@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countUserTextOccurrences,
@@ -121,6 +122,7 @@ export function useMobileNativeChatDrafts(args: {
     setDrafts
   })
 
+  useMobileNativeChatDraftPersistence(draftKey, drafts, setDrafts)
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
       if (!draftKey) {

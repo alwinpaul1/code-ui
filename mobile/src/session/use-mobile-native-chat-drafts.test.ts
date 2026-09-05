@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
+vi.mock('../storage/native-chat-drafts', () => ({
+  readNativeChatDraft: vi.fn(async () => null),
+  writeNativeChatDraft: vi.fn(async () => undefined)
+}))
+
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
 
 function userTextMessage(id: string, text: string): NativeChatMessage {
