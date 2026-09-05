@@ -112,6 +112,8 @@ export function useMobileNativeChatSessionOptions(args: {
   scopeKey: string | null
   /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
+  /** Effort level as the terminal's status line shows it, when observed. */
+  reportedEffort?: string | null
   dispatchCommand: (
     command: string,
     options?: { delivery?: CatalogCommandDelivery }
@@ -121,6 +123,7 @@ export function useMobileNativeChatSessionOptions(args: {
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
+  const reportedEffort = args.reportedEffort ?? null
   const catalog = useMemo(
     // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
@@ -202,15 +205,21 @@ export function useMobileNativeChatSessionOptions(args: {
     // status stream reconnects, and a session-start report cannot have observed a
     // `/model` sent after it. Re-applying it would revert the user's pick. Only a
     // report that CHANGES is evidence; the value itself still wins when it does.
-    if (appliedReportByScope.get(scopeKey) === matched) {
+    const reportKey = reportedEffort ? `${matched}\0${reportedEffort}` : matched
+    if (appliedReportByScope.get(scopeKey) === reportKey) {
       return
     }
-    appliedReportByScope.set(scopeKey, matched)
+    appliedReportByScope.set(scopeKey, reportKey)
     const record = getScopedRecord(scopeKey, agent)
-    if (applyNativeChatReportedSessionOptions(record, { model: matched })) {
+    if (
+      applyNativeChatReportedSessionOptions(record, {
+        model: matched,
+        ...(reportedEffort ? { effort: reportedEffort } : {})
+      })
+    ) {
       bump()
     }
-  }, [agent, bump, catalog, reportedModel, scopeKey])
+  }, [agent, bump, catalog, reportedEffort, reportedModel, scopeKey])
 
   const snapshot = useMemo(() => {
     if (!catalog || !scopeKey || !agent) {

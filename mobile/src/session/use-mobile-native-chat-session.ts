@@ -43,6 +43,13 @@ export type MobileNativeChatSession = {
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
+// Why: a subscribe that never answers (a snapshot the host cannot deliver, or a
+// transcript it chokes on) used to spin forever. Retry with a smaller first
+// window, then give up with a message instead of a spinner.
+const SUBSCRIBE_LIMITS = [INITIAL_LIMIT, 12, 4] as const
+const SNAPSHOT_WATCHDOG_MS = 12_000
+const TRANSCRIPT_TIMEOUT_MESSAGE =
+  'The desktop did not send this transcript in time. Switch to the terminal view, or retry.'
 const PAGE = 60
 const MAX_MESSAGES = 2000
 
@@ -105,6 +112,10 @@ export function useMobileNativeChatSession(args: {
   // base (read / loadEarlier ordered tails); `applyAppend` folds live frames in.
   const mergerRef = useRef(createNativeChatMerger())
   const limitRef = useRef(INITIAL_LIMIT)
+  const [subscribeAttempt, setSubscribeAttempt] = useState(0)
+  useEffect(() => {
+    setSubscribeAttempt(0)
+  }, [identity])
   // Tracks the live session so a late loadEarlier resolve can detect a swap.
   const sessionIdRef = useRef<string | null>(sessionId)
   sessionIdRef.current = sessionId
@@ -132,9 +143,11 @@ export function useMobileNativeChatSession(args: {
     // Why: disconnect/agent/session loss must invalidate a page request before
     // the early idle/waiting return can clear the visible source.
     streamGenerationRef.current += 1
-    limitRef.current = INITIAL_LIMIT
+    const attemptLimit = SUBSCRIBE_LIMITS[Math.min(subscribeAttempt, SUBSCRIBE_LIMITS.length - 1)]!
+    limitRef.current = attemptLimit
     loadingEarlierRef.current = false
     snapshotSeenRef.current = false
+    let frameSeen = false
     setLoadingEarlier(false)
     setList([])
     setError(undefined)
@@ -161,6 +174,7 @@ export function useMobileNativeChatSession(args: {
         if (cancelled) {
           return
         }
+        frameSeen = true
         const frame = raw as MobileNativeChatStreamFrame
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
@@ -214,11 +228,24 @@ export function useMobileNativeChatSession(args: {
       }
     )
 
+    const watchdog = setTimeout(() => {
+      if (cancelled || frameSeen) {
+        return
+      }
+      if (subscribeAttempt < SUBSCRIBE_LIMITS.length - 1) {
+        setSubscribeAttempt(subscribeAttempt + 1)
+        return
+      }
+      setRead({ client, identity, status: 'error' })
+      setError(TRANSCRIPT_TIMEOUT_MESSAGE)
+    }, SNAPSHOT_WATCHDOG_MS)
+
     return () => {
       cancelled = true
+      clearTimeout(watchdog)
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {

@@ -20,6 +20,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
   reportedModel: string | null
+  reportedEffort?: string | null
   structured: {
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
@@ -41,6 +42,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isTabChatView,
     isWorking,
     reportedModel,
+    reportedEffort,
     structured,
     toggleTabChatView,
     worktreeId
@@ -62,6 +64,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
+    reportedEffort,
     dispatchCommand,
     onAgentPicker: handleAgentPicker
   })

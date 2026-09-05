@@ -21,6 +21,7 @@ import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
+import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -295,6 +296,15 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
+  // The terminal's own status line is the one place that states model AND
+  // effort; read it while chat covers the terminal and let it win over the
+  // hook report, which names the model only.
+  const hudObservation = useMobileTerminalHudObservation({
+    client,
+    enabled: showNativeChat && !activeChatStructured && connState === 'connected',
+    handleRef: activeHandleRef,
+    handleKey: showNativeChat ? streamScopeKey : null
+  })
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
@@ -304,7 +314,8 @@ export function useMobileNativeChatController(args: {
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
-      reportedModel: activeSessionTab?.agentStatus?.model ?? null,
+      reportedModel: hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null,
+      reportedEffort: hudObservation?.effort ?? null,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
