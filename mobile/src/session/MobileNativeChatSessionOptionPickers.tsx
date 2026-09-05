@@ -41,6 +41,8 @@ export type MobileNativeChatSessionOptionPickersProps = {
   /** False when this terminal's status line shows no model badge, so the phone
    *  cannot mirror what the desktop is running. */
   statusLineObserved?: boolean
+  /** Subscription name shown above the model list, when the agent reports one. */
+  planLabel?: string | null
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
@@ -48,7 +50,8 @@ export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking: _isWorking,
   sendInFlight = false,
-  statusLineObserved = true
+  statusLineObserved = true,
+  planLabel = null
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
@@ -146,6 +149,9 @@ export function MobileNativeChatSessionOptionPickers({
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
+            {modelView && planLabel ? (
+              <SessionOptionCaption>{`Models on your ${planLabel} plan`}</SessionOptionCaption>
+            ) : null}
             {modelView && !statusLineObserved ? (
               <SessionOptionCaption>
                 No model badge in this terminal's status line, so the phone can't see what the

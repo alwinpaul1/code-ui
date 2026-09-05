@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
+vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   FlatList: 'FlatList',

@@ -113,7 +113,8 @@ describe('parseTerminalHudObservation — Codex footer', () => {
       effort: 'medium',
       context: null,
       permissionMode: 'default',
-      agentMode: 'default'
+      agentMode: 'default',
+      accountPlan: null
     })
   })
 
@@ -162,5 +163,17 @@ describe('Codex mode and context from the screen', () => {
       usedLabel: '19.5K',
       windowLabel: '258K'
     })
+  })
+})
+
+describe('Codex account plan from /status', () => {
+  it('reads the plan in parentheses after the account', () => {
+    expect(
+      parseTerminalHudObservation([
+        '│  Account:                     someone@example.com (Pro Lite)                          │',
+        '› Ask Codex to do anything',
+        '  gpt-5.6-sol xhigh · ~/Project'
+      ])?.accountPlan
+    ).toBe('Pro Lite')
   })
 })

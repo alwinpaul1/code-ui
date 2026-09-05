@@ -25,6 +25,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   reportedEffort?: string | null
   /** A model badge was read from the terminal's status line (see the pickers' hint). */
   statusLineObserved?: boolean
+  /** Subscription name for the sheet caption (Codex: from /status), when known. */
+  planLabel?: string | null
   structured: {
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
@@ -54,6 +56,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModel,
     reportedEffort,
     statusLineObserved = true,
+    planLabel = null,
     structured,
     toggleTabChatView,
     worktreeId,
@@ -134,9 +137,9 @@ export function useMobileNativeChatSessionOptionController(args: {
           ? { controller: structuredController, isWorking }
           : null
         : sessionOptions.snapshot.length > 0
-          ? { controller: sessionOptions, isWorking, statusLineObserved }
+          ? { controller: sessionOptions, isWorking, statusLineObserved, planLabel }
           : null,
-    [activeChatStructured, isWorking, sessionOptions, statusLineObserved, structuredController]
+    [activeChatStructured, isWorking, planLabel, sessionOptions, statusLineObserved, structuredController]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

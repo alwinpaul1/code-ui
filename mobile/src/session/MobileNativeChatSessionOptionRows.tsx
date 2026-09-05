@@ -10,6 +10,25 @@ import type {
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
+/** Small display-only tag beside a row label ("Default"). */
+function Badge({ children }: { children: string }): React.JSX.Element {
+  const { colors, radius } = useTheme()
+  return (
+    <View
+      style={{
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: radius.pill,
+        backgroundColor: colors.accentSoft
+      }}
+    >
+      <Txt variant="caption" weight="semibold" tone="accent">
+        {children}
+      </Txt>
+    </View>
+  )
+}
+
 /** Muted one-liner above a group — dispatch state, or why a row is locked. */
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   const { space } = useTheme()
@@ -144,6 +163,7 @@ function Radio({ selected }: { selected: boolean }) {
 function ChoiceRow({
   label,
   description,
+  badge,
   selected,
   disabled,
   grouped,
@@ -152,6 +172,7 @@ function ChoiceRow({
 }: {
   label: string
   description?: string
+  badge?: string
   selected: boolean
   disabled: boolean
   grouped: boolean
@@ -169,9 +190,12 @@ function ChoiceRow({
     >
       <Radio selected={selected} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="body" weight="medium">
-          {label}
-        </Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Txt variant="body" weight="medium" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {label}
+          </Txt>
+          {badge ? <Badge>{badge}</Badge> : null}
+        </View>
         {description ? (
           <Txt variant="caption" tone="secondary" numberOfLines={2}>
             {description}
@@ -326,6 +350,7 @@ export function DescriptorRows({
           key={choice.value}
           label={choice.label}
           description={choice.description}
+          badge={choice.badge}
           selected={choice.value === currentValue}
           disabled={locked}
           grouped={grouped}

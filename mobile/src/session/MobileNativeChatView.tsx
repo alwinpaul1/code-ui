@@ -21,6 +21,7 @@ import {
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
@@ -449,6 +450,7 @@ export function MobileNativeChatView({
         skills={skills}
         onNeedSkills={onNeedSkills}
       />
+      <ImagePreviewModal />
     </View>
   )
 }

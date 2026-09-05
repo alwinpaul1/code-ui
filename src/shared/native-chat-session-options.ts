@@ -4,6 +4,8 @@ export type SessionOptionSelectChoice = {
   value: string
   label: string
   description?: string
+  /** Short display-only tag beside the label, e.g. "Default". */
+  badge?: string
 }
 
 /** `default` is the catalog's own value shown before anything is observed —

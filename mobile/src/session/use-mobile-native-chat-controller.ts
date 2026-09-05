@@ -358,6 +358,7 @@ export function useMobileNativeChatController(args: {
           : (hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null),
       reportedEffort: hudObservation?.effort ?? null,
       statusLineObserved: hudObservation != null,
+      planLabel: hudObservation?.accountPlan ?? null,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
