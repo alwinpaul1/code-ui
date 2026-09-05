@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
 import { applyLiveTranscript } from '../hooks/mobile-live-transcript'
+import { liveDictationDelta } from '../hooks/mobile-live-dictation-delta'
 import { loadLiveTranscriptionEnabled } from '../storage/preferences'
 import { triggerError } from '../platform/haptics'
 import {
@@ -97,10 +98,26 @@ export function useMobileSessionNativeChatDictation(
   // path below stays for the terminal and as the fallback.
   const [liveTranscriptionEnabled, setLiveTranscriptionEnabled] = useState(true)
   const liveBaseTextRef = useRef('')
+  // Where a live transcript lands: the chat composer, the buffered command box,
+  // or (live terminal input) the PTY line itself, revised with backspaces.
+  const liveTargetRef = useRef<{ kind: 'chat' } | { kind: 'buffered' } | { kind: 'pty'; handle: string; typed: string }>({ kind: 'chat' })
   const liveTranscription = useMobileLiveTranscription({
     onTranscript: (text) => {
       const base = liveBaseTextRef.current
-      nativeChatController.setChatComposerText(() => applyLiveTranscript(base, text))
+      const target = liveTargetRef.current
+      if (target.kind === 'chat') {
+        nativeChatController.setChatComposerText(() => applyLiveTranscript(base, text))
+        return
+      }
+      if (target.kind === 'buffered') {
+        setInput(() => applyLiveTranscript(base, text))
+        return
+      }
+      const delta = liveDictationDelta(target.typed, text)
+      target.typed = text
+      if (delta) {
+        void sendLiveTerminalInput(target.handle, delta)
+      }
     },
     onError: (err) => {
       triggerError()
@@ -158,13 +175,23 @@ export function useMobileSessionNativeChatDictation(
     }
   })
 
-  const useLiveTranscription =
-    liveTranscriptionEnabled && liveTranscription.available && showNativeChat
+  const useLiveTranscription = liveTranscriptionEnabled && liveTranscription.available
   const dictation = useLiveTranscription ? liveTranscription : desktopDictation
 
   const startDictation = useCallback(() => {
     if (useLiveTranscription) {
-      liveBaseTextRef.current = nativeChatController.chatComposerText
+      if (showNativeChatRef.current) {
+        liveTargetRef.current = { kind: 'chat' }
+        liveBaseTextRef.current = nativeChatController.chatComposerText
+      } else if (activeHandle && liveInputTerminalHandles.has(activeHandle)) {
+        liveTargetRef.current = { kind: 'pty', handle: activeHandle, typed: '' }
+      } else {
+        liveTargetRef.current = { kind: 'buffered' }
+        setInput((current) => {
+          liveBaseTextRef.current = current
+          return current
+        })
+      }
       void liveTranscription.start().catch((err) => {
         triggerError()
         showToast(err instanceof Error ? err.message : String(err))
@@ -188,6 +215,8 @@ export function useMobileSessionNativeChatDictation(
     liveInputTerminalHandles,
     liveTranscription,
     nativeChatController,
+    setInput,
+    showNativeChatRef,
     triggerError,
     showToast,
     useLiveTranscription
@@ -197,10 +226,18 @@ export function useMobileSessionNativeChatDictation(
     dictationRouteContextRef.current = null
     if (useLiveTranscription) {
       const base = liveBaseTextRef.current
-      nativeChatController.setChatComposerText(() => base)
+      const target = liveTargetRef.current
+      if (target.kind === 'chat') {
+        nativeChatController.setChatComposerText(() => base)
+      } else if (target.kind === 'buffered') {
+        setInput(() => base)
+      } else if (target.typed) {
+        void sendLiveTerminalInput(target.handle, liveDictationDelta(target.typed, ''))
+        target.typed = ''
+      }
     }
     void dictation.cancel()
-  }, [dictation, nativeChatController, useLiveTranscription])
+  }, [dictation, nativeChatController, sendLiveTerminalInput, setInput, useLiveTranscription])
 
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {

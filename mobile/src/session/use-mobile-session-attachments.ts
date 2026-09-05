@@ -69,7 +69,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
 
   // Terminal input pastes an attached image straight into the visible terminal;
   // native chat instead holds it as a composer chip and rides it along on submit.
-  const { attachImage, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
+  const { attachImage, attachDocument, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
     client,
     activeHandle,
     activeHandleRef,
@@ -158,6 +158,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,
     attachImage,
+    attachDocument,
     isAttaching,
     nativeChatImages
   }

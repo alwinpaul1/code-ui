@@ -41,6 +41,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     handleSend,
     isAttaching,
     attachImage,
+    attachDocument,
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
@@ -189,7 +190,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             dictation={dictation}
             dictationMode={dictationMode}
             onAttachImage={() => void attachImage('library')}
-            onAttachFile={() => void attachImage('files')}
+            onAttachFile={() => void attachDocument()}
             onDictationToggle={handleDictationToggle}
             onDictationPressIn={handleDictationPressIn}
             onDictationPressOut={handleDictationPressOut}
@@ -255,7 +256,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             dictation={dictation}
             dictationMode={dictationMode}
             onAttachImage={() => void attachImage('library')}
-            onAttachFile={() => void attachImage('files')}
+            onAttachFile={() => void attachDocument()}
             onDictationToggle={handleDictationToggle}
             onDictationPressIn={handleDictationPressIn}
             onDictationPressOut={handleDictationPressOut}

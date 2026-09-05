@@ -72,10 +72,11 @@ export function useMobileSessionImageAttachments({
   onError
 }: Args): {
   attachImage: (source: MobileImageSource) => Promise<void>
+  attachDocument: () => Promise<void>
   isAttaching: boolean
   nativeChatImages: MobileNativeChatImageAttachments
 } {
-  const { attachImage, isAttaching } = useMobileImageAttachment({
+  const { attachImage, attachDocument, isAttaching } = useMobileImageAttachment({
     client,
     activeHandle,
     canSend,
@@ -103,5 +104,5 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
-  return { attachImage, isAttaching, nativeChatImages }
+  return { attachImage, attachDocument, isAttaching, nativeChatImages }
 }
