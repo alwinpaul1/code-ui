@@ -22,6 +22,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   Copy: 'Copy',
+  Image: 'ImageIcon',
   Sparkles: 'Sparkles',
   SquareChevronRight: 'SquareChevronRight'
 }))
@@ -74,14 +75,16 @@ describe('MobileNativeChatMessage', () => {
     })
   })
 
-  it('falls back to a text placeholder for a bare host path', () => {
-    // A host temp path (e.g. on an SSH host) is not loadable on the device.
+  it('shows an image chip, never the raw host path, for an unloadable image', () => {
+    // A host temp path (a desktop paste, or an SSH host) is not loadable on the
+    // device until the host grants it; the bubble must not print the path.
     const tree = render(userMessage([{ type: 'image-ref', path: '/tmp/host.png' }]))
     expect(tree.root.findAllByType('Image' as never)).toHaveLength(0)
     const texts = tree.root
       .findAllByType('Text' as never)
       .map((node) => String(node.children.join('')))
-    expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
+    expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(false)
+    expect(texts).toContain('Image')
   })
 
   it('labels a tool row with the target path instead of raw input JSON', () => {

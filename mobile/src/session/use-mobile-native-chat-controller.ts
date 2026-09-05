@@ -312,6 +312,7 @@ export function useMobileNativeChatController(args: {
       activeSessionTabId && activeChatSessionId
         ? { tabId: activeSessionTabId, sessionId: activeChatSessionId }
         : null,
+    terminalHandleRef: activeHandleRef,
     messages: nativeChatSession.messages,
     localPreviews: chatImagePreviewsByMessageIdLocal
   })

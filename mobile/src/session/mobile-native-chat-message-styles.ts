@@ -150,6 +150,18 @@ export function makeChatMessageStyles(theme: Theme) {
       fontFamily: fonts.regular,
       fontSize: TEXT_SIZE
     },
+    imageChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: radius.md,
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
     imageThumb: {
       width: 200,
       height: 150,

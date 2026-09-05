@@ -58,6 +58,9 @@ async function loadHostImage(args: {
   hostId: string
   worktreeId: string
   nativeChatContext: { tabId: string; sessionId: string } | null
+  /** The tab's terminal: a pasted path is echoed in its output, which is the
+   *  one provenance the host accepts for a user-pasted file. */
+  terminalHandle: string | null
   path: string
 }): Promise<string | null> {
   const key = `${args.hostId}\0${args.path}`
@@ -83,6 +86,7 @@ async function loadHostImage(args: {
           // Same shape as a tapped chat path (mobile-file-tap-open): the paste
           // lives in the Mac temp dir, outside every workspace.
           crossWorkspace: true,
+          ...(args.terminalHandle ? { terminal: args.terminalHandle } : {}),
           ...(args.nativeChatContext ? { nativeChatContext: args.nativeChatContext } : {})
         },
         { timeoutMs: 15_000 }
@@ -134,10 +138,12 @@ export function useHostImagePreviews(args: {
   hostId: string
   worktreeId: string
   nativeChatContext: { tabId: string; sessionId: string } | null
+  terminalHandleRef: { current: string | null }
   messages: readonly NativeChatMessage[]
   localPreviews: Record<string, string[]>
 }): Record<string, string[]> {
   const { client, enabled, hostId, worktreeId, nativeChatContext, messages, localPreviews } = args
+  const { terminalHandleRef } = args
   const wanted = useMemo(
     () => (enabled ? collectHostImagePaths(messages, localPreviews) : {}),
     [enabled, localPreviews, messages]
@@ -155,7 +161,14 @@ export function useHostImagePreviews(args: {
       if (dataUriByPath.has(key) || failedPaths.has(key)) {
         continue
       }
-      void loadHostImage({ client, hostId, worktreeId, nativeChatContext, path }).then((uri) => {
+      void loadHostImage({
+        client,
+        hostId,
+        worktreeId,
+        nativeChatContext,
+        terminalHandle: terminalHandleRef.current,
+        path
+      }).then((uri) => {
         if (active && uri) {
           setLoaded((current) => (current[path] === uri ? current : { ...current, [path]: uri }))
         }
@@ -164,7 +177,7 @@ export function useHostImagePreviews(args: {
     return () => {
       active = false
     }
-  }, [client, enabled, hostId, nativeChatContext, wanted, worktreeId])
+  }, [client, enabled, hostId, nativeChatContext, terminalHandleRef, wanted, worktreeId])
 
   return useMemo(() => {
     const previews: Record<string, string[]> = {}

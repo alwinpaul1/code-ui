@@ -154,6 +154,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       worktreeId: current.worktreeId,
       worktreeName: current.worktreeName,
       pathText,
+      absolutePathTerminalHandle: sourceTerminalHandle,
       nativeChatContext:
         nativeChatSessionId && nativeChatTabId
           ? { tabId: nativeChatTabId, sessionId: nativeChatSessionId }

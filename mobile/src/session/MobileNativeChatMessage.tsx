@@ -1,7 +1,14 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ArrowUp, ChevronDown, ChevronRight, Copy, Sparkles } from 'lucide-react-native'
+import {
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Image as ImageIcon,
+  Sparkles
+} from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -70,10 +77,19 @@ function Prose({
         </Pressable>
       )
     }
+    // Not loadable (yet): a compact chip instead of the raw host path. Tapping
+    // still asks the host for the file through the preview route.
+    const hostPath = block.path
     return (
-      <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-        🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
-      </Text>
+      <Pressable
+        onPress={hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
+        accessibilityRole="button"
+        accessibilityLabel={block.alt ?? 'Attached image'}
+        style={styles.imageChip}
+      >
+        <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
+        <Text style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]}>Image</Text>
+      </Pressable>
     )
   }
   return null

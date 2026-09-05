@@ -8,7 +8,12 @@ import {
 export type OpenMobileNativeChatFileTapOptions<T extends FileTapSessionTab> = Omit<
   OpenMobileFileTapOptions<T>,
   'terminalHandle' | 'cwd' | 'line' | 'column'
->
+> & {
+  /** Used only for an ABSOLUTE path (a desktop image paste in the Mac temp dir):
+   *  cwd cannot misplace it, and the path is echoed in this terminal's output,
+   *  which is the provenance the host accepts for a user-pasted file. */
+  absolutePathTerminalHandle?: string | null
+}
 
 /**
  * Open a file reference tapped in native chat: same haptic / preview-route /
@@ -21,8 +26,12 @@ export function openMobileNativeChatFileTap<T extends FileTapSessionTab>(
   options: OpenMobileNativeChatFileTapOptions<T>
 ): void {
   const { path, line, column } = splitFilePathLineSuffix(options.pathText)
+  const { absolutePathTerminalHandle, ...rest } = options
   openMobileFileTap<T>({
-    ...options,
+    ...rest,
+    ...(absolutePathTerminalHandle && path.startsWith('/')
+      ? { terminalHandle: absolutePathTerminalHandle }
+      : {}),
     pathText: path,
     line,
     column
