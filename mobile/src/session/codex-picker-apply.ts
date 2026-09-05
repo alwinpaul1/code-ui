@@ -101,7 +101,7 @@ export function createCodexPickerIo(args: {
   }
 }
 
-async function waitForStep(
+export async function waitForCodexPickerStep(
   io: CodexPickerIo,
   step: CodexPickerScreen['step'],
   timeoutMs: number
@@ -117,7 +117,7 @@ async function waitForStep(
   return null
 }
 
-async function escapePicker(io: CodexPickerIo): Promise<void> {
+export async function escapeCodexPicker(io: CodexPickerIo): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const lines = await io.readScreen()
     if (isCodexWorking(lines)) {
@@ -148,7 +148,7 @@ async function moveCursor(
   if (delta !== 0) {
     await io.sleep(POLL_MS)
   }
-  const screen = await waitForStep(io, step, STEP_TIMEOUT_MS)
+  const screen = await waitForCodexPickerStep(io, step, STEP_TIMEOUT_MS)
   return screen?.cursorIndex === to
 }
 
@@ -161,31 +161,31 @@ export async function applyCodexPickerSelection(
     return { ok: false, reason: 'busy' }
   }
   if (parseCodexPickerScreen(before)) {
-    await escapePicker(io)
+    await escapeCodexPicker(io)
   }
   if (!(await io.typeCommand('/model'))) {
     return { ok: false, reason: 'send-failed' }
   }
-  const modelStep = await waitForStep(io, 'model', STEP_TIMEOUT_MS)
+  const modelStep = await waitForCodexPickerStep(io, 'model', STEP_TIMEOUT_MS)
   if (!modelStep) {
     return { ok: false, reason: 'no-picker' }
   }
   const modelRow = modelStep.rows.find((row) => row.name === target.model)
   const cursor = modelStep.cursorIndex ?? modelStep.rows.find((row) => row.isCurrent)?.index ?? null
   if (!modelRow || cursor === null) {
-    await escapePicker(io)
+    await escapeCodexPicker(io)
     return { ok: false, reason: modelRow ? 'cursor' : 'model-unavailable' }
   }
   if (!(await moveCursor(io, 'model', cursor, modelRow.index))) {
-    await escapePicker(io)
+    await escapeCodexPicker(io)
     return { ok: false, reason: 'cursor' }
   }
   if (!(await io.sendKey(KEY_ENTER))) {
     return { ok: false, reason: 'send-failed' }
   }
-  let effortStep = await waitForStep(io, 'effort', STEP_TIMEOUT_MS)
+  let effortStep = await waitForCodexPickerStep(io, 'effort', STEP_TIMEOUT_MS)
   if (!effortStep) {
-    await escapePicker(io)
+    await escapeCodexPicker(io)
     return { ok: false, reason: 'no-picker' }
   }
   if (target.effort) {
@@ -196,32 +196,32 @@ export async function applyCodexPickerSelection(
       const effortCursor =
         effortStep.cursorIndex ?? effortStep.rows.find((row) => row.isCurrent)?.index
       if (!more || effortCursor === undefined) {
-        await escapePicker(io)
+        await escapeCodexPicker(io)
         return { ok: false, reason: 'effort-unavailable' }
       }
       if (
         !(await moveCursor(io, 'effort', effortCursor, more.index)) ||
         !(await io.sendKey(KEY_ENTER))
       ) {
-        await escapePicker(io)
+        await escapeCodexPicker(io)
         return { ok: false, reason: 'cursor' }
       }
       await io.sleep(POLL_MS)
-      effortStep = await waitForStep(io, 'effort', STEP_TIMEOUT_MS)
+      effortStep = await waitForCodexPickerStep(io, 'effort', STEP_TIMEOUT_MS)
       effortRow = effortStep ? matchCodexEffortRow(effortStep.rows, target.effort) : undefined
       if (!effortStep || !effortRow) {
-        await escapePicker(io)
+        await escapeCodexPicker(io)
         return { ok: false, reason: 'effort-unavailable' }
       }
     }
     const effortCursor =
       effortStep.cursorIndex ?? effortStep.rows.find((row) => row.isCurrent)?.index
     if (effortCursor === undefined) {
-      await escapePicker(io)
+      await escapeCodexPicker(io)
       return { ok: false, reason: 'cursor' }
     }
     if (!(await moveCursor(io, 'effort', effortCursor, effortRow.index))) {
-      await escapePicker(io)
+      await escapeCodexPicker(io)
       return { ok: false, reason: 'cursor' }
     }
   }

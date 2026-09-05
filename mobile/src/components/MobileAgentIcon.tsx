@@ -85,12 +85,22 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
   )
 }
 
-export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
+export function MobileAgentIcon({
+  agentId,
+  size = 16,
+  color
+}: {
+  agentId: string
+  size?: number
+  /** Override for monochrome marks (the OpenAI logo) so they stay visible on an
+   *  inverted surface such as the selected tab chip. */
+  color?: string
+}) {
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
   if (agentId === 'codex') {
-    return <OpenAIIcon size={size} />
+    return <OpenAIIcon size={size} color={color} />
   }
   if (agentId === 'pi') {
     return <PiIcon size={size} />

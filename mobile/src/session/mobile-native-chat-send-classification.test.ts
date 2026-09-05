@@ -22,9 +22,9 @@ describe('classifyMobileNativeChatSend', () => {
   it('keeps prose as chat, including leading-whitespace slash text', () => {
     expect(classifyMobileNativeChatSend('claude', 'hello there')).toBe('chat')
     expect(classifyMobileNativeChatSend('claude', ' /clear is a command')).toBe('chat')
-    expect(classifyMobileNativeChatSend('claude', '/usr/bin/python is missing')).toBe(
-      'unknown-token'
-    )
+    // A leading absolute path is prose, not a command: a desktop image paste
+    // starts a message with "/var/folders/…/x.png" and must stay a chat turn.
+    expect(classifyMobileNativeChatSend('claude', '/usr/bin/python is missing')).toBe('chat')
   })
 
   it('treats $ tokens as skill grammar only for Codex', () => {

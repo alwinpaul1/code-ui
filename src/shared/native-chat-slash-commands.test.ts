@@ -69,3 +69,13 @@ describe('dispatch vs completion text', () => {
     expect(applySlashSuggestion({ name: 'model' })).toBe('/model ')
   })
 })
+
+describe('leading paths are not commands', () => {
+  it('keeps a desktop image paste path as chat, not a slash command', () => {
+    const paste = '/var/folders/0y/T/orca-paste-1.png [Image #1] remove this'
+    expect(isSlashCommandDraft(paste)).toBe(false)
+    expect(isSlashCommandDraft('/Users/me/notes.md please read')).toBe(false)
+    expect(isSlashCommandDraft('/model')).toBe(true)
+    expect(isSlashCommandDraft('/mcp verbose')).toBe(true)
+  })
+})

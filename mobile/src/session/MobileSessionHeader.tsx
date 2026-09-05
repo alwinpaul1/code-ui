@@ -260,8 +260,12 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     <FileText size={13} color={iconColor} strokeWidth={2.1} />
                   )}
                   {t.type === 'file' && <File size={13} color={iconColor} strokeWidth={2.1} />}
-                  {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
-                  {terminalAgentId ? <MobileAgentIcon agentId={terminalAgentId} size={13} /> : null}
+                  {t.type === 'agent-session' && (
+                    <MobileAgentIcon agentId={t.agent} size={13} color={iconColor} />
+                  )}
+                  {terminalAgentId ? (
+                    <MobileAgentIcon agentId={terminalAgentId} size={13} color={iconColor} />
+                  ) : null}
                   <Txt
                     variant="label"
                     weight={active ? 'semibold' : 'medium'}

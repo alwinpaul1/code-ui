@@ -6,12 +6,19 @@ import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createCodexPickerIo } from './codex-picker-apply'
 import { isCodexIdle, isCodexWorking, parseCodexPickerScreen } from './codex-picker-screen'
+import {
+  codexVisibleModelsKey,
+  peekCodexVisibleModels,
+  scrapeCodexVisibleModels
+} from './codex-visible-models'
 
 const SETTLE_AFTER_TURN_MS = 700
 const STATUS_RENDER_MS = 1_500
 
 export function useCodexStatusPoll(args: {
   client: RpcClient | null
+  hostId: string
+  worktreeId: string
   /** Codex chat is showing over a live terminal. */
   enabled: boolean
   working: boolean
@@ -22,6 +29,7 @@ export function useCodexStatusPoll(args: {
   refreshHud: () => Promise<unknown>
 }): void {
   const { client, enabled, working, handleRef, deviceTokenRef, handleKey, refreshHud } = args
+  const { hostId, worktreeId } = args
   const previousWorking = useRef(working)
   const polledOnOpen = useRef<string | null>(null)
 
@@ -66,6 +74,16 @@ export function useCodexStatusPoll(args: {
         if (!isCodexIdle(lines)) {
           return
         }
+        // First open only: learn which models this session can pick by reading
+        // Codex's own picker (the host probe lists hidden ones and misses some).
+        const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
+        if (firstOpen && !peekCodexVisibleModels(visibleKey)) {
+          await scrapeCodexVisibleModels(io, visibleKey)
+          if (!active) {
+            return
+          }
+          await io.sleep(400)
+        }
         if (!(await io.typeCommand('/status'))) {
           return
         }
@@ -79,5 +97,15 @@ export function useCodexStatusPoll(args: {
       active = false
       clearTimeout(timer)
     }
-  }, [client, deviceTokenRef, enabled, handleKey, handleRef, refreshHud, working])
+  }, [
+    client,
+    deviceTokenRef,
+    enabled,
+    handleKey,
+    handleRef,
+    hostId,
+    refreshHud,
+    working,
+    worktreeId
+  ])
 }

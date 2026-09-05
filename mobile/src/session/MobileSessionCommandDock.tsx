@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { View, TextInput, Pressable, Platform } from 'react-native'
-import { ArrowUp, MessageSquare } from 'lucide-react-native'
+import { ArrowUp } from 'lucide-react-native'
 import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
@@ -9,7 +9,6 @@ import { MobileSessionAccessoryStrip } from './MobileSessionAccessoryStrip'
 import { getMobileTerminalLiveInputPlaceholder } from './mobile-terminal-live-input-placeholder'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { useTheme } from '../theme/theme-context'
-import { Txt } from '../ui/Txt'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
@@ -49,7 +48,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     nativeChatController,
     showLoadingState
   } = controller
-  const { terminalPeekActive, endTerminalPeek, viewResolved } = nativeChatController
+  const { viewResolved } = nativeChatController
   // Tracks the live field's focus so the bar can highlight while the keyboard is open.
   const [liveFocused, setLiveFocused] = useState(false)
   useEffect(() => {
@@ -83,37 +82,6 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         transform: [{ translateY: -keyboardLift }]
       }}
     >
-      {terminalPeekActive ? (
-        // A chat tab showing its terminal for a slash command's TUI output.
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: space.md,
-            paddingTop: space.xs + 2
-          }}
-        >
-          <Pressable
-            onPress={endTerminalPeek}
-            accessibilityRole="button"
-            accessibilityLabel="Back to chat"
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.xs,
-              height: 30,
-              paddingHorizontal: space.sm + 2,
-              borderRadius: radius.sm,
-              backgroundColor: pressed ? colors.borderStrong : colors.accentSoft
-            })}
-          >
-            <MessageSquare size={14} color={colors.accent} strokeWidth={2} />
-            <Txt variant="caption" weight="semibold" tone="accent">
-              Back to chat
-            </Txt>
-          </Pressable>
-        </View>
-      ) : null}
       <MobileSessionAccessoryStrip controller={controller} />
 
       {/* Input bar */}

@@ -2,6 +2,12 @@
 // driving Codex's own `/model` picker. Plugs into useMobileNativeChatSessionOptions
 // through `discoveredModels` and `applyOverride`; inert for every other agent.
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react'
+import {
+  codexVisibleModelsKey,
+  peekCodexVisibleModels,
+  subscribeCodexVisibleModels,
+  type CodexVisibleModel
+} from './codex-visible-models'
 import type { RpcClient } from '../transport/rpc-client'
 import type { CatalogModel } from '../../../src/shared/agent-session-option-catalog-types'
 import type { SessionOptionValue } from '../../../src/shared/native-chat-session-options'
@@ -58,10 +64,47 @@ export function useCodexNativeChatOptions(args: {
     }
   }, [client, hostId, isCodex, worktreeId])
 
-  const discoveredModels = useMemo(
-    () => (discovered && discovered.length > 0 ? discoveredCodexCatalogModels(discovered) : null),
-    [discovered]
+  // Membership comes from Codex's own picker (see codex-visible-models.ts);
+  // the host probe only contributes display names and per-model effort levels.
+  const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
+  const [visible, setVisible] = useState<CodexVisibleModel[] | null>(() =>
+    isCodex ? peekCodexVisibleModels(visibleKey) : null
   )
+  useEffect(() => {
+    if (!isCodex) {
+      setVisible(null)
+      return
+    }
+    setVisible(peekCodexVisibleModels(visibleKey))
+    return subscribeCodexVisibleModels(() => setVisible(peekCodexVisibleModels(visibleKey)))
+  }, [isCodex, visibleKey])
+
+  const discoveredModels = useMemo(() => {
+    if (!visible || visible.length === 0) {
+      return null
+    }
+    const probed = new Map((discovered ?? []).map((model) => [model.id, model]))
+    const merged: DiscoveredCodexModel[] = visible.map((row) => {
+      const known = probed.get(row.slug)
+      return {
+        id: row.slug,
+        label: known?.label ?? row.slug,
+        ...(row.description ? { description: row.description } : {}),
+        levels: known?.levels ?? [],
+        defaultLevel: known?.defaultLevel ?? null,
+        isDefault: row.isDefault
+      }
+    })
+    return discoveredCodexCatalogModels(merged)
+  }, [discovered, visible])
+
+  // Why: the pill fills from the terminal footer; re-read it once the list is
+  // known so a cleared stale model is replaced without waiting for the poll.
+  useEffect(() => {
+    if (discoveredModels) {
+      void refreshHud()
+    }
+  }, [discoveredModels, refreshHud])
 
   const applyOverride = useCallback(
     async (id: string, value: SessionOptionValue): Promise<boolean | null> => {

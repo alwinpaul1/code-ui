@@ -190,7 +190,16 @@ export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSu
  *  Slash drafts dispatch to the agent's own TUI and must NOT render an optimistic
  *  user bubble — they are control actions, not chat turns. */
 export function isSlashCommandDraft(draft: string): boolean {
-  return draft.trimStart().startsWith('/')
+  return isSlashCommandToken(draft.trimStart().split(/\s/, 1)[0] ?? '')
+}
+
+/** A command token is `/name` — letters, digits, `-`, `_`, `:` (plugin skills),
+ *  `.` — with no further slash. A leading absolute path ("/var/folders/…/x.png",
+ *  the text a desktop image paste puts first; "/usr/bin/python …") has more
+ *  slashes and is prose: dispatching it as a command sent it raw to the TUI and
+ *  flipped the tab to the terminal. */
+export function isSlashCommandToken(token: string): boolean {
+  return /^\/[A-Za-z][\w:.-]*$/.test(token)
 }
 
 /** Case-insensitive prefix filter over an agent's commands. An empty query
@@ -236,7 +245,7 @@ export function classifyNativeChatSend(
   if (commands.some((command) => firstToken === `/${command.name}`)) {
     return 'command'
   }
-  if (firstToken.startsWith('/')) {
+  if (isSlashCommandToken(firstToken)) {
     return 'unknown-token'
   }
   // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style

@@ -374,6 +374,8 @@ export function useMobileNativeChatController(args: {
   // Codex names its context window only in `/status`; run it as turns end.
   useCodexStatusPoll({
     client,
+    hostId,
+    worktreeId,
     enabled:
       activeChatResolution?.agent === 'codex' &&
       showNativeChat &&
