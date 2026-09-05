@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { readSessionOptionRecord, writeSessionOptionRecord } from '../storage/session-option-records'
+import {
+  mergeStoredSessionOptionRecord,
+  readSessionOptionRecord,
+  writeSessionOptionRecord
+} from '../storage/session-option-records'
 import {
   getAgentSessionOptionCatalog,
   type AgentSessionOptionCatalog,
@@ -155,11 +159,18 @@ export function useMobileNativeChatSessionOptions(args: {
     }
     let active = true
     void readSessionOptionRecord(scopeKey).then((stored) => {
-      if (!active || !stored || stored.agent !== agent || recordsByScope.has(scopeKey)) {
+      if (!active || !stored || stored.agent !== agent) {
         return
       }
-      recordsByScope.set(scopeKey, stored)
-      bump()
+      const live = recordsByScope.get(scopeKey)
+      if (!live) {
+        recordsByScope.set(scopeKey, stored)
+        bump()
+        return
+      }
+      if (mergeStoredSessionOptionRecord(live, stored)) {
+        bump()
+      }
     })
     return () => {
       active = false

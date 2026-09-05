@@ -64,3 +64,32 @@ export function writeSessionOptionRecord(
   })
   return write
 }
+
+/**
+ * Fold a stored record into the live one. The hook report usually lands before
+ * the disk read resolves and has already created a record holding only the
+ * reported model, so the stored one cannot simply replace it. The report stays
+ * authoritative for the model; the user's own option picks (effort, toggles) are
+ * carried over per model unless a newer pick already exists in memory.
+ * Returns true when the live record changed.
+ */
+export function mergeStoredSessionOptionRecord(
+  live: NativeChatSessionOptionRecord,
+  stored: NativeChatSessionOptionRecord
+): boolean {
+  let changed = false
+  for (const [modelId, values] of Object.entries(stored.valuesByModel)) {
+    const target = (live.valuesByModel[modelId] ??= {})
+    for (const [optionId, tracked] of Object.entries(values)) {
+      if (tracked.source !== 'reported' && target[optionId] === undefined) {
+        target[optionId] = { ...tracked }
+        changed = true
+      }
+    }
+  }
+  if (!live.model && stored.model) {
+    live.model = { ...stored.model }
+    changed = true
+  }
+  return changed
+}

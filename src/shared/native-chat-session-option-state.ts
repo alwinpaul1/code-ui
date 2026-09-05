@@ -128,10 +128,26 @@ export function applyNativeChatReportedSessionOptions(
   if (!modelId) {
     return false
   }
+  const previousModelId = typeof record.model?.value === 'string' ? record.model.value : null
   const modelChanged = record.model?.value !== modelId
   let changed = modelChanged || record.model?.source !== 'reported'
   record.model = { value: modelId, source: 'reported' }
-  const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
+  // Why: when the agent reports a different model than the one the user picked
+  // (a switch that did not take, or a restart), the user's own option picks such
+  // as effort still express what they asked for. Carry them to the reported
+  // model instead of dropping them; the report's own values still win below.
+  const carried: Record<string, TrackedNativeChatSessionOption> = {}
+  if (modelChanged && previousModelId) {
+    for (const [id, tracked] of Object.entries(record.valuesByModel[previousModelId] ?? {})) {
+      if (tracked.source !== 'reported') {
+        carried[id] = { ...tracked }
+      }
+    }
+  }
+  const modelValues = modelChanged ? carried : { ...record.valuesByModel[modelId] }
+  if (modelChanged && Object.keys(carried).length > 0) {
+    changed = true
+  }
   for (const [id, value] of Object.entries(values)) {
     if (id === 'model') {
       continue
