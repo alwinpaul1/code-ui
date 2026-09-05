@@ -281,7 +281,7 @@ function MobileNativeChatMessageImpl({
               onPress={onCancelQueued}
               style={({ pressed }) => ({ marginLeft: 12, opacity: pressed ? 0.5 : 1 })}
             >
-              <Txt variant="caption" weight="semibold" tone="inverse">
+              <Txt variant="caption" weight="semibold" tone="danger">
                 Cancel
               </Txt>
             </Pressable>
