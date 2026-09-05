@@ -1,4 +1,11 @@
-import { useCallback, useLayoutEffect, useRef, type MutableRefObject, useEffect } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import { useMobileNativeChatCancelQueued } from './use-mobile-native-chat-cancel-queued'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -14,6 +21,8 @@ import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-ga
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
+import { slashCommandOpensOverlay } from '../../../src/shared/native-chat-slash-commands'
+import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
 import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
@@ -215,11 +224,20 @@ export function useMobileNativeChatController(args: {
   })
   // A slash/skill result renders in the TUI, not the transcript: show the
   // terminal for it without persisting a view override.
-  const peekTerminalForDispatchedCommand = useCallback(() => {
-    if (activeSessionTabId) {
-      peekTerminalTab(activeSessionTabId)
-    }
-  }, [activeSessionTabId, peekTerminalTab])
+  const peekTerminalForDispatchedCommand = useCallback(
+    (command: string) => {
+      // Why: a Codex command that only prints (/status, /compact, /new…) has no
+      // overlay to drive, so flipping to the terminal just loses the chat; only
+      // an overlay command (a picker, a prompt) needs the terminal on screen.
+      if (activeChatAgentRef.current === 'codex' && !slashCommandOpensOverlay('codex', command)) {
+        return
+      }
+      if (activeSessionTabId) {
+        peekTerminalTab(activeSessionTabId)
+      }
+    },
+    [activeChatAgentRef, activeSessionTabId, peekTerminalTab]
+  )
 
   const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
     useMobileNativeChatAnswerSend({
@@ -269,8 +287,8 @@ export function useMobileNativeChatController(args: {
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
   const {
-    send: handleNativeChatSend,
-    sendWithOutcome: handleNativeChatSendWithOutcome,
+    send: _rawHandleNativeChatSend,
+    sendWithOutcome: rawHandleNativeChatSendWithOutcome,
     answerQuestion: legacyHandleNativeChatQuestionAnswer,
     dispatchCommand: handleNativeChatDispatchCommand
   } = useMobileNativeChatMessageSend({
@@ -340,6 +358,7 @@ export function useMobileNativeChatController(args: {
     const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
     return () => timers.forEach(clearTimeout)
   }, [legacyNativeChatPermission, refreshTerminalHud])
+  const [modelSheetRequest, setModelSheetRequestState] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
@@ -359,6 +378,7 @@ export function useMobileNativeChatController(args: {
       reportedEffort: hudObservation?.effort ?? null,
       statusLineObserved: hudObservation != null,
       planLabel: hudObservation?.accountPlan ?? null,
+      openRequest: modelSheetRequest,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
@@ -389,6 +409,15 @@ export function useMobileNativeChatController(args: {
     handleKey: showNativeChat ? streamScopeKey : null,
     refreshHud: refreshTerminalHud
   })
+  const codexIntercept = useCodexChatCommandIntercept({
+    agentRef: activeChatAgentRef,
+    sessionOptions: nativeChatSessionOptions,
+    rawSendWithOutcome: rawHandleNativeChatSendWithOutcome
+  })
+  const { handleNativeChatSend, handleNativeChatSendWithOutcome } = codexIntercept
+  useEffect(() => {
+    setModelSheetRequestState(codexIntercept.modelSheetRequest)
+  }, [codexIntercept.modelSheetRequest])
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])

@@ -4,7 +4,8 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
-  slashCommandDispatchText
+  slashCommandDispatchText,
+  slashCommandOpensOverlay
 } from './native-chat-slash-commands'
 
 describe('getAgentSlashCommands', () => {
@@ -77,5 +78,18 @@ describe('leading paths are not commands', () => {
     expect(isSlashCommandDraft('/Users/me/notes.md please read')).toBe(false)
     expect(isSlashCommandDraft('/model')).toBe(true)
     expect(isSlashCommandDraft('/mcp verbose')).toBe(true)
+  })
+})
+
+describe('slashCommandOpensOverlay (Codex)', () => {
+  it('flags picker/prompt commands and not text-only ones', () => {
+    expect(slashCommandOpensOverlay('codex', '/model')).toBe(true)
+    expect(slashCommandOpensOverlay('codex', '/permissions')).toBe(true)
+    expect(slashCommandOpensOverlay('codex', '/status')).toBe(false)
+    expect(slashCommandOpensOverlay('codex', '/compact')).toBe(false)
+    expect(slashCommandOpensOverlay('codex', '/mcp verbose')).toBe(false)
+  })
+  it('assumes an unknown command needs the terminal', () => {
+    expect(slashCommandOpensOverlay('codex', '/whatever')).toBe(true)
   })
 })

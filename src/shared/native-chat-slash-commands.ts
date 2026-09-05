@@ -11,6 +11,9 @@ export type SlashCommandSuggestion = {
   name: string
   /** Optional one-line description for the suggestion row. */
   description?: string
+  /** The command opens a TUI overlay (picker, prompt, wizard) that only the
+   *  terminal view can show or drive; text-only commands leave this unset. */
+  opensOverlay?: true
 }
 
 // Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
@@ -126,52 +129,60 @@ const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'workflows', description: 'Browse running and completed workflows' }
 ]
 
+// Codex 0.153.4's palette, enumerated by prefix on 2026-09-05 (the palette
+// caps at four rows, so single letters alone under-count). `opensOverlay`
+// marks commands whose UI lives in the TUI; the rest print text or act silently.
 const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'model', description: 'Choose the model and reasoning effort' },
-  { name: 'ide', description: 'Include IDE context' },
-  { name: 'permissions', description: 'Choose what Codex is allowed to do' },
-  { name: 'keymap', description: 'Remap TUI shortcuts' },
-  { name: 'vim', description: 'Toggle Vim mode' },
-  { name: 'experimental', description: 'Toggle experimental features' },
-  { name: 'approve', description: 'Approve one auto-review retry' },
-  { name: 'memories', description: 'Configure memory use' },
-  { name: 'skills', description: 'Manage and use skills' },
-  { name: 'import', description: 'Import setup from Claude Code' },
-  { name: 'hooks', description: 'View lifecycle hooks' },
-  { name: 'review', description: 'Review the current changes' },
-  { name: 'rename', description: 'Rename the current thread' },
-  { name: 'new', description: 'Start a new chat' },
-  { name: 'archive', description: 'Archive this session and exit' },
-  { name: 'delete', description: 'Delete this session and exit' },
-  { name: 'resume', description: 'Resume a saved chat' },
-  { name: 'fork', description: 'Fork the current chat' },
-  { name: 'app', description: 'Continue in Codex Desktop' },
-  { name: 'init', description: 'Create an AGENTS.md file' },
-  { name: 'compact', description: 'Compact the conversation' },
+  { name: 'model', description: 'Choose the model and reasoning effort', opensOverlay: true },
+  { name: 'status', description: 'Show session configuration and token usage' },
   { name: 'plan', description: 'Switch to Plan mode' },
-  { name: 'goal', description: 'Set or view the goal' },
-  { name: 'agent', description: 'Switch the active agent thread' },
-  { name: 'side', description: 'Start a side conversation' },
-  { name: 'copy', description: 'Copy the last response as markdown' },
+  { name: 'permissions', description: 'Choose what Codex is allowed to do', opensOverlay: true },
+  { name: 'compact', description: 'Summarize conversation to prevent hitting the context limit' },
+  { name: 'recap', description: 'Summarize the current conversation now' },
+  { name: 'new', description: 'Start a new chat during a conversation' },
+  { name: 'clear', description: 'Clear the terminal and start a new chat' },
+  { name: 'init', description: 'Create an AGENTS.md file with instructions for Codex' },
+  { name: 'diff', description: 'Show git diff (including untracked files)' },
+  { name: 'review', description: 'Review my current changes and find issues' },
+  { name: 'usage', description: 'View account usage or use a usage limit reset' },
+  { name: 'fast', description: '1.5x speed, increased usage' },
+  { name: 'rename', description: 'Rename the current thread' },
+  { name: 'resume', description: 'Resume a saved chat', opensOverlay: true },
+  { name: 'fork', description: 'Fork the current chat', opensOverlay: true },
+  { name: 'btw', description: 'Start a side conversation in an ephemeral fork' },
+  { name: 'side', description: 'Start a side conversation in an ephemeral fork' },
+  { name: 'goal', description: 'Set or view the goal for a long-running task' },
+  { name: 'agents', description: 'View and switch between all active agent sessions', opensOverlay: true },
+  { name: 'approve', description: 'Approve one retry of a recent auto-review denial' },
+  { name: 'skills', description: 'Use skills to improve how Codex performs specific tasks', opensOverlay: true },
+  { name: 'mention', description: 'Mention a file', opensOverlay: true },
+  { name: 'mcp', description: 'List configured MCP tools; use /mcp verbose for details' },
+  { name: 'memories', description: 'Configure memory use and generation', opensOverlay: true },
+  { name: 'hooks', description: 'View and manage lifecycle hooks', opensOverlay: true },
+  { name: 'plugins', description: 'Browse plugins', opensOverlay: true },
+  { name: 'personality', description: 'Choose a communication style for Codex', opensOverlay: true },
+  { name: 'pets', description: 'Choose or hide the terminal pet', opensOverlay: true },
+  { name: 'theme', description: 'Choose a syntax highlighting theme', opensOverlay: true },
+  { name: 'statusline', description: 'Configure which items appear in the status line', opensOverlay: true },
+  { name: 'title', description: 'Configure which items appear in the terminal title', opensOverlay: true },
+  { name: 'keymap', description: 'Remap TUI shortcuts', opensOverlay: true },
+  { name: 'vim', description: 'Toggle Vim mode for the composer' },
+  { name: 'experimental', description: 'Toggle experimental features', opensOverlay: true },
   { name: 'raw', description: 'Toggle raw scrollback mode' },
-  { name: 'diff', description: 'Show the working diff' },
-  { name: 'mention', description: 'Mention a file' },
-  { name: 'status', description: 'Show session configuration and usage' },
-  { name: 'usage', description: 'View account usage' },
-  { name: 'title', description: 'Configure the terminal title' },
-  { name: 'statusline', description: 'Configure the status line' },
-  { name: 'theme', description: 'Choose a syntax highlighting theme' },
-  { name: 'pets', description: 'Choose or hide the terminal pet' },
-  { name: 'mcp', description: 'List configured MCP tools' },
-  { name: 'plugins', description: 'Browse plugins' },
-  { name: 'logout', description: 'Log out of Codex' },
-  { name: 'exit', description: 'Exit Codex' },
-  { name: 'feedback', description: 'Send logs to maintainers' },
+  { name: 'copy', description: 'Copy the last response, code block, or quote' },
+  { name: 'export', description: 'Export the conversation as markdown' },
+  { name: 'ide', description: 'Include selection, open files and context from your IDE' },
+  { name: 'import', description: 'Import setup, this project and recent chats from Claude Code', opensOverlay: true },
+  { name: 'cd', description: 'Change the current working directory' },
   { name: 'ps', description: 'List background terminals' },
   { name: 'stop', description: 'Stop all background terminals' },
-  { name: 'clear', description: 'Clear the terminal and start a new chat' },
-  { name: 'personality', description: 'Choose a communication style' },
-  { name: 'subagents', description: 'Switch the active agent thread' }
+  { name: 'app', description: 'Continue this session in the Desktop app' },
+  { name: 'feedback', description: 'Send logs to maintainers', opensOverlay: true },
+  { name: 'archive', description: 'Archive this session and exit', opensOverlay: true },
+  { name: 'delete', description: 'Permanently delete this session and exit', opensOverlay: true },
+  { name: 'logout', description: 'Log out of Codex', opensOverlay: true },
+  { name: 'exit', description: 'Exit Codex', opensOverlay: true },
+  { name: 'quit', description: 'Exit Codex', opensOverlay: true }
 ]
 
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
@@ -254,4 +265,14 @@ export function classifyNativeChatSend(
     return 'unknown-token'
   }
   return 'chat'
+}
+
+/** Whether a slash command needs the terminal view (it opens a TUI overlay). A
+ *  command the catalog does not know is assumed to, since we cannot tell. */
+export function slashCommandOpensOverlay(agent: AgentType, commandText: string): boolean {
+  const name = commandText.trim().split(/\s/, 1)[0]?.replace(/^\//, '') ?? ''
+  const command = getAgentSlashCommands(agent).find(
+    (candidate) => candidate.name.toLowerCase() === name.toLowerCase()
+  )
+  return command ? command.opensOverlay === true : true
 }

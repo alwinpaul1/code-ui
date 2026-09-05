@@ -27,6 +27,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   statusLineObserved?: boolean
   /** Subscription name for the sheet caption (Codex: from /status), when known. */
   planLabel?: string | null
+  /** Bumped to open the model sheet imperatively. */
+  openRequest?: number
   structured: {
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
@@ -57,6 +59,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedEffort,
     statusLineObserved = true,
     planLabel = null,
+    openRequest = 0,
     structured,
     toggleTabChatView,
     worktreeId,
@@ -137,9 +140,17 @@ export function useMobileNativeChatSessionOptionController(args: {
           ? { controller: structuredController, isWorking }
           : null
         : sessionOptions.snapshot.length > 0
-          ? { controller: sessionOptions, isWorking, statusLineObserved, planLabel }
+          ? { controller: sessionOptions, isWorking, statusLineObserved, planLabel, openRequest }
           : null,
-    [activeChatStructured, isWorking, planLabel, sessionOptions, statusLineObserved, structuredController]
+    [
+      activeChatStructured,
+      isWorking,
+      openRequest,
+      planLabel,
+      sessionOptions,
+      statusLineObserved,
+      structuredController
+    ]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

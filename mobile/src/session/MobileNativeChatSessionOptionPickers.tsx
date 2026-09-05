@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Keyboard, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -43,6 +43,8 @@ export type MobileNativeChatSessionOptionPickersProps = {
   statusLineObserved?: boolean
   /** Subscription name shown above the model list, when the agent reports one. */
   planLabel?: string | null
+  /** Bumped by the owner to open the model sheet (a typed `/model` in Codex chat). */
+  openRequest?: number
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
@@ -51,12 +53,20 @@ export function MobileNativeChatSessionOptionPickers({
   isWorking: _isWorking,
   sendInFlight = false,
   statusLineObserved = true,
-  planLabel = null
+  planLabel = null,
+  openRequest = 0
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
+  const modelId = model?.id ?? null
+  useEffect(() => {
+    if (openRequest > 0 && modelId) {
+      Keyboard.dismiss()
+      setOpenDescriptorId(modelId)
+    }
+  }, [modelId, openRequest])
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model) {
     return null
