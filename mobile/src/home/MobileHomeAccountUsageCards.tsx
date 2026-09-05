@@ -7,20 +7,19 @@ import {
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
-import { getVisibleUsageWindows } from '../components/account-usage-state'
-import { UsageMeter } from '../components/UsageMeter'
-import { UsageRing } from '../components/UsageRing'
-import { getUsageHeadline, usageWindowTitle } from '../components/usage-window-summary'
+import { getVisibleUsageWindows, getWindowResetLabel } from '../components/account-usage-state'
 import { useNow } from '../hooks/use-now'
+import { UsageMeter } from '../components/UsageMeter'
+import { usageWindowTitle } from '../components/usage-window-summary'
 import { useTheme } from '../theme/theme-context'
 import type { HostProfile } from '../transport/types'
 import { PressScale } from '../ui/PressScale'
 import { SectionLabel } from '../ui/SectionLabel'
 import { Txt } from '../ui/Txt'
 
-// Home usage card: one block per provider, after GitHub's Copilot usage row
-// (name, plan line, a ring with the headline number) with the per-window
-// meters underneath. The ring leads with the window closest to its limit.
+// Home usage card: one block per provider — tile, name, the signed-in account
+// — with the per-window meters underneath, one column per window the plan
+// reports. Tapping opens the Usage screen.
 
 const PROVIDER_NAME: Record<ProviderKey, string> = { claude: 'Claude', codex: 'Codex' }
 
@@ -29,7 +28,7 @@ export function MobileHomeAccountUsageCards(props: {
   onOpen: (hostId: string) => void
 }) {
   const { colors, radius, space } = useTheme()
-  // Why: reset labels need a clock; a minute tick is plenty for "resets Wed 7:00 PM".
+  // Why: reset lines need a clock; a minute tick is plenty for "Resets in 3 hr 29 min".
   const now = useNow(60_000, props.items.length > 0)
   if (props.items.length === 0) {
     return null
@@ -47,9 +46,8 @@ export function MobileHomeAccountUsageCards(props: {
             borderWidth: 1,
             borderColor: colors.border,
             borderRadius: radius.lg,
-            paddingHorizontal: space.md,
-            paddingVertical: space.md,
-            gap: space.lg,
+            padding: space.lg,
+            gap: space.xl,
             marginBottom: space.sm
           }}
           onPress={() => props.onOpen(host.id)}
@@ -73,15 +71,10 @@ export function MobileHomeAccountUsageCards(props: {
             if (state.accounts.length === 0 && !hasActiveProviderUsage(limits)) {
               return null
             }
-            const headline = getUsageHeadline(limits, now)
             const windows = getVisibleUsageWindows(limits)
-            const subtitle =
-              active?.email ??
-              (headline?.resetLabel
-                ? `${headline.title} · ${headline.resetLabel.replace(/^Resets /, 'resets ')}`
-                : null)
+            const subtitle = active?.email ?? null
             return (
-              <View key={provider} style={{ gap: space.sm + 2 }}>
+              <View key={provider} style={{ gap: space.md }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                   <View
                     style={{
@@ -100,7 +93,7 @@ export function MobileHomeAccountUsageCards(props: {
                     )}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                    <Txt variant="label" weight="semibold" numberOfLines={1}>
+                    <Txt variant="heading" weight="semibold" numberOfLines={1}>
                       {PROVIDER_NAME[provider]}
                     </Txt>
                     {subtitle ? (
@@ -109,30 +102,25 @@ export function MobileHomeAccountUsageCards(props: {
                       </Txt>
                     ) : null}
                   </View>
-                  {headline ? (
-                    <UsageRing
-                      size={44}
-                      strokeWidth={5}
-                      usedPercent={headline.usedPercent}
-                      unavailable={headline.unavailable}
-                      loading={headline.loading}
-                    />
-                  ) : null}
                 </View>
                 {windows.length > 0 ? (
-                  <View style={{ flexDirection: 'row', gap: space.md }}>
+                  <View style={{ gap: space.md }}>
                     {windows.map((key) => {
                       const bar = getUsageBarState(limits, key)
                       return (
-                        <View key={key} style={{ flex: 1, minWidth: 0 }}>
-                          <UsageMeter
-                            title={usageWindowTitle(key)}
-                            usedPercent={bar.usedPercent}
-                            unavailable={bar.unavailable}
-                            loading={bar.loading}
-                            compact
-                          />
-                        </View>
+                        <UsageMeter
+                          key={key}
+                          title={
+                            key === 'weekly' && !windows.includes('session')
+                              ? 'Weekly limit'
+                              : usageWindowTitle(key, true)
+                          }
+                          usedPercent={bar.usedPercent}
+                          unavailable={bar.unavailable}
+                          loading={bar.loading}
+                          subtitle={getWindowResetLabel(limits, key, now)}
+                          dense
+                        />
                       )
                     })}
                   </View>

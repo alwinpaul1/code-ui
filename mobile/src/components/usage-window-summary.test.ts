@@ -1,52 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { getUsageHeadline, usageTone } from './usage-window-summary'
-
-const window = (usedPercent: number, resetsAt: number | null = null) => ({
-  usedPercent,
-  windowMinutes: 300,
-  resetsAt,
-  resetDescription: null
-})
+import { formatResetCountdown, usageWindowTitle } from './usage-window-summary'
 
 describe('usage window summary', () => {
-  it('leads with the most-used visible window', () => {
-    const headline = getUsageHeadline(
-      {
-        provider: 'claude',
-        session: window(7),
-        weekly: window(16),
-        fableWeekly: window(30),
-        updatedAt: 1,
-        error: null,
-        status: 'ok'
-      } as never,
-      1
-    )
-    expect(headline?.key).toBe('fableWeekly')
-    expect(headline?.usedPercent).toBe(30)
+  it('names windows the way the Claude app does', () => {
+    expect(usageWindowTitle('session', true)).toBe('Current session')
+    expect(usageWindowTitle('weekly', true)).toBe('All models')
+    expect(usageWindowTitle('fableWeekly', true)).toBe('Fable only')
+    expect(usageWindowTitle('weekly')).toBe('Weekly')
   })
 
-  it('shows only the weekly window for a plan with no session window', () => {
-    const headline = getUsageHeadline(
-      {
-        provider: 'codex',
-        session: null,
-        weekly: window(0, 5_000),
-        updatedAt: 1,
-        error: null,
-        status: 'ok'
-      } as never,
-      1
-    )
-    expect(headline?.key).toBe('weekly')
-    expect(headline?.resetLabel).toMatch(/^Resets /)
-  })
-
-  it('bands tone like the desktop status bar', () => {
-    expect(usageTone(null)).toBe('muted')
-    expect(usageTone(59)).toBe('success')
-    expect(usageTone(60)).toBe('warning')
-    expect(usageTone(80)).toBe('danger')
+  it('formats the reset countdown', () => {
+    const now = 1_000_000_000
+    expect(formatResetCountdown(now + (3 * 60 + 34) * 60_000, now)).toBe('Resets in 3 hr 34 min')
+    expect(formatResetCountdown(now + 7 * 24 * 3_600_000, now)).toBe('Resets in 7d 0h')
+    expect(formatResetCountdown(now + 12 * 60_000, now)).toBe('Resets in 12 min')
+    expect(formatResetCountdown(now - 1, now)).toBe('Resets now')
   })
 })

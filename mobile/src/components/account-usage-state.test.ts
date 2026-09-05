@@ -150,14 +150,14 @@ describe('getWindowResetLabel', () => {
     ).toBe(null)
   })
 
-  it('session: the clock time it lands on; weekly: weekday and time', () => {
+  it('session: the countdown; weekly: weekday and time', () => {
     const at47 = now + 47 * min
     expect(getWindowResetLabel(makeLimits({ session: makeWindow(at47) }), 'session', now)).toBe(
-      `Resets ${formatResetClock(at47)}`
+      'Resets in 47 min'
     )
     const at3h54 = now + 3 * hour + 54 * min
     expect(getWindowResetLabel(makeLimits({ session: makeWindow(at3h54) }), 'session', now)).toBe(
-      `Resets ${formatResetClock(at3h54)}`
+      'Resets in 3 hr 54 min'
     )
     const weeklyAt = now + 6 * day + 7 * hour
     const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(weeklyAt).getDay()]

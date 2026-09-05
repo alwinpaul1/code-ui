@@ -122,6 +122,8 @@ export function getVisibleUsageWindows(
   return fetching || !limits || limits.status !== 'ok' ? ['session', 'weekly'] : []
 }
 
+import { formatResetCountdown } from './usage-window-summary'
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
 /** "5:30 AM" in the device's time zone. */
@@ -157,12 +159,8 @@ export function getWindowResetLabel(
     }
     return `Resets ${WEEKDAYS[new Date(resetsAt).getDay()]} ${formatResetClock(resetsAt)}`
   }
-  // Session window: just the clock time it lands on — "Resets 5:30 AM". The
-  // two bars share one row on the phone, so a countdown does not fit beside it.
-  if (resetsAt <= now) {
-    return 'Resets now'
-  }
-  return `Resets ${formatResetClock(resetsAt)}`
+  // Session window: the countdown, as the Claude app writes it — "Resets in 3 hr 34 min".
+  return formatResetCountdown(resetsAt, now)
 }
 
 /** "Updated just now" / "Updated 3m ago" / "Updated 2h ago", or null without a timestamp. */
