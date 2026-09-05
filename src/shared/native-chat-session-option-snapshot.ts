@@ -169,7 +169,12 @@ export function withTrackedNativeChatModel(
     return [...models]
   }
   const seeded = catalog.models.find((model) => model.id === trackedId)
-  return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
+  // Why: an unlisted tracked model (a Codex release newer than the catalog) still
+  // gets the catalog's fallback effort rows, so the sheet is not model-name-only.
+  return [
+    ...models,
+    seeded ?? { id: trackedId, label: trackedId, options: catalog.unknownModelOptions ?? [] }
+  ]
 }
 
 /** Why: no tracked model means no `-m` was ever emitted, so the CLI is running its

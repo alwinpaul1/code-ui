@@ -155,11 +155,13 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         CLAUDE_SESSION_OPTION_CATALOG.models,
         record
       )
-      expect(reconciled.at(-1)).toEqual({
-        id: 'experimental-model',
-        label: 'experimental-model',
-        options: []
-      })
+      // An unlisted tracked model keeps its id as the label and inherits the
+      // catalog's fallback effort rows (parity with the launch/structured paths),
+      // so the sheet offers effort for a model newer than the catalog.
+      const last = reconciled.at(-1)
+      expect(last?.id).toBe('experimental-model')
+      expect(last?.label).toBe('experimental-model')
+      expect(last?.options).toBe(CLAUDE_SESSION_OPTION_CATALOG.unknownModelOptions)
     })
 
     it('leaves the list alone when the tracked model is already listed', () => {

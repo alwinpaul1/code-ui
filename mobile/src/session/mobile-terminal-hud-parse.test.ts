@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerminalHudObservation, parseTerminalPermissionMode } from './mobile-terminal-hud-parse'
+import {
+  parseTerminalHudObservation,
+  parseTerminalPermissionMode
+} from './mobile-terminal-hud-parse'
 
 describe('parseTerminalHudObservation', () => {
   it('reads model and effort from the claude-hud badge', () => {
@@ -49,7 +52,13 @@ describe('parseTerminalHudObservation', () => {
   it('reads the Code UI status line badge (no auth segment, "effort" label, middle dot)', () => {
     expect(
       parseTerminalHudObservation(['[Fable 5.1 · effort high] ~/Desktop/Project/Thesis', '❯'])
-    ).toEqual({ modelLabel: 'Fable 5.1', modelId: 'fable', effort: 'high', context: null, permissionMode: 'default' })
+    ).toEqual({
+      modelLabel: 'Fable 5.1',
+      modelId: 'fable',
+      effort: 'high',
+      context: null,
+      permissionMode: 'default'
+    })
     expect(parseTerminalHudObservation(['[Sonnet 5] ~/x'])).toEqual({
       modelLabel: 'Sonnet 5',
       modelId: 'sonnet',
@@ -73,14 +82,55 @@ describe('parseTerminalHudObservation', () => {
   })
 
   it('reads the permission mode from the input footer', () => {
-    expect(parseTerminalPermissionMode(['❯ ', '  ⏵⏵ accept edits on (shift+tab to cycle)'])).toBe('acceptEdits')
+    expect(parseTerminalPermissionMode(['❯ ', '  ⏵⏵ accept edits on (shift+tab to cycle)'])).toBe(
+      'acceptEdits'
+    )
     expect(parseTerminalPermissionMode(['  ⏸ plan mode on (shift+tab to cycle)'])).toBe('plan')
     expect(parseTerminalPermissionMode(['  ⏵⏵ auto mode on'])).toBe('auto')
     expect(parseTerminalPermissionMode(['  ⏸ manual mode on'])).toBe('manual')
     expect(parseTerminalPermissionMode(['  ⏵⏵ bypass permissions on'])).toBe('bypassPermissions')
     expect(parseTerminalPermissionMode(['❯ ', '[Fable 5.1 · effort high] ctx 12%'])).toBe('default')
     expect(
-      parseTerminalHudObservation(['[Fable 5.1 · effort high]', '  ⏸ plan mode on (shift+tab to cycle)'])
+      parseTerminalHudObservation([
+        '[Fable 5.1 · effort high]',
+        '  ⏸ plan mode on (shift+tab to cycle)'
+      ])
     ).toMatchObject({ permissionMode: 'plan' })
+  })
+})
+
+describe('parseTerminalHudObservation — Codex footer', () => {
+  it('reads the model and reasoning effort from the Codex input footer', () => {
+    expect(
+      parseTerminalHudObservation([
+        '• Model changed to gpt-6-astra medium',
+        '› Ask Codex to do anything',
+        '  gpt-6-astra medium · ~/Desktop/Project/Code UI'
+      ])
+    ).toEqual({
+      modelLabel: 'gpt-6-astra',
+      modelId: 'gpt-6-astra',
+      effort: 'medium',
+      context: null,
+      permissionMode: 'default'
+    })
+  })
+
+  it('treats a "default" reasoning word as no effort', () => {
+    const observation = parseTerminalHudObservation([
+      '  gpt-6-astra default · ~/Desktop/Project/Code UI'
+    ])
+    expect(observation?.modelId).toBe('gpt-6-astra')
+    expect(observation?.effort).toBeNull()
+  })
+
+  it('ignores middot prose that is not a model footer', () => {
+    expect(
+      parseTerminalHudObservation(['✻ Worked for 4s · done 1:32 PM', 'new task? /clear'])
+    ).toBeNull()
+  })
+
+  it('prefers the Claude badge when both could match', () => {
+    expect(parseTerminalHudObservation(['  [Opus 5 high | Max 20x] 61%'])?.modelId).toBe('opus')
   })
 })

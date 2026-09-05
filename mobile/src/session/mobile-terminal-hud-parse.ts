@@ -3,8 +3,9 @@ const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 export type TerminalHudObservation = {
   /** Model as the status line names it, e.g. "Fable 5.1", "Opus 4.8 (1M context)". */
   modelLabel: string
-  /** Catalog id the label maps to, or null when no family word is present. */
-  modelId: 'fable' | 'opus' | 'sonnet' | 'haiku' | null
+  /** Catalog id (Claude) or the raw provider model (Codex), or null when the
+   *  status line names no model. */
+  modelId: string | null
   /** Effort level printed after the model, when the HUD shows one. */
   effort: string | null
   /** Context window usage when the status line prints it (claude-hud's
@@ -121,6 +122,50 @@ const FILLER = new Set(['·', '•', '|', '-', '—', ':', 'effort', 'effort:'])
  * `effort` field never reaches the phone, so the phone reads what the terminal
  * shows instead. `ultracode(level)` counts as its inner level.
  */
+// Codex has no bracket badge. Its input footer states the model and reasoning
+// effort as "<model> <effort> · <cwd>", e.g. "gpt-6-astra medium · ~/Project".
+// Effort may read "default" (the model's own default) or be absent. Match a
+// model token that looks like a provider id (a digit or a dash rules out prose
+// like "done · 1:32 PM") followed by a path after the middot.
+const CODEX_EFFORT_LEVELS = new Set([
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra'
+])
+const CODEX_FOOTER =
+  /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+[~/]/i
+
+function looksLikeProviderModelId(token: string): boolean {
+  return /\d/.test(token) || token.includes('-')
+}
+
+export function parseCodexHudObservation(lines: readonly string[]): TerminalHudObservation | null {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const match = CODEX_FOOTER.exec(lines[index] ?? '')
+    if (!match) {
+      continue
+    }
+    const model = match[1]!
+    if (!looksLikeProviderModelId(model)) {
+      continue
+    }
+    const effortWord = match[2]?.toLowerCase() ?? null
+    const effort = effortWord && CODEX_EFFORT_LEVELS.has(effortWord) ? effortWord : null
+    return {
+      modelLabel: model,
+      modelId: model,
+      effort,
+      context: null,
+      permissionMode: parseTerminalPermissionMode(lines)
+    }
+  }
+  return null
+}
+
 export function parseTerminalHudObservation(
   lines: readonly string[]
 ): TerminalHudObservation | null {
@@ -170,5 +215,6 @@ export function parseTerminalHudObservation(
       }) ?? parseTerminalHudContextWindow(lines[index + 1] ?? '')
     return { modelLabel, modelId, effort, context, permissionMode: parseTerminalPermissionMode(lines) }
   }
-  return null
+  // No Claude badge on screen; try the Codex footer before giving up.
+  return parseCodexHudObservation(lines)
 }

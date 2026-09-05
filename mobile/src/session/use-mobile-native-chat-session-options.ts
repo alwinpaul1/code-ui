@@ -197,7 +197,13 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
-    const matched = matchNativeChatCatalogModelId(catalog, reportedModel)
+    // Why: Codex's lineup (gpt-6-astra, …) outpaces the catalog, so track a
+    // reported id it does not list as the raw model; withTrackedNativeChatModel
+    // then names it in the pill. Claude keeps the strict match (its badge label
+    // "Opus 5" is not a catalog id).
+    const matched =
+      matchNativeChatCatalogModelId(catalog, reportedModel) ??
+      (agent === 'codex' ? reportedModel.trim() : null)
     if (!matched) {
       return
     }
