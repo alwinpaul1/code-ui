@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
-import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  NATIVE_CHAT_INPUT_LEASE_GRACE_MS,
+  useMobileNativeChatInputLease
+} from './use-mobile-native-chat-input-lease'
 
 type Lease = ReturnType<typeof useMobileNativeChatInputLease>
 
@@ -59,5 +62,26 @@ describe('useMobileNativeChatInputLease', () => {
 
     act(() => lease?.markReady('other'))
     expect(lease?.clear()).toBe(true)
+  })
+
+  it('presumes the lease once the acknowledgement is overdue, and drops it on disconnect', async () => {
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { connected: true }))
+      })
+      expect(lease?.ready).toBe(false)
+      act(() => vi.advanceTimersByTime(NATIVE_CHAT_INPUT_LEASE_GRACE_MS - 1))
+      expect(lease?.ready).toBe(false)
+      act(() => vi.advanceTimersByTime(1))
+      expect(lease?.ready).toBe(true)
+      expect(lease?.lockReason).toBeNull()
+
+      await act(async () => renderer?.update(createElement(Harness, { connected: false })))
+      expect(lease?.ready).toBe(false)
+      expect(lease?.lockReason).toBe('disconnected')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

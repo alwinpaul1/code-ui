@@ -49,6 +49,27 @@ describe('useMobileNativeChatSession', () => {
     })
   }
 
+  it('keeps the shown transcript when a re-subscribe comes back empty', async () => {
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      return () => {}
+    })
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+    await mount(client)
+    act(() => emit({ type: 'snapshot', messages: [message('a'), message('b')], hasMore: false }))
+    expect(state?.messages.map((row) => row.id)).toEqual(['a', 'b'])
+
+    // Leaving for a file tab drops the source; coming back re-subscribes.
+    await act(async () => renderer?.update(createElement(Harness, { client: null })))
+    await act(async () => renderer?.update(createElement(Harness, { client })))
+    act(() => emit({ type: 'snapshot', messages: [], hasMore: false }))
+    expect(state?.status).toBe('ready')
+    expect(state?.messages.map((row) => row.id)).toEqual(['a', 'b'])
+
+    act(() => emit({ type: 'appended', messages: [message('c')] }))
+    expect(state?.messages.map((row) => row.id)).toEqual(['a', 'b', 'c'])
+  })
+
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(

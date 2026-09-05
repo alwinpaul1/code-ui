@@ -71,9 +71,8 @@ export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescri
       labels.push(descriptor.id === 'fastMode' ? 'Fast' : descriptor.label)
     }
   }
-  if (labels.length > 0) {
-    return labels.join(' · ')
-  }
-  const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
-  return effort ? effort.label : 'Options'
+  // Why: with nothing known the pill used to read "Sonnet Effort" — the effort
+  // descriptor's title standing in for a value. An empty string lets the pill
+  // show the model alone; the sheet still lists effort for the user to set.
+  return labels.join(' · ')
 }

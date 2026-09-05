@@ -38,4 +38,13 @@ describe('native chat transcript retention', () => {
       encodeNativeChatTranscriptIdentity(['host', 'workspace\0session'])
     )
   })
+
+  it('hands back the retained transcript for its identity only', () => {
+    const retention = createNativeChatTranscriptRetention()
+    const retained = [message('retained')]
+    expect(retention.retained('source-a')).toBeNull()
+    retention.capture('source-a', retained)
+    expect(retention.retained('source-a')).toBe(retained)
+    expect(retention.retained('source-b')).toBeNull()
+  })
 })

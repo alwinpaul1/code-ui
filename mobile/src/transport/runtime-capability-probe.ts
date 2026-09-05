@@ -11,7 +11,7 @@ const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 
 export function startRuntimeCapabilityProbe(
   client: RpcClient,
-  onCapabilities: (capabilities: readonly string[]) => void
+  onCapabilities: (capabilities: readonly string[], statusResult?: unknown) => void
 ): () => void {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -37,7 +37,7 @@ export function startRuntimeCapabilityProbe(
           rawCapabilities.every((value) => typeof value === 'string')
             ? rawCapabilities
             : []
-        onCapabilities(capabilities)
+        onCapabilities(capabilities, result)
       },
       (error: unknown) => {
         if (cancelled) {

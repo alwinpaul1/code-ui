@@ -62,7 +62,7 @@ export function MobileNativeChatSessionOptionPickers({
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id
   const modelLabel = mobileModelPillLabel(model)
-  const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) : null
+  const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) || null : null
   const pillLabel = optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 

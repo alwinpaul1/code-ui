@@ -8,6 +8,9 @@ export function encodeNativeChatTranscriptIdentity(parts: readonly (string | nul
 
 export type NativeChatTranscriptRetention = {
   capture: (identity: string, messages: NativeChatMessage[]) => void
+  /** The settled transcript captured for `identity`, or null. Lets a caller seed a
+   *  re-subscribe that came back empty instead of blanking a conversation it showed. */
+  retained: (identity: string) => NativeChatMessage[] | null
   visible: (args: {
     identity: string
     messages: NativeChatMessage[]
@@ -22,6 +25,9 @@ export function createNativeChatTranscriptRetention(): NativeChatTranscriptReten
   return {
     capture(identity, messages) {
       captured = { identity, messages }
+    },
+    retained(identity) {
+      return captured?.identity === identity ? captured.messages : null
     },
     visible({ identity, messages, settled }) {
       if (settled) {

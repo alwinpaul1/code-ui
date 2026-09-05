@@ -51,6 +51,11 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
 | [#17579](https://github.com/stablyai/orca/issues/17579) reasoning floods the transcript | Reasoning turns fold into a Thinking disclosure with a one-line preview. |
 | [#17729](https://github.com/stablyai/orca/issues/17729) every commit shows "just now" | Commit timestamps are treated as epoch milliseconds, as the desktop sends them. |
 | [#18568](https://github.com/stablyai/orca/issues/18568) no visible model | The session header shows the active model as a chip. |
+| [#12707](https://github.com/stablyai/orca/issues/12707) / [#18101](https://github.com/stablyai/orca/issues/18101) no in-app update for the sideloaded APK | Daily check against GitHub Releases, a morphing update card with release notes, in-app download and hand-off to the package installer. |
+| [#16602](https://github.com/stablyai/orca/issues/16602) APK published as `app-release.apk` | The release workflow names it `code-ui-android-v<version>-<versionCode>.apk`. |
+| [#15512](https://github.com/stablyai/orca/issues/15512)-shaped: chat re-subscribe comes back empty | A conversation the phone already showed is kept as the base when a re-subscribe (chat → file tab → chat) returns no rows; live appends fold onto it. Seen on a Windows host. |
+| Windows host: xterm query replies echoed as `^[P>|xterm…^[[?1;2c` when `claude` starts | The phone stays silent on win32 hosts; ConPTY answers DA1/CPR itself and a cooked PowerShell prompt echoed everything else. |
+| Composer stuck on "Waiting for terminal…" | After 6 s without the host's lease acknowledgement the composer unlocks and lets the host's own send verdict decide. |
 
 Screens that were not restyled yet keep Orca's dark palette in both modes:
 diff review, source control, file browser and preview, pull request panel,

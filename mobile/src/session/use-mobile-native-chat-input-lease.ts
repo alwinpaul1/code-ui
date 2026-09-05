@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
+/** How long a connected chat waits for the host's `subscribed` acknowledgement
+ *  before the composer stops treating the lease as missing. A healthy host acks
+ *  within a round trip; past this the phone lets the send go and the host's own
+ *  terminal.send verdict decides, instead of "Waiting for terminal…" forever. */
+export const NATIVE_CHAT_INPUT_LEASE_GRACE_MS = 6_000
+
 export function useMobileNativeChatInputLease(args: {
   activeHandle: string | null
   connected: boolean
@@ -16,7 +22,21 @@ export function useMobileNativeChatInputLease(args: {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   // Mirrors the state so `clear` can report synchronously whether it changed anything.
   const readyHandlesRef = useRef(readyHandles)
-  const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
+  // Why: a handle whose acknowledgement never came (seen on a Windows host) is
+  // presumed leased after the grace period; a real refusal still surfaces from
+  // the host on send, so the user gets a retryable error instead of a dead arrow.
+  const [presumedHandle, setPresumedHandle] = useState<string | null>(null)
+  const acknowledged = args.activeHandle != null && readyHandles.has(args.activeHandle)
+  const ready = acknowledged || (args.activeHandle != null && presumedHandle === args.activeHandle)
+  useEffect(() => {
+    if (!args.connected || args.activeHandle == null || acknowledged) {
+      setPresumedHandle(null)
+      return
+    }
+    const handle = args.activeHandle
+    const timer = setTimeout(() => setPresumedHandle(handle), NATIVE_CHAT_INPUT_LEASE_GRACE_MS)
+    return () => clearTimeout(timer)
+  }, [acknowledged, args.activeHandle, args.connected])
   // Why: absence of an acknowledgement proves only that setup is still pending;
   // the protocol does not report evidence that another client owns the floor.
   const lockReason: MobileNativeChatInputLockReason | null = !args.connected

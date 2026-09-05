@@ -38,6 +38,23 @@ describe('sendMobileTerminalQueryReply', () => {
     })
   })
 
+  it('stays silent on Windows hosts, where ConPTY answers and a cooked shell echoes', async () => {
+    const client = createClient()
+    await expect(
+      sendMobileTerminalQueryReply({
+        bytes: '\x1b[?1;2c',
+        client,
+        clientId: 'mobile-1',
+        connected: true,
+        handle: 'terminal-1',
+        hostSupportsQueryReplyInput: true,
+        hostPlatform: 'win32',
+        subscribedTerminals: new Set(['terminal-1'])
+      })
+    ).resolves.toBe(false)
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['disconnected', false, new Set(['terminal-1']), '\x1b[3;4R', 'terminal-1'],
     ['unsubscribed', true, new Set(), '\x1b[3;4R', 'terminal-1'],

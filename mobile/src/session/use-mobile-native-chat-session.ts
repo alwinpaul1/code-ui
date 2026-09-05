@@ -209,7 +209,20 @@ export function useMobileNativeChatSession(args: {
           beforeOffsetRef.current = applied.beforeOffset ?? null
           setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
         }
-        setMessages(applied.messages)
+        // Why: a re-subscribe of a conversation this hook already showed (chat →
+        // file tab → chat) can come back as an empty base when the host fails to
+        // read the transcript file — seen on a Windows host, where the phone then
+        // dropped to "Start a chat" over a live session. The retained settled
+        // transcript is the better base; live appends fold onto it as usual.
+        const retained =
+          applied.windowReplaced && applied.messages.length === 0
+            ? transcriptRetentionRef.current.retained(identity)
+            : null
+        if (retained && retained.length > 0) {
+          setList(retained)
+        } else {
+          setMessages(applied.messages)
+        }
         if (!applied.windowReplaced && applied.hasMore != null) {
           setHasMore(applied.hasMore)
         }

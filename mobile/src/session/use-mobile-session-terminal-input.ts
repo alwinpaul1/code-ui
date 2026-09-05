@@ -41,7 +41,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     clearPendingLiveInputCommit,
     showToast,
     getTerminalRef,
-    hostQueryReplyInputSupportedRef
+    hostQueryReplyInputSupportedRef,
+    hostPlatformRef
   } = scope
   const toggleLiveInput = useCallback(() => {
     if (!activeHandle) {
@@ -219,6 +220,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       connected: connStateRef.current === 'connected',
       handle,
       hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
+      hostPlatform: hostPlatformRef.current,
       subscribedTerminals: terminalUnsubsRef.current
     })
   }, [])
