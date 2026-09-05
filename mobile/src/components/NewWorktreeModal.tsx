@@ -22,6 +22,7 @@ import {
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
 } from './new-workspace-project-targets'
+import { useNewWorkspaceSshTargetLabels } from './use-new-workspace-ssh-target-labels'
 import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
 import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
 import { useNewWorkspaceAgentSelection } from './use-new-workspace-agent-selection'
@@ -68,6 +69,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
   const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
     useNewWorktreeRuntimeCapabilities(client, visible)
+  const sshTargetLabels = useNewWorkspaceSshTargetLabels(client, visible)
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const executionTarget = useNewWorkspaceExecutionTarget({
     client,
@@ -150,11 +152,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
-    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform),
-    [hostPlatform, repos, selectedProjectId]
+    () =>
+      buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, sshTargetLabels),
+    [hostPlatform, repos, selectedProjectId, sshTargetLabels]
   )
   const selectedRunTarget = selectedRepo
-    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
+    ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, sshTargetLabels)
     : null
   const needsSetupChoice = Boolean(setupScript.setupCommand) && setupScript.setupRunPolicy === 'ask'
   const canCreate =

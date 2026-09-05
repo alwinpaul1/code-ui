@@ -58,9 +58,13 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
   })
 }
 
+/** SSH target id → the label the user gave it (ssh-config alias or display name). */
+export type SshTargetLabels = ReadonlyMap<string, string>
+
 export function getNewWorkspaceRunTarget(
   repo: WorkspaceRepo,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  sshTargetLabels: SshTargetLabels | null = null
 ): {
   label: string
   detail: string
@@ -69,7 +73,11 @@ export function getNewWorkspaceRunTarget(
   const host = parseExecutionHostId(hostId)
   const hostLabel = getExecutionHostLabel(hostId)
   if (host?.kind === 'ssh') {
-    return { label: `SSH · ${hostLabel}`, detail: repo.path }
+    // Why: the execution host id carries the generated target id
+    // (`ssh-1724000000000-abc123`), which is what the picker showed (Orca issue
+    // #16114). The host's target summaries know the alias the user recognises.
+    const label = sshTargetLabels?.get(host.targetId) ?? hostLabel
+    return { label: `SSH · ${label}`, detail: repo.path }
   }
   if (host?.kind === 'runtime') {
     return { label: `Remote · ${hostLabel}`, detail: repo.path }
@@ -83,7 +91,8 @@ export function getNewWorkspaceRunTarget(
 export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   repos: readonly TRepo[],
   projectId: string | null,
-  localPlatform: NodeJS.Platform | null = null
+  localPlatform: NodeJS.Platform | null = null,
+  sshTargetLabels: SshTargetLabels | null = null
 ): NewWorkspaceRunTargetOption<TRepo>[] {
   if (!projectId) {
     return []
@@ -97,7 +106,7 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
     if (!options.has(hostId)) {
       options.set(hostId, {
         id: repo.id,
-        ...getNewWorkspaceRunTarget(repo, localPlatform),
+        ...getNewWorkspaceRunTarget(repo, localPlatform, sshTargetLabels),
         repo
       })
     }

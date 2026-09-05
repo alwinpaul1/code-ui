@@ -62,6 +62,18 @@ describe('new workspace project targets', () => {
       })
     ).toEqual({ label: 'SSH · Windows VM', detail: 'C:\\src\\orca' })
     expect(
+      getNewWorkspaceRunTarget(
+        {
+          id: 'ssh',
+          displayName: 'orca',
+          path: '/home/ada/orca',
+          executionHostId: 'ssh:ssh-1724000000000-abc123'
+        },
+        'darwin',
+        new Map([['ssh-1724000000000-abc123', 'devbox']])
+      )
+    ).toEqual({ label: 'SSH · devbox', detail: '/home/ada/orca' })
+    expect(
       getNewWorkspaceRunTarget({
         id: 'runtime',
         displayName: 'orca',
