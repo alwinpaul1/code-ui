@@ -45,7 +45,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeFileTab,
     activeBrowserTab,
     keyboardLift,
-    nativeChatController
+    nativeChatController,
+    showLoadingState
   } = controller
   const { terminalPeekActive, endTerminalPeek, viewResolved } = nativeChatController
   // Tracks the live field's focus so the bar can highlight while the keyboard is open.
@@ -57,7 +58,16 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   }, [liveInputEnabled])
   // Why: until the stored view is known this would be the terminal dock under a
   // tab that is about to open as chat — the flash the user sees as a glitch.
-  if (activeMarkdownTab || activeFileTab || activeBrowserTab || showNativeChat || !viewResolved) {
+  // Same for the tab list itself: no tab yet means no terminal to type into,
+  // and the tab about to arrive may open as chat.
+  if (
+    activeMarkdownTab ||
+    activeFileTab ||
+    activeBrowserTab ||
+    showNativeChat ||
+    !viewResolved ||
+    showLoadingState
+  ) {
     return null
   }
 

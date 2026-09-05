@@ -142,11 +142,13 @@ export function MobileNativeChatView({
   // Follow the tail as the conversation grows and keep the newest message above
   // the keyboard when it opens — but only while following, so we never yank the
   // reader away from history.
+  // Not animated: the transcript arrives in a few batches on open, and an
+  // animated jump per batch reads as the list stuttering. Sends still animate.
   useEffect(() => {
     if (data.length === 0 || !followingRef.current) {
       return
     }
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
+    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60)
     return () => clearTimeout(t)
   }, [data.length, keyboardInset])
 
