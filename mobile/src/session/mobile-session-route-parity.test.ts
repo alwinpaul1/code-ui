@@ -65,11 +65,11 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = 'b0ac3fb9a8629b79409dc5e4bb2c0d61913f0f55d02cbc6ade7022b90b60fd04'
-const HEAD_HOOK_BINDING_SHA256 = '35051aa9181d54942eca8aa80c0f087233d6037bda92109eb761be94c6469ac7'
+const HEAD_MAIN_HOOK_SHA256 = 'a884cbd293c34bbbf3d4b844e0710fcb179c20c75a939e88f36825eba1d6ea02'
+const HEAD_HOOK_BINDING_SHA256 = '2122f277e414f10f4ac2fc82af46dce46834e5767c9b69f02066d6f80ac17891'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'd4d428102aa291faacbaa50a0d07423ef169900bc377a98db23344da29d87fae'
-const HEAD_CALLBACK_BODY_SHA256 = '6649214c70354743b73e32643a2ab52303e769a992e182d7046b016cac7eb58f'
+  'cef959f4bf753c78b6f195124b34090ce271aebc462c823c4f96cbd7489c4b98'
+const HEAD_CALLBACK_BODY_SHA256 = 'e7ca87ac7f36a5095bfc8b1c0d9a571b94612611d5053d0232ff850f76963511'
 const HEAD_EFFECT_SHA256 = 'd9ebfaabc1e79773cdada7ab370b20459ed972f1f8edce1652199f4d0391cd13'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 const HEAD_NESTED_FUNCTION_SHA256 =
@@ -84,7 +84,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 const HEAD_RUNTIME_STRING_SHA256 =
   'e7ea0f0f68b664e19a17b2db4c4eaf237f6959b65d899e087a1266ee1046e5c4'
 const HEAD_HOST_JSX_SHA256 = '6413618e047a0ad70758aa7e8f5286739b14cac815761a12cd99412de9e75fcf'
-const HEAD_LEAF_JSX_SHA256 = '034b2d7ea0ae7605fab49d15c72e74b5579442078502c7f6c1f74c1f58c82187'
+const HEAD_LEAF_JSX_SHA256 = '57794edb4052acc3436ba568e0f07b61a9b62490eb783a7d850476f3168c8a68'
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -475,10 +475,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(269)
+    expect(main.hooks).toHaveLength(271)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(78)
+    expect(main.callbacks).toHaveLength(79)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)

@@ -6,6 +6,7 @@ import { useMobileSessionNativeChatDictation } from './use-mobile-session-native
 import { useMobileSessionTerminalSubscriptionFoundation } from './use-mobile-session-terminal-subscription-foundation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
 import { useMobileSessionTerminalStreamDisplay } from './use-mobile-session-terminal-stream-display'
+import { useMobileSessionViewSwitch } from './use-mobile-session-view-switch'
 import { useMobileSessionTerminalList } from './use-mobile-session-terminal-list'
 import { useMobileSessionTabApplication } from './use-mobile-session-tab-application'
 import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'
@@ -118,7 +119,8 @@ export function useMobileSessionController() {
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
-  return panelRouteActions
+  const viewSwitch = Object.assign(panelRouteActions, useMobileSessionViewSwitch(panelRouteActions))
+  return viewSwitch
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

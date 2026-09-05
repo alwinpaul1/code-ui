@@ -7,7 +7,9 @@
 import { homedir } from 'node:os'
 
 let raw = ''
-for await (const chunk of process.stdin) raw += chunk
+for await (const chunk of process.stdin) {
+  raw += chunk
+}
 let d
 try {
   d = JSON.parse(raw)
@@ -20,6 +22,8 @@ const effort = d.effort
 const level = typeof effort === 'string' ? effort : effort?.level ?? null
 let cwd = d.workspace?.current_dir || d.cwd || ''
 const home = homedir()
-if (cwd.startsWith(home)) cwd = '~' + cwd.slice(home.length)
+if (cwd.startsWith(home)) {
+  cwd = '~' + cwd.slice(home.length)
+}
 const badge = level ? `[${name} · effort ${level}]` : `[${name}]`
 console.log(`${badge} ${cwd}`)

@@ -40,21 +40,18 @@ export function useMobileSessionTerminalStreamDisplay(
 
   // Why: server does the resize and emits 'resized' on the existing subscription — no client-side state tracking needed.
   const toggleInFlightRef = useRef<Set<string>>(new Set())
-  const toggleDisplayMode = useCallback(
-    async (handle: string) => {
+  /** Request a display mode outright; resolves true once the host accepted it. */
+  const setDisplayMode = useCallback(
+    async (handle: string, next: 'auto' | 'desktop'): Promise<boolean> => {
       if (!client) {
-        return
+        return false
       }
       if (toggleInFlightRef.current.has(handle)) {
-        return
+        return false
       }
-      const current = terminalModes.get(handle) ?? 'auto'
-      // Why: 'phone' is an observed state, not a setting; the toggle only requests 'auto' or 'desktop'.
-      const next: 'auto' | 'desktop' =
-        current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
       toggleInFlightRef.current.add(handle)
       try {
-        await client.sendRequest('terminal.setDisplayMode', {
+        const response = await client.sendRequest('terminal.setDisplayMode', {
           terminal: handle,
           mode: next,
           // Why: presence-lock take-floor — requesting 'auto' is the explicit "drive at phone dims" gesture.
@@ -64,17 +61,28 @@ export function useMobileSessionTerminalStreamDisplay(
           // Why: late-bind viewport for terminals subscribed before measurement, or auto toggles no-op on a null stored viewport.
           ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
         })
+        return response.ok
       } catch {
         // Mode change failed — server state unchanged, UI stays in sync.
+        return false
       } finally {
         toggleInFlightRef.current.delete(handle)
       }
     },
-    [client, terminalModes]
+    [client]
+  )
+  const toggleDisplayMode = useCallback(
+    async (handle: string) => {
+      const current = terminalModes.get(handle) ?? 'auto'
+      // Why: 'phone' is an observed state, not a setting; the toggle only requests 'auto' or 'desktop'.
+      await setDisplayMode(handle, current === 'auto' || current === 'phone' ? 'desktop' : 'auto')
+    },
+    [setDisplayMode, terminalModes]
   )
   return {
     nativeChatStream,
     toggleInFlightRef,
+    setDisplayMode,
     toggleDisplayMode
   }
 }

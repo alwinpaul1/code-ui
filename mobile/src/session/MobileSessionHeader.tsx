@@ -78,13 +78,14 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   const modelLabel = resolveSessionModelLabel(controller)
   // Why: chat and terminal are two views of the same agent session; the user
   // switches between them from the header instead of the tab long-press sheet.
-  const { activeChatEligible, showNativeChat, toggleTabChatView } = controller.nativeChatController
+  const { activeChatEligible, showNativeChat } = controller.nativeChatController
+  const { switchTabView } = controller
   const viewToggle =
     activeChatEligible && activeSessionTabId
       ? {
           label: showNativeChat ? 'Show terminal' : 'Show chat',
           icon: showNativeChat ? Terminal : MessageSquare,
-          onPress: () => toggleTabChatView(activeSessionTabId)
+          onPress: () => void switchTabView(activeSessionTabId)
         }
       : null
   const createDisabled =
