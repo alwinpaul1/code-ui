@@ -36,6 +36,7 @@ export function PermissionModePill({
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => ({
+        flexShrink: 0,
         paddingHorizontal: 9,
         paddingVertical: 4,
         borderRadius: radius.pill,

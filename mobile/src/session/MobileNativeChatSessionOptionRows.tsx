@@ -45,6 +45,11 @@ export function Pill({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
+        // Why: the action row also carries the mode pill, the context ring, the
+        // mic and send. A long label ("Opus Extra high") must ellipsize rather
+        // than push those off the right edge.
+        flexShrink: 1,
+        minWidth: 0,
         maxWidth: 190,
         height: 30,
         paddingHorizontal: space.sm + 2,

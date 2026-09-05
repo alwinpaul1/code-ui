@@ -109,7 +109,7 @@ export function MobileNativeChatSessionOptionPickers({
   }
 
   return (
-    <View>
+    <View style={{ flexShrink: 1, minWidth: 0 }}>
       <Pill
         label={pillLabel}
         accessibleName={`Model, ${pillLabel}`}

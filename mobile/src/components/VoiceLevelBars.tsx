@@ -13,7 +13,14 @@ export function VoiceLevelBars({ level, height = 18 }: { level: number; height?:
   return (
     <View
       accessibilityLabel="Listening"
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 3, height, paddingHorizontal: 6 }}
+      style={{
+        flexShrink: 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        height,
+        paddingHorizontal: 6
+      }}
     >
       {BAR_WEIGHTS.slice(0, BAR_COUNT).map((weight, index) => {
         const barHeight = Math.max(3, Math.round(height * (0.18 + 0.82 * clamped * weight)))

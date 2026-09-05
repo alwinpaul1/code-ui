@@ -254,6 +254,7 @@ export function MobileNativeChatComposer({
   }
 
   const iconButton = {
+    flexShrink: 0,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -327,6 +328,9 @@ export function MobileNativeChatComposer({
               flexDirection: 'row',
               alignItems: 'center',
               gap: space.xs,
+              // Why: one flexible child (the model pill) and fixed icon buttons;
+              // without this the row grows past the composer and clips send.
+              flexWrap: 'nowrap',
               paddingHorizontal: space.sm,
               paddingBottom: space.sm
             }}
@@ -370,7 +374,7 @@ export function MobileNativeChatComposer({
                 onPress={() => setShowContextSheet(true)}
               />
             ) : null}
-            <View style={{ flex: 1 }} />
+            <View style={{ flex: 1, minWidth: 0 }} />
             {micActive ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
               <Pressable

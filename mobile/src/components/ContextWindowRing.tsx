@@ -26,7 +26,13 @@ export function ContextWindowRing({
       accessibilityRole="button"
       hitSlop={10}
       onPress={onPress}
-      style={{ width: size + 8, height: size + 8, alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        flexShrink: 0,
+        width: size + 8,
+        height: size + 8,
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
     >
       <Svg width={size} height={size}>
         <Circle
