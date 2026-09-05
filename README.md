@@ -55,6 +55,8 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
 | [#16602](https://github.com/stablyai/orca/issues/16602) APK published as `app-release.apk` | The release workflow names it `code-ui-android-v<version>-<versionCode>.apk`. |
 | [#15512](https://github.com/stablyai/orca/issues/15512)-shaped: chat re-subscribe comes back empty | A conversation the phone already showed is kept as the base when a re-subscribe (chat → file tab → chat) returns no rows; live appends fold onto it. Seen on a Windows host. |
 | Windows host: xterm query replies echoed as `^[P>|xterm…^[[?1;2c` when `claude` starts | The phone stays silent on win32 hosts; ConPTY answers DA1/CPR itself and a cooked PowerShell prompt echoed everything else. |
+| [#16328](https://github.com/stablyai/orca/issues/16328) no error boundary, a render throw kills the app | A themed root error boundary shows the message and stack with Try again / Go to Home. |
+| [#16215](https://github.com/stablyai/orca/issues/16215) folder workspaces show "Agent Presets Unavailable" | Folder workspaces detect agents on the paired host instead of failing the repo lookup. |
 | Composer stuck on "Waiting for terminal…" | After 6 s without the host's lease acknowledgement the composer unlocks and lets the host's own send verdict decide. |
 
 Screens that were not restyled yet keep Orca's dark palette in both modes:

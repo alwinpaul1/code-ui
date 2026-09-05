@@ -42,6 +42,29 @@ describe('mobile new-tab agent loading', () => {
     ])
   })
 
+  it('detects agents on the paired host for a folder workspace instead of failing repo lookup', async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return {
+          ok: true,
+          result: { settings: { defaultTuiAgent: 'claude', disabledTuiAgents: [] } }
+        }
+      }
+      if (method === 'preflight.detectAgents') {
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({
+        client,
+        worktreeId: 'folder-workspace:group-1::/Users/ada/notes'
+      })
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).not.toContain('repo.list')
+  })
+
   it('detects agents through the worktree repo connection for SSH sessions', async () => {
     const client = createClient(async (method, params) => {
       if (method === 'settings.get') {

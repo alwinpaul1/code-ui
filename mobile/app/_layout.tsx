@@ -33,6 +33,9 @@ Notifications.setNotificationHandler({
   })
 })
 
+// expo-router picks this export up for every route below the root layout.
+export { AppErrorBoundary as ErrorBoundary } from '../src/components/AppErrorBoundary'
+
 export default function RootLayout() {
   return (
     <ThemeProvider>

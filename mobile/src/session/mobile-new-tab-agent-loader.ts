@@ -8,6 +8,12 @@ import {
   type MobileNewTabAgentSettings
 } from './mobile-new-tab-agent-options'
 
+const FOLDER_WORKSPACE_REPO_PREFIX = 'folder-workspace:'
+
+export function isFolderWorkspaceWorktreeId(worktreeId: string): boolean {
+  return getRepoIdFromMobileWorktreeId(worktreeId).startsWith(FOLDER_WORKSPACE_REPO_PREFIX)
+}
+
 type RuntimeRepoSummary = {
   id: string
   connectionId?: string | null
@@ -18,10 +24,15 @@ export async function loadMobileNewTabAgentOptions(args: {
   worktreeId: string
 }): Promise<MobileNewTabAgentOption[]> {
   const { client, worktreeId } = args
-  // Why: the floating workspace runs on the paired host, so it has no repo connection to resolve.
-  const detectedAgentsRequest = isFloatingWorkspaceWorktreeId(worktreeId)
-    ? client.sendRequest('preflight.detectAgents')
-    : loadWorkspaceDetectedAgents(client, worktreeId)
+  // Why: the floating workspace and folder workspaces run on the paired host and
+  // have no repo to resolve — a folder workspace's `folder-workspace:<group>`
+  // repo id is never in repo.list, and the old lookup threw
+  // worktree_repo_not_found, which the drawer showed as "Agent Presets
+  // Unavailable — check the host connection" (Orca issue #16215).
+  const detectedAgentsRequest =
+    isFloatingWorkspaceWorktreeId(worktreeId) || isFolderWorkspaceWorktreeId(worktreeId)
+      ? client.sendRequest('preflight.detectAgents')
+      : loadWorkspaceDetectedAgents(client, worktreeId)
   const [settingsResponse, detectedResponse] = await Promise.all([
     client.sendRequest('settings.get'),
     detectedAgentsRequest
