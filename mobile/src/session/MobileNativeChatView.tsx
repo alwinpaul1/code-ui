@@ -106,8 +106,10 @@ export function MobileNativeChatView({
   // few frames later, once rows have measured. Showing that first paint reads
   // as the list jumping. Keep the list invisible until the first pin settled,
   // per conversation, so the first frame the user sees is already at the end.
-  const [revealedFor, setRevealedFor] = useState<string | null>(null)
-  const revealed = revealedFor === sendSurfaceId
+  // Only the window right after the FIRST batch lands is hidden; an empty or
+  // still-loading conversation shows its own state so nothing can spin forever.
+  const [pinning, setPinning] = useState<{ key: string; done: boolean } | null>(null)
+  const revealed = !(pinning?.key === sendSurfaceId && !pinning.done)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   useEffect(
@@ -169,19 +171,16 @@ export function MobileNativeChatView({
   }, [data.length, keyboardInset])
 
   useEffect(() => {
-    if (revealed) {
+    if (data.length === 0 || pinning?.key === sendSurfaceId) {
       return
     }
-    // An empty, settled conversation has nothing to pin; show it at once.
-    if (data.length === 0) {
-      if (status === 'ready' || status === 'error') {
-        setRevealedFor(sendSurfaceId)
-      }
-      return
-    }
-    const timer = setTimeout(() => setRevealedFor(sendSurfaceId), REVEAL_AFTER_FIRST_PIN_MS)
+    setPinning({ key: sendSurfaceId, done: false })
+    const timer = setTimeout(
+      () => setPinning((current) => (current?.key === sendSurfaceId ? { ...current, done: true } : current)),
+      REVEAL_AFTER_FIRST_PIN_MS
+    )
     return () => clearTimeout(timer)
-  }, [data.length, revealed, sendSurfaceId, status])
+  }, [data.length, pinning?.key, sendSurfaceId])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
