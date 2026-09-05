@@ -1,4 +1,4 @@
-import { AppUpdateCard } from './AppUpdateCard'
+import { AppUpdateDialog } from './AppUpdateDialog'
 import { useHomeUpdateCheck } from './use-home-update-check'
 
 export function HomeUpdateSurface() {
@@ -6,5 +6,5 @@ export function HomeUpdateSurface() {
   // Home screen does not need update-specific state.
   useHomeUpdateCheck()
 
-  return <AppUpdateCard />
+  return <AppUpdateDialog />
 }

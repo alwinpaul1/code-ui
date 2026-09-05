@@ -5,7 +5,7 @@ import { ChevronRight, Globe, RefreshCw, type LucideIcon } from 'lucide-react-na
 import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { AppUpdateCard } from '../src/app-update/AppUpdateCard'
+import { AppUpdateDialog } from '../src/app-update/AppUpdateDialog'
 import { useAppUpdateStore } from '../src/app-update/app-update-store'
 import { useTheme } from '../src/theme/theme-context'
 import { ScreenHeader } from '../src/ui/ScreenHeader'
@@ -182,14 +182,18 @@ export default function AboutScreen() {
           })}
         >
           <Txt variant="caption" tone="muted">
-            Developed with <Txt variant="caption" style={{ color: colors.danger }}>♥</Txt> by{' '}
+            Developed with{' '}
+            <Txt variant="caption" style={{ color: colors.danger }}>
+              ♥
+            </Txt>{' '}
+            by{' '}
             <Txt variant="caption" weight="medium" tone="accent">
               Alwin Paul
             </Txt>
           </Txt>
         </Pressable>
       </ScrollView>
-      <AppUpdateCard />
+      <AppUpdateDialog />
     </View>
   )
 }
