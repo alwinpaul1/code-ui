@@ -86,6 +86,7 @@ export function MobileNativeChatView({
   onAnswerQuestion,
   permission,
   onRespondPermission,
+  onCancelQueued,
   onOpenFile,
   keyboardInset = 0,
   keyStrip
@@ -193,7 +194,8 @@ export function MobileNativeChatView({
       return
     }
     const timer = setTimeout(
-      () => setPinning((current) => (current && !current.done ? { ...current, done: true } : current)),
+      () =>
+        setPinning((current) => (current && !current.done ? { ...current, done: true } : current)),
       REVEAL_AFTER_FIRST_PIN_MS
     )
     return () => clearTimeout(timer)
@@ -261,9 +263,14 @@ export function MobileNativeChatView({
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
+        onCancelQueued={
+          agentWorking && onCancelQueued && item.id.startsWith('pending-')
+            ? () => void onCancelQueued(item.id)
+            : undefined
+        }
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
+    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile, agentWorking, onCancelQueued]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)

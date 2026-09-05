@@ -61,6 +61,8 @@ export type MobileNativeChatController = {
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
+  /** Drop one message Claude Code has queued behind the running turn. */
+  handleNativeChatCancelQueued: (id: string) => Promise<boolean>
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void

@@ -90,6 +90,8 @@ export type MobileNativeChatViewProps = {
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
+  /** Drop one message Claude Code has queued behind the running turn. */
+  onCancelQueued?: (id: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
   onOpenFile?: (relativePath: string) => void
   /** Pixels to lift the composer by when the soft keyboard is open. The route
@@ -98,4 +100,3 @@ export type MobileNativeChatViewProps = {
   /** Terminal accessory keys shown above the composer (Tab, Shift+Tab, arrows, Esc…). */
   keyStrip?: MobileNativeChatKeyStripProps
 }
-

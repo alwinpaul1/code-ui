@@ -103,3 +103,16 @@ export function removeWaitingSessionPending(
   delete next[draftKey]
   return next
 }
+
+/** Drop one echo by id from every key; returns the same object when nothing changed
+ *  (a cancelled queued entry must not leave its bubble behind). */
+export function dropMobileNativeChatPending(previous: PendingByKey, id: string): PendingByKey {
+  let changed = false
+  const next: PendingByKey = {}
+  for (const [key, items] of Object.entries(previous)) {
+    const kept = items.filter((item) => item.id !== id)
+    changed ||= kept.length !== items.length
+    next[key] = kept
+  }
+  return changed ? next : previous
+}

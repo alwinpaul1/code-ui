@@ -93,6 +93,7 @@ export function MobileNativeChatOverlay({
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
+        onCancelQueued={controller.handleNativeChatCancelQueued}
         onOpenFile={onOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}

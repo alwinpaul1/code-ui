@@ -14,6 +14,7 @@ import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pen
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import {
   appendMobileNativeChatPending,
+  dropMobileNativeChatPending,
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
   removeWaitingSessionPending,
@@ -77,6 +78,8 @@ export function useMobileNativeChatDrafts(args: {
     text: string,
     onUnconfirmed: () => void
   ) => void
+  /** Drop one optimistic echo whose queued entry the user cancelled. */
+  removePending: (id: string) => void
 } {
   const {
     hostId,
@@ -335,6 +338,11 @@ export function useMobileNativeChatDrafts(args: {
     })
   }, [messages, pending, pendingKey, transcriptSettled])
 
+  const removePending = useCallback((id: string) => {
+    setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
+    setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
+  }, [])
+
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
@@ -349,6 +357,7 @@ export function useMobileNativeChatDrafts(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend
+    holdUnconfirmedSend,
+    removePending
   }
 }

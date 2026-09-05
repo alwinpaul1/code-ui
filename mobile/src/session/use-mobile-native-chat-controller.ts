@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject, useEffect } from 'react'
+import { useMobileNativeChatCancelQueued } from './use-mobile-native-chat-cancel-queued'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -123,7 +124,8 @@ export function useMobileNativeChatController(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend
+    holdUnconfirmedSend,
+    removePending: removeChatPending
   } = useMobileNativeChatDrafts({
     hostId,
     worktreeId,
@@ -351,6 +353,16 @@ export function useMobileNativeChatController(args: {
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
   const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+  const handleNativeChatCancelQueued = useMobileNativeChatCancelQueued({
+    client,
+    connected: connState === 'connected',
+    structured: activeChatStructured,
+    handleRef: activeHandleRef,
+    deviceTokenRef,
+    pending: chatPending,
+    draft: chatComposerText,
+    removePending: removeChatPending
+  })
 
   return {
     isTabChatView,
@@ -384,6 +396,7 @@ export function useMobileNativeChatController(args: {
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
+    handleNativeChatCancelQueued,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,

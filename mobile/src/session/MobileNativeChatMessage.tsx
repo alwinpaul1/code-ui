@@ -9,7 +9,11 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { TEXT_SIZE, useChatMessageStyles, type ChatMessageStyles } from './mobile-native-chat-message-styles'
+import {
+  TEXT_SIZE,
+  useChatMessageStyles,
+  type ChatMessageStyles
+} from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { ToolRun } from './MobileNativeChatToolRun'
 
@@ -119,7 +123,11 @@ function ReasoningDisclosure({
   const { colors } = useTheme()
   const [open, setOpen] = useState(false)
   const text = nativeChatMessageText(message.blocks)
-  const preview = text.split('\n').find((line) => line.trim().length > 0)?.trim() ?? ''
+  const preview =
+    text
+      .split('\n')
+      .find((line) => line.trim().length > 0)
+      ?.trim() ?? ''
   const truncated =
     preview.length > REASONING_PREVIEW_CHARS
       ? `${preview.slice(0, REASONING_PREVIEW_CHARS).trimEnd()}…`
@@ -163,10 +171,13 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
-  onOpenFile
+  onOpenFile,
+  onCancelQueued
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
+  /** Present while this optimistic echo is still queued behind a running turn. */
+  onCancelQueued?: () => void
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   /** This message's index in the list, paired with onScrollToMessage. */
@@ -258,6 +269,23 @@ function MobileNativeChatMessageImpl({
             onOpenFile={onOpenFile}
             styles={styles}
           />
+        ) : onCancelQueued ? (
+          <View style={styles.controlsRow}>
+            <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
+              Queued
+            </Txt>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel queued message"
+              hitSlop={8}
+              onPress={onCancelQueued}
+              style={({ pressed }) => ({ marginLeft: 12, opacity: pressed ? 0.5 : 1 })}
+            >
+              <Txt variant="caption" weight="semibold" tone="inverse">
+                Cancel
+              </Txt>
+            </Pressable>
+          </View>
         ) : controls ? (
           <View style={styles.controlsRow}>{controls}</View>
         ) : null}
