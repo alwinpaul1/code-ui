@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useMobileLiveTranscription } from './use-mobile-live-transcription'
+import { speechLevel, useMobileLiveTranscription } from './use-mobile-live-transcription'
 
 vi.mock('expo-speech-recognition', () => ({ ExpoSpeechRecognitionModule: {} }))
 
@@ -93,5 +93,33 @@ describe('useMobileLiveTranscription', () => {
     act(() => recognizer.emit('error', { error: 'aborted', message: '' }))
     act(() => recognizer.emit('end', {}))
     expect(onTranscript).not.toHaveBeenCalled()
+  })
+
+  it('moves the meter only while speech is detected, above the room noise', async () => {
+    const recognizer = fakeRecognizer()
+    const { api } = mount(recognizer)
+    await act(async () => {
+      await api().start()
+    })
+    act(() => recognizer.emit('start', {}))
+    // A noisy room before anyone speaks: bars stay down.
+    act(() => recognizer.emit('volumechange', { value: 4 }))
+    act(() => recognizer.emit('volumechange', { value: 4 }))
+    expect(api().level).toBe(0)
+    act(() => recognizer.emit('speechstart', {}))
+    act(() => recognizer.emit('volumechange', { value: 8 }))
+    expect(api().level).toBeGreaterThan(0.3)
+    // Speech at the same loudness as the room noise does not register.
+    act(() => recognizer.emit('volumechange', { value: 1 }))
+    expect(api().level).toBe(0)
+    act(() => recognizer.emit('speechend', {}))
+    act(() => recognizer.emit('volumechange', { value: 9 }))
+    expect(api().level).toBe(0)
+  })
+
+  it('stretches the level above the noise floor', () => {
+    expect(speechLevel(0.2, 0.2)).toBe(0)
+    expect(speechLevel(0.5, 0)).toBeCloseTo((0.5 - 0.06) / 0.94, 3)
+    expect(speechLevel(1, 0.5)).toBe(1)
   })
 })
