@@ -120,17 +120,14 @@ and point it at `mobile/scripts/code-ui-statusline.sh`, or add to `~/.claude/set
 It prints `[Fable 5.1 · effort high] ~/project`. The phone polls the terminal screen every
 5 s while Chat UI is open and mirrors the badge into the pickers.
 
-On **Windows** use the PowerShell or Node version instead of the `sh` one:
+One script per platform, all printing the same badge; pick the one that matches the
+machine running Claude Code:
 
-```json
-"statusLine": { "type": "command", "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\path\\to\\mobile\\scripts\\code-ui-statusline.ps1" }
-```
-
-or, with Node installed on any OS:
-
-```json
-"statusLine": { "type": "command", "command": "node /path/to/mobile/scripts/code-ui-statusline.mjs" }
-```
+| Host | `statusLine.command` |
+|---|---|
+| macOS / Linux | `sh /path/to/mobile/scripts/code-ui-statusline.sh` (python3 if present, plain `sed` otherwise) |
+| Windows (cmd or PowerShell) | `C:\\path\\to\\mobile\\scripts\\code-ui-statusline.cmd` (wraps the `.ps1`; PowerShell ships with Windows) |
+| Any OS with Node | `node /path/to/mobile/scripts/code-ui-statusline.mjs` |
 
 Orca on Windows works the same as on macOS for everything else: pair the phone from the
 Orca desktop app, and Orca installs its Claude Code hooks into `%USERPROFILE%\.claude`
