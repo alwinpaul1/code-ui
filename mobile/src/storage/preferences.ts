@@ -231,3 +231,21 @@ export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
 export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<void> {
   await AsyncStorage.setItem(PINS_PREFIX + hostId, JSON.stringify([...ids]))
 }
+
+const LIVE_TRANSCRIPTION_KEY = 'orca:liveTranscriptionEnabled'
+
+// Why: chat dictation transcribes on the phone by default so words appear as
+// they are spoken; the desktop's speech model is the opt-out for people who
+// prefer its accuracy or have no recognizer on the phone.
+export async function loadLiveTranscriptionEnabled(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem(LIVE_TRANSCRIPTION_KEY)
+    return raw !== 'false'
+  } catch {
+    return true
+  }
+}
+
+export async function saveLiveTranscriptionEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(LIVE_TRANSCRIPTION_KEY, String(enabled))
+}

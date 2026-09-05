@@ -139,6 +139,13 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Code UI to use the microphone for voice dictation.",
+          "speechRecognitionPermission": "Allow Code UI to transcribe your voice on this phone as you speak."
+        }
       ]
     ]
   }

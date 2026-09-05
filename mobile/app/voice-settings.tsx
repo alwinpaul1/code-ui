@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View
 } from 'react-native'
@@ -18,6 +17,11 @@ import { useFocusedSettingsHostClients } from '../src/transport/settings-host-cl
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
+import { VoiceSettingsSwitchRow } from '../src/components/VoiceSettingsSwitchRow'
+import {
+  loadLiveTranscriptionEnabled,
+  saveLiveTranscriptionEnabled
+} from '../src/storage/preferences'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
   deleteDictationModel,
@@ -39,6 +43,14 @@ const DICTATION_MODES = [
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
 export default function VoiceSettingsScreen(): React.JSX.Element {
+  const [liveOnPhone, setLiveOnPhone] = useState(true)
+  useEffect(() => {
+    void loadLiveTranscriptionEnabled().then(setLiveOnPhone)
+  }, [])
+  const handleToggleLiveOnPhone = useCallback((value: boolean) => {
+    setLiveOnPhone(value)
+    void saveLiveTranscriptionEnabled(value)
+  }, [])
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -217,20 +229,21 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         >
           <Text style={styles.groupHeading}>DICTATION</Text>
           <View style={[styles.section, styles.sectionTopGap]}>
-            <View style={styles.row}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Enable Voice Dictation</Text>
-                <Text style={styles.rowSublabel}>
-                  Dictate text into any focused pane on your desktop.
-                </Text>
-              </View>
-              <Switch
-                value={enabled}
-                onValueChange={(v) => void handleToggleEnabled(v)}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
-              />
-            </View>
+            <VoiceSettingsSwitchRow
+              label="Enable Voice Dictation"
+              sublabel="Dictate text into any focused pane on your desktop."
+              value={enabled}
+              onValueChange={(v) => void handleToggleEnabled(v)}
+            />
+
+            <View style={styles.separator} />
+
+            <VoiceSettingsSwitchRow
+              label="Live transcription on phone"
+              sublabel="In Chat, words appear as you speak using this phone's speech recognizer. Off: audio goes to the desktop model below."
+              value={liveOnPhone}
+              onValueChange={handleToggleLiveOnPhone}
+            />
 
             <View style={styles.separator} />
 

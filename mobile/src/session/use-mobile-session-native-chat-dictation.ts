@@ -1,6 +1,9 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
+import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
+import { applyLiveTranscript } from '../hooks/mobile-live-transcript'
+import { loadLiveTranscriptionEnabled } from '../storage/preferences'
 import { triggerError } from '../platform/haptics'
 import {
   appendBufferedDictation,
@@ -89,7 +92,22 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
-  const dictation = useMobileDictation({
+  // Chat dictation transcribes on the phone so the words show up as they are
+  // spoken (Claude Code's own voice input behaves this way); the desktop model
+  // path below stays for the terminal and as the fallback.
+  const [liveTranscriptionEnabled, setLiveTranscriptionEnabled] = useState(true)
+  const liveBaseTextRef = useRef('')
+  const liveTranscription = useMobileLiveTranscription({
+    onTranscript: (text) => {
+      const base = liveBaseTextRef.current
+      nativeChatController.setChatComposerText(() => applyLiveTranscript(base, text))
+    },
+    onError: (err) => {
+      triggerError()
+      showToast(err.message)
+    }
+  })
+  const desktopDictation = useMobileDictation({
     client,
     enabled: canSend,
     onTranscript: (text) => {
@@ -140,7 +158,19 @@ export function useMobileSessionNativeChatDictation(
     }
   })
 
+  const useLiveTranscription =
+    liveTranscriptionEnabled && liveTranscription.available && showNativeChat
+  const dictation = useLiveTranscription ? liveTranscription : desktopDictation
+
   const startDictation = useCallback(() => {
+    if (useLiveTranscription) {
+      liveBaseTextRef.current = nativeChatController.chatComposerText
+      void liveTranscription.start().catch((err) => {
+        triggerError()
+        showToast(err instanceof Error ? err.message : String(err))
+      })
+      return
+    }
     const routeContext = activeHandle
       ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
       : null
@@ -152,12 +182,25 @@ export function useMobileSessionNativeChatDictation(
       triggerError()
       showToast(err instanceof Error ? err.message : String(err))
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [
+    activeHandle,
+    dictation,
+    liveInputTerminalHandles,
+    liveTranscription,
+    nativeChatController,
+    triggerError,
+    showToast,
+    useLiveTranscription
+  ])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
+    if (useLiveTranscription) {
+      const base = liveBaseTextRef.current
+      nativeChatController.setChatComposerText(() => base)
+    }
     void dictation.cancel()
-  }, [dictation])
+  }, [dictation, nativeChatController, useLiveTranscription])
 
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
@@ -204,6 +247,7 @@ export function useMobileSessionNativeChatDictation(
   useFocusEffect(
     useCallback(() => {
       void refreshDictationMode()
+      void loadLiveTranscriptionEnabled().then(setLiveTranscriptionEnabled)
     }, [refreshDictationMode])
   )
 
