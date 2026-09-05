@@ -78,6 +78,9 @@ importers:
       expo-image-picker:
         specifier: ^55.0.24
         version: 55.0.24(expo@55.0.30)
+      expo-intent-launcher:
+        specifier: ~55.0.16
+        version: 55.0.16(expo@55.0.30)
       expo-keep-awake:
         specifier: ~55.0.8
         version: 55.0.8(expo@55.0.30)(react@19.2.8)
@@ -4390,6 +4393,11 @@ packages:
     peerDependenciesMeta:
       react-native-web:
         optional: true
+
+  expo-intent-launcher@55.0.16:
+    resolution: {integrity: sha512-0jVpzSPT3Ey7seNAzwEyf3+OVVYRqKGecSzgQdgMI41TqMFCfawgdP4E/KGNfFUgcSBwAACGXP+WF0jNyZQS9Q==}
+    peerDependencies:
+      expo: '*'
 
   expo-json-utils@55.0.2:
     resolution: {integrity: sha512-QJMOZOPOG7CTnKcrdVaiummn2va1MCO56z++eyWkDv3GBRODldM6MFMDf/jTREWthFc2Nxo6TuyWRrEV9S6n/Q==}
@@ -12239,6 +12247,10 @@ snapshots:
       sf-symbols-typescript: 2.2.0
     optionalDependencies:
       react-native-web: 0.21.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+
+  expo-intent-launcher@55.0.16(expo@55.0.30):
+    dependencies:
+      expo: 55.0.30(df1b8ba866629f1a6b4802551ac46003)
 
   expo-json-utils@55.0.2: {}
 

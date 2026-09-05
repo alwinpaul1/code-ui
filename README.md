@@ -59,6 +59,38 @@ settings, troubleshooting and the connection log. They read from the legacy
 static palette in `mobile/src/theme/mobile-theme.ts`, which was retuned to the
 warm dark tokens so they blend in dark mode.
 
+## Releases and in-app updates
+
+Code UI ships as an APK on GitHub Releases, the way Orca Mobile does, and the
+installed app checks for a newer one by itself.
+
+- **Versioning.** `mobile/app.json` is the only source of truth: `expo.version`
+  is the marketing version and `android.versionCode` is the monotonic build id
+  Android compares on install. Bump both in one commit.
+- **Cutting a release.** Push a tag that matches the committed version:
+
+  ```sh
+  git tag mobile-android-v0.2.0 && git push origin mobile-android-v0.2.0
+  ```
+
+  `.github/workflows/mobile-android-release.yml` lints, typechecks, runs the
+  unit tests, prebuilds, builds `assembleRelease`, names the file
+  `code-ui-android-v<version>-<versionCode>.apk` and publishes a GitHub Release
+  with generated notes. `scripts/prepare-android-release.mjs` refuses a tag
+  that disagrees with `app.json`. The workflow can also be started by hand from
+  the Actions tab (`workflow_dispatch`).
+- **Signing.** Release builds are signed with the Expo template debug keystore
+  that `expo prebuild` generates, on CI and on a laptop alike, so a CI build
+  installs over a local one. Swap in a real keystore before any store listing.
+- **In-app update.** Once a day on Home focus, and on About → Check for
+  updates, the app reads the newest `mobile-android-v*` release from the
+  GitHub API (`mobile/src/app-update/`). A newer version shows a card at the
+  bottom of Home and About that morphs from release notes → download progress
+  → "ready to install", then hands the APK to Android's package installer.
+  "Later" hides that exact version until the next one. The card mirrors Orca
+  desktop's UpdateCard; the check logic is ported from Orca Mobile's Android
+  update check.
+
 ## Run it
 
 Requirements: Node 24+, pnpm, Android Studio SDK (the emulator image

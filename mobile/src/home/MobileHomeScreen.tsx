@@ -5,6 +5,7 @@ import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { HomeUpdateSurface } from '../app-update/HomeUpdateSurface'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
@@ -160,6 +161,7 @@ export function MobileHomeScreen() {
           onOpenActions={openHostActions}
         />
       )}
+      <HomeUpdateSurface />
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}

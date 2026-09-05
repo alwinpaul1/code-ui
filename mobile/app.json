@@ -2,7 +2,7 @@
   "expo": {
     "name": "Code UI",
     "slug": "code-ui",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -89,10 +89,11 @@
       "allowBackup": false,
       "permissions": [
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "REQUEST_INSTALL_PACKAGES"
       ],
       "package": "com.alwinpaul.codeui",
-      "versionCode": 1
+      "versionCode": 2
     },
     "plugins": [
       "expo-router",

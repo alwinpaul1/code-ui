@@ -1,10 +1,12 @@
 import { View, Linking, Platform, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronRight, Globe, type LucideIcon } from 'lucide-react-native'
+import { ChevronRight, Globe, RefreshCw, type LucideIcon } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
+import { AppUpdateCard } from '../src/app-update/AppUpdateCard'
+import { useAppUpdateStore } from '../src/app-update/app-update-store'
 import { useTheme } from '../src/theme/theme-context'
 import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { SectionLabel } from '../src/ui/SectionLabel'
@@ -73,6 +75,49 @@ function LinkRow({
   )
 }
 
+function CheckForUpdatesRow() {
+  const { colors, space } = useTheme()
+  const status = useAppUpdateStore((s) => s.status)
+  const latestVersion = useAppUpdateStore((s) => s.latestVersion)
+  const checkForUpdate = useAppUpdateStore((s) => s.checkForUpdate)
+  const hint =
+    status === 'checking'
+      ? 'Checking…'
+      : status === 'available' && latestVersion
+        ? `v${latestVersion} available`
+        : status === 'up-to-date'
+          ? 'Up to date'
+          : status === 'error'
+            ? 'Could not check'
+            : null
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Check for updates"
+      disabled={status === 'checking'}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        minHeight: 52,
+        paddingHorizontal: space.lg,
+        backgroundColor: pressed ? colors.bgRaised : 'transparent'
+      })}
+      onPress={() => void checkForUpdate({ force: true })}
+    >
+      <RefreshCw size={17} color={colors.textSecondary} strokeWidth={2} />
+      <Txt variant="body" weight="medium" style={{ flex: 1 }}>
+        Check for updates
+      </Txt>
+      {hint ? (
+        <Txt variant="caption" tone={status === 'available' ? 'accent' : 'muted'}>
+          {hint}
+        </Txt>
+      ) : null}
+    </Pressable>
+  )
+}
+
 export default function AboutScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -103,11 +148,11 @@ export default function AboutScreen() {
 
         <SectionLabel style={{ marginTop: 0 }}>Code UI</SectionLabel>
         <Surface rounded="lg" style={{ overflow: 'hidden' }}>
+          <CheckForUpdatesRow />
           <LinkRow
             icon="github"
             label="alwinpaul1/code-ui"
             url="https://github.com/alwinpaul1/code-ui"
-            first
           />
         </Surface>
 
@@ -144,6 +189,7 @@ export default function AboutScreen() {
           </Txt>
         </Pressable>
       </ScrollView>
+      <AppUpdateCard />
     </View>
   )
 }

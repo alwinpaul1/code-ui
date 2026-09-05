@@ -39,6 +39,7 @@
     "expo-haptics": "^55.0.18",
     "expo-image-manipulator": "^55.0.21",
     "expo-image-picker": "^55.0.24",
+    "expo-intent-launcher": "~55.0.16",
     "expo-keep-awake": "~55.0.8",
     "expo-linking": "^55.0.17",
     "expo-modules-core": "~55.0.25",
