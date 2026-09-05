@@ -34,12 +34,12 @@ export function UsageMeter({
     used == null || unavailable ? colors.textMuted : used >= 80 ? colors.danger : colors.accent
   const percentText = unavailable || used == null ? '—' : compact ? `${used}%` : `${used}% used`
   return (
-    <View style={{ gap: compact ? 6 : dense ? space.sm : space.sm + 2 }}>
+    <View style={{ gap: compact ? space.sm : dense ? space.sm : space.sm + 2 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }}>
         <Txt
-          variant={compact ? 'caption' : dense ? 'body' : 'heading'}
+          variant={compact ? 'label' : dense ? 'body' : 'heading'}
           weight={compact ? 'regular' : 'medium'}
-          tone={compact ? 'muted' : 'primary'}
+          tone={compact ? 'secondary' : 'primary'}
           style={{ flex: 1 }}
           numberOfLines={1}
         >
@@ -49,8 +49,8 @@ export function UsageMeter({
           <ActivityIndicator size="small" color={colors.textMuted} />
         ) : (
           <Txt
-            variant={compact ? 'caption' : 'body'}
-            weight={compact ? 'medium' : 'regular'}
+            variant={compact ? 'label' : 'body'}
+            weight={compact ? 'semibold' : 'regular'}
             tone={compact ? 'primary' : 'secondary'}
           >
             {percentText}

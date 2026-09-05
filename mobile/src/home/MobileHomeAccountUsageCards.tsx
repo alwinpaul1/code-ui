@@ -7,8 +7,7 @@ import {
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
-import { getVisibleUsageWindows, getWindowResetLabel } from '../components/account-usage-state'
-import { useNow } from '../hooks/use-now'
+import { getVisibleUsageWindows } from '../components/account-usage-state'
 import { UsageMeter } from '../components/UsageMeter'
 import { usageWindowTitle } from '../components/usage-window-summary'
 import { useTheme } from '../theme/theme-context'
@@ -28,8 +27,6 @@ export function MobileHomeAccountUsageCards(props: {
   onOpen: (hostId: string) => void
 }) {
   const { colors, radius, space } = useTheme()
-  // Why: reset lines need a clock; a minute tick is plenty for "Resets in 3 hr 29 min".
-  const now = useNow(60_000, props.items.length > 0)
   if (props.items.length === 0) {
     return null
   }
@@ -47,7 +44,7 @@ export function MobileHomeAccountUsageCards(props: {
             borderColor: colors.border,
             borderRadius: radius.lg,
             padding: space.lg,
-            gap: space.xl,
+            gap: space.lg,
             marginBottom: space.sm
           }}
           onPress={() => props.onOpen(host.id)}
@@ -74,12 +71,12 @@ export function MobileHomeAccountUsageCards(props: {
             const windows = getVisibleUsageWindows(limits)
             const subtitle = active?.email ?? null
             return (
-              <View key={provider} style={{ gap: space.md }}>
+              <View key={provider} style={{ gap: space.sm + 2 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
                   <View
                     style={{
-                      width: 40,
-                      height: 40,
+                      width: 36,
+                      height: 36,
                       borderRadius: radius.md,
                       backgroundColor: colors.bgRaised,
                       alignItems: 'center',
@@ -87,13 +84,13 @@ export function MobileHomeAccountUsageCards(props: {
                     }}
                   >
                     {provider === 'claude' ? (
-                      <ClaudeIcon size={20} />
+                      <ClaudeIcon size={18} />
                     ) : (
-                      <OpenAIIcon size={20} color={colors.text} />
+                      <OpenAIIcon size={18} color={colors.text} />
                     )}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                    <Txt variant="heading" weight="semibold" numberOfLines={1}>
+                    <Txt variant="label" weight="semibold" numberOfLines={1}>
                       {PROVIDER_NAME[provider]}
                     </Txt>
                     {subtitle ? (
@@ -104,23 +101,23 @@ export function MobileHomeAccountUsageCards(props: {
                   </View>
                 </View>
                 {windows.length > 0 ? (
-                  <View style={{ gap: space.md }}>
+                  <View style={{ flexDirection: 'row', gap: space.lg }}>
                     {windows.map((key) => {
                       const bar = getUsageBarState(limits, key)
                       return (
-                        <UsageMeter
-                          key={key}
-                          title={
-                            key === 'weekly' && !windows.includes('session')
-                              ? 'Weekly limit'
-                              : usageWindowTitle(key, true)
-                          }
-                          usedPercent={bar.usedPercent}
-                          unavailable={bar.unavailable}
-                          loading={bar.loading}
-                          subtitle={getWindowResetLabel(limits, key, now)}
-                          dense
-                        />
+                        <View key={key} style={{ flex: 1, minWidth: 0 }}>
+                          <UsageMeter
+                            title={
+                              key === 'weekly' && !windows.includes('session')
+                                ? 'Weekly limit'
+                                : usageWindowTitle(key)
+                            }
+                            usedPercent={bar.usedPercent}
+                            unavailable={bar.unavailable}
+                            loading={bar.loading}
+                            compact
+                          />
+                        </View>
                       )
                     })}
                   </View>

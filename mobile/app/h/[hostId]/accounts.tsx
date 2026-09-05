@@ -243,13 +243,13 @@ export default function AccountsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScreenHeader
-        title="Usage"
+        title="Accounts"
         subtitle={hostName || undefined}
         onBack={() => router.back()}
         trailing={
           <IconButton
             icon={RefreshCw}
-            accessibilityLabel="Refresh usage"
+            accessibilityLabel="Refresh accounts"
             onPress={() => void refresh()}
             disabled={!client || refreshing || connState !== 'connected'}
           />
@@ -276,7 +276,7 @@ export default function AccountsScreen() {
         ) : error && !snapshot ? (
           placeholder(error, false)
         ) : !snapshot ? (
-          placeholder('Loading usage…')
+          placeholder('Loading accounts…')
         ) : (
           <>
             {renderProvider('claude')}
