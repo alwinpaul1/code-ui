@@ -11,7 +11,8 @@ export type {
   CodexAccountSummary,
   AccountsSnapshot,
   ProviderKey,
-  UsageBarState
+  UsageBarState,
+  UsageWindowKey
 } from './account-usage-state'
 export {
   decodeAccountsSnapshot,
@@ -20,8 +21,14 @@ export {
   getUsageBarState,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasFableWindow,
   hasRenderableUsage
 } from './account-usage-state'
+
+/** Label column: "5h"/"7d" fit in 22; "Fable" needs the wide column, and every
+ *  bar in the same block takes it so the tracks stay aligned. */
+export const USAGE_LABEL_WIDTH = 22
+export const USAGE_LABEL_WIDTH_WIDE = 38
 
 // Why: matches desktop StatusBar — bars show percent used (consumption), same
 // as Claude/Codex harness meters. Fresh account is empty/green; depleted is
@@ -31,13 +38,15 @@ export function UsageBar({
   usedPercent,
   unavailable,
   loading,
-  resetText
+  resetText,
+  labelWidth = USAGE_LABEL_WIDTH
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
   resetText?: string | null
+  labelWidth?: number
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
@@ -53,7 +62,7 @@ export function UsageBar({
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>
-        <Text style={styles.usageLabel}>{label}</Text>
+        <Text style={[styles.usageLabel, { width: labelWidth }]}>{label}</Text>
         <View style={styles.usageTrack}>
           <View
             style={[
@@ -76,7 +85,10 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={1}>
+        <Text
+          style={[styles.usageResetText, { marginLeft: labelWidth + spacing.xs }]}
+          numberOfLines={1}
+        >
           {resetText}
         </Text>
       ) : null}
@@ -96,8 +108,7 @@ const styles = StyleSheet.create({
   },
   usageLabel: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    width: 22
+    color: colors.textMuted
   },
   usageTrack: {
     flex: 1,
@@ -123,7 +134,6 @@ const styles = StyleSheet.create({
   // start of the track above it.
   usageResetText: {
     fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginLeft: 22 + spacing.xs
+    color: colors.textMuted
   }
 })

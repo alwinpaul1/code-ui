@@ -27,6 +27,14 @@ export {
 
 export type ProviderKey = 'claude' | 'codex'
 
+/** `fableWeekly` is the Fable model's own 7-day window; the host reports it
+ *  only for accounts that have one, so callers show that bar conditionally. */
+export type UsageWindowKey = 'session' | 'weekly' | 'fableWeekly'
+
+export function hasFableWindow(limits: ProviderRateLimits | null): boolean {
+  return limits?.fableWeekly != null
+}
+
 export type UsageBarState = {
   usedPercent: number | null
   unavailable: boolean
@@ -64,6 +72,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   if (
     limits.session != null ||
     limits.weekly != null ||
+    limits.fableWeekly != null ||
     limits.monthly != null ||
     (limits.buckets && limits.buckets.length > 0)
   ) {
@@ -76,7 +85,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
 // is per window rather than per provider status.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: UsageWindowKey,
   isFetchingOverride?: boolean
 ): UsageBarState {
   const window = limits?.[windowKey] ?? null
@@ -111,14 +120,14 @@ export function formatResetClock(resetsAt: number): string {
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: UsageWindowKey,
   now: number
 ): string | null {
   const resetsAt = limits?.[windowKey]?.resetsAt
   if (resetsAt == null) {
     return null
   }
-  if (windowKey === 'weekly') {
+  if (windowKey === 'weekly' || windowKey === 'fableWeekly') {
     if (resetsAt <= now) {
       return 'Resets now'
     }

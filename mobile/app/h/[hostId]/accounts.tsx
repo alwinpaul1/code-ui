@@ -23,11 +23,9 @@ import {
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
-  getUsageBarState,
-  getWindowResetLabel,
-  hasActiveProviderUsage,
-  UsageBar
+  hasActiveProviderUsage
 } from '../../../src/components/AccountUsage'
+import { ProviderUsageBars } from '../../../src/components/ProviderUsageBars'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
@@ -200,8 +198,6 @@ export default function AccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
-    const activeSessionBar = getUsageBarState(activeUsage, 'session')
-    const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
@@ -224,21 +220,8 @@ export default function AccountsScreen() {
                   holds the system-default login's rate limits — surface them
                   here so non-managed users still see their usage. */}
               {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageRow}>
-                  <UsageBar
-                    label="5h"
-                    usedPercent={activeSessionBar.usedPercent}
-                    unavailable={activeSessionBar.unavailable}
-                    loading={activeSessionBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
-                  />
-                  <UsageBar
-                    label="7d"
-                    usedPercent={activeWeeklyBar.usedPercent}
-                    unavailable={activeWeeklyBar.unavailable}
-                    loading={activeWeeklyBar.loading}
-                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
-                  />
+                <View style={styles.usageStack}>
+                  <ProviderUsageBars limits={activeUsage} now={now} layout="stacked" />
                 </View>
               ) : null}
             </View>
@@ -260,8 +243,6 @@ export default function AccountsScreen() {
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
-            const sessionBar = getUsageBarState(usage, 'session', isFetching)
-            const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
             return (
               <View key={account.id}>
                 <View style={styles.separator} />
@@ -279,20 +260,12 @@ export default function AccountsScreen() {
                     <Text style={styles.rowTitle} numberOfLines={1}>
                       {account.email}
                     </Text>
-                    <View style={styles.usageRow}>
-                      <UsageBar
-                        label="5h"
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                        resetText={getWindowResetLabel(usage, 'session', now)}
-                      />
-                      <UsageBar
-                        label="7d"
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                        resetText={getWindowResetLabel(usage, 'weekly', now)}
+                    <View style={styles.usageStack}>
+                      <ProviderUsageBars
+                        limits={usage}
+                        isFetching={isFetching}
+                        now={now}
+                        layout="stacked"
                       />
                     </View>
                     {usage?.error ? (

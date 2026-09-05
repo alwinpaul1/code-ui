@@ -108,6 +108,11 @@ export const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: 4
   },
+  // One window per block; the trailing check column stays clear of the bars.
+  usageStack: {
+    gap: spacing.md,
+    marginTop: spacing.sm + 2
+  },
   errorText: {
     fontSize: typography.metaSize,
     color: colors.statusRed

@@ -2,12 +2,11 @@ import { View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
   getActiveProviderRateLimits,
-  getUsageBarState,
   hasActiveProviderUsage,
-  UsageBar,
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
+import { ProviderUsageBars } from '../components/ProviderUsageBars'
 import { useTheme } from '../theme/theme-context'
 import type { HostProfile } from '../transport/types'
 import { PressScale } from '../ui/PressScale'
@@ -70,8 +69,6 @@ export function MobileHomeAccountUsageCards(props: {
               if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                 return null
               }
-              const sessionBar = getUsageBarState(limits, 'session')
-              const weeklyBar = getUsageBarState(limits, 'weekly')
               return (
                 <View
                   key={provider}
@@ -97,19 +94,8 @@ export function MobileHomeAccountUsageCards(props: {
                     <Txt variant="label" weight="semibold" numberOfLines={1}>
                       {active?.email ?? 'System default'}
                     </Txt>
-                    <View style={{ flexDirection: 'row', gap: space.md, marginTop: 4 }}>
-                      <UsageBar
-                        label="5h"
-                        usedPercent={sessionBar.usedPercent}
-                        unavailable={sessionBar.unavailable}
-                        loading={sessionBar.loading}
-                      />
-                      <UsageBar
-                        label="7d"
-                        usedPercent={weeklyBar.usedPercent}
-                        unavailable={weeklyBar.unavailable}
-                        loading={weeklyBar.loading}
-                      />
+                    <View style={{ flexDirection: 'row', gap: space.md, marginTop: 6 }}>
+                      <ProviderUsageBars limits={limits} layout="columns" />
                     </View>
                   </View>
                 </View>

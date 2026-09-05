@@ -6,6 +6,7 @@ import {
   formatResetClock,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasFableWindow,
   hasRenderableUsage,
   type AccountsSnapshot,
   type InactiveAccountUsage,
@@ -205,5 +206,33 @@ describe('getUsageBarState', () => {
       unavailable: false,
       loading: true
     })
+  })
+})
+
+describe('fable weekly window', () => {
+  const now = Date.UTC(2026, 8, 5, 3, 0, 0)
+  const fable = { usedPercent: 13, windowMinutes: 10080, resetsAt: now + 4 * 86_400_000 }
+
+  it('is shown only when the host reports it', () => {
+    expect(hasFableWindow(makeLimits())).toBe(false)
+    expect(hasFableWindow(makeLimits({ fableWeekly: null }))).toBe(false)
+    expect(hasFableWindow(makeLimits({ fableWeekly: fable }))).toBe(true)
+  })
+
+  it('reads the bar like the other windows and counts as usage', () => {
+    const limits = makeLimits({ fableWeekly: fable, status: 'ok' })
+    expect(getUsageBarState(limits, 'fableWeekly')).toEqual({
+      usedPercent: 13,
+      unavailable: false,
+      loading: false
+    })
+    expect(hasActiveProviderUsage(makeLimits({ fableWeekly: fable, status: 'error' }))).toBe(true)
+  })
+
+  it('labels the reset like the weekly window', () => {
+    const limits = makeLimits({ fableWeekly: fable })
+    expect(getWindowResetLabel(limits, 'fableWeekly', now)).toBe(
+      getWindowResetLabel(makeLimits({ weekly: fable }), 'weekly', now)
+    )
   })
 })
