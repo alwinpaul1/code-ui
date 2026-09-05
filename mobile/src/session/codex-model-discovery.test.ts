@@ -50,7 +50,8 @@ describe('parseCodexDiscovery', () => {
       'max',
       'ultra'
     ])
-    expect(models[0]?.isDefault).toBe(true)
+    // The probe's default is the host seed's, not the account's: never trusted.
+    expect(models[0]?.isDefault).toBe(false)
     expect(models[1]?.levels).toHaveLength(4)
     expect(models[1]?.defaultLevel).toBe('medium')
   })
@@ -64,7 +65,7 @@ describe('parseCodexDiscovery', () => {
 describe('discoveredCodexCatalogModels', () => {
   it('builds a per-model effort select from the discovered levels', () => {
     const [astra, five] = discoveredCodexCatalogModels(parseCodexDiscovery(RESULT))
-    expect(astra?.isDefault).toBe(true)
+    expect(astra?.isDefault).toBeUndefined()
     const effort = astra?.options[0]
     expect(effort?.id).toBe('effort')
     expect(effort?.kind.type === 'select' && effort.kind.choices.map((c) => c.value)).toEqual([

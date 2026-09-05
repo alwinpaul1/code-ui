@@ -41,8 +41,6 @@ export function parseCodexDiscovery(result: unknown): DiscoveredCodexModel[] {
   if (!response || response.success !== true || !Array.isArray(response.models)) {
     return []
   }
-  const defaultModelId =
-    typeof response.defaultModelId === 'string' ? response.defaultModelId : null
   const models: DiscoveredCodexModel[] = []
   for (const model of response.models) {
     if (typeof model.id !== 'string' || !model.id || typeof model.label !== 'string') {
@@ -63,7 +61,9 @@ export function parseCodexDiscovery(result: unknown): DiscoveredCodexModel[] {
       levels,
       defaultLevel:
         typeof model.defaultThinkingLevel === 'string' ? model.defaultThinkingLevel : null,
-      isDefault: model.isDefault === true || model.id === defaultModelId
+      // Why false: the probe's default is the host's static seed default, not
+      // the account's; only Codex's own picker knows which row is "(default)".
+      isDefault: false
     })
   }
   return models

@@ -6,6 +6,7 @@ import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createCodexPickerIo } from './codex-picker-apply'
 import { isCodexIdle, isCodexWorking, parseCodexPickerScreen } from './codex-picker-screen'
+import { withCodexTerminalLock } from './codex-terminal-lock'
 import {
   codexVisibleModelsKey,
   peekCodexVisibleModels,
@@ -47,9 +48,12 @@ export function useCodexStatusPoll(args: {
     polledOnOpen.current = handleKey
     let active = true
     const timer = setTimeout(() => {
-      void (async () => {
-        const handle = handleRef.current
-        if (!active || !handle) {
+      const handle = handleRef.current
+      if (!active || !handle) {
+        return
+      }
+      void withCodexTerminalLock(handle, async () => {
+        if (!active) {
           return
         }
         const io = createCodexPickerIo({
@@ -92,7 +96,7 @@ export function useCodexStatusPoll(args: {
         if (active) {
           await refreshHud()
         }
-      })()
+      })
     }, SETTLE_AFTER_TURN_MS)
     return () => {
       active = false

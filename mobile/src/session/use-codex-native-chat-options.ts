@@ -20,6 +20,7 @@ import {
 } from './codex-model-discovery'
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import { applyCodexPickerSelection, createCodexPickerIo } from './codex-picker-apply'
+import { withCodexTerminalLock } from './codex-terminal-lock'
 
 export type CodexNativeChatOptions = {
   discoveredModels: CatalogModel[] | null
@@ -136,7 +137,9 @@ export function useCodexNativeChatOptions(args: {
       } else {
         return null
       }
-      const result = await applyCodexPickerSelection(io, target)
+      const result = await withCodexTerminalLock(handle, () =>
+        applyCodexPickerSelection(io, target)
+      )
       void refreshHud()
       if (result.ok) {
         return true
