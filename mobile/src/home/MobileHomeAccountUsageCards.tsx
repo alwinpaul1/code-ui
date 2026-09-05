@@ -45,7 +45,9 @@ export function MobileHomeAccountUsageCards(props: {
               borderRadius: radius.lg,
               paddingHorizontal: space.md,
               paddingVertical: space.md,
-              gap: space.sm,
+              // Why: two providers stacked read as one block at sm; lg gives
+              // each its own breathing room without a divider.
+              gap: space.lg,
               marginBottom: space.sm
             }}
             onPress={() => props.onOpen(host.id)}
@@ -91,10 +93,18 @@ export function MobileHomeAccountUsageCards(props: {
                     )}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                    <Txt variant="label" weight="semibold" numberOfLines={1}>
-                      {active?.email ?? 'System default'}
-                    </Txt>
-                    <View style={{ flexDirection: 'row', gap: space.md, marginTop: 6 }}>
+                    {active?.email ? (
+                      <Txt variant="label" weight="semibold" numberOfLines={1}>
+                        {active.email}
+                      </Txt>
+                    ) : null}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        gap: space.md,
+                        marginTop: active?.email ? 6 : 0
+                      }}
+                    >
                       <ProviderUsageBars limits={limits} layout="columns" />
                     </View>
                   </View>

@@ -214,13 +214,20 @@ export default function AccountsScreen() {
             disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
           >
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>System default</Text>
-              <Text style={styles.rowSubtitle}>Use the agent's own login</Text>
+              {/* Why: with no managed accounts there is nothing to switch
+                  between, so "System default" is noise over the usage bars.
+                  The label returns once a second login exists to choose from. */}
+              {state.accounts.length > 0 ? (
+                <>
+                  <Text style={styles.rowTitle}>System default</Text>
+                  <Text style={styles.rowSubtitle}>Use the agent's own login</Text>
+                </>
+              ) : null}
               {/* Why: when system default is the active selection, activeUsage
                   holds the system-default login's rate limits — surface them
                   here so non-managed users still see their usage. */}
               {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={styles.usageStack}>
+                <View style={state.accounts.length > 0 ? styles.usageStack : styles.usageStackBare}>
                   <ProviderUsageBars limits={activeUsage} now={now} layout="stacked" />
                 </View>
               ) : null}

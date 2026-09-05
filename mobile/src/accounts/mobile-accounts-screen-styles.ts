@@ -113,6 +113,10 @@ export const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.sm + 2
   },
+  usageStackBare: {
+    gap: spacing.md,
+    marginTop: 2
+  },
   errorText: {
     fontSize: typography.metaSize,
     color: colors.statusRed
