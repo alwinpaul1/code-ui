@@ -5,7 +5,6 @@
 // Pure state/selectors live here (no React Native imports) so they can be
 // unit-tested directly; AccountUsage.tsx re-exports them alongside the
 // UsageBar component.
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
 import type {
   AccountsSnapshot,
   InactiveAccountUsage,
@@ -125,10 +124,12 @@ export function getWindowResetLabel(
     }
     return `Resets ${WEEKDAYS[new Date(resetsAt).getDay()]} ${formatResetClock(resetsAt)}`
   }
-  // Why a line break: the two bars share one row on the phone, and "Resets in
-  // 1h 2m · 5:30 AM" does not fit half of it; the clock goes on its own line.
-  const countdown = formatResetCountdown(resetsAt - now)
-  return countdown === 'Resets now' ? countdown : `${countdown}\n${formatResetClock(resetsAt)}`
+  // Session window: just the clock time it lands on — "Resets 5:30 AM". The
+  // two bars share one row on the phone, so a countdown does not fit beside it.
+  if (resetsAt <= now) {
+    return 'Resets now'
+  }
+  return `Resets ${formatResetClock(resetsAt)}`
 }
 
 // Why: the usage UI must render for the system-default login, not only for

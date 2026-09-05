@@ -76,7 +76,7 @@ export function UsageBar({
         )}
       </View>
       {resetText ? (
-        <Text style={styles.usageResetText} numberOfLines={2}>
+        <Text style={styles.usageResetText} numberOfLines={1}>
           {resetText}
         </Text>
       ) : null}
