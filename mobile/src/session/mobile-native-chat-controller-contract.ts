@@ -1,3 +1,4 @@
+import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type {
@@ -84,4 +85,6 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** Context window figure read from the desktop status line, or null. */
+  nativeChatContextWindow: TerminalHudContextWindow | null
 }

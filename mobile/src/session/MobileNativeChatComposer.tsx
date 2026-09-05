@@ -1,14 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Image,
-  Keyboard,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View
-} from 'react-native'
-import { ArrowUp, Mic, Plus, Square, X } from 'lucide-react-native'
+import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native'
+import { ArrowUp, Image as ImageIcon, Mic, Paperclip, Plus, Square } from 'lucide-react-native'
+import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ContextWindowRing } from '../components/ContextWindowRing'
+import { VoiceLevelBars } from '../components/VoiceLevelBars'
+import { MobileContextWindowSheet } from './MobileContextWindowSheet'
+import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import {
   getNativeChatAgentProfile,
   getVerifiedNativeChatCommands
@@ -58,6 +56,8 @@ type Props = {
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  /** Any document via the system file picker; shown as a named chip. */
+  onAttachFile?: () => void
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
    *  and ridden along on the next send (desktop native-chat parity). */
   attachments?: PendingNativeChatImage[]
@@ -65,6 +65,10 @@ type Props = {
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  /** Microphone level 0..1 while `micActive`; shows the voice bars. */
+  micLevel?: number
+  /** Context window figure from the desktop status line; shows the ring. */
+  contextWindow?: TerminalHudContextWindow | null
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
@@ -91,11 +95,14 @@ export function MobileNativeChatComposer({
   agent,
   sessionOptions,
   onAttachImage,
+  onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   isAttaching = false,
   onMicPress,
   micActive = false,
+  micLevel = 0,
+  contextWindow = null,
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
@@ -126,6 +133,8 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
+  const [showAttachSheet, setShowAttachSheet] = useState(false)
+  const [showContextSheet, setShowContextSheet] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
@@ -269,61 +278,10 @@ export function MobileNativeChatComposer({
           }}
           testID="native-chat-composer"
         >
-          {attachments.length > 0 ? (
-            <ScrollView
-              horizontal
-              keyboardShouldPersistTaps="always"
-              showsHorizontalScrollIndicator={false}
-              style={{ maxHeight: 80 }}
-              contentContainerStyle={{
-                gap: space.sm,
-                paddingHorizontal: space.md,
-                paddingTop: space.md
-              }}
-            >
-              {attachments.map((attachment) => (
-                <View
-                  key={attachment.id}
-                  style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: radius.sm,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.bgRaised
-                  }}
-                >
-                  <Image
-                    source={{ uri: attachment.previewUri }}
-                    style={{ width: '100%', height: '100%', borderRadius: radius.sm }}
-                    resizeMode="cover"
-                  />
-                  {onRemoveAttachment ? (
-                    <Pressable
-                      accessibilityLabel="Remove image"
-                      // Inset inside the thumb: Android drops touches outside the parent's bounds,
-                      // so an overhanging badge would lose part of its tap target.
-                      style={{
-                        position: 'absolute',
-                        top: 3,
-                        right: 3,
-                        width: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: colors.text
-                      }}
-                      onPress={() => onRemoveAttachment(attachment.id)}
-                      hitSlop={8}
-                    >
-                      <X size={12} color={colors.textInverse} strokeWidth={2.6} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              ))}
-            </ScrollView>
-          ) : null}
+          <MobileNativeChatAttachmentChips
+            attachments={attachments}
+            onRemoveAttachment={onRemoveAttachment}
+          />
           <TextInput
             style={{
               width: '100%',
@@ -369,12 +327,14 @@ export function MobileNativeChatComposer({
           >
             {onAttachImage ? (
               <Pressable
-                accessibilityLabel="Attach image"
+                accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
                 style={({ pressed }) => [
                   iconButton,
                   { backgroundColor: pressed ? colors.bgRaised : 'transparent' }
                 ]}
-                onPress={onAttachImage}
+                // Why: with a file option the "+" opens a small chooser (Claude's
+                // "Add to Chat" sheet); without one it keeps opening Photos directly.
+                onPress={onAttachFile ? () => setShowAttachSheet(true) : onAttachImage}
                 disabled={isAttaching || disabled}
               >
                 {isAttaching ? (
@@ -390,7 +350,14 @@ export function MobileNativeChatComposer({
                 sendInFlight={sending || isAttaching}
               />
             ) : null}
+            {contextWindow ? (
+              <ContextWindowRing
+                usedPercent={contextWindow.usedPercent}
+                onPress={() => setShowContextSheet(true)}
+              />
+            ) : null}
             <View style={{ flex: 1 }} />
+            {micActive ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
               <Pressable
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
@@ -438,6 +405,32 @@ export function MobileNativeChatComposer({
           </View>
         </View>
       </View>
+      <MobileContextWindowSheet
+        visible={showContextSheet}
+        context={contextWindow}
+        onClose={() => setShowContextSheet(false)}
+      />
+      {onAttachImage && onAttachFile ? (
+        <ActionSheetModal
+          visible={showAttachSheet}
+          title="Add to chat"
+          actions={[
+            {
+              label: 'Photos',
+              hint: 'Pick from your photo library',
+              icon: ImageIcon,
+              onPress: onAttachImage
+            },
+            {
+              label: 'Files',
+              hint: 'PDF, documents, code, anything on this phone',
+              icon: Paperclip,
+              onPress: onAttachFile
+            }
+          ]}
+          onClose={() => setShowAttachSheet(false)}
+        />
+      ) : null}
     </View>
   )
 }

@@ -255,6 +255,7 @@ export function MobileSessionActiveContent({
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
         micActive={dictation.isRecording}
+        micLevel={(dictation as { level?: number }).level ?? 0}
         dictationMode={dictationMode}
         onMicPressIn={handleDictationPressIn}
         onMicPressOut={handleDictationPressOut}

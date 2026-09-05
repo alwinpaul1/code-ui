@@ -56,11 +56,14 @@ export function MobileNativeChatView({
   composerText,
   onComposerTextChange,
   onAttachImage,
+  onAttachFile,
   attachments,
   onRemoveAttachment,
   isAttaching,
   onMicPress,
   micActive,
+  micLevel,
+  contextWindow,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -401,11 +404,14 @@ export function MobileNativeChatView({
         agent={agent}
         sessionOptions={sessionOptions}
         onAttachImage={onAttachImage}
+        onAttachFile={onAttachFile}
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
         isAttaching={isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
+        micLevel={micLevel}
+        contextWindow={contextWindow}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

@@ -33,7 +33,32 @@ home = os.path.expanduser("~")
 if cwd.startswith(home):
     cwd = "~" + cwd[len(home):]
 badge = "[%s · effort %s]" % (name, level) if level else "[%s]" % name
-print("%s %s" % (badge, cwd))
+def short(n):
+    n = float(n)
+    if n >= 1e6:
+        s = "%.1fM" % (n / 1e6)
+    elif n >= 1e3:
+        s = "%.1fk" % (n / 1e3)
+    else:
+        return str(int(n))
+    return s.replace(".0M", "M").replace(".0k", "k")
+ctx = d.get("context_window") or {}
+pct = ctx.get("used_percentage")
+size = ctx.get("context_window_size")
+usage = ctx.get("current_usage") or {}
+used = None
+if isinstance(usage, dict):
+    used = sum(int(usage.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+if pct is None and used is not None and size:
+    pct = 100.0 * used / float(size)
+parts = [badge]
+if pct is not None:
+    figure = "ctx %d%%" % round(float(pct))
+    if used is not None and size:
+        figure += " %s/%s" % (short(used), short(size))
+    parts.append(figure)
+parts.append(cwd)
+print(" ".join(p for p in parts if p))
 '
   exit 0
 fi
@@ -41,9 +66,15 @@ fi
 # No python3: pull the two fields out with sed. Good enough for the badge.
 name=$(printf '%s' "$input" | sed -n 's/.*"display_name":"\([^"]*\)".*/\1/p' | head -n 1)
 level=$(printf '%s' "$input" | sed -n 's/.*"effort":{"level":"\([^"]*\)".*/\1/p' | head -n 1)
+pct=$(printf '%s' "$input" | sed -n 's/.*"used_percentage":\([0-9]*\).*/\1/p' | head -n 1)
 [ -n "$name" ] || name="Claude"
 if [ -n "$level" ]; then
-  printf '[%s · effort %s]\n' "$name" "$level"
+  badge=$(printf '[%s · effort %s]' "$name" "$level")
 else
-  printf '[%s]\n' "$name"
+  badge=$(printf '[%s]' "$name")
+fi
+if [ -n "$pct" ]; then
+  printf '%s ctx %s%%\n' "$badge" "$pct"
+else
+  printf '%s\n' "$badge"
 fi

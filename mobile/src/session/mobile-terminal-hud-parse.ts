@@ -7,6 +7,53 @@ export type TerminalHudObservation = {
   modelId: 'fable' | 'opus' | 'sonnet' | 'haiku' | null
   /** Effort level printed after the model, when the HUD shows one. */
   effort: string | null
+  /** Context window usage when the status line prints it (claude-hud's
+   *  "78% (776k/1.0M)" or Code UI's "ctx 54% 537.2k/1M"); null otherwise. */
+  context: TerminalHudContextWindow | null
+}
+
+export type TerminalHudContextWindow = {
+  usedPercent: number
+  /** Human labels as printed, e.g. "537.2k" and "1M"; null when only a percent is shown. */
+  usedLabel: string | null
+  windowLabel: string | null
+}
+
+const CONTEXT_PATTERNS = [
+  // Code UI status line: "ctx 54% 537.2k/1M"
+  /\bctx\s*:?\s*(\d{1,3})%(?:\s+([\d.]+[kKmM]?)\s*\/\s*([\d.]+[kKmM]?))?/,
+  // claude-hud: "78% (776k/1.0M)"
+  /(\d{1,3})%\s*\(\s*([\d.]+[kKmM]?)\s*\/\s*([\d.]+[kKmM]?)\s*\)/,
+  // Generic "context 54%" / "54% context"
+  /\bcontext\s*:?\s*(\d{1,3})%/i,
+  /(\d{1,3})%\s*(?:ctx|context)\b/i
+]
+// On the badge line itself the first percent after the badge is the context
+// meter (claude-hud draws "████░░ 61% (60…" there, often cut by the column).
+const BARE_PERCENT = /(\d{1,3})%/
+
+export function parseTerminalHudContextWindow(
+  line: string,
+  options: { allowBarePercent?: boolean } = {}
+): TerminalHudContextWindow | null {
+  for (const pattern of options.allowBarePercent
+    ? [...CONTEXT_PATTERNS, BARE_PERCENT]
+    : CONTEXT_PATTERNS) {
+    const match = pattern.exec(line)
+    if (!match) {
+      continue
+    }
+    const usedPercent = Number(match[1])
+    if (!Number.isFinite(usedPercent) || usedPercent < 0 || usedPercent > 100) {
+      continue
+    }
+    return {
+      usedPercent,
+      usedLabel: match[2] ?? null,
+      windowLabel: match[3] ?? null
+    }
+  }
+  return null
 }
 
 const BADGE = /\[([^\]]+)\]/
@@ -62,7 +109,14 @@ export function parseTerminalHudObservation(
     if (!modelId) {
       continue
     }
-    return { modelLabel, modelId, effort }
+    // The context figure sits after the badge on the same line, or on the line
+    // below when the HUD wraps; the badge line wins when both carry one.
+    const line = lines[index] ?? ''
+    const context =
+      parseTerminalHudContextWindow(line.slice(match.index + match[0].length), {
+        allowBarePercent: true
+      }) ?? parseTerminalHudContextWindow(lines[index + 1] ?? '')
+    return { modelLabel, modelId, effort, context }
   }
   return null
 }

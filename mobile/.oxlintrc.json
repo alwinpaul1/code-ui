@@ -153,6 +153,21 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-native-chat-drafts.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 305,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
     }
   ]
 }

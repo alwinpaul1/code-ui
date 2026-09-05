@@ -1,3 +1,4 @@
+import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -47,12 +48,15 @@ export type MobileNativeChatViewProps = {
   composerText: string
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
+  onAttachFile?: () => void
   /** Pending image attachments shown as composer thumbnails until the next send. */
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
   micActive?: boolean
+  micLevel?: number
+  contextWindow?: TerminalHudContextWindow | null
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
   onMicPressOut?: () => void

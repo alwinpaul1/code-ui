@@ -57,6 +57,10 @@ vi.mock('react-native', async () => {
   }
 })
 
+vi.mock('react-native-svg', () => ({
+  default: () => null,
+  Circle: () => null
+}))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',

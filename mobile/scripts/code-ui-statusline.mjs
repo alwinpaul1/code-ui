@@ -26,4 +26,23 @@ if (cwd.startsWith(home)) {
   cwd = '~' + cwd.slice(home.length)
 }
 const badge = level ? `[${name} · effort ${level}]` : `[${name}]`
-console.log(`${badge} ${cwd}`)
+const short = (n) => {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`.replace('.0M', 'M')
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}k`.replace('.0k', 'k')
+  return String(Math.round(n))
+}
+const ctx = d.context_window ?? {}
+const usage = ctx.current_usage ?? {}
+const used =
+  (usage.input_tokens ?? 0) +
+  (usage.cache_creation_input_tokens ?? 0) +
+  (usage.cache_read_input_tokens ?? 0)
+const size = ctx.context_window_size
+let pct = ctx.used_percentage
+if (pct == null && size && used) pct = (100 * used) / size
+const parts = [badge]
+if (pct != null) {
+  parts.push(`ctx ${Math.round(pct)}%` + (used && size ? ` ${short(used)}/${short(size)}` : ''))
+}
+parts.push(cwd)
+console.log(parts.filter(Boolean).join(' '))

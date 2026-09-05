@@ -17,6 +17,7 @@ type Props = {
   images: MobileNativeChatImageAttachments
   onMicPress: () => void
   micActive: boolean
+  micLevel?: number
   dictationMode: 'toggle' | 'hold'
   onMicPressIn: () => void
   onMicPressOut: () => void
@@ -45,6 +46,7 @@ export function MobileNativeChatOverlay({
   images,
   onMicPress,
   micActive,
+  micLevel,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -100,11 +102,14 @@ export function MobileNativeChatOverlay({
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}
         onAttachImage={() => void images.attachImage('library')}
+        onAttachFile={() => void images.attachDocument()}
         attachments={images.attachments}
         onRemoveAttachment={images.removeAttachment}
         isAttaching={images.isAttaching}
         onMicPress={onMicPress}
         micActive={micActive}
+        micLevel={micLevel}
+        contextWindow={controller.nativeChatContextWindow}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

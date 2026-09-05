@@ -117,8 +117,10 @@ and point it at `mobile/scripts/code-ui-statusline.sh`, or add to `~/.claude/set
 "statusLine": { "type": "command", "command": "sh /absolute/path/to/mobile/scripts/code-ui-statusline.sh" }
 ```
 
-It prints `[Fable 5.1 · effort high] ~/project`. The phone polls the terminal screen every
-5 s while Chat UI is open and mirrors the badge into the pickers.
+It prints `[Fable 5.1 · effort high] ctx 54% 537.2k/1M ~/project`. The phone polls the
+terminal screen every 5 s while Chat UI is open and mirrors the badge into the pickers; the
+`ctx` figure feeds the context-window ring next to the model pill (tap it for the detail).
+claude-hud's `78% (776k/1.0M)` meter is read the same way.
 
 One script per platform, all printing the same badge; pick the one that matches the
 machine running Claude Code:
