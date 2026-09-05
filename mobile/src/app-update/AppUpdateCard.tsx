@@ -124,9 +124,6 @@ export function AppUpdateCard() {
         left: space.lg,
         right: space.lg,
         bottom: insets.bottom + space.lg,
-        maxWidth: 420,
-        alignSelf: 'center',
-        width: '100%',
         opacity: reveal,
         transform: [
           { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }

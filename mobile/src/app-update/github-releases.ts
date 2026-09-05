@@ -139,6 +139,7 @@ export async function fetchLatestAndroidRelease(
         // Why: GitHub can rate-limit a later page after page 1 already found a
         // valid APK. Keep that signal instead of turning a partial success into
         // "no update".
+        console.log('[app-update] releases request failed', { page, status: response.status })
         return best
       }
       const releases = GithubReleasesResponse.parse(await response.json())
@@ -178,9 +179,10 @@ export async function fetchLatestAndroidRelease(
       }
     }
     return best
-  } catch {
+  } catch (error) {
     // Why: best-effort — rate limits, offline, or a shape change must not break
     // the Home screen. If a previous page already found a valid APK, keep it.
+    console.log('[app-update] releases lookup failed', String(error))
     return best
   }
 }

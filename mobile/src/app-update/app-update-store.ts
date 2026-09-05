@@ -104,6 +104,12 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
         clearTimeout(timer)
       }
 
+      // One line per check so a silent "no card" is diagnosable from logcat /
+      // the connection log without a debug build.
+      console.log('[app-update] check', {
+        installed: `${getInstalledVersion()} (${getInstalledBuildNumber() ?? '?'})`,
+        result
+      })
       // Why: advance the throttle on any completion so a failed attempt today
       // doesn't immediately retry on the next screen focus.
       void AsyncStorage.setItem(LAST_CHECK_KEY, String(Date.now())).catch(() => {})

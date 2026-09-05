@@ -42,6 +42,9 @@ importers:
       expo:
         specifier: ^55.0.30
         version: 55.0.30(df1b8ba866629f1a6b4802551ac46003)
+      expo-application:
+        specifier: ~55.0.19
+        version: 55.0.19(expo@55.0.30)
       expo-build-properties:
         specifier: ^55.0.18
         version: 55.0.18(expo@55.0.30)

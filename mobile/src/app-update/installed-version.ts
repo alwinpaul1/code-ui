@@ -1,22 +1,25 @@
+import * as Application from 'expo-application'
 import Constants from 'expo-constants'
 import { Platform } from 'react-native'
 
-// Thin adapter over expo-constants so the rest of the app-update module can stay
-// pure and unit-testable without pulling a native Expo module into the vitest
-// environment. Only this file (and the RN-coupled store) import expo-constants.
+// Thin adapter over the native app identity so the rest of the app-update module
+// stays pure and unit-testable without pulling native Expo modules into vitest.
+//
+// Why expo-application first: expo-constants' version fields come from the config
+// embedded in the JS bundle, i.e. whatever app.json said when the bundle was
+// built. A build whose native versionName differs (a local test build, a stale
+// prebuild) would then compare the wrong number and never see an update.
+// expo-application reads PackageInfo / CFBundle on the installed binary.
 
-/** Read the installed marketing version. Prefers the native binary's version
- *  (versionName / CFBundleShortVersionString): expoConfig.version is whatever
- *  app.json said when the JS bundle was built, which can differ from the APK that
- *  is actually installed. Defaults to 0.0.0. */
+/** Read the installed marketing version. Defaults to 0.0.0. */
 export function getInstalledVersion(): string {
-  return Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? '0.0.0'
+  return Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? '0.0.0'
 }
 
 /** Read the installed native build identifier used to break same-version ties. */
 export function getInstalledBuildNumber(): string | null {
-  if (Constants.nativeBuildVersion) {
-    return String(Constants.nativeBuildVersion)
+  if (Application.nativeBuildVersion) {
+    return Application.nativeBuildVersion
   }
   if (Platform.OS === 'ios') {
     return Constants.platform?.ios?.buildNumber ?? Constants.expoConfig?.ios?.buildNumber ?? null
