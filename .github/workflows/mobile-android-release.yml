@@ -58,6 +58,9 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
+          # Why pinned here: the action runs from the repo root, which has no
+          # package.json "packageManager" field to read the version from.
+          version: 11.25.0
           run_install: false
 
       - name: Install dependencies
