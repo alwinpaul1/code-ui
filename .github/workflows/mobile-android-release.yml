@@ -137,6 +137,27 @@ jobs:
           git tag "$tag" "$GITHUB_SHA"
           git push origin "refs/tags/$tag"
 
+      - name: Write release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          # Why commit subjects, not --generate-notes: the in-app update card
+          # shows this body as bullets, and this repo lands most work as direct
+          # commits, which GitHub's generated notes leave out.
+          previous="$(git tag --list 'mobile-android-v*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
+          range="${previous:+$previous..}HEAD"
+          {
+            echo "## What's changed"
+            echo
+            git log --no-merges --pretty='- %s' "$range" | grep -vE '^- (Code UI Android [0-9]|Release-script test)' | head -n 40
+            echo
+            if [ -n "$previous" ]; then
+              echo "**Full Changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$previous...$tag"
+            fi
+          } > dist/release-notes.md
+          cat dist/release-notes.md
+
       - name: Create GitHub Release
         if: steps.release.outputs.publish_release == 'true'
         env:
@@ -147,12 +168,11 @@ jobs:
           apk="dist/${{ steps.apk.outputs.name }}"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "$apk"
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file dist/release-notes.md
           else
-            # Why --generate-notes: the in-app update card shows this body as
-            # the release notes, so every merged PR title becomes a bullet.
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Code UI Android v${{ steps.release.outputs.version }}" \
-              --generate-notes \
+              --notes-file dist/release-notes.md \
               "$apk"
           fi
