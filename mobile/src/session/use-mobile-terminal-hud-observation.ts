@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { parseTerminalHudObservation, type TerminalHudObservation } from './mobile-terminal-hud-parse'
+import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
+import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 const HUD_POLL_MS = 5_000
 
@@ -23,13 +25,17 @@ export function useMobileTerminalHudObservation(args: {
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
+  /** Claude Code's permission dialog options as drawn on screen, or null. */
+  dialogOptions: MobileChatPermission['options'] | null
 } {
   const { client, enabled, handleRef, handleKey } = args
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
+  const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
   useEffect(() => {
     setObservation(null)
+    setDialogOptions(null)
     if (!client || !enabled || !handleKey) {
       return
     }
@@ -51,6 +57,10 @@ export function useMobileTerminalHudObservation(args: {
         }
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw) ? raw.filter((line): line is string => typeof line === 'string') : []
+        const dialog = permissionOptionsFromScreen(lines)
+        setDialogOptions((current) =>
+          JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
+        )
         const next = parseTerminalHudObservation(lines)
         if (next) {
           setObservation((current) =>
@@ -87,5 +97,5 @@ export function useMobileTerminalHudObservation(args: {
   // 5s for the next poll would make the mode pill look stuck.
   const refresh = useCallback(() => readRef.current(), [])
 
-  return { observation, refresh }
+  return { observation, refresh, dialogOptions }
 }

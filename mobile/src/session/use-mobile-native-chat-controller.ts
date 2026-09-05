@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, type MutableRefObject, useEffect } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -22,6 +22,7 @@ import type { MobileNativeChatController } from './mobile-native-chat-controller
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
+import { withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -299,12 +300,26 @@ export function useMobileNativeChatController(args: {
   // The terminal's own status line is the one place that states model AND
   // effort; read it while chat covers the terminal and let it win over the
   // hook report, which names the model only.
-  const { observation: hudObservation, refresh: refreshTerminalHud } = useMobileTerminalHudObservation({
+  const {
+    observation: hudObservation,
+    refresh: refreshTerminalHud,
+    dialogOptions: terminalDialogOptions
+  } = useMobileTerminalHudObservation({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
     handleKey: showNativeChat ? streamScopeKey : null
   })
+  // Why: the approval envelope lands before the dialog is drawn; re-read the
+  // screen shortly after so the card shows the dialog's own options, not the
+  // generic pair, without waiting for the next 5s poll.
+  useEffect(() => {
+    if (!legacyNativeChatPermission) {
+      return
+    }
+    const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
+    return () => timers.forEach(clearTimeout)
+  }, [legacyNativeChatPermission, refreshTerminalHud])
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
@@ -359,7 +374,7 @@ export function useMobileNativeChatController(args: {
     nativeChatStreamScopeKey: streamScopeKey,
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission
-      : legacyNativeChatPermission,
+      : withTerminalDialogOptions(legacyNativeChatPermission, terminalDialogOptions),
     nativeChatQuestion: activeChatStructured
       ? structuredNativeChat.question
       : legacyNativeChatQuestion,
