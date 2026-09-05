@@ -18,6 +18,17 @@ describe('parseTerminalHudObservation', () => {
     ).toEqual({ modelLabel: 'Opus 4.8 (1M context)', modelId: 'opus', effort: null })
   })
 
+  it('reads the Code UI status line badge (no auth segment, "effort" label, middle dot)', () => {
+    expect(
+      parseTerminalHudObservation(['[Fable 5.1 · effort high] ~/Desktop/Project/Thesis', '❯'])
+    ).toEqual({ modelLabel: 'Fable 5.1', modelId: 'fable', effort: 'high' })
+    expect(parseTerminalHudObservation(['[Sonnet 5] ~/x'])).toEqual({
+      modelLabel: 'Sonnet 5',
+      modelId: 'sonnet',
+      effort: null
+    })
+  })
+
   it('unwraps ultracode and ignores brackets that are not a model badge', () => {
     expect(
       parseTerminalHudObservation(['  [x] done', '  [Opus 5 ultracode(xhigh) | Team] 62%'])

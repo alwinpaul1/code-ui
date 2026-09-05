@@ -9,7 +9,9 @@ export type TerminalHudObservation = {
   effort: string | null
 }
 
-const BADGE = /\[([^\]|]+?)\s*\|[^\]]*\]/
+const BADGE = /\[([^\]]+)\]/
+/** Separators and labels a status line may put between the model and the effort. */
+const FILLER = new Set(['·', '•', '|', '-', '—', ':', 'effort', 'effort:'])
 
 /**
  * Read the model badge of the Claude Code status line (the claude-hud
@@ -28,16 +30,20 @@ export function parseTerminalHudObservation(
     if (!match) {
       continue
     }
-    const words = match[1]!.trim().split(/\s+/)
+    // Only the first segment names the model; "| Max 20x" style suffixes are auth/plan.
+    const segment = match[1]!.split('|')[0]!.trim()
+    const words: string[] = []
     let effort: string | null = null
-    const last = words[words.length - 1]?.toLowerCase() ?? ''
-    const ultracode = /^ultracode\(([a-z]+)\)$/.exec(last)
-    if (ultracode && EFFORT_LEVELS.has(ultracode[1]!)) {
-      effort = ultracode[1]!
-      words.pop()
-    } else if (EFFORT_LEVELS.has(last)) {
-      effort = last
-      words.pop()
+    for (const raw of segment.split(/\s+/)) {
+      const lower = raw.toLowerCase()
+      const ultracode = /^ultracode\(([a-z]+)\)$/.exec(lower)
+      if (ultracode && EFFORT_LEVELS.has(ultracode[1]!)) {
+        effort = ultracode[1]!
+      } else if (EFFORT_LEVELS.has(lower)) {
+        effort = lower
+      } else if (!FILLER.has(lower)) {
+        words.push(raw)
+      }
     }
     const modelLabel = words.join(' ')
     if (!modelLabel) {

@@ -38,13 +38,17 @@ export type MobileNativeChatSessionOptionPickersProps = {
    *  window would be submitted as part of the user's prompt. The composer blocks
    *  the reverse direction on `pendingId`; this is the same guard mirrored. */
   sendInFlight?: boolean
+  /** False when this terminal's status line shows no model badge, so the phone
+   *  cannot mirror what the desktop is running. */
+  statusLineObserved?: boolean
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
-  sendInFlight = false
+  sendInFlight = false,
+  statusLineObserved = true
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
@@ -139,6 +143,12 @@ export function MobileNativeChatSessionOptionPickers({
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
+            {modelView && !statusLineObserved ? (
+              <SessionOptionCaption>
+                No model badge in this terminal's status line, so the phone can't see what the
+                desktop switches to. Install the Code UI status line (see README) to sync both ways.
+              </SessionOptionCaption>
+            ) : null}
             <Surface level="raised" bordered rounded="lg" style={{ overflow: 'hidden' }}>
               <DescriptorRows
                 descriptor={activeDescriptor}

@@ -97,3 +97,25 @@ Two upstream test files are handled specially in this fork: the pull request
 creation test is excluded because it imports a desktop renderer module the fork
 does not vendor, and the session route parity test was re-pinned to the new
 session chrome.
+
+## Keeping model and effort in sync with the desktop
+
+Code UI's chat pickers dispatch `/model` and `/effort` into the Claude Code session, so a
+pick on the phone switches the desktop. For the other direction the phone reads the
+terminal's status line, because that is the only place Claude Code states both the model
+and the effort it is running. Any status line that prints a `[<model name> … <effort>]`
+badge works (claude-hud with `showEffortLevel` does). If you don't run one, install the
+minimal one shipped here, once per Claude profile:
+
+```
+/statusline
+```
+
+and point it at `mobile/scripts/code-ui-statusline.sh`, or add to `~/.claude/settings.json`:
+
+```json
+"statusLine": { "type": "command", "command": "sh /absolute/path/to/mobile/scripts/code-ui-statusline.sh" }
+```
+
+It prints `[Fable 5.1 · effort high] ~/project`. The phone polls the terminal screen every
+5 s while Chat UI is open and mirrors the badge into the pickers.

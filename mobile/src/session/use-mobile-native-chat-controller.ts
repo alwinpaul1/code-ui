@@ -316,6 +316,7 @@ export function useMobileNativeChatController(args: {
       isWorking: nativeChatAgentWorking,
       reportedModel: hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null,
       reportedEffort: hudObservation?.effort ?? null,
+      statusLineObserved: hudObservation != null,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
