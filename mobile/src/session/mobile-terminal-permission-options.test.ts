@@ -62,3 +62,24 @@ describe('terminal permission dialog', () => {
     expect(permissionOptionsFromScreen(['1. Positional argument', '2. Flag'])).toBeNull()
   })
 })
+
+it('skips the "switch to auto mode" choice on a real accept-edits Bash prompt', () => {
+  // Captured from Claude Code via `orca terminal read --screen` on 2026-09-05.
+  const lines = [
+    ' Bash command',
+    ' Tip: auto mode handles these prompts for you — choose "switch to auto mode" below',
+    '   touch /tmp/codeui-perm-test',
+    '   Create empty test file',
+    ' Do you want to proceed?',
+    ' ❯ 1. Yes',
+    '   2. Yes, and always allow access to /private/tmp from this project',
+    '   3. Yes, and switch to auto mode · auto mode handles these prompts for you',
+    '   4. No',
+    ' Esc to cancel · Tab to amend',
+  ]
+  expect(permissionOptionsFromScreen(lines)).toEqual([
+    { label: 'Allow', send: '1' },
+    { label: 'Allow all', send: '2' },
+    { label: 'Deny', send: '4' },
+  ])
+})
