@@ -45,6 +45,9 @@ export type MobileNativeChatSessionOptionPickersProps = {
   planLabel?: string | null
   /** Bumped by the owner to open the model sheet (a typed `/model` in Codex chat). */
   openRequest?: number
+  /** The agent's own model list is still being read (Codex scrapes its picker);
+   *  the sheet shows a reader row instead of a placeholder list. */
+  modelsPending?: boolean
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
@@ -54,7 +57,8 @@ export function MobileNativeChatSessionOptionPickers({
   sendInFlight = false,
   statusLineObserved = true,
   planLabel = null,
-  openRequest = 0
+  openRequest = 0,
+  modelsPending = false
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
@@ -135,9 +139,7 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer visible={activeDescriptor !== undefined} onClose={closePicker}>
         {activeDescriptor ? (
           <View style={{ paddingBottom: space.xs }}>
-            <View
-              style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: space.lg }}
-            >
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: space.lg }}>
               <IconButton
                 icon={modelView ? X : ChevronLeft}
                 accessibilityLabel={modelView ? 'Close picker' : 'Back to models'}
@@ -149,7 +151,9 @@ export function MobileNativeChatSessionOptionPickers({
               <Txt variant="title" weight="semibold" align="center" style={{ flex: 1 }}>
                 {modelView ? 'Select model' : `Select ${activeDescriptor.label.toLowerCase()}`}
               </Txt>
-              <View style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+              >
                 {pendingId !== null ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                 ) : null}
@@ -160,7 +164,7 @@ export function MobileNativeChatSessionOptionPickers({
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
             {modelView && planLabel ? (
-              <SessionOptionCaption>{`Models on your ${planLabel} plan`}</SessionOptionCaption>
+              <SessionOptionCaption>{planLabel}</SessionOptionCaption>
             ) : null}
             {modelView && !statusLineObserved ? (
               <SessionOptionCaption>
@@ -169,13 +173,32 @@ export function MobileNativeChatSessionOptionPickers({
               </SessionOptionCaption>
             ) : null}
             <Surface level="raised" bordered rounded="lg" style={{ overflow: 'hidden' }}>
-              <DescriptorRows
-                descriptor={activeDescriptor}
-                disabled={disabled}
-                grouped
-                onSetOption={(value) => applyOption(activeDescriptor, value)}
-                onInvokeAction={() => invokeAction(activeDescriptor)}
-              />
+              {modelView && modelsPending ? (
+                <View
+                  accessibilityRole="progressbar"
+                  accessibilityLabel="Reading models from the agent"
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: space.sm,
+                    paddingHorizontal: space.md,
+                    paddingVertical: space.md
+                  }}
+                >
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                  <Txt variant="body" tone="secondary">
+                    Reading models from the agent…
+                  </Txt>
+                </View>
+              ) : (
+                <DescriptorRows
+                  descriptor={activeDescriptor}
+                  disabled={disabled}
+                  grouped
+                  onSetOption={(value) => applyOption(activeDescriptor, value)}
+                  onInvokeAction={() => invokeAction(activeDescriptor)}
+                />
+              )}
             </Surface>
             {modelView && options.length > 0 ? (
               <Surface

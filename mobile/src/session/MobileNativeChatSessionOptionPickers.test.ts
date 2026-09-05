@@ -74,7 +74,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   const setOption = vi.fn<MobileNativeChatSessionOptionsController['setOption']>()
   const invokeAction = vi.fn<MobileNativeChatSessionOptionsController['invokeAction']>()
 
-  const mount = (snapshot: SessionOptionDescriptor[], isWorking = false): void => {
+  const mount = (
+    snapshot: SessionOptionDescriptor[],
+    isWorking = false,
+    extra: { modelsPending?: boolean; planLabel?: string } = {}
+  ): void => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
       pendingId: null,
@@ -84,7 +88,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     }
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatSessionOptionPickers, { controller, isWorking })
+        createElement(MobileNativeChatSessionOptionPickers, { controller, isWorking, ...extra })
       )
     })
   }
@@ -234,6 +238,19 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(rowByText('Choose in agent picker…').props.accessibilityRole).toBe('button')
     await act(async () => rowByText('Choose in agent picker…').props.onPress())
     expect(invokeAction).toHaveBeenCalledWith('model')
+  })
+
+  it('shows a reader instead of the placeholder list while models are pending', async () => {
+    mount([MODEL_DESCRIPTOR], false, { modelsPending: true, planLabel: 'Pro Lite' })
+    await act(async () => pill('Model').props.onPress())
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => String(node.props.children))
+    expect(texts).toContain('Reading models from the agent…')
+    // The caption is the plan name exactly as the agent reports it, nothing more.
+    expect(texts).toContain('Pro Lite')
+    expect(texts.some((text) => text.includes('Models on your'))).toBe(false)
+    expect(renderer!.root.findAll((node) => node.props.accessibilityRole === 'radio')).toEqual([])
   })
 
   it('keeps the pills usable while the agent is working (Claude queues /model)', () => {

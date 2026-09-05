@@ -24,6 +24,9 @@ import { withCodexTerminalLock } from './codex-terminal-lock'
 
 export type CodexNativeChatOptions = {
   discoveredModels: CatalogModel[] | null
+  /** True until Codex's own picker has been read for this terminal, so the
+   *  sheet shows a reader instead of a list that will be replaced. */
+  modelsPending: boolean
   discoveredModelApply: CatalogOptionApply | null
   applyOverride: ((id: string, value: SessionOptionValue) => Promise<boolean | null>) | undefined
 }
@@ -82,9 +85,10 @@ export function useCodexNativeChatOptions(args: {
 
   const discoveredModels = useMemo(() => {
     if (!visible || visible.length === 0) {
-      // Until the picker has been read, the probe's list is still the account's
-      // list (it may include a hidden model or two); an empty sheet is worse.
-      return discovered && discovered.length > 0 ? discoveredCodexCatalogModels(discovered) : null
+      // Why not the probe list meanwhile: it carries hidden models (GPT-Reserve,
+      // the review model) that the picker never offers, so it flashed a wrong
+      // list that then rewrote itself. The sheet shows a reader until this lands.
+      return null
     }
     const probed = new Map((discovered ?? []).map((model) => [model.id, model]))
     const merged: DiscoveredCodexModel[] = visible.map((row) => {
@@ -160,6 +164,7 @@ export function useCodexNativeChatOptions(args: {
 
   return {
     discoveredModels,
+    modelsPending: isCodex && discoveredModels === null,
     discoveredModelApply: discoveredModels ? CODEX_DISCOVERED_MODEL_APPLY : null,
     applyOverride: isCodex ? applyOverride : undefined
   }

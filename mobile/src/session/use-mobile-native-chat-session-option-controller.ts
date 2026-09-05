@@ -140,10 +140,18 @@ export function useMobileNativeChatSessionOptionController(args: {
           ? { controller: structuredController, isWorking }
           : null
         : sessionOptions.snapshot.length > 0
-          ? { controller: sessionOptions, isWorking, statusLineObserved, planLabel, openRequest }
+          ? {
+              controller: sessionOptions,
+              isWorking,
+              statusLineObserved,
+              planLabel,
+              openRequest,
+              modelsPending: codex.modelsPending
+            }
           : null,
     [
       activeChatStructured,
+      codex.modelsPending,
       isWorking,
       openRequest,
       planLabel,
