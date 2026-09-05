@@ -21,10 +21,17 @@ export function useMobileNativeChatFileSearch(args: {
   /** Result cap; the composer's `@` menu keeps the small default, the file
    *  explorer's search asks for more since it has the whole screen. */
   limit?: number
-}): { nativeChatFilePaths: string[]; loadNativeChatFiles: (query: string) => void } {
+}): {
+  nativeChatFilePaths: string[]
+  /** A debounced or in-flight search has not answered yet; an empty list then
+   *  means "still looking", not "nothing matched". */
+  nativeChatFileSearchPending: boolean
+  loadNativeChatFiles: (query: string) => void
+} {
   const { client, worktreeId } = args
   const limit = args.limit ?? FILE_SEARCH_RESULT_LIMIT
   const [nativeChatFilePaths, setNativeChatFilePaths] = useState<string[]>([])
+  const [nativeChatFileSearchPending, setNativeChatFileSearchPending] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
   const generationRef = useRef(0)
@@ -41,6 +48,7 @@ export function useMobileNativeChatFileSearch(args: {
     legacyLoadRef.current = null
     searchSupportedRef.current = null
     setNativeChatFilePaths([])
+    setNativeChatFileSearchPending(false)
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current)
@@ -65,6 +73,7 @@ export function useMobileNativeChatFileSearch(args: {
         }
         sequenceRef.current++
         setNativeChatFilePaths(cached)
+        setNativeChatFileSearchPending(false)
         return
       }
       if (timerRef.current) {
@@ -73,6 +82,7 @@ export function useMobileNativeChatFileSearch(args: {
       const sequence = ++sequenceRef.current
       const generation = generationRef.current
       setNativeChatFilePaths([])
+      setNativeChatFileSearchPending(true)
       timerRef.current = setTimeout(() => {
         timerRef.current = null
         const applyPaths = (paths: string[]): void => {
@@ -88,6 +98,7 @@ export function useMobileNativeChatFileSearch(args: {
             queryCacheRef.current.delete(oldest)
           }
           setNativeChatFilePaths(paths)
+          setNativeChatFileSearchPending(false)
         }
         const loadLegacyPaths = async (): Promise<void> => {
           if (!legacyPathsRef.current) {
@@ -140,11 +151,18 @@ export function useMobileNativeChatFileSearch(args: {
             searchSupportedRef.current = false
             await loadLegacyPaths()
           }
-        })().catch(() => {})
+        })()
+          .catch(() => {})
+          .finally(() => {
+            // Why: a rejected or unsupported search must not read as "still searching".
+            if (sequenceRef.current === sequence) {
+              setNativeChatFileSearchPending(false)
+            }
+          })
       }, FILE_SEARCH_DEBOUNCE_MS)
     },
     [client, limit, worktreeId]
   )
 
-  return { nativeChatFilePaths, loadNativeChatFiles }
+  return { nativeChatFilePaths, nativeChatFileSearchPending, loadNativeChatFiles }
 }
