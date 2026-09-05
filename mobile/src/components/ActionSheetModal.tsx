@@ -63,12 +63,19 @@ export function ActionSheetContent({
         <View
           style={{
             paddingHorizontal: space.xs,
-            paddingBottom: space.sm,
+            paddingBottom: centerTitle ? space.md : space.sm,
+            paddingTop: centerTitle ? space.xs : 0,
             alignItems: centerTitle ? 'center' : undefined
           }}
         >
           {title ? (
-            <Txt variant="label" weight="medium" tone="muted" numberOfLines={1}>
+            // A centred title is a real heading (mode picker); a left one stays the quiet label.
+            <Txt
+              variant={centerTitle ? 'heading' : 'label'}
+              weight={centerTitle ? 'semibold' : 'medium'}
+              tone={centerTitle ? 'primary' : 'muted'}
+              numberOfLines={1}
+            >
               {title}
             </Txt>
           ) : null}
