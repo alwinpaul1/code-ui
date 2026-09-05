@@ -43,9 +43,6 @@ export function MobileContextWindowSheet({
         >
           <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 4 }} />
         </View>
-        <Txt variant="caption" tone="muted">
-          Read from the desktop status line; updates a few seconds behind the agent.
-        </Txt>
       </Surface>
     </BottomDrawer>
   )
