@@ -9,7 +9,7 @@ import {
   Pressable,
   View
 } from 'react-native'
-import { AlertCircle, Check, ExternalLink } from 'lucide-react-native'
+import { ExternalLink } from 'lucide-react-native'
 
 import { AppUpdateDialogHeader as DialogHeader } from './AppUpdateDialogHeader'
 import { useTheme } from '../theme/theme-context'
@@ -17,6 +17,7 @@ import { Txt } from '../ui/Txt'
 import { Button } from '../ui/Button'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
+import { getInstalledVersion } from './installed-version'
 import { releaseNotesExcerpt } from './release-notes-excerpt'
 
 // One centered dialog for the whole update journey, after the update dialogs
@@ -26,8 +27,6 @@ import { releaseNotesExcerpt } from './release-notes-excerpt'
 // ready → error instead of stacking banners, the shape Orca desktop's
 // UpdateCard has. Transient states (checking, up to date) only show for a
 // user-initiated "Check for updates".
-
-const UP_TO_DATE_AUTO_HIDE_MS = 2500
 
 type DialogState =
   | { kind: 'hidden' }
@@ -46,21 +45,6 @@ function useDialogState(): DialogState {
   const phase = useApkInstallStore((s) => s.phase)
   const progress = useApkInstallStore((s) => s.progress)
   const error = useApkInstallStore((s) => s.error)
-  const [latestSeenAt, setLatestSeenAt] = useState<number | null>(null)
-
-  const isUpToDate = status === 'up-to-date' && userInitiated
-  useEffect(() => {
-    if (!isUpToDate) {
-      setLatestSeenAt(null)
-      return
-    }
-    setLatestSeenAt(Date.now())
-    const timer = setTimeout(() => {
-      setLatestSeenAt(null)
-      useAppUpdateStore.setState({ userInitiated: false })
-    }, UP_TO_DATE_AUTO_HIDE_MS)
-    return () => clearTimeout(timer)
-  }, [isUpToDate])
 
   if (phase === 'downloading') {
     return { kind: 'downloading', progress }
@@ -77,7 +61,7 @@ function useDialogState(): DialogState {
   if (userInitiated && status === 'checking') {
     return { kind: 'checking' }
   }
-  if (isUpToDate && latestSeenAt !== null) {
+  if (userInitiated && status === 'up-to-date') {
     return { kind: 'up-to-date' }
   }
   if (userInitiated && status === 'error') {
@@ -195,33 +179,44 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
   const reopenInstaller = useApkInstallStore((s) => s.install)
   const installVersion = useApkInstallStore((s) => s.version)
   const version = installVersion ?? latestVersion ?? ''
+  const installedVersion = getInstalledVersion()
 
   switch (state.kind) {
     case 'checking':
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Txt variant="body" style={{ flex: 1 }}>
-            Checking for updates…
+        <View style={{ gap: space.lg, alignItems: 'center' }}>
+          <DialogHeader version={installedVersion} />
+          <Txt variant="title" weight="semibold" align="center">
+            Checking for updates
           </Txt>
+          <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       )
     case 'up-to-date':
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <Check size={20} color={colors.success} />
-          <Txt variant="body" style={{ flex: 1 }}>
-            You're on the latest version.
-          </Txt>
+        <View style={{ gap: space.lg }}>
+          <DialogHeader version={installedVersion} tone="success" />
+          <View style={{ gap: space.xs }}>
+            <Txt variant="title" weight="semibold" align="center">
+              You're up to date
+            </Txt>
+            <Txt variant="body" tone="secondary" align="center">
+              Code UI {installedVersion} is the latest version.
+            </Txt>
+          </View>
+          <Button label="Done" variant="secondary" block onPress={onDismiss} />
         </View>
       )
     case 'check-failed':
       return (
         <View style={{ gap: space.lg }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-            <AlertCircle size={20} color={colors.danger} />
-            <Txt variant="body" style={{ flex: 1 }}>
-              Could not check for updates. Try again in a moment.
+          <DialogHeader version={installedVersion} tone="danger" />
+          <View style={{ gap: space.xs }}>
+            <Txt variant="title" weight="semibold" align="center">
+              Could not check for updates
+            </Txt>
+            <Txt variant="body" tone="secondary" align="center">
+              Check the connection and try again in a moment.
             </Txt>
           </View>
           <Button label="OK" variant="secondary" block onPress={onDismiss} />
