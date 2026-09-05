@@ -1,3 +1,4 @@
+import { hasCodexFooter } from './mobile-terminal-hud-parse'
 // Codex's `/model` picker as it renders in the terminal screen buffer. Codex
 // 0.153.x has no non-interactive way to set the model or reasoning effort
 // mid-session — `/model <slug>` is unreliable and a second argument is sent to
@@ -110,10 +111,15 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
   return { step, model, rows, cursorIndex }
 }
 
-/** Whether the Codex TUI is idle at its prompt with no turn running. */
+/** Whether the Codex TUI is idle at its prompt with no turn running. The
+ *  placeholder disappears once the composer holds a draft, so the footer line
+ *  ("<model> <effort> · <cwd>") counts as evidence of the prompt too. */
 export function isCodexIdle(lines: readonly string[]): boolean {
   const tail = lines.slice(-6).join('\n')
-  return /Ask Codex to do anything/.test(tail) && !/esc to interrupt/.test(tail)
+  if (/esc to interrupt/.test(tail) || parseCodexPickerScreen(lines)) {
+    return false
+  }
+  return /Ask Codex to do anything/.test(tail) || hasCodexFooter(lines)
 }
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */

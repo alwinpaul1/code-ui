@@ -225,6 +225,9 @@ export function useMobileNativeChatSessionOptions(args: {
       !discoveredModels.some((model) => model.id === tracked)
     ) {
       clearNativeChatSessionModel(record)
+      // Why: the seeding effect ignores a report it has already applied, so
+      // without this the footer's (unchanged) model would never refill the pill.
+      appliedReportByScope.delete(scopeKey)
       bump()
     }
   }, [agent, bump, discoveredModels, reportedModel, scopeKey, version])

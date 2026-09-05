@@ -172,6 +172,14 @@ const CODEX_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh'
 const CODEX_FOOTER =
   /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+[~/]/i
 
+/** Whether the Codex input footer ("<model> <effort> · <cwd>") is on screen. */
+export function hasCodexFooter(lines: readonly string[]): boolean {
+  return lines.slice(-4).some((line) => {
+    const match = CODEX_FOOTER.exec(line)
+    return match !== null && looksLikeProviderModelId(match[1]!)
+  })
+}
+
 function looksLikeProviderModelId(token: string): boolean {
   return /\d/.test(token) || token.includes('-')
 }

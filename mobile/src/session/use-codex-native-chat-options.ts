@@ -81,7 +81,9 @@ export function useCodexNativeChatOptions(args: {
 
   const discoveredModels = useMemo(() => {
     if (!visible || visible.length === 0) {
-      return null
+      // Until the picker has been read, the probe's list is still the account's
+      // list (it may include a hidden model or two); an empty sheet is worse.
+      return discovered && discovered.length > 0 ? discoveredCodexCatalogModels(discovered) : null
     }
     const probed = new Map((discovered ?? []).map((model) => [model.id, model]))
     const merged: DiscoveredCodexModel[] = visible.map((row) => {

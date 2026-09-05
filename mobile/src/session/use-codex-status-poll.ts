@@ -74,10 +74,11 @@ export function useCodexStatusPoll(args: {
         if (!isCodexIdle(lines)) {
           return
         }
-        // First open only: learn which models this session can pick by reading
-        // Codex's own picker (the host probe lists hidden ones and misses some).
+        // Learn which models this session can pick by reading Codex's own picker
+        // (the host probe lists hidden ones and misses some). Retried on every
+        // idle open / turn end until it succeeds once.
         const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
-        if (firstOpen && !peekCodexVisibleModels(visibleKey)) {
+        if (!peekCodexVisibleModels(visibleKey)) {
           await scrapeCodexVisibleModels(io, visibleKey)
           if (!active) {
             return
