@@ -101,7 +101,17 @@ export default function AboutScreen() {
           </Txt>
         </View>
 
-        <SectionLabel style={{ marginTop: 0 }}>Built on Orca</SectionLabel>
+        <SectionLabel style={{ marginTop: 0 }}>Code UI</SectionLabel>
+        <Surface rounded="lg" style={{ overflow: 'hidden' }}>
+          <LinkRow
+            icon="github"
+            label="alwinpaul1/code-ui"
+            url="https://github.com/alwinpaul1/code-ui"
+            first
+          />
+        </Surface>
+
+        <SectionLabel>Built on Orca</SectionLabel>
         <Surface rounded="lg" style={{ overflow: 'hidden' }}>
           <LinkRow icon={Globe} label="onOrca.dev" url="https://onOrca.dev" first />
           <LinkRow icon="github" label="stablyai/orca" url="https://github.com/stablyai/orca" />
@@ -114,6 +124,25 @@ export default function AboutScreen() {
           Code UI reuses Orca's relay, pairing and terminal engine under the MIT licence. The
           desktop app stays the source of truth; this app is a remote control for it.
         </Txt>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Developed with love by Alwin Paul, opens alwinpaul.me"
+          onPress={() => void Linking.openURL('https://alwinpaul.me')}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            alignSelf: 'center',
+            marginTop: space.xl,
+            marginBottom: space.md,
+            opacity: pressed ? 0.6 : 1
+          })}
+        >
+          <Txt variant="caption" tone="muted">
+            Developed with <Txt variant="caption" style={{ color: colors.danger }}>♥</Txt> by{' '}
+            <Txt variant="caption" weight="medium" tone="accent">
+              Alwin Paul
+            </Txt>
+          </Txt>
+        </Pressable>
       </ScrollView>
     </View>
   )
