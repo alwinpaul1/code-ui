@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
-import { parseTerminalHudObservation, type TerminalHudObservation } from './mobile-terminal-hud-parse'
+import {
+  parseCodexHudObservation,
+  parseTerminalHudObservation,
+  type TerminalHudObservation
+} from './mobile-terminal-hud-parse'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
@@ -21,6 +25,10 @@ export function useMobileTerminalHudObservation(args: {
   handleRef: MutableRefObject<string | null>
   /** Changes whenever the active terminal changes; restarts the poll. */
   handleKey: string | null
+  /** Codex states model/effort/mode differently and its host agent-status is
+   *  mislabelled 'claude', so a codex tab must parse only the Codex footer —
+   *  never the Claude bracket badge, which would leak a Claude model onto it. */
+  agent?: string | null
 }): {
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
@@ -28,7 +36,7 @@ export function useMobileTerminalHudObservation(args: {
   /** Claude Code's permission dialog options as drawn on screen, or null. */
   dialogOptions: MobileChatPermission['options'] | null
 } {
-  const { client, enabled, handleRef, handleKey } = args
+  const { client, enabled, handleRef, handleKey, agent } = args
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
@@ -48,7 +56,10 @@ export function useMobileTerminalHudObservation(args: {
       }
       inFlight = true
       try {
-        const response = await client.sendRequest('terminal.read', { terminal: handle, screen: true })
+        const response = await client.sendRequest('terminal.read', {
+          terminal: handle,
+          screen: true
+        })
         if (!active || !response.ok) {
           return null
         }
@@ -56,12 +67,15 @@ export function useMobileTerminalHudObservation(args: {
           terminal?: { tail?: unknown; lines?: unknown }
         }
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
-        const lines = Array.isArray(raw) ? raw.filter((line): line is string => typeof line === 'string') : []
+        const lines = Array.isArray(raw)
+          ? raw.filter((line): line is string => typeof line === 'string')
+          : []
         const dialog = permissionOptionsFromScreen(lines)
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
-        const next = parseTerminalHudObservation(lines)
+        const next =
+          agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
         if (next) {
           setObservation((current) =>
             current &&
@@ -91,7 +105,7 @@ export function useMobileTerminalHudObservation(args: {
       readRef.current = async () => null
       clearInterval(timer)
     }
-  }, [client, enabled, handleKey, handleRef])
+  }, [agent, client, enabled, handleKey, handleRef])
 
   // Why: a Shift+Tab from the phone changes the footer at once; waiting up to
   // 5s for the next poll would make the mode pill look stuck.

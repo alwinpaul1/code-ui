@@ -14,6 +14,7 @@ import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-ga
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
+import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -118,7 +119,7 @@ export function useMobileNativeChatController(args: {
     setComposerText: setChatComposerText,
     getComposerEditGeneration: getChatComposerEditGeneration,
     pending: chatPending,
-    imagePreviewsByMessageId: chatImagePreviewsByMessageId,
+    imagePreviewsByMessageId: chatImagePreviewsByMessageIdLocal,
     captureSendOrigin,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
@@ -300,6 +301,20 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
+  // Desktop-pasted images are host paths; fetch thumbnails through the host so
+  // the bubble shows the picture, not "🖼 /var/folders/…".
+  const hostImagePreviews = useHostImagePreviews({
+    client,
+    enabled: showNativeChat && !activeChatStructured && connState === 'connected',
+    hostId,
+    worktreeId,
+    nativeChatContext:
+      activeSessionTabId && activeChatSessionId
+        ? { tabId: activeSessionTabId, sessionId: activeChatSessionId }
+        : null,
+    messages: nativeChatSession.messages,
+    localPreviews: chatImagePreviewsByMessageIdLocal
+  })
   // The terminal's own status line is the one place that states model AND
   // effort; read it while chat covers the terminal and let it win over the
   // hook report, which names the model only.
@@ -311,7 +326,8 @@ export function useMobileNativeChatController(args: {
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
-    handleKey: showNativeChat ? streamScopeKey : null
+    handleKey: showNativeChat ? streamScopeKey : null,
+    agent: activeChatResolution?.agent ?? null
   })
   // Why: the approval envelope lands before the dialog is drawn; re-read the
   // screen shortly after so the card shows the dialog's own options, not the
@@ -332,7 +348,13 @@ export function useMobileNativeChatController(args: {
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
-      reportedModel: hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null,
+      // Why no agentStatus fallback for Codex: the host mislabels a Codex
+      // session's agent-status as 'claude', so its `model` is a Claude id that
+      // would leak onto the Codex pill. Trust only the Codex footer (hud).
+      reportedModel:
+        activeChatResolution?.agent === 'codex'
+          ? (hudObservation?.modelId ?? null)
+          : (hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null),
       reportedEffort: hudObservation?.effort ?? null,
       statusLineObserved: hudObservation != null,
       structured: {
@@ -398,7 +420,10 @@ export function useMobileNativeChatController(args: {
     setChatComposerText,
     getChatComposerEditGeneration,
     chatPending,
-    chatImagePreviewsByMessageId,
+    chatImagePreviewsByMessageId: mergeImagePreviews(
+      chatImagePreviewsByMessageIdLocal,
+      hostImagePreviews
+    ),
     nativeChatSession,
     nativeChatAgentWorking,
     nativeChatStreamingText,

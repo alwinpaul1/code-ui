@@ -53,13 +53,21 @@ function Prose({
     // host path (not loadable on the device) falls back to a text placeholder.
     const uri = block.url ?? block.path
     if (isRenderableImageUri(uri)) {
+      // Why tappable: the host path (desktop paste or the phone's own upload)
+      // opens through the same file-preview route a tapped path uses, full size.
+      const hostPath = block.path
       return (
-        <Image
-          source={{ uri }}
-          style={styles.imageThumb}
-          resizeMode="contain"
-          accessibilityLabel={block.alt ?? 'Attached image'}
-        />
+        <Pressable
+          onPress={hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
+          accessibilityRole={hostPath && onOpenFile ? 'imagebutton' : 'image'}
+        >
+          <Image
+            source={{ uri }}
+            style={styles.imageThumb}
+            resizeMode="contain"
+            accessibilityLabel={block.alt ?? 'Attached image'}
+          />
+        </Pressable>
       )
     }
     return (
