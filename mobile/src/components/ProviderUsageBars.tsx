@@ -4,6 +4,7 @@ import { Txt } from '../ui/Txt'
 import {
   formatUsageUpdatedLabel,
   getUsageBarState,
+  getVisibleUsageWindows,
   getWindowResetLabel,
   hasFableWindow,
   type ProviderRateLimits
@@ -37,12 +38,15 @@ export function ProviderUsageBars({
   const session = getUsageBarState(limits, 'session', isFetching)
   const weekly = getUsageBarState(limits, 'weekly', isFetching)
   const fable = getUsageBarState(limits, 'fableWeekly', isFetching)
+  const visible = getVisibleUsageWindows(limits, isFetching)
+  const showSession = visible.includes('session')
+  const showWeekly = visible.includes('weekly')
   const reset = (key: 'session' | 'weekly' | 'fableWeekly') =>
     now === undefined ? null : getWindowResetLabel(limits, key, now)
   if (layout === 'columns') {
     const columns = [
-      { key: 'session', title: 'Session', state: session },
-      { key: 'weekly', title: 'Weekly', state: weekly },
+      ...(showSession ? [{ key: 'session', title: 'Session', state: session }] : []),
+      ...(showWeekly ? [{ key: 'weekly', title: 'Weekly', state: weekly }] : []),
       ...(showFable ? [{ key: 'fable', title: 'Fable', state: fable }] : [])
     ]
     return (
@@ -65,39 +69,44 @@ export function ProviderUsageBars({
     // Mirrors Claude's Usage page: "Current session", then a "Weekly limits"
     // group holding the all-models window and any model-specific one (Fable).
     const sessionSubtitle =
-      reset('session') ??
-      (session.usedPercent === 0 ? 'Starts when a message is sent' : null)
+      reset('session') ?? (session.usedPercent === 0 ? 'Starts when a message is sent' : null)
     const updated = now === undefined ? null : formatUsageUpdatedLabel(limits, now)
     return (
       <>
-        <UsageMeter
-          title="Current session"
-          usedPercent={session.usedPercent}
-          unavailable={session.unavailable}
-          loading={session.loading}
-          subtitle={sessionSubtitle}
-        />
-        <View style={{ gap: space.sm + 2 }}>
-          <Txt variant="caption" weight="semibold" tone="secondary">
-            Weekly limits
-          </Txt>
+        {showSession ? (
           <UsageMeter
-            title="All models"
-            usedPercent={weekly.usedPercent}
-            unavailable={weekly.unavailable}
-            loading={weekly.loading}
-            subtitle={reset('weekly')}
+            title="Current session"
+            usedPercent={session.usedPercent}
+            unavailable={session.unavailable}
+            loading={session.loading}
+            subtitle={sessionSubtitle}
           />
-          {showFable ? (
-            <UsageMeter
-              title="Fable"
-              usedPercent={fable.usedPercent}
-              unavailable={fable.unavailable}
-              loading={fable.loading}
-              subtitle={reset('fableWeekly')}
-            />
-          ) : null}
-        </View>
+        ) : null}
+        {showWeekly || showFable ? (
+          <View style={{ gap: space.sm + 2 }}>
+            <Txt variant="caption" weight="semibold" tone="secondary">
+              Weekly limits
+            </Txt>
+            {showWeekly ? (
+              <UsageMeter
+                title="All models"
+                usedPercent={weekly.usedPercent}
+                unavailable={weekly.unavailable}
+                loading={weekly.loading}
+                subtitle={reset('weekly')}
+              />
+            ) : null}
+            {showFable ? (
+              <UsageMeter
+                title="Fable"
+                usedPercent={fable.usedPercent}
+                unavailable={fable.unavailable}
+                loading={fable.loading}
+                subtitle={reset('fableWeekly')}
+              />
+            ) : null}
+          </View>
+        ) : null}
         {updated ? (
           <Txt variant="caption" tone="muted">
             {updated}
@@ -108,22 +117,26 @@ export function ProviderUsageBars({
   }
   return (
     <>
-      <UsageBar
-        label="5h"
-        labelWidth={labelWidth}
-        usedPercent={session.usedPercent}
-        unavailable={session.unavailable}
-        loading={session.loading}
-        resetText={reset('session')}
-      />
-      <UsageBar
-        label="7d"
-        labelWidth={labelWidth}
-        usedPercent={weekly.usedPercent}
-        unavailable={weekly.unavailable}
-        loading={weekly.loading}
-        resetText={reset('weekly')}
-      />
+      {showSession ? (
+        <UsageBar
+          label="5h"
+          labelWidth={labelWidth}
+          usedPercent={session.usedPercent}
+          unavailable={session.unavailable}
+          loading={session.loading}
+          resetText={reset('session')}
+        />
+      ) : null}
+      {showWeekly ? (
+        <UsageBar
+          label="7d"
+          labelWidth={labelWidth}
+          usedPercent={weekly.usedPercent}
+          unavailable={weekly.unavailable}
+          loading={weekly.loading}
+          resetText={reset('weekly')}
+        />
+      ) : null}
       {showFable ? (
         <UsageBar
           label="Fable"

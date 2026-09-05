@@ -11,6 +11,7 @@ import {
   hasRenderableUsage,
   type AccountsSnapshot,
   type InactiveAccountUsage,
+  getVisibleUsageWindows,
   type ProviderRateLimits
 } from './account-usage-state'
 
@@ -151,13 +152,13 @@ describe('getWindowResetLabel', () => {
 
   it('session: the clock time it lands on; weekly: weekday and time', () => {
     const at47 = now + 47 * min
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(at47) }), 'session', now)
-    ).toBe(`Resets ${formatResetClock(at47)}`)
+    expect(getWindowResetLabel(makeLimits({ session: makeWindow(at47) }), 'session', now)).toBe(
+      `Resets ${formatResetClock(at47)}`
+    )
     const at3h54 = now + 3 * hour + 54 * min
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(at3h54) }), 'session', now)
-    ).toBe(`Resets ${formatResetClock(at3h54)}`)
+    expect(getWindowResetLabel(makeLimits({ session: makeWindow(at3h54) }), 'session', now)).toBe(
+      `Resets ${formatResetClock(at3h54)}`
+    )
     const weeklyAt = now + 6 * day + 7 * hour
     const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(weeklyAt).getDay()]
     expect(getWindowResetLabel(makeLimits({ weekly: makeWindow(weeklyAt) }), 'weekly', now)).toBe(
@@ -252,5 +253,26 @@ describe('formatUsageUpdatedLabel', () => {
     expect(formatUsageUpdatedLabel(makeLimits({ updatedAt: now - 2 * 3_600_000 }), now)).toBe(
       'Updated 2h ago'
     )
+  })
+})
+
+describe('getVisibleUsageWindows', () => {
+  const window = { usedPercent: 12, resetsAt: 1, windowDurationMins: 10080 }
+  it('draws only the windows the plan reports once the host answered', () => {
+    expect(
+      getVisibleUsageWindows({ status: 'ok', session: null, weekly: window } as never)
+    ).toEqual(['weekly'])
+    expect(
+      getVisibleUsageWindows({ status: 'ok', session: window, weekly: window } as never)
+    ).toEqual(['session', 'weekly'])
+  })
+  it('keeps both placeholders while fetching or when nothing came back', () => {
+    expect(
+      getVisibleUsageWindows({ status: 'fetching', session: null, weekly: null } as never)
+    ).toEqual(['session', 'weekly'])
+    expect(
+      getVisibleUsageWindows({ status: 'error', session: null, weekly: null } as never)
+    ).toEqual(['session', 'weekly'])
+    expect(getVisibleUsageWindows(null)).toEqual(['session', 'weekly'])
   })
 })

@@ -98,6 +98,30 @@ export function getUsageBarState(
   }
 }
 
+/**
+ * Which windows to draw for a provider. A provider reports only the windows its
+ * plan has: since September 2026 a ChatGPT plan can carry a weekly limit and no
+ * 5-hour window at all, and drawing "Session —" next to a live weekly bar reads
+ * as a bug. A window with data is always drawn; while the first fetch is still
+ * running the session and weekly placeholders show their spinners; once the
+ * host answered, windows it did not report are dropped. With nothing at all
+ * (error, no data) both placeholders stay so the dashes explain themselves.
+ */
+export function getVisibleUsageWindows(
+  limits: ProviderRateLimits | null,
+  isFetchingOverride?: boolean
+): UsageWindowKey[] {
+  const fetching =
+    isFetchingOverride ?? (limits?.status === 'fetching' || limits?.status === 'idle')
+  const withData = (['session', 'weekly', 'fableWeekly'] as const).filter(
+    (key) => limits?.[key] != null
+  )
+  if (withData.length > 0) {
+    return withData
+  }
+  return fetching || !limits || limits.status !== 'ok' ? ['session', 'weekly'] : []
+}
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
 /** "5:30 AM" in the device's time zone. */
