@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import type { RpcSuccess } from '../transport/types'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
+import { readCachedSessionTabs, sessionTabsCacheKey } from './mobile-session-tabs-cache'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
@@ -8,6 +9,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
   const {
     hostId,
     worktreeId,
+    sessionTabsRef,
     created,
     isFloatingWorkspaceRoute,
     connState,
@@ -72,7 +74,10 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    setSessionTabs([])
+    // Why: seed from the last visit so the strip paints before the host answers.
+    const cachedTabs = readCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId))
+    sessionTabsRef.current = cachedTabs
+    setSessionTabs(cachedTabs)
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())

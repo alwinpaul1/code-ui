@@ -1,8 +1,6 @@
+import { sharedNativeChatTranscriptRetention } from './mobile-native-chat-transcript-cache'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  createNativeChatTranscriptRetention,
-  encodeNativeChatTranscriptIdentity
-} from '../../../src/shared/native-chat-transcript-retention'
+import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
@@ -123,7 +121,8 @@ export function useMobileNativeChatSession(args: {
   // Whether this subscription already delivered its base snapshot; later
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
-  const transcriptRetentionRef = useRef(createNativeChatTranscriptRetention())
+  // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
+  const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
   useEffect(() => {
     if (settledReady) {
@@ -215,7 +214,7 @@ export function useMobileNativeChatSession(args: {
         // dropped to "Start a chat" over a live session. The retained settled
         // transcript is the better base; live appends fold onto it as usual.
         const retained =
-          applied.windowReplaced && applied.messages.length === 0
+          applied.windowReplaced && applied.messages.length === 0 && !applied.pending
             ? transcriptRetentionRef.current.retained(identity)
             : null
         if (retained && retained.length > 0) {

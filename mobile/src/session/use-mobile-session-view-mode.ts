@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router'
 import {
   DEFAULT_SESSION_VIEW,
   loadDefaultSessionView,
+  peekDefaultSessionView,
+  peekSessionViewOverrides,
   readSessionViewOverridesPreference,
   updateSessionViewOverride,
   type MobileSessionView,
@@ -62,12 +64,12 @@ export function useMobileSessionViewMode(args: {
   worktreeId: string
 }): MobileSessionViewModeController {
   const { hostId, worktreeId } = args
-  const [viewOverridesState, setViewOverridesState] = useState<ViewOverridesState>(() => ({
-    hostId,
-    worktreeId,
-    overrides: new Map(),
-    loaded: false
-  }))
+  // Why: a revisited scope starts from the in-memory copy so tabs resolve to
+  // chat or terminal on the first frame instead of flashing the terminal.
+  const [viewOverridesState, setViewOverridesState] = useState<ViewOverridesState>(() => {
+    const peeked = peekSessionViewOverrides(hostId, worktreeId)
+    return { hostId, worktreeId, overrides: peeked ?? new Map(), loaded: peeked != null }
+  })
   const viewOverridesStateRef = useRef(viewOverridesState)
   viewOverridesStateRef.current = viewOverridesState
   const viewOverridesRuntimeRef = useRef<ViewOverridesRuntime | null>(null)
@@ -94,11 +96,15 @@ export function useMobileSessionViewMode(args: {
     viewOverridesRuntimeRef.current = next
     return next
   }, [])
-  const [defaultView, setDefaultView] = useState<MobileSessionView>(DEFAULT_SESSION_VIEW)
-  const [defaultViewLoaded, setDefaultViewLoaded] = useState(false)
+  const [defaultView, setDefaultView] = useState<MobileSessionView>(
+    () => peekDefaultSessionView() ?? DEFAULT_SESSION_VIEW
+  )
+  const [defaultViewLoaded, setDefaultViewLoaded] = useState(() => peekDefaultSessionView() != null)
   // Why: an unreadable override store keeps `loaded` false forever; the read
   // still settled, and the route must not hold its dock on that.
-  const [overridesSettled, setOverridesSettled] = useState(false)
+  const [overridesSettled, setOverridesSettled] = useState(
+    () => peekSessionViewOverrides(hostId, worktreeId) != null
+  )
   // Why: a peek is session-local by design — it must not outlive the route or
   // write an override the user then has to undo from the tab sheet.
   const [peekedTerminalTabId, setPeekedTerminalTabId] = useState<string | null>(null)
@@ -112,7 +118,15 @@ export function useMobileSessionViewMode(args: {
 
   useEffect(() => {
     let active = true
-    setOverridesSettled(false)
+    const peeked = peekSessionViewOverrides(hostId, worktreeId)
+    if (peeked && !isOverrideScope(viewOverridesStateRef.current, hostId, worktreeId)) {
+      // A switch to a project seen before: resolve from memory now, then let
+      // the storage read below reconcile.
+      const seeded = { hostId, worktreeId, overrides: peeked, loaded: true }
+      viewOverridesStateRef.current = seeded
+      setViewOverridesState(seeded)
+    }
+    setOverridesSettled(peeked != null)
     const runtime = ensureViewOverridesRuntime(hostId, worktreeId)
     void runtime.loadPromise.then((preference) => {
       if (!active) {

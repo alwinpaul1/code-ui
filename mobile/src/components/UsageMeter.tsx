@@ -28,10 +28,16 @@ export function UsageMeter({
 }) {
   const { colors, space } = useTheme()
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
-  // Why: one accent for the fill, like the Claude app; red only from 80% so a
-  // limit about to bite still stands out.
+  // Why: the bar's colour is the usage warning — calm accent under 50%, amber
+  // from 50%, red from 80% when the limit is about to bite.
   const fill =
-    used == null || unavailable ? colors.textMuted : used >= 80 ? colors.danger : colors.accent
+    used == null || unavailable
+      ? colors.textMuted
+      : used >= 80
+        ? colors.danger
+        : used >= 50
+          ? colors.warning
+          : colors.accent
   const percentText = unavailable || used == null ? '—' : compact ? `${used}%` : `${used}% used`
   return (
     <View style={{ gap: compact ? space.sm : dense ? space.sm : space.sm + 2 }}>

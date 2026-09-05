@@ -44,6 +44,8 @@ vi.mock('expo-router', async () => {
 vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'chat',
   loadDefaultSessionView: vi.fn(),
+  peekDefaultSessionView: vi.fn(() => null),
+  peekSessionViewOverrides: vi.fn(() => null),
   readSessionViewOverridesPreference: vi.fn(),
   updateSessionViewOverride: vi.fn()
 }))

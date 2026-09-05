@@ -32,12 +32,40 @@ export type DefaultSessionViewPreference = {
 }
 
 /** Reads the raw per-device default and whether its storage key exists. */
+// Why in-memory copies: every session visit re-read these from AsyncStorage and
+// defaulted tabs to the terminal until the read landed, a visible flash of the
+// wrong composer on each project switch. The last loaded values answer
+// synchronously for the next mount; storage stays the source of truth.
+let defaultViewMemory: MobileSessionView | null = null
+const overridesMemory = new Map<string, Map<string, MobileSessionView>>()
+
+/** The last loaded or saved device default, or null before the first read. */
+export function peekDefaultSessionView(): MobileSessionView | null {
+  return defaultViewMemory
+}
+
+/** The last loaded overrides for a scope, or null before its first read. */
+export function peekSessionViewOverrides(
+  hostId: string,
+  worktreeId: string
+): Map<string, MobileSessionView> | null {
+  const cached = overridesMemory.get(sessionViewOverridesKey(hostId, worktreeId))
+  return cached ? new Map(cached) : null
+}
+
+export function resetSessionViewPreferenceMemoryForTests(): void {
+  defaultViewMemory = null
+  overridesMemory.clear()
+}
+
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {
   await defaultViewWriteBarrier
   try {
     const raw = await AsyncStorage.getItem(DEFAULT_SESSION_VIEW_KEY)
+    const value = raw === 'chat' || raw === 'terminal' ? raw : null
+    defaultViewMemory = value ?? DEFAULT_SESSION_VIEW
     return {
-      value: raw === 'chat' || raw === 'terminal' ? raw : null,
+      value,
       loaded: true,
       hasStoredValue: raw !== null
     }
@@ -52,6 +80,7 @@ export async function loadDefaultSessionView(): Promise<MobileSessionView> {
 }
 
 export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
+  defaultViewMemory = view
   // Why: callers can outlive their route; a shared barrier keeps remounted
   // Settings screens from letting an older write land after a newer choice.
   const write = (defaultViewWriteBarrier ?? Promise.resolve()).then(() =>
@@ -125,7 +154,11 @@ export async function readSessionViewOverridesPreference(
 ): Promise<SessionViewOverridesPreference> {
   const key = sessionViewOverridesKey(hostId, worktreeId)
   await overrideUpdateBarriers.get(key)
-  return readSessionViewOverridesStorage(key)
+  const preference = await readSessionViewOverridesStorage(key)
+  if (preference.loaded) {
+    overridesMemory.set(key, new Map(preference.overrides))
+  }
+  return preference
 }
 
 /** Persists one user mutation without replacing sibling overrides from another mount. */
@@ -145,6 +178,7 @@ export async function updateSessionViewOverride(
       throw new Error('Session view overrides could not be read')
     }
     current.overrides.set(tabId, view)
+    overridesMemory.set(key, new Map(current.overrides))
     await AsyncStorage.setItem(key, JSON.stringify(Object.fromEntries(current.overrides)))
   })
   const barrier = update.catch(() => undefined)

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { sessionTabsCacheKey, writeCachedSessionTabs } from './mobile-session-tabs-cache'
 import { recordSessionTabVisit } from './mobile-session-tab-history'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -36,6 +37,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     markdownDocsRef,
     initializedHandlesRef,
     terminalDiagnosticsRef,
+    hostId,
+    worktreeId,
     activeHandleRef,
     activeSessionTabTypeRef,
     visitedSessionTabIdsRef,
@@ -84,6 +87,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         retainMissingSurfaces: result.tabs.length === 0
       })
       sessionTabsRef.current = nextTabs
+      writeCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId), nextTabs)
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))

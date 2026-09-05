@@ -236,8 +236,8 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(invokeAction).toHaveBeenCalledWith('model')
   })
 
-  it('locks the pills while the agent is working', () => {
+  it('keeps the pills usable while the agent is working (Claude queues /model)', () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], true)
-    expect(pill('Model').props).toMatchObject({ disabled: true })
+    expect(pill('Model').props).toMatchObject({ disabled: false })
   })
 })

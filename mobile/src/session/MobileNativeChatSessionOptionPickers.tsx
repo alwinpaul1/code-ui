@@ -46,7 +46,7 @@ export type MobileNativeChatSessionOptionPickersProps = {
 /** Combined model/session-option trigger and its mobile bottom drawer. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
-  isWorking,
+  isWorking: _isWorking,
   sendInFlight = false,
   statusLineObserved = true
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
@@ -58,7 +58,10 @@ export function MobileNativeChatSessionOptionPickers({
   if (!model) {
     return null
   }
-  const disabled = isWorking || pendingId !== null || sendInFlight
+  // Why not `isWorking`: Claude Code queues a `/model` typed mid-turn and applies
+  // it when the turn ends, so the pill stays usable while the agent works. Only
+  // an in-flight change of ours, or a send in progress, holds it.
+  const disabled = pendingId !== null || sendInFlight
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id
   const modelLabel = mobileModelPillLabel(model)

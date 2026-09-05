@@ -11,16 +11,6 @@
       "orca"
     ],
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F3F1EA",
-      "dark": {
-        "image": "./assets/splash-icon.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#1A1917"
-      }
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.alwinpaul.codeui",

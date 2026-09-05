@@ -1,3 +1,4 @@
+import { resetNativeChatTranscriptCacheForTests } from './mobile-native-chat-transcript-cache'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +26,7 @@ describe('useMobileNativeChatSession', () => {
 
   beforeEach(() => {
     state = null
+    resetNativeChatTranscriptCacheForTests()
   })
 
   afterEach(() => {
@@ -458,6 +460,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
 
   beforeEach(() => {
     renders.length = 0
+    resetNativeChatTranscriptCacheForTests()
   })
 
   afterEach(() => {
