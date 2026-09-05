@@ -90,14 +90,25 @@ export function getUsageBarState(
   }
 }
 
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+/** "5:30 AM" in the device's time zone. */
+export function formatResetClock(resetsAt: number): string {
+  const date = new Date(resetsAt)
+  const hours24 = date.getHours()
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  const hours12 = hours24 % 12 === 0 ? 12 : hours24 % 12
+  return `${hours12}:${minutes} ${hours24 < 12 ? 'AM' : 'PM'}`
+}
+
 /**
- * Reset countdown for one window, e.g. "Resets in 3h 54m" / "Resets now",
- * or null when the window has no reset timestamp (so the UI degrades to
- * today's bars-only layout).
+ * Reset label for one window, or null when the window has no reset timestamp
+ * (so the UI degrades to today's bars-only layout).
  *
- * Why: shares formatResetCountdown with the desktop status-bar tooltip so the
- * copy stays identical across surfaces. `now` is a parameter so the function
- * stays pure and unit-testable.
+ * Session (5h): the countdown plus the clock time it lands on — "Resets in
+ * 1h 14m · 5:30 AM". Weekly (7d): the weekday and time — "Resets Wed 7:00 PM",
+ * which is how the desktop status line names it; a "4d 14h" countdown told
+ * nobody which evening that was. `now` is a parameter so this stays pure.
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
@@ -108,7 +119,14 @@ export function getWindowResetLabel(
   if (resetsAt == null) {
     return null
   }
-  return formatResetCountdown(resetsAt - now)
+  if (windowKey === 'weekly') {
+    if (resetsAt <= now) {
+      return 'Resets now'
+    }
+    return `Resets ${WEEKDAYS[new Date(resetsAt).getDay()]} ${formatResetClock(resetsAt)}`
+  }
+  const countdown = formatResetCountdown(resetsAt - now)
+  return countdown === 'Resets now' ? countdown : `${countdown} · ${formatResetClock(resetsAt)}`
 }
 
 // Why: the usage UI must render for the system-default login, not only for

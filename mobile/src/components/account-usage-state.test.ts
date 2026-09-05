@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getInactiveProviderUsage,
   getUsageBarState,
+  formatResetClock,
   getWindowResetLabel,
   hasActiveProviderUsage,
   hasRenderableUsage,
@@ -146,33 +147,30 @@ describe('getWindowResetLabel', () => {
     ).toBe(null)
   })
 
-  it('formats minutes, hours+minutes, and days+hours like the desktop tooltip', () => {
+  it('session: countdown plus the clock time it lands on; weekly: weekday and time', () => {
+    const at47 = now + 47 * min
     expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(now + 47 * min) }), 'session', now)
-    ).toBe('Resets in 47m')
+      getWindowResetLabel(makeLimits({ session: makeWindow(at47) }), 'session', now)
+    ).toBe(`Resets in 47m · ${formatResetClock(at47)}`)
+    const at3h54 = now + 3 * hour + 54 * min
     expect(
-      getWindowResetLabel(
-        makeLimits({ session: makeWindow(now + 3 * hour + 54 * min) }),
-        'session',
-        now
-      )
-    ).toBe('Resets in 3h 54m')
-    expect(
-      getWindowResetLabel(
-        makeLimits({ weekly: makeWindow(now + 6 * day + 7 * hour) }),
-        'weekly',
-        now
-      )
-    ).toBe('Resets in 6d 7h')
+      getWindowResetLabel(makeLimits({ session: makeWindow(at3h54) }), 'session', now)
+    ).toBe(`Resets in 3h 54m · ${formatResetClock(at3h54)}`)
+    const weeklyAt = now + 6 * day + 7 * hour
+    const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(weeklyAt).getDay()]
+    expect(getWindowResetLabel(makeLimits({ weekly: makeWindow(weeklyAt) }), 'weekly', now)).toBe(
+      `Resets ${weekday} ${formatResetClock(weeklyAt)}`
+    )
   })
 
-  it('formats exact hours and exact days without a zero remainder', () => {
-    expect(
-      getWindowResetLabel(makeLimits({ session: makeWindow(now + 2 * hour) }), 'session', now)
-    ).toBe('Resets in 2h')
-    expect(
-      getWindowResetLabel(makeLimits({ weekly: makeWindow(now + 7 * day) }), 'weekly', now)
-    ).toBe('Resets in 7d')
+  it('formats the clock in 12-hour time with AM/PM and says "Resets now" once passed', () => {
+    const noon = new Date(2026, 8, 5, 12, 5).getTime()
+    expect(formatResetClock(noon)).toBe('12:05 PM')
+    expect(formatResetClock(new Date(2026, 8, 5, 0, 30).getTime())).toBe('12:30 AM')
+    expect(formatResetClock(new Date(2026, 8, 5, 19, 0).getTime())).toBe('7:00 PM')
+    expect(getWindowResetLabel(makeLimits({ weekly: makeWindow(now - 1) }), 'weekly', now)).toBe(
+      'Resets now'
+    )
   })
 
   it('reports "Resets now" for a reset timestamp in the past', () => {
