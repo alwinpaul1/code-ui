@@ -11,6 +11,10 @@ export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string
   readonly previewUri: string
+  /** Documents share the image upload channel but are described to the agent
+   *  in text instead of being pasted as an image. Absent means image. */
+  readonly kind?: 'image' | 'file'
+  readonly name?: string
 }
 
 export function appendPendingNativeChatImages(
@@ -71,7 +75,9 @@ export async function uploadMobileNativeChatImages(
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    const result = { path, previewUri }
+    const result = image.name
+      ? { path, previewUri, kind: 'file' as const, name: image.name }
+      : { path, previewUri }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

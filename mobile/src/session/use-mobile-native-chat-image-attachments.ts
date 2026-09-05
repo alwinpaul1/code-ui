@@ -31,6 +31,10 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
+import {
+  isPendingNativeChatFile,
+  withMobileNativeChatFileNotes
+} from './mobile-native-chat-file-attachment'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -80,6 +84,8 @@ export type MobileNativeChatImageAttachments = {
   readonly attachments: PendingNativeChatImage[]
   readonly isAttaching: boolean
   readonly attachImage: (source: MobileImageSource) => Promise<void>
+  /** Any document via the file picker; described to the agent in the message text. */
+  readonly attachDocument: () => Promise<void>
   readonly removeAttachment: (id: string) => void
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
@@ -121,7 +127,7 @@ export function useMobileNativeChatImageAttachments({
     []
   )
 
-  const { attachImage, isAttaching } = useMobileNativeChatImageUpload({
+  const { attachImage, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
     client,
     activeHandleRef,
     getActiveWorktreeConnectionId,
@@ -152,7 +158,7 @@ export function useMobileNativeChatImageAttachments({
   )
 
   const sendNativeChat = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (composerText: string): Promise<boolean> => {
       // Serialize clear/paste/submit ownership per terminal while allowing other
       // tabs to send. Shared with the prompt-card writes (answer/permission), so
       // a card tap can't interleave into a mid-flight paste sequence either.
@@ -168,8 +174,26 @@ export function useMobileNativeChatImageAttachments({
       const deadline = openMobileNativeChatSendBudget()
       try {
         const scope = scopeKey
-        const pendingImages =
+        const pendingAll =
           (scope ? attachmentsByScope[scope] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
+        // Documents never paste as images: their note joins the text body, and
+        // the chip clears with the images once the send is accepted.
+        const pendingFiles = pendingAll.filter(isPendingNativeChatFile)
+        const pendingImages = pendingAll.filter((attachment) => !isPendingNativeChatFile(attachment))
+        const text = withMobileNativeChatFileNotes(composerText, pendingFiles)
+        const clearSent = (): void => {
+          if (!scope) {
+            return
+          }
+          const sentIds = new Set(pendingAll.map((attachment) => attachment.id))
+          setAttachmentsByScope((prev) =>
+            withScopeAttachments(
+              prev,
+              scope,
+              (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
+            )
+          )
+        }
         if (structuredNativeChat && pendingImages.length > 0 && scope) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
@@ -183,14 +207,7 @@ export function useMobileNativeChatImageAttachments({
             pendingImages
           )
           if (outcome !== 'rejected') {
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            setAttachmentsByScope((prev) =>
-              withScopeAttachments(
-                prev,
-                scope,
-                (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
-              )
-            )
+            clearSent()
           }
           return outcome !== 'rejected'
         }
@@ -224,7 +241,11 @@ export function useMobileNativeChatImageAttachments({
             }
           }
           // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
-          return (await baseSend(text, undefined, deadline)) !== 'rejected'
+          const accepted = (await baseSend(text, undefined, deadline)) !== 'rejected'
+          if (accepted && pendingFiles.length > 0) {
+            clearSent()
+          }
+          return accepted
         }
         const handle = activeHandleRef.current
         if (!client || !handle || !enabled || connState !== 'connected') {
@@ -286,14 +307,7 @@ export function useMobileNativeChatImageAttachments({
             // Drop only what rode along — a chip attached while this send was in
             // flight keeps waiting for its own send. 'unknown' clears too: the
             // send usually DID land, and a kept chip would double-send the image.
-            const sentIds = new Set(pendingImages.map((attachment) => attachment.id))
-            setAttachmentsByScope((prev) =>
-              withScopeAttachments(
-                prev,
-                scope,
-                (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
-              )
-            )
+            clearSent()
           }
           return outcome !== 'rejected'
         } catch {
@@ -327,5 +341,5 @@ export function useMobileNativeChatImageAttachments({
     ]
   )
 
-  return { attachments, isAttaching, attachImage, removeAttachment, sendNativeChat }
+  return { attachments, isAttaching, attachImage, attachDocument, removeAttachment, sendNativeChat }
 }

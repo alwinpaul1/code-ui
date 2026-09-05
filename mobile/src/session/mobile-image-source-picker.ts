@@ -16,6 +16,10 @@ export type PickedMobileImage = {
   // Local file URI of the picked asset — used only to render a composer preview
   // thumbnail (the host upload uses `base64`); absent when the source can't supply one.
   readonly uri?: string
+  // Set for documents picked through `pickMobileDocuments`: the chip shows the
+  // name, and the sent message tells the agent what the upload actually is.
+  readonly name?: string
+  readonly mimeType?: string
 }
 
 export class ImageLibraryPermissionError extends Error {
@@ -135,6 +139,32 @@ async function* pickFromFiles(
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
     if (base64) {
       yield { base64, uri: asset.uri }
+    }
+  }
+}
+
+/** Any document (PDF, docx, csv, source…) via the system file picker. The bytes
+ *  ride the same host upload as images (the only byte channel a phone has). */
+export async function* pickMobileDocuments(
+  launch: typeof DocumentPicker.getDocumentAsync = DocumentPicker.getDocumentAsync,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  const result = await launch({ type: '*/*', multiple: true, copyToCacheDirectory: true })
+  if (result.canceled) {
+    return
+  }
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
+    if (base64) {
+      yield {
+        base64,
+        uri: asset.uri,
+        name: asset.name || asset.uri.split('/').pop() || 'file',
+        ...(asset.mimeType ? { mimeType: asset.mimeType } : {})
+      }
     }
   }
 }

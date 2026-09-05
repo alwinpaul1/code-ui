@@ -4,6 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
   ImageLibraryPermissionError,
+  pickMobileDocuments,
   pickMobileImages,
   type MobileImageSource
 } from './mobile-image-source-picker'
@@ -29,6 +30,7 @@ export function useMobileNativeChatImageUpload(args: {
   onError?: () => void
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
+  attachDocument: () => Promise<void>
   isAttaching: boolean
 } {
   const {
@@ -50,8 +52,11 @@ export function useMobileNativeChatImageUpload(args: {
     connStateRef.current = connState
   }, [connState])
 
-  const attachImage = useCallback(
-    async (source: MobileImageSource): Promise<void> => {
+  const attachWith = useCallback(
+    async (
+      pickImages: Parameters<typeof uploadMobileNativeChatImages>[1]['pickImages'],
+      source: MobileImageSource
+    ): Promise<void> => {
       const scope = scopeKey
       if (
         !client ||
@@ -68,7 +73,7 @@ export function useMobileNativeChatImageUpload(args: {
         await uploadMobileNativeChatImages(source, {
           client,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: pickMobileImages,
+          pickImages,
           onImageUploaded: (image) => uploadedImages.push(image),
           onUploadStart: () => {
             started = true
@@ -102,7 +107,7 @@ export function useMobileNativeChatImageUpload(args: {
           return
         }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
-          showToast('Image too large to attach', 1500)
+          showToast('File too large to attach (18 MB max)', 1500)
           return
         }
         showToast('Attach failed', 1500)
@@ -122,5 +127,14 @@ export function useMobileNativeChatImageUpload(args: {
     ]
   )
 
-  return { attachImage, isAttaching }
+  const attachImage = useCallback(
+    (source: MobileImageSource) => attachWith(pickMobileImages, source),
+    [attachWith]
+  )
+  const attachDocument = useCallback(
+    () => attachWith(() => pickMobileDocuments(), 'files'),
+    [attachWith]
+  )
+
+  return { attachImage, attachDocument, isAttaching }
 }
