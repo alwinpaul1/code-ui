@@ -5,7 +5,7 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 // cannot even start meanwhile because connecting/handshaking count as live direct
 // progress. Happy eyeballs: give direct this much of a head start, then race the
 // relay dial — migrateTo hands the logical client to whichever authenticates first.
-const DIRECT_DIAL_GRACE_MS = 2500
+export const DIRECT_DIAL_GRACE_MS = 2500
 
 type DirectGraceTimerDependencies = {
   setTimer: typeof setTimeout
@@ -21,7 +21,11 @@ export class MobileRelayDirectGraceTimer {
   constructor(
     private readonly dependencies: DirectGraceTimerDependencies,
     private readonly logical: StableLogicalRpcClient,
-    private readonly dialRelay: () => void
+    private readonly dialRelay: () => void,
+    // Why: a direct endpoint that has failed every dial this session (Tailscale
+    // off on the phone, a stale pairing address) earns no head start; the relay
+    // race begins immediately and the user is connected ~2.5s sooner.
+    private readonly graceMs: () => number = () => DIRECT_DIAL_GRACE_MS
   ) {}
 
   // No-op unless the direct dial is still unauthenticated, so a healthy LAN and
@@ -36,7 +40,7 @@ export class MobileRelayDirectGraceTimer {
       if (this.logical.getState() !== 'connected') {
         this.dialRelay()
       }
-    }, DIRECT_DIAL_GRACE_MS)
+    }, Math.max(0, this.graceMs()))
   }
 
   clear(): void {

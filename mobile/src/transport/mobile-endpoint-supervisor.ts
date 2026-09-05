@@ -16,7 +16,10 @@ import {
 } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
-import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
+import {
+  DIRECT_DIAL_GRACE_MS,
+  MobileRelayDirectGraceTimer
+} from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -43,6 +46,7 @@ export class MobileEndpointSupervisor {
   private readonly nudgeRouter: MobileEndpointNudgeRouter
   private credentialRotationInFlight = false
   private relayRotationPending = false
+  private relayDialStartedAt: number | null = null
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
   private readonly relayReconnect: RelayReconnectController
@@ -84,9 +88,14 @@ export class MobileEndpointSupervisor {
     // Why: the race owns recovery exactly like a network-change replacement — its
     // failure must book the shared cooldown. recoverRelay's own guards already
     // cover stopped/background/no-relay, so the timer needs no scope check.
-    this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
-      void this.recoverRelay(true, true)
-    })
+    this.directGrace = new MobileRelayDirectGraceTimer(
+      dependencies,
+      logical,
+      () => {
+        void this.recoverRelay(true, true)
+      },
+      () => (this.hysteresis.directLooksUnreachable() ? 0 : DIRECT_DIAL_GRACE_MS)
+    )
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
       controller: this.relayReconnect,
@@ -105,7 +114,12 @@ export class MobileEndpointSupervisor {
       recordMigration: () => {
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
-        logRelayConnected(this.logRelay)
+        const startedAt = this.relayDialStartedAt
+        this.relayDialStartedAt = null
+        logRelayConnected(
+          this.logRelay,
+          startedAt === null ? undefined : dependencies.now() - startedAt
+        )
       },
       scheduleLease: (expiry) =>
         this.leaseRotation.scheduleFromLease(
@@ -171,6 +185,9 @@ export class MobileEndpointSupervisor {
       } else {
         // Why: the direct client enters reconnecting after its first failed
         // dial and may never publish disconnected while its retry loop lives.
+        if (this.logical.getActivePath() !== 'relay') {
+          this.hysteresis.noteDirectDialFailure()
+        }
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
         logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
@@ -223,6 +240,11 @@ export class MobileEndpointSupervisor {
       // Why: a 12s direct probe can own the mutex when a network handoff lands;
       // afterProbe replays the queued replacement so the signal is never lost.
       this.pendingReplace ||= forceReplacement && ownsRecovery
+      if (this.pendingReplace) {
+        // A replacement is the connection's only hope right now; don't let it
+        // wait out a probe of a direct endpoint that is not answering.
+        this.directProbe.abort()
+      }
       return
     }
     if (this.pendingReplace) {
@@ -275,6 +297,7 @@ export class MobileEndpointSupervisor {
         return
       }
       this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
+      this.relayDialStartedAt = this.dependencies.now()
       const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
       if (dialed.outcome === 'established') {
         // Why: a fresh socket satisfies any replacement intent queued mid-dial.

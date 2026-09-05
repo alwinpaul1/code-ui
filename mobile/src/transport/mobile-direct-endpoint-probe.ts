@@ -56,13 +56,33 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
 export async function openAuthenticatedDirectEndpoint(
   host: HostProfile,
   openDirect: (endpoint: string) => RpcClient,
-  timeoutMs: number
+  timeoutMs: number,
+  // Why: a relay replacement (network handoff) must not sit behind a 12s probe
+  // of an endpoint that is not answering; aborting settles this null at once.
+  signal?: AbortSignal
 ): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
   const endpoints = directEndpointUrls(host)
+  if (signal?.aborted) {
+    return null
+  }
   return await new Promise((resolve) => {
     const clients = new Set<RpcClient>()
     let remaining = endpoints.length
     let settled = false
+    signal?.addEventListener(
+      'abort',
+      () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        for (const candidate of clients) {
+          candidate.close()
+        }
+        resolve(null)
+      },
+      { once: true }
+    )
     const rejectCandidate = (): void => {
       remaining--
       if (!settled && remaining === 0) {

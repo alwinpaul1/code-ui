@@ -47,6 +47,10 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
     }
   }
 
+  if (/relay-dial-failed|relay dial failed|relay_outer_/i.test(evidence)) {
+    return diagnoseRelayDial(evidence, failure)
+  }
+
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
     const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
     const structuredDirectLiveness =
@@ -116,6 +120,41 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
   }
 }
 
+// The outer relay WebSocket died before Orca's own handshake. The phone never
+// sees the cell's HTTP status directly; Android's socket error text ("Expected
+// HTTP 101 response but was '503 Service Unavailable'") is the one place it
+// leaks through, so it decides between "the relay is down" and "we are offline".
+function diagnoseRelayDial(
+  evidence: string,
+  failure: ConnectionLogEntry | undefined
+): ConnectionDiagnosis {
+  const reportability: ConnectionDiagnosis['reportability'] =
+    failure?.code === 'relay-dial-failed' && failure.path === 'relay' ? 'orca-relay' : 'none'
+  if (/\b503\b|overload|service unavailable/i.test(evidence)) {
+    return {
+      likelyCause:
+        'The Relay cell refused the connection with 503 (overloaded or draining). The desktop is dropped from it too, so nothing on this phone can restore the Relay path.',
+      nextStep:
+        'Wait for the Relay to recover, or use a LAN or Tailscale endpoint, which bypasses the Relay.',
+      reportability
+    }
+  }
+  if (/\b40[13]\b|unauthorized|forbidden/i.test(evidence)) {
+    return {
+      likelyCause: 'The Relay cell rejected this device before the handshake.',
+      nextStep: 'Pair this device again; if it repeats, the desktop may have revoked it.',
+      reportability: 'none'
+    }
+  }
+  return {
+    likelyCause:
+      'The Relay dropped the connection before the encrypted handshake (relay_outer_1006). Either this phone cannot reach the Relay, or the Relay is down.',
+    nextStep:
+      'Check that other sites load on this phone, then confirm the desktop shows Relay connected. If both hold, the Relay itself is down; a LAN or Tailscale endpoint bypasses it.',
+    reportability
+  }
+}
+
 export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs): string | null {
   if (diagnoseConnection(args).reportability !== 'orca-relay') {
     return null
@@ -146,7 +185,7 @@ function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
   const evidence = `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
-  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+  return /relay director resolve failed \((?:401|503)\)|relay-dial-failed|relay dial failed|relay_outer_|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
     evidence
   )
 }

@@ -11,6 +11,10 @@ export type EndpointHysteresisOptions = {
 export class MobileEndpointHysteresis {
   private consecutiveDirectSuccesses = 0
   private consecutiveDirectFailures = 0
+  // Failures since the last direct authentication. Unlike the backoff ladder it
+  // survives resetFailureBackoff, so foreground can retry direct promptly while
+  // still knowing the endpoint has not answered once this session.
+  private directFailuresSinceSuccess = 0
   private directObservationStartedAt: number | null = null
   private cooldownUntil = 0
   private lastMigrationAt: number
@@ -30,6 +34,7 @@ export class MobileEndpointHysteresis {
       this.directObservationStartedAt = now
     }
     this.consecutiveDirectFailures = 0
+    this.directFailuresSinceSuccess = 0
     this.consecutiveDirectSuccesses += 1
     return (
       this.consecutiveDirectSuccesses >= this.options.directSuccessesRequired &&
@@ -43,6 +48,7 @@ export class MobileEndpointHysteresis {
     this.consecutiveDirectSuccesses = 0
     this.directObservationStartedAt = null
     this.consecutiveDirectFailures += 1
+    this.directFailuresSinceSuccess += 1
     // Why: a direct endpoint that is simply unreachable (Tailscale off, a stale
     // address from pairing) fails every probe for hours. Redialing it every
     // minute costs a 10s socket timeout and radio time each round for no
@@ -52,6 +58,19 @@ export class MobileEndpointHysteresis {
     const doubled =
       this.options.failureCooldownMs * 2 ** Math.min(this.consecutiveDirectFailures - 1, 16)
     this.cooldownUntil = now + Math.min(ceiling, doubled)
+  }
+
+  /** A direct dial (not a probe) failed to authenticate; no backoff bookkeeping. */
+  noteDirectDialFailure(): void {
+    this.consecutiveDirectSuccesses = 0
+    this.directObservationStartedAt = null
+    this.directFailuresSinceSuccess += 1
+  }
+
+  /** True once direct has failed and not authenticated since. The relay race
+   *  then starts at once instead of granting direct its head start. */
+  directLooksUnreachable(): boolean {
+    return this.directFailuresSinceSuccess >= 1
   }
 
   /** The user is back (foreground) or the network changed: probe soon again. */

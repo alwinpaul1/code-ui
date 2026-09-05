@@ -10,6 +10,7 @@ const DIRECT_PROBE_INTERVAL_MS = 15_000
 // endpoint and migrate back once hysteresis proves it stable.
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
+  private inFlight: AbortController | null = null
 
   constructor(
     private readonly deps: {
@@ -47,21 +48,32 @@ export class DirectReturnProbe {
     }
   }
 
+  /** Give up an in-flight probe so its mutex is released now; a no-op otherwise. */
+  abort(): void {
+    this.inFlight?.abort()
+  }
+
   private async probe(): Promise<void> {
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule()
       return
     }
     this.hooks.beginOperation()
+    const controller = new AbortController()
+    this.inFlight = controller
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
       successful = await openAuthenticatedDirectEndpoint(
         this.hooks.host(),
         this.deps.openDirect,
-        12_000
+        12_000,
+        controller.signal
       )
       if (!successful) {
-        this.hooks.hysteresis.recordDirectFailure(this.deps.now())
+        // Why: an aborted probe proved nothing about the endpoint.
+        if (!controller.signal.aborted) {
+          this.hooks.hysteresis.recordDirectFailure(this.deps.now())
+        }
         return
       }
       if (!this.hooks.hysteresis.recordDirectSuccess(this.deps.now())) {
@@ -73,6 +85,7 @@ export class DirectReturnProbe {
       this.hooks.hysteresis.recordMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {
+      this.inFlight = null
       successful?.client.close()
       // Why: a relay drop or backoff timer can arrive while the probe owns the
       // operation mutex; afterProbe releases it and replays deferred recovery.

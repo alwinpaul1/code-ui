@@ -55,3 +55,23 @@ describe('mobile endpoint hysteresis', () => {
     expect(policy.canProbe(1_060_000)).toBe(true)
   })
 })
+
+describe('directLooksUnreachable', () => {
+  it('holds across a foreground backoff reset until direct authenticates', () => {
+    const h = new MobileEndpointHysteresis(0, {
+      directSuccessesRequired: 3,
+      directObservationMs: 30_000,
+      failureCooldownMs: 60_000,
+      minimumDwellMs: 60_000
+    })
+    expect(h.directLooksUnreachable()).toBe(false)
+    h.noteDirectDialFailure()
+    expect(h.directLooksUnreachable()).toBe(true)
+    h.resetFailureBackoff(1_000)
+    expect(h.directLooksUnreachable()).toBe(true)
+    h.recordDirectSuccess(200_000)
+    expect(h.directLooksUnreachable()).toBe(false)
+    h.recordDirectFailure(300_000)
+    expect(h.directLooksUnreachable()).toBe(true)
+  })
+})

@@ -15,8 +15,14 @@ import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
 export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
-    super(`relay_outer_${code}`)
+  // `detail` is the transport's own words for why the outer socket died. On
+  // Android that is OkHttp's "Expected HTTP 101 response but was '503 Service
+  // Unavailable'", the only place the cell's HTTP status survives.
+  constructor(
+    readonly code: number,
+    readonly detail?: string
+  ) {
+    super(detail ? `relay_outer_${code} (${detail})` : `relay_outer_${code}`)
   }
 }
 
@@ -49,6 +55,7 @@ export class MobileRelayE2eeLink {
   private outerReady = false
   private closed = false
   private transportErrorTimer: ReturnType<typeof setTimeout> | null = null
+  private transportErrorDetail: string | undefined
   private inboundChain: Promise<void> = Promise.resolve()
 
   constructor(options: MobileRelayE2eeLinkOptions) {
@@ -128,10 +135,11 @@ export class MobileRelayE2eeLink {
     }
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
-    this.socket.onerror = () => {
+    this.socket.onerror = (event) => {
+      this.transportErrorDetail ??= transportEventDetail(event)
       this.transportErrorTimer ??= setTimeout(() => {
         this.transportErrorTimer = null
-        this.fail(new RelayOuterError(1006))
+        this.fail(new RelayOuterError(1006, this.transportErrorDetail))
       }, RELAY_ERROR_CLOSE_GRACE_MS)
     }
     this.socket.onclose = (event) => {
@@ -144,7 +152,12 @@ export class MobileRelayE2eeLink {
       if (hostCloseReason) {
         this.options.onHostCloseReason?.(hostCloseReason)
       }
-      this.fail(new RelayOuterError(event.code || 1006))
+      // A cell's structured close reason already has its own channel above;
+      // only free-text reasons (the transport's own words) travel as detail.
+      const detail = hostCloseReason
+        ? undefined
+        : (transportEventDetail({ message: event.reason }) ?? this.transportErrorDetail)
+      this.fail(new RelayOuterError(event.code || 1006, detail))
     }
   }
 
@@ -193,6 +206,15 @@ function relaySocketUrl(endpoint: { cellUrl: string; relayHostId: string }): str
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(endpoint.relayHostId)}`
   return url.toString()
+}
+
+function transportEventDetail(event: unknown): string | undefined {
+  const message = (event as { message?: unknown } | null)?.message
+  if (typeof message !== 'string') {
+    return undefined
+  }
+  const trimmed = message.trim()
+  return trimmed.length > 0 ? trimmed.slice(0, 120) : undefined
 }
 
 function asError(error: unknown): Error {

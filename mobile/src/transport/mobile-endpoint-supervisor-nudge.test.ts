@@ -49,6 +49,35 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
+  it('aborts an in-flight direct probe so a network replacement dials at once', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const probeSessions: FakeSession[] = []
+    const deps = dependencies({
+      openDirect: vi.fn(() => {
+        // The endpoint accepts TCP but never authenticates (dead Tailscale peer).
+        const session = new FakeSession('connecting')
+        probeSessions.push(session)
+        return session
+      })
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+    supervisor.setForeground(true)
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+
+    // The 15s return probe is now mid-flight, holding the recovery mutex.
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(probeSessions.length).toBe(1)
+
+    supervisor.nudge('network-change')
+    await vi.advanceTimersByTimeAsync(0)
+    // Previously this waited for the probe's 12s authentication timeout.
+    expect(deps.openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
+
   it('suspends only after a failed replacement dial, then backs off further nudges', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi

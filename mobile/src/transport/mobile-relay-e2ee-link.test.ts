@@ -25,8 +25,8 @@ class ThrowingSocket {
   bufferedAmount = 0
   onopen: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
-  onerror: (() => void) | null = null
-  onclose: ((event: { code: number }) => void) | null = null
+  onerror: ((event?: { message?: string }) => void) | null = null
+  onclose: ((event: { code: number; reason?: string }) => void) | null = null
   send = vi.fn(() => {
     throw new Error('relay auth write failed')
   })

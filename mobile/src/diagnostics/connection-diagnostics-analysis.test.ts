@@ -40,6 +40,47 @@ describe('diagnoseConnection', () => {
     })
   })
 
+  it('names an overloaded Relay cell from the socket error text', () => {
+    const entry: ConnectionLogEntry = {
+      id: 'dial',
+      ts: 1,
+      level: 'error',
+      message: 'relay dial failed',
+      detail: "Error: relay_outer_1006 (Expected HTTP 101 response but was '503 Service Unavailable')",
+      code: 'relay-dial-failed',
+      path: 'relay'
+    }
+    const args = {
+      endpoint: 'ws://100.72.20.78:6768',
+      state: 'reconnecting' as const,
+      pendingPath: 'relay' as const,
+      entries: [event('WebSocket closed', 'Close code 1006; reconnect scheduled'), entry]
+    }
+    expect(diagnoseConnection(args)).toEqual({
+      likelyCause:
+        'The Relay cell refused the connection with 503 (overloaded or draining). The desktop is dropped from it too, so nothing on this phone can restore the Relay path.',
+      nextStep:
+        'Wait for the Relay to recover, or use a LAN or Tailscale endpoint, which bypasses the Relay.',
+      reportability: 'orca-relay'
+    })
+    expect(getReportableConnectionIncidentId(args)).toBe('dial')
+  })
+
+  it('explains a bare relay_outer_1006 instead of "no specific failure"', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.72.20.78:6768',
+        state: 'connecting',
+        pendingPath: 'relay',
+        entries: [event('Relay: relay dial failed', 'Error: relay_outer_1006')]
+      })
+    ).toMatchObject({
+      likelyCause: expect.stringContaining('relay_outer_1006'),
+      nextStep: expect.stringContaining('Relay connected'),
+      reportability: 'none'
+    })
+  })
+
   it('identifies the direct Tailscale timeout while Relay recovery is pending', () => {
     expect(
       diagnoseConnection({
