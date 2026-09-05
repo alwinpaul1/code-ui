@@ -29,6 +29,16 @@ function createAppConfig() {
   return { configPath, contents }
 }
 
+// Why: on the release runner GITHUB_REF is the mobile-android-v* tag being built, and
+// GITHUB_OUTPUT points at the job's output file. The script under test must see neither,
+// or its fixture app.json (0.0.22) fails the tag-version match and the suite blocks the
+// very release it guards.
+const scriptEnv = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([key]) => key !== 'GITHUB_REF' && key !== 'GITHUB_OUTPUT' && !key.startsWith('MOBILE_ANDROID_')
+  )
+)
+
 describe('prepare Android release script', () => {
   afterEach(() => {
     for (const dir of tempDirs) {
@@ -43,7 +53,7 @@ describe('prepare Android release script', () => {
     const output = execFileSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...scriptEnv,
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_PUBLISH_RELEASE: 'true'
       }
@@ -60,7 +70,7 @@ describe('prepare Android release script', () => {
     const result = spawnSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...scriptEnv,
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_BUMP_VERSION_CODE: 'true'
       }
@@ -78,7 +88,7 @@ describe('prepare Android release script', () => {
     const result = spawnSync(process.execPath, [scriptPath], {
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...scriptEnv,
         MOBILE_APP_CONFIG_PATH: configPath,
         MOBILE_ANDROID_RELEASE_VERSION: '0.0.23'
       }
