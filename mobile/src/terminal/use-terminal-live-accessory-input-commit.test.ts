@@ -43,6 +43,7 @@ type AccessoryInputCommitHarness = {
   readonly applyLiveInputMirror: ReturnType<typeof vi.fn>
   readonly flushPendingLiveInputText: ReturnType<typeof vi.fn>
   readonly waitForPendingLiveInputFlush: ReturnType<typeof vi.fn>
+  readonly clearPendingLiveInputCommit: ReturnType<typeof vi.fn>
   readonly unmount: () => void
 }
 
@@ -113,6 +114,7 @@ function createAccessoryInputCommitHarness({
     applyLiveInputMirror,
     flushPendingLiveInputText,
     waitForPendingLiveInputFlush,
+    clearPendingLiveInputCommit,
     unmount: () => {
       act(() => renderer?.unmount())
     }
@@ -248,5 +250,38 @@ describe('terminal live accessory input commit hook', () => {
     // Then
     expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'a', false)
     expect(result).toEqual({ kind: 'handled' })
+  })
+})
+
+describe('terminal live accessory cursor reposition reset', () => {
+  it('Given a typed run When a left-arrow accessory key is sent Then the mirror is reset so the next run starts fresh', async () => {
+    // Given a live line the field has been typing into
+    const harness = createAccessoryInputCommitHarness({
+      sentText: 'exception',
+      pendingHandle: 'terminal-a'
+    })
+
+    // When the cursor is moved with the accessory left arrow
+    const result = await harness.commit({ bytes: '\x1b[D' })
+
+    // Then the raw byte goes out and the stale field model is cleared
+    expect(result).toEqual({ kind: 'allow-raw' })
+    expect(harness.sent).toEqual([])
+    expect(harness.clearPendingLiveInputCommit).toHaveBeenCalledTimes(1)
+  })
+
+  it('Given a typed run When Escape is sent Then the mirror is not reset', async () => {
+    // Given
+    const harness = createAccessoryInputCommitHarness({
+      sentText: 'exception',
+      pendingHandle: 'terminal-a'
+    })
+
+    // When a non-cursor control is sent
+    const result = await harness.commit({ bytes: '\x1b' })
+
+    // Then the field model survives
+    expect(result).toEqual({ kind: 'allow-raw' })
+    expect(harness.clearPendingLiveInputCommit).not.toHaveBeenCalled()
   })
 })

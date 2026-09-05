@@ -2,7 +2,8 @@ import { useCallback, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
-  getTerminalLiveAccessoryLocalEditText
+  getTerminalLiveAccessoryLocalEditText,
+  isTerminalLiveCursorRepositionBytes
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
@@ -75,12 +76,21 @@ export function useTerminalLiveAccessoryInputCommit({
       const sentText = ownsPendingState ? sentLiveInputTextRef.current : ''
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
       switch (decision.kind) {
-        case 'send-now':
+        case 'send-now': {
           // Why: raw accessory bytes must wait behind any in-flight mirror send
           // so composed Hangul reaches the PTY before follow-up controls.
-          return (await waitForPendingLiveInputFlush())
-            ? { kind: 'allow-raw' }
-            : { kind: 'suppress-raw' }
+          if (!(await waitForPendingLiveInputFlush())) {
+            return { kind: 'suppress-raw' }
+          }
+          // Why: a cursor move or line-mutating control leaves the field's
+          // linear model out of step with the TUI line, so reset it — the next
+          // typed run then inserts fresh at the TUI's new cursor. This is what
+          // makes editing a recalled prompt (↑) in place work.
+          if (isTerminalLiveCursorRepositionBytes(input.bytes)) {
+            clearPendingLiveInputCommit()
+          }
+          return { kind: 'allow-raw' }
+        }
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
             localEdit: decision.localEdit,

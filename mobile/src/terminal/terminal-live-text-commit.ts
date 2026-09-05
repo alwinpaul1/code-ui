@@ -81,3 +81,28 @@ export function getTerminalLiveAccessoryLocalEditText({
 
   return Array.from(fieldText).slice(0, -1).join('')
 }
+
+// Cursor-repositioning and line-mutating control bytes sent from the accessory
+// strip. The live mirror tracks a single linear run of typed text and diffs it
+// against the field; it cannot represent a cursor the TUI moved on its own. So
+// once one of these reaches the PTY the mirror's model is stale, and the next
+// typed run must start fresh at the TUI's new cursor. Resetting after these
+// keys is what lets a recalled prompt (↑) be edited in place: move with the
+// arrows, then type, and each character inserts where the TUI cursor sits.
+const TERMINAL_LIVE_CURSOR_REPOSITION_BYTES: ReadonlySet<string> = new Set([
+  '\x1b[A', // ↑ history / line up
+  '\x1b[B', // ↓ history / line down
+  '\x1b[C', // → right
+  '\x1b[D', // ← left
+  '\x1b[H', // Home
+  '\x1b[F', // End
+  '\x1bOH', // Home (application cursor keys)
+  '\x1bOF', // End (application cursor keys)
+  '\x01', // Ctrl+A, start of line
+  '\x05', // Ctrl+E, end of line
+  '\x17' // Ctrl+W, delete word backward
+])
+
+export function isTerminalLiveCursorRepositionBytes(bytes: string): boolean {
+  return TERMINAL_LIVE_CURSOR_REPOSITION_BYTES.has(bytes)
+}

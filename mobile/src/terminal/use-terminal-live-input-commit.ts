@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
+import {
+  getTerminalLiveSpecialKeyDecision,
+  isTerminalLiveCursorRepositionBytes
+} from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
@@ -185,11 +188,20 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         case 'ignore':
         case 'local-edit':
           return
-        case 'send-now':
+        case 'send-now': {
+          const repositionBytes = decision.bytes
           void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+            sendLiveTerminalInputRef.current(activeHandle, repositionBytes)
+          ).then(() => {
+            // Why: a cursor move from the keyboard leaves the field's linear
+            // model out of step with the TUI line, so reset it — the next typed
+            // run inserts fresh at the TUI's new cursor (same as the strip path).
+            if (isTerminalLiveCursorRepositionBytes(repositionBytes)) {
+              clearPendingLiveInputCommit()
+            }
+          })
           return
+        }
         case 'commit-held-then-send':
           void sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
