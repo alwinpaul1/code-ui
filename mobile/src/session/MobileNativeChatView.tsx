@@ -144,12 +144,20 @@ export function MobileNativeChatView({
   // reader away from history.
   // Not animated: the transcript arrives in a few batches on open, and an
   // animated jump per batch reads as the list stuttering. Sends still animate.
+  // Retried: a non-animated scrollToEnd right after a batch lands on the
+  // content height measured so far; markdown rows keep growing for a few
+  // hundred ms, so re-pin until the layout has settled.
   useEffect(() => {
     if (data.length === 0 || !followingRef.current) {
       return
     }
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60)
-    return () => clearTimeout(t)
+    const pin = (): void => {
+      if (followingRef.current) {
+        listRef.current?.scrollToEnd({ animated: false })
+      }
+    }
+    const timers = [60, 250, 600, 1200].map((delay) => setTimeout(pin, delay))
+    return () => timers.forEach(clearTimeout)
   }, [data.length, keyboardInset])
 
   const handleSend = useCallback(
