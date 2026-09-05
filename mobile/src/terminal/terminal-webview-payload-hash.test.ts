@@ -7,8 +7,8 @@ import { XTERM_HTML } from './terminal-webview-html'
 // update these values only when that change is deliberate, and only after checking the
 // document still runs. Refactors that merely move slice boundaries must leave them alone.
 // Last deliberate change: idempotent applyTerminalTheme guard (#17567).
-const EXPECTED_SHA256 = 'a1d208a0713ef8147f0bfe39bc60e27ecf33df0ce220047c6787e132cc268a18'
-const EXPECTED_LENGTH = 730342
+const EXPECTED_SHA256 = '07f54c1ab2be941cceaf6bba1c6b5c1a7afce2a3a421c58d0d903fae7be28ac6'
+const EXPECTED_LENGTH = 733376
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

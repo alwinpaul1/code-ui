@@ -8,10 +8,11 @@ export const TERMINAL_HTML_DOCUMENT_SHELL = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <script>
 window.__engineErrors = [];
-window.onerror = function(msg) {
+window.onerror = function(msg, src, line, col) {
   // Why: a degraded engine can throw per frame; cap so the capture buffer
   // and downstream reporting stay bounded for the document's lifetime.
-  if (window.__engineErrors.length < 20) window.__engineErrors.push(String(msg));
+  var where = line ? ' @' + line + ':' + (col || 0) : '';
+  if (window.__engineErrors.length < 20) window.__engineErrors.push(String(msg) + where);
 };
 </script>
 <style>${XTERM_ENGINE_CSS}</style>

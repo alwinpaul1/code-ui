@@ -68,7 +68,10 @@ async function buildEngineJs() {
     },
     bundle: true,
     format: 'iife',
+    // Why: keep identifiers readable so a runtime ReferenceError names the real
+    // symbol in the phone log (whitespace and syntax are still minified).
     minify: true,
+    minifyIdentifiers: false,
     platform: 'browser',
     target,
     legalComments: 'none',
