@@ -64,6 +64,8 @@ export function MobileNativeChatView({
   micActive,
   micLevel,
   contextWindow,
+  permissionMode,
+  onSelectPermissionMode,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -412,6 +414,8 @@ export function MobileNativeChatView({
         micActive={micActive}
         micLevel={micLevel}
         contextWindow={contextWindow}
+        permissionMode={permissionMode}
+        onSelectPermissionMode={onSelectPermissionMode}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

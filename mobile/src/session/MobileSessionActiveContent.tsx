@@ -10,6 +10,10 @@ import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
+import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
+import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
+import type { TerminalPermissionMode } from './mobile-terminal-hud-parse'
+
 
 export function MobileSessionActiveContent({
   controller
@@ -51,13 +55,7 @@ export function MobileSessionActiveContent({
     nativeChatSendError,
     nativeChatOverlayInputLockReason,
     nativeChatController,
-    visibleBuiltInAccessoryKeys,
-    customKeys,
-    canSend,
     handleAccessoryKey,
-    startAccessoryRepeat,
-    stopAccessoryRepeat,
-    didAccessoryRepeatFire,
     dictation,
     handleDictationToggle,
     handleDictationPressIn,
@@ -99,6 +97,27 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  // Claude Code only cycles modes (Shift+Tab), and which modes are in the cycle
+  // depends on how the session was started. So: press, re-read the footer, and
+  // stop when it shows the pick; give up after a full lap and say so.
+  const selectPermissionMode = async (target: TerminalPermissionMode) => {
+    const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
+    if (!shiftTab) {
+      return
+    }
+    const wanted = target === 'default' ? 'manual' : target
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const seen = await nativeChatController.refreshNativeChatHud()
+      const current = seen?.permissionMode === 'default' ? 'manual' : seen?.permissionMode
+      if (current === wanted) {
+        return
+      }
+      await handleAccessoryKey(createTerminalLiveAccessoryInput(shiftTab))
+      await new Promise((resolve) => setTimeout(resolve, 450))
+    }
+    showToast('That mode is not available in this session')
+  }
+
   return showLoadingState ? (
     <View style={centered}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -265,15 +284,7 @@ export function MobileSessionActiveContent({
         sendSurfaceId={controller.nativeChatScopeKey ?? ''}
         getSendCompletionGeneration={controller.getSendCompletionGeneration}
         keyboardInset={keyboardLift}
-        keyStrip={{
-          keys: visibleBuiltInAccessoryKeys,
-          customKeys,
-          enabled: canSend,
-          onKey: (input) => void handleAccessoryKey(input),
-          onRepeatStart: startAccessoryRepeat,
-          onRepeatStop: stopAccessoryRepeat,
-          didRepeatFire: didAccessoryRepeatFire
-        }}
+        onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
       />
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

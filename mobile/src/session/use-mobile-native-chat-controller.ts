@@ -299,7 +299,7 @@ export function useMobileNativeChatController(args: {
   // The terminal's own status line is the one place that states model AND
   // effort; read it while chat covers the terminal and let it win over the
   // hook report, which names the model only.
-  const hudObservation = useMobileTerminalHudObservation({
+  const { observation: hudObservation, refresh: refreshTerminalHud } = useMobileTerminalHudObservation({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
@@ -385,6 +385,8 @@ export function useMobileNativeChatController(args: {
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
-    nativeChatContextWindow: hudObservation?.context ?? null
+    nativeChatContextWindow: hudObservation?.context ?? null,
+    nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
+    refreshNativeChatHud: refreshTerminalHud
   }
 }

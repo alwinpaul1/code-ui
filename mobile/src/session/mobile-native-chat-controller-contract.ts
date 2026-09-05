@@ -1,4 +1,8 @@
-import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+import type {
+  TerminalHudContextWindow,
+  TerminalHudObservation,
+  TerminalPermissionMode
+} from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type {
@@ -87,4 +91,8 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
+  /** Permission mode from the terminal footer, or null when no status line is observed. */
+  nativeChatPermissionMode: TerminalPermissionMode | null
+  /** Re-read the terminal screen now (after a Shift+Tab, so the mode pill follows). */
+  refreshNativeChatHud: () => Promise<TerminalHudObservation | null>
 }

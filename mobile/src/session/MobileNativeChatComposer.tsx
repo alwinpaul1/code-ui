@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native'
-import { ArrowUp, Image as ImageIcon, Mic, Paperclip, Plus, Square } from 'lucide-react-native'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
+import { PermissionModePill } from '../components/PermissionModePill'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
-import { MobileContextWindowSheet } from './MobileContextWindowSheet'
-import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
+import type { TerminalHudContextWindow, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import {
   getNativeChatAgentProfile,
@@ -69,6 +69,10 @@ type Props = {
   micLevel?: number
   /** Context window figure from the desktop status line; shows the ring. */
   contextWindow?: TerminalHudContextWindow | null
+  /** Permission mode from the terminal footer; shows the pill. */
+  permissionMode?: TerminalPermissionMode | null
+  /** Steps the terminal to the chosen mode (Shift+Tab until its footer agrees). */
+  onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
@@ -103,6 +107,8 @@ export function MobileNativeChatComposer({
   micActive = false,
   micLevel = 0,
   contextWindow = null,
+  permissionMode = null,
+  onSelectPermissionMode,
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
@@ -135,6 +141,7 @@ export function MobileNativeChatComposer({
   const [sending, setSending] = useState(false)
   const [showAttachSheet, setShowAttachSheet] = useState(false)
   const [showContextSheet, setShowContextSheet] = useState(false)
+  const [showModeSheet, setShowModeSheet] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
@@ -350,6 +357,13 @@ export function MobileNativeChatComposer({
                 sendInFlight={sending || isAttaching}
               />
             ) : null}
+            {permissionMode ? (
+              <PermissionModePill
+                mode={permissionMode}
+                onPress={() => setShowModeSheet(true)}
+                disabled={disabled || !onSelectPermissionMode}
+              />
+            ) : null}
             {contextWindow ? (
               <ContextWindowRing
                 usedPercent={contextWindow.usedPercent}
@@ -405,32 +419,19 @@ export function MobileNativeChatComposer({
           </View>
         </View>
       </View>
-      <MobileContextWindowSheet
-        visible={showContextSheet}
-        context={contextWindow}
-        onClose={() => setShowContextSheet(false)}
+      <MobileNativeChatComposerSheets
+        showModeSheet={showModeSheet}
+        onCloseModeSheet={() => setShowModeSheet(false)}
+        permissionMode={permissionMode}
+        onSelectPermissionMode={onSelectPermissionMode}
+        showContextSheet={showContextSheet}
+        onCloseContextSheet={() => setShowContextSheet(false)}
+        contextWindow={contextWindow}
+        showAttachSheet={showAttachSheet}
+        onCloseAttachSheet={() => setShowAttachSheet(false)}
+        onAttachImage={onAttachImage}
+        onAttachFile={onAttachFile}
       />
-      {onAttachImage && onAttachFile ? (
-        <ActionSheetModal
-          visible={showAttachSheet}
-          title="Add to chat"
-          actions={[
-            {
-              label: 'Photos',
-              hint: 'Pick from your photo library',
-              icon: ImageIcon,
-              onPress: onAttachImage
-            },
-            {
-              label: 'Files',
-              hint: 'PDF, documents, code, anything on this phone',
-              icon: Paperclip,
-              onPress: onAttachFile
-            }
-          ]}
-          onClose={() => setShowAttachSheet(false)}
-        />
-      ) : null}
     </View>
   )
 }

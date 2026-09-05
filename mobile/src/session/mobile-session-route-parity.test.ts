@@ -82,9 +82,9 @@ const HEAD_TIMER_CREATION_SHA256 =
   '161c8ea678cd33630d36c31765ef93d92787eae9752deed9c392cbf679ca3472'
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9a51dd3fbcf9af7229067ffb30bdcd955d4fd766f0316b13facaa7b7dc7e533b'
+  '1ac8aed596d96ff73af01f659497a181d2b8a6a8e6c0e666b68f3345f55ca859'
 const HEAD_HOST_JSX_SHA256 = '6413618e047a0ad70758aa7e8f5286739b14cac815761a12cd99412de9e75fcf'
-const HEAD_LEAF_JSX_SHA256 = '57006bb0db90c9af9d6978483f3e61431ef2a60b045ba4363188d9c62f553986'
+const HEAD_LEAF_JSX_SHA256 = '3876559488bdfd058a43eb67e26f449c03aa997975bda5f240afdd8b15ad2748'
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -520,7 +520,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(613)
+    expect(strings).toHaveLength(616)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(97)

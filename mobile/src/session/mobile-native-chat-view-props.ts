@@ -1,4 +1,4 @@
-import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+import type { TerminalHudContextWindow, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -57,6 +57,8 @@ export type MobileNativeChatViewProps = {
   micActive?: boolean
   micLevel?: number
   contextWindow?: TerminalHudContextWindow | null
+  permissionMode?: TerminalPermissionMode | null
+  onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
   onMicPressOut?: () => void

@@ -1,4 +1,4 @@
-import { useEffect, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { parseTerminalHudObservation, type TerminalHudObservation } from './mobile-terminal-hud-parse'
@@ -19,9 +19,14 @@ export function useMobileTerminalHudObservation(args: {
   handleRef: MutableRefObject<string | null>
   /** Changes whenever the active terminal changes; restarts the poll. */
   handleKey: string | null
-}): TerminalHudObservation | null {
+}): {
+  observation: TerminalHudObservation | null
+  /** Re-read the screen now; resolves with what it saw (null on failure). */
+  refresh: () => Promise<TerminalHudObservation | null>
+} {
   const { client, enabled, handleRef, handleKey } = args
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
+  const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
   useEffect(() => {
     setObservation(null)
@@ -30,16 +35,16 @@ export function useMobileTerminalHudObservation(args: {
     }
     let active = true
     let inFlight = false
-    const read = async (): Promise<void> => {
+    const read = async (): Promise<TerminalHudObservation | null> => {
       const handle = handleRef.current
       if (!handle || inFlight) {
-        return
+        return null
       }
       inFlight = true
       try {
         const response = await client.sendRequest('terminal.read', { terminal: handle, screen: true })
         if (!active || !response.ok) {
-          return
+          return null
         }
         const terminal = (response as RpcSuccess).result as {
           terminal?: { tail?: unknown; lines?: unknown }
@@ -52,24 +57,35 @@ export function useMobileTerminalHudObservation(args: {
             current &&
             current.modelId === next.modelId &&
             current.effort === next.effort &&
-            current.modelLabel === next.modelLabel
+            current.modelLabel === next.modelLabel &&
+            current.permissionMode === next.permissionMode &&
+            current.context?.usedPercent === next.context?.usedPercent &&
+            current.context?.usedLabel === next.context?.usedLabel
               ? current
               : next
           )
         }
+        return next
       } catch {
         // A failed screen read just leaves the last observation in place.
+        return null
       } finally {
         inFlight = false
       }
     }
+    readRef.current = read
     void read()
     const timer = setInterval(() => void read(), HUD_POLL_MS)
     return () => {
       active = false
+      readRef.current = async () => null
       clearInterval(timer)
     }
   }, [client, enabled, handleKey, handleRef])
 
-  return observation
+  // Why: a Shift+Tab from the phone changes the footer at once; waiting up to
+  // 5s for the next poll would make the mode pill look stuck.
+  const refresh = useCallback(() => readRef.current(), [])
+
+  return { observation, refresh }
 }

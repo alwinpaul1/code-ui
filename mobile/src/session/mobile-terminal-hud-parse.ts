@@ -10,6 +10,58 @@ export type TerminalHudObservation = {
   /** Context window usage when the status line prints it (claude-hud's
    *  "78% (776k/1.0M)" or Code UI's "ctx 54% 537.2k/1M"); null otherwise. */
   context: TerminalHudContextWindow | null
+  /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
+   *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
+  permissionMode: TerminalPermissionMode
+}
+
+export type TerminalPermissionMode =
+  | 'default'
+  | 'manual'
+  | 'acceptEdits'
+  | 'plan'
+  | 'auto'
+  | 'bypassPermissions'
+
+const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
+  [/manual mode on/i, 'manual'],
+  [/accept edits on/i, 'acceptEdits'],
+  [/plan mode on/i, 'plan'],
+  [/auto mode on/i, 'auto'],
+  [/bypass permissions on/i, 'bypassPermissions']
+]
+
+/** The mode footer sits under the input box; the last match on screen wins. */
+export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? ''
+    for (const [pattern, mode] of PERMISSION_MODE_PATTERNS) {
+      if (pattern.test(line)) {
+        return mode
+      }
+    }
+  }
+  return 'default'
+}
+
+export function permissionModeLabel(mode: TerminalPermissionMode): string {
+  switch (mode) {
+    case 'default':
+    case 'manual':
+      return 'Manual'
+    case 'acceptEdits':
+      return 'Accept edits'
+    case 'plan':
+      return 'Plan'
+    case 'auto':
+      return 'Auto'
+    case 'bypassPermissions':
+      return 'Bypass'
+    default: {
+      const exhaustive: never = mode
+      return exhaustive
+    }
+  }
 }
 
 export type TerminalHudContextWindow = {
@@ -116,7 +168,7 @@ export function parseTerminalHudObservation(
       parseTerminalHudContextWindow(line.slice(match.index + match[0].length), {
         allowBarePercent: true
       }) ?? parseTerminalHudContextWindow(lines[index + 1] ?? '')
-    return { modelLabel, modelId, effort, context }
+    return { modelLabel, modelId, effort, context, permissionMode: parseTerminalPermissionMode(lines) }
   }
   return null
 }

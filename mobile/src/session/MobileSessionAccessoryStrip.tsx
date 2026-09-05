@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Pressable, ScrollView, View } from 'react-native'
-import { ChevronDown, ChevronsRight, Keyboard as KeyboardIcon, Monitor, Plus, Smartphone } from 'lucide-react-native'
+import { ChevronsRight, Keyboard as KeyboardIcon, Monitor, Plus, Smartphone } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
@@ -81,15 +81,7 @@ export function MobileSessionAccessoryStrip({ controller }: { controller: Mobile
           accessibilityLabel="Dismiss keyboard"
           accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
         >
-          <View style={{ alignItems: 'center', height: 18, width: 18, position: 'relative' }}>
-            <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
-            <ChevronDown
-              size={10}
-              color={colors.textSecondary}
-              strokeWidth={2.5}
-              style={{ position: 'absolute', bottom: -2 }}
-            />
-          </View>
+          <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
         </Pressable>
       )}
       {/* Why: default tap handling makes the first accessory-key tap dismiss the keyboard and get swallowed (#5106). */}

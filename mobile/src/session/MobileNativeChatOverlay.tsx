@@ -1,3 +1,4 @@
+import type { TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -18,6 +19,8 @@ type Props = {
   onMicPress: () => void
   micActive: boolean
   micLevel?: number
+  /** Steps the terminal to a permission mode (the mode sheet's pick). */
+  onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   dictationMode: 'toggle' | 'hold'
   onMicPressIn: () => void
   onMicPressOut: () => void
@@ -47,6 +50,7 @@ export function MobileNativeChatOverlay({
   onMicPress,
   micActive,
   micLevel,
+  onSelectPermissionMode,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -110,6 +114,8 @@ export function MobileNativeChatOverlay({
         micActive={micActive}
         micLevel={micLevel}
         contextWindow={controller.nativeChatContextWindow}
+        permissionMode={controller.nativeChatPermissionMode}
+        onSelectPermissionMode={onSelectPermissionMode}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

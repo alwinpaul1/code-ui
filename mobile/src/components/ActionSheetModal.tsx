@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Pressable } from 'react-native'
-import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
+import { Check, Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
@@ -13,6 +13,8 @@ export type ActionSheetAction = {
   destructive?: boolean
   disabled?: boolean
   hint?: string
+  /** Marks the current choice with a trailing check (mode / option pickers). */
+  selected?: boolean
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -22,6 +24,8 @@ export type ActionSheetAction = {
 type Props = {
   visible: boolean
   title?: string
+  /** Centre the title (pickers without a message read better that way). */
+  centerTitle?: boolean
   message?: string
   actions: ActionSheetAction[]
   onClose: () => void
@@ -39,17 +43,30 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
 
 type ContentProps = {
   title?: string
+  centerTitle?: boolean
   message?: string
   actions: ActionSheetAction[]
   onClose?: () => void
 }
 
-export function ActionSheetContent({ title, message, actions, onClose }: ContentProps) {
+export function ActionSheetContent({
+  title,
+  centerTitle,
+  message,
+  actions,
+  onClose
+}: ContentProps) {
   const { colors, space } = useTheme()
   return (
     <>
       {(title || message) && (
-        <View style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
+        <View
+          style={{
+            paddingHorizontal: space.xs,
+            paddingBottom: space.sm,
+            alignItems: centerTitle ? 'center' : undefined
+          }}
+        >
           {title ? (
             <Txt variant="label" weight="medium" tone="muted" numberOfLines={1}>
               {title}
@@ -118,6 +135,8 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
                 </View>
                 {action.loading ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : action.selected ? (
+                  <Check size={18} color={colors.accent} strokeWidth={2.4} />
                 ) : null}
               </Pressable>
             </View>
@@ -128,7 +147,14 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
   )
 }
 
-export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
+export function ActionSheetModal({
+  visible,
+  title,
+  centerTitle,
+  message,
+  actions,
+  onClose
+}: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
@@ -156,6 +182,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
     >
       <ActionSheetContent
         title={title}
+        centerTitle={centerTitle}
         message={message}
         actions={sequencedActions}
         onClose={onClose}
