@@ -5,7 +5,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createCodexPickerIo } from './codex-picker-apply'
-import { isCodexIdle } from './codex-picker-screen'
+import { isCodexIdle, isCodexWorking, parseCodexPickerScreen } from './codex-picker-screen'
 
 const SETTLE_AFTER_TURN_MS = 700
 const STATUS_RENDER_MS = 1_500
@@ -49,9 +49,21 @@ export function useCodexStatusPoll(args: {
           terminal: handle,
           deviceToken: deviceTokenRef.current
         })
+        // Self-heal: a picker left open (an apply cut off by a disconnect or a
+        // backgrounded app) swallows every send. Escape it first — never while
+        // a turn runs, since Esc there interrupts the agent.
+        let lines = await io.readScreen()
+        for (let attempt = 0; attempt < 3 && parseCodexPickerScreen(lines); attempt += 1) {
+          if (!active || isCodexWorking(lines)) {
+            return
+          }
+          await io.sendKey('\x1b')
+          await io.sleep(400)
+          lines = await io.readScreen()
+        }
         // Why the idle check: while a turn runs, "/status" would be queued as a
         // prompt to the model instead of running as a command.
-        if (!isCodexIdle(await io.readScreen())) {
+        if (!isCodexIdle(lines)) {
           return
         }
         if (!(await io.typeCommand('/status'))) {

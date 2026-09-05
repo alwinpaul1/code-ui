@@ -209,6 +209,26 @@ export function useMobileNativeChatSessionOptions(args: {
     }
   }, [scopeKey, version])
 
+  // Why: a record persisted by an older build can hold a model this agent never
+  // had (a Claude id leaked onto a Codex tab). Once the account's own list is
+  // known, a tracked id outside it — and not what the footer reports — is stale.
+  useEffect(() => {
+    if (agent !== 'codex' || !scopeKey || !discoveredModels || discoveredModels.length === 0) {
+      return
+    }
+    void version
+    const record = getScopedRecord(scopeKey, agent)
+    const tracked = typeof record.model?.value === 'string' ? record.model.value : null
+    if (
+      tracked &&
+      tracked !== reportedModel &&
+      !discoveredModels.some((model) => model.id === tracked)
+    ) {
+      clearNativeChatSessionModel(record)
+      bump()
+    }
+  }, [agent, bump, discoveredModels, reportedModel, scopeKey, version])
+
   // Seed the current model from live agent status; hook reports are authority
   // over locally dispatched guesses (desktop 'reported' source parity).
   useEffect(() => {

@@ -80,6 +80,9 @@ async function loadHostImage(args: {
         {
           worktree,
           pathText: args.path,
+          // Same shape as a tapped chat path (mobile-file-tap-open): the paste
+          // lives in the Mac temp dir, outside every workspace.
+          crossWorkspace: true,
           ...(args.nativeChatContext ? { nativeChatContext: args.nativeChatContext } : {})
         },
         { timeoutMs: 15_000 }
