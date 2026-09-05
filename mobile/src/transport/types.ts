@@ -101,6 +101,9 @@ export type HostProfile = {
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
+  /** Set when the direct endpoint stopped answering; cleared once it connects
+   *  again. Lets the next launch race the relay at once. */
+  directUnreachableSince?: number
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -122,7 +125,8 @@ export const HostProfileSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{16}$/)
     .optional(),
-  relay: MobileRelayEndpointSchema.optional()
+  relay: MobileRelayEndpointSchema.optional(),
+  directUnreachableSince: z.number().optional()
 })
 
 // Why: persisted host record after the v0.0.3 keychain split. The
@@ -133,7 +137,8 @@ export const StoredHostProfileSchema = z.object({
   name: z.string().min(1),
   endpoint: z.string().min(1),
   publicKeyB64: z.string().min(1),
-  lastConnected: z.number().finite()
+  lastConnected: z.number().finite(),
+  directUnreachableSince: z.number().optional()
 })
 
 export type StoredHostProfile = z.infer<typeof StoredHostProfileSchema>

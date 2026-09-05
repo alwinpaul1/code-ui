@@ -1,11 +1,15 @@
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 
-export function logRelayConnected(log: RelayRecoveryLog, dialDurationMs?: number): void {
-  // The dial time is the number a "slow to connect" report needs; the phases
-  // (director resolve, cell socket, E2EE, migration) all live inside it.
-  const detail =
-    dialDurationMs === undefined ? undefined : `dialed in ${(dialDurationMs / 1000).toFixed(1)}s`
+export function logRelayConnected(
+  log: RelayRecoveryLog,
+  dialDurationMs?: number,
+  legs?: string
+): void {
+  // The dial time is the number a "slow to connect" report needs, and the legs
+  // (socket open, relay hello, E2EE, resume confirm) say where it went.
+  const total = dialDurationMs === undefined ? null : `dialed in ${(dialDurationMs / 1000).toFixed(1)}s`
+  const detail = total && legs ? `${total} (${legs})` : (total ?? legs)
   log('runtime channel migrated to relay', detail, {
     level: 'success',
     code: 'relay-connected'

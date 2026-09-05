@@ -68,7 +68,7 @@ async function confirmResume() {
   })
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onAuthenticated()
-  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
   const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
     id: string
     method: string
@@ -201,7 +201,7 @@ describe('mobile relay RPC session', () => {
     expect(session.getDialStage()).toBe('handshaking')
     fakes.linkOptions!.onAuthenticated()
     expect(session.getDialStage()).toBe('confirming')
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
     expect(stages).toEqual(['awaiting-hello', 'handshaking', 'confirming'])
     session.close()
   })

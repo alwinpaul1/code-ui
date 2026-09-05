@@ -9,7 +9,9 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
-import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
+import { RelayDialStageTracker, type RelayDialStageSource,
+  type RelayDialTimings
+} from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
@@ -30,6 +32,8 @@ export type MobileRelayRpcSession = RpcClient &
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getFailure(): Error | null
+    /** When each dial leg began; for the "dialed in" log line. */
+    getDialTimings(): RelayDialTimings
   }
 
 export function connectMobileRelayRpcSession(args: {
@@ -141,6 +145,7 @@ export function connectMobileRelayRpcSession(args: {
     },
     getDialStage: () => dialStage.getDialStage(),
     onDialStageChange: (listener) => dialStage.onDialStageChange(listener),
+    getDialTimings: () => dialStage.getTimings(),
     getAttachDeadlineAt: () => attachDeadlineAt,
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
@@ -173,12 +178,21 @@ export function connectMobileRelayRpcSession(args: {
   async function confirmResume(): Promise<void> {
     dialStage.advance('confirming')
     try {
-      const response = await sendRpc(
+      // Why: the capability advisory is one-way and independent of the resume
+      // confirmation, so it rides the same round trip instead of a second one
+      // after it (that second trip was a third of the confirm leg). The
+      // confirmation frame still goes out first.
+      const confirmation = sendRpc(
         'pairing.getEndpoints',
         { resumeConfirmReqId: args.resumeConfirmReqId },
         requestTimeoutMs,
         true
       )
+      const capabilities = settleMobileRuntimeCapabilities((method, params) =>
+        sendRpc(method, params, requestTimeoutMs, true)
+      )
+      capabilities.catch(() => undefined)
+      const response = await confirmation
       if (!response.ok) {
         throw new Error(response.error.code)
       }
@@ -190,10 +204,9 @@ export function connectMobileRelayRpcSession(args: {
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
-      await settleMobileRuntimeCapabilities((method, params) =>
-        sendRpc(method, params, requestTimeoutMs, true)
-      )
+      await capabilities
       livenessWatchdog.start(livenessIdentity)
+      dialStage.markConnected()
       publishState('connected')
     } catch (error) {
       fail(asError(error))

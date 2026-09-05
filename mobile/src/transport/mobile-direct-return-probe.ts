@@ -27,6 +27,8 @@ export class DirectReturnProbe {
       beginOperation: () => void
       migrate: (client: RpcClient, path: MobileConnectionPath) => Promise<void>
       onDirectMigrated: () => Promise<void>
+      /** A probe timed out or was refused (not aborted). */
+      onDirectUnreachable?: () => void
       afterProbe: () => void
     }
   ) {}
@@ -73,6 +75,7 @@ export class DirectReturnProbe {
         // Why: an aborted probe proved nothing about the endpoint.
         if (!controller.signal.aborted) {
           this.hooks.hysteresis.recordDirectFailure(this.deps.now())
+          this.hooks.onDirectUnreachable?.()
         }
         return
       }

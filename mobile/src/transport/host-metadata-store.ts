@@ -24,8 +24,15 @@ export function writeStoredHostProfiles(hosts: readonly StoredHostProfile[]): Pr
 }
 
 export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
-  const { id, name, endpoint, publicKeyB64, lastConnected } = host
-  return { id, name, endpoint, publicKeyB64, lastConnected }
+  const { id, name, endpoint, publicKeyB64, lastConnected, directUnreachableSince } = host
+  return {
+    id,
+    name,
+    endpoint,
+    publicKeyB64,
+    lastConnected,
+    ...(directUnreachableSince !== undefined ? { directUnreachableSince } : {})
+  }
 }
 
 function parseStoredHostProfiles(raw: string | null): StoredHostProfile[] | null {

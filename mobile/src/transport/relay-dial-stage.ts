@@ -25,9 +25,22 @@ export function relayDialStageSource(session: object): RelayDialStageSource | nu
     : null
 }
 
+export type RelayDialTimings = Partial<Record<RelayDialStage | 'connected', number>>
+
 export class RelayDialStageTracker implements RelayDialStageSource {
   private stage: RelayDialStage = 'opening'
   private readonly listeners = new Set<(stage: RelayDialStage) => void>()
+  // Wall-clock ms at which each stage began (and 'connected' when the dial
+  // finished), so a slow dial can say which leg was slow.
+  private readonly timings: RelayDialTimings = { opening: Date.now() }
+
+  getTimings(): RelayDialTimings {
+    return { ...this.timings }
+  }
+
+  markConnected(): void {
+    this.timings.connected ??= Date.now()
+  }
 
   getDialStage(): RelayDialStage {
     return this.stage
@@ -43,6 +56,7 @@ export class RelayDialStageTracker implements RelayDialStageSource {
       return
     }
     this.stage = stage
+    this.timings[stage] ??= Date.now()
     for (const listener of this.listeners) {
       listener(stage)
     }
@@ -61,4 +75,25 @@ const RELAY_DIAL_STAGE_BUDGET_MS: Record<Exclude<RelayDialStage, 'opening'>, num
 
 export function relayDialStageBudgetMs(stage: Exclude<RelayDialStage, 'opening'>): number {
   return RELAY_DIAL_STAGE_BUDGET_MS[stage]
+}
+
+/** "open 0.4s · hello 0.9s · e2ee 0.3s · confirm 1.2s" — the time spent in each
+ *  leg of the dial, for the connection log. */
+export function formatRelayDialTimings(timings: RelayDialTimings): string | null {
+  const legs: Array<[string, RelayDialStage | 'connected', RelayDialStage]> = [
+    ['open', 'awaiting-hello', 'opening'],
+    ['hello', 'handshaking', 'awaiting-hello'],
+    ['e2ee', 'confirming', 'handshaking'],
+    ['confirm', 'connected', 'confirming']
+  ]
+  const parts: string[] = []
+  for (const [label, end, start] of legs) {
+    const from = timings[start]
+    const to = timings[end]
+    if (from === undefined || to === undefined) {
+      continue
+    }
+    parts.push(`${label} ${((to - from) / 1000).toFixed(1)}s`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
 }

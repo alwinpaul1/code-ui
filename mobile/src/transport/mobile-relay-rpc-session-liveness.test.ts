@@ -53,7 +53,7 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
     resumeExpiresAt: Date.now() + 300_000
   })
   fakes.linkOptions!.onAuthenticated()
-  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
   const confirmation = sentRequests()[0]!
   fakes.linkOptions!.onText(
     JSON.stringify({

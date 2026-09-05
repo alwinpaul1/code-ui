@@ -20,6 +20,8 @@ import {
   DIRECT_DIAL_GRACE_MS,
   MobileRelayDirectGraceTimer
 } from './mobile-relay-direct-grace-timer'
+import { formatRelayDialTimings } from './relay-dial-stage'
+import { withDirectVerdict } from './mobile-direct-verdict'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -47,6 +49,9 @@ export class MobileEndpointSupervisor {
   private credentialRotationInFlight = false
   private relayRotationPending = false
   private relayDialStartedAt: number | null = null
+  // The direct head start expired with direct still unauthenticated; if the
+  // relay then wins, that counts as the direct endpoint not answering.
+  private directRaceLost = false
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
   private readonly relayReconnect: RelayReconnectController
@@ -92,9 +97,15 @@ export class MobileEndpointSupervisor {
       dependencies,
       logical,
       () => {
+        this.directRaceLost = true
         void this.recoverRelay(true, true)
       },
-      () => (this.hysteresis.directLooksUnreachable() ? 0 : DIRECT_DIAL_GRACE_MS)
+      // A direct endpoint that never answered last time gets no head start on
+      // the next launch either; the verdict lives on the host profile.
+      () =>
+        this.hysteresis.directLooksUnreachable() || this.host.directUnreachableSince != null
+          ? 0
+          : DIRECT_DIAL_GRACE_MS
     )
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
@@ -111,14 +122,21 @@ export class MobileEndpointSupervisor {
       },
       bundle: () => this.bundle,
       adoptBundle: (bundle) => (this.bundle = bundle),
-      recordMigration: () => {
+      recordMigration: (session) => {
+        if (this.directRaceLost) {
+          this.directRaceLost = false
+          this.rememberDirectVerdict(false)
+        }
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
         const startedAt = this.relayDialStartedAt
         this.relayDialStartedAt = null
         logRelayConnected(
           this.logRelay,
-          startedAt === null ? undefined : dependencies.now() - startedAt
+          startedAt === null ? undefined : dependencies.now() - startedAt,
+          typeof session.getDialTimings === 'function'
+            ? (formatRelayDialTimings(session.getDialTimings()) ?? undefined)
+            : undefined
         )
       },
       scheduleLease: (expiry) =>
@@ -137,7 +155,9 @@ export class MobileEndpointSupervisor {
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
       migrate: (client, path) => this.logical.migrateTo(client, path),
+      onDirectUnreachable: () => this.rememberDirectVerdict(false),
       onDirectMigrated: async () => {
+        this.rememberDirectVerdict(true)
         this.leaseRotation.clear()
         this.relayRotationPending = false
         await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
@@ -176,7 +196,11 @@ export class MobileEndpointSupervisor {
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
         this.directGrace.clear()
+        // Why: a relay win publishes 'connected' before recordMigration runs,
+        // which is where a lost race is written down; only a direct win clears it.
         if (this.logical.getActivePath() !== 'relay') {
+          this.directRaceLost = false
+          this.rememberDirectVerdict(true)
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
@@ -187,6 +211,7 @@ export class MobileEndpointSupervisor {
         // dial and may never publish disconnected while its retry loop lives.
         if (this.logical.getActivePath() !== 'relay') {
           this.hysteresis.noteDirectDialFailure()
+          this.rememberDirectVerdict(false)
         }
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
@@ -328,6 +353,14 @@ export class MobileEndpointSupervisor {
       if (retryAfterOperation && this.isActive()) {
         void this.recoverRelay()
       }
+    }
+  }
+
+  private rememberDirectVerdict(reachable: boolean): void {
+    const next = withDirectVerdict(this.host, reachable, this.dependencies.now())
+    if (next) {
+      this.host = next
+      void this.dependencies.saveHost(next).catch(() => undefined)
     }
   }
 

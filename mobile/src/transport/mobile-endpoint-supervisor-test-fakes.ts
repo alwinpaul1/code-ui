@@ -41,6 +41,7 @@ export class FakeSession implements RpcClient {
 }
 
 export class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
+  getDialTimings = () => ({})
   constructor(
     state: ConnectionState,
     private readonly failure: Error | null = null,

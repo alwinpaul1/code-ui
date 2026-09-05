@@ -9,6 +9,7 @@ import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../src/shared/relay-host-close-reason'
 import type { HostProfile } from './types'
@@ -39,7 +40,7 @@ export class MobileRelaySessionEstablisher {
       bundle: () => MobileRelayCredentialBundle | null
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
       // Hysteresis stamp + rotation-pending clear + recovery log line.
-      recordMigration: () => void
+      recordMigration: (session: MobileRelayRpcSession) => void
       // Owns the stopped/disconnected guard so late bookkeeping cannot arm a stale timer.
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
@@ -130,7 +131,7 @@ export class MobileRelaySessionEstablisher {
     if (!args.isForeground()) {
       args.controller.suspendActiveRelay(args.logical)
     }
-    args.recordMigration()
+    args.recordMigration(session)
     try {
       const applied = await persistResumeConfirmation({
         session,

@@ -49,6 +49,48 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
+  it('remembers a dead direct endpoint on the host profile and skips its head start next launch', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    // Fresh host: direct keeps its head start, so no relay dial yet.
+    expect(deps.openRelay).not.toHaveBeenCalled()
+    // The direct dial fails; the verdict is written to the profile.
+    logical.publishState('reconnecting')
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({ directUnreachableSince: expect.any(Number) })
+    )
+    supervisor.stop()
+
+    const remembered = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })
+    const next = new MobileEndpointSupervisor(
+      new FakeLogicalClient('connecting', 'lan'),
+      { ...host, directUnreachableSince: 1 },
+      remembered
+    )
+    await next.start()
+    await vi.advanceTimersByTimeAsync(0)
+    // No head start this time: the relay dial goes out at once.
+    expect(remembered.openRelay).toHaveBeenCalledOnce()
+    next.stop()
+  })
+
+  it('writes the verdict when the relay wins the race against a silent direct endpoint', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.objectContaining({ directUnreachableSince: expect.any(Number) })
+    )
+    supervisor.stop()
+  })
+
   it('aborts an in-flight direct probe so a network replacement dials at once', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const probeSessions: FakeSession[] = []
