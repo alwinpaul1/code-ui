@@ -109,6 +109,7 @@ export function MobileNativeChatView({
   // Only the window right after the FIRST batch lands is hidden; an empty or
   // still-loading conversation shows its own state so nothing can spin forever.
   const [pinning, setPinning] = useState<{ key: string; done: boolean } | null>(null)
+  const pinnedKeyRef = useRef<string | null>(null)
   const revealed = !(pinning?.key === sendSurfaceId && !pinning.done)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -170,17 +171,28 @@ export function MobileNativeChatView({
     return () => timers.forEach(clearTimeout)
   }, [data.length, keyboardInset])
 
+  // Start the hidden window once per conversation, on the first batch. No
+  // cleanup here: batches keep landing inside the window and must not cancel it.
   useEffect(() => {
-    if (data.length === 0 || pinning?.key === sendSurfaceId) {
+    if (data.length === 0 || pinnedKeyRef.current === sendSurfaceId) {
       return
     }
+    pinnedKeyRef.current = sendSurfaceId
     setPinning({ key: sendSurfaceId, done: false })
+  }, [data.length, sendSurfaceId])
+  // The timer belongs to the pinning state itself, so only its own change (done)
+  // or unmount can clear it — previously a data change cancelled it and the list
+  // stayed hidden behind the spinner for good.
+  useEffect(() => {
+    if (!pinning || pinning.done) {
+      return
+    }
     const timer = setTimeout(
-      () => setPinning((current) => (current?.key === sendSurfaceId ? { ...current, done: true } : current)),
+      () => setPinning((current) => (current && !current.done ? { ...current, done: true } : current)),
       REVEAL_AFTER_FIRST_PIN_MS
     )
     return () => clearTimeout(timer)
-  }, [data.length, pinning?.key, sendSurfaceId])
+  }, [pinning])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {

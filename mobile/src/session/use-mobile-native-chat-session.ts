@@ -47,7 +47,7 @@ const INITIAL_LIMIT = 40
 // transcript it chokes on) used to spin forever. Retry with a smaller first
 // window, then give up with a message instead of a spinner.
 const SUBSCRIBE_LIMITS = [INITIAL_LIMIT, 12, 4] as const
-const SNAPSHOT_WATCHDOG_MS = 12_000
+const SNAPSHOT_WATCHDOG_MS = 20_000
 const TRANSCRIPT_TIMEOUT_MESSAGE =
   'The desktop did not send this transcript in time. Switch to the terminal view, or retry.'
 const PAGE = 60
