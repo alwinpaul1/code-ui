@@ -116,7 +116,7 @@ export function MobileNativeChatView({
   // still-loading conversation shows its own state so nothing can spin forever.
   const [pinning, setPinning] = useState<{ key: string; done: boolean } | null>(null)
   const pinnedKeyRef = useRef<string | null>(null)
-  const revealed = !(pinning?.key === sendSurfaceId && !pinning.done)
+
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   useEffect(
@@ -155,6 +155,12 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
+
+  // Why the render-time check as well: the effect below starts the hidden
+  // window one commit after the first batch renders, which let that first
+  // top-anchored paint reach the screen for a frame before the pin.
+  const awaitingFirstPin = data.length > 0 && pinnedKeyRef.current !== sendSurfaceId
+  const revealed = !awaitingFirstPin && !(pinning?.key === sendSurfaceId && !pinning.done)
 
   // Follow the tail as the conversation grows and keep the newest message above
   // the keyboard when it opens — but only while following, so we never yank the

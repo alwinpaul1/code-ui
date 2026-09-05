@@ -23,7 +23,11 @@ import type {
   MobileSessionTab,
   Terminal
 } from './mobile-session-route-types'
-import { readCachedSessionTabs, sessionTabsCacheKey } from './mobile-session-tabs-cache'
+import {
+  pickCachedActiveSessionTab,
+  readCachedSessionTabs,
+  sessionTabsCacheKey
+} from './mobile-session-tabs-cache'
 import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
@@ -61,8 +65,13 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
-  const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
-  const activeSessionTabIdRef = useRef<string | null>(null)
+  // Why seeded: with a cached strip but no active tab the screen shows the
+  // terminal shell until the host snapshot picks one — the last visible
+  // hand-off on a cold open. The snapshot still re-selects as before.
+  const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(
+    () => pickCachedActiveSessionTab(sessionTabs)?.id ?? null
+  )
+  const activeSessionTabIdRef = useRef<string | null>(activeSessionTabId)
   // Phone-side visit order of session tabs (most recent last); see mobile-session-tab-history.ts.
   const visitedSessionTabIdsRef = useRef<string[]>([])
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.

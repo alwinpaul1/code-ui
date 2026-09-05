@@ -38,6 +38,10 @@ export type DefaultSessionViewPreference = {
 // synchronously for the next mount; storage stays the source of truth.
 let defaultViewMemory: MobileSessionView | null = null
 const overridesMemory = new Map<string, Map<string, MobileSessionView>>()
+// Why: once every stored scope has been read, a scope with no entry is known
+// to have no overrides — answering "loaded, empty" lets the default view apply
+// on the first frame instead of the terminal fallback.
+let allScopesHydrated = false
 
 /** The last loaded or saved device default, or null before the first read. */
 export function peekDefaultSessionView(): MobileSessionView | null {
@@ -50,12 +54,58 @@ export function peekSessionViewOverrides(
   worktreeId: string
 ): Map<string, MobileSessionView> | null {
   const cached = overridesMemory.get(sessionViewOverridesKey(hostId, worktreeId))
-  return cached ? new Map(cached) : null
+  if (cached) {
+    return new Map(cached)
+  }
+  return allScopesHydrated ? new Map() : null
+}
+
+/**
+ * Warm the memory copies from storage at app start, so the first project a
+ * cold-started app opens resolves chat/terminal on its first frame instead of
+ * flashing the terminal until the per-scope read lands.
+ */
+export async function hydrateSessionViewPreferences(): Promise<void> {
+  try {
+    const keys = await AsyncStorage.getAllKeys()
+    const overrideKeys = keys.filter((key) => key.startsWith(NATIVE_CHAT_TABS_PREFIX))
+    const rows = await AsyncStorage.multiGet([DEFAULT_SESSION_VIEW_KEY, ...overrideKeys])
+    for (const [key, raw] of rows) {
+      if (key === DEFAULT_SESSION_VIEW_KEY) {
+        if (defaultViewMemory === null) {
+          defaultViewMemory = raw === 'chat' || raw === 'terminal' ? raw : DEFAULT_SESSION_VIEW
+        }
+        continue
+      }
+      if (raw === null || overridesMemory.has(key)) {
+        continue
+      }
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>
+        const overrides = new Map<string, MobileSessionView>()
+        for (const [tabId, view] of Object.entries(parsed)) {
+          if (view === 'chat' || view === 'terminal') {
+            overrides.set(tabId, view)
+          }
+        }
+        overridesMemory.set(key, overrides)
+      } catch {
+        // A corrupt scope entry is read again, and reported, on its own open.
+      }
+    }
+    if (defaultViewMemory === null) {
+      defaultViewMemory = DEFAULT_SESSION_VIEW
+    }
+    allScopesHydrated = true
+  } catch {
+    // Storage unavailable: the per-open reads take over as before.
+  }
 }
 
 export function resetSessionViewPreferenceMemoryForTests(): void {
   defaultViewMemory = null
   overridesMemory.clear()
+  allScopesHydrated = false
 }
 
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {

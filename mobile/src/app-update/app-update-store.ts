@@ -2,7 +2,13 @@ import { Platform } from 'react-native'
 import { create } from 'zustand'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-import { performUpdateCheck, shouldRunUpdateCheck, type UpdateStatus } from './check-update'
+import {
+  evaluateUpdate,
+  performUpdateCheck,
+  shouldRunUpdateCheck,
+  type UpdateCheckResult,
+  type UpdateStatus
+} from './check-update'
 import { getUpdateDismissalId, isUpdateDismissed } from './dismissed-update-id'
 import { getInstalledBuildNumber, getInstalledVersion } from './installed-version'
 
@@ -17,8 +23,10 @@ import { getInstalledBuildNumber, getInstalledVersion } from './installed-versio
 // check-update.ts (unit-tested); this module only wires it to device storage.
 
 const LAST_CHECK_KEY = 'codeui:last-update-check'
-const DISMISSED_KEY = 'codeui:dismissed-update'
-const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // once per day
+const LAST_AVAILABLE_KEY = 'codeui:last-available-update'
+// Why 30 minutes: a new release should reach a phone that is opened a few
+// times a day within the hour, without polling GitHub on every foreground.
+const CHECK_INTERVAL_MS = 30 * 60 * 1000
 const REQUEST_TIMEOUT_MS = 12_000
 
 // Why: status flips after async storage reads, so block overlapping focus events
@@ -118,7 +126,6 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
       // "Later" tap from this or a prior session always suppresses the right
       // version — regardless of whether hydrateAppUpdateState has run yet (it
       // races the first check on cold start).
-      const dismissedFromStorage = await AsyncStorage.getItem(DISMISSED_KEY).catch(() => null)
 
       set((state) => {
         if (result.status === 'error') {
@@ -132,6 +139,7 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
           return { status: 'error' }
         }
         if (result.status === 'up-to-date') {
+          void AsyncStorage.removeItem(LAST_AVAILABLE_KEY).catch(() => {})
           return {
             status: 'up-to-date',
             latestVersion: null,
@@ -151,9 +159,10 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
           buildNumber: result.latestBuildNumber,
           updateUrl: result.updateUrl
         }
-        const suppress =
-          isUpdateDismissed(dismissedFromStorage, resultUpdate) ||
-          isUpdateDismissed(state.dismissedUpdateId, resultUpdate)
+        const suppress = isUpdateDismissed(state.dismissedUpdateId, resultUpdate)
+        // Why persisted: a cold start shows the dialog from this before the
+        // network answers, which is what makes "every open until installed" hold.
+        void AsyncStorage.setItem(LAST_AVAILABLE_KEY, JSON.stringify(result)).catch(() => {})
         if (suppress) {
           return {
             status: 'up-to-date',
@@ -188,6 +197,8 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
       buildNumber: get().latestBuildNumber,
       updateUrl: get().updateUrl
     })
+    // Why not persisted: "Later" hides the dialog for this app session only.
+    // The next open shows it again until the update is installed.
     set({
       dismissedUpdateId,
       status: 'up-to-date',
@@ -198,17 +209,52 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
       releaseUrl: null,
       userInitiated: false
     })
-    void AsyncStorage.setItem(DISMISSED_KEY, dismissedUpdateId).catch(() => {})
   }
 }))
 
 /**
- * Hydrate the persisted dismissed update id into the store on cold start so a
- * "Later" tap from a previous session still suppresses that exact update.
+ * Restore the last update the phone found, so a cold start shows the dialog
+ * at once; the next check confirms or clears it. Skipped once the installed
+ * build has caught up.
  */
 export async function hydrateAppUpdateState(): Promise<void> {
-  const dismissed = await AsyncStorage.getItem(DISMISSED_KEY).catch(() => null)
-  if (dismissed) {
-    useAppUpdateStore.setState({ dismissedUpdateId: dismissed })
+  const raw = await AsyncStorage.getItem(LAST_AVAILABLE_KEY).catch(() => null)
+  if (!raw) {
+    return
   }
+  let stored: UpdateCheckResult
+  try {
+    stored = JSON.parse(raw) as UpdateCheckResult
+  } catch {
+    return
+  }
+  if (stored.status !== 'available' || useAppUpdateStore.getState().status !== 'idle') {
+    return
+  }
+  const stillNewer =
+    evaluateUpdate({
+      installedVersion: getInstalledVersion(),
+      installedBuildNumber: getInstalledBuildNumber(),
+      candidates: [
+        {
+          version: stored.latestVersion,
+          buildNumber: stored.latestBuildNumber,
+          releaseNotes: stored.releaseNotes,
+          updateUrl: stored.updateUrl,
+          releaseUrl: stored.releaseUrl
+        }
+      ]
+    }).status === 'available'
+  if (!stillNewer) {
+    void AsyncStorage.removeItem(LAST_AVAILABLE_KEY).catch(() => {})
+    return
+  }
+  useAppUpdateStore.setState({
+    status: 'available',
+    latestVersion: stored.latestVersion,
+    latestBuildNumber: stored.latestBuildNumber ?? null,
+    releaseNotes: stored.releaseNotes ?? null,
+    updateUrl: stored.updateUrl ?? null,
+    releaseUrl: stored.releaseUrl ?? null
+  })
 }

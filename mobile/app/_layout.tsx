@@ -13,6 +13,7 @@ import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
+import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -59,6 +60,9 @@ function ThemedRoot() {
     // Why: pairing publication is journaled across process death; startup must
     // reconcile the server result before another scan can replace that journal.
     void recoverMobileRelayPairing()
+    // Why: project caches (last tabs, last transcript) live on disk too, so a
+    // cold start paints a project from the last visit instead of two spinners.
+    void hydrateSessionCaches()
   }, [])
 
   // Why: route `orca://pair?...` and `codeui://pair?...` deep links to the

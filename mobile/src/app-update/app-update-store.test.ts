@@ -1,13 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useAppUpdateStore } from './app-update-store'
+import { hydrateAppUpdateState, useAppUpdateStore } from './app-update-store'
 import { performUpdateCheck } from './check-update'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(),
-    setItem: vi.fn()
+    setItem: vi.fn(),
+    removeItem: vi.fn(() => Promise.resolve())
   }
 }))
 
@@ -66,5 +67,36 @@ describe('useAppUpdateStore', () => {
 
     expect(performUpdateCheck).toHaveBeenCalledTimes(1)
     expect(useAppUpdateStore.getState().status).toBe('up-to-date')
+  })
+
+  it('shows a remembered update again on the next open, and forgets it once installed', async () => {
+    const stored = {
+      status: 'available',
+      latestVersion: '9.9.9',
+      latestBuildNumber: '99',
+      updateUrl: 'https://x/apk',
+      releaseUrl: 'https://x/rel'
+    }
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stored))
+    vi.mocked(AsyncStorage.removeItem).mockResolvedValue(undefined)
+    useAppUpdateStore.setState({ status: 'idle', latestVersion: null, dismissedUpdateId: null })
+    await hydrateAppUpdateState()
+    expect(useAppUpdateStore.getState().status).toBe('available')
+    expect(useAppUpdateStore.getState().latestVersion).toBe('9.9.9')
+
+    // "Later" hides it for this session only: nothing is written to storage.
+    vi.mocked(AsyncStorage.setItem).mockClear()
+    await useAppUpdateStore.getState().dismiss()
+    expect(useAppUpdateStore.getState().status).toBe('up-to-date')
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled()
+
+    // An older remembered update than the installed build is dropped.
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      JSON.stringify({ ...stored, latestVersion: '0.0.1', latestBuildNumber: '0' })
+    )
+    useAppUpdateStore.setState({ status: 'idle', latestVersion: null })
+    await hydrateAppUpdateState()
+    expect(useAppUpdateStore.getState().status).toBe('idle')
+    expect(AsyncStorage.removeItem).toHaveBeenCalled()
   })
 })

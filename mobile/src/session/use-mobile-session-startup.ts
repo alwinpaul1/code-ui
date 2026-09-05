@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import type { RpcSuccess } from '../transport/types'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
-import { readCachedSessionTabs, sessionTabsCacheKey } from './mobile-session-tabs-cache'
+import {
+  pickCachedActiveSessionTab,
+  readCachedSessionTabs,
+  sessionTabsCacheKey
+} from './mobile-session-tabs-cache'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
@@ -32,6 +36,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalDiagnosticsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
+    activeSessionTabIdRef,
     pendingActiveSessionTabIdRef,
     selectedSessionTabIdRef,
     pendingActiveTerminalHandleRef,
@@ -78,7 +83,10 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     const cachedTabs = readCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId))
     sessionTabsRef.current = cachedTabs
     setSessionTabs(cachedTabs)
-    setActiveSessionTabId(null)
+    const cachedActive = pickCachedActiveSessionTab(cachedTabs)
+    activeSessionTabIdRef.current = cachedActive?.id ?? null
+    activeSessionTabTypeRef.current = cachedActive?.type ?? null
+    setActiveSessionTabId(cachedActive?.id ?? null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
