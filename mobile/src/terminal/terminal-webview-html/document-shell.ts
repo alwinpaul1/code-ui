@@ -5,6 +5,7 @@ export const TERMINAL_HTML_DOCUMENT_SHELL = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="color-scheme" content="dark">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <script>
 window.__engineErrors = [];

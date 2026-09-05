@@ -6,9 +6,9 @@ import { XTERM_HTML } from './terminal-webview-html'
 // uncovered region ships silently. A diff here means the emitted WebView source changed —
 // update these values only when that change is deliberate, and only after checking the
 // document still runs. Refactors that merely move slice boundaries must leave them alone.
-// Last deliberate change: idempotent applyTerminalTheme guard (#17567).
-const EXPECTED_SHA256 = '07f54c1ab2be941cceaf6bba1c6b5c1a7afce2a3a421c58d0d903fae7be28ac6'
-const EXPECTED_LENGTH = 733376
+// Last deliberate change: dark color-scheme meta so the WebView never paints white first (#17304).
+const EXPECTED_SHA256 = '2ebd11ee44d6e86511dbf43d87be0870a61e196b0e7074f4e8b5955a7b76b1e2'
+const EXPECTED_LENGTH = 733418
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

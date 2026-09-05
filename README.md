@@ -58,6 +58,7 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
 | [#16328](https://github.com/stablyai/orca/issues/16328) no error boundary, a render throw kills the app | A themed root error boundary shows the message and stack with Try again / Go to Home. |
 | [#16215](https://github.com/stablyai/orca/issues/16215) folder workspaces show "Agent Presets Unavailable" | Folder workspaces detect agents on the paired host instead of failing the repo lookup. |
 | [#16114](https://github.com/stablyai/orca/issues/16114) Run on picker shows the internal SSH target id | The picker resolves ids through the host's SSH target summaries and shows the alias. |
+| [#17304](https://github.com/stablyai/orca/issues/17304) white surface until the xterm engine boots | The terminal document declares a dark colour scheme so the WebView's first paint is dark. |
 | Composer stuck on "Waiting for terminal…" | After 6 s without the host's lease acknowledgement the composer unlocks and lets the host's own send verdict decide. |
 
 Screens that were not restyled yet keep Orca's dark palette in both modes:
