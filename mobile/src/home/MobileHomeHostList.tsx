@@ -2,7 +2,6 @@ import { memo, useCallback, type ReactElement } from 'react'
 import { FlatList, View } from 'react-native'
 import type { ListRenderItemInfo } from 'react-native'
 import { MobileHostCard } from '../components/MobileHostCard'
-import type { HomeStatsSummary } from '../stats/home-stats-total'
 import { useTheme } from '../theme/theme-context'
 import { classifyConnection } from '../transport/connection-health'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
@@ -25,7 +24,6 @@ type MobileHomeHostListProps = {
   hosts: HostCatalogEntry[]
   hostStates: Record<string, ConnectionState>
   isWideLayout: boolean
-  stats: HomeStatsSummary | null
   worktreeInfo: Record<string, HostWorktreeInfo>
   onOpen: (host: HostCatalogEntry) => void
   onLongPress: (host: HostCatalogEntry) => void
@@ -81,7 +79,7 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
           alignSelf: 'center'
         }
       ]}
-      ListHeaderComponent={<MobileHomeListHeader stats={props.stats} />}
+      ListHeaderComponent={<MobileHomeListHeader />}
       ItemSeparatorComponent={CardGap}
       renderItem={renderHost}
       ListFooterComponent={props.footer}

@@ -151,7 +151,6 @@ export function MobileHomeScreen() {
           hosts={data.sortedHostCatalog}
           hostStates={data.hostStates}
           isWideLayout={isWideLayout}
-          stats={data.stats}
           worktreeInfo={data.worktreeInfo}
           onOpen={openHost}
           onLongPress={(host) => {
@@ -200,4 +199,3 @@ export function MobileHomeScreen() {
     </SafeAreaView>
   )
 }
-
