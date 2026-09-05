@@ -122,6 +122,11 @@ terminal screen every 5 s while Chat UI is open and mirrors the badge into the p
 `ctx` figure feeds the context-window ring next to the model pill (tap it for the detail).
 claude-hud's `78% (776k/1.0M)` meter is read the same way.
 
+Orca installs a status line of its own when you have none. It prints nothing (so the phone
+has nothing to read) and only forwards Claude Code's `rate_limits` to the desktop for the
+usage bars. Code UI's scripts do that same forwarding, so switching to them keeps the
+desktop bars live and adds the badge and context figure for the phone.
+
 One script per platform, all printing the same badge; pick the one that matches the
 machine running Claude Code:
 

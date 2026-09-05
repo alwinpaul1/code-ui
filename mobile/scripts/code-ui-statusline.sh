@@ -17,6 +17,38 @@
 
 input=$(cat)
 
+# Orca's own (silent) status line forwards this JSON to the desktop so its usage
+# bars stay live; when Code UI's script replaces it, forward the same way so
+# nothing is lost. Orca sets ORCA_AGENT_HOOK_ENDPOINT and ORCA_PANE_KEY in its
+# terminals; outside Orca this block is a no-op. Throttled to one post per pane
+# per 15 s, like Orca.
+forward_to_orca() {
+  case "$input" in *'"rate_limits"'*) ;; *) return 0 ;; esac
+  [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ] || return 0
+  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || return 0
+  [ -n "$ORCA_AGENT_HOOK_PORT" ] && [ -n "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_PANE_KEY" ] || return 0
+  pane_id=$(printf '%s' "$ORCA_PANE_KEY" | tr -c 'A-Za-z0-9._-' '_')
+  stamp="${TMPDIR:-/tmp}/code-ui-statusline-last-${pane_id}"
+  now=$(date +%s)
+  if [ -r "$stamp" ]; then
+    last=$(cat "$stamp" 2>/dev/null)
+    case "$last" in ''|*[!0-9]*) ;; *) [ $((now - last)) -lt 15 ] && return 0 ;; esac
+  fi
+  printf '%s' "$now" >"$stamp" 2>/dev/null
+  config_dir_field="configDir="
+  [ -n "$CLAUDE_CONFIG_DIR" ] && config_dir_field="configDir=$CLAUDE_CONFIG_DIR"
+  printf '%s' "$input" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/statusline/claude" \
+    --connect-timeout 0.5 --max-time 1.5 \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \
+    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \
+    --data-urlencode "$config_dir_field" \
+    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \
+    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \
+    --data-urlencode "payload@-" >/dev/null 2>&1 || :
+}
+[ -z "$CLAUDE_JOB_DIR" ] && forward_to_orca &
+
 if command -v python3 >/dev/null 2>&1; then
   printf '%s' "$input" | python3 -c '
 import json, os, sys

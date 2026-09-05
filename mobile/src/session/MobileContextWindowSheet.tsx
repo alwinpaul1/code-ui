@@ -1,4 +1,3 @@
-import { ChevronRight } from 'lucide-react-native'
 import { View } from 'react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
@@ -38,7 +37,6 @@ export function MobileContextWindowSheet({
           <Txt variant="body" tone="secondary">
             {context ? formatContextWindowFigure(context) : 'Not reported'}
           </Txt>
-          <ChevronRight size={16} color={colors.textMuted} />
         </View>
         <View
           style={{ height: 8, borderRadius: 4, backgroundColor: colors.bgSunken, overflow: 'hidden' }}
