@@ -112,7 +112,8 @@ describe('parseTerminalHudObservation — Codex footer', () => {
       modelId: 'gpt-6-astra',
       effort: 'medium',
       context: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      agentMode: 'default'
     })
   })
 
@@ -132,5 +133,34 @@ describe('parseTerminalHudObservation — Codex footer', () => {
 
   it('prefers the Claude badge when both could match', () => {
     expect(parseTerminalHudObservation(['  [Opus 5 high | Max 20x] 61%'])?.modelId).toBe('opus')
+  })
+})
+
+describe('Codex mode and context from the screen', () => {
+  it('reads Plan mode from the footer and Default when absent', () => {
+    expect(
+      parseTerminalHudObservation([
+        '› Ask Codex to do anything',
+        '  gpt-5.6-sol medium · ~/Project                          Plan mode (shift+tab to cycle)'
+      ])?.agentMode
+    ).toBe('plan')
+    expect(
+      parseTerminalHudObservation(['› Ask Codex to do anything', '  gpt-5.6-sol xhigh · ~/Project'])
+        ?.agentMode
+    ).toBe('default')
+  })
+
+  it('turns the /status "left" figure into a used-percent context window', () => {
+    const observation = parseTerminalHudObservation([
+      '│  Context window:              97% left (19.5K used / 258K)                              │',
+      '╰───────────────────────────────────────────────────────────────────────────────────────╯',
+      '› Ask Codex to do anything',
+      '  gpt-5.6-sol xhigh · ~/Project'
+    ])
+    expect(observation?.context).toEqual({
+      usedPercent: 3,
+      usedLabel: '19.5K',
+      windowLabel: '258K'
+    })
   })
 })

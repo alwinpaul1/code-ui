@@ -12,8 +12,7 @@ import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import type { TerminalPermissionMode } from './mobile-terminal-hud-parse'
-
+import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 
 export function MobileSessionActiveContent({
   controller
@@ -100,6 +99,22 @@ export function MobileSessionActiveContent({
   // Claude Code only cycles modes (Shift+Tab), and which modes are in the cycle
   // depends on how the session was started. So: press, re-read the footer, and
   // stop when it shows the pick; give up after a full lap and say so.
+  // Codex has two collaboration modes on the same Shift+Tab cycle.
+  const selectAgentMode = async (target: TerminalAgentMode) => {
+    const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
+    if (!shiftTab) {
+      return
+    }
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const seen = await nativeChatController.refreshNativeChatHud()
+      if (seen?.agentMode === target) {
+        return
+      }
+      await handleAccessoryKey(createTerminalLiveAccessoryInput(shiftTab))
+      await new Promise((resolve) => setTimeout(resolve, 450))
+    }
+    showToast('That mode is not available in this session')
+  }
   const selectPermissionMode = async (target: TerminalPermissionMode) => {
     const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
     if (!shiftTab) {
@@ -285,6 +300,7 @@ export function MobileSessionActiveContent({
         getSendCompletionGeneration={controller.getSendCompletionGeneration}
         keyboardInset={keyboardLift}
         onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
+        onSelectAgentMode={(mode) => void selectAgentMode(mode)}
       />
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

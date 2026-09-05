@@ -13,6 +13,7 @@ import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message
 import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
+import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -341,8 +342,27 @@ export function useMobileNativeChatController(args: {
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
       toggleTabChatView,
-      worktreeId
+      worktreeId,
+      client,
+      handleRef: activeHandleRef,
+      deviceTokenRef,
+      refreshHud: refreshTerminalHud,
+      onFailure: onSendError
     })
+  // Codex names its context window only in `/status`; run it as turns end.
+  useCodexStatusPoll({
+    client,
+    enabled:
+      activeChatResolution?.agent === 'codex' &&
+      showNativeChat &&
+      !activeChatStructured &&
+      connState === 'connected',
+    working: nativeChatAgentWorking,
+    handleRef: activeHandleRef,
+    deviceTokenRef,
+    handleKey: showNativeChat ? streamScopeKey : null,
+    refreshHud: refreshTerminalHud
+  })
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])
@@ -415,6 +435,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSessionOptions,
     nativeChatContextWindow: hudObservation?.context ?? null,
     nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
+    nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
   }
 }

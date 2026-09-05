@@ -14,6 +14,47 @@ export type TerminalHudObservation = {
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
    *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
   permissionMode: TerminalPermissionMode
+  /** Codex's collaboration mode from its footer ("Plan mode (shift+tab to
+   *  cycle)" or nothing for Default). Absent for agents without one. */
+  agentMode?: TerminalAgentMode | null
+}
+
+export type TerminalAgentMode = 'default' | 'plan'
+
+export const CODEX_AGENT_MODES: ReadonlyArray<{
+  id: TerminalAgentMode
+  label: string
+  hint: string
+}> = [
+  { id: 'default', label: 'Default', hint: 'Codex works on the task directly' },
+  { id: 'plan', label: 'Plan', hint: 'Codex writes a plan before making changes' }
+]
+
+/** Codex prints "Plan mode (shift+tab to cycle)" at the footer's right edge in
+ *  Plan mode and nothing in Default. The last few lines are the footer. */
+export function parseCodexAgentMode(lines: readonly string[]): TerminalAgentMode {
+  return /Plan mode \(shift\+tab to cycle\)/.test(lines.slice(-4).join('\n')) ? 'plan' : 'default'
+}
+
+// Codex only states its context window in the `/status` box:
+//   "│  Context window:              97% left (19.5K used / 258K)   │"
+// It reports what is LEFT; the ring shows what is used.
+const CODEX_STATUS_CONTEXT =
+  /Context window:\s+(\d{1,3})%\s+left\s*\(\s*([\d.]+[kKmM]?)\s+used\s*\/\s*([\d.]+[kKmM]?)\s*\)/
+
+export function parseCodexStatusContext(lines: readonly string[]): TerminalHudContextWindow | null {
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const match = CODEX_STATUS_CONTEXT.exec(lines[index] ?? '')
+    if (!match) {
+      continue
+    }
+    const left = Number(match[1])
+    if (!Number.isFinite(left) || left < 0 || left > 100) {
+      continue
+    }
+    return { usedPercent: 100 - left, usedLabel: match[2] ?? null, windowLabel: match[3] ?? null }
+  }
+  return null
 }
 
 export type TerminalPermissionMode =
@@ -127,15 +168,7 @@ const FILLER = new Set(['·', '•', '|', '-', '—', ':', 'effort', 'effort:'])
 // Effort may read "default" (the model's own default) or be absent. Match a
 // model token that looks like a provider id (a digit or a dash rules out prose
 // like "done · 1:32 PM") followed by a path after the middot.
-const CODEX_EFFORT_LEVELS = new Set([
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-  'ultra'
-])
+const CODEX_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
 const CODEX_FOOTER =
   /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+[~/]/i
 
@@ -159,8 +192,9 @@ export function parseCodexHudObservation(lines: readonly string[]): TerminalHudO
       modelLabel: model,
       modelId: model,
       effort,
-      context: null,
-      permissionMode: parseTerminalPermissionMode(lines)
+      context: parseCodexStatusContext(lines),
+      permissionMode: parseTerminalPermissionMode(lines),
+      agentMode: parseCodexAgentMode(lines)
     }
   }
   return null
@@ -213,7 +247,13 @@ export function parseTerminalHudObservation(
       parseTerminalHudContextWindow(line.slice(match.index + match[0].length), {
         allowBarePercent: true
       }) ?? parseTerminalHudContextWindow(lines[index + 1] ?? '')
-    return { modelLabel, modelId, effort, context, permissionMode: parseTerminalPermissionMode(lines) }
+    return {
+      modelLabel,
+      modelId,
+      effort,
+      context,
+      permissionMode: parseTerminalPermissionMode(lines)
+    }
   }
   // No Claude badge on screen; try the Codex footer before giving up.
   return parseCodexHudObservation(lines)

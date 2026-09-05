@@ -2,10 +2,15 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
+import { AgentModePill } from '../components/AgentModePill'
 import { PermissionModePill } from '../components/PermissionModePill'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
-import type { TerminalHudContextWindow, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import type {
+  TerminalAgentMode,
+  TerminalHudContextWindow,
+  TerminalPermissionMode
+} from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import {
   getNativeChatAgentProfile,
@@ -73,6 +78,9 @@ type Props = {
   permissionMode?: TerminalPermissionMode | null
   /** Steps the terminal to the chosen mode (Shift+Tab until its footer agrees). */
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
+  /** Codex collaboration mode from its footer; shows the Default/Plan pill. */
+  agentMode?: TerminalAgentMode | null
+  onSelectAgentMode?: (mode: TerminalAgentMode) => void
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
@@ -109,6 +117,8 @@ export function MobileNativeChatComposer({
   contextWindow = null,
   permissionMode = null,
   onSelectPermissionMode,
+  agentMode = null,
+  onSelectAgentMode,
   dictationMode = 'toggle',
   onMicPressIn,
   onMicPressOut,
@@ -361,7 +371,13 @@ export function MobileNativeChatComposer({
                 sendInFlight={sending || isAttaching}
               />
             ) : null}
-            {permissionMode ? (
+            {agentMode ? (
+              <AgentModePill
+                mode={agentMode}
+                onPress={() => setShowModeSheet(true)}
+                disabled={disabled || !onSelectAgentMode}
+              />
+            ) : permissionMode ? (
               <PermissionModePill
                 mode={permissionMode}
                 onPress={() => setShowModeSheet(true)}
@@ -406,10 +422,7 @@ export function MobileNativeChatComposer({
               accessibilityLabel="Send message"
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}
-              style={[
-                iconButton,
-                { backgroundColor: canSend ? colors.accent : colors.bgRaised }
-              ]}
+              style={[iconButton, { backgroundColor: canSend ? colors.accent : colors.bgRaised }]}
               pressedScale={0.9}
               onPress={handleSend}
               disabled={!canSend}
@@ -428,6 +441,8 @@ export function MobileNativeChatComposer({
         onCloseModeSheet={() => setShowModeSheet(false)}
         permissionMode={permissionMode}
         onSelectPermissionMode={onSelectPermissionMode}
+        agentMode={agentMode}
+        onSelectAgentMode={onSelectAgentMode}
         showContextSheet={showContextSheet}
         onCloseContextSheet={() => setShowContextSheet(false)}
         contextWindow={contextWindow}

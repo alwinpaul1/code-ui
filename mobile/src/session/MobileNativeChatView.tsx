@@ -66,6 +66,8 @@ export function MobileNativeChatView({
   contextWindow,
   permissionMode,
   onSelectPermissionMode,
+  agentMode,
+  onSelectAgentMode,
   dictationMode,
   onMicPressIn,
   onMicPressOut,
@@ -429,6 +431,8 @@ export function MobileNativeChatView({
         contextWindow={contextWindow}
         permissionMode={permissionMode}
         onSelectPermissionMode={onSelectPermissionMode}
+        agentMode={agentMode}
+        onSelectAgentMode={onSelectAgentMode}
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}

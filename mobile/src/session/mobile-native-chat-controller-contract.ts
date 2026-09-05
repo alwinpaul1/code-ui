@@ -1,6 +1,7 @@
 import type {
   TerminalHudContextWindow,
   TerminalHudObservation,
+  TerminalAgentMode,
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
@@ -95,6 +96,8 @@ export type MobileNativeChatController = {
   nativeChatContextWindow: TerminalHudContextWindow | null
   /** Permission mode from the terminal footer, or null when no status line is observed. */
   nativeChatPermissionMode: TerminalPermissionMode | null
+  /** Codex collaboration mode (Default / Plan) from its footer, or null. */
+  nativeChatAgentMode: TerminalAgentMode | null
   /** Re-read the terminal screen now (after a Shift+Tab, so the mode pill follows). */
   refreshNativeChatHud: () => Promise<TerminalHudObservation | null>
 }

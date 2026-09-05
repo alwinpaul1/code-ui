@@ -1,4 +1,5 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import type { RpcClient } from '../transport/rpc-client'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
@@ -10,6 +11,7 @@ import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
+import { useCodexNativeChatOptions } from './use-codex-native-chat-options'
 
 export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
@@ -31,6 +33,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   }
   toggleTabChatView: (tabId: string) => void
   worktreeId: string
+  /** Codex drives its own picker over the terminal; these reach it. */
+  client: RpcClient | null
+  handleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  refreshHud: () => Promise<unknown>
+  onFailure: (message: string) => void
 }): {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   recordCommand: (command: string) => void
@@ -48,7 +56,12 @@ export function useMobileNativeChatSessionOptionController(args: {
     statusLineObserved = true,
     structured,
     toggleTabChatView,
-    worktreeId
+    worktreeId,
+    client,
+    handleRef,
+    deviceTokenRef,
+    refreshHud,
+    onFailure
   } = args
   const {
     invokeAction: invokeStructuredAction,
@@ -63,13 +76,37 @@ export function useMobileNativeChatSessionOptionController(args: {
     }
   }, [activeSessionTabId, isTabChatView, toggleTabChatView])
 
+  // Why a ref: the Codex hook needs the model the sheet shows, which is only
+  // known once the options hook below has built its snapshot.
+  const currentModelRef = useRef<string | null>(null)
+  const codex = useCodexNativeChatOptions({
+    agent: activeChatStructured ? null : agent,
+    client,
+    hostId,
+    worktreeId,
+    handleRef,
+    deviceTokenRef,
+    currentModelId: () => currentModelRef.current,
+    refreshHud,
+    onFailure
+  })
   const sessionOptions = useMobileNativeChatSessionOptions({
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
     reportedEffort,
     dispatchCommand,
-    onAgentPicker: handleAgentPicker
+    onAgentPicker: handleAgentPicker,
+    discoveredModels: codex.discoveredModels,
+    discoveredModelApply: codex.discoveredModelApply,
+    applyOverride: codex.applyOverride
+  })
+  useLayoutEffect(() => {
+    const model = sessionOptions.snapshot.find((descriptor) => descriptor.category === 'model')
+    currentModelRef.current =
+      model?.kind.type === 'select' && typeof model.kind.currentValue === 'string'
+        ? model.kind.currentValue
+        : null
   })
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
     () =>

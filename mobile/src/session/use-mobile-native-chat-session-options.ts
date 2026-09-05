@@ -10,6 +10,7 @@ import {
   type CatalogCommandDelivery,
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
+import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
@@ -121,16 +122,33 @@ export function useMobileNativeChatSessionOptions(args: {
   /** A model change that must happen in the agent's own TUI picker was
    *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
+  /** Models discovered from the running agent (Codex: `codex debug models`),
+   *  replacing the catalog's static seed so the sheet lists the account's own. */
+  discoveredModels?: readonly CatalogModel[] | null
+  /** Model apply to pair with `discoveredModels` (radio rows instead of the
+   *  agent-picker action row). */
+  discoveredModelApply?: CatalogOptionApply | null
+  /** Apply a value some other way than typing a command (Codex drives its own
+   *  picker). Resolves the outcome, or null to fall through to the command path. */
+  applyOverride?: (id: string, value: SessionOptionValue) => Promise<boolean | null>
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
+  const { discoveredModels, discoveredModelApply, applyOverride } = args
   const reportedEffort = args.reportedEffort ?? null
-  const catalog = useMemo(
+  const catalog = useMemo(() => {
     // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
     // so a CLI-default model would render option rows that do nothing when tapped.
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
-    [agent]
-  )
+    const base =
+      agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null
+    return base && discoveredModels && discoveredModels.length > 0
+      ? {
+          ...base,
+          models: [...discoveredModels],
+          ...(discoveredModelApply ? { modelApply: discoveredModelApply } : {})
+        }
+      : base
+  }, [agent, discoveredModelApply, discoveredModels])
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)
   const [pendingByIdentity, setPendingByIdentity] = useState<
@@ -294,6 +312,19 @@ export function useMobileNativeChatSessionOptions(args: {
             : activeModels(catalog, record)
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
+        if (applyOverride) {
+          const handled = await applyOverride(id, value)
+          if (handled !== null) {
+            if (handled) {
+              if (id === 'model' && typeof value === 'string' && previousModelId !== value) {
+                delete record.valuesByModel[value]
+              }
+              setTrackedSessionOption(record, id, value, 'dispatched')
+              bump()
+            }
+            return handled
+          }
+        }
         if (!apply || apply.midSession?.kind === 'agent-picker') {
           return false
         }
@@ -355,7 +386,7 @@ export function useMobileNativeChatSessionOptions(args: {
         return true
       })
     },
-    [agent, bump, catalog, dispatchCommand, identity, runSerialized, scopeKey]
+    [agent, applyOverride, bump, catalog, dispatchCommand, identity, runSerialized, scopeKey]
   )
 
   const invokeAction = useCallback(

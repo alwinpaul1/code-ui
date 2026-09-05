@@ -1,0 +1,252 @@
+// Drive Codex's `/model` picker from the phone to set the model and reasoning
+// effort. See codex-picker-screen.ts for why the picker, not a command.
+//
+// Sequence: confirm the TUI is idle → type "/model" → wait for the model step
+// → arrow the cursor from its current row to the target → Enter → wait for the
+// effort step → (expand "More reasoning…" if the level hides behind it) → arrow
+// → Enter → wait for the picker to close and the footer to name the pair.
+// Every wait is bounded; on any miss the picker is escaped — but never while a
+// turn is running, because Esc there interrupts the agent.
+import type { RpcClient } from '../transport/rpc-client'
+import type { RpcSuccess } from '../transport/types'
+import { buildTerminalSendParams } from '../terminal/terminal-send-request'
+import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { typeMobileNativeChatCommandWithOutcome } from './mobile-native-chat-send'
+import {
+  isCodexWorking,
+  matchCodexEffortRow,
+  parseCodexPickerScreen,
+  type CodexPickerScreen
+} from './codex-picker-screen'
+
+const KEY_UP = '\x1b[A'
+const KEY_DOWN = '\x1b[B'
+const KEY_ENTER = '\r'
+const KEY_ESC = '\x1b'
+const POLL_MS = 250
+const STEP_TIMEOUT_MS = 5_000
+const CLOSE_TIMEOUT_MS = 6_000
+const SEND_TIMEOUT_MS = 8_000
+
+export type CodexPickerTarget = {
+  model: string
+  /** Omit to keep the model's current effort (Enter on the highlighted row). */
+  effort?: { id: string; label: string } | null
+}
+
+export type CodexPickerApplyResult =
+  | { ok: true }
+  | {
+      ok: false
+      reason:
+        | 'busy'
+        | 'no-picker'
+        | 'model-unavailable'
+        | 'effort-unavailable'
+        | 'cursor'
+        | 'send-failed'
+        | 'unverified'
+    }
+
+export type CodexPickerIo = {
+  readScreen: () => Promise<string[]>
+  /** One raw write; resolves false when the host rejected it. */
+  sendKey: (text: string) => Promise<boolean>
+  typeCommand: (command: string) => Promise<boolean>
+  sleep: (ms: number) => Promise<void>
+  now: () => number
+}
+
+export function createCodexPickerIo(args: {
+  client: RpcClient
+  terminal: string
+  deviceToken: string | null
+}): CodexPickerIo {
+  const { client, terminal, deviceToken } = args
+  return {
+    readScreen: async () => {
+      const response = await client.sendRequest(
+        'terminal.read',
+        { terminal, screen: true },
+        { timeoutMs: SEND_TIMEOUT_MS }
+      )
+      if (!response.ok) {
+        return []
+      }
+      const result = (response as RpcSuccess).result as {
+        terminal?: { tail?: unknown; lines?: unknown }
+      }
+      const raw = result.terminal?.tail ?? result.terminal?.lines
+      return Array.isArray(raw)
+        ? raw.filter((line): line is string => typeof line === 'string')
+        : []
+    },
+    sendKey: async (text) => {
+      const response = await client.sendRequest(
+        'terminal.send',
+        buildTerminalSendParams({ terminal, text, enter: false, deviceToken }),
+        { timeoutMs: SEND_TIMEOUT_MS }
+      )
+      return isTerminalSendRpcAccepted(response)
+    },
+    typeCommand: async (command) =>
+      (await typeMobileNativeChatCommandWithOutcome({
+        client,
+        terminal,
+        command,
+        ...(deviceToken ? { mobileClient: { id: deviceToken, type: 'mobile' } } : {})
+      })) === 'accepted',
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    now: () => Date.now()
+  }
+}
+
+async function waitForStep(
+  io: CodexPickerIo,
+  step: CodexPickerScreen['step'],
+  timeoutMs: number
+): Promise<CodexPickerScreen | null> {
+  const deadline = io.now() + timeoutMs
+  while (io.now() < deadline) {
+    const screen = parseCodexPickerScreen(await io.readScreen())
+    if (screen?.step === step) {
+      return screen
+    }
+    await io.sleep(POLL_MS)
+  }
+  return null
+}
+
+async function escapePicker(io: CodexPickerIo): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const lines = await io.readScreen()
+    if (isCodexWorking(lines)) {
+      return
+    }
+    if (!parseCodexPickerScreen(lines)) {
+      return
+    }
+    await io.sendKey(KEY_ESC)
+    await io.sleep(POLL_MS)
+  }
+}
+
+/** Move the cursor from `from` to `to` (1-based rows) and confirm it landed. */
+async function moveCursor(
+  io: CodexPickerIo,
+  step: CodexPickerScreen['step'],
+  from: number,
+  to: number
+): Promise<boolean> {
+  const delta = to - from
+  const key = delta > 0 ? KEY_DOWN : KEY_UP
+  for (let index = 0; index < Math.abs(delta); index += 1) {
+    if (!(await io.sendKey(key))) {
+      return false
+    }
+  }
+  if (delta !== 0) {
+    await io.sleep(POLL_MS)
+  }
+  const screen = await waitForStep(io, step, STEP_TIMEOUT_MS)
+  return screen?.cursorIndex === to
+}
+
+export async function applyCodexPickerSelection(
+  io: CodexPickerIo,
+  target: CodexPickerTarget
+): Promise<CodexPickerApplyResult> {
+  const before = await io.readScreen()
+  if (isCodexWorking(before)) {
+    return { ok: false, reason: 'busy' }
+  }
+  if (parseCodexPickerScreen(before)) {
+    await escapePicker(io)
+  }
+  if (!(await io.typeCommand('/model'))) {
+    return { ok: false, reason: 'send-failed' }
+  }
+  const modelStep = await waitForStep(io, 'model', STEP_TIMEOUT_MS)
+  if (!modelStep) {
+    return { ok: false, reason: 'no-picker' }
+  }
+  const modelRow = modelStep.rows.find((row) => row.name === target.model)
+  const cursor = modelStep.cursorIndex ?? modelStep.rows.find((row) => row.isCurrent)?.index ?? null
+  if (!modelRow || cursor === null) {
+    await escapePicker(io)
+    return { ok: false, reason: modelRow ? 'cursor' : 'model-unavailable' }
+  }
+  if (!(await moveCursor(io, 'model', cursor, modelRow.index))) {
+    await escapePicker(io)
+    return { ok: false, reason: 'cursor' }
+  }
+  if (!(await io.sendKey(KEY_ENTER))) {
+    return { ok: false, reason: 'send-failed' }
+  }
+  let effortStep = await waitForStep(io, 'effort', STEP_TIMEOUT_MS)
+  if (!effortStep) {
+    await escapePicker(io)
+    return { ok: false, reason: 'no-picker' }
+  }
+  if (target.effort) {
+    let effortRow = matchCodexEffortRow(effortStep.rows, target.effort)
+    if (!effortRow) {
+      // Max/Ultra sit behind an expander row; open it and look again.
+      const more = effortStep.rows.find((row) => row.isMore)
+      const effortCursor =
+        effortStep.cursorIndex ?? effortStep.rows.find((row) => row.isCurrent)?.index
+      if (!more || effortCursor === undefined) {
+        await escapePicker(io)
+        return { ok: false, reason: 'effort-unavailable' }
+      }
+      if (
+        !(await moveCursor(io, 'effort', effortCursor, more.index)) ||
+        !(await io.sendKey(KEY_ENTER))
+      ) {
+        await escapePicker(io)
+        return { ok: false, reason: 'cursor' }
+      }
+      await io.sleep(POLL_MS)
+      effortStep = await waitForStep(io, 'effort', STEP_TIMEOUT_MS)
+      effortRow = effortStep ? matchCodexEffortRow(effortStep.rows, target.effort) : undefined
+      if (!effortStep || !effortRow) {
+        await escapePicker(io)
+        return { ok: false, reason: 'effort-unavailable' }
+      }
+    }
+    const effortCursor =
+      effortStep.cursorIndex ?? effortStep.rows.find((row) => row.isCurrent)?.index
+    if (effortCursor === undefined) {
+      await escapePicker(io)
+      return { ok: false, reason: 'cursor' }
+    }
+    if (!(await moveCursor(io, 'effort', effortCursor, effortRow.index))) {
+      await escapePicker(io)
+      return { ok: false, reason: 'cursor' }
+    }
+  }
+  if (!(await io.sendKey(KEY_ENTER))) {
+    return { ok: false, reason: 'send-failed' }
+  }
+  // The footer names the active pair ("gpt-5.6-sol xhigh · ~/dir") once applied.
+  const deadline = io.now() + CLOSE_TIMEOUT_MS
+  const wantedEffort = target.effort?.id ?? null
+  while (io.now() < deadline) {
+    const lines = await io.readScreen()
+    if (!parseCodexPickerScreen(lines)) {
+      const footer = lines.slice(-4).join('\n')
+      const named = new RegExp(
+        `\\b${escapeRegExp(target.model)}\\s+${wantedEffort ? escapeRegExp(wantedEffort) : '\\S+'}\\s*·`
+      )
+      if (named.test(footer)) {
+        return { ok: true }
+      }
+    }
+    await io.sleep(POLL_MS)
+  }
+  return { ok: false, reason: 'unverified' }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
