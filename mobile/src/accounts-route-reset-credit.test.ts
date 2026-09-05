@@ -54,6 +54,22 @@ vi.mock('expo-router', async () => {
 
 vi.mock('expo-crypto', () => ({ randomUUID: dependencies.randomUUID }))
 
+// Why: the Usage screen draws its ring with react-native-svg and presses through
+// the reanimated PressScale; neither parses under vitest, and neither matters
+// to what this test asserts.
+vi.mock('react-native-svg', () => ({ default: 'Svg', Circle: 'Circle', Path: 'Path' }))
+vi.mock('react-native-reanimated', () => ({
+  default: {
+    View: 'AnimatedView',
+    createAnimatedComponent: (component: unknown) => component
+  },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withSpring: (to: number) => to,
+  withTiming: (to: number) => to
+}))
+vi.mock('./platform/haptics', () => ({ triggerSelection: () => {} }))
+
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronLeft: 'ChevronLeft',
@@ -179,7 +195,7 @@ function systemDefaultButtons(renderer: ReactTestRenderer) {
   return renderer.root
     .findAllByType('Pressable')
     .filter((node) =>
-      node.findAllByType('Text').some((textNode) => textNode.children.join('') === 'System default')
+      node.findAllByType('Text').some((textNode) => textNode.children.join('') === 'Desktop login')
     )
 }
 

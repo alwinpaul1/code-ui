@@ -1,31 +1,24 @@
 import { useEffect, useState, useCallback } from 'react'
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  ActivityIndicator,
-  RefreshControl,
-  Alert
-} from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
+import { RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
-import { colors, spacing } from '../../../src/theme/mobile-theme'
-import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
+import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
+import { ScreenHeader } from '../../../src/ui/ScreenHeader'
+import { IconButton } from '../../../src/ui/IconButton'
+import { Txt } from '../../../src/ui/Txt'
 import {
   type AccountsSnapshot,
   type ProviderKey,
   decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
-  hasActiveProviderUsage
+  hasRenderableUsage
 } from '../../../src/components/AccountUsage'
-import { ProviderUsageBars } from '../../../src/components/ProviderUsageBars'
+import { AccountsProviderCard } from '../../../src/accounts/AccountsProviderCard'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
@@ -36,6 +29,7 @@ import { useCodexResetCreditAction } from '../../../src/components/use-codex-res
 export default function AccountsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { colors, space } = useTheme()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
@@ -188,8 +182,8 @@ export default function AccountsScreen() {
     [client, refresh, snapshot]
   )
 
-  const renderProviderSection = (provider: ProviderKey, title: string) => {
-    if (!snapshot) {
+  const renderProvider = (provider: ProviderKey) => {
+    if (!snapshot || !hasRenderableUsage(snapshot, provider)) {
       return null
     }
     const state = provider === 'claude' ? snapshot.claude : snapshot.codex
@@ -198,101 +192,32 @@ export default function AccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+    const activeEmail =
+      state.accounts.find((account) => account.id === activeAccountId)?.email ?? null
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
-    const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
+    const accounts = state.accounts.map((account) => {
+      const isActive = activeAccountId === account.id
+      const inactive = isActive ? null : getInactiveProviderUsage(snapshot, provider, account.id)
+      return {
+        id: account.id,
+        email: account.email,
+        limits: isActive ? activeUsage : (inactive?.rateLimits ?? null),
+        isFetching: isActive ? activeUsage?.status === 'fetching' : inactive?.isFetching === true
+      }
+    })
     return (
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Icon size={14} />
-          <Text style={styles.sectionHeading}>{title}</Text>
-        </View>
-        <View style={styles.card}>
-          {/* System default row */}
-          <Pressable
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            onPress={() => selectAccount(provider, null)}
-            disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
-          >
-            <View style={styles.rowMain}>
-              {/* Why: with no managed accounts there is nothing to switch
-                  between, so "System default" is noise over the usage bars.
-                  The label returns once a second login exists to choose from. */}
-              {state.accounts.length > 0 ? (
-                <>
-                  <Text style={styles.rowTitle}>System default</Text>
-                  <Text style={styles.rowSubtitle}>Use the agent's own login</Text>
-                </>
-              ) : null}
-              {/* Why: when system default is the active selection, activeUsage
-                  holds the system-default login's rate limits — surface them
-                  here so non-managed users still see their usage. */}
-              {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <View style={state.accounts.length > 0 ? styles.usageStack : styles.usageStackBare}>
-                  <ProviderUsageBars limits={activeUsage} now={now} layout="stacked" />
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.rowTrailing}>
-              {activeAccountId === null ? (
-                <Check size={16} color={colors.accentBlue} />
-              ) : busyAccountId === `${provider}:default` ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : null}
-            </View>
-          </Pressable>
-
-          {state.accounts.map((account) => {
-            const isActive = activeAccountId === account.id
-            const inactiveEntry = !isActive
-              ? getInactiveProviderUsage(snapshot, provider, account.id)
-              : null
-            const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
-            const isFetching =
-              (isActive && usage?.status === 'fetching') ||
-              (!isActive && inactiveEntry?.isFetching === true)
-            return (
-              <View key={account.id}>
-                <View style={styles.separator} />
-                <Pressable
-                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  onPress={() => selectAccount(provider, account.id)}
-                  disabled={
-                    busyAccountId !== null ||
-                    resettingCodex ||
-                    connState !== 'connected' ||
-                    isActive
-                  }
-                >
-                  <View style={styles.rowMain}>
-                    <Text style={styles.rowTitle} numberOfLines={1}>
-                      {account.email}
-                    </Text>
-                    <View style={styles.usageStack}>
-                      <ProviderUsageBars
-                        limits={usage}
-                        isFetching={isFetching}
-                        now={now}
-                        layout="stacked"
-                      />
-                    </View>
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <View style={styles.rowTrailing}>
-                    {isActive ? (
-                      <Check size={16} color={colors.accentBlue} />
-                    ) : busyAccountId === account.id ? (
-                      <ActivityIndicator size="small" color={colors.textSecondary} />
-                    ) : null}
-                  </View>
-                </Pressable>
-              </View>
-            )
-          })}
-          {resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
+      <AccountsProviderCard
+        provider={provider}
+        activeLimits={activeUsage}
+        activeEmail={activeEmail}
+        activeAccountId={activeAccountId}
+        accounts={accounts}
+        now={now}
+        busyAccountId={busyAccountId}
+        disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
+        onSelect={(accountId) => void selectAccount(provider, accountId)}
+        footer={
+          resetCredit && codexResetSupported && resetScope && connState === 'connected' ? (
             <CodexResetCreditAction
               summary={resetCredit}
               scopeLabel={resetScopeLabel}
@@ -300,76 +225,78 @@ export default function AccountsScreen() {
               disabled={resettingCodex || busyAccountId !== null || connState !== 'connected'}
               onPress={confirmCodexReset}
             />
-          ) : null}
-        </View>
-      </View>
+          ) : null
+        }
+      />
     )
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.titleWrap}>
-          <Text style={styles.heading}>Accounts</Text>
-          {hostName ? (
-            <Text style={styles.subheading} numberOfLines={1}>
-              {hostName}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={styles.iconButton}
-          onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
-        </Pressable>
-      </View>
+  const placeholder = (text: string, spinner = true) => (
+    <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
+      {spinner ? <ActivityIndicator color={colors.textSecondary} /> : null}
+      <Txt variant="body" tone={spinner ? 'secondary' : 'danger'} align="center">
+        {text}
+      </Txt>
+    </View>
+  )
 
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScreenHeader
+        title="Usage"
+        subtitle={hostName || undefined}
+        onBack={() => router.back()}
+        trailing={
+          <IconButton
+            icon={RefreshCw}
+            accessibilityLabel="Refresh usage"
+            onPress={() => void refresh()}
+            disabled={!client || refreshing || connState !== 'connected'}
+          />
+        }
+      />
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
+        contentContainerStyle={{
+          paddingHorizontal: space.lg,
+          paddingTop: space.sm,
+          paddingBottom: insets.bottom + space.xl,
+          gap: space.lg
+        }}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={refresh}
+            onRefresh={() => void refresh()}
             tintColor={colors.textSecondary}
           />
         }
       >
         {connState !== 'connected' && !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Connecting to {hostName || 'host'}…</Text>
-          </View>
+          placeholder(`Connecting to ${hostName || 'host'}…`)
         ) : error && !snapshot ? (
-          <View style={styles.placeholder}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
+          placeholder(error, false)
         ) : !snapshot ? (
-          <View style={styles.placeholder}>
-            <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Loading accounts…</Text>
-          </View>
+          placeholder('Loading usage…')
         ) : (
           <>
-            {renderProviderSection('claude', 'Claude')}
-            {renderProviderSection('codex', 'Codex')}
-            <View style={styles.footerHint}>
+            {renderProvider('claude')}
+            {renderProvider('codex')}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.sm,
+                paddingHorizontal: space.xs
+              }}
+            >
               <User size={14} color={colors.textMuted} />
-              <Text style={styles.footerHintText}>
+              <Txt variant="caption" tone="muted" style={{ flex: 1 }}>
                 Add or re-authenticate accounts from desktop Settings → Accounts.
-              </Text>
+              </Txt>
             </View>
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
