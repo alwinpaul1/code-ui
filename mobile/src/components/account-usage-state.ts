@@ -125,8 +125,10 @@ export function getWindowResetLabel(
     }
     return `Resets ${WEEKDAYS[new Date(resetsAt).getDay()]} ${formatResetClock(resetsAt)}`
   }
+  // Why a line break: the two bars share one row on the phone, and "Resets in
+  // 1h 2m · 5:30 AM" does not fit half of it; the clock goes on its own line.
   const countdown = formatResetCountdown(resetsAt - now)
-  return countdown === 'Resets now' ? countdown : `${countdown} · ${formatResetClock(resetsAt)}`
+  return countdown === 'Resets now' ? countdown : `${countdown}\n${formatResetClock(resetsAt)}`
 }
 
 // Why: the usage UI must render for the system-default login, not only for
