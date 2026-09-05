@@ -94,6 +94,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     <>
       <MobileSessionHeaderMoreActionsSheet
         visible={showHeaderMoreActions}
+        client={client}
         showAgentSessionHistory={showAgentSessionHistoryAction}
         showChecks={showChecksAction}
         onOpenAgentSessionHistory={openAgentSessionHistory}
