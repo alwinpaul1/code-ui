@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+.expo-shared/
+mobile/android/
+mobile/ios/
+mobile/terminal-color-repro/
+*.log
+.DS_Store
+.env
+.env.*
+*.keystore
+*.jks
+dist/
+build/
