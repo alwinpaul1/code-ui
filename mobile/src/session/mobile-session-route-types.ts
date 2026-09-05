@@ -98,7 +98,7 @@ export type FileDocState =
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
-  | { status: 'ready'; kind: 'pdf'; base64: string }
+  | { status: 'ready'; kind: 'pdf'; uri: string }
   | { status: 'ready'; kind: 'html'; content: string }
   | { status: 'error'; message: string }
 

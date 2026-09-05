@@ -4,11 +4,11 @@ import Pdf from 'react-native-pdf'
 import { useTheme } from '../theme/theme-context'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
-/** In-app PDF viewer for the file explorer and session file tabs. The host
- *  already streams the bytes as base64 (`files.readPreview`), so the document
- *  renders from a data URI with no temp file. Pinch zoom and page paging come
- *  from the native view. */
-export function MobileFilePdfPreview({ base64 }: { base64: string }) {
+/** In-app PDF viewer for the file explorer and session file tabs. `uri` is
+ *  normally a file in the app cache written by `resolveMobilePdfUri` (fast to
+ *  hand to the native view, free to reopen); a data: URI is the fallback.
+ *  Pinch zoom and page paging come from the native view. */
+export function MobileFilePdfPreview({ uri }: { uri: string }) {
   const { colors } = useTheme()
   const [pageCount, setPageCount] = useState<number | null>(null)
   const [page, setPage] = useState(1)
@@ -24,7 +24,7 @@ export function MobileFilePdfPreview({ base64 }: { base64: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <Pdf
-        source={{ uri: `data:application/pdf;base64,${base64}` }}
+        source={{ uri, cache: false }}
         style={{ flex: 1, backgroundColor: colors.bg }}
         trustAllCerts={false}
         enablePaging={false}

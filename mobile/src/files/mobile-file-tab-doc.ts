@@ -4,7 +4,7 @@ import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-dif
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { mobileDiffImageDataUri, type MobileBinaryDiffResult } from './mobile-diff-image-preview'
-import { readMobileFileBase64Chunked } from './mobile-file-chunked-read'
+import { resolveMobilePdfUri } from './mobile-pdf-cache'
 
 type FileTabDocClient = Pick<RpcClient, 'sendRequest'>
 
@@ -14,7 +14,7 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
-  | { status: 'ready'; kind: 'pdf'; base64: string }
+  | { status: 'ready'; kind: 'pdf'; uri: string }
   | { status: 'ready'; kind: 'html'; content: string }
 
 export type MobileFileTabDocRequest = {
@@ -76,8 +76,8 @@ export async function resolveMobileFileTabDoc(
 
   if (artifactKind === 'pdf') {
     // Chunked: the preview read is capped on the host and refuses ordinary PDFs.
-    const { base64 } = await readMobileFileBase64Chunked(client, worktree, relativePath)
-    return { status: 'ready', kind: 'pdf', base64 }
+    const { uri } = await resolveMobilePdfUri(client, worktree, relativePath)
+    return { status: 'ready', kind: 'pdf', uri }
   }
 
   const response = await client.sendRequest('files.read', { worktree, relativePath })

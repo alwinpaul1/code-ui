@@ -23,7 +23,7 @@ export type MobileFilePreviewResult =
   | {
       status: 'ready'
       kind: 'pdf'
-      base64: string
+      uri: string
     }
   | {
       status: 'ready'
@@ -151,7 +151,7 @@ function normalizePdfPreviewResult(result: unknown): MobileFilePreviewResult {
   if (preview.isBinary !== true || typeof preview.content !== 'string' || !preview.content) {
     return previewError('binary_file')
   }
-  return { status: 'ready', kind: 'pdf', base64: preview.content }
+  return { status: 'ready', kind: 'pdf', uri: `data:application/pdf;base64,${preview.content}` }
 }
 
 function normalizeTextPreviewResult(

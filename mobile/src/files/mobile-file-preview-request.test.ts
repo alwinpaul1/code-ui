@@ -8,6 +8,7 @@ import {
   saveMobileTerminalArtifactPreview
 } from './mobile-file-preview-request'
 
+vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///cache' } }))
 function ok(result: unknown): RpcSuccess {
   return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }

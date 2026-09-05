@@ -73,7 +73,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     )
   }
   if (preview.kind === 'pdf') {
-    return <MobileFilePdfPreview base64={preview.base64} />
+    return <MobileFilePdfPreview uri={preview.uri} />
   }
   if (preview.kind === 'markdown') {
     return options.editable ? (

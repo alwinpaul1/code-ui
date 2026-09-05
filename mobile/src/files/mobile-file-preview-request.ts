@@ -1,5 +1,5 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import { readMobileFileBase64Chunked } from './mobile-file-chunked-read'
+import { resolveMobilePdfUri } from './mobile-pdf-cache'
 import type { RpcFailure, RpcResponse } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -106,12 +106,12 @@ export async function loadMobileFilePreview(
         : null
   if (worktreePdf && classifyMobileArtifact(worktreePdf.relativePath) === 'pdf') {
     try {
-      const { base64 } = await readMobileFileBase64Chunked(
+      const { uri } = await resolveMobilePdfUri(
         client,
         `id:${worktreePdf.worktreeId}`,
         worktreePdf.relativePath
       )
-      return { status: 'ready', kind: 'pdf', base64 }
+      return { status: 'ready', kind: 'pdf', uri }
     } catch (error) {
       return previewError(error instanceof Error ? error.message : 'Unable to load preview')
     }

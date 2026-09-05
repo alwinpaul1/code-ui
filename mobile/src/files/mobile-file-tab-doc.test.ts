@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { resolveMobileFileTabDoc } from './mobile-file-tab-doc'
 
+vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///cache' } }))
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l8sm7wAAAABJRU5ErkJggg=='
 

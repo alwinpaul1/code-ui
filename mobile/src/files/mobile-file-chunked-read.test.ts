@@ -26,7 +26,22 @@ describe('readMobileFileBase64Chunked', () => {
     })
     expect(result.byteLength).toBe(10)
     expect(Buffer.from(result.base64, 'base64').toString()).toBe('a'.repeat(10))
-    expect(sendRequest).toHaveBeenCalledTimes(2)
+    // One wave of four requests covers the file; a short chunk ends the read.
+    expect(sendRequest).toHaveBeenCalledTimes(4)
+  })
+
+  it('stitches parallel waves in offset order and reports progress', async () => {
+    const bytes = Buffer.from(Array.from({ length: 30 }, (_, i) => 65 + (i % 26)))
+    const sendRequest = chunkServer(bytes)
+    const progress: number[] = []
+    const result = await readMobileFileBase64Chunked({ sendRequest } as never, 'id:w', 'doc.pdf', {
+      chunkBytes: 3,
+      parallelism: 4,
+      onProgress: (n) => progress.push(n)
+    })
+    expect(Buffer.from(result.base64, 'base64').equals(bytes)).toBe(true)
+    expect(progress.at(-1)).toBe(30)
+    expect(sendRequest).toHaveBeenCalledTimes(12)
   })
 
   it('stops with file_too_large once the running total passes the cap', async () => {
@@ -37,7 +52,6 @@ describe('readMobileFileBase64Chunked', () => {
         chunkBytes: 30
       })
     ).rejects.toThrow('file_too_large')
-    expect(sendRequest).toHaveBeenCalledTimes(2)
   })
 
   it('treats an empty file as unreadable', async () => {

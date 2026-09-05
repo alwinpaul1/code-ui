@@ -252,7 +252,7 @@ export function FileReader({
   }
 
   if (doc.kind === 'pdf') {
-    return <MobileFilePdfPreview base64={doc.base64} />
+    return <MobileFilePdfPreview uri={doc.uri} />
   }
 
   if (doc.kind === 'image') {
