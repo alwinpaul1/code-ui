@@ -1,5 +1,8 @@
 import { View } from 'react-native'
+import { useTheme } from '../theme/theme-context'
+import { Txt } from '../ui/Txt'
 import {
+  formatUsageUpdatedLabel,
   getUsageBarState,
   getWindowResetLabel,
   hasFableWindow,
@@ -28,6 +31,7 @@ export function ProviderUsageBars({
   now?: number
   layout?: 'inline' | 'stacked' | 'columns'
 }) {
+  const { space } = useTheme()
   const showFable = hasFableWindow(limits)
   const labelWidth = showFable ? USAGE_LABEL_WIDTH_WIDE : USAGE_LABEL_WIDTH
   const session = getUsageBarState(limits, 'session', isFetching)
@@ -35,51 +39,70 @@ export function ProviderUsageBars({
   const fable = getUsageBarState(limits, 'fableWeekly', isFetching)
   const reset = (key: 'session' | 'weekly' | 'fableWeekly') =>
     now === undefined ? null : getWindowResetLabel(limits, key, now)
-  if (layout === 'stacked' || layout === 'columns') {
-    const compact = layout === 'columns'
-    const meters = [
-      <UsageMeter
-        key="session"
-        title={compact ? 'Session' : 'Session · 5h'}
-        usedPercent={session.usedPercent}
-        unavailable={session.unavailable}
-        loading={session.loading}
-        resetText={reset('session')}
-        compact={compact}
-      />,
-      <UsageMeter
-        key="weekly"
-        title={compact ? 'Weekly' : 'Weekly · 7d'}
-        usedPercent={weekly.usedPercent}
-        unavailable={weekly.unavailable}
-        loading={weekly.loading}
-        resetText={reset('weekly')}
-        compact={compact}
-      />,
-      ...(showFable
-        ? [
+  if (layout === 'columns') {
+    const columns = [
+      { key: 'session', title: 'Session', state: session },
+      { key: 'weekly', title: 'Weekly', state: weekly },
+      ...(showFable ? [{ key: 'fable', title: 'Fable', state: fable }] : [])
+    ]
+    return (
+      <>
+        {columns.map((column) => (
+          <View key={column.key} style={{ flex: 1, minWidth: 0 }}>
             <UsageMeter
-              key="fable"
-              title={compact ? 'Fable' : 'Fable · 7d'}
+              title={column.title}
+              usedPercent={column.state.usedPercent}
+              unavailable={column.state.unavailable}
+              loading={column.state.loading}
+              compact
+            />
+          </View>
+        ))}
+      </>
+    )
+  }
+  if (layout === 'stacked') {
+    // Mirrors Claude's Usage page: "Current session", then a "Weekly limits"
+    // group holding the all-models window and any model-specific one (Fable).
+    const sessionSubtitle =
+      reset('session') ??
+      (session.usedPercent === 0 ? 'Starts when a message is sent' : null)
+    const updated = now === undefined ? null : formatUsageUpdatedLabel(limits, now)
+    return (
+      <>
+        <UsageMeter
+          title="Current session"
+          usedPercent={session.usedPercent}
+          unavailable={session.unavailable}
+          loading={session.loading}
+          subtitle={sessionSubtitle}
+        />
+        <View style={{ gap: space.sm + 2 }}>
+          <Txt variant="caption" weight="semibold" tone="secondary">
+            Weekly limits
+          </Txt>
+          <UsageMeter
+            title="All models"
+            usedPercent={weekly.usedPercent}
+            unavailable={weekly.unavailable}
+            loading={weekly.loading}
+            subtitle={reset('weekly')}
+          />
+          {showFable ? (
+            <UsageMeter
+              title="Fable"
               usedPercent={fable.usedPercent}
               unavailable={fable.unavailable}
               loading={fable.loading}
-              resetText={reset('fableWeekly')}
-              compact={compact}
+              subtitle={reset('fableWeekly')}
             />
-          ]
-        : [])
-    ]
-    if (!compact) {
-      return <>{meters}</>
-    }
-    return (
-      <>
-        {meters.map((meter) => (
-          <View key={meter.key} style={{ flex: 1, minWidth: 0 }}>
-            {meter}
-          </View>
-        ))}
+          ) : null}
+        </View>
+        {updated ? (
+          <Txt variant="caption" tone="muted">
+            {updated}
+          </Txt>
+        ) : null}
       </>
     )
   }

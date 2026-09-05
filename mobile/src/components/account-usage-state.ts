@@ -141,6 +141,28 @@ export function getWindowResetLabel(
   return `Resets ${formatResetClock(resetsAt)}`
 }
 
+/** "Updated just now" / "Updated 3m ago" / "Updated 2h ago", or null without a timestamp. */
+export function formatUsageUpdatedLabel(
+  limits: ProviderRateLimits | null,
+  now: number
+): string | null {
+  const updatedAt = limits?.updatedAt
+  if (updatedAt == null || updatedAt <= 0) {
+    return null
+  }
+  const ageMs = Math.max(0, now - updatedAt)
+  if (ageMs < 60_000) {
+    return 'Updated just now'
+  }
+  if (ageMs < 3_600_000) {
+    return `Updated ${Math.floor(ageMs / 60_000)}m ago`
+  }
+  if (ageMs < 86_400_000) {
+    return `Updated ${Math.floor(ageMs / 3_600_000)}h ago`
+  }
+  return `Updated ${Math.floor(ageMs / 86_400_000)}d ago`
+}
+
 // Why: the usage UI must render for the system-default login, not only for
 // Orca-managed accounts. Show a provider when it has at least one managed
 // account OR active rate-limit data for the system-default target.

@@ -4,6 +4,7 @@ import {
   getInactiveProviderUsage,
   getUsageBarState,
   formatResetClock,
+  formatUsageUpdatedLabel,
   getWindowResetLabel,
   hasActiveProviderUsage,
   hasFableWindow,
@@ -233,6 +234,23 @@ describe('fable weekly window', () => {
     const limits = makeLimits({ fableWeekly: fable })
     expect(getWindowResetLabel(limits, 'fableWeekly', now)).toBe(
       getWindowResetLabel(makeLimits({ weekly: fable }), 'weekly', now)
+    )
+  })
+})
+
+describe('formatUsageUpdatedLabel', () => {
+  const now = 1_000_000_000_000
+  it('rounds the snapshot age the way the Claude usage page does', () => {
+    expect(formatUsageUpdatedLabel(null, now)).toBe(null)
+    expect(formatUsageUpdatedLabel(makeLimits({ updatedAt: 0 }), now)).toBe(null)
+    expect(formatUsageUpdatedLabel(makeLimits({ updatedAt: now - 5_000 }), now)).toBe(
+      'Updated just now'
+    )
+    expect(formatUsageUpdatedLabel(makeLimits({ updatedAt: now - 3 * 60_000 }), now)).toBe(
+      'Updated 3m ago'
+    )
+    expect(formatUsageUpdatedLabel(makeLimits({ updatedAt: now - 2 * 3_600_000 }), now)).toBe(
+      'Updated 2h ago'
     )
   })
 })
