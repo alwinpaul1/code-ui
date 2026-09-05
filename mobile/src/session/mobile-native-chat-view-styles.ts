@@ -46,6 +46,12 @@ export function makeChatViewStyles(theme: Theme) {
     pressed: {
       opacity: 0.6
     },
+    listHidden: { opacity: 0 },
+    revealOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
     listWrap: {
       flex: 1,
       position: 'relative'

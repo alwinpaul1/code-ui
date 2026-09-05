@@ -28,6 +28,8 @@ import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 
 const INPUT_LOCK_SETTLE_MS = 600
+/** Covers the 60 ms and 250 ms pins; rows that grow later re-pin unseen. */
+const REVEAL_AFTER_FIRST_PIN_MS = 320
 /** Within this many px of the bottom the list is "at the live edge". */
 const LIVE_EDGE_THRESHOLD_PX = 48
 
@@ -100,6 +102,12 @@ export function MobileNativeChatView({
   // moment the user drags we stop following until they return to the edge.
   const followingRef = useRef(true)
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+  // Why: the transcript paints at the top first and is pinned to the bottom a
+  // few frames later, once rows have measured. Showing that first paint reads
+  // as the list jumping. Keep the list invisible until the first pin settled,
+  // per conversation, so the first frame the user sees is already at the end.
+  const [revealedFor, setRevealedFor] = useState<string | null>(null)
+  const revealed = revealedFor === sendSurfaceId
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   useEffect(
@@ -159,6 +167,21 @@ export function MobileNativeChatView({
     const timers = [60, 250, 600, 1200].map((delay) => setTimeout(pin, delay))
     return () => timers.forEach(clearTimeout)
   }, [data.length, keyboardInset])
+
+  useEffect(() => {
+    if (revealed) {
+      return
+    }
+    // An empty, settled conversation has nothing to pin; show it at once.
+    if (data.length === 0) {
+      if (status === 'ready' || status === 'error') {
+        setRevealedFor(sendSurfaceId)
+      }
+      return
+    }
+    const timer = setTimeout(() => setRevealedFor(sendSurfaceId), REVEAL_AFTER_FIRST_PIN_MS)
+    return () => clearTimeout(timer)
+  }, [data.length, revealed, sendSurfaceId, status])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -245,12 +268,17 @@ export function MobileNativeChatView({
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
+      {!showLoading && !revealed ? (
+        <View pointerEvents="none" style={styles.revealOverlay}>
+          <ActivityIndicator color={colors.textSecondary} />
+        </View>
+      ) : null}
       {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : (
-        <GestureHandlerRootView style={styles.listWrap}>
+        <GestureHandlerRootView style={[styles.listWrap, !revealed && styles.listHidden]}>
           <GestureDetector gesture={pinchGesture}>
             <FlatList
               ref={listRef}
