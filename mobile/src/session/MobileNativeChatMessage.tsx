@@ -17,6 +17,7 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { openImagePreview } from './image-preview-store'
+import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
   TEXT_SIZE,
   useChatMessageStyles,
@@ -78,18 +79,25 @@ function Prose({
         </Pressable>
       )
     }
-    // Not loadable (yet): a compact chip instead of the raw host path. Tapping
-    // still asks the host for the file through the preview route.
+    // Desktop clipboard files have no mobile preview grant. A transcript path
+    // alone cannot make those bytes available on the phone; don't expose an
+    // action that only produces a path error. A real URI above still wins.
+    const desktopPaste = splitOrcaPastedImagePaths(uri ?? '').paths.length > 0
     const hostPath = block.path
     return (
       <Pressable
-        onPress={hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
-        accessibilityRole="button"
-        accessibilityLabel={block.alt ?? 'Attached image'}
+        onPress={!desktopPaste && hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
+        disabled={desktopPaste}
+        accessibilityRole={desktopPaste ? 'image' : 'button'}
+        accessibilityLabel={
+          desktopPaste ? 'Image on Desktop. Preview unavailable.' : (block.alt ?? 'Attached image')
+        }
         style={styles.imageChip}
       >
         <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
-        <Text style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]}>Image</Text>
+        <Text style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]}>
+          {desktopPaste ? 'Image on Desktop' : 'Image'}
+        </Text>
       </Pressable>
     )
   }

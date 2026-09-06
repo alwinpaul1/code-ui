@@ -54,3 +54,17 @@ editing or deleting them cannot leave the original text displayed as sent.
 Codex's recall hint is recognized across wrapped lines. A missing hint reports
 that editing is unavailable, rather than claiming the message was submitted.
 Arbitrary entry editing remains unsupported by this release.
+
+## Three-entry verification, 0.2.44
+
+Separate live probes queued three distinct plain-text messages through stock
+Orca. Codex 0.153.4 recalled the third message first; pressing recall again
+replaced that draft with the second message. It did not provide safe arbitrary
+selection while retaining the first recalled draft. Claude Code 2.1.263 recalled
+all three messages into one multiline draft, losing the original boundaries.
+
+No per-entry edit pencils were added for these unsupported cases. Reconstructing
+the queue from visible captions could lose attachment state, reorder messages,
+or race the running agent consuming a message. Reliable arbitrary edits require
+an agent/Orca queue operation that identifies and updates entries atomically.
+This release does not implement that host integration.

@@ -48,7 +48,7 @@ describe('MobileNativeChatMessage', () => {
 
   function render(
     message: NativeChatMessage,
-    props: { toolsExpanded?: boolean } = {}
+    props: { toolsExpanded?: boolean; onOpenFile?: (path: string) => void } = {}
   ): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
@@ -85,6 +85,24 @@ describe('MobileNativeChatMessage', () => {
       .map((node) => String(node.children.join('')))
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(false)
     expect(texts).toContain('Image')
+  })
+
+  it('does not send inaccessible desktop paste paths through the failing file opener', () => {
+    const onOpenFile = vi.fn()
+    const tree = render(
+      userMessage([
+        {
+          type: 'image-ref',
+          path: '/var/folders/0y/session/T/orca-paste-1788732989689-c9b48721-60fe-4649-9ee3-a1369133656b.png'
+        }
+      ]),
+      { onOpenFile }
+    )
+    expect(textIn(tree.root)).toContain('Image on Desktop')
+    expect(tree.root.findAllByType('Pressable').filter((node) => node.props.onPress)).toHaveLength(
+      0
+    )
+    expect(onOpenFile).not.toHaveBeenCalled()
   })
 
   it('labels a tool row with the target path instead of raw input JSON', () => {

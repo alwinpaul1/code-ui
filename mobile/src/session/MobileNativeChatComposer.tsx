@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Keyboard, Pressable, TextInput, View } from 'react-native'
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { AgentModePill } from '../components/AgentModePill'
@@ -253,9 +253,8 @@ export function MobileNativeChatComposer({
         composerEditGeneration === getComposerEditGeneration()
       ) {
         setCursor(0)
-        // Why: the turn is now the agent's — the keyboard would cover the reply.
-        // A rejected send keeps it up so the handed-back draft stays editable.
-        Keyboard.dismiss()
+        // Keep the keyboard and list viewport stable while the accepted send
+        // becomes a queued input or transcript row. The user controls dismissal.
       }
     } finally {
       sendingRef.current = false

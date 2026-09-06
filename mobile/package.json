@@ -22,6 +22,7 @@
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@shopify/flash-list": "2.3.2",
     "@xterm/addon-unicode11": "0.10.0-beta.300",
     "@xterm/addon-webgl": "0.20.0-beta.299",
     "@xterm/xterm": "6.1.0-beta.303",

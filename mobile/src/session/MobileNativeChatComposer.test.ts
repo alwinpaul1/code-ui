@@ -485,17 +485,16 @@ describe('MobileNativeChatComposer', () => {
     expect(mic().props.onPressOut).toBeUndefined()
   })
 
-  it('dismisses the keyboard once a send is accepted', async () => {
-    // Why: the reply the user is now waiting on sits behind the keyboard.
+  it('keeps the viewport stable by leaving the keyboard open after an accepted send', async () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     await render(vi.fn().mockResolvedValue(true), vi.fn())
 
     await act(async () => sendButton().props.onPress())
 
-    expect(Keyboard.dismiss).toHaveBeenCalledTimes(1)
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
   })
 
-  it('dismisses an accepted send after Strict Mode replays mount effects', async () => {
+  it('keeps the keyboard open after Strict Mode replays mount effects', async () => {
     vi.mocked(Keyboard.dismiss).mockClear()
     await act(async () => {
       renderer = create(
@@ -515,7 +514,7 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(Keyboard.dismiss).toHaveBeenCalledTimes(1)
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
   })
 
   it('keeps the keyboard up when the send is rejected', async () => {

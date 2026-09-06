@@ -7,12 +7,14 @@ import { MobileNativeChatView } from './MobileNativeChatView'
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
-  FlatList: 'FlatList',
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   View: 'View'
 }))
+
+vi.mock('@shopify/flash-list', () => ({ FlashList: 'FlashList' }))
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
@@ -120,12 +122,12 @@ describe('MobileNativeChatView', () => {
 
   /** Ids of the rows the list is currently rendering. */
   function listIds(): string[] {
-    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    const list = renderer!.root.find((node) => node.type === 'FlashList')
     return (list.props.data as { id: string }[]).map((row) => row.id)
   }
 
   function renderedRow(id: string): ReturnType<typeof createElement> {
-    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    const list = renderer!.root.find((node) => node.type === 'FlashList')
     const data = list.props.data as NativeChatMessage[]
     const index = data.findIndex((row) => row.id === id)
     return list.props.renderItem({ item: data[index], index })
@@ -157,6 +159,20 @@ describe('MobileNativeChatView', () => {
     })
   }
 
+  it('attaches native gestures to the actual scroll view without replacing it on updates', async () => {
+    await render()
+    const scrollComponent = renderer!.root.findByType('FlashList').props.renderScrollComponent
+    let scrollRenderer!: ReactTestRenderer
+    await act(async () => {
+      scrollRenderer = create(createElement(scrollComponent, { scrollEnabled: true }))
+    })
+    const detector = scrollRenderer.root.findByType('GestureDetector')
+    expect(detector.children[0]).toEqual(scrollRenderer.root.findByType('ScrollView'))
+    await update({ folded: [assistantTurn('a1', 'Reply')] })
+    expect(renderer!.root.findByType('FlashList').props.renderScrollComponent).toBe(scrollComponent)
+    act(() => scrollRenderer.unmount())
+  })
+
   it('renders the route-reported failure verbatim', async () => {
     await render({ sendErrorMessage: 'Permission reply failed' })
 
@@ -166,7 +182,7 @@ describe('MobileNativeChatView', () => {
 
   it('does not resume following during a drag near the live edge', async () => {
     await render({ folded: [assistantTurn('a1', 'Streaming reply')] })
-    const list = () => renderer!.root.findByType('FlatList')
+    const list = () => renderer!.root.findByType('FlashList')
     const nearBottom = {
       nativeEvent: {
         contentOffset: { y: 20 },
@@ -187,20 +203,45 @@ describe('MobileNativeChatView', () => {
 
   it('uses history anchoring only while the reader is away from the live edge', async () => {
     await render({ folded: [assistantTurn('a1', 'Streaming reply')] })
-    const list = () => renderer!.root.findByType('FlatList')
-    expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    const list = () => renderer!.root.findByType('FlashList')
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
     act(() => list().props.onScrollBeginDrag())
-    expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
     act(() =>
       renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
     )
-    expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+  })
+
+  it('does not treat a requested jump animation as a new reader drag', async () => {
+    await render({ folded: [assistantTurn('a1', 'Reply')] })
+    const list = () => renderer!.root.findByType('FlashList')
+    act(() => list().props.onScrollBeginDrag())
+    act(() =>
+      renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
+    )
+    act(() => list().props.onMomentumScrollBegin())
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      0
+    )
+  })
+
+  it('preserves the reading position when a new message is sent from history', async () => {
+    await render({ folded: [assistantTurn('a1', 'Reply')] })
+    const list = () => renderer!.root.findByType('FlashList')
+    act(() => list().props.onScrollBeginDrag())
+    await pressSend()
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      1
+    )
   })
 
   it('loads older history only at the inverted history edge after the reader scrolls', async () => {
     const onLoadEarlier = vi.fn()
     await render({ folded: [assistantTurn('a1', 'Reply')], hasMore: true, onLoadEarlier })
-    const list = () => renderer!.root.findByType('FlatList')
+    const list = () => renderer!.root.findByType('FlashList')
     const event = (y: number) => ({
       nativeEvent: {
         contentOffset: { y },
@@ -224,7 +265,7 @@ describe('MobileNativeChatView', () => {
     await act(async () => {
       renderer = create(chatViewElement({ folded: [assistantTurn('a1', 'Growing reply')] }), {
         createNodeMock: (node) =>
-          node.type === 'FlatList'
+          node.type === 'FlashList'
             ? {
                 scrollToEnd: estimatedEnd,
                 scrollToOffset
@@ -232,7 +273,7 @@ describe('MobileNativeChatView', () => {
             : null
       })
     })
-    const list = () => renderer!.root.findByType('FlatList')
+    const list = () => renderer!.root.findByType('FlashList')
     expect(list().props.inverted).toBe(true)
     act(() => list().props.onContentSizeChange(400, 2400))
     act(() => list().props.onContentSizeChange(400, 2200))
@@ -345,11 +386,11 @@ it('does not animate a delayed scroll across the keyboard-close and queue-confir
           folded: [assistantTurn('a1', 'Reply')],
           onSend: vi.fn().mockResolvedValue(true)
         }),
-        { createNodeMock: (node) => (node.type === 'FlatList' ? { scrollToOffset } : null) }
+        { createNodeMock: (node) => (node.type === 'FlashList' ? { scrollToOffset } : null) }
       )
     })
     await act(async () => instance.root.findByType('Composer').props.onPress())
-    act(() => instance.root.findByType('FlatList').props.onContentSizeChange(400, 1500))
+    act(() => instance.root.findByType('FlashList').props.onContentSizeChange(400, 1500))
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
@@ -370,7 +411,7 @@ it('keeps the confirmed queue inside the inverted list so it does not resize the
   await act(async () => {
     instance = create(chatViewElement({ queuedMessages: ['first', 'second'] }))
   })
-  const header = instance.root.findByType('FlatList').props.ListHeaderComponent
+  const header = instance.root.findByType('FlashList').props.ListHeaderComponent
   expect(header.props.messages).toEqual(['first', 'second'])
   expect(instance.root.findAllByType('ScrollView')).toHaveLength(0)
   await act(async () => instance.unmount())

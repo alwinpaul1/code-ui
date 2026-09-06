@@ -43,3 +43,55 @@ development chat after its tab changed. Its final assertion targeted the isolate
 session and failed; it is not counted as a passed phone end-to-end test. Separate
 adapter tests through Orca passed recall, save, cancel, and delete on isolated
 Claude and Codex sessions.
+
+## Keyboard-closed send follow-up, 0.2.44
+
+The keyboard-open checks did not cover the reported remaining bug. A new ADB
+recording explicitly typed a short prompt, closed the keyboard, waited for it to
+settle, and tapped Send in an isolated Claude session. Existing messages moved
+downward before jumping upward when the new bubble arrived. Temporary traces
+showed content height collapsing from 10,493 to 848 logical pixels, then
+recovering, with the live-edge scroll offset still zero. The transcript count
+increased normally. This isolates a list layout transition, not lost messages
+or relay reconnection.
+
+The chat now uses FlashList 2.3.2 measured layouts with the existing inverted
+live edge. Recycling is disabled for off-screen message state; virtualization
+remains enabled. Reader anchoring, history pagination, and the queue header are
+preserved. Send no longer forces history readers to the live edge or dismisses
+the keyboard. A keyboard already closed stays closed.
+
+Candidate release recordings `codeui-044-closed1.mp4` (Claude) and
+`codeui-044-closed2.mp4` (Codex) showed the new message and reply without the
+reproduced backward jump. The harness verified the selected isolated tab,
+desktop delivery, and unchanged composer bounds. Claude's send transition was
+also inspected at 20 frames per second. These are observations on this phone,
+not a guarantee for every device or message shape. The earlier coarse transient
+frame metric did not catch this send reversal and is not used as proof here.
+
+A diagnostic long-prompt run failed the fixed-composer-bounds assertion because
+a two-line draft became an empty one-line composer. That result is not counted
+as a passing flicker check. Attempts with a different active tab or another app
+in the foreground stopped before typing.
+
+The full suite passed: 555 test files, 4,375 tests passed and 3 skipped. TypeScript
+and lint passed. Temporary list tracing was removed from the clean build.
+
+The same release renders inaccessible macOS `orca-paste` image paths as a
+non-clickable “Image on Desktop” label. It does not claim to retrieve desktop
+clipboard bytes. Loadable preview URIs retain thumbnails and full-screen
+previews. A regression test verifies that tapping the unavailable fallback
+cannot invoke the file-open error path.
+
+Final history testing caught a candidate integration regression: the native
+pinch/scroll gesture was attached to FlashList's measurement wrapper, preventing
+dragging. The gesture now wraps the actual scroll component with a stable
+forwarded-ref component. A regression test checks that attachment and preserves
+the component identity across message updates.
+
+On the clean installed release, three ADB swipes in the active development chat
+revealed older messages and the jump control. The unavailable desktop-image
+label was visible and disabled; tapping it produced no file-open error. The
+jump animation also needed a guard: its momentum event was being treated as a
+new reader drag, re-enabling anchoring before reaching the end. A failing test
+reproduced that state transition and passes with the explicit-jump guard.

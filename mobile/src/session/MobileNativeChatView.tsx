@@ -1,12 +1,14 @@
+import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
-  FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
+  ScrollView,
+  type ScrollViewProps,
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -101,7 +103,8 @@ export function MobileNativeChatView({
   const { colors } = useTheme()
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
-  const listRef = useRef<FlatList<NativeChatMessage>>(null)
+  const listRef = useRef<FlashListRef<NativeChatMessage>>(null)
+  const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
@@ -117,9 +120,23 @@ export function MobileNativeChatView({
     useMobileChatFollowing()
 
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  // FlashList has an outer measurement view. Native scroll recognition must
+  // attach to its actual ScrollView, not that wrapper, or dragging is blocked.
+  const ChatScrollView = useMemo(
+    () =>
+      forwardRef<ScrollView, ScrollViewProps>(function ChatScrollView(props, ref) {
+        return (
+          <GestureDetector gesture={pinchGesture}>
+            <ScrollView {...props} ref={ref} />
+          </GestureDetector>
+        )
+      }),
+    [pinchGesture]
+  )
 
   const jumpToLatest = useCallback(
     (animated: boolean) => {
+      jumpingRef.current = true
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
@@ -140,8 +157,8 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
-  // Inversion keeps the live edge at offset zero. Estimated spacing for
-  // unmeasured history can then change without shifting the visible tail.
+  // Measured layouts avoid the transient history-spacer collapse on sends.
+  // Inversion keeps the live edge at offset zero while those rows grow.
   const newestFirst = useMemo(() => data.toReversed(), [data])
 
   const handleSend = useCallback(
@@ -153,14 +170,12 @@ export function MobileNativeChatView({
       // The route-owned banner outlives this send; a success must retire it too,
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
-      // Always jump to the newest message when the user sends.
-      setFollowing(true)
-      // Sending closes the keyboard and can replace an echo with a queue card.
-      // Animate neither resize; the inverted live edge is already offset zero.
-      listRef.current?.scrollToOffset({ offset: 0, animated: false })
+      // Sending must not override a reader's position or change native anchoring.
+      // Existing live-edge following handles new rows; history readers keep the
+      // jump-to-latest control until they choose to return.
       return true
     },
-    [onSend, onClearSendError, setFollowing]
+    [onSend, onClearSendError]
   )
 
   const evaluateEdge = useCallback(
@@ -182,6 +197,7 @@ export function MobileNativeChatView({
   // The reader took control: stop following immediately, on the same frame as
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
+    jumpingRef.current = false
     beginScroll()
   }, [beginScroll])
 
@@ -245,88 +261,78 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <GestureDetector gesture={pinchGesture}>
-            <FlatList
-              ref={listRef}
-              data={newestFirst}
-              inverted
-              keyExtractor={(item) => item.id}
-              renderItem={renderItem}
-              contentContainerStyle={styles.listContent}
-              // Let link/file taps land while the composer keyboard is up
-              // instead of being swallowed by the dismiss gesture.
-              keyboardShouldPersistTaps="handled"
-              onScroll={evaluateEdge}
-              onScrollBeginDrag={onScrollBeginDrag}
-              onScrollEndDrag={onScrollEnd}
-              onMomentumScrollBegin={onScrollBeginDrag}
-              onMomentumScrollEnd={onScrollEnd}
-              scrollEventThrottle={16}
-              // Why: while the reader is up in history, content growing above the
-              // fold must not shift what they are reading. At the live edge,
-              // native anchoring fights scrollToEnd and briefly shows old rows.
-              maintainVisibleContentPosition={
-                showJumpToLatest ? { minIndexForVisible: 0 } : undefined
+          <FlashList
+            ref={listRef}
+            renderScrollComponent={ChatScrollView}
+            data={newestFirst}
+            inverted
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            // Let link/file taps land while the composer keyboard is up
+            // instead of being swallowed by the dismiss gesture.
+            keyboardShouldPersistTaps="handled"
+            onScroll={evaluateEdge}
+            onScrollBeginDrag={onScrollBeginDrag}
+            onScrollEndDrag={onScrollEnd}
+            onMomentumScrollBegin={() => {
+              // A requested jump also emits momentum events. Enabling history
+              // anchoring during that animation interrupts it before the end.
+              if (!jumpingRef.current) {
+                beginScroll()
               }
-              onContentSizeChange={() => {
-                if (data.length > 0 && followingRef.current) {
-                  listRef.current?.scrollToOffset({ offset: 0, animated: false })
-                }
-              }}
-              // scrollToIndex can fail before an off-screen row is measured —
-              // fall back to an estimated offset, then retry once it's laid out.
-              onScrollToIndexFailed={(info) => {
-                listRef.current?.scrollToOffset({
-                  offset: info.averageItemLength * info.index,
-                  animated: true
-                })
-                setTimeout(() => {
-                  listRef.current?.scrollToIndex({
-                    index: info.index,
-                    viewPosition: 1,
-                    animated: true
-                  })
-                }, 120)
-              }}
-              ListHeaderComponent={
-                <MobileNativeChatQueue
-                  messages={queuedMessages}
-                  agent={agent}
-                  onEdit={onEditQueue}
-                />
+            }}
+            onMomentumScrollEnd={(event) => {
+              jumpingRef.current = false
+              onScrollEnd(event)
+            }}
+            scrollEventThrottle={16}
+            // Why: while the reader is up in history, content growing above the
+            // fold must not shift what they are reading. At the live edge,
+            // native anchoring fights scrollToEnd and briefly shows old rows.
+            maintainVisibleContentPosition={{ disabled: !showJumpToLatest }}
+            onContentSizeChange={() => {
+              if (data.length > 0 && followingRef.current) {
+                listRef.current?.scrollToOffset({ offset: 0, animated: false })
               }
-              ListFooterComponent={
-                hasMore ? (
-                  <Pressable
-                    style={styles.loadEarlier}
-                    onPress={onLoadEarlier}
-                    disabled={loadingEarlier}
-                  >
-                    {loadingEarlier ? (
-                      <ActivityIndicator size="small" color={colors.textMuted} />
-                    ) : (
-                      <Txt variant="caption" weight="semibold" tone="muted">
-                        Load earlier messages
-                      </Txt>
-                    )}
-                  </Pressable>
-                ) : null
-              }
-              ListEmptyComponent={
-                emptyState ? (
-                  <View style={styles.center}>
-                    {agent ? <MobileAgentIcon agentId={agent} size={40} /> : null}
-                    <Txt variant="heading" weight="semibold" align="center">
-                      {emptyState.title}
+            }}
+            // Message descendants hold disclosure and copy state. Keep it
+            // scoped to the message when off-screen cells leave the window.
+            maxItemsInRecyclePool={0}
+            ListHeaderComponent={
+              <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
+            }
+            ListFooterComponent={
+              hasMore ? (
+                <Pressable
+                  style={styles.loadEarlier}
+                  onPress={onLoadEarlier}
+                  disabled={loadingEarlier}
+                >
+                  {loadingEarlier ? (
+                    <ActivityIndicator size="small" color={colors.textMuted} />
+                  ) : (
+                    <Txt variant="caption" weight="semibold" tone="muted">
+                      Load earlier messages
                     </Txt>
-                    <Txt variant="body" tone="muted" align="center">
-                      {emptyState.subtitle}
-                    </Txt>
-                  </View>
-                ) : null
-              }
-            />
-          </GestureDetector>
+                  )}
+                </Pressable>
+              ) : null
+            }
+            ListEmptyComponent={
+              emptyState ? (
+                <View style={styles.center}>
+                  {agent ? <MobileAgentIcon agentId={agent} size={40} /> : null}
+                  <Txt variant="heading" weight="semibold" align="center">
+                    {emptyState.title}
+                  </Txt>
+                  <Txt variant="body" tone="muted" align="center">
+                    {emptyState.subtitle}
+                  </Txt>
+                </View>
+              ) : null
+            }
+          />
           {showJumpToLatest ? (
             <Pressable
               accessibilityLabel="Scroll to latest"
