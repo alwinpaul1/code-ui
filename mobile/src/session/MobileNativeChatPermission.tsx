@@ -108,37 +108,40 @@ function MobileNativeChatPermissionImpl({
                     ? 'Deny'
                     : option.label
           return (
-            <PressScale
-              key={`${option.send}:${option.label}`}
-              accessibilityRole="button"
-              accessibilityLabel={option.label}
-              accessibilityState={{ disabled: submitting, busy: submitting }}
-              pressedScale={0.98}
-              disabled={submitting}
-              onPress={() => void respond(option.send)}
-              style={{
-                minHeight: 48,
-                paddingHorizontal: space.md,
-                paddingVertical: space.sm + 4,
-                gap: space.sm,
-                justifyContent: 'center',
-                borderRadius: radius.md,
-                borderWidth: 1,
-                borderColor: index === 0 ? colors.accent : colors.border,
-                backgroundColor: index === 0 ? colors.accent : colors.bgRaised,
-                opacity: submitting ? 0.55 : 1
-              }}
-            >
-              <Txt
-                variant="label"
-                weight="semibold"
-                align="center"
-                tone={index === 0 ? 'onAccent' : 'primary'}
+            <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel={option.label}
+                accessibilityState={{ disabled: submitting, busy: submitting }}
+                pressedScale={0.98}
+                disabled={submitting}
+                onPress={() => void respond(option.send)}
+                style={{
+                  minHeight: 48,
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.sm + 4,
+                  gap: space.sm,
+                  justifyContent: 'center',
+                  borderRadius: radius.md,
+                  borderWidth: 1,
+                  borderColor: index === 0 ? colors.accent : colors.border,
+                  backgroundColor: index === 0 ? colors.accent : colors.bgRaised,
+                  opacity: submitting ? 0.55 : 1
+                }}
               >
-                {shortLabel}
-              </Txt>
+                <Txt
+                  variant="label"
+                  weight="semibold"
+                  align="center"
+                  tone={index === 0 ? 'onAccent' : 'primary'}
+                >
+                  {shortLabel}
+                </Txt>
+              </PressScale>
               {rememberedPrefix || rememberedScope ? (
-                <View style={{ gap: space.sm }}>
+                <View
+                  style={{ gap: space.sm, paddingHorizontal: space.md, paddingBottom: space.sm }}
+                >
                   <Txt variant="caption" tone="secondary">
                     {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
                   </Txt>
@@ -148,11 +151,16 @@ function MobileNativeChatPermissionImpl({
                 </View>
               ) : null}
               {autoMode ? (
-                <Txt variant="caption" tone="secondary">
-                  {option.label}
+                <Txt
+                  variant="caption"
+                  tone="secondary"
+                  style={{ paddingHorizontal: space.md, paddingBottom: space.sm }}
+                >
+                  {option.label.replace(/^Yes, and switch to auto mode\s*[·:]?\s*/i, '') ||
+                    'Switches this session to auto mode.'}
                 </Txt>
               ) : null}
-            </PressScale>
+            </View>
           )
         })}
       </View>
