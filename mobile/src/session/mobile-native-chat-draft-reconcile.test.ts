@@ -23,6 +23,17 @@ function pending(id: string, images: string[], expectedOccurrence = 1): PendingI
 }
 
 describe('mobile native chat image preview reconciliation', () => {
+  it('binds a local thumbnail when the agent echoes the uploaded path before the caption', () => {
+    const path =
+      '/var/folders/0y/session/T/orca-paste-1788707946740-fd6147a9-5b2d-4051-8a87-dbd45992c21e.png'
+    const messages = [userText('landed', path + ' look at this')]
+    expect(
+      findLandedImagePreviewEchoes(messages, [
+        { ...pending('pending', ['file:///a.jpg']), text: 'look at this' }
+      ])
+    ).toEqual([{ pendingId: 'pending', messageId: 'landed', images: ['file:///a.jpg'] }])
+  })
+
   it('reconciles a trailing-marker echo and hands its preview to that echo', () => {
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),

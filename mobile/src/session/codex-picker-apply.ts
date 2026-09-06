@@ -7,6 +7,7 @@
 // → Enter → wait for the picker to close and the footer to name the pair.
 // Every wait is bounded; on any miss the picker is escaped — but never while a
 // turn is running, because Esc there interrupts the agent.
+import { codexPermissionFromScreen } from './codex-terminal-permission'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
@@ -199,7 +200,7 @@ export async function applyCodexPickerSelection(
   target: CodexPickerTarget
 ): Promise<CodexPickerApplyResult> {
   const before = await io.readScreen()
-  if (isCodexWorking(before)) {
+  if (codexPermissionFromScreen(before)) {
     return { ok: false, reason: 'busy' }
   }
   if (parseCodexPickerScreen(before)) {

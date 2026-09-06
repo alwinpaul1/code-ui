@@ -61,6 +61,7 @@ type Args = {
    *  text+Enter may have left the image on the input line, which needs healing.
    *  Accepts this action's budget so the text body draws from what the paste left
    *  rather than opening a second one. */
+  readonly beforeImagePaste?: () => Promise<void>
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -106,6 +107,7 @@ export function useMobileNativeChatImageAttachments({
   showToast,
   onSendError,
   baseSend,
+  beforeImagePaste,
   structuredNativeChat,
   readSeededLaunchDraft,
   onAttachSuccess,
@@ -179,7 +181,9 @@ export function useMobileNativeChatImageAttachments({
         // Documents never paste as images: their note joins the text body, and
         // the chip clears with the images once the send is accepted.
         const pendingFiles = pendingAll.filter(isPendingNativeChatFile)
-        const pendingImages = pendingAll.filter((attachment) => !isPendingNativeChatFile(attachment))
+        const pendingImages = pendingAll.filter(
+          (attachment) => !isPendingNativeChatFile(attachment)
+        )
         const text = withMobileNativeChatFileNotes(composerText, pendingFiles)
         const clearSent = (): void => {
           if (!scope) {
@@ -255,6 +259,13 @@ export function useMobileNativeChatImageAttachments({
           return false
         }
         try {
+          // Drain caption mirroring before clearing/pasting. A delayed mirror
+          // write after the image would overwrite or split this submission.
+          await beforeImagePaste?.()
+          if (activeHandleRef.current !== handle) {
+            onSendError('Message not sent (session changed)')
+            return false
+          }
           const seededLaunchDraft = readSeededLaunchDraft()
           const pasted = await pasteMobileNativeChatImagePaths({
             client,
@@ -329,6 +340,7 @@ export function useMobileNativeChatImageAttachments({
       activeHandleRef,
       attachmentsByScope,
       baseSend,
+      beforeImagePaste,
       client,
       connState,
       deviceTokenRef,

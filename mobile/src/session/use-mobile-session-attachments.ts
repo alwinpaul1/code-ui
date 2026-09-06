@@ -81,6 +81,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       nativeChatInputLeaseReady,
       getActiveWorktreeConnectionId,
       beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+      beforeNativeChatImagePaste: nativeChatController.prepareNativeChatImageSend,
       nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
       structuredNativeChat: activeSessionTab?.type === 'agent-session',
       readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,

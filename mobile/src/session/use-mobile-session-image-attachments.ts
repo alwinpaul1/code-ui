@@ -26,6 +26,7 @@ type Args = {
   /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
    *  paste can mark the terminal input for healing (#10228). Takes the image
    *  send's budget so the paste and this text body share one `sending` window. */
+  readonly beforeNativeChatImagePaste?: () => Promise<void>
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
@@ -64,6 +65,7 @@ export function useMobileSessionImageAttachments({
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
+  beforeNativeChatImagePaste,
   structuredNativeChat,
   readSeededLaunchDraft,
   showToast,
@@ -100,6 +102,7 @@ export function useMobileSessionImageAttachments({
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
+    beforeImagePaste: beforeNativeChatImagePaste,
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError

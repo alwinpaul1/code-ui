@@ -160,7 +160,7 @@ export function useCodexNativeChatOptions(args: {
       }
       onFailure(
         result.reason === 'busy'
-          ? 'Codex is working — try again when the turn ends'
+          ? 'Respond to the active Codex approval first'
           : result.reason === 'model-unavailable'
             ? "That model isn't in this account's picker"
             : result.reason === 'effort-unavailable'

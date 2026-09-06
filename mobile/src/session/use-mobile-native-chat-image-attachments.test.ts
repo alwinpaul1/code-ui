@@ -163,6 +163,9 @@ describe('useMobileNativeChatImageAttachments', () => {
         client: trackedClient as RpcClient,
         deviceTokenRef: { current: 'device-1' },
         baseSend,
+        beforeImagePaste: async () => {
+          order.push('drain-mirror')
+        },
         sleep
       })
     )
@@ -189,7 +192,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(combined).toContain('.png\x1b[201~ look')
     expect(combined).not.toContain('.png\x1b[201~look')
     // Clear, then paste, then settle, then the text send — in that order.
-    expect(order).toEqual(['clear', 'paste', 'settle', 'text:look at this'])
+    expect(order).toEqual(['drain-mirror', 'clear', 'paste', 'settle', 'text:look at this'])
     // The local preview URI rides along so the sent bubble shows the photo.
     expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number))
     // Chips clear once the send is accepted.

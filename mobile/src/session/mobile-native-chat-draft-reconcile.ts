@@ -157,7 +157,7 @@ export function findLandedImagePreviewEchoes(
   // so a plain text row must not become a candidate merely because it shares a
   // caption prefix with a glued image send.
   const imageMessageIds = new Set(
-    messages
+    [...messages, ...normalized]
       .filter(
         (message) =>
           message.role === 'user' &&

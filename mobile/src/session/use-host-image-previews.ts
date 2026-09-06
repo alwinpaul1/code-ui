@@ -44,7 +44,8 @@ export function mergeImagePreviews(
 }
 
 const dataUriByPath = new Map<string, string>()
-const failedPaths = new Set<string>()
+const failedPaths = new Map<string, number>()
+const RETRY_MS = 5_000
 const inFlight = new Map<string, Promise<string | null>>()
 
 export function resetHostImagePreviewCacheForTests(): void {
@@ -53,7 +54,7 @@ export function resetHostImagePreviewCacheForTests(): void {
   inFlight.clear()
 }
 
-async function loadHostImage(args: {
+export async function loadHostImage(args: {
   client: RpcClient
   hostId: string
   worktreeId: string
@@ -68,7 +69,7 @@ async function loadHostImage(args: {
   if (cached) {
     return cached
   }
-  if (failedPaths.has(key)) {
+  if ((failedPaths.get(key) ?? 0) > Date.now()) {
     return null
   }
   const pending = inFlight.get(key)
@@ -92,37 +93,52 @@ async function loadHostImage(args: {
         { timeoutMs: 15_000 }
       )
       if (!resolved.ok) {
-        failedPaths.add(key)
+        failedPaths.set(key, Date.now() + RETRY_MS)
         return null
       }
-      const target = (
-        (resolved as RpcSuccess).result as {
-          openTarget?: { kind?: unknown; absolutePath?: unknown; grantId?: unknown }
+      const resolution = (resolved as RpcSuccess).result as {
+        worktree?: string
+        openTarget?: {
+          kind?: string
+          absolutePath?: string
+          grantId?: string
+          relativePath?: string
         }
-      ).openTarget
-      if (
-        !target ||
-        target.kind !== 'absolute-file' ||
-        typeof target.absolutePath !== 'string' ||
-        typeof target.grantId !== 'string'
-      ) {
-        failedPaths.add(key)
+      }
+      const target = resolution.openTarget
+      const resolvedWorktree = resolution.worktree ? `id:${resolution.worktree}` : worktree
+      const request =
+        target?.kind === 'absolute-file' && target.absolutePath && target.grantId
+          ? {
+              method: 'files.readTerminalArtifactPreview',
+              params: {
+                worktree: resolvedWorktree,
+                absolutePath: target.absolutePath,
+                grantId: target.grantId
+              }
+            }
+          : target?.kind === 'worktree-file' && target.relativePath
+            ? {
+                method: 'files.readPreview',
+                params: { worktree: resolvedWorktree, relativePath: target.relativePath }
+              }
+            : null
+      if (!request) {
+        failedPaths.set(key, Date.now() + RETRY_MS)
         return null
       }
-      const read = await args.client.sendRequest(
-        'files.readTerminalArtifactPreview',
-        { worktree, absolutePath: target.absolutePath, grantId: target.grantId },
-        { timeoutMs: 30_000 }
-      )
-      const preview = normalizeMobileFilePreviewResponse(target.absolutePath, read)
+      const read = await args.client.sendRequest(request.method, request.params, {
+        timeoutMs: 30_000
+      })
+      const preview = normalizeMobileFilePreviewResponse(args.path, read)
       if (preview.status !== 'ready' || preview.kind !== 'image') {
-        failedPaths.add(key)
+        failedPaths.set(key, Date.now() + RETRY_MS)
         return null
       }
       dataUriByPath.set(key, preview.dataUri)
       return preview.dataUri
     } catch {
-      failedPaths.add(key)
+      failedPaths.set(key, Date.now() + RETRY_MS)
       return null
     } finally {
       inFlight.delete(key)
@@ -144,6 +160,8 @@ export function useHostImagePreviews(args: {
 }): Record<string, string[]> {
   const { client, enabled, hostId, worktreeId, nativeChatContext, messages, localPreviews } = args
   const { terminalHandleRef } = args
+  const tabId = nativeChatContext?.tabId
+  const sessionId = nativeChatContext?.sessionId
   const wanted = useMemo(
     () => (enabled ? collectHostImagePaths(messages, localPreviews) : {}),
     [enabled, localPreviews, messages]
@@ -156,34 +174,46 @@ export function useHostImagePreviews(args: {
     }
     let active = true
     const paths = [...new Set(Object.values(wanted).flat())]
-    for (const path of paths) {
-      const key = `${hostId}\0${path}`
-      if (dataUriByPath.has(key) || failedPaths.has(key)) {
-        continue
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let attempts = 0
+    const read = async () => {
+      attempts += 1
+      await Promise.all(
+        paths.map(async (path) => {
+          const key = `${hostId}\0${path}`
+          const uri = await loadHostImage({
+            client,
+            hostId,
+            worktreeId,
+            nativeChatContext: tabId && sessionId ? { tabId, sessionId } : null,
+            terminalHandle: terminalHandleRef.current,
+            path
+          })
+          if (active && uri) {
+            setLoaded((current) => (current[key] === uri ? current : { ...current, [key]: uri }))
+          }
+        })
+      )
+      if (
+        active &&
+        attempts < 3 &&
+        paths.some((path) => !dataUriByPath.has(`${hostId}\0${path}`))
+      ) {
+        timer = setTimeout(() => void read(), RETRY_MS)
       }
-      void loadHostImage({
-        client,
-        hostId,
-        worktreeId,
-        nativeChatContext,
-        terminalHandle: terminalHandleRef.current,
-        path
-      }).then((uri) => {
-        if (active && uri) {
-          setLoaded((current) => (current[path] === uri ? current : { ...current, [path]: uri }))
-        }
-      })
     }
+    void read()
     return () => {
       active = false
+      clearTimeout(timer)
     }
-  }, [client, enabled, hostId, nativeChatContext, terminalHandleRef, wanted, worktreeId])
+  }, [client, enabled, hostId, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
 
   return useMemo(() => {
     const previews: Record<string, string[]> = {}
     for (const [messageId, paths] of Object.entries(wanted)) {
       const uris = paths.map(
-        (path) => loaded[path] ?? dataUriByPath.get(`${hostId}\0${path}`) ?? ''
+        (path) => loaded[`${hostId}\0${path}`] ?? dataUriByPath.get(`${hostId}\0${path}`) ?? ''
       )
       if (uris.some((uri) => uri.length > 0)) {
         previews[messageId] = uris

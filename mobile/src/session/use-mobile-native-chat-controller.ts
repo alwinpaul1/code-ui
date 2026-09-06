@@ -165,10 +165,6 @@ export function useMobileNativeChatController(args: {
       : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
-  const observeActive =
-    nativeChatAgentWorking ||
-    nativeChatStatus?.state === 'blocked' ||
-    nativeChatStatus?.state === 'waiting'
   const {
     observation: hudObservation,
     refresh: refreshTerminalHud,
@@ -182,7 +178,10 @@ export function useMobileNativeChatController(args: {
     handleRef: activeHandleRef,
     handleKey: showNativeChat ? streamScopeKey : null,
     agent: activeChatResolution?.agent ?? null,
-    active: observeActive
+    active:
+      nativeChatAgentWorking ||
+      nativeChatStatus?.state === 'blocked' ||
+      nativeChatStatus?.state === 'waiting'
   })
   const {
     permission: reportedNativeChatPermission,
@@ -476,6 +475,7 @@ export function useMobileNativeChatController(args: {
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
     handleNativeChatCancelQueued,
+    prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,

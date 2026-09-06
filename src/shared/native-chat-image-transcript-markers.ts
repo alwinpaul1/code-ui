@@ -1,3 +1,4 @@
+import { splitOrcaPastedImagePaths } from './native-chat-pasted-image-paths'
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
@@ -63,7 +64,9 @@ export function stripImagePromptMarker(text: string): string {
 export function normalizeNativeChatUserText(text: string): string {
   // Strip sequences first so their printable tails cannot survive a lone-control pass.
   return stripImagePromptMarker(
-    stripAnsiEscapeSequences(text).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+    splitOrcaPastedImagePaths(
+      stripAnsiEscapeSequences(text).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+    ).text
   )
     .trim()
     .replace(/\s+/g, ' ')
@@ -95,7 +98,14 @@ function stripImagePromptMarkersFromTextBlocks(
     }
     const isFirstText = !sawText
     sawText = true
-    const text = stripImagePromptMarker(block.text)
+    const pasted = isFirstText
+      ? splitOrcaPastedImagePaths(block.text)
+      : { paths: [], text: block.text }
+    if (pasted.paths.length) {
+      next ??= blocks.slice(0, index)
+      next.push(...pasted.paths.map((path) => ({ type: 'image-ref' as const, path })))
+    }
+    const text = stripImagePromptMarker(pasted.text)
     if (!text.trim() && (text !== block.text || isFirstText)) {
       next ??= blocks.slice(0, index)
       continue
