@@ -85,9 +85,11 @@ export function deriveMobileNativeChatStreaming(
   const scopeKey = options.scopeKey === undefined ? gate.scopeKey : options.scopeKey
   const scopedGate =
     gate.scopeKey === scopeKey ? gate : createMobileNativeChatStreamingGate(scopeKey)
-  const text = streamingText?.trim() ?? ''
   const tail = folded.at(-1)
   const tailId = tail?.id ?? null
+  // A live status gap is not a deletion. Keep the prose until its transcript
+  // arrives; tearing down the bubble here flashes the entire list's layout.
+  const text = streamingText?.trim() || (options.streamLive ? scopedGate.prevText : '')
   if (!text) {
     // Only a textless tick that carries a real tail and is outside a live turn
     // is trustworthy pre-stream history. Mid-turn gaps (a tool call, a throttle
@@ -103,10 +105,15 @@ export function deriveMobileNativeChatStreaming(
   // (next reply part); re-anchor to the tail that predates it.
   const segmentStart = scopedGate.prevText !== '' && !text.startsWith(scopedGate.prevText)
   const baselineTailId = segmentStart ? tailId : scopedGate.baselineTailId
-  const tailLeadsWithStream = assistantTailText(tail).startsWith(text)
+  const tailText = assistantTailText(tail)
+  // Once this segment has its own transcript row, let that row own rendering
+  // even if its latest update is slightly behind the status preview. Otherwise
+  // each alternating update inserts/removes a second copy of the whole reply.
+  const tailMatchesStream =
+    tailText !== '' && (tailText.startsWith(text) || text.startsWith(tailText))
   // A null baseline (text on the very first tick, no tail ever seen) is unequal
   // to every real tail id, so this degrades to the legacy suppress-on-prefix rule.
-  const caughtUp = tailLeadsWithStream && tailId !== baselineTailId
+  const caughtUp = tailMatchesStream && tailId !== baselineTailId
   return {
     gate: advanceGate(scopedGate, text, baselineTailId),
     streaming: caughtUp ? null : text

@@ -126,7 +126,7 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: [], text: 'Done.', live: true },
       { folded: prior, text: 'Done.', live: true }
     ])
-    expect(results).toEqual([null, 'Done.', null, 'Done.', 'Done.'])
+    expect(results).toEqual([null, 'Done.', 'Done.', 'Done.', 'Done.'])
   })
 
   it('still hides after a hidden gap once the reply landed as its own turn', () => {
@@ -138,7 +138,7 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: [], live: true },
       { folded: landed, text: 'Done.', live: true }
     ])
-    expect(results).toEqual([null, 'Done.', null, null])
+    expect(results).toEqual([null, 'Done.', 'Done.', null])
   })
 
   it('hides a reply whose own turn landed before its status text arrived', () => {

@@ -93,6 +93,34 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     expect(streaming()).toBe('The tests')
   })
 
+  it('keeps live prose visible through a status gap until the transcript arrives', async () => {
+    const prior = [assistantTurn('a1', 'Earlier reply')]
+    await render({ messages: prior })
+    await update({ messages: prior, streamingText: 'The new reply is growing', streamLive: true })
+    await update({ messages: prior, streamLive: true })
+    expect(streaming()).toBe('The new reply is growing')
+    await update({
+      messages: [...prior, assistantTurn('a2', 'The new reply is growing')],
+      streamLive: true
+    })
+    expect(streaming()).toBeNull()
+  })
+
+  it('does not flash a second full bubble when the transcript trails the stream by a few words', async () => {
+    const prior = [assistantTurn('a1', 'Earlier reply')]
+    await render({ messages: prior })
+    await update({ messages: prior, streamingText: 'The new reply', streamLive: true })
+    const partial = [...prior, assistantTurn('a2', 'The new')]
+    await update({ messages: partial, streamingText: 'The new reply is growing', streamLive: true })
+    expect(streaming()).toBeNull()
+    await update({
+      messages: [...prior, assistantTurn('a2', 'The new reply is growing')],
+      streamingText: 'The new reply is growing',
+      streamLive: true
+    })
+    expect(streaming()).toBeNull()
+  })
+
   it('drops the streaming bubble once the reply lands as its own turn', async () => {
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
