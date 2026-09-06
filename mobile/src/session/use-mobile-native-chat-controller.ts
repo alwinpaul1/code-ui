@@ -19,6 +19,7 @@ import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-co
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { slashCommandOpensOverlay } from '../../../src/shared/native-chat-slash-commands'
@@ -358,6 +359,11 @@ export function useMobileNativeChatController(args: {
     const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
     return () => timers.forEach(clearTimeout)
   }, [legacyNativeChatPermission, refreshTerminalHud])
+  const codexCurrentModel = useCodexCurrentModel(
+    activeChatResolution?.agent ?? null,
+    hostId,
+    worktreeId
+  )
   const [modelSheetRequest, setModelSheetRequestState] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
@@ -370,13 +376,14 @@ export function useMobileNativeChatController(args: {
       isWorking: nativeChatAgentWorking,
       // Why no agentStatus fallback for Codex: the host mislabels a Codex
       // session's agent-status as 'claude', so its `model` is a Claude id that
-      // would leak onto the Codex pill. Trust only the Codex footer (hud).
+      // would leak onto the Codex pill. The model comes from Codex's own picker
+      // (`(current)` marker, read on open and persisted) — no status line
+      // needed — with the footer as a fresher override once a turn has drawn it.
       reportedModel:
         activeChatResolution?.agent === 'codex'
-          ? (hudObservation?.modelId ?? null)
+          ? (hudObservation?.modelId ?? codexCurrentModel)
           : (hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null),
       reportedEffort: hudObservation?.effort ?? null,
-      statusLineObserved: hudObservation != null,
       openRequest: modelSheetRequest,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,
