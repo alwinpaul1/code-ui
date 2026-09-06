@@ -3,6 +3,7 @@ import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
 import { getNextHostNameFromHosts } from './host-names'
 import * as hostListLoads from './host-list-load-sharing'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
+import { withDirectEndpoint } from './mobile-direct-endpoint-list'
 import { resetPairingKeychainForTests } from './pairing-keychain'
 import { readHostDeviceToken, writeHostDeviceToken } from './host-device-token-store'
 import {
@@ -15,7 +16,8 @@ import {
   loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
   removeMobileRelayHostOverlays,
-  saveMobileRelayHostOverlay
+  saveMobileRelayHostOverlay,
+  loadMobileRelayHostOverlays
 } from './mobile-relay-host-overlay-store'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 import {
@@ -302,12 +304,14 @@ export async function updateHostNameAndEndpoint(
   hostId: string,
   updates: { name?: string; endpoint?: string }
 ): Promise<void> {
+  let previousEndpoint: string | null = null
   await mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((host) => host.id === hostId)
     if (index === -1) {
       throw new Error('Host not found')
     }
     const next = hosts.slice()
+    previousEndpoint = next[index]!.endpoint
     next[index] = {
       ...next[index]!,
       ...(updates.name !== undefined ? { name: updates.name } : {}),
@@ -315,6 +319,21 @@ export async function updateHostNameAndEndpoint(
     }
     return next
   })
+  // Why keep the old address: the same desktop is reachable at different
+  // addresses on different networks (home LAN, Tailscale elsewhere). Both stay
+  // in the list and the supervisor races them; the edit only changes which is
+  // dialled first.
+  if (updates.endpoint !== undefined && previousEndpoint && previousEndpoint !== updates.endpoint) {
+    const overlay = (await loadMobileRelayHostOverlays(new Set([hostId]))).get(hostId)
+    await saveMobileRelayHostOverlay({
+      v: 2,
+      hostId,
+      endpoints: withDirectEndpoint(overlay?.endpoints, updates.endpoint, previousEndpoint),
+      ...(overlay?.relayHostId ? { relayHostId: overlay.relayHostId } : {}),
+      ...(overlay?.relay ? { relay: overlay.relay } : {})
+    })
+    hostListLoads.dropSharedHostListLoad()
+  }
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {

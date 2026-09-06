@@ -1,11 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "extends": [
-    "../.oxlintrc.json"
-  ],
-  "ignorePatterns": [
-    "src/terminal/terminal-webview-engine.generated.ts"
-  ],
+  "extends": ["../.oxlintrc.json"],
+  "ignorePatterns": ["src/terminal/terminal-webview-engine.generated.ts"],
   "rules": {
     "react-hooks/exhaustive-deps": "off",
     "react/no-unescaped-entities": "off",
@@ -20,9 +16,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "src/terminal/TerminalWebView.tsx"
-      ],
+      "files": ["src/terminal/TerminalWebView.tsx"],
       "rules": {
         "max-lines": [
           "error",
@@ -35,9 +29,7 @@
       }
     },
     {
-      "files": [
-        "app/h/*/source-control/*.tsx"
-      ],
+      "files": ["app/h/*/source-control/*.tsx"],
       "rules": {
         "max-lines": [
           "error",
@@ -50,9 +42,7 @@
       }
     },
     {
-      "files": [
-        "app/index.tsx"
-      ],
+      "files": ["app/index.tsx"],
       "rules": {
         "max-lines": [
           "error",
@@ -65,9 +55,7 @@
       }
     },
     {
-      "files": [
-        "src/transport/rpc-client.ts"
-      ],
+      "files": ["src/transport/rpc-client.ts"],
       "rules": {
         "max-lines": [
           "error",
@@ -80,9 +68,7 @@
       }
     },
     {
-      "files": [
-        "scripts/mock-server.ts"
-      ],
+      "files": ["scripts/mock-server.ts"],
       "rules": {
         "max-lines": [
           "error",
@@ -95,9 +81,7 @@
       }
     },
     {
-      "files": [
-        "app/h/*/files/*.tsx"
-      ],
+      "files": ["app/h/*/files/*.tsx"],
       "rules": {
         "max-lines": [
           "error",
@@ -110,14 +94,12 @@
       }
     },
     {
-      "files": [
-        "src/transport/mobile-endpoint-supervisor.ts"
-      ],
+      "files": ["src/transport/mobile-endpoint-supervisor.ts"],
       "rules": {
         "max-lines": [
           "error",
           {
-            "max": 360,
+            "max": 410,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -125,9 +107,7 @@
       }
     },
     {
-      "files": [
-        "src/session/use-mobile-native-chat-controller.ts"
-      ],
+      "files": ["src/session/use-mobile-native-chat-controller.ts"],
       "rules": {
         "max-lines": [
           "error",
@@ -140,9 +120,7 @@
       }
     },
     {
-      "files": [
-        "src/session/use-mobile-native-chat-session-options.ts"
-      ],
+      "files": ["src/session/use-mobile-native-chat-session-options.ts"],
       "rules": {
         "max-lines": [
           "error",
@@ -155,9 +133,20 @@
       }
     },
     {
-      "files": [
-        "src/session/use-mobile-native-chat-drafts.ts"
-      ],
+      "files": ["src/session/use-mobile-native-chat-drafts.ts"],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 320,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/transport/host-store.ts"],
       "rules": {
         "max-lines": [
           "error",

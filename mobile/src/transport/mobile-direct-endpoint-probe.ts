@@ -1,12 +1,7 @@
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { HostProfile } from './types'
-
-function directEndpointUrls(host: HostProfile): string[] {
-  const endpoints =
-    host.endpoints?.filter(({ kind }) => kind !== 'relay').map(({ url }) => url) ?? []
-  return [...new Set([host.endpoint, ...endpoints])]
-}
+import { directEndpointUrls } from './mobile-direct-endpoint-list'
 
 export function directPathForEndpoint(
   host: HostProfile,
@@ -60,7 +55,11 @@ export async function openAuthenticatedDirectEndpoint(
   // Why: a relay replacement (network handoff) must not sit behind a 12s probe
   // of an endpoint that is not answering; aborting settles this null at once.
   signal?: AbortSignal
-): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
+): Promise<{
+  client: RpcClient
+  path: Exclude<MobileConnectionPath, 'relay'>
+  endpoint: string
+} | null> {
   const endpoints = directEndpointUrls(host)
   if (signal?.aborted) {
     return null
@@ -111,7 +110,7 @@ export async function openAuthenticatedDirectEndpoint(
               candidate.close()
             }
           }
-          resolve({ client, path: directPathForEndpoint(host, endpoint) })
+          resolve({ client, path: directPathForEndpoint(host, endpoint), endpoint })
         },
         () => {
           if (settled) {

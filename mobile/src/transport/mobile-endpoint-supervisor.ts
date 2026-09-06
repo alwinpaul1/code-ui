@@ -27,6 +27,8 @@ import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason, HostProfile } from './types'
 import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
+import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
+import { directEndpointUrls, withPreferredDirectEndpoint } from './mobile-direct-endpoint-list'
 import {
   logRelayConnected,
   logRelayCredentialUnavailable,
@@ -34,6 +36,9 @@ import {
 } from './mobile-relay-diagnostic-log'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
+
+// A direct address that has not authenticated by then is not on this network.
+const LAUNCH_RACE_TIMEOUT_MS = 6_000
 
 const DIRECT_OBSERVATION_MS = 30_000
 const MINIMUM_DWELL_MS = 60_000
@@ -58,6 +63,7 @@ export class MobileEndpointSupervisor {
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
   private readonly directProbe: DirectReturnProbe
+  private launchRace: AbortController | null = null
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
@@ -227,6 +233,10 @@ export class MobileEndpointSupervisor {
         logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
       }
     })
+    // Why before the relay work: a phone that knows more than one direct
+    // address (LAN and Tailscale) must not dial only its primary and fall to
+    // the relay while the other would have answered in milliseconds.
+    this.raceDirectCandidates()
     if (this.relayReconnect.needsRecovery(this.logical.getState())) {
       // Why: the first direct dial can fail while encrypted relay credentials
       // are still loading, before the supervisor subscribes to state changes.
@@ -235,6 +245,55 @@ export class MobileEndpointSupervisor {
       this.directProbe.schedule()
       this.directGrace.arm()
     }
+  }
+
+  /**
+   * Dial every known direct address at once and adopt the first that
+   * authenticates, even over a relay session that won meanwhile: direct is
+   * the faster path and this is the one moment the hysteresis (three probes,
+   * 45 s) is skipped. The winner becomes the primary so the next launch dials
+   * it first, and the loser stays in the list for the next network.
+   */
+  private raceDirectCandidates(): void {
+    if (this.launchRace || directEndpointUrls(this.host).length < 2) {
+      return
+    }
+    const controller = new AbortController()
+    this.launchRace = controller
+    void openAuthenticatedDirectEndpoint(
+      this.host,
+      this.dependencies.openDirect,
+      LAUNCH_RACE_TIMEOUT_MS,
+      controller.signal
+    )
+      .then(async (won) => {
+        if (!won) {
+          return
+        }
+        if (
+          !this.isActive() ||
+          (this.logical.getActivePath() !== 'relay' && this.logical.getState() === 'connected')
+        ) {
+          won.client.close()
+          return
+        }
+        await this.logical.migrateTo(won.client, won.path)
+        this.hysteresis.recordDirectSuccess(this.dependencies.now())
+        this.hysteresis.recordMigration(this.dependencies.now())
+        this.directRaceLost = false
+        this.rememberDirectVerdict(true)
+        const preferred = withPreferredDirectEndpoint(this.host, won.endpoint)
+        if (preferred) {
+          this.host = preferred
+          await this.dependencies.saveHost(preferred).catch(() => undefined)
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.launchRace === controller) {
+          this.launchRace = null
+        }
+      })
   }
 
   setForeground(foreground: boolean): void {
@@ -252,6 +311,8 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    this.launchRace?.abort()
+    this.launchRace = null
     this.unsubscribeState?.()
     this.unsubscribeState = null
     this.backgroundGrace.stop()

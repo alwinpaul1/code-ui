@@ -107,6 +107,49 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
+  it('races every known direct address at start and keeps the winner as primary', async () => {
+    // The phone was paired over Tailscale (dead here) but also knows the LAN
+    // address: it must connect on the LAN at once, and dial it first next time.
+    const paired = {
+      ...host,
+      endpoint: 'ws://100.72.20.78:6768',
+      endpoints: [
+        { id: 'direct-primary', kind: 'tailscale' as const, url: 'ws://100.72.20.78:6768' },
+        { id: 'direct-lan', kind: 'lan' as const, url: 'ws://192.168.1.154:6768' },
+        {
+          id: 'relay-primary',
+          kind: 'relay' as const,
+          url: 'wss://relay-c1.onorca.dev/v1/connect/id'
+        }
+      ]
+    }
+    const openDirect = vi.fn((endpoint: string) =>
+      endpoint.includes('192.168.1.154')
+        ? new FakeSession('connected')
+        : new FakeSession('connecting')
+    )
+    const deps = dependencies({ openDirect })
+    const logical = new FakeLogicalClient('connecting', 'tailscale')
+    const supervisor = new MobileEndpointSupervisor(logical, paired, deps)
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openDirect).toHaveBeenCalledWith('ws://100.72.20.78:6768')
+    expect(openDirect).toHaveBeenCalledWith('ws://192.168.1.154:6768')
+    await vi.waitFor(() =>
+      expect(logical.migrateTo).toHaveBeenCalledWith(expect.any(FakeSession), 'lan')
+    )
+    await vi.waitFor(() =>
+      expect(deps.saveHost).toHaveBeenCalledWith(
+        expect.objectContaining({ endpoint: 'ws://192.168.1.154:6768' })
+      )
+    )
+    const saved = (deps.saveHost as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as typeof host
+    expect(saved.endpoints?.map((entry) => entry.url)).toEqual(
+      expect.arrayContaining(['ws://100.72.20.78:6768', 'ws://192.168.1.154:6768'])
+    )
+    supervisor.stop()
+  })
+
   it('writes the verdict when the relay wins the race against a silent direct endpoint', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })

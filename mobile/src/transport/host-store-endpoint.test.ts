@@ -52,13 +52,30 @@ describe('updateHostNameAndEndpoint', () => {
       endpoint: 'ws://192.168.1.10:6768'
     })
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
+    // The hosts record is still one atomic write; the second write is the
+    // endpoint list, which keeps the previous address alongside the new one.
+    const hostWrites = vi
+      .mocked(AsyncStorage.setItem)
+      .mock.calls.filter(([key]) => key === 'orca:hosts')
+    expect(hostWrites).toHaveLength(1)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       'orca:hosts',
       JSON.stringify([
         { ...stored[0], name: 'Home Desk', endpoint: 'ws://192.168.1.10:6768' },
         stored[1]
       ])
+    )
+    const overlayWrite = vi
+      .mocked(AsyncStorage.setItem)
+      .mock.calls.find(([key]) => key !== 'orca:hosts')
+    expect(overlayWrite).toBeDefined()
+    const overlays = JSON.parse(String(overlayWrite![1])) as Array<{
+      hostId: string
+      endpoints: Array<{ url: string }>
+    }>
+    const mine = overlays.find((overlay) => overlay.hostId === 'host-1')
+    expect(mine?.endpoints.map((entry) => entry.url)).toEqual(
+      expect.arrayContaining([stored[0]!.endpoint, 'ws://192.168.1.10:6768'])
     )
   })
 
