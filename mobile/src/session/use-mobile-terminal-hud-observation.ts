@@ -7,6 +7,7 @@ import {
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
@@ -96,7 +97,11 @@ export function useMobileTerminalHudObservation(args: {
               ? claudePermissionFromScreen(lines)
               : null
         const queued =
-          agent === 'claude' || agent === 'openclaude' ? queuedMessagesFromScreen(lines) : []
+          agent === 'codex'
+            ? codexQueuedMessagesFromScreen(lines)
+            : agent === 'claude' || agent === 'openclaude'
+              ? queuedMessagesFromScreen(lines)
+              : []
         queueScopeRef.current = handleKey
         setQueuedMessages((current) =>
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued

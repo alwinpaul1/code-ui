@@ -19,44 +19,52 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 describe('terminal approval observation', () => {
-  it('refreshes an active Claude queue within one second and clears consumed entries', async () => {
-    vi.useFakeTimers()
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValue({
+  it.each(['claude', 'codex'])(
+    'refreshes an active %s queue within one second and clears consumed entries',
+    async (agent) => {
+      vi.useFakeTimers()
+      const sendRequest = vi.fn().mockResolvedValue({
         ok: true,
         result: {
           terminal: {
-            lines: ['Working', '', '❯ desktop task', '─────', '❯ Press up to edit queued messages']
+            lines:
+              agent === 'codex'
+                ? [
+                    '• Queued follow-up inputs',
+                    '  ↳ desktop task',
+                    '    alt + ↑ edit last queued message'
+                  ]
+                : ['Working', '', '❯ desktop task', '─────', '❯ Press up to edit queued messages']
           }
         }
       })
-    const client = { sendRequest } as unknown as RpcClient
-    function Harness() {
-      observation = useMobileTerminalHudObservation({
-        client,
-        enabled: true,
-        active: true,
-        handleRef,
-        handleKey: 'terminal',
-        agent: 'claude'
+      const client = { sendRequest } as unknown as RpcClient
+      function Harness() {
+        observation = useMobileTerminalHudObservation({
+          client,
+          enabled: true,
+          active: true,
+          handleRef,
+          handleKey: 'terminal',
+          agent
+        })
+        return null
+      }
+      await act(async () => {
+        renderer = create(createElement(Harness))
       })
-      return null
+      expect(observation.queuedMessages).toEqual(['desktop task'])
+      sendRequest.mockResolvedValue({
+        ok: true,
+        result: { terminal: { lines: ['Running desktop task'] } }
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(observation.queuedMessages).toEqual([])
+      expect(sendRequest).toHaveBeenCalledTimes(2)
     }
-    await act(async () => {
-      renderer = create(createElement(Harness))
-    })
-    expect(observation.queuedMessages).toEqual(['desktop task'])
-    sendRequest.mockResolvedValue({
-      ok: true,
-      result: { terminal: { lines: ['Running desktop task'] } }
-    })
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1000)
-    })
-    expect(observation.queuedMessages).toEqual([])
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-  })
+  )
   it('shows a Codex screen-only approval and removes it when the dialog closes', async () => {
     vi.useFakeTimers()
     const sendRequest = vi
