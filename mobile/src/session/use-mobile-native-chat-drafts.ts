@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
+import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countUserTextOccurrences,
@@ -126,6 +127,11 @@ export function useMobileNativeChatDrafts(args: {
   })
 
   useMobileNativeChatDraftPersistence(draftKey, drafts, setDrafts)
+  useMobileNativeChatImagePreviewPersistence(
+    pendingKey,
+    imagePreviewsBySession,
+    setImagePreviewsBySession
+  )
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
       if (!draftKey) {

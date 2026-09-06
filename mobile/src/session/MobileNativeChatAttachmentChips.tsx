@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { openImagePreview } from './image-preview-store'
 
 /** The strip above the composer text: image thumbnails and named document
  *  chips, each with its remove badge. */
@@ -59,11 +60,20 @@ export function MobileNativeChatAttachmentChips({
                 </Txt>
               </View>
             ) : (
-              <Image
-                source={{ uri: attachment.previewUri }}
-                style={{ width: '100%', height: '100%', borderRadius: radius.sm }}
-                resizeMode="cover"
-              />
+              // Why: the picture is already on the phone, so a tap opens it
+              // full-screen at once, same as a thumbnail in a sent bubble.
+              <Pressable
+                accessibilityRole="imagebutton"
+                accessibilityLabel="Preview image"
+                style={{ flex: 1 }}
+                onPress={() => openImagePreview(attachment.previewUri, attachment.name ?? 'Image')}
+              >
+                <Image
+                  source={{ uri: attachment.previewUri }}
+                  style={{ width: '100%', height: '100%', borderRadius: radius.sm }}
+                  resizeMode="cover"
+                />
+              </Pressable>
             )}
             {onRemoveAttachment ? (
               <Pressable

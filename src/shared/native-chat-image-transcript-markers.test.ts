@@ -44,6 +44,38 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
+  it('folds a companion source turn that FOLLOWS the prompt (current Claude Code)', () => {
+    // Claude Code now writes the prompt row first and the `[Image: source: …]`
+    // row after it (turnCompanion). Seen 2026-09-06: the trailing row rendered
+    // as its own "Image" bubble under the prompt.
+    const out = normalizeImageTranscriptMessages([
+      userText('prompt', " [Image #42] Don't show default and sub name too"),
+      userText('companion', '[Image: source: /tmp/orca-paste-1788675001182-874e.png]'),
+      { ...userText('reply', 'ok'), role: 'assistant' }
+    ])
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'reply'])
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/orca-paste-1788675001182-874e.png' },
+      { type: 'text', text: "Don't show default and sub name too" }
+    ])
+  })
+
+  it('folds every trailing companion row of a multi-image send', () => {
+    const out = normalizeImageTranscriptMessages([
+      userText('prompt', 'first [Image #40] then [Image #41]'),
+      userText('c1', '[Image: source: /tmp/a.png]'),
+      userText('c2', '[Image: source: /tmp/b.png]'),
+      userText('later', 'unrelated')
+    ])
+    expect(out.map((message) => message.id)).toEqual(['prompt', 'later'])
+    expect(out[0]!.blocks).toEqual([
+      { type: 'image-ref', path: '/tmp/a.png' },
+      { type: 'image-ref', path: '/tmp/b.png' },
+      // Only the leading/trailing whitespace around a marker is trimmed.
+      { type: 'text', text: 'first  then' }
+    ])
+  })
+
   it('folds and strips markers in later text blocks', () => {
     const prompt: NativeChatMessage = {
       ...userText('prompt', 'unused'),

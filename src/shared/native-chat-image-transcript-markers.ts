@@ -114,8 +114,10 @@ export function hasImagePromptMarker(message: NativeChatMessage): boolean {
   return message.blocks.some((block) => isTextBlock(block) && IMAGE_PROMPT_MARKER.test(block.text))
 }
 
-/** Claude records image paths as source turns followed by a prompt carrying
- *  image markers. Merge the whole run back into one native user turn. */
+/** Claude records image paths as `[Image: source: …]` companion turns next to
+ *  a prompt carrying `[Image #N]` markers: before the prompt in older builds,
+ *  after it (a `turnCompanion` row) in current ones. Merge either run back into
+ *  one native user turn. */
 export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
@@ -167,6 +169,31 @@ export function normalizeImageTranscriptMessages(
         blocks: messageImagePaths.map((path) => ({ type: 'image-ref' as const, path }))
       })
       continue
+    }
+    if (hasImagePromptMarker(message)) {
+      const trailingPaths: string[] = []
+      let nextIndex = index + 1
+      while (nextIndex < messages.length) {
+        const candidate = messages[nextIndex]!
+        const candidatePaths = imageSourcePathsFromMessage(candidate)
+        if (candidate.source !== message.source || candidatePaths.length === 0) {
+          break
+        }
+        trailingPaths.push(...candidatePaths)
+        nextIndex += 1
+      }
+      if (trailingPaths.length > 0) {
+        normalized ??= messages.slice(0, index)
+        normalized.push({
+          ...message,
+          blocks: [
+            ...trailingPaths.map((path) => ({ type: 'image-ref' as const, path })),
+            ...stripImagePromptMarkersFromTextBlocks(message.blocks)
+          ]
+        })
+        index = nextIndex - 1
+        continue
+      }
     }
     const blocks = stripImagePromptMarkersFromTextBlocks(message.blocks)
     if (blocks === message.blocks) {
