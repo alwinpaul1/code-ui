@@ -185,12 +185,15 @@ export function findLandedImagePreviewEchoes(
           return false
         }
         // Why not equality alone: a send is glued onto the agent's input line with any
-        // send adjacent to it, so an image send that shares a turn with a following
-        // text-only send lands in a row whose text is the concatenation. Requiring the
-        // whole row to equal this echo left it unmatched, and since both other
-        // retirement paths skip image echoes, nothing could ever retire it.
+        // send adjacent to it, so an image send that shares a turn with another send
+        // lands in a row whose text is the concatenation. Requiring the whole row to
+        // equal this echo left it unmatched, and since both other retirement paths
+        // skip image echoes, nothing could ever retire it. The image send can sit
+        // anywhere in the glue (a text-only send queued first, the photo after it
+        // — seen 2026-09-06 on 0.2.18), so match it as a whole-word segment.
         return (
-          text === targetText || (imageMessageIds.has(message.id) && text.startsWith(targetText))
+          text === targetText ||
+          (imageMessageIds.has(message.id) && containsGluedSegment(text, targetText))
         )
       }
       const imageCount = message.blocks.filter(isImageRefBlock).length
@@ -217,6 +220,27 @@ export function findLandedImagePreviewEchoes(
     landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
   }
   return landed
+}
+
+/** `segment` appears in `text` as a run of whole words (the glue joins sends
+ *  with a space), so "does it" matches "… does [gap] … does it" at its end
+ *  but "it" alone does not match "edit". */
+function containsGluedSegment(text: string, segment: string): boolean {
+  let from = 0
+  while (from <= text.length - segment.length) {
+    const at = text.indexOf(segment, from)
+    if (at === -1) {
+      return false
+    }
+    const end = at + segment.length
+    const startsWord = at === 0 || text[at - 1] === ' '
+    const endsWord = end === text.length || text[end] === ' '
+    if (startsWord && endsWord) {
+      return true
+    }
+    from = at + 1
+  }
+  return false
 }
 
 export function findLandedUnconfirmedSends(

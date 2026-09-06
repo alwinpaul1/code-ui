@@ -63,6 +63,32 @@ describe('mobile native chat image preview reconciliation', () => {
     ])
   })
 
+  it('binds an image echo that was glued AFTER a text-only send (suffix of the row)', () => {
+    // Seen on 0.2.18: "…does" sent text-only while the agent worked, then the photo
+    // send "…does it" glued after it. The row read "…does [Image #1] …does it"; the
+    // prefix-only matcher left the thumbnail echo queued forever beside a chips row.
+    const messages = [
+      userText('prompt', 'see how orca github does [Image #1] see how orca github does it'),
+      userText('companion', '[Image: source: /tmp/a.png]')
+    ]
+    const preview = {
+      ...pending('pending', ['file:///a.jpg']),
+      text: 'see how orca github does it'
+    }
+    expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([
+      { pendingId: 'pending', messageId: 'prompt', images: ['file:///a.jpg'] }
+    ])
+  })
+
+  it('does not bind an image echo to a row where its caption is only part of a word', () => {
+    const messages = [
+      userText('source', '[Image: source: /tmp/a.png]'),
+      userText('prompt', 'please edit this[Image #1]')
+    ]
+    const preview = { ...pending('pending', ['file:///a.jpg']), text: 'it' }
+    expect(findLandedImagePreviewEchoes(messages, [preview])).toEqual([])
+  })
+
   it('does not bind an image echo to a row that merely shares a word', () => {
     const messages = [
       userText('source', '[Image: source: /tmp/a.png]'),
