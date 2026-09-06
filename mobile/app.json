@@ -2,7 +2,7 @@
   "expo": {
     "name": "Code UI",
     "slug": "code-ui",
-    "version": "0.2.45",
+    "version": "0.2.46",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",

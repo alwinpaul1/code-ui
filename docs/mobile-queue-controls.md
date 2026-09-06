@@ -85,3 +85,24 @@ this visual change does not extend which entries their native controls can edit.
 
 Validation: 555 test files passed (4,375 tests passed, 3 skipped), TypeScript and
 lint passed, and the Android release build succeeded.
+
+## Editor presentation, 0.2.46
+
+The editor now has a compact footer with an icon-only Delete action, Cancel, and
+a checkmark Save button. The header close button restores the original queued
+input, just like Cancel. The writing area is larger, the sheet respects the
+bottom safe area, and its body can scroll independently of the actions. Controls
+are disabled during an operation; the header shows its progress indicator.
+
+Mobbin MCP was unavailable in this session, and its public pages did not expose
+the requested reference screens. The accessible reference was
+[Slack's documented mobile message editor](https://slack.com/help/articles/202395258-Edit-or-delete-messages-Edit-or-delete-messages),
+which uses a checkmark to save. This is not a Mobbin-verified design.
+
+The installed versionCode 48 was visually inspected on a physical Android phone
+with the keyboard closed and open. The field and all footer actions were visible
+above the keyboard. Subsequent save automation stopped at its session/editor
+guards after the phone changed state; it is not counted as a completed save test.
+All 555 test files passed (4,375 tests, 3 skipped), including the queue operations
+and editor action/disabled-state checks. TypeScript, lint, and the Android release
+build passed.

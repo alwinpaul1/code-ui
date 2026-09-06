@@ -3,7 +3,9 @@ import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Modal: 'Modal',
+  ScrollView: 'ScrollView',
   Pressable: 'Pressable',
   TextInput: 'TextInput',
   View: 'View',
@@ -11,6 +13,10 @@ vi.mock('react-native', () => ({
   KeyboardAvoidingView: 'KeyboardAvoidingView',
   Platform: { OS: 'android' },
   StyleSheet: { create: (styles: unknown) => styles }
+}))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Trash2: 'Trash2', X: 'X' }))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 24, left: 0, right: 0 })
 }))
 it('edits in a chat text field with short actions and no terminal instructions', async () => {
   const editor = {
@@ -33,9 +39,8 @@ it('edits in a chat text field with short actions and no terminal instructions',
   expect(editor.setText).toHaveBeenCalledWith('updated message')
   expect(renderer.root.findAllByType('Text').map((node) => node.props.children)).toEqual([
     'Edit queued message',
-    'Save',
     'Cancel',
-    'Delete message'
+    'Save'
   ])
   for (const [label, handler] of [
     ['Save queued message', editor.save],
@@ -45,5 +50,22 @@ it('edits in a chat text field with short actions and no terminal instructions',
     act(() => renderer.root.findByProps({ accessibilityLabel: label }).props.onPress())
     expect(handler).toHaveBeenCalledOnce()
   }
+  act(() =>
+    renderer.root
+      .findByProps({ accessibilityLabel: 'Cancel changes to queued message' })
+      .props.onPress()
+  )
+  expect(editor.cancel).toHaveBeenCalledTimes(2)
+  await act(async () => {
+    renderer.update(
+      createElement(MobileNativeChatQueueEditor, { editor: { ...editor, busy: true } })
+    )
+  })
+  expect(renderer.root.findByType('TextInput').props.editable).toBe(false)
+  for (const button of renderer.root.findAllByType('Pressable')) {
+    expect(button.props.disabled).toBe(true)
+  }
+  act(() => renderer.root.findByType('Modal').props.onRequestClose())
+  expect(editor.cancel).toHaveBeenCalledTimes(2)
   await act(async () => renderer.unmount())
 })
