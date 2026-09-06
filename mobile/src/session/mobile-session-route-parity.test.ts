@@ -72,8 +72,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 const HEAD_CALLBACK_BODY_SHA256 = 'aeab73f01a7625ca468aed9b0dce7d67f020caaeaf695cfa61864c3d834a4ada'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+// 2026-09-06: Codex server creation now reports unsupported hosts instead of
+// falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '7840e844c1cc9ec4fe9b3c9cd439614e13e5c25480119a008df903b61c73d3fb'
+  '72a366846cd56bd27e4a12cac7ba8f11fb24984e422b2c784184ae3ea5c186ce'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -82,7 +84,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   '8b2229f4a3c880c0e21f546a1bfabb27b3536b9a2344cf3b39f5b7da82e24dba'
 const HEAD_TIMER_CLEANUP_SHA256 = 'be3117bde057916619602341bef132f1bd8767d1dff4bacdfd547ca690f5640a'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '889f4f69daa52587811657710d378bf311bcc0c3ccabc119e5c1ac3e32bd5f36'
+  '6111d2e1385ccc700ec20ba7683ef035c57af6bb91799118911d888def073d7d'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 const HEAD_LEAF_JSX_SHA256 = '3dfc81f6688249dc371643f2f5ae0d481e107eba625395e48f1e43fbae74e710'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -520,7 +522,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(617)
+    expect(strings).toHaveLength(618)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)
