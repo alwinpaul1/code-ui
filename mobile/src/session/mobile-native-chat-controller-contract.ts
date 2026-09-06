@@ -39,6 +39,7 @@ export type MobileNativeChatController = {
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
+  nativeChatQueuedMessages?: string[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   nativeChatAgentWorking: boolean

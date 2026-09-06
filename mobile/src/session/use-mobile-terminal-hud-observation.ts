@@ -6,6 +6,8 @@ import {
   parseTerminalHudObservation,
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
+import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -13,8 +15,8 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 const HUD_POLL_MS = 5_000
 
 /**
- * While chat covers a terminal, read its screen every few seconds and pull the
- * model/effort badge out of the Claude Code status line.
+ * While chat covers a terminal, read its screen for live controls and queued
+ * messages: once per second while active, every five seconds while idle.
  *
  * Why polling `terminal.read`: chat pauses the terminal stream, the hook report
  * has no effort, and the host's mobile allowlist exposes no transcript read.
@@ -29,8 +31,11 @@ export function useMobileTerminalHudObservation(args: {
   /** Codex states model/effort/mode differently and its host agent-status is
    *  mislabelled 'claude', so a codex tab must parse only the Codex footer —
    *  never the Claude bracket badge, which would leak a Claude model onto it. */
+  active?: boolean
   agent?: string | null
 }): {
+  permissionDismissed: boolean
+  queuedMessages: string[]
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -39,18 +44,24 @@ export function useMobileTerminalHudObservation(args: {
   terminalPermission: MobileChatPermission | null
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
+  const queueScopeRef = useRef<string | null>(null)
+  const [permissionDismissed, setPermissionDismissed] = useState(false)
+  const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
   useEffect(() => {
+    setPermissionDismissed(false)
+    setQueuedMessages((current) => (current.length ? [] : current))
     setObservation(null)
     setDialogOptions(null)
     setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
       return
     }
+    let sawPermission = false
     let active = true
     let inFlight = false
     const read = async (): Promise<TerminalHudObservation | null> => {
@@ -60,11 +71,15 @@ export function useMobileTerminalHudObservation(args: {
       }
       inFlight = true
       try {
-        const response = await client.sendRequest('terminal.read', {
-          terminal: handle,
-          screen: true
-        })
-        if (!active || !response.ok) {
+        const response = await client.sendRequest(
+          'terminal.read',
+          {
+            terminal: handle,
+            screen: true
+          },
+          { timeoutMs: 2500, budgetSpansConnect: true }
+        )
+        if (!active || handle !== handleRef.current || !response.ok) {
           return null
         }
         const terminal = (response as RpcSuccess).result as {
@@ -74,7 +89,24 @@ export function useMobileTerminalHudObservation(args: {
         const lines = Array.isArray(raw)
           ? raw.filter((line): line is string => typeof line === 'string')
           : []
-        const permission = agent === 'codex' ? codexPermissionFromScreen(lines) : null
+        const permission =
+          agent === 'codex'
+            ? codexPermissionFromScreen(lines)
+            : agent === 'claude' || agent === 'openclaude'
+              ? claudePermissionFromScreen(lines)
+              : null
+        const queued =
+          agent === 'claude' || agent === 'openclaude' ? queuedMessagesFromScreen(lines) : []
+        queueScopeRef.current = handleKey
+        setQueuedMessages((current) =>
+          JSON.stringify(current) === JSON.stringify(queued) ? current : queued
+        )
+        if (permission) {
+          sawPermission = true
+          setPermissionDismissed(false)
+        } else if (sawPermission) {
+          setPermissionDismissed(true)
+        }
         setTerminalPermission((current) =>
           JSON.stringify(current) === JSON.stringify(permission) ? current : permission
         )
@@ -108,17 +140,24 @@ export function useMobileTerminalHudObservation(args: {
     }
     readRef.current = read
     void read()
-    const timer = setInterval(() => void read(), HUD_POLL_MS)
+    const timer = setInterval(() => void read(), args.active ? 1000 : HUD_POLL_MS)
     return () => {
       active = false
       readRef.current = async () => null
       clearInterval(timer)
     }
-  }, [agent, client, enabled, handleKey, handleRef])
+  }, [agent, args.active, client, enabled, handleKey, handleRef])
 
   // Why: a Shift+Tab from the phone changes the footer at once; waiting up to
   // 5s for the next poll would make the mode pill look stuck.
   const refresh = useCallback(() => readRef.current(), [])
 
-  return { observation, refresh, dialogOptions, terminalPermission }
+  return {
+    observation,
+    refresh,
+    dialogOptions,
+    terminalPermission,
+    queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
+    permissionDismissed
+  }
 }

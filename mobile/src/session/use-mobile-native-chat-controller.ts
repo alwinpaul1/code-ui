@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type MutableRefObject
-} from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 import { useMobileNativeChatCancelQueued } from './use-mobile-native-chat-cancel-queued'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -22,7 +15,7 @@ import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
-import { slashCommandOpensOverlay } from '../../../src/shared/native-chat-slash-commands'
+import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
 import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
 import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -35,7 +28,11 @@ import type { MobileNativeChatController } from './mobile-native-chat-controller
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
-import { withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
+import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
+import {
+  withTerminalDialogOptions,
+  resolveObservedPermission
+} from './mobile-terminal-permission-options-merge'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -162,28 +159,30 @@ export function useMobileNativeChatController(args: {
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
-  // Throttle the streaming bubble: OpenCode emits a status frame per streamed
-  // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
     activeChatStructured
       ? undefined
       : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
-  // The terminal's own status line is the one place that states model AND
-  // effort; read it while chat covers the terminal and let it win over the
-  // hook report, which names the model only.
+  const observeActive =
+    nativeChatAgentWorking ||
+    nativeChatStatus?.state === 'blocked' ||
+    nativeChatStatus?.state === 'waiting'
   const {
     observation: hudObservation,
     refresh: refreshTerminalHud,
     dialogOptions: terminalDialogOptions,
-    terminalPermission
+    terminalPermission,
+    permissionDismissed,
+    queuedMessages: visibleQueuedMessages
   } = useMobileTerminalHudObservation({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
     handleKey: showNativeChat ? streamScopeKey : null,
-    agent: activeChatResolution?.agent ?? null
+    agent: activeChatResolution?.agent ?? null,
+    active: observeActive
   })
   const {
     permission: reportedNativeChatPermission,
@@ -196,7 +195,11 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages,
     transcriptLoading: nativeChatSession.transcriptLoading
   })
-  const legacyNativeChatPermission = terminalPermission ?? reportedNativeChatPermission
+  const legacyNativeChatPermission = resolveObservedPermission(
+    terminalPermission,
+    reportedNativeChatPermission,
+    permissionDismissed
+  )
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
     nativeChatSession.status === 'ready' ||
@@ -239,21 +242,10 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     text: chatComposerText
   })
-  // A slash/skill result renders in the TUI, not the transcript: show the
-  // terminal for it without persisting a view override.
-  const peekTerminalForDispatchedCommand = useCallback(
-    (command: string) => {
-      // Why: a Codex command that only prints (/status, /compact, /new…) has no
-      // overlay to drive, so flipping to the terminal just loses the chat; only
-      // an overlay command (a picker, a prompt) needs the terminal on screen.
-      if (activeChatAgentRef.current === 'codex' && !slashCommandOpensOverlay('codex', command)) {
-        return
-      }
-      if (activeSessionTabId) {
-        peekTerminalTab(activeSessionTabId)
-      }
-    },
-    [activeChatAgentRef, activeSessionTabId, peekTerminalTab]
+  const peekTerminalForDispatchedCommand = useMobileChatCommandPeek(
+    activeChatAgentRef,
+    activeSessionTabId,
+    peekTerminalTab
   )
 
   const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
@@ -283,7 +275,9 @@ export function useMobileNativeChatController(args: {
     handleRef: activeHandleRef,
     deviceTokenRef,
     onSendError,
-    expectedCodexPermission: terminalPermission
+    expectedCodexPermission: terminalPermission,
+    expectedTerminalAgent: activeChatResolution?.agent,
+    onResponseAccepted: refreshTerminalHud
   })
 
   const handleNativeChatStop = useMobileNativeChatStop({
@@ -352,16 +346,7 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages,
     localPreviews: chatImagePreviewsByMessageIdLocal
   })
-  // Why: the approval envelope lands before the dialog is drawn; re-read the
-  // screen shortly after so the card shows the dialog's own options, not the
-  // generic pair, without waiting for the next 5s poll.
-  useEffect(() => {
-    if (!reportedNativeChatPermission) {
-      return
-    }
-    const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
-    return () => timers.forEach(clearTimeout)
-  }, [reportedNativeChatPermission, refreshTerminalHud])
+  useMobilePermissionRefresh(reportedNativeChatPermission, refreshTerminalHud)
   const codexModel = useCodexCurrentModel(
     activeChatResolution?.agent ?? null,
     hostId,
@@ -467,6 +452,8 @@ export function useMobileNativeChatController(args: {
     setChatComposerText,
     getChatComposerEditGeneration,
     chatPending,
+    nativeChatQueuedMessages:
+      activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews

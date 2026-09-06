@@ -1,4 +1,5 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import { pendingOutsideVisibleQueue } from './mobile-terminal-queued-messages'
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -95,7 +96,11 @@ export function MobileNativeChatOverlay({
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
-        onCancelQueued={controller.handleNativeChatCancelQueued}
+        onCancelQueued={
+          controller.nativeChatQueuedMessages?.length
+            ? undefined
+            : controller.handleNativeChatCancelQueued
+        }
         onOpenFile={onOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
@@ -104,7 +109,11 @@ export function MobileNativeChatOverlay({
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
-        pending={controller.chatPending}
+        queuedMessages={controller.nativeChatQueuedMessages}
+        pending={pendingOutsideVisibleQueue(
+          controller.chatPending,
+          controller.nativeChatQueuedMessages ?? []
+        )}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react'
-import { View } from 'react-native'
+import { ScrollView, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
@@ -15,6 +15,7 @@ function MobileNativeChatPermissionImpl({
   onRespond: (send: string) => Promise<boolean>
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
+  const [accepted, setAccepted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
   const commandStart = permission.detail?.search(/^\$ /m) ?? -1
@@ -29,11 +30,35 @@ function MobileNativeChatPermissionImpl({
     }
     submittingRef.current = true
     setSubmitting(true)
-    const accepted = await onRespond(send)
-    if (!accepted) {
-      submittingRef.current = false
-      setSubmitting(false)
+    let sent = false
+    try {
+      sent = await onRespond(send)
+      setAccepted(sent)
+    } catch {
+      setAccepted(false)
+    } finally {
+      if (!sent) {
+        submittingRef.current = false
+        setSubmitting(false)
+      }
     }
+  }
+  if (accepted) {
+    return (
+      <View
+        accessibilityLiveRegion="polite"
+        style={{
+          margin: space.md,
+          padding: space.md,
+          borderRadius: radius.md,
+          backgroundColor: colors.bgPanel
+        }}
+      >
+        <Txt variant="label" tone="secondary">
+          Response sent · waiting for agent
+        </Txt>
+      </View>
+    )
   }
   return (
     <View
@@ -66,27 +91,40 @@ function MobileNativeChatPermissionImpl({
           {permission.title}
         </Txt>
       </View>
-      {description ? (
-        <Txt variant="body" tone="secondary" selectable>
-          {description}
-        </Txt>
-      ) : null}
-      {command ? (
-        <View
-          style={{
-            padding: space.md,
-            gap: space.sm,
-            borderRadius: radius.md,
-            backgroundColor: colors.bgSunken
-          }}
+      {description || command ? (
+        <ScrollView
+          style={{ maxHeight: 160 }}
+          nestedScrollEnabled
+          contentContainerStyle={{ gap: space.md }}
         >
-          <Txt variant="caption" tone="muted">
-            Command
-          </Txt>
-          <Txt variant="mono" selectable>
-            {command}
-          </Txt>
-        </View>
+          {description ? (
+            <Txt variant="body" tone="secondary" selectable>
+              {description}
+            </Txt>
+          ) : null}
+          {command ? (
+            <View
+              style={{
+                padding: space.md,
+                gap: space.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.bgSunken
+              }}
+            >
+              <Txt variant="caption" tone="muted">
+                Command
+              </Txt>
+              <Txt variant="mono" selectable>
+                {command}
+              </Txt>
+            </View>
+          ) : null}
+        </ScrollView>
+      ) : null}
+      {submitting ? (
+        <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
+          Sending response…
+        </Txt>
       ) : null}
       <View style={{ gap: space.sm }}>
         {permission.options.map((option, index) => {

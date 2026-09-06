@@ -5,6 +5,7 @@ import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   View: 'View'
@@ -74,7 +75,38 @@ describe('MobileNativeChatPermission', () => {
     })
 
     expect(onRespond).toHaveBeenCalledOnce()
+    expect(
+      renderer.root
+        .findAllByType('Text')
+        .some((node) => node.props.children === 'Sending response…')
+    ).toBe(true)
+    expect(renderer.root.findByType('Pressable').props.disabled).toBe(true)
     await act(async () => resolveResponse(true))
+    expect(renderer.root.findAllByType('Pressable')).toHaveLength(0)
+    expect(
+      renderer.root
+        .findAllByType('Text')
+        .some((node) => node.props.children === 'Response sent · waiting for agent')
+    ).toBe(true)
+  })
+
+  it('restores choices after a rejected response', async () => {
+    const onRespond = vi.fn(async () => false)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: { title: 'Approve?', options: [{ label: 'Deny', send: '3' }] },
+          onRespond
+        })
+      )
+    })
+    await act(async () => renderer.root.findByType('Pressable').props.onPress())
+    expect(renderer.root.findByType('Pressable').props.disabled).toBe(false)
+    expect(
+      renderer.root
+        .findAllByType('Text')
+        .some((node) => node.props.children === 'Response sent · waiting for agent')
+    ).toBe(false)
   })
 
   it('renders all four Claude choices with full scope and keeps auto mode explicit', async () => {

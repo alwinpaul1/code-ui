@@ -44,6 +44,7 @@ export type MobileNativeChatViewProps = {
   /** Reads user draft mutations from the route-owned controller. */
   getComposerEditGeneration: () => number
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
+  queuedMessages?: readonly string[]
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an
    *  optimistic image bubble. */

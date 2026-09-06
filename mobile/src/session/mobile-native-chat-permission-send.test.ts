@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
+import { claudePermissionFromScreen } from './claude-terminal-permission'
 import {
   sendMobileNativeChatPermissionResponse,
   useMobileNativeChatPermissionSend
@@ -20,6 +21,36 @@ import {
 } from './mobile-native-chat-terminal-write-lock'
 
 describe('sendMobileNativeChatPermissionResponse', () => {
+  it('rejects a changed Claude command even when its choices are identical', async () => {
+    const screen = [
+      'Bash command',
+      ' echo first',
+      'Do you want to proceed?',
+      '❯ 1. Yes',
+      '  2. No',
+      'Esc to cancel · Tab to amend'
+    ]
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        result: {
+          terminal: { lines: screen.map((line) => line.replace('echo first', 'echo different')) }
+        }
+      })
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: null,
+        text: '1',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: claudePermissionFromScreen(screen)
+      })
+    ).resolves.toBe('rejected')
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
+  })
   it('writes an approval as raw bytes without appending Return', async () => {
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,

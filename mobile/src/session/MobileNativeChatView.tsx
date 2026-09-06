@@ -25,6 +25,7 @@ import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 
@@ -52,6 +53,7 @@ export function MobileNativeChatView({
   sendSurfaceId,
   getSendCompletionGeneration,
   getComposerEditGeneration,
+  queuedMessages,
   pending,
   imagePreviewsByMessageId,
   composerText,
@@ -393,6 +395,7 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
+      <MobileNativeChatQueue messages={queuedMessages} />
       <MobileNativeChatPromptCard
         ask={ask}
         askKey={askKey}

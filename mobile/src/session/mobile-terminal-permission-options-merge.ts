@@ -11,3 +11,12 @@ export function withTerminalDialogOptions(
   }
   return { ...permission, options: dialogOptions }
 }
+
+/** A dismissed, screen-confirmed Bash prompt must not fall back to a sticky hook summary. */
+export function resolveObservedPermission(
+  screen: MobileChatPermission | null,
+  reported: MobileChatPermission | null,
+  dismissed: boolean
+): MobileChatPermission | null {
+  return screen ?? (dismissed && reported?.title === 'Allow Bash?' ? null : reported)
+}

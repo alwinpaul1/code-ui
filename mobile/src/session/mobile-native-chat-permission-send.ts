@@ -1,4 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { claudePermissionFromScreen } from './claude-terminal-permission'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { RpcClient } from '../transport/rpc-client'
@@ -16,6 +17,7 @@ export async function sendMobileNativeChatPermissionResponse(args: {
   terminal: string
   deviceToken: string | null
   text: string
+  expectedTerminalAgent?: string | null
   expectedCodexPermission?: MobileChatPermission | null
 }): Promise<MobileNativeChatSendOutcome> {
   if (args.expectedCodexPermission) {
@@ -35,7 +37,10 @@ export async function sendMobileNativeChatPermissionResponse(args: {
       const lines = Array.isArray(raw)
         ? raw.filter((line): line is string => typeof line === 'string')
         : []
-      const current = codexPermissionFromScreen(lines)
+      const current =
+        args.expectedTerminalAgent === 'claude' || args.expectedTerminalAgent === 'openclaude'
+          ? claudePermissionFromScreen(lines)
+          : codexPermissionFromScreen(lines)
       if (
         JSON.stringify(current) !== JSON.stringify(args.expectedCodexPermission) ||
         !current?.options.some((option) => option.send === args.text)
@@ -63,6 +68,8 @@ export function useMobileNativeChatPermissionSend(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   onSendError: (message: string) => void
+  expectedTerminalAgent?: string | null
+  onResponseAccepted?: () => void
   expectedCodexPermission?: MobileChatPermission | null
 }): (text: string) => Promise<boolean> {
   return useCallback(
@@ -88,7 +95,8 @@ export function useMobileNativeChatPermissionSend(args: {
           terminal,
           deviceToken: args.deviceTokenRef.current,
           text,
-          expectedCodexPermission: args.expectedCodexPermission
+          expectedCodexPermission: args.expectedCodexPermission,
+          expectedTerminalAgent: args.expectedTerminalAgent
         })
       } finally {
         releaseMobileNativeChatTerminalWrite(terminal)
@@ -100,6 +108,9 @@ export function useMobileNativeChatPermissionSend(args: {
       } else if (outcome === 'rejected') {
         args.onSendError('Response not sent')
       }
+      if (outcome === 'accepted') {
+        args.onResponseAccepted?.()
+      }
       return outcome === 'accepted'
     },
     [
@@ -107,6 +118,8 @@ export function useMobileNativeChatPermissionSend(args: {
       args.deviceTokenRef,
       args.enabled,
       args.expectedCodexPermission,
+      args.expectedTerminalAgent,
+      args.onResponseAccepted,
       args.handleRef,
       args.onSendError
     ]
