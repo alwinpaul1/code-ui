@@ -147,6 +147,16 @@ function MobileNativeChatPermissionImpl({
                     : option.label
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
+              {rememberedPrefix || rememberedScope ? (
+                <View style={{ gap: space.sm, paddingTop: space.sm }}>
+                  <Txt variant="body" tone="secondary" selectable>
+                    {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
+                  </Txt>
+                  <Txt variant="body" tone="secondary" selectable>
+                    {rememberedPrefix ?? rememberedScope}
+                  </Txt>
+                </View>
+              ) : null}
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={option.label}
@@ -176,18 +186,6 @@ function MobileNativeChatPermissionImpl({
                   {shortLabel}
                 </Txt>
               </PressScale>
-              {rememberedPrefix || rememberedScope ? (
-                <View
-                  style={{ gap: space.sm, paddingHorizontal: space.md, paddingBottom: space.sm }}
-                >
-                  <Txt variant="caption" tone="secondary">
-                    {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
-                  </Txt>
-                  <Txt variant="mono" tone="secondary">
-                    {rememberedPrefix ?? rememberedScope}
-                  </Txt>
-                </View>
-              ) : null}
               {autoMode ? (
                 <Txt
                   variant="caption"
