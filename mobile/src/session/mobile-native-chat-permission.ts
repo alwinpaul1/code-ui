@@ -11,6 +11,7 @@
 export type MobileChatPermission = {
   title: string
   detail?: string
+  command?: string
   options: Array<{ label: string; send: string }>
 }
 

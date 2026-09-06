@@ -20,7 +20,9 @@ function MobileNativeChatPermissionImpl({
   const commandStart = permission.detail?.search(/^\$ /m) ?? -1
   const description =
     commandStart >= 0 ? permission.detail?.slice(0, commandStart).trim() : permission.detail
-  const command = commandStart >= 0 ? permission.detail?.slice(commandStart + 2).trim() : undefined
+  const command =
+    permission.command ??
+    (commandStart >= 0 ? permission.detail?.slice(commandStart + 2).trim() : undefined)
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -91,6 +93,20 @@ function MobileNativeChatPermissionImpl({
           const rememberedPrefix = option.label.match(
             /^Yes, and don't ask again for commands that start with\s+(.+)$/is
           )?.[1]
+          const rememberedScope = option.label.match(
+            /^Yes, and don['’]t ask again for:?\s+(.+)$/is
+          )?.[1]
+          const autoMode = /^Yes, and switch to auto mode\b/i.test(option.label)
+          const shortLabel =
+            rememberedPrefix || rememberedScope
+              ? 'Allow and remember'
+              : autoMode
+                ? 'Allow and switch to auto mode'
+                : /^Yes$/i.test(option.label)
+                  ? 'Allow once'
+                  : /^No$/i.test(option.label)
+                    ? 'Deny'
+                    : option.label
           return (
             <PressScale
               key={`${option.send}:${option.label}`}
@@ -119,17 +135,22 @@ function MobileNativeChatPermissionImpl({
                 align="center"
                 tone={index === 0 ? 'onAccent' : 'primary'}
               >
-                {rememberedPrefix ? 'Allow and remember' : option.label}
+                {shortLabel}
               </Txt>
-              {rememberedPrefix ? (
+              {rememberedPrefix || rememberedScope ? (
                 <View style={{ gap: space.sm }}>
                   <Txt variant="caption" tone="secondary">
-                    For commands starting with:
+                    {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
                   </Txt>
                   <Txt variant="mono" tone="secondary">
-                    {rememberedPrefix}
+                    {rememberedPrefix ?? rememberedScope}
                   </Txt>
                 </View>
+              ) : null}
+              {autoMode ? (
+                <Txt variant="caption" tone="secondary">
+                  {option.label}
+                </Txt>
               ) : null}
             </PressScale>
           )

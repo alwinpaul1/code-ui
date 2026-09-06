@@ -41,30 +41,16 @@ export function parseTerminalDialogOptions(lines: readonly string[]): ScreenOpti
   return options
 }
 
-function isAlways(text: string): boolean {
-  return /\balways\b|don't ask again|do not ask again|allow all\b|this session/i.test(text)
-}
-
-/**
- * Map the dialog's options onto the card: Allow (Yes), Allow all (the "don't
- * ask again" / "always allow" variant) and Deny (No), each sending its real
- * digit. Null when the screen shows no yes/no dialog, so the caller keeps the
- * generic Allow/Deny pair.
- */
+/** Preserve every offered choice and its scope, including Claude's auto-mode choice. */
 export function permissionOptionsFromScreen(
   lines: readonly string[]
 ): MobileChatPermission['options'] | null {
   const options = parseTerminalDialogOptions(lines)
-  const yes = options.find((option) => /^yes\b/i.test(option.text) && !isAlways(option.text))
-  const always = options.find((option) => /^yes\b/i.test(option.text) && isAlways(option.text))
-  const no = options.find((option) => /^no\b/i.test(option.text))
-  if (!yes || !no) {
+  if (
+    !options.some((option) => /^yes\b/i.test(option.text)) ||
+    !options.some((option) => /^no\b/i.test(option.text))
+  ) {
     return null
   }
-  const result: MobileChatPermission['options'] = [{ label: 'Allow', send: yes.digit }]
-  if (always) {
-    result.push({ label: 'Allow all', send: always.digit })
-  }
-  result.push({ label: 'Deny', send: no.digit })
-  return result
+  return options.map((option) => ({ label: option.text, send: option.digit }))
 }

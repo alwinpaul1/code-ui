@@ -35,6 +35,22 @@ export function useMobileNativeChatPrompts(args: {
           toolInput: status.toolInput
         }) ?? parseApprovalFromStatus(status.interactivePrompt))
       : null
+  // Only a complete JSON tool payload can supply a command; previews may be truncated.
+  if (permission && status?.toolName === 'Bash' && status.toolInput) {
+    try {
+      const input: unknown = JSON.parse(status.toolInput)
+      if (
+        input &&
+        typeof input === 'object' &&
+        'command' in input &&
+        typeof input.command === 'string'
+      ) {
+        permission.command = input.command
+      }
+    } catch {
+      // Keep the host's existing description when only a text preview is available.
+    }
+  }
   const question =
     blocked && status && !permission ? parseAgentQuestion(status.lastAssistantMessage ?? '') : null
   const askFromStatus = useMemo(

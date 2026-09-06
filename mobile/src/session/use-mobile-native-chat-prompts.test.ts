@@ -39,6 +39,16 @@ function permissionFor(status: Partial<AgentStatusEntry> | null): unknown {
 }
 
 describe('useMobileNativeChatPrompts approval-envelope state gate', () => {
+  it('uses a complete host command payload and ignores truncated JSON previews', () => {
+    const command = 'pdftoppm -r 110 -f 2 -l 2 -png main.pdf /private/tmp/fig1'
+    const status = { state: 'waiting' as const, toolName: 'Bash', interactivePrompt: APPROVAL }
+    expect(permissionFor({ ...status, toolInput: JSON.stringify({ command }) })).toMatchObject({
+      command
+    })
+    expect(permissionFor({ ...status, toolInput: '{"command":"pdftoppm' })).not.toHaveProperty(
+      'command'
+    )
+  })
   it('renders no approval card while the agent is working', () => {
     expect(permissionFor({ state: 'working', interactivePrompt: APPROVAL })).toBeNull()
   })

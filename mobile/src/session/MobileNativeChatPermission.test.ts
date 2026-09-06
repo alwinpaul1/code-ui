@@ -76,4 +76,37 @@ describe('MobileNativeChatPermission', () => {
     expect(onRespond).toHaveBeenCalledOnce()
     await act(async () => resolveResponse(true))
   })
+
+  it('renders all four Claude choices with full scope and keeps auto mode explicit', async () => {
+    const scope = 'pdftoppm -r 110 -f 2 -l 2 -png main.pdf /private/tmp/fig1'
+    const auto = 'Yes, and switch to auto mode · auto mode handles these prompts for you'
+    const onRespond = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Allow Bash?',
+            command: scope,
+            options: [
+              { label: 'Yes', send: '1' },
+              { label: `Yes, and don’t ask again for: ${scope}`, send: '2' },
+              { label: auto, send: '3' },
+              { label: 'No', send: '4' }
+            ]
+          },
+          onRespond
+        })
+      )
+    })
+    const buttons = renderer.root.findAllByType('Pressable')
+    expect(buttons).toHaveLength(4)
+    const texts = renderer.root.findAllByType('Text')
+    expect(texts.some((text) => text.props.children === 'Allow and remember')).toBe(true)
+    expect(texts.some((text) => text.props.children === scope && text.props.selectable)).toBe(true)
+    expect(onRespond).not.toHaveBeenCalled()
+    await act(async () =>
+      buttons.find((button) => button.props.accessibilityLabel === auto)?.props.onPress()
+    )
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')
+  })
 })

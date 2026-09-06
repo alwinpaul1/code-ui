@@ -30,11 +30,15 @@ describe('terminal permission dialog', () => {
     ])
   })
 
-  it('maps them to Allow, Allow all and Deny with their real digits', () => {
+  it('preserves permission scope and real digits', () => {
     expect(permissionOptionsFromScreen(BASH_DIALOG)).toEqual([
-      { label: 'Allow', send: '1' },
-      { label: 'Allow all', send: '2' },
-      { label: 'Deny', send: '3' }
+      { label: 'Yes', send: '1' },
+      {
+        label:
+          "Yes, and don't ask again for rm commands in /Users/alwinpaul/Desktop/Project/Code UI",
+        send: '2'
+      },
+      { label: 'No, and tell Claude what to do differently (esc)', send: '3' }
     ])
   })
 
@@ -47,13 +51,13 @@ describe('terminal permission dialog', () => {
         '  3. No, and tell Claude what to do differently (esc)'
       ])
     ).toEqual([
-      { label: 'Allow', send: '1' },
-      { label: 'Allow all', send: '2' },
-      { label: 'Deny', send: '3' }
+      { label: 'Yes', send: '1' },
+      { label: 'Yes, allow all edits during this session (shift+tab)', send: '2' },
+      { label: 'No, and tell Claude what to do differently (esc)', send: '3' }
     ])
     expect(permissionOptionsFromScreen(['❯ 1. Yes', '  2. No'])).toEqual([
-      { label: 'Allow', send: '1' },
-      { label: 'Deny', send: '2' }
+      { label: 'Yes', send: '1' },
+      { label: 'No', send: '2' }
     ])
   })
 
@@ -63,7 +67,7 @@ describe('terminal permission dialog', () => {
   })
 })
 
-it('skips the "switch to auto mode" choice on a real accept-edits Bash prompt', () => {
+it('preserves the "switch to auto mode" choice on a real accept-edits Bash prompt', () => {
   // Captured from Claude Code via `orca terminal read --screen` on 2026-09-05.
   const lines = [
     ' Bash command',
@@ -75,11 +79,12 @@ it('skips the "switch to auto mode" choice on a real accept-edits Bash prompt', 
     '   2. Yes, and always allow access to /private/tmp from this project',
     '   3. Yes, and switch to auto mode · auto mode handles these prompts for you',
     '   4. No',
-    ' Esc to cancel · Tab to amend',
+    ' Esc to cancel · Tab to amend'
   ]
   expect(permissionOptionsFromScreen(lines)).toEqual([
-    { label: 'Allow', send: '1' },
-    { label: 'Allow all', send: '2' },
-    { label: 'Deny', send: '4' },
+    { label: 'Yes', send: '1' },
+    { label: 'Yes, and always allow access to /private/tmp from this project', send: '2' },
+    { label: 'Yes, and switch to auto mode · auto mode handles these prompts for you', send: '3' },
+    { label: 'No', send: '4' }
   ])
 })
