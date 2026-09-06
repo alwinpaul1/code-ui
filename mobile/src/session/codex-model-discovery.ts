@@ -4,6 +4,7 @@
 // model catalog: slug, display name, default reasoning level, and the levels
 // each model supports. A Pro-only account therefore sees only what it can use.
 import type { RpcClient } from '../transport/rpc-client'
+import { readCodexModelList, writeCodexModelList } from '../storage/codex-model-lists'
 import type { RpcSuccess } from '../transport/types'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../src/shared/agent-session-option-catalog-claude-codex'
 import type {
@@ -120,7 +121,48 @@ export function discoveredCodexCatalogModels(
 }
 
 const cache = new Map<string, DiscoveredCodexModel[]>()
+const persisted = new Map<string, DiscoveredCodexModel[]>()
 const inFlight = new Map<string, Promise<DiscoveredCodexModel[]>>()
+const hydrating = new Map<string, Promise<void>>()
+
+function isDiscoveredModel(value: unknown): value is DiscoveredCodexModel {
+  const model = value as Partial<DiscoveredCodexModel> | null
+  return (
+    typeof model?.id === 'string' &&
+    model.id.length > 0 &&
+    typeof model.label === 'string' &&
+    Array.isArray(model.levels) &&
+    model.levels.every(
+      (level) => typeof level?.id === 'string' && typeof level?.label === 'string'
+    ) &&
+    (model.defaultLevel === null || typeof model.defaultLevel === 'string') &&
+    typeof model.isDefault === 'boolean'
+  )
+}
+
+/** Load the persisted probe result so labels and effort levels are there on a
+ *  cold open; the live probe still runs and replaces it. */
+export function hydrateDiscoveredCodexModels(hostId: string, worktreeId: string): Promise<void> {
+  const key = codexDiscoveryCacheKey(hostId, worktreeId)
+  if (cache.has(key) || persisted.has(key)) {
+    return Promise.resolve()
+  }
+  const pending = hydrating.get(key)
+  if (pending) {
+    return pending
+  }
+  const run = readCodexModelList('discovered', key, isDiscoveredModel)
+    .then((stored) => {
+      if (stored && !cache.has(key) && !persisted.has(key)) {
+        persisted.set(key, stored)
+      }
+    })
+    .finally(() => {
+      hydrating.delete(key)
+    })
+  hydrating.set(key, run)
+  return run
+}
 
 export function codexDiscoveryCacheKey(hostId: string, worktreeId: string): string {
   return `${hostId}\0${worktreeId}`
@@ -130,11 +172,14 @@ export function peekDiscoveredCodexModels(
   hostId: string,
   worktreeId: string
 ): DiscoveredCodexModel[] | null {
-  return cache.get(codexDiscoveryCacheKey(hostId, worktreeId)) ?? null
+  const key = codexDiscoveryCacheKey(hostId, worktreeId)
+  return cache.get(key) ?? persisted.get(key) ?? null
 }
 
 export function resetCodexDiscoveryForTests(): void {
   cache.clear()
+  persisted.clear()
+  hydrating.clear()
   inFlight.clear()
 }
 
@@ -169,6 +214,7 @@ export function discoverCodexModels(args: {
       const models = parseCodexDiscovery((response as RpcSuccess).result)
       if (models.length > 0) {
         cache.set(key, models)
+        void writeCodexModelList('discovered', key, models)
       }
       return models
     } catch {

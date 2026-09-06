@@ -1,6 +1,9 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { CodexPickerIo } from './codex-picker-apply'
 import {
+  hasScrapedCodexVisibleModels,
+  hydrateCodexVisibleModels,
   peekCodexVisibleModels,
   resetCodexVisibleModelsForTests,
   scrapeCodexVisibleModels,
@@ -43,7 +46,10 @@ function fakeIo(): CodexPickerIo & { sent: string[]; typed: string[] } {
 }
 
 describe('scrapeCodexVisibleModels', () => {
-  beforeEach(() => resetCodexVisibleModelsForTests())
+  beforeEach(async () => {
+    resetCodexVisibleModelsForTests()
+    await AsyncStorage.clear()
+  })
 
   it('opens the picker, reads the visible rows, escapes, caches, and notifies', async () => {
     const io = fakeIo()
@@ -64,6 +70,36 @@ describe('scrapeCodexVisibleModels', () => {
     expect(io.sent).toContain('\x1b')
     expect(peekCodexVisibleModels('h\0w')?.length).toBe(3)
     expect(notified).toBe(1)
+  })
+
+  it('shows the persisted list on a cold start until this process scrapes', async () => {
+    await scrapeCodexVisibleModels(fakeIo(), 'h\0w')
+    await Promise.resolve()
+    // A new process: memory is empty, disk still has the last scrape.
+    resetCodexVisibleModelsForTests()
+    expect(peekCodexVisibleModels('h\0w')).toBeNull()
+    let notified = 0
+    const unsubscribe = subscribeCodexVisibleModels(() => {
+      notified += 1
+    })
+    await hydrateCodexVisibleModels('h\0w')
+    unsubscribe()
+    expect(peekCodexVisibleModels('h\0w')?.map((model) => model.slug)).toEqual([
+      'gpt-6-astra',
+      'gpt-5.6-sol',
+      'gpt-5.3-codex-spark'
+    ])
+    expect(notified).toBe(1)
+    // The persisted copy does not count as read: the poll still scrapes once.
+    expect(hasScrapedCodexVisibleModels('h\0w')).toBe(false)
+    await scrapeCodexVisibleModels(fakeIo(), 'h\0w')
+    expect(hasScrapedCodexVisibleModels('h\0w')).toBe(true)
+  })
+
+  it('ignores a corrupt persisted list', async () => {
+    await AsyncStorage.setItem('orca:codexModels:visible:h%00w', '{"nope":1}')
+    await hydrateCodexVisibleModels('h\0w')
+    expect(peekCodexVisibleModels('h\0w')).toBeNull()
   })
 
   it('does nothing while a turn is running', async () => {

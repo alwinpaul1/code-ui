@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { discoveredCodexCatalogModels, parseCodexDiscovery } from './codex-model-discovery'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { beforeEach, describe, expect, it } from 'vitest'
+import {
+  discoverCodexModels,
+  discoveredCodexCatalogModels,
+  hydrateDiscoveredCodexModels,
+  parseCodexDiscovery,
+  peekDiscoveredCodexModels,
+  resetCodexDiscoveryForTests
+} from './codex-model-discovery'
+import type { RpcClient } from '../transport/rpc-client'
 
 // Shape of the host's `git.discoverCommitMessageModels` result for agentId
 // 'codex' (parseCodexModels over `codex debug models`), captured 2026-09-05.
@@ -78,5 +87,29 @@ describe('discoveredCodexCatalogModels', () => {
     ])
     expect(effort?.kind.type === 'select' && effort.kind.defaultValue).toBe('medium')
     expect(five?.options[0]?.kind.type === 'select' && five.options[0].kind.choices).toHaveLength(4)
+  })
+})
+
+describe('discoverCodexModels persistence', () => {
+  beforeEach(async () => {
+    resetCodexDiscoveryForTests()
+    await AsyncStorage.clear()
+  })
+
+  it('offers the last probe on a cold start, then the live probe replaces it', async () => {
+    const client = {
+      sendRequest: async () => ({ ok: true, result: RESULT })
+    } as unknown as RpcClient
+    const live = await discoverCodexModels({ client, hostId: 'h', worktreeId: 'w' })
+    expect(live.map((model) => model.id)).toEqual(['gpt-6-astra', 'gpt-5.5'])
+    await Promise.resolve()
+    resetCodexDiscoveryForTests()
+    expect(peekDiscoveredCodexModels('h', 'w')).toBeNull()
+    await hydrateDiscoveredCodexModels('h', 'w')
+    expect(peekDiscoveredCodexModels('h', 'w')?.map((model) => model.id)).toEqual([
+      'gpt-6-astra',
+      'gpt-5.5'
+    ])
+    expect(peekDiscoveredCodexModels('h', 'w')?.[0]?.levels).toHaveLength(6)
   })
 })

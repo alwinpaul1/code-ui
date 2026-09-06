@@ -8,6 +8,7 @@
 // per host+worktree for the process; the account's list does not move mid-day.
 import { escapeCodexPicker, waitForCodexPickerStep, type CodexPickerIo } from './codex-picker-apply'
 import { isCodexIdle, parseCodexPickerScreen } from './codex-picker-screen'
+import { readCodexModelList, writeCodexModelList } from '../storage/codex-model-lists'
 
 export type CodexVisibleModel = {
   slug: string
@@ -17,15 +18,65 @@ export type CodexVisibleModel = {
 }
 
 const cache = new Map<string, CodexVisibleModel[]>()
+/** The last list a scrape wrote to disk, shown until this process scrapes. */
+const persisted = new Map<string, CodexVisibleModel[]>()
 const listeners = new Set<() => void>()
 const inFlight = new Set<string>()
+const hydrating = new Map<string, Promise<void>>()
+
+function isVisibleModel(value: unknown): value is CodexVisibleModel {
+  const row = value as Partial<CodexVisibleModel> | null
+  return (
+    typeof row?.slug === 'string' &&
+    row.slug.length > 0 &&
+    typeof row.description === 'string' &&
+    typeof row.isDefault === 'boolean' &&
+    typeof row.isCurrent === 'boolean'
+  )
+}
+
+function notify(): void {
+  for (const listener of listeners) {
+    listener()
+  }
+}
 
 export function codexVisibleModelsKey(hostId: string, worktreeId: string): string {
   return `${hostId}\0${worktreeId}`
 }
 
+/** This process's scrape, else the persisted copy from an earlier run. */
 export function peekCodexVisibleModels(key: string): CodexVisibleModel[] | null {
-  return cache.get(key) ?? null
+  return cache.get(key) ?? persisted.get(key) ?? null
+}
+
+/** True once Codex's picker has been read in this process (a persisted copy
+ *  is shown meanwhile but does not count: the plan may have changed). */
+export function hasScrapedCodexVisibleModels(key: string): boolean {
+  return cache.has(key)
+}
+
+/** Load the persisted list so a cold open shows models at once. */
+export function hydrateCodexVisibleModels(key: string): Promise<void> {
+  if (cache.has(key) || persisted.has(key)) {
+    return Promise.resolve()
+  }
+  const pending = hydrating.get(key)
+  if (pending) {
+    return pending
+  }
+  const run = readCodexModelList('visible', key, isVisibleModel)
+    .then((stored) => {
+      if (stored && !cache.has(key) && !persisted.has(key)) {
+        persisted.set(key, stored)
+        notify()
+      }
+    })
+    .finally(() => {
+      hydrating.delete(key)
+    })
+  hydrating.set(key, run)
+  return run
 }
 
 export function subscribeCodexVisibleModels(listener: () => void): () => void {
@@ -37,6 +88,8 @@ export function subscribeCodexVisibleModels(listener: () => void): () => void {
 
 export function resetCodexVisibleModelsForTests(): void {
   cache.clear()
+  persisted.clear()
+  hydrating.clear()
   inFlight.clear()
 }
 
@@ -78,9 +131,8 @@ export async function scrapeCodexVisibleModels(
       return null
     }
     cache.set(key, models)
-    for (const listener of listeners) {
-      listener()
-    }
+    void writeCodexModelList('visible', key, models)
+    notify()
     return models
   } finally {
     inFlight.delete(key)

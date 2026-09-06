@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react'
 import {
   codexVisibleModelsKey,
+  hydrateCodexVisibleModels,
   peekCodexVisibleModels,
   subscribeCodexVisibleModels,
   type CodexVisibleModel
@@ -15,6 +16,7 @@ import {
   CODEX_DISCOVERED_MODEL_APPLY,
   discoverCodexModels,
   discoveredCodexCatalogModels,
+  hydrateDiscoveredCodexModels,
   peekDiscoveredCodexModels,
   type DiscoveredCodexModel
 } from './codex-model-discovery'
@@ -58,6 +60,13 @@ export function useCodexNativeChatOptions(args: {
     }
     let active = true
     setDiscovered(peekDiscoveredCodexModels(hostId, worktreeId))
+    // The persisted copy fills labels and effort levels at once; the live
+    // probe (a `codex debug models` run on the host) replaces it when it lands.
+    void hydrateDiscoveredCodexModels(hostId, worktreeId).then(() => {
+      if (active) {
+        setDiscovered((current) => current ?? peekDiscoveredCodexModels(hostId, worktreeId))
+      }
+    })
     void discoverCodexModels({ client, hostId, worktreeId }).then((models) => {
       if (active && models.length > 0) {
         setDiscovered(models)
@@ -80,6 +89,7 @@ export function useCodexNativeChatOptions(args: {
       return
     }
     setVisible(peekCodexVisibleModels(visibleKey))
+    void hydrateCodexVisibleModels(visibleKey)
     return subscribeCodexVisibleModels(() => setVisible(peekCodexVisibleModels(visibleKey)))
   }, [isCodex, visibleKey])
 

@@ -11,7 +11,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
-import { typeMobileNativeChatCommandWithOutcome } from './mobile-native-chat-send'
+import { AGENT_TUI_CLEAR_INPUT_LINE } from '../../../src/shared/agent-tui-input-clear'
 import {
   isCodexWorking,
   matchCodexEffortRow,
@@ -23,7 +23,11 @@ const KEY_UP = '\x1b[A'
 const KEY_DOWN = '\x1b[B'
 const KEY_ENTER = '\r'
 const KEY_ESC = '\x1b'
-const POLL_MS = 250
+// Each poll is a terminal.read round trip; the interval only adds to that.
+const POLL_MS = 120
+// Gap between the command text and its Enter, so the slash palette has
+// filtered to the command before Enter picks it.
+const COMMAND_ENTER_GAP_MS = 60
 const STEP_TIMEOUT_MS = 5_000
 const CLOSE_TIMEOUT_MS = 6_000
 const SEND_TIMEOUT_MS = 8_000
@@ -89,13 +93,25 @@ export function createCodexPickerIo(args: {
       )
       return isTerminalSendRpcAccepted(response)
     },
-    typeCommand: async (command) =>
-      (await typeMobileNativeChatCommandWithOutcome({
-        client,
-        terminal,
-        command,
-        ...(deviceToken ? { mobileClient: { id: deviceToken, type: 'mobile' } } : {})
-      })) === 'accepted',
+    // Why not the per-key typer the chat composer uses: that is one round trip
+    // per character (8 for "/model"), which was most of a pick's latency. Codex
+    // reads a burst of bytes as separate key events, so the clear + command
+    // goes in one write and Enter in a second (verified live 2026-09-06).
+    typeCommand: async (command) => {
+      const write = async (text: string): Promise<boolean> => {
+        const response = await client.sendRequest(
+          'terminal.send',
+          buildTerminalSendParams({ terminal, text, enter: false, deviceToken }),
+          { timeoutMs: SEND_TIMEOUT_MS }
+        )
+        return isTerminalSendRpcAccepted(response)
+      }
+      if (!(await write(AGENT_TUI_CLEAR_INPUT_LINE + command))) {
+        return false
+      }
+      await new Promise((resolve) => setTimeout(resolve, COMMAND_ENTER_GAP_MS))
+      return write(KEY_ENTER)
+    },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now()
   }
@@ -139,17 +155,24 @@ async function moveCursor(
   to: number
 ): Promise<boolean> {
   const delta = to - from
-  const key = delta > 0 ? KEY_DOWN : KEY_UP
-  for (let index = 0; index < Math.abs(delta); index += 1) {
-    if (!(await io.sendKey(key))) {
-      return false
-    }
+  if (delta === 0) {
+    return true
   }
-  if (delta !== 0) {
+  // One write for the whole run of arrows: the TUI reads them as separate
+  // key events, and a write per row was a round trip per row.
+  const keys = (delta > 0 ? KEY_DOWN : KEY_UP).repeat(Math.abs(delta))
+  if (!(await io.sendKey(keys))) {
+    return false
+  }
+  const deadline = io.now() + STEP_TIMEOUT_MS
+  while (io.now() < deadline) {
+    const screen = parseCodexPickerScreen(await io.readScreen())
+    if (screen?.step === step && screen.cursorIndex === to) {
+      return true
+    }
     await io.sleep(POLL_MS)
   }
-  const screen = await waitForCodexPickerStep(io, step, STEP_TIMEOUT_MS)
-  return screen?.cursorIndex === to
+  return false
 }
 
 export async function applyCodexPickerSelection(

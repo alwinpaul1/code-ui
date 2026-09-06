@@ -9,12 +9,17 @@ import { isCodexIdle, isCodexWorking, parseCodexPickerScreen } from './codex-pic
 import { withCodexTerminalLock } from './codex-terminal-lock'
 import {
   codexVisibleModelsKey,
-  peekCodexVisibleModels,
+  hasScrapedCodexVisibleModels,
   scrapeCodexVisibleModels
 } from './codex-visible-models'
+import { parseCodexStatusContext } from './mobile-terminal-hud-parse'
 
 const SETTLE_AFTER_TURN_MS = 700
-const STATUS_RENDER_MS = 1_500
+// The /status box is on screen well under a second; poll for its context
+// line instead of sleeping a fixed 1.5 s that held the terminal lock (and any
+// pick queued behind it) for the whole time.
+const STATUS_POLL_MS = 150
+const STATUS_TIMEOUT_MS = 2_000
 
 export function useCodexStatusPoll(args: {
   client: RpcClient | null
@@ -82,17 +87,22 @@ export function useCodexStatusPoll(args: {
         // (the host probe lists hidden ones and misses some). Retried on every
         // idle open / turn end until it succeeds once.
         const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
-        if (!peekCodexVisibleModels(visibleKey)) {
+        if (!hasScrapedCodexVisibleModels(visibleKey)) {
           await scrapeCodexVisibleModels(io, visibleKey)
           if (!active) {
             return
           }
-          await io.sleep(400)
         }
         if (!(await io.typeCommand('/status'))) {
           return
         }
-        await io.sleep(STATUS_RENDER_MS)
+        const deadline = io.now() + STATUS_TIMEOUT_MS
+        while (active && io.now() < deadline) {
+          await io.sleep(STATUS_POLL_MS)
+          if (parseCodexStatusContext(await io.readScreen())) {
+            break
+          }
+        }
         if (active) {
           await refreshHud()
         }
