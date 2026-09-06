@@ -53,3 +53,18 @@ describe('Codex visible pending inputs', () => {
     expect(codexQueuedMessagesFromScreen(['Working…'])).toEqual([])
   })
 })
+
+it('reads the unbulleted queue layout shown in the desktop screenshot', () => {
+  expect(
+    codexQueuedMessagesFromScreen([
+      'Queued follow-up inputs',
+      '↳ /var/folders/0y/session/T/orca-paste-1788712836417-a0492b73-30c3-4c2f-9f7c-c9b7ca928614.png Same',
+      '  message seen as duplicate fix that',
+      '↳ second image and caption',
+      '  ⌥ + ↑ edit last queued message'
+    ])
+  ).toEqual([
+    '/var/folders/0y/session/T/orca-paste-1788712836417-a0492b73-30c3-4c2f-9f7c-c9b7ca928614.png Same\nmessage seen as duplicate fix that',
+    'second image and caption'
+  ])
+})

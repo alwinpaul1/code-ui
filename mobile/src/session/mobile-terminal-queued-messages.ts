@@ -52,36 +52,35 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
   })
 }
 
-/** Keep the photo bubble when a TUI queue echoes its caption plus image paths.
- * Text-only queue entries still use the agent queue. Match each occurrence once. */
+export type MobileChatQueueEntry = string | { text: string; images: string[] }
+
+/** Show each confirmed queued send once, retaining local photos in the queue. */
 export function projectMobileChatQueue<T extends { text: string; images?: string[] }>(
   pending: readonly T[],
   queue: readonly string[]
-): { pending: T[]; queue: string[] } {
+): { pending: T[]; queue: MobileChatQueueEntry[] } {
   const available = pending.filter((item) => item.images?.length)
   const matchedImages = new Set<T>()
-  const remainingQueue = queue.filter((text) => {
+  const projected = queue.map((text): MobileChatQueueEntry => {
     if (!splitOrcaPastedImagePaths(text).paths.length && !/\[Image #\d+\]/.test(text)) {
-      return true
+      return text
     }
     const normalized = normalizeNativeChatUserText(text)
     const index = available.findIndex(
       (item) => normalizeNativeChatUserText(item.text) === normalized
     )
     if (index === -1) {
-      return true
+      return text
     }
-    matchedImages.add(available.splice(index, 1)[0]!)
-    return false
+    const item = available.splice(index, 1)[0]!
+    matchedImages.add(item)
+    return { text: item.text, images: item.images! }
   })
-  const unmatched = new Set(
-    pendingOutsideVisibleQueue(
-      pending.filter((item) => !matchedImages.has(item)),
-      remainingQueue
-    )
-  )
   return {
-    pending: pending.filter((item) => matchedImages.has(item) || unmatched.has(item)),
-    queue: remainingQueue
+    pending: pendingOutsideVisibleQueue(
+      pending.filter((item) => !matchedImages.has(item)),
+      projected.filter((item): item is string => typeof item === 'string')
+    ),
+    queue: projected
   }
 }
