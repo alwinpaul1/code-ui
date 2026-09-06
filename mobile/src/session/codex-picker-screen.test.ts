@@ -99,3 +99,18 @@ describe('idle and working detection', () => {
     expect(isCodexWorking(lines)).toBe(true)
   })
 })
+
+it('reads an indented picker cursor while background output is visible', () => {
+  expect(
+    parseCodexPickerScreen([
+      '• Working (esc to interrupt)',
+      '  Select Reasoning Level for gpt-6-astra',
+      '    1. Low',
+      '  › 2. Extra high (current)',
+      '  Press enter to confirm or esc to go back'
+    ])
+  ).toMatchObject({
+    cursorIndex: 2,
+    rows: expect.arrayContaining([expect.objectContaining({ name: 'Extra high', index: 2 })])
+  })
+})

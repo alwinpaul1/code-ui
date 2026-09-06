@@ -1,6 +1,7 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { pendingOutsideVisibleQueue } from './mobile-terminal-queued-messages'
 import { useMemo } from 'react'
+import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
@@ -66,6 +67,7 @@ export function MobileNativeChatOverlay({
   keyStrip
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
+  usePendingImageHistory(session, controller.chatPending, sendSurfaceId)
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
@@ -96,11 +98,6 @@ export function MobileNativeChatOverlay({
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
-        onCancelQueued={
-          controller.nativeChatQueuedMessages?.length
-            ? undefined
-            : controller.handleNativeChatCancelQueued
-        }
         onOpenFile={onOpenFile}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}

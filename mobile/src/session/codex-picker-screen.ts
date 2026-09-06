@@ -43,7 +43,7 @@ const FOOTER = /Press enter to confirm or esc to go back/
 const ROW = /^([›>]?)\s*(\d+)\.\s+(.+?)(?:\s+\((default|current)\))*(?:\s{2,}(.*))?$/
 
 function parseRow(line: string): CodexPickerRow | null {
-  const match = ROW.exec(line)
+  const match = ROW.exec(line.trimStart())
   if (!match) {
     return null
   }

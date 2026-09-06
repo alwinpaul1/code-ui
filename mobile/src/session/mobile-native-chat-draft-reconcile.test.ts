@@ -241,3 +241,17 @@ describe('mobile native chat image preview reconciliation', () => {
     ).toEqual({ [sessionKey]: { prompt: ['file:///a.jpg'] } })
   })
 })
+
+it('reconciles repeated captions after the send baseline when older history is absent', () => {
+  const entry = {
+    ...pending('pending', ['file:///a.jpg'], 3),
+    text: 'See this',
+    baselineTailMessageId: 'tail'
+  }
+  expect(
+    findLandedImagePreviewEchoes(
+      [userText('tail', 'earlier'), userText('landed', 'See this[Image #1]')],
+      [entry]
+    )
+  ).toEqual([{ pendingId: 'pending', messageId: 'landed', images: ['file:///a.jpg'] }])
+})

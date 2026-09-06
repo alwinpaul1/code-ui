@@ -204,7 +204,15 @@ export function findLandedImagePreviewEchoes(
       : -1
     const occurrenceIndex = Math.max(0, entry.expectedOccurrence - 1)
     const candidate = targetText
-      ? candidates[occurrenceIndex]
+      ? tailIndex !== undefined && tailIndex >= 0
+        ? // The saved ordinal counted a larger transcript. A retained baseline
+          // is stronger evidence: use the next unclaimed echo after that send.
+          candidates.find(
+            (message) =>
+              !claimedMessageIds.has(message.id) &&
+              (messageIndexById.get(message.id) ?? -1) > tailIndex
+          )
+        : candidates[occurrenceIndex]
       : candidates.filter(
           (message) =>
             tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex

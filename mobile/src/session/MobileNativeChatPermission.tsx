@@ -148,14 +148,22 @@ function MobileNativeChatPermissionImpl({
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
               {rememberedPrefix || rememberedScope ? (
-                <View style={{ gap: space.sm, paddingTop: space.sm }}>
+                <ScrollView
+                  style={{
+                    maxHeight: 160,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.bgSunken
+                  }}
+                  contentContainerStyle={{ gap: space.sm, padding: space.md }}
+                  nestedScrollEnabled
+                >
                   <Txt variant="body" tone="secondary" selectable>
                     {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
                   </Txt>
                   <Txt variant="body" tone="secondary" selectable>
                     {rememberedPrefix ?? rememberedScope}
                   </Txt>
-                </View>
+                </ScrollView>
               ) : null}
               {autoMode ? (
                 <Txt variant="body" tone="secondary" selectable style={{ paddingTop: space.sm }}>
