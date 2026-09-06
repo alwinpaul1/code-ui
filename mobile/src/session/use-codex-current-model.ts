@@ -20,10 +20,15 @@ import {
 } from './codex-visible-models'
 import { peekDiscoveredCodexModels } from './codex-model-discovery'
 
-const CLAUDE_ID = /claude|opus|sonnet|haiku|fable/i
+/** OpenAI's model ids as Codex names them (gpt-6-astra, gpt-5.3-codex-spark,
+ *  o4-mini…). The fallback for the moment before the account list is known:
+ *  any Claude id (fable, opus, sonnet, haiku, claude-…) fails this shape. */
+const CODEX_ID_SHAPE = /^(gpt-|o\d|codex)/i
 
-/** The hook-reported model, if it is one this Codex account can run. With no
- *  list known yet, anything that reads as a Claude id is refused. */
+/** A reported model, if it is one this Codex account can run. Every source
+ *  goes through this — the host's hook status and the terminal footer alike —
+ *  because the host has labelled a Codex pane with a Claude session's model
+ *  and a tab switch can read the other tab's screen. */
 export function acceptCodexStatusModel(
   reported: string | null | undefined,
   known: readonly string[]
@@ -35,7 +40,7 @@ export function acceptCodexStatusModel(
   if (known.length > 0) {
     return known.includes(model) ? model : null
   }
-  return CLAUDE_ID.test(model) ? null : model
+  return CODEX_ID_SHAPE.test(model) ? model : null
 }
 
 function readPickerCurrent(key: string): string | null {
@@ -53,8 +58,10 @@ export function useCodexCurrentModel(
   hostId: string,
   worktreeId: string,
   /** `agentStatus.model` for the active tab, from Orca's Codex hook. */
-  statusModel: string | null | undefined
-): string | null {
+  statusModel: string | null | undefined,
+  /** What the terminal footer names, when a turn has drawn it. */
+  hud: { modelId: string | null; effort: string | null } | null
+): { model: string | null; effort: string | null } {
   const isCodex = agent === 'codex'
   const key = codexVisibleModelsKey(hostId, worktreeId)
   const [tick, setTick] = useState(0)
@@ -66,11 +73,16 @@ export function useCodexCurrentModel(
     return subscribeCodexVisibleModels(() => setTick((value) => value + 1))
   }, [isCodex, key])
   if (!isCodex) {
-    return null
+    return { model: null, effort: null }
   }
   void tick
-  return (
-    acceptCodexStatusModel(statusModel, readKnown(key, hostId, worktreeId)) ??
-    readPickerCurrent(key)
-  )
+  const known = readKnown(key, hostId, worktreeId)
+  const footerModel = acceptCodexStatusModel(hud?.modelId, known)
+  if (footerModel) {
+    return { model: footerModel, effort: hud?.effort ?? null }
+  }
+  return {
+    model: acceptCodexStatusModel(statusModel, known) ?? readPickerCurrent(key),
+    effort: null
+  }
 }

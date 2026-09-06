@@ -70,17 +70,17 @@ const HEAD_HOOK_BINDING_SHA256 = '59e832f8814beb98a10d0748f559e64192834cdbb7fdc1
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '4eb795ff870f31ccce483e196993f15756c380c7bf223f6af0342131d587054e'
 const HEAD_CALLBACK_BODY_SHA256 = 'aeab73f01a7625ca468aed9b0dce7d67f020caaeaf695cfa61864c3d834a4ada'
-const HEAD_EFFECT_SHA256 = 'c155f3de0dc0a0caec0ec855fabb9e741c7b8a5c24b384016bd934a283c45860'
+const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 const HEAD_NESTED_FUNCTION_SHA256 =
   '7840e844c1cc9ec4fe9b3c9cd439614e13e5c25480119a008df903b61c73d3fb'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
-  'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
+  '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =
   '4c994574675a2a0f9c607b3ea89ab7a2ed5a83f7c72fa42342ddcb5f00fc3f4f'
 const HEAD_TIMER_CREATION_SHA256 =
-  '161c8ea678cd33630d36c31765ef93d92787eae9752deed9c392cbf679ca3472'
-const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
+  '8b2229f4a3c880c0e21f546a1bfabb27b3536b9a2344cf3b39f5b7da82e24dba'
+const HEAD_TIMER_CLEANUP_SHA256 = 'be3117bde057916619602341bef132f1bd8767d1dff4bacdfd547ca690f5640a'
 const HEAD_RUNTIME_STRING_SHA256 =
   '889f4f69daa52587811657710d378bf311bcc0c3ccabc119e5c1ac3e32bd5f36'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
@@ -497,13 +497,13 @@ describe('mobile session route extraction parity', () => {
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
     expect(native.removals).toHaveLength(9)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
-    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
+    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(8)
     expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
     expect(
       native.creations.filter((fact) => fact.startsWith('requestAnimationFrame'))
     ).toHaveLength(1)
     expect(hash(native.creations)).toBe(HEAD_TIMER_CREATION_SHA256)
-    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(11)
+    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(13)
     expect(native.cleanups.filter((fact) => fact.startsWith('clearInterval'))).toHaveLength(1)
     expect(native.cleanups.filter((fact) => fact.startsWith('cancelAnimationFrame'))).toHaveLength(
       1

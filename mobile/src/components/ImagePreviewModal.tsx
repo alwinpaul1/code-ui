@@ -9,7 +9,7 @@ import { Txt } from '../ui/Txt'
  *  close. Dark scrim in both themes, like the Claude app's viewer. */
 export function ImagePreviewModal(): React.JSX.Element | null {
   const preview = useImagePreview()
-  const { width, height } = useWindowDimensions()
+  const { width } = useWindowDimensions()
   const { colors, space } = useTheme()
   if (!preview) {
     return null
@@ -24,25 +24,20 @@ export function ImagePreviewModal(): React.JSX.Element | null {
     >
       <StatusBar barStyle="light-content" />
       <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)', justifyContent: 'center' }}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)' }}
         onPress={closeImagePreview}
         accessibilityRole="button"
         accessibilityLabel="Close image preview"
       >
-        <Image
-          source={{ uri: preview.uri }}
-          style={{ width, height: height * 0.82, alignSelf: 'center' }}
-          resizeMode="contain"
-          accessibilityLabel={preview.label}
-        />
+        {/* The close button owns a bar of its own above the picture, so it
+            never sits on top of the image. */}
         <View
           style={{
-            position: 'absolute',
-            top: space.xl + space.lg,
-            right: space.md,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.sm
+            height: space.xl + space.lg + 40 + space.md,
+            paddingTop: space.xl + space.lg,
+            paddingRight: space.md,
+            alignItems: 'flex-end',
+            justifyContent: 'flex-start'
           }}
         >
           <Pressable
@@ -62,7 +57,13 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             <X size={20} color="#fff" strokeWidth={2.2} />
           </Pressable>
         </View>
-        <View style={{ position: 'absolute', bottom: space.xl + space.lg, left: 0, right: 0 }}>
+        <Image
+          source={{ uri: preview.uri }}
+          style={{ flex: 1, width, alignSelf: 'center' }}
+          resizeMode="contain"
+          accessibilityLabel={preview.label}
+        />
+        <View style={{ paddingVertical: space.lg + space.md }}>
           <Txt
             variant="caption"
             align="center"

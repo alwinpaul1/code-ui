@@ -219,11 +219,10 @@ export function useMobileNativeChatSessionOptions(args: {
     void version
     const record = getScopedRecord(scopeKey, agent)
     const tracked = typeof record.model?.value === 'string' ? record.model.value : null
-    if (
-      tracked &&
-      tracked !== reportedModel &&
-      !discoveredModels.some((model) => model.id === tracked)
-    ) {
+    // Why not spare a tracked id that equals the report: the report is already
+    // filtered to the account's list, so a match outside it cannot happen, and
+    // an unfiltered older build's leak must not survive on that technicality.
+    if (tracked && !discoveredModels.some((model) => model.id === tracked)) {
       clearNativeChatSessionModel(record)
       // Why: the seeding effect ignores a report it has already applied, so
       // without this the footer's (unchanged) model would never refill the pill.

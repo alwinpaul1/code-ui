@@ -69,25 +69,26 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
 
   // Terminal input pastes an attached image straight into the visible terminal;
   // native chat instead holds it as a composer chip and rides it along on submit.
-  const { attachImage, attachDocument, isAttaching, nativeChatImages } = useMobileSessionImageAttachments({
-    client,
-    activeHandle,
-    activeHandleRef,
-    canSend,
-    connState,
-    deviceTokenRef,
-    nativeChatScopeKey,
-    nativeChatInputLeaseReady,
-    getActiveWorktreeConnectionId,
-    beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
-    nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
-    structuredNativeChat: activeSessionTab?.type === 'agent-session',
-    readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
-    showToast,
-    onNativeChatSendError: nativeChatSendError.show,
-    onSuccess: triggerSelection,
-    onError: triggerError
-  })
+  const { attachImage, attachDocument, isAttaching, nativeChatImages } =
+    useMobileSessionImageAttachments({
+      client,
+      activeHandle,
+      activeHandleRef,
+      canSend,
+      connState,
+      deviceTokenRef,
+      nativeChatScopeKey,
+      nativeChatInputLeaseReady,
+      getActiveWorktreeConnectionId,
+      beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
+      nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+      structuredNativeChat: activeSessionTab?.type === 'agent-session',
+      readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
+      showToast,
+      onNativeChatSendError: nativeChatSendError.show,
+      onSuccess: triggerSelection,
+      onError: triggerError
+    })
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
@@ -103,15 +104,27 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       })
     }
     refresh()
+    // Why the second read: Android refuses clipboard access until the window
+    // has focus, which lands a beat after AppState says 'active' (logcat:
+    // "Denying clipboard access … application is not in focus"), so the read
+    // on activation came back empty and the paste button missed a fresh copy.
+    let focusRetry: ReturnType<typeof setTimeout> | null = null
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refresh()
+        if (focusRetry) {
+          clearTimeout(focusRetry)
+        }
+        focusRetry = setTimeout(refresh, 600)
       } else if (selectModeActive && activeHandleRef.current) {
         terminalRefs.current.get(activeHandleRef.current)?.cancelSelect()
       }
     })
     return () => {
       mounted = false
+      if (focusRetry) {
+        clearTimeout(focusRetry)
+      }
       sub.remove()
     }
   }, [selectModeActive])

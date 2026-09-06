@@ -359,11 +359,12 @@ export function useMobileNativeChatController(args: {
     const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
     return () => timers.forEach(clearTimeout)
   }, [legacyNativeChatPermission, refreshTerminalHud])
-  const codexCurrentModel = useCodexCurrentModel(
+  const codexModel = useCodexCurrentModel(
     activeChatResolution?.agent ?? null,
     hostId,
     worktreeId,
-    activeSessionTab?.agentStatus?.model
+    activeSessionTab?.agentStatus?.model,
+    hudObservation ? { modelId: hudObservation.modelId, effort: hudObservation.effort } : null
   )
   const [modelSheetRequest, setModelSheetRequestState] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
@@ -382,9 +383,12 @@ export function useMobileNativeChatController(args: {
       // footer, when a turn has drawn it, is only a fresher override.
       reportedModel:
         activeChatResolution?.agent === 'codex'
-          ? (hudObservation?.modelId ?? codexCurrentModel)
+          ? codexModel.model
           : (hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null),
-      reportedEffort: hudObservation?.effort ?? null,
+      reportedEffort:
+        activeChatResolution?.agent === 'codex'
+          ? codexModel.effort
+          : (hudObservation?.effort ?? null),
       openRequest: modelSheetRequest,
       structured: {
         snapshot: structuredNativeChat.optionSnapshot,

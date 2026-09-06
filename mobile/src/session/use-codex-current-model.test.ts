@@ -13,9 +13,13 @@ describe('acceptCodexStatusModel', () => {
     expect(acceptCodexStatusModel('gpt-reserve', ['gpt-6-astra'])).toBeNull()
   })
 
-  it('with no list yet, refuses anything that reads as a Claude id', () => {
-    expect(acceptCodexStatusModel('claude-opus-5', [])).toBeNull()
+  it('with no list yet, accepts only Codex-shaped ids (every Claude model fails)', () => {
+    for (const claude of ['claude-opus-5', 'fable', 'Opus 4.8', 'sonnet', 'haiku', 'Fable 5.1']) {
+      expect(acceptCodexStatusModel(claude, [])).toBeNull()
+    }
     expect(acceptCodexStatusModel('gpt-6-astra', [])).toBe('gpt-6-astra')
+    expect(acceptCodexStatusModel('o4-mini', [])).toBe('o4-mini')
+    expect(acceptCodexStatusModel('codex-mini-latest', [])).toBe('codex-mini-latest')
     expect(acceptCodexStatusModel('  ', [])).toBeNull()
     expect(acceptCodexStatusModel(undefined, [])).toBeNull()
   })

@@ -28,6 +28,9 @@ const POLL_MS = 120
 // Gap between the command text and its Enter, so the slash palette has
 // filtered to the command before Enter picks it.
 const COMMAND_ENTER_GAP_MS = 60
+// How long a typed command may stay on the input line after Enter before the
+// Enter is treated as lost and sent again.
+const ENTER_VERIFY_MS = 900
 const STEP_TIMEOUT_MS = 5_000
 const CLOSE_TIMEOUT_MS = 6_000
 const SEND_TIMEOUT_MS = 8_000
@@ -67,7 +70,7 @@ export function createCodexPickerIo(args: {
   deviceToken: string | null
 }): CodexPickerIo {
   const { client, terminal, deviceToken } = args
-  return {
+  const io: CodexPickerIo = {
     readScreen: async () => {
       const response = await client.sendRequest(
         'terminal.read',
@@ -110,11 +113,27 @@ export function createCodexPickerIo(args: {
         return false
       }
       await new Promise((resolve) => setTimeout(resolve, COMMAND_ENTER_GAP_MS))
+      if (!(await write(KEY_ENTER))) {
+        return false
+      }
+      // Why: one Enter was lost once (a "/status" sat on the input line with the
+      // palette open, and would have glued onto the user's next message). Confirm
+      // the line cleared; if the command is still typed there, Enter again once.
+      const still = new RegExp(`^\\s*›\\s*${escapeRegExp(command)}\\s*$`)
+      const deadline = Date.now() + ENTER_VERIFY_MS
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS))
+        const lines = await io.readScreen()
+        if (!lines.some((line) => still.test(line))) {
+          return true
+        }
+      }
       return write(KEY_ENTER)
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now()
   }
+  return io
 }
 
 export async function waitForCodexPickerStep(
