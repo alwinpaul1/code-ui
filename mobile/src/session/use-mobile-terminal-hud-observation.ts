@@ -84,7 +84,7 @@ export function useMobileTerminalHudObservation(args: {
           return null
         }
         const terminal = (response as RpcSuccess).result as {
-          terminal?: { tail?: unknown; lines?: unknown; source?: string }
+          terminal?: { tail?: unknown; lines?: unknown; source?: string; draft?: unknown }
         }
         // Stream fallback contains old repaints, not the current queue or dialog.
         if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
@@ -104,7 +104,7 @@ export function useMobileTerminalHudObservation(args: {
           agent === 'codex'
             ? codexQueuedMessagesFromScreen(lines)
             : agent === 'claude' || agent === 'openclaude'
-              ? queuedMessagesFromScreen(lines)
+              ? queuedMessagesFromScreen(lines, terminal.terminal?.draft)
               : []
         queueScopeRef.current = handleKey
         setQueuedMessages((current) =>

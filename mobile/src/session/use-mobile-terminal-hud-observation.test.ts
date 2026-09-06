@@ -125,3 +125,40 @@ it('retains the current approval while activity changes the polling cadence', as
   await act(async () => renderer.update(createElement(Harness, { active: true })))
   expect(observation.terminalPermission).toBe(permission)
 })
+
+it('finds the live Claude queue when Orca extracts its hint into draft', async () => {
+  const sendRequest = vi.fn().mockResolvedValue({
+    ok: true,
+    result: {
+      terminal: {
+        source: 'screen',
+        tail: [
+          '✢ Smooshing…',
+          '  ❯ desktop alpha',
+          '  ❯ desktop beta',
+          '──────────────────',
+          '❯',
+          '──────────────────',
+          '  auto mode on'
+        ],
+        draft: 'Press up to edit queued messages'
+      }
+    }
+  })
+  const client = { sendRequest } as unknown as RpcClient
+  function Harness() {
+    observation = useMobileTerminalHudObservation({
+      client,
+      enabled: true,
+      active: true,
+      handleRef,
+      handleKey: 'terminal',
+      agent: 'claude'
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness))
+  })
+  expect(observation.queuedMessages).toEqual(['desktop alpha', 'desktop beta'])
+})

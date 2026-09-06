@@ -333,3 +333,45 @@ describe('MobileNativeChatView', () => {
     }
   })
 })
+
+it('does not animate a delayed scroll across the keyboard-close and queue-confirmation layouts after sending', async () => {
+  vi.useFakeTimers()
+  const scrollToOffset = vi.fn()
+  let instance!: ReturnType<typeof create>
+  try {
+    await act(async () => {
+      instance = create(
+        chatViewElement({
+          folded: [assistantTurn('a1', 'Reply')],
+          onSend: vi.fn().mockResolvedValue(true)
+        }),
+        { createNodeMock: (node) => (node.type === 'FlatList' ? { scrollToOffset } : null) }
+      )
+    })
+    await act(async () => instance.root.findByType('Composer').props.onPress())
+    act(() => instance.root.findByType('FlatList').props.onContentSizeChange(400, 1500))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(scrollToOffset).toHaveBeenCalled()
+    expect(
+      scrollToOffset.mock.calls.every(
+        ([options]) => options.offset === 0 && options.animated === false
+      )
+    ).toBe(true)
+  } finally {
+    await act(async () => instance?.unmount())
+    vi.useRealTimers()
+  }
+})
+
+it('keeps the confirmed queue inside the inverted list so it does not resize the viewport', async () => {
+  let instance!: ReturnType<typeof create>
+  await act(async () => {
+    instance = create(chatViewElement({ queuedMessages: ['first', 'second'] }))
+  })
+  const header = instance.root.findByType('FlatList').props.ListHeaderComponent
+  expect(header.props.messages).toEqual(['first', 'second'])
+  expect(instance.root.findAllByType('ScrollView')).toHaveLength(0)
+  await act(async () => instance.unmount())
+})

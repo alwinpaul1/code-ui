@@ -101,3 +101,19 @@ it('keeps both queue entries when a photo and another message repeat a caption',
     queue: [{ text: image.text, images: image.images }, 'See this']
   })
 })
+
+it('excludes Claude’s right-aligned yank hint between the queue and composer', () => {
+  expect(
+    queuedMessagesFromScreen(
+      [
+        '✳ Spinning…',
+        '  ❯ queue verification alpha',
+        '                                      Ctrl+Y to paste deleted text',
+        '──────────────────',
+        '❯',
+        '──────────────────'
+      ],
+      'Press up to edit queued messages'
+    )
+  ).toEqual(['queue verification alpha'])
+})

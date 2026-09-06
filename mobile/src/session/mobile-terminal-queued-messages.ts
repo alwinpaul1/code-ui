@@ -2,14 +2,30 @@ import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcri
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 /** Read only the explicit Claude queue block immediately above its queue footer.
  * The screen can show only a subset of a long queue; never use this to rewrite it. */
-export function queuedMessagesFromScreen(lines: readonly string[]): string[] {
+export function queuedMessagesFromScreen(screen: readonly string[], draft?: unknown): string[] {
+  const lines = [...screen]
+  // Orca removes the composer text from tail and publishes it separately, even
+  // when Claude paints the queue hint as a placeholder in that composer.
+  if (
+    typeof draft === 'string' &&
+    /^Press up to (?:edit queued messages|select a queued message)\b/.test(draft)
+  ) {
+    const input = lines.findLastIndex((line) => /^\s*❯\s*$/.test(line))
+    if (input !== -1) {
+      lines[input] = `❯ ${draft}`
+    }
+  }
   // Claude's newer per-message selector has different copy from the legacy
   // whole-queue recall. The hint can wrap on a narrow phone-sized terminal.
-  const footer = lines.findLastIndex((line, index) =>
-    /^\s*[❯›>]?\s*Press up to\b/i.test(line) &&
-    /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i.test(
-      lines.slice(index, index + 3).map((part) => part.trim()).join(' ')
-    )
+  const footer = lines.findLastIndex(
+    (line, index) =>
+      /^\s*[❯›>]?\s*Press up to\b/i.test(line) &&
+      /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i.test(
+        lines
+          .slice(index, index + 3)
+          .map((part) => part.trim())
+          .join(' ')
+      )
   )
   if (footer === -1) {
     return []
@@ -18,6 +34,9 @@ export function queuedMessagesFromScreen(lines: readonly string[]): string[] {
   let seenEntry = false
   for (let i = footer - 1; i >= Math.max(0, footer - 60); i--) {
     const line = lines[i]!
+    if (!seenEntry && /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
+      continue
+    }
     if (/^[\s─━—-]*$/.test(line)) {
       if (seenEntry) {
         break

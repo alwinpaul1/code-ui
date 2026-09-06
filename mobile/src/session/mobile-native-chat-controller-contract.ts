@@ -1,3 +1,4 @@
+import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -69,7 +70,7 @@ export type MobileNativeChatController = {
   prepareNativeChatImageSend?: () => Promise<void>
   /** Uses the original agent input for desktop and mobile queued messages. */
   openNativeChatQueueEditor?: () => Promise<void>
-  nativeChatQueueEditorAgent?: 'claude' | 'codex' | null
+  nativeChatQueueEditor?: InlineQueueEditor | null
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void

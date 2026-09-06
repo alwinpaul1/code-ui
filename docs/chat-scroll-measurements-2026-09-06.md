@@ -28,3 +28,18 @@ Frame comparison sampled the chat viewport at 30 fps and checked for brief chang
 Temporary native and JavaScript diagnostics were removed before the release build. Regression tests cover the fixed live edge, reader-controlled following, inverted history pagination, and streaming-preview retirement.
 
 Release checks: 553 test files passed; 4,342 tests passed and 3 skipped. Lint, TypeScript, and Android release build passed. Installed version: 0.2.41, versionCode 43.
+
+## Send transition follow-up, 0.2.43
+
+Removed the delayed animated send scroll and moved the confirmed queue into the
+inverted list header, so adding a queue does not resize the list viewport itself.
+The connected phone recording still shows a send-time transition as the keyboard
+closes and an optimistic bubble becomes a confirmed queue entry. This issue is
+not confirmed resolved. The earlier zero-transient measurements cover incoming
+streaming updates, not this send transition.
+
+The phone harness inadvertently sent two harmless test prompts into the active
+development chat after its tab changed. Its final assertion targeted the isolated
+session and failed; it is not counted as a passed phone end-to-end test. Separate
+adapter tests through Orca passed recall, save, cancel, and delete on isolated
+Claude and Codex sessions.

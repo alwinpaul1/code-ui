@@ -1,3 +1,4 @@
+import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -54,6 +55,7 @@ export function MobileNativeChatView({
   getComposerEditGeneration,
   queuedMessages,
   onEditQueue,
+  queueEditor,
   pending,
   imagePreviewsByMessageId,
   composerText,
@@ -114,16 +116,7 @@ export function MobileNativeChatView({
   const { followingRef, scrollingRef, showJumpToLatest, setFollowing, beginScroll, endScroll } =
     useMobileChatFollowing()
 
-  const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  useEffect(
-    () => () => {
-      if (sendScrollTimerRef.current) {
-        clearTimeout(sendScrollTimerRef.current)
-      }
-    },
-    []
-  )
 
   const jumpToLatest = useCallback(
     (animated: boolean) => {
@@ -162,13 +155,9 @@ export function MobileNativeChatView({
       onClearSendError?.()
       // Always jump to the newest message when the user sends.
       setFollowing(true)
-      if (sendScrollTimerRef.current) {
-        clearTimeout(sendScrollTimerRef.current)
-      }
-      sendScrollTimerRef.current = setTimeout(() => {
-        sendScrollTimerRef.current = null
-        listRef.current?.scrollToOffset({ offset: 0, animated: true })
-      }, 60)
+      // Sending closes the keyboard and can replace an echo with a queue card.
+      // Animate neither resize; the inverted live edge is already offset zero.
+      listRef.current?.scrollToOffset({ offset: 0, animated: false })
       return true
     },
     [onSend, onClearSendError, setFollowing]
@@ -194,10 +183,6 @@ export function MobileNativeChatView({
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
     beginScroll()
-    if (sendScrollTimerRef.current) {
-      clearTimeout(sendScrollTimerRef.current)
-      sendScrollTimerRef.current = null
-    }
   }, [beginScroll])
 
   const onScrollEnd = useCallback(
@@ -303,6 +288,13 @@ export function MobileNativeChatView({
                   })
                 }, 120)
               }}
+              ListHeaderComponent={
+                <MobileNativeChatQueue
+                  messages={queuedMessages}
+                  agent={agent}
+                  onEdit={onEditQueue}
+                />
+              }
               ListFooterComponent={
                 hasMore ? (
                   <Pressable
@@ -346,7 +338,7 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
-        <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
+      <MobileNativeChatQueueEditor editor={queueEditor} />
       <MobileNativeChatPromptCard
         ask={ask}
         askKey={askKey}

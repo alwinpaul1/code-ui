@@ -1,3 +1,4 @@
+import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type {
   TerminalHudContextWindow,
@@ -47,6 +48,7 @@ export type MobileNativeChatViewProps = {
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   queuedMessages?: readonly MobileChatQueueEntry[]
   onEditQueue?: () => Promise<void>
+  queueEditor?: InlineQueueEditor | null
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an
    *  optimistic image bubble. */

@@ -27,6 +27,9 @@ it.each(['claude', 'codex'])(
       )
     })
     expect(renderer!.root.findAllByType('Pencil')).toHaveLength(1)
+    expect(renderer!.root.findAllByType('Text').map((node) => node.props.children)).not.toContain(
+      agent === 'codex' ? 'Edit latest' : 'Edit queue'
+    )
     const button = renderer!.root
       .findAllByType('Pressable')
       .find((node) => node.props.accessibilityRole === 'button')!

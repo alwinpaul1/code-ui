@@ -54,9 +54,6 @@ export function MobileNativeChatQueue({
             })}
           >
             <Pencil size={16} color={colors.textSecondary} />
-            <Txt variant="caption" tone="secondary">
-              {agent === 'codex' ? 'Edit latest' : 'Edit queue'}
-            </Txt>
           </Pressable>
         ) : null}
       </View>

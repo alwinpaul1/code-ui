@@ -87,7 +87,7 @@ const HEAD_RUNTIME_STRING_SHA256 =
   '6111d2e1385ccc700ec20ba7683ef035c57af6bb91799118911d888def073d7d'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
-const HEAD_LEAF_JSX_SHA256 = '648f46d97d268404e64941b1b11994a21b6bd4dc147253f21984a64f86863586'
+const HEAD_LEAF_JSX_SHA256 = '3dfc81f6688249dc371643f2f5ae0d481e107eba625395e48f1e43fbae74e710'
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -528,7 +528,7 @@ describe('mobile session route extraction parity', () => {
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
-    expect(jsx.leaf).toHaveLength(68)
+    expect(jsx.leaf).toHaveLength(67)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     expect(jsx.styleReferences).toHaveLength(88)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)

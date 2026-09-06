@@ -119,7 +119,8 @@ export function useMobileNativeChatController(
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend
+    holdUnconfirmedSend,
+    removePending
   } = useMobileNativeChatDrafts({
     hostId,
     worktreeId,
@@ -418,9 +419,11 @@ export function useMobileNativeChatController(
     tabId: activeSessionTabId,
     handleRef: activeHandleRef,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
-    peeking: terminalPeekActive,
+    client,
+    deviceTokenRef,
     beforeOpen: settleDraftMirrorBeforeSend,
-    peek: peekTerminalTab,
+    pending: chatPending,
+    removePending,
     onError: onSendError
   })
 
@@ -462,7 +465,7 @@ export function useMobileNativeChatController(
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
     openNativeChatQueueEditor: queueEditor.open,
-    nativeChatQueueEditorAgent: queueEditor.agent,
+    nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,
