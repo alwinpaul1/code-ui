@@ -34,7 +34,13 @@ describe('terminal approval observation', () => {
                     '  ↳ desktop task',
                     '    alt + ↑ edit last queued message'
                   ]
-                : ['Working', '', '❯ desktop task', '─────', '❯ Press up to edit queued messages']
+                : [
+                    'Working',
+                    '',
+                    '❯ desktop task',
+                    '─────',
+                    '❯ Press up to select a queued message, then Enter to edit it'
+                  ]
           }
         }
       })

@@ -113,6 +113,7 @@ export function MobileNativeChatOverlay({
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
         queuedMessages={projectedQueue.queue}
+        onEditQueue={controller.openNativeChatQueueEditor}
         pending={projectedQueue.pending}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}

@@ -13,6 +13,28 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles }
 }))
 vi.mock('./image-preview-store', () => ({ openImagePreview: vi.fn() }))
+vi.mock('lucide-react-native', () => ({ Pencil: 'Pencil' }))
+
+it.each(['claude', 'codex'])(
+  'offers a pencil for a %s desktop queue without any phone pending messages',
+  async (agent) => {
+    const onEdit = vi.fn().mockResolvedValue(undefined)
+    const projected = projectMobileChatQueue([], ['desktop-only message'])
+    let renderer: ReturnType<typeof create>
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatQueue, { messages: projected.queue, agent, onEdit })
+      )
+    })
+    expect(renderer!.root.findAllByType('Pencil')).toHaveLength(1)
+    const button = renderer!.root
+      .findAllByType('Pressable')
+      .find((node) => node.props.accessibilityRole === 'button')!
+    await act(async () => button.props.onPress())
+    expect(onEdit).toHaveBeenCalledOnce()
+    await act(async () => renderer!.unmount())
+  }
+)
 
 it('shows the desktop-confirmed image queue with a caption and tappable thumbnail only once', async () => {
   const path =

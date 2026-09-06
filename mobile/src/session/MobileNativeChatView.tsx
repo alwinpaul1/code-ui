@@ -53,6 +53,7 @@ export function MobileNativeChatView({
   getSendCompletionGeneration,
   getComposerEditGeneration,
   queuedMessages,
+  onEditQueue,
   pending,
   imagePreviewsByMessageId,
   composerText,
@@ -345,7 +346,7 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
-      <MobileNativeChatQueue messages={queuedMessages} />
+        <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
       <MobileNativeChatPromptCard
         ask={ask}
         askKey={askKey}

@@ -84,7 +84,11 @@ export function useMobileTerminalHudObservation(args: {
           return null
         }
         const terminal = (response as RpcSuccess).result as {
-          terminal?: { tail?: unknown; lines?: unknown }
+          terminal?: { tail?: unknown; lines?: unknown; source?: string }
+        }
+        // Stream fallback contains old repaints, not the current queue or dialog.
+        if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
+          return null
         }
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw)

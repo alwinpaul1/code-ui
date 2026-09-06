@@ -7,6 +7,24 @@ import {
 import { claudePermissionFromScreen } from './claude-terminal-permission'
 
 describe('visible agent queue', () => {
+  it.each([
+    ['❯ Press up to select a queued message, then Enter to edit it'],
+    ['❯ Press up to select a queued message to edit, or Enter to send them now'],
+    ['❯ Press up to select a queued message, then Enter', '  to edit it']
+  ])('reads the newer Claude queue selector hint: %s', (...footer) => {
+    expect(
+      queuedMessagesFromScreen([
+        '⏺ Earlier response',
+        '',
+        '✻ Working…',
+        '',
+        '❯ desktop follow-up',
+        '  with wrapped text',
+        '────────',
+        ...footer
+      ])
+    ).toEqual(['desktop follow-up\nwith wrapped text'])
+  })
   it('reads the explicit queue and wrapped text without importing history', () => {
     expect(
       queuedMessagesFromScreen([

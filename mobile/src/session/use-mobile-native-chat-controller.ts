@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useMobileNativeChatCancelQueued } from './use-mobile-native-chat-cancel-queued'
+import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
@@ -119,8 +119,7 @@ export function useMobileNativeChatController(
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
-    holdUnconfirmedSend,
-    removePending: removeChatPending
+    holdUnconfirmedSend
   } = useMobileNativeChatDrafts({
     hostId,
     worktreeId,
@@ -414,15 +413,15 @@ export function useMobileNativeChatController(
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
   const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
-  const handleNativeChatCancelQueued = useMobileNativeChatCancelQueued({
-    client,
-    connected: connState === 'connected',
-    structured: activeChatStructured,
+  const queueEditor = useMobileNativeChatQueueEditor({
+    agent: activeChatAgent,
+    tabId: activeSessionTabId,
     handleRef: activeHandleRef,
-    deviceTokenRef,
-    pending: chatPending,
-    draft: chatComposerText,
-    removePending: removeChatPending
+    enabled: showNativeChat && !activeChatStructured && connState === 'connected',
+    peeking: terminalPeekActive,
+    beforeOpen: settleDraftMirrorBeforeSend,
+    peek: peekTerminalTab,
+    onError: onSendError
   })
 
   return {
@@ -462,7 +461,8 @@ export function useMobileNativeChatController(
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
-    handleNativeChatCancelQueued,
+    openNativeChatQueueEditor: queueEditor.open,
+    nativeChatQueueEditorAgent: queueEditor.agent,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,

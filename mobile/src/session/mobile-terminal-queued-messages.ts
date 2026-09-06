@@ -3,7 +3,14 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
 /** Read only the explicit Claude queue block immediately above its queue footer.
  * The screen can show only a subset of a long queue; never use this to rewrite it. */
 export function queuedMessagesFromScreen(lines: readonly string[]): string[] {
-  const footer = lines.findLastIndex((line) => /Press up to edit queued messages/i.test(line))
+  // Claude's newer per-message selector has different copy from the legacy
+  // whole-queue recall. The hint can wrap on a narrow phone-sized terminal.
+  const footer = lines.findLastIndex((line, index) =>
+    /^\s*[❯›>]?\s*Press up to\b/i.test(line) &&
+    /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i.test(
+      lines.slice(index, index + 3).map((part) => part.trim()).join(' ')
+    )
+  )
   if (footer === -1) {
     return []
   }

@@ -10,6 +10,7 @@ import { getMobileTerminalLiveInputPlaceholder } from './mobile-terminal-live-in
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { useTheme } from '../theme/theme-context'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { MobileNativeQueueEditorControls } from './MobileNativeQueueEditorControls'
 
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   const { colors, fonts, radius, space, type } = useTheme()
@@ -82,6 +83,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         transform: [{ translateY: -keyboardLift }]
       }}
     >
+      {nativeChatController.nativeChatQueueEditorAgent ? (
+        <MobileNativeQueueEditorControls
+          agent={nativeChatController.nativeChatQueueEditorAgent}
+          enabled={canSend}
+          onKey={(input) => void controller.handleAccessoryKey(input)}
+          onClose={nativeChatController.endTerminalPeek}
+        />
+      ) : null}
       <MobileSessionAccessoryStrip controller={controller} />
 
       {/* Input bar */}

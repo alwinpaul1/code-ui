@@ -1,4 +1,5 @@
 import { Image, Pressable, ScrollView, View } from 'react-native'
+import { Pencil } from 'lucide-react-native'
 import { Txt } from '../ui/Txt'
 import { useTheme } from '../theme/theme-context'
 import { openImagePreview } from './image-preview-store'
@@ -6,9 +7,13 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 
 export function MobileNativeChatQueue({
-  messages
+  messages,
+  agent,
+  onEdit
 }: {
   messages?: readonly MobileChatQueueEntry[]
+  agent?: string | null
+  onEdit?: () => Promise<void>
 }) {
   const { colors, space, radius } = useTheme()
   if (!messages?.length) {
@@ -25,7 +30,36 @@ export function MobileNativeChatQueue({
         backgroundColor: colors.bgPanel
       }}
     >
-      <Txt variant="caption" tone="secondary">{`Queued on agent · ${messages.length}`}</Txt>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Txt variant="caption" tone="secondary">{`Queued on agent · ${messages.length}`}</Txt>
+        {onEdit && (agent === 'claude' || agent === 'codex') ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              agent === 'codex'
+                ? 'Edit latest queued message in Codex'
+                : 'Edit queued messages in Claude'
+            }
+            onPress={() => void onEdit()}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              minWidth: 44,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: space.xs,
+              paddingHorizontal: space.sm,
+              borderRadius: radius.sm,
+              backgroundColor: pressed ? colors.border : colors.bgRaised
+            })}
+          >
+            <Pencil size={16} color={colors.textSecondary} />
+            <Txt variant="caption" tone="secondary">
+              {agent === 'codex' ? 'Edit latest' : 'Edit queue'}
+            </Txt>
+          </Pressable>
+        ) : null}
+      </View>
       <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
         {messages.map((entry, index) => {
           const text = typeof entry === 'string' ? entry : entry.text

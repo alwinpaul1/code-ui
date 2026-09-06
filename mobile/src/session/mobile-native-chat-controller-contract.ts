@@ -66,9 +66,10 @@ export type MobileNativeChatController = {
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
-  /** Drop one message Claude Code has queued behind the running turn. */
   prepareNativeChatImageSend?: () => Promise<void>
-  handleNativeChatCancelQueued: (id: string) => Promise<boolean>
+  /** Uses the original agent input for desktop and mobile queued messages. */
+  openNativeChatQueueEditor?: () => Promise<void>
+  nativeChatQueueEditorAgent?: 'claude' | 'codex' | null
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
