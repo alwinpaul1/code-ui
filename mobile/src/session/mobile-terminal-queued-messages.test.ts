@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   queuedMessagesFromScreen,
-  pendingOutsideVisibleQueue
+  pendingOutsideVisibleQueue,
+  projectMobileChatQueue
 } from './mobile-terminal-queued-messages'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
 
@@ -59,5 +60,26 @@ describe('Claude live approval', () => {
   it('rejects unselected history and incomplete dialogs', () => {
     expect(claudePermissionFromScreen(screen.map((x) => x.replace('❯ ', '')))).toBeNull()
     expect(claudePermissionFromScreen(screen.slice(0, -1))).toBeNull()
+  })
+})
+
+it('renders a queued image and caption once with its local thumbnail instead of path text', () => {
+  const image = { text: 'See this', images: ['file:///a.jpg'], id: 1 }
+  const path =
+    '/var/folders/0y/session/T/orca-paste-1788707946740-fd6147a9-5b2d-4051-8a87-dbd45992c21e.png'
+  expect(projectMobileChatQueue([image], [path + ' See this', 'unrelated'])).toEqual({
+    pending: [image],
+    queue: ['unrelated']
+  })
+  expect(
+    projectMobileChatQueue([image], [path + ' See this', path + ' See this']).queue
+  ).toHaveLength(1)
+})
+
+it('keeps a matched photo bubble when another queued message repeats its caption', () => {
+  const image = { text: 'See this', images: ['file:///a.jpg'], id: 1 }
+  expect(projectMobileChatQueue([image], ['[Image #1] See this', 'See this'])).toEqual({
+    pending: [image],
+    queue: ['See this']
   })
 })

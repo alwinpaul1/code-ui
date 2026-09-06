@@ -162,6 +162,27 @@ describe('MobileNativeChatView', () => {
     expect(bannerText()).toContain('Permission reply failed')
   })
 
+  it('does not resume following during a drag near the live edge', async () => {
+    await render({ folded: [assistantTurn('a1', 'Streaming reply')] })
+    const list = () => renderer!.root.findByType('FlatList')
+    const nearBottom = {
+      nativeEvent: {
+        contentOffset: { y: 480 },
+        contentSize: { height: 1000 },
+        layoutMeasurement: { height: 500 }
+      }
+    }
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScroll(nearBottom))
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      1
+    )
+    act(() => list().props.onScrollEndDrag(nearBottom))
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      0
+    )
+  })
+
   it('does not duplicate the route banner when the composer rejects', async () => {
     const onClearSendError = vi.fn()
     await render({

@@ -1,3 +1,6 @@
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import type {
   TerminalHudContextWindow,
   TerminalHudObservation,
@@ -102,4 +105,22 @@ export type MobileNativeChatController = {
   nativeChatAgentMode: TerminalAgentMode | null
   /** Re-read the terminal screen now (after a Shift+Tab, so the mode pill follows). */
   refreshNativeChatHud: () => Promise<TerminalHudObservation | null>
+}
+
+export type MobileNativeChatControllerArgs = {
+  client: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  onSendError: (message: string) => void
+  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
+   *  answer or permission reply must not sit under a stale "not sent". */
+  onSendResolved: () => void
 }

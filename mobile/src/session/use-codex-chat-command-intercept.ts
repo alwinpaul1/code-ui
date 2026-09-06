@@ -8,13 +8,18 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 export function useCodexChatCommandIntercept(args: {
   agentRef: MutableRefObject<string | null>
   sessionOptions: MobileNativeChatSessionOptionPickersProps | null
-  rawSendWithOutcome: (text: string, images?: string[]) => Promise<MobileNativeChatSendOutcome>
+  rawSendWithOutcome: (
+    text: string,
+    images?: string[],
+    deadline?: number
+  ) => Promise<MobileNativeChatSendOutcome>
 }): {
   modelSheetRequest: number
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>
   handleNativeChatSendWithOutcome: (
     text: string,
-    images?: string[]
+    images?: string[],
+    deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const { agentRef, sessionOptions, rawSendWithOutcome } = args
@@ -41,8 +46,19 @@ export function useCodexChatCommandIntercept(args: {
     [agentRef]
   )
   const handleNativeChatSendWithOutcome = useCallback(
-    async (text: string, images?: string[]): Promise<MobileNativeChatSendOutcome> =>
-      (await intercept(text)) ?? rawSendWithOutcome(text, images),
+    async (
+      text: string,
+      images?: string[],
+      deadline?: number
+    ): Promise<MobileNativeChatSendOutcome> => {
+      const intercepted = images?.length ? null : await intercept(text)
+      if (intercepted !== null) {
+        return intercepted
+      }
+      return deadline === undefined
+        ? rawSendWithOutcome(text, images)
+        : rawSendWithOutcome(text, images, deadline)
+    },
     [intercept, rawSendWithOutcome]
   )
   const handleNativeChatSend = useCallback(

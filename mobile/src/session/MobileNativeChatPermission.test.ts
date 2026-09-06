@@ -82,13 +82,66 @@ describe('MobileNativeChatPermission', () => {
     ).toBe(true)
     expect(renderer.root.findByType('Pressable').props.disabled).toBe(true)
     await act(async () => resolveResponse(true))
-    expect(renderer.root.findAllByType('Pressable')).toHaveLength(0)
+    expect(renderer.root.findByType('Pressable').props.disabled).toBe(true)
     expect(
       renderer.root
         .findAllByType('Text')
         .some((node) => node.props.children === 'Response sent · waiting for agent')
     ).toBe(true)
   })
+
+  it.each([0, 1, 2])(
+    'shows sending feedback above the selected choice %i only',
+    async (selected) => {
+      const options = [
+        { label: 'Allow once', send: 'y' },
+        { label: "Yes, and don't ask again for commands that start with pnpm test", send: 'p' },
+        { label: 'Deny', send: '\x1b' }
+      ]
+      let finish: (accepted: boolean) => void = () => {}
+      const onRespond = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finish = resolve
+          })
+      )
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Approve?', options },
+            onRespond
+          })
+        )
+      })
+      act(() => renderer!.root.findAllByType('Pressable')[selected].props.onPress())
+      const groups = renderer!.root
+        .findAllByType('View')
+        .filter(
+          (view) =>
+            view.findAllByType('Pressable').length === 1 &&
+            view.findAllByType('Text').some((text) => text.props.children === 'Sending response…')
+        )
+      expect(groups).toHaveLength(1)
+      expect(groups[0].findByType('Pressable').props.accessibilityLabel).toBe(
+        options[selected].label
+      )
+      expect(
+        renderer!.root.findAllByType('Pressable').every((button) => button.props.disabled)
+      ).toBe(true)
+      expect(
+        renderer!.root
+          .findAllByType('Pressable')
+          .map((button) => button.props.accessibilityState.busy)
+      ).toEqual(options.map((_, index) => index === selected))
+      expect(onRespond).toHaveBeenCalledExactlyOnceWith(options[selected].send)
+      await act(async () => finish(false))
+      expect(
+        renderer!.root
+          .findAllByType('Text')
+          .some((text) => text.props.children === 'Sending response…')
+      ).toBe(false)
+    }
+  )
 
   it('restores choices after a rejected response', async () => {
     const onRespond = vi.fn(async () => false)

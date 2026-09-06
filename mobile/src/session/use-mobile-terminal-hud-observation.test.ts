@@ -92,3 +92,30 @@ describe('terminal approval observation', () => {
     expect(observation.terminalPermission).toBeNull()
   })
 })
+
+it('retains the current approval while activity changes the polling cadence', async () => {
+  vi.useFakeTimers()
+  const sendRequest = vi
+    .fn()
+    .mockResolvedValue({ ok: true, result: { terminal: { lines: SCREEN } } })
+  const client = { sendRequest } as unknown as RpcClient
+  function Harness({ active }: { active: boolean }) {
+    observation = useMobileTerminalHudObservation({
+      client,
+      enabled: true,
+      active,
+      handleRef,
+      handleKey: 'terminal',
+      agent: 'codex'
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness, { active: false }))
+  })
+  const permission = observation.terminalPermission
+  expect(permission).not.toBeNull()
+  sendRequest.mockReturnValue(new Promise(() => {}))
+  await act(async () => renderer.update(createElement(Harness, { active: true })))
+  expect(observation.terminalPermission).toBe(permission)
+})

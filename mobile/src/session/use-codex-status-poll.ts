@@ -1,7 +1,3 @@
-// Codex states its context window only in the `/status` box, never in the
-// footer, so the ring has nothing to read unless something runs `/status`.
-// Run it when a turn ends (the figure changed) and once when a Codex chat
-// opens, then re-read the screen so the ring picks the new figure up.
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createCodexPickerIo } from './codex-picker-apply'
@@ -12,14 +8,12 @@ import {
   hasScrapedCodexVisibleModels,
   scrapeCodexVisibleModels
 } from './codex-visible-models'
-import { parseCodexStatusContext } from './mobile-terminal-hud-parse'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWrite
+} from './mobile-native-chat-terminal-write-lock'
 
 const SETTLE_AFTER_TURN_MS = 700
-// The /status box is on screen well under a second; poll for its context
-// line instead of sleeping a fixed 1.5 s that held the terminal lock (and any
-// pick queued behind it) for the whole time.
-const STATUS_POLL_MS = 150
-const STATUS_TIMEOUT_MS = 2_000
 const MODEL_READ_RETRY_MS = 1_000
 const MODEL_READ_ATTEMPTS = 3
 
@@ -30,6 +24,8 @@ export function useCodexStatusPoll(args: {
   /** Codex chat is showing over a live terminal. */
   enabled: boolean
   working: boolean
+  hasDraft?: boolean
+  beforeWrite?: () => Promise<void>
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   /** Restarts the "once on open" poll when the terminal changes. */
@@ -37,14 +33,14 @@ export function useCodexStatusPoll(args: {
   refreshHud: () => Promise<unknown>
 }): void {
   const { client, enabled, working, handleRef, deviceTokenRef, handleKey, refreshHud } = args
-  const { hostId, worktreeId } = args
+  const { hostId, worktreeId, hasDraft = false, beforeWrite } = args
   const previousWorking = useRef(working)
   const polledOnOpen = useRef<string | null>(null)
 
   useEffect(() => {
     const wasWorking = previousWorking.current
     previousWorking.current = working
-    if (!client || !enabled || !handleKey) {
+    if (!client || !enabled || !handleKey || hasDraft) {
       return
     }
     const turnEnded = wasWorking && !working
@@ -64,60 +60,57 @@ export function useCodexStatusPoll(args: {
         return
       }
       void withCodexTerminalLock(handle, async () => {
-        if (!active) {
+        if (!active || !acquireMobileNativeChatTerminalWrite(handle)) {
           return
         }
-        const io = createCodexPickerIo({
-          client,
-          terminal: handle,
-          deviceToken: deviceTokenRef.current
-        })
-        // Self-heal: a picker left open (an apply cut off by a disconnect or a
-        // backgrounded app) swallows every send. Escape it first — never while
-        // a turn runs, since Esc there interrupts the agent.
-        let lines = await io.readScreen()
-        for (let attempt = 0; attempt < 3 && parseCodexPickerScreen(lines); attempt += 1) {
-          // An open model picker already contains the answer: let the reader
-          // consume it before cleanup instead of closing and reopening it.
-          if (
-            parseCodexPickerScreen(lines)?.step === 'model' &&
-            !hasScrapedCodexVisibleModels(visibleKey)
-          ) {
-            break
-          }
-          if (!active || isCodexWorking(lines)) {
+        try {
+          await beforeWrite?.()
+          if (!active) {
             return
           }
-          await io.sendKey('\x1b')
-          await io.sleep(400)
-          lines = await io.readScreen()
-        }
-        // Why the idle check: while a turn runs, "/status" would be queued as a
-        // prompt to the model instead of running as a command.
-        if (!isCodexIdle(lines) && parseCodexPickerScreen(lines)?.step !== 'model') {
-          return
-        }
-        // Learn which models this session can pick by reading Codex's own picker
-        // (the host probe lists hidden ones and misses some). Retried on every
-        // idle open / turn end until it succeeds once.
-        if (!hasScrapedCodexVisibleModels(visibleKey)) {
-          const models = await scrapeCodexVisibleModels(io, visibleKey, lines)
-          if (!active || !models) {
+          const io = createCodexPickerIo({
+            client,
+            terminal: handle,
+            deviceToken: deviceTokenRef.current
+          })
+          // Self-heal: a picker left open (an apply cut off by a disconnect or a
+          // backgrounded app) swallows every send. Escape it first — never while
+          // a turn runs, since Esc there interrupts the agent.
+          let lines = await io.readScreen()
+          for (let attempt = 0; attempt < 3 && parseCodexPickerScreen(lines); attempt += 1) {
+            // An open model picker already contains the answer: let the reader
+            // consume it before cleanup instead of closing and reopening it.
+            if (
+              parseCodexPickerScreen(lines)?.step === 'model' &&
+              !hasScrapedCodexVisibleModels(visibleKey)
+            ) {
+              break
+            }
+            if (!active || isCodexWorking(lines)) {
+              return
+            }
+            await io.sendKey('\x1b')
+            await io.sleep(400)
+            lines = await io.readScreen()
+          }
+          // Only discover models on an idle input; a working turn owns the terminal.
+          if (!isCodexIdle(lines) && parseCodexPickerScreen(lines)?.step !== 'model') {
             return
           }
-        }
-        if (!(await io.typeCommand('/status'))) {
-          return
-        }
-        const deadline = io.now() + STATUS_TIMEOUT_MS
-        while (active && io.now() < deadline) {
-          await io.sleep(STATUS_POLL_MS)
-          if (parseCodexStatusContext(await io.readScreen())) {
-            break
+          // Learn which models this session can pick by reading Codex's own picker
+          // (the host probe lists hidden ones and misses some). Retried on every
+          // idle open / turn end until it succeeds once.
+          if (!hasScrapedCodexVisibleModels(visibleKey)) {
+            const models = await scrapeCodexVisibleModels(io, visibleKey, lines)
+            if (!active || !models) {
+              return
+            }
           }
-        }
-        if (active) {
-          await refreshHud()
+          if (active) {
+            await refreshHud()
+          }
+        } finally {
+          releaseMobileNativeChatTerminalWrite(handle)
         }
       })
         .catch(() => {
@@ -142,6 +135,8 @@ export function useCodexStatusPoll(args: {
     }
   }, [
     client,
+    hasDraft,
+    beforeWrite,
     deviceTokenRef,
     enabled,
     handleKey,

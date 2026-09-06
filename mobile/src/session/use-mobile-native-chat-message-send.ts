@@ -147,7 +147,7 @@ export function useMobileNativeChatMessageSend(args: {
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
-      const classification = classifyMobileNativeChatSend(agent, text)
+      const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
@@ -195,6 +195,9 @@ export function useMobileNativeChatMessageSend(args: {
             client,
             terminal: handle,
             text,
+            ...(agent === 'codex' && syncComposer && classification === 'chat'
+              ? { queueWithTab: true }
+              : {}),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
             ...(mobileClient ? { mobileClient } : {})

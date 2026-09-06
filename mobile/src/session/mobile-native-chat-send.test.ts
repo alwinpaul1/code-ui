@@ -396,3 +396,62 @@ describe('clearMobileNativeChatInput', () => {
     expect(client.sendRequest).not.toHaveBeenCalled()
   })
 })
+
+it('stages a Codex follow-up and queues it with Tab, never Enter', async () => {
+  const client = clientWithResponse({ ok: true, result: { send: { accepted: true } } })
+  expect(
+    await sendMobileNativeChatMessageWithOutcome({
+      client,
+      terminal: 'term',
+      text: 'caption',
+      queueWithTab: true
+    })
+  ).toBe('accepted')
+  const calls = vi.mocked(client.sendRequest).mock.calls
+  expect(calls.map(([, params]) => params)).toEqual([
+    { terminal: 'term', text: 'caption', enter: false },
+    { terminal: 'term', text: '\t', enter: false }
+  ])
+})
+
+it('does not submit a queued follow-up after an ambiguous staging write', async () => {
+  const client = clientWithResponse({ ok: true, result: { send: { accepted: true } } })
+  vi.mocked(client.sendRequest).mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('ack lost')))
+  expect(
+    await sendMobileNativeChatMessageWithOutcome({
+      client,
+      terminal: 'term',
+      text: 'caption',
+      queueWithTab: true
+    })
+  ).toBe('unknown')
+  expect(client.sendRequest).toHaveBeenCalledOnce()
+})
+
+it('queues an already pasted image without an empty staging write', async () => {
+  const client = clientWithResponse({ ok: true, result: { send: { accepted: true } } })
+  await sendMobileNativeChatMessageWithOutcome({
+    client,
+    terminal: 'term',
+    text: '',
+    queueWithTab: true
+  })
+  expect(vi.mocked(client.sendRequest).mock.calls.map(([, params]) => params)).toEqual([
+    { terminal: 'term', text: '\t', enter: false }
+  ])
+})
+
+it('resolves a Codex launch draft only on the queue submission', async () => {
+  const client = clientWithResponse({ ok: true, result: { send: { accepted: true } } })
+  const resolvedLaunchDraft = { text: 'seed', createdAt: 7 }
+  await sendMobileNativeChatMessageWithOutcome({
+    client,
+    terminal: 'term',
+    text: 'caption',
+    queueWithTab: true,
+    resolvedLaunchDraft
+  })
+  const params = vi.mocked(client.sendRequest).mock.calls.map(([, value]) => value)
+  expect(params[0]).not.toHaveProperty('resolvedLaunchDraft')
+  expect(params[1]).toMatchObject({ text: '\t', resolvedLaunchDraft })
+})

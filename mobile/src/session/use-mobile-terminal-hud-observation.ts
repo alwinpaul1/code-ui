@@ -145,13 +145,21 @@ export function useMobileTerminalHudObservation(args: {
     }
     readRef.current = read
     void read()
-    const timer = setInterval(() => void read(), args.active ? 1000 : HUD_POLL_MS)
     return () => {
       active = false
       readRef.current = async () => null
-      clearInterval(timer)
     }
-  }, [agent, args.active, client, enabled, handleKey, handleRef])
+  }, [agent, client, enabled, handleKey, handleRef])
+
+  // Activity changes the cadence, not the observed session. Resetting the read
+  // effect here made approval cards disappear and reappear on status updates.
+  useEffect(() => {
+    if (!client || !enabled || !handleKey) {
+      return
+    }
+    const timer = setInterval(() => void readRef.current(), args.active ? 1000 : HUD_POLL_MS)
+    return () => clearInterval(timer)
+  }, [args.active, client, enabled, handleKey])
 
   // Why: a Shift+Tab from the phone changes the footer at once; waiting up to
   // 5s for the next poll would make the mode pill look stuck.

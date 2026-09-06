@@ -1,3 +1,5 @@
+import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
+import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 /** Read only the explicit Claude queue block immediately above its queue footer.
  * The screen can show only a subset of a long queue; never use this to rewrite it. */
 export function queuedMessagesFromScreen(lines: readonly string[]): string[] {
@@ -48,4 +50,38 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
     remaining.splice(index, 1)
     return false
   })
+}
+
+/** Keep the photo bubble when a TUI queue echoes its caption plus image paths.
+ * Text-only queue entries still use the agent queue. Match each occurrence once. */
+export function projectMobileChatQueue<T extends { text: string; images?: string[] }>(
+  pending: readonly T[],
+  queue: readonly string[]
+): { pending: T[]; queue: string[] } {
+  const available = pending.filter((item) => item.images?.length)
+  const matchedImages = new Set<T>()
+  const remainingQueue = queue.filter((text) => {
+    if (!splitOrcaPastedImagePaths(text).paths.length && !/\[Image #\d+\]/.test(text)) {
+      return true
+    }
+    const normalized = normalizeNativeChatUserText(text)
+    const index = available.findIndex(
+      (item) => normalizeNativeChatUserText(item.text) === normalized
+    )
+    if (index === -1) {
+      return true
+    }
+    matchedImages.add(available.splice(index, 1)[0]!)
+    return false
+  })
+  const unmatched = new Set(
+    pendingOutsideVisibleQueue(
+      pending.filter((item) => !matchedImages.has(item)),
+      remainingQueue
+    )
+  )
+  return {
+    pending: pending.filter((item) => matchedImages.has(item) || unmatched.has(item)),
+    queue: remainingQueue
+  }
 }

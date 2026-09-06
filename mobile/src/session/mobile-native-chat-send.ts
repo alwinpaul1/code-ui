@@ -14,6 +14,8 @@ type MobileNativeChatSendArgs = {
   terminal: string
   text: string
   enter?: boolean
+  /** Codex Tab queues during a turn and submits normally when idle. */
+  queueWithTab?: boolean
   /** Exact host launch draft this submitting write resolves when accepted. */
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
@@ -43,6 +45,27 @@ export function openMobileNativeChatSendBudget(): number {
 export async function sendMobileNativeChatMessageWithOutcome(
   args: MobileNativeChatSendArgs
 ): Promise<MobileNativeChatSendOutcome> {
+  if (args.queueWithTab) {
+    const deadline = args.deadline ?? openMobileNativeChatSendBudget()
+    const { queueWithTab: _queue, resolvedLaunchDraft, ...write } = args
+    if (write.text.length > 0) {
+      const staged = await sendMobileNativeChatMessageWithOutcome({
+        ...write,
+        enter: false,
+        deadline
+      })
+      if (staged !== 'accepted') {
+        return staged
+      }
+    }
+    return sendMobileNativeChatMessageWithOutcome({
+      ...write,
+      resolvedLaunchDraft,
+      text: '\t',
+      enter: false,
+      deadline
+    })
+  }
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   // Starting an underfunded final write risks delivery followed by a false timeout.

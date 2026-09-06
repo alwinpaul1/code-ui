@@ -16,7 +16,8 @@ function MobileNativeChatPermissionImpl({
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
   const [accepted, setAccepted] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
+  const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
+  const submitting = submittingIndex !== null
   const submittingRef = useRef(false)
   const commandStart = permission.detail?.search(/^\$ /m) ?? -1
   const description =
@@ -24,12 +25,12 @@ function MobileNativeChatPermissionImpl({
   const command =
     permission.command ??
     (commandStart >= 0 ? permission.detail?.slice(commandStart + 2).trim() : undefined)
-  const respond = async (send: string): Promise<void> => {
+  const respond = async (send: string, index: number): Promise<void> => {
     if (submittingRef.current) {
       return
     }
     submittingRef.current = true
-    setSubmitting(true)
+    setSubmittingIndex(index)
     let sent = false
     try {
       sent = await onRespond(send)
@@ -39,26 +40,9 @@ function MobileNativeChatPermissionImpl({
     } finally {
       if (!sent) {
         submittingRef.current = false
-        setSubmitting(false)
+        setSubmittingIndex(null)
       }
     }
-  }
-  if (accepted) {
-    return (
-      <View
-        accessibilityLiveRegion="polite"
-        style={{
-          margin: space.md,
-          padding: space.md,
-          borderRadius: radius.md,
-          backgroundColor: colors.bgPanel
-        }}
-      >
-        <Txt variant="label" tone="secondary">
-          Response sent · waiting for agent
-        </Txt>
-      </View>
-    )
   }
   return (
     <View
@@ -121,11 +105,6 @@ function MobileNativeChatPermissionImpl({
           ) : null}
         </ScrollView>
       ) : null}
-      {submitting ? (
-        <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
-          Sending response…
-        </Txt>
-      ) : null}
       <View style={{ gap: space.sm }}>
         {permission.options.map((option, index) => {
           const rememberedPrefix = option.label.match(
@@ -171,13 +150,20 @@ function MobileNativeChatPermissionImpl({
                     'Switches this session to auto mode.'}
                 </Txt>
               ) : null}
+              <View style={{ minHeight: 18 }}>
+                {submittingIndex === index ? (
+                  <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
+                    {accepted ? 'Response sent · waiting for agent' : 'Sending response…'}
+                  </Txt>
+                ) : null}
+              </View>
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={option.label}
-                accessibilityState={{ disabled: submitting, busy: submitting }}
+                accessibilityState={{ disabled: submitting, busy: submittingIndex === index }}
                 pressedScale={0.98}
                 disabled={submitting}
-                onPress={() => void respond(option.send)}
+                onPress={() => void respond(option.send, index)}
                 style={{
                   minHeight: 48,
                   paddingHorizontal: space.md,

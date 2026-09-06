@@ -1,8 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMobileNativeChatCancelQueued } from './use-mobile-native-chat-cancel-queued'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
@@ -24,7 +21,10 @@ import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
-import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import type {
+  MobileNativeChatController,
+  MobileNativeChatControllerArgs
+} from './mobile-native-chat-controller-contract'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
@@ -40,23 +40,9 @@ const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
 
 /** Owns mobile native-chat state and teardown outside the already dense session
  *  route. The route remains responsible only for choosing and rendering the view. */
-export function useMobileNativeChatController(args: {
-  client: RpcClient | null
-  hostId: string
-  worktreeId: string
-  activeSessionTab: MobileNativeChatTab | null
-  activeSessionTabId: string | null
-  activeHandleRef: MutableRefObject<string | null>
-  deviceTokenRef: MutableRefObject<string | null>
-  nativeChatTranscriptIsLocalReadable: boolean
-  nativeChatInputLeaseReady: boolean
-  /** Live socket state; the lease collapses on disconnect but one render later. */
-  connState: ConnectionState
-  onSendError: (message: string) => void
-  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
-   *  answer or permission reply must not sit under a stale "not sent". */
-  onSendResolved: () => void
-}): MobileNativeChatController {
+export function useMobileNativeChatController(
+  args: MobileNativeChatControllerArgs
+): MobileNativeChatController {
   const {
     client,
     hostId,
@@ -391,7 +377,7 @@ export function useMobileNativeChatController(args: {
       refreshHud: refreshTerminalHud,
       onFailure: onSendError
     })
-  // Codex names its context window only in `/status`; run it as turns end.
+  // Read cached model membership safely; never inject background /status commands.
   useCodexStatusPoll({
     client,
     hostId,
@@ -402,6 +388,8 @@ export function useMobileNativeChatController(args: {
       !activeChatStructured &&
       connState === 'connected',
     working: nativeChatAgentWorking,
+    hasDraft: chatComposerText.trim().length > 0,
+    beforeWrite: settleDraftMirrorBeforeSend,
     handleRef: activeHandleRef,
     deviceTokenRef,
     handleKey: showNativeChat ? streamScopeKey : null,

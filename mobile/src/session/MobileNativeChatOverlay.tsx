@@ -1,5 +1,5 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
-import { pendingOutsideVisibleQueue } from './mobile-terminal-queued-messages'
+import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
 import { useMemo } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
@@ -68,6 +68,10 @@ export function MobileNativeChatOverlay({
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   usePendingImageHistory(session, controller.chatPending, sendSurfaceId)
+  const projectedQueue = projectMobileChatQueue(
+    controller.chatPending,
+    controller.nativeChatQueuedMessages ?? []
+  )
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
@@ -106,11 +110,8 @@ export function MobileNativeChatOverlay({
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
-        queuedMessages={controller.nativeChatQueuedMessages}
-        pending={pendingOutsideVisibleQueue(
-          controller.chatPending,
-          controller.nativeChatQueuedMessages ?? []
-        )}
+        queuedMessages={projectedQueue.queue}
+        pending={projectedQueue.pending}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

@@ -1,3 +1,4 @@
+import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -111,8 +112,8 @@ export function MobileNativeChatView({
   // lagged one frame behind the user's scroll and the list yanked back down
   // mid-read. The ref is read synchronously by every autoscroll site, and the
   // moment the user drags we stop following until they return to the edge.
-  const followingRef = useRef(true)
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+  const { followingRef, scrollingRef, showJumpToLatest, setFollowing, beginScroll, endScroll } =
+    useMobileChatFollowing()
   // Why: the transcript paints at the top first and is pinned to the bottom a
   // few frames later, once rows have measured. Showing that first paint reads
   // as the list jumping. Keep the list invisible until the first pin settled,
@@ -132,11 +133,6 @@ export function MobileNativeChatView({
     },
     []
   )
-
-  const setFollowing = useCallback((next: boolean) => {
-    followingRef.current = next
-    setShowJumpToLatest((visible) => (visible === !next ? visible : !next))
-  }, [])
 
   const jumpToLatest = useCallback(
     (animated: boolean) => {
@@ -239,7 +235,7 @@ export function MobileNativeChatView({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
       const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      if (distanceFromBottom < LIVE_EDGE_THRESHOLD_PX) {
+      if (!scrollingRef.current && distanceFromBottom < LIVE_EDGE_THRESHOLD_PX) {
         setFollowing(true)
       }
       // Near the top — page in older history.
@@ -253,8 +249,20 @@ export function MobileNativeChatView({
   // The reader took control: stop following immediately, on the same frame as
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
-    setFollowing(false)
-  }, [setFollowing])
+    beginScroll()
+    if (sendScrollTimerRef.current) {
+      clearTimeout(sendScrollTimerRef.current)
+      sendScrollTimerRef.current = null
+    }
+  }, [beginScroll])
+
+  const onScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      endScroll()
+      evaluateEdge(event)
+    },
+    [evaluateEdge, endScroll]
+  )
 
   // Align a single message's top to the top of the viewport.
   const onScrollToMessage = useCallback(
@@ -325,8 +333,9 @@ export function MobileNativeChatView({
               keyboardShouldPersistTaps="handled"
               onScroll={evaluateEdge}
               onScrollBeginDrag={onScrollBeginDrag}
-              onScrollEndDrag={evaluateEdge}
-              onMomentumScrollEnd={evaluateEdge}
+              onScrollEndDrag={onScrollEnd}
+              onMomentumScrollBegin={onScrollBeginDrag}
+              onMomentumScrollEnd={onScrollEnd}
               scrollEventThrottle={16}
               // Why: while the reader is up in history, content growing above the
               // fold (older pages, re-flowed tool rows) must not shift what they
