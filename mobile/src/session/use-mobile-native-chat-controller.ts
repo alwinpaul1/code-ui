@@ -362,7 +362,8 @@ export function useMobileNativeChatController(args: {
   const codexCurrentModel = useCodexCurrentModel(
     activeChatResolution?.agent ?? null,
     hostId,
-    worktreeId
+    worktreeId,
+    activeSessionTab?.agentStatus?.model
   )
   const [modelSheetRequest, setModelSheetRequestState] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
@@ -374,11 +375,11 @@ export function useMobileNativeChatController(args: {
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
-      // Why no agentStatus fallback for Codex: the host mislabels a Codex
-      // session's agent-status as 'claude', so its `model` is a Claude id that
-      // would leak onto the Codex pill. The model comes from Codex's own picker
-      // (`(current)` marker, read on open and persisted) — no status line
-      // needed — with the footer as a fresher override once a turn has drawn it.
+      // Neither agent needs the status line: Orca's own hooks report the model
+      // into agent-status (Claude's raw id maps onto the catalog; Codex's goes
+      // through useCodexCurrentModel, which guards the host's occasional Claude
+      // id on a Codex pane and falls back to the picker's `(current)` row). The
+      // footer, when a turn has drawn it, is only a fresher override.
       reportedModel:
         activeChatResolution?.agent === 'codex'
           ? (hudObservation?.modelId ?? codexCurrentModel)
