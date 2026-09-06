@@ -77,6 +77,36 @@ describe('mobile endpoint supervisor nudges', () => {
     next.stop()
   })
 
+  it('retries the relay on its own backoff while a known-dead direct dial is still connecting', async () => {
+    // Seen 2026-09-06 during a relay drain (relay_outer_4503): every relay retry
+    // waited behind the dead Tailscale endpoint's 12s connect timeout.
+    const draining = new RelayOuterError(4503)
+    const openRelay = vi
+      .fn()
+      .mockImplementationOnce(() => new FakeRelaySession('disconnected', draining))
+      .mockImplementationOnce(() => new FakeRelaySession('disconnected', draining))
+      .mockImplementation(() => new FakeRelaySession('connected'))
+    const deps = dependencies({
+      openDirect: vi.fn(() => new FakeSession('connecting')),
+      openRelay
+    })
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const supervisor = new MobileEndpointSupervisor(
+      logical,
+      { ...host, directUnreachableSince: 1 },
+      deps
+    )
+    await supervisor.start()
+    // Direct stays 'connecting' throughout (its fake never opens). The relay's
+    // own backoff, well under the direct connect timeout, must bring the next
+    // dials — the direct socket never publishes a failure here.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(openRelay.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(logical.getState()).not.toBe('reconnecting')
+    await vi.waitFor(() => expect(logical.getActivePath()).toBe('relay'))
+    supervisor.stop()
+  })
+
   it('writes the verdict when the relay wins the race against a silent direct endpoint', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })

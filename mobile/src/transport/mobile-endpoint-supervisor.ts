@@ -75,7 +75,19 @@ export class MobileEndpointSupervisor {
       maxFailureCooldownMs: MAX_FAILURE_COOLDOWN_MS
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
-    this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
+    this.relayReconnect = new RelayReconnectController(dependencies, (forceReplacement) => {
+      // Why: a relay retry is otherwise held while the direct socket sits in
+      // 'connecting' ("live direct progress"), and against a dead direct
+      // endpoint that is the whole 12s connect timeout — so during a relay
+      // outage the phone re-dialled the relay only every ~11s, and every
+      // reconnect waited out a dial that could not succeed. A known-dead
+      // direct endpoint earns no such hold: the retry runs as the race the
+      // grace timer would have started. Only while direct is still DIALLING:
+      // 'handshaking' is a socket that opened and is authenticating, real
+      // progress that keeps its hold.
+      const directDead = this.directLooksDead() && this.logical.getState() === 'connecting'
+      return this.recoverRelay(forceReplacement || directDead, directDead)
+    })
     this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
@@ -102,10 +114,7 @@ export class MobileEndpointSupervisor {
       },
       // A direct endpoint that never answered last time gets no head start on
       // the next launch either; the verdict lives on the host profile.
-      () =>
-        this.hysteresis.directLooksUnreachable() || this.host.directUnreachableSince != null
-          ? 0
-          : DIRECT_DIAL_GRACE_MS
+      () => (this.directLooksDead() ? 0 : DIRECT_DIAL_GRACE_MS)
     )
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
@@ -354,6 +363,10 @@ export class MobileEndpointSupervisor {
         void this.recoverRelay()
       }
     }
+  }
+
+  private directLooksDead(): boolean {
+    return this.hysteresis.directLooksUnreachable() || this.host.directUnreachableSince != null
   }
 
   private rememberDirectVerdict(reachable: boolean): void {
