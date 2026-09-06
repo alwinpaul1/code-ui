@@ -4,8 +4,10 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 // whole 12s connect timeout (rpc-client CONNECT_TIMEOUT_MS), and relay recovery
 // cannot even start meanwhile because connecting/handshaking count as live direct
 // progress. Happy eyeballs: give direct this much of a head start, then race the
-// relay dial — migrateTo hands the logical client to whichever authenticates first.
-export const DIRECT_DIAL_GRACE_MS = 2500
+// relay dial. A 250ms head start favors a fast LAN without imposing seconds
+// of delay on cellular connections. migrateTo hands the logical client to
+// whichever authenticates first.
+export const DIRECT_DIAL_GRACE_MS = 250
 
 type DirectGraceTimerDependencies = {
   setTimer: typeof setTimeout
@@ -24,7 +26,7 @@ export class MobileRelayDirectGraceTimer {
     private readonly dialRelay: () => void,
     // Why: a direct endpoint that has failed every dial this session (Tailscale
     // off on the phone, a stale pairing address) earns no head start; the relay
-    // race begins immediately and the user is connected ~2.5s sooner.
+    // race begins immediately and the user is connected without the initial head start.
     private readonly graceMs: () => number = () => DIRECT_DIAL_GRACE_MS
   ) {}
 

@@ -841,13 +841,13 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
-  it('races a relay dial when the direct dial stalls unauthenticated', async () => {
+  it('starts relay within 250ms when the direct dial stalls unauthenticated', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies()
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
-    await vi.advanceTimersByTimeAsync(2_499)
+    await vi.advanceTimersByTimeAsync(249)
     expect(deps.openRelay).not.toHaveBeenCalled()
     expect(logical.getState()).toBe('connecting')
 
