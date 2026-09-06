@@ -170,8 +170,23 @@ export function useMobileNativeChatController(args: {
       : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
+  // The terminal's own status line is the one place that states model AND
+  // effort; read it while chat covers the terminal and let it win over the
+  // hook report, which names the model only.
   const {
-    permission: legacyNativeChatPermission,
+    observation: hudObservation,
+    refresh: refreshTerminalHud,
+    dialogOptions: terminalDialogOptions,
+    terminalPermission
+  } = useMobileTerminalHudObservation({
+    client,
+    enabled: showNativeChat && !activeChatStructured && connState === 'connected',
+    handleRef: activeHandleRef,
+    handleKey: showNativeChat ? streamScopeKey : null,
+    agent: activeChatResolution?.agent ?? null
+  })
+  const {
+    permission: reportedNativeChatPermission,
     question: legacyNativeChatQuestion,
     detectedAsk: nativeChatDetectedAsk,
     ask: nativeChatAskPrompt
@@ -181,6 +196,7 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages,
     transcriptLoading: nativeChatSession.transcriptLoading
   })
+  const legacyNativeChatPermission = terminalPermission ?? reportedNativeChatPermission
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
     nativeChatSession.status === 'ready' ||
@@ -266,7 +282,8 @@ export function useMobileNativeChatController(args: {
     enabled: inputSendable && !activeChatStructured,
     handleRef: activeHandleRef,
     deviceTokenRef,
-    onSendError
+    onSendError,
+    expectedCodexPermission: terminalPermission
   })
 
   const handleNativeChatStop = useMobileNativeChatStop({
@@ -335,30 +352,16 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages,
     localPreviews: chatImagePreviewsByMessageIdLocal
   })
-  // The terminal's own status line is the one place that states model AND
-  // effort; read it while chat covers the terminal and let it win over the
-  // hook report, which names the model only.
-  const {
-    observation: hudObservation,
-    refresh: refreshTerminalHud,
-    dialogOptions: terminalDialogOptions
-  } = useMobileTerminalHudObservation({
-    client,
-    enabled: showNativeChat && !activeChatStructured && connState === 'connected',
-    handleRef: activeHandleRef,
-    handleKey: showNativeChat ? streamScopeKey : null,
-    agent: activeChatResolution?.agent ?? null
-  })
   // Why: the approval envelope lands before the dialog is drawn; re-read the
   // screen shortly after so the card shows the dialog's own options, not the
   // generic pair, without waiting for the next 5s poll.
   useEffect(() => {
-    if (!legacyNativeChatPermission) {
+    if (!reportedNativeChatPermission) {
       return
     }
     const timers = [400, 1500].map((ms) => setTimeout(() => void refreshTerminalHud(), ms))
     return () => timers.forEach(clearTimeout)
-  }, [legacyNativeChatPermission, refreshTerminalHud])
+  }, [reportedNativeChatPermission, refreshTerminalHud])
   const codexModel = useCodexCurrentModel(
     activeChatResolution?.agent ?? null,
     hostId,

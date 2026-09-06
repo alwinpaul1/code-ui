@@ -10,7 +10,7 @@ function logicalIn(state: string) {
 }
 
 describe('MobileRelayDirectGraceTimer', () => {
-  it('gives a fresh direct dial its 250ms head start', () => {
+  it('races relay without delaying a fresh direct dial', () => {
     const setTimer = vi.fn(() => 1 as unknown as ReturnType<typeof setTimeout>)
     const timer = new MobileRelayDirectGraceTimer(
       { setTimer: setTimer as never, clearTimer: vi.fn() },

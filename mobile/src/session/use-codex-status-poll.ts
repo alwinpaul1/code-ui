@@ -20,6 +20,8 @@ const SETTLE_AFTER_TURN_MS = 700
 // pick queued behind it) for the whole time.
 const STATUS_POLL_MS = 150
 const STATUS_TIMEOUT_MS = 2_000
+const MODEL_READ_RETRY_MS = 1_000
+const MODEL_READ_ATTEMPTS = 3
 
 export function useCodexStatusPoll(args: {
   client: RpcClient | null
@@ -52,7 +54,11 @@ export function useCodexStatusPoll(args: {
     }
     polledOnOpen.current = handleKey
     let active = true
-    const timer = setTimeout(() => {
+    const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
+    let attempts = 0
+    let timer: ReturnType<typeof setTimeout>
+    const poll = (): void => {
+      attempts += 1
       const handle = handleRef.current
       if (!active || !handle) {
         return
@@ -71,6 +77,14 @@ export function useCodexStatusPoll(args: {
         // a turn runs, since Esc there interrupts the agent.
         let lines = await io.readScreen()
         for (let attempt = 0; attempt < 3 && parseCodexPickerScreen(lines); attempt += 1) {
+          // An open model picker already contains the answer: let the reader
+          // consume it before cleanup instead of closing and reopening it.
+          if (
+            parseCodexPickerScreen(lines)?.step === 'model' &&
+            !hasScrapedCodexVisibleModels(visibleKey)
+          ) {
+            break
+          }
           if (!active || isCodexWorking(lines)) {
             return
           }
@@ -80,16 +94,15 @@ export function useCodexStatusPoll(args: {
         }
         // Why the idle check: while a turn runs, "/status" would be queued as a
         // prompt to the model instead of running as a command.
-        if (!isCodexIdle(lines)) {
+        if (!isCodexIdle(lines) && parseCodexPickerScreen(lines)?.step !== 'model') {
           return
         }
         // Learn which models this session can pick by reading Codex's own picker
         // (the host probe lists hidden ones and misses some). Retried on every
         // idle open / turn end until it succeeds once.
-        const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
         if (!hasScrapedCodexVisibleModels(visibleKey)) {
-          await scrapeCodexVisibleModels(io, visibleKey)
-          if (!active) {
+          const models = await scrapeCodexVisibleModels(io, visibleKey, lines)
+          if (!active || !models) {
             return
           }
         }
@@ -107,7 +120,22 @@ export function useCodexStatusPoll(args: {
           await refreshHud()
         }
       })
-    }, SETTLE_AFTER_TURN_MS)
+        .catch(() => {
+          // A relay handoff can interrupt any read; retry below after releasing
+          // the terminal lock. Never leave an unhandled rejection in the effect.
+        })
+        .finally(() => {
+          if (
+            active &&
+            !hasScrapedCodexVisibleModels(visibleKey) &&
+            attempts < MODEL_READ_ATTEMPTS
+          ) {
+            timer = setTimeout(poll, MODEL_READ_RETRY_MS)
+          }
+        })
+    }
+    // A fresh idle chat needs no post-turn settling delay.
+    timer = setTimeout(poll, firstOpen ? 0 : SETTLE_AFTER_TURN_MS)
     return () => {
       active = false
       clearTimeout(timer)

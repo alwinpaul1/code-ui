@@ -48,7 +48,7 @@ export type MobileNativeChatSessionOptionPickersProps = {
 /** Combined model/session-option trigger and its mobile bottom drawer. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
-  isWorking: _isWorking,
+  isWorking,
   sendInFlight = false,
   openRequest = 0,
   modelsPending = false
@@ -160,7 +160,9 @@ export function MobileNativeChatSessionOptionPickers({
               {modelView && modelsPending ? (
                 <View
                   accessibilityRole="progressbar"
-                  accessibilityLabel="Reading models from the agent"
+                  accessibilityLabel={
+                    isWorking ? 'Waiting for Codex to finish' : 'Reading models from the agent'
+                  }
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -171,7 +173,9 @@ export function MobileNativeChatSessionOptionPickers({
                 >
                   <ActivityIndicator size="small" color={colors.textSecondary} />
                   <Txt variant="body" tone="secondary">
-                    Reading models from the agent…
+                    {isWorking
+                      ? 'Models will load when Codex finishes this turn'
+                      : 'Reading models from the agent…'}
                   </Txt>
                 </View>
               ) : (

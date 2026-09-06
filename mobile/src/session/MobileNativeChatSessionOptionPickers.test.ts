@@ -250,6 +250,16 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(renderer!.root.findAll((node) => node.props.accessibilityRole === 'radio')).toEqual([])
   })
 
+  it('explains why a first model read waits while Codex is working', async () => {
+    mount([MODEL_DESCRIPTOR], true, { modelsPending: true })
+    await act(async () => pill('Model').props.onPress())
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => String(node.props.children))
+    expect(texts).toContain('Models will load when Codex finishes this turn')
+    expect(texts).not.toContain('Reading models from the agent…')
+  })
+
   it('keeps the pills usable while the agent is working (Claude queues /model)', () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], true)
     expect(pill('Model').props).toMatchObject({ disabled: false })

@@ -6,6 +6,7 @@ import {
   parseTerminalHudObservation,
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
+import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
@@ -35,15 +36,18 @@ export function useMobileTerminalHudObservation(args: {
   refresh: () => Promise<TerminalHudObservation | null>
   /** Claude Code's permission dialog options as drawn on screen, or null. */
   dialogOptions: MobileChatPermission['options'] | null
+  terminalPermission: MobileChatPermission | null
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
+  const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
   useEffect(() => {
     setObservation(null)
     setDialogOptions(null)
+    setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
       return
     }
@@ -70,7 +74,11 @@ export function useMobileTerminalHudObservation(args: {
         const lines = Array.isArray(raw)
           ? raw.filter((line): line is string => typeof line === 'string')
           : []
-        const dialog = permissionOptionsFromScreen(lines)
+        const permission = agent === 'codex' ? codexPermissionFromScreen(lines) : null
+        setTerminalPermission((current) =>
+          JSON.stringify(current) === JSON.stringify(permission) ? current : permission
+        )
+        const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
@@ -112,5 +120,5 @@ export function useMobileTerminalHudObservation(args: {
   // 5s for the next poll would make the mode pill look stuck.
   const refresh = useCallback(() => readRef.current(), [])
 
-  return { observation, refresh, dialogOptions }
+  return { observation, refresh, dialogOptions, terminalPermission }
 }

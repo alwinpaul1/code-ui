@@ -76,6 +76,13 @@ describe('subscribeConnectionRevivalTriggers', () => {
     expect(nudge).toHaveBeenCalledTimes(1)
   })
 
+  it('nudges on a cellular to Wi-Fi handoff without an offline event', async () => {
+    seededNetworkState = { isConnected: true, type: 'CELLULAR' }
+    await subscribeAndSeed(nudge)
+    networkListener?.({ isConnected: true, type: 'WIFI' })
+    expect(nudge).toHaveBeenCalledExactlyOnceWith('network-change')
+  })
+
   it('stays quiet when the network state matches the seeded baseline', async () => {
     await subscribeAndSeed(nudge)
     networkListener?.({ isConnected: true, type: 'WIFI' })

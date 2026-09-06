@@ -9,7 +9,9 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
-import { RelayDialStageTracker, type RelayDialStageSource,
+import {
+  RelayDialStageTracker,
+  type RelayDialStageSource,
   type RelayDialTimings
 } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
@@ -202,9 +204,14 @@ export function connectMobileRelayRpcSession(args: {
       }
       resumeConfirmation = result.resumeConfirmation
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
-      lastConnectedAt = Date.now()
       // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
       await capabilities
+      // A background cancellation or a direct winner may close this session
+      // while the advisory settles. Never revive a socket that was retired.
+      if (closed) {
+        return
+      }
+      lastConnectedAt = Date.now()
       livenessWatchdog.start(livenessIdentity)
       dialStage.markConnected()
       publishState('connected')

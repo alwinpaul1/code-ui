@@ -1,13 +1,9 @@
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
-// Why: on a black-holed LAN endpoint the direct dial sits in 'connecting' for the
-// whole 12s connect timeout (rpc-client CONNECT_TIMEOUT_MS), and relay recovery
-// cannot even start meanwhile because connecting/handshaking count as live direct
-// progress. Happy eyeballs: give direct this much of a head start, then race the
-// relay dial. A 250ms head start favors a fast LAN without imposing seconds
-// of delay on cellular connections. migrateTo hands the logical client to
-// whichever authenticates first.
-export const DIRECT_DIAL_GRACE_MS = 250
+// Race relay alongside an unauthenticated direct dial on the next event-loop
+// turn. A fixed LAN head start also delays cellular and stale Wi-Fi endpoints;
+// the existing migration guards let the first authenticated connection win.
+export const DIRECT_DIAL_GRACE_MS = 0
 
 type DirectGraceTimerDependencies = {
   setTimer: typeof setTimeout

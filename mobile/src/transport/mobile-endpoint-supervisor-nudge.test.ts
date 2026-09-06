@@ -49,16 +49,14 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
-  it('remembers a dead direct endpoint on the host profile and skips its head start next launch', async () => {
+  it('remembers a dead direct endpoint and races relay immediately on both launches', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connecting')) })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
-    // Fresh host: direct keeps its head start, so no relay dial yet.
-    expect(deps.openRelay).not.toHaveBeenCalled()
-    // The direct dial fails; the verdict is written to the profile.
-    logical.publishState('reconnecting')
+    // Relay wins immediately and persists the silent direct endpoint verdict.
+    expect(deps.openRelay).toHaveBeenCalledOnce()
     expect(deps.saveHost).toHaveBeenCalledWith(
       expect.objectContaining({ directUnreachableSince: expect.any(Number) })
     )

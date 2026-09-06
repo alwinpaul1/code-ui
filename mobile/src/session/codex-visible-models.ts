@@ -98,27 +98,31 @@ export function resetCodexVisibleModelsForTests(): void {
  *  read this time (the next open retries). */
 export async function scrapeCodexVisibleModels(
   io: CodexPickerIo,
-  key: string
+  key: string,
+  initialScreen?: string[]
 ): Promise<CodexVisibleModel[] | null> {
   if (inFlight.has(key)) {
     return null
   }
   inFlight.add(key)
   try {
-    let lines = await io.readScreen()
-    if (parseCodexPickerScreen(lines)) {
-      await escapeCodexPicker(io)
-      lines = await io.readScreen()
+    let lines = initialScreen ?? (await io.readScreen())
+    let step = parseCodexPickerScreen(lines)
+    if (step?.step !== 'model') {
+      if (step) {
+        await escapeCodexPicker(io)
+        lines = await io.readScreen()
+      }
+      if (!isCodexIdle(lines)) {
+        return null
+      }
+      if (!(await io.typeCommand('/model'))) {
+        return null
+      }
+      step = await waitForCodexPickerStep(io, 'model', 5_000)
     }
-    if (!isCodexIdle(lines)) {
-      return null
-    }
-    if (!(await io.typeCommand('/model'))) {
-      return null
-    }
-    const step = await waitForCodexPickerStep(io, 'model', 5_000)
-    await escapeCodexPicker(io)
     if (!step) {
+      await escapeCodexPicker(io)
       return null
     }
     const models = step.rows.map((row) => ({
@@ -132,7 +136,11 @@ export async function scrapeCodexVisibleModels(
     }
     cache.set(key, models)
     void writeCodexModelList('visible', key, models)
+    // The list is already verified. Publish it before the extra relay round
+    // trips needed to close the picker; callers still hold the terminal lock
+    // until cleanup ends, so a selection cannot interleave keystrokes.
     notify()
+    await escapeCodexPicker(io)
     return models
   } finally {
     inFlight.delete(key)

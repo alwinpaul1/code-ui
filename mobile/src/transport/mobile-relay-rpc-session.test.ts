@@ -177,6 +177,22 @@ describe('mobile relay RPC session', () => {
     expect(session.getFailure()).toBeNull()
   })
 
+  it('does not revive a closed session when capability negotiation finishes late', async () => {
+    vi.useFakeTimers()
+    const { session, capabilityRequest } = await confirmResume()
+    session.close()
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: capabilityRequest.id,
+        ok: true,
+        result: {}
+      })
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(session.getState()).toBe('disconnected')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   // Why: ConnectionState stays 'connecting' until relay-hello, so the migration bound
   // needs a separate signal to tell "cell never answered the upgrade" from "cell took
   // relay-auth and is still resolving the assignment".

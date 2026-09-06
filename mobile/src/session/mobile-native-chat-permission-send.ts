@@ -1,4 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react'
+import { codexPermissionFromScreen } from './codex-terminal-permission'
+import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   sendMobileNativeChatMessageWithOutcome,
@@ -9,12 +11,41 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 
-export function sendMobileNativeChatPermissionResponse(args: {
+export async function sendMobileNativeChatPermissionResponse(args: {
   client: RpcClient
   terminal: string
   deviceToken: string | null
   text: string
+  expectedCodexPermission?: MobileChatPermission | null
 }): Promise<MobileNativeChatSendOutcome> {
+  if (args.expectedCodexPermission) {
+    // Recheck the visible command before sending a shortcut. A stale card
+    // must not approve a different command after a reconnect or desktop click.
+    try {
+      const response = await args.client.sendRequest(
+        'terminal.read',
+        { terminal: args.terminal, screen: true },
+        { timeoutMs: 4_000, budgetSpansConnect: true }
+      )
+      if (!response.ok) {
+        return 'rejected'
+      }
+      const result = response.result as { terminal?: { tail?: unknown; lines?: unknown } }
+      const raw = result?.terminal?.tail ?? result?.terminal?.lines
+      const lines = Array.isArray(raw)
+        ? raw.filter((line): line is string => typeof line === 'string')
+        : []
+      const current = codexPermissionFromScreen(lines)
+      if (
+        JSON.stringify(current) !== JSON.stringify(args.expectedCodexPermission) ||
+        !current?.options.some((option) => option.send === args.text)
+      ) {
+        return 'rejected'
+      }
+    } catch {
+      return 'rejected'
+    }
+  }
   // Why: approval choices are already complete terminal control sequences;
   // appending Return changes both numbered choices and Escape denial.
   return sendMobileNativeChatMessageWithOutcome({
@@ -32,6 +63,7 @@ export function useMobileNativeChatPermissionSend(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   onSendError: (message: string) => void
+  expectedCodexPermission?: MobileChatPermission | null
 }): (text: string) => Promise<boolean> {
   return useCallback(
     async (text: string): Promise<boolean> => {
@@ -55,7 +87,8 @@ export function useMobileNativeChatPermissionSend(args: {
           client: args.client,
           terminal,
           deviceToken: args.deviceTokenRef.current,
-          text
+          text,
+          expectedCodexPermission: args.expectedCodexPermission
         })
       } finally {
         releaseMobileNativeChatTerminalWrite(terminal)
@@ -69,6 +102,13 @@ export function useMobileNativeChatPermissionSend(args: {
       }
       return outcome === 'accepted'
     },
-    [args.client, args.deviceTokenRef, args.enabled, args.handleRef, args.onSendError]
+    [
+      args.client,
+      args.deviceTokenRef,
+      args.enabled,
+      args.expectedCodexPermission,
+      args.handleRef,
+      args.onSendError
+    ]
   )
 }

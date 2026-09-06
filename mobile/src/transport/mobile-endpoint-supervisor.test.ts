@@ -54,16 +54,13 @@ describe('mobile endpoint supervisor', () => {
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
 
+    // A failure before the scheduled race must start recovery only once.
     logical.publishState('handshaking')
-    await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).not.toHaveBeenCalled()
-
-    supervisor.setForeground(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(deps.openRelay).not.toHaveBeenCalled()
-
     logical.publishState('reconnecting')
     await vi.waitFor(() => expect(logical.getActivePath()).toBe('relay'))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(deps.openRelay).toHaveBeenCalledOnce()
 
     expect(logical.migrateTo).toHaveBeenCalledWith(
       expect.any(FakeRelaySession),
@@ -841,19 +838,18 @@ describe('mobile endpoint supervisor', () => {
     supervisor.stop()
   })
 
-  it('starts relay within 250ms when the direct dial stalls unauthenticated', async () => {
+  it('starts relay without a head start when the direct dial stalls unauthenticated', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies()
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
-    await vi.advanceTimersByTimeAsync(249)
-    expect(deps.openRelay).not.toHaveBeenCalled()
     expect(logical.getState()).toBe('connecting')
 
-    // The direct dial never authenticates; the relay wins the race through migrateTo.
-    await vi.advanceTimersByTimeAsync(1)
-    await vi.waitFor(() => expect(logical.getActivePath()).toBe('relay'))
+    // Start the relay on the next event-loop turn, without an artificial delay.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
     expect(logical.migrateTo).toHaveBeenCalledWith(
       expect.any(FakeRelaySession),
       'relay',

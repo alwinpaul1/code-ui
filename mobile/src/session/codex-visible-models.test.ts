@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexPickerIo } from './codex-picker-apply'
 import {
   hasScrapedCodexVisibleModels,
@@ -100,6 +100,38 @@ describe('scrapeCodexVisibleModels', () => {
     await AsyncStorage.setItem('orca:codexModels:visible:h%00w', '{"nope":1}')
     await hydrateCodexVisibleModels('h\0w')
     expect(peekCodexVisibleModels('h\0w')).toBeNull()
+  })
+
+  it('publishes models before slow picker cleanup finishes', async () => {
+    const io = fakeIo()
+    const send = io.sendKey
+    let release!: () => void
+    const cleanup = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    io.sendKey = async (key) => {
+      await cleanup
+      return send(key)
+    }
+    const run = scrapeCodexVisibleModels(io, 'h\0w')
+    try {
+      await vi.waitFor(() => expect(peekCodexVisibleModels('h\0w')).toHaveLength(3), {
+        timeout: 100
+      })
+    } finally {
+      release()
+      await run
+    }
+  })
+
+  it('reads an already-open model picker without closing and reopening it', async () => {
+    const io = fakeIo()
+    await io.typeCommand('/model')
+    io.typed.length = 0
+    await scrapeCodexVisibleModels(io, 'h\0w')
+    expect(io.typed).toEqual([])
+    expect(peekCodexVisibleModels('h\0w')).toHaveLength(3)
+    expect(io.sent).toContain('\x1b')
   })
 
   it('does nothing while a turn is running', async () => {
