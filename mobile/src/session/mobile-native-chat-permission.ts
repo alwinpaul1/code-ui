@@ -127,7 +127,7 @@ function buildNumberedPermission(
   return {
     title: 'Permission requested',
     detail,
-    options: options.map((opt) => ({ label: shortLabel(opt.text), send: opt.num }))
+    options: options.map((opt) => ({ label: opt.text.trim(), send: opt.num }))
   }
 }
 

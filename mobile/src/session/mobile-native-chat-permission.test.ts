@@ -112,7 +112,7 @@ describe('detectAgentPermission', () => {
     expect((result?.detail ?? '').length).toBeLessThanOrEqual(160)
   })
 
-  it('shortens long numbered option labels', () => {
+  it('preserves long numbered option labels and their exact response', () => {
     const result = detectAgentPermission({
       state: 'blocked',
       lastAssistantMessage:
@@ -120,7 +120,9 @@ describe('detectAgentPermission', () => {
     })
     const second = result?.options[1]
     expect(second?.send).toBe('2')
-    expect((second?.label ?? '').length).toBeLessThanOrEqual(40)
+    expect(second?.label).toBe(
+      'No, and explain in great detail exactly why this particular approach is wrong'
+    )
   })
 })
 

@@ -20,6 +20,40 @@ describe('MobileNativeChatPermission', () => {
     renderer = null
   })
 
+  it('shows the complete remembered scope and sends only the selected agent response', async () => {
+    const prefix = '`python3 /tmp/codeui-network-benchmark.py`'
+    const persistentLabel = `Yes, and don't ask again for commands that start with ${prefix}`
+    const command = 'python3 /tmp/codeui-network-benchmark.py cold wifi-1'
+    const onRespond = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Run this command?',
+            detail: `Environment: local\nReason: Measure the connection\n$ ${command}`,
+            options: [
+              { label: 'Allow once', send: 'y' },
+              { label: persistentLabel, send: 'p' },
+              { label: 'Deny', send: '\x1b' }
+            ]
+          },
+          onRespond
+        })
+      )
+    })
+    const texts = renderer.root.findAllByType('Text')
+    expect(texts.some((text) => text.props.children === prefix)).toBe(true)
+    expect(texts.some((text) => text.props.children === command && text.props.selectable)).toBe(
+      true
+    )
+    expect(onRespond).not.toHaveBeenCalled()
+    const remembered = renderer.root
+      .findAllByType('Pressable')
+      .find((button) => button.props.accessibilityLabel === persistentLabel)
+    await act(async () => remembered?.props.onPress())
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith('p')
+  })
+
   it('accepts only one response when two presses land in the same render batch', async () => {
     let resolveResponse: (accepted: boolean) => void = () => {}
     const response = new Promise<boolean>((resolve) => (resolveResponse = resolve))

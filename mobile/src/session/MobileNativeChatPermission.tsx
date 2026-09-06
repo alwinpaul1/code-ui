@@ -2,13 +2,11 @@ import { memo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
-import { Button } from '../ui/Button'
+import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
-// Renders a detected agent permission ask as a card with tappable options.
-// The first option is treated as the primary (allow) action and gets a filled
-// accent button so the affirmative choice reads as distinct from the rest.
+// Keep agent-provided choices intact; action surfaces grow with their content.
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond
@@ -19,6 +17,10 @@ function MobileNativeChatPermissionImpl({
   const { colors, radius, space } = useTheme()
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  const commandStart = permission.detail?.search(/^\$ /m) ?? -1
+  const description =
+    commandStart >= 0 ? permission.detail?.slice(0, commandStart).trim() : permission.detail
+  const command = commandStart >= 0 ? permission.detail?.slice(commandStart + 2).trim() : undefined
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -62,21 +64,76 @@ function MobileNativeChatPermissionImpl({
           {permission.title}
         </Txt>
       </View>
-      {permission.detail ? (
-        <Txt variant="label" tone="secondary">
-          {permission.detail}
+      {description ? (
+        <Txt variant="body" tone="secondary" selectable>
+          {description}
         </Txt>
       ) : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        {permission.options.map((option, index) => (
-          <Button
-            key={`${option.send}:${option.label}`}
-            label={option.label}
-            variant={index === 0 ? 'accent' : 'secondary'}
-            disabled={submitting}
-            onPress={() => void respond(option.send)}
-          />
-        ))}
+      {command ? (
+        <View
+          style={{
+            padding: space.md,
+            gap: space.sm,
+            borderRadius: radius.md,
+            backgroundColor: colors.bgSunken
+          }}
+        >
+          <Txt variant="caption" tone="muted">
+            Command
+          </Txt>
+          <Txt variant="mono" selectable>
+            {command}
+          </Txt>
+        </View>
+      ) : null}
+      <View style={{ gap: space.sm }}>
+        {permission.options.map((option, index) => {
+          const rememberedPrefix = option.label.match(
+            /^Yes, and don't ask again for commands that start with\s+(.+)$/is
+          )?.[1]
+          return (
+            <PressScale
+              key={`${option.send}:${option.label}`}
+              accessibilityRole="button"
+              accessibilityLabel={option.label}
+              accessibilityState={{ disabled: submitting, busy: submitting }}
+              pressedScale={0.98}
+              disabled={submitting}
+              onPress={() => void respond(option.send)}
+              style={{
+                minHeight: 48,
+                paddingHorizontal: space.md,
+                paddingVertical: space.sm + 4,
+                gap: space.sm,
+                justifyContent: 'center',
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: index === 0 ? colors.accent : colors.border,
+                backgroundColor: index === 0 ? colors.accent : colors.bgRaised,
+                opacity: submitting ? 0.55 : 1
+              }}
+            >
+              <Txt
+                variant="label"
+                weight="semibold"
+                align="center"
+                tone={index === 0 ? 'onAccent' : 'primary'}
+              >
+                {rememberedPrefix ? 'Allow and remember' : option.label}
+              </Txt>
+              {rememberedPrefix ? (
+                <View style={{ gap: space.sm }}>
+                  <Txt variant="caption" tone="secondary">
+                    For commands starting with:
+                  </Txt>
+                  <Txt variant="mono" tone="secondary">
+                    {rememberedPrefix}
+                  </Txt>
+                </View>
+              ) : null}
+            </PressScale>
+          )
+        })}
       </View>
     </View>
   )
