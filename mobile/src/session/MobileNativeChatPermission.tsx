@@ -157,6 +157,12 @@ function MobileNativeChatPermissionImpl({
                   </Txt>
                 </View>
               ) : null}
+              {autoMode ? (
+                <Txt variant="body" tone="secondary" selectable style={{ paddingTop: space.sm }}>
+                  {option.label.replace(/^Yes, and switch to auto mode\s*[·:]?\s*/i, '') ||
+                    'Switches this session to auto mode.'}
+                </Txt>
+              ) : null}
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={option.label}
@@ -186,16 +192,6 @@ function MobileNativeChatPermissionImpl({
                   {shortLabel}
                 </Txt>
               </PressScale>
-              {autoMode ? (
-                <Txt
-                  variant="caption"
-                  tone="secondary"
-                  style={{ paddingHorizontal: space.md, paddingBottom: space.sm }}
-                >
-                  {option.label.replace(/^Yes, and switch to auto mode\s*[·:]?\s*/i, '') ||
-                    'Switches this session to auto mode.'}
-                </Txt>
-              ) : null}
             </View>
           )
         })}
