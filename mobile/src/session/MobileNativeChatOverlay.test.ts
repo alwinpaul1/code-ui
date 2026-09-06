@@ -136,6 +136,45 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     expect(streaming()).toBeNull()
   })
 
+  it('does not revive a delivered preview when the next transcript message arrives', async () => {
+    const prior = [assistantTurn('a1', 'Earlier reply')]
+    await render({ messages: prior })
+    await update({ messages: prior, streamingText: 'First part', streamLive: true })
+    const landed = [...prior, assistantTurn('a2', 'First part')]
+    await update({ messages: landed, streamingText: 'First part', streamLive: true })
+    expect(streaming()).toBeNull()
+    await update({
+      messages: [...landed, assistantTurn('a3', 'Next part')],
+      streamingText: 'First part',
+      streamLive: true
+    })
+    expect(streaming()).toBeNull()
+  })
+
+  it('retires the preview when a transcript batch already includes a later reply', async () => {
+    const prior = [assistantTurn('a1', 'Earlier reply')]
+    await render({ messages: prior })
+    await update({ messages: prior, streamingText: 'First part', streamLive: true })
+    await update({
+      messages: [...prior, assistantTurn('a2', 'First part'), assistantTurn('a3', 'Next part')],
+      streamingText: 'First part',
+      streamLive: true
+    })
+    expect(streaming()).toBeNull()
+  })
+
+  it('does not duplicate a new part whose transcript beats its status preview', async () => {
+    const prior = [assistantTurn('a1', 'Earlier reply')]
+    await render({ messages: prior })
+    await update({ messages: prior, streamingText: 'First part', streamLive: true })
+    const landed = [...prior, assistantTurn('a2', 'First part')]
+    await update({ messages: landed, streamingText: 'First part', streamLive: true })
+    const next = [...landed, assistantTurn('a3', 'Next part')]
+    await update({ messages: next, streamingText: 'First part', streamLive: true })
+    await update({ messages: next, streamingText: 'Next part', streamLive: true })
+    expect(streaming()).toBeNull()
+  })
+
   it('keeps the bubble across a peek at the terminal view', async () => {
     // Toggling to the terminal unmounts the chat list and unsubscribes its
     // transcript. The gate lives above that boundary, so the baseline survives

@@ -31,8 +31,6 @@ import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 
 const INPUT_LOCK_SETTLE_MS = 600
-/** Covers the 60 ms and 250 ms pins; rows that grow later re-pin unseen. */
-const REVEAL_AFTER_FIRST_PIN_MS = 320
 /** Within this many px of the bottom the list is "at the live edge". */
 const LIVE_EDGE_THRESHOLD_PX = 48
 
@@ -114,14 +112,6 @@ export function MobileNativeChatView({
   // moment the user drags we stop following until they return to the edge.
   const { followingRef, scrollingRef, showJumpToLatest, setFollowing, beginScroll, endScroll } =
     useMobileChatFollowing()
-  // Why: the transcript paints at the top first and is pinned to the bottom a
-  // few frames later, once rows have measured. Showing that first paint reads
-  // as the list jumping. Keep the list invisible until the first pin settled,
-  // per conversation, so the first frame the user sees is already at the end.
-  // Only the window right after the FIRST batch lands is hidden; an empty or
-  // still-loading conversation shows its own state so nothing can spin forever.
-  const [pinning, setPinning] = useState<{ key: string; done: boolean } | null>(null)
-  const pinnedKeyRef = useRef<string | null>(null)
 
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -137,7 +127,7 @@ export function MobileNativeChatView({
   const jumpToLatest = useCallback(
     (animated: boolean) => {
       setFollowing(true)
-      listRef.current?.scrollToEnd({ animated })
+      listRef.current?.scrollToOffset({ offset: 0, animated })
     },
     [setFollowing]
   )
@@ -156,57 +146,9 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
-
-  // Why the render-time check as well: the effect below starts the hidden
-  // window one commit after the first batch renders, which let that first
-  // top-anchored paint reach the screen for a frame before the pin.
-  const awaitingFirstPin = data.length > 0 && pinnedKeyRef.current !== sendSurfaceId
-  const revealed = !awaitingFirstPin && !(pinning?.key === sendSurfaceId && !pinning.done)
-
-  // Follow the tail as the conversation grows and keep the newest message above
-  // the keyboard when it opens — but only while following, so we never yank the
-  // reader away from history.
-  // Not animated: the transcript arrives in a few batches on open, and an
-  // animated jump per batch reads as the list stuttering. Sends still animate.
-  // Retried: a non-animated scrollToEnd right after a batch lands on the
-  // content height measured so far; markdown rows keep growing for a few
-  // hundred ms, so re-pin until the layout has settled.
-  useEffect(() => {
-    if (data.length === 0 || !followingRef.current) {
-      return
-    }
-    const pin = (): void => {
-      if (followingRef.current) {
-        listRef.current?.scrollToEnd({ animated: false })
-      }
-    }
-    const timers = [60, 250, 600, 1200].map((delay) => setTimeout(pin, delay))
-    return () => timers.forEach(clearTimeout)
-  }, [data.length, keyboardInset])
-
-  // Start the hidden window once per conversation, on the first batch. No
-  // cleanup here: batches keep landing inside the window and must not cancel it.
-  useEffect(() => {
-    if (data.length === 0 || pinnedKeyRef.current === sendSurfaceId) {
-      return
-    }
-    pinnedKeyRef.current = sendSurfaceId
-    setPinning({ key: sendSurfaceId, done: false })
-  }, [data.length, sendSurfaceId])
-  // The timer belongs to the pinning state itself, so only its own change (done)
-  // or unmount can clear it — previously a data change cancelled it and the list
-  // stayed hidden behind the spinner for good.
-  useEffect(() => {
-    if (!pinning || pinning.done) {
-      return
-    }
-    const timer = setTimeout(
-      () =>
-        setPinning((current) => (current && !current.done ? { ...current, done: true } : current)),
-      REVEAL_AFTER_FIRST_PIN_MS
-    )
-    return () => clearTimeout(timer)
-  }, [pinning])
+  // Inversion keeps the live edge at offset zero. Estimated spacing for
+  // unmeasured history can then change without shifting the visible tail.
+  const newestFirst = useMemo(() => data.toReversed(), [data])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -224,7 +166,7 @@ export function MobileNativeChatView({
       }
       sendScrollTimerRef.current = setTimeout(() => {
         sendScrollTimerRef.current = null
-        listRef.current?.scrollToEnd({ animated: true })
+        listRef.current?.scrollToOffset({ offset: 0, animated: true })
       }, 60)
       return true
     },
@@ -234,12 +176,13 @@ export function MobileNativeChatView({
   const evaluateEdge = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
-      const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      if (!scrollingRef.current && distanceFromBottom < LIVE_EDGE_THRESHOLD_PX) {
+      const distanceFromHistoryStart =
+        contentSize.height - (contentOffset.y + layoutMeasurement.height)
+      if (!scrollingRef.current && contentOffset.y < LIVE_EDGE_THRESHOLD_PX) {
         setFollowing(true)
       }
       // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
+      if (!followingRef.current && distanceFromHistoryStart < 60 && hasMore && !loadingEarlier) {
         onLoadEarlier?.()
       }
     },
@@ -268,7 +211,7 @@ export function MobileNativeChatView({
   const onScrollToMessage = useCallback(
     (index: number) => {
       setFollowing(false)
-      listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
+      listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true })
     },
     [setFollowing]
   )
@@ -310,21 +253,17 @@ export function MobileNativeChatView({
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
-      {!showLoading && !revealed ? (
-        <View pointerEvents="none" style={styles.revealOverlay}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
-      ) : null}
       {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : (
-        <GestureHandlerRootView style={[styles.listWrap, !revealed && styles.listHidden]}>
+        <GestureHandlerRootView style={styles.listWrap}>
           <GestureDetector gesture={pinchGesture}>
             <FlatList
               ref={listRef}
-              data={data}
+              data={newestFirst}
+              inverted
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
@@ -338,12 +277,14 @@ export function MobileNativeChatView({
               onMomentumScrollEnd={onScrollEnd}
               scrollEventThrottle={16}
               // Why: while the reader is up in history, content growing above the
-              // fold (older pages, re-flowed tool rows) must not shift what they
-              // are looking at.
-              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              // fold must not shift what they are reading. At the live edge,
+              // native anchoring fights scrollToEnd and briefly shows old rows.
+              maintainVisibleContentPosition={
+                showJumpToLatest ? { minIndexForVisible: 0 } : undefined
+              }
               onContentSizeChange={() => {
                 if (data.length > 0 && followingRef.current) {
-                  listRef.current?.scrollToEnd({ animated: false })
+                  listRef.current?.scrollToOffset({ offset: 0, animated: false })
                 }
               }}
               // scrollToIndex can fail before an off-screen row is measured —
@@ -356,12 +297,12 @@ export function MobileNativeChatView({
                 setTimeout(() => {
                   listRef.current?.scrollToIndex({
                     index: info.index,
-                    viewPosition: 0,
+                    viewPosition: 1,
                     animated: true
                   })
                 }, 120)
               }}
-              ListHeaderComponent={
+              ListFooterComponent={
                 hasMore ? (
                   <Pressable
                     style={styles.loadEarlier}
@@ -411,10 +352,8 @@ export function MobileNativeChatView({
         onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk}
         onCancelAsk={onCancelAsk}
-        question={question}
-        onAnswerQuestion={onAnswerQuestion}
-        permission={permission}
-        onRespondPermission={onRespondPermission}
+        {...{ question, onAnswerQuestion }}
+        {...{ permission, onRespondPermission }}
       />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}

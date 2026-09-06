@@ -16,6 +16,8 @@ export type MobileNativeChatStreamingGate = {
    *  gate has never observed a transcript tail (text arrived on its very first
    *  tick), where the legacy suppress-on-prefix rule applies. */
   baselineTailId: string | null
+  /** Once delivered, a segment stays retired even as newer rows arrive. */
+  landedMessageId: string | null
 }
 
 /** The preview text to feed the gate for one tick, or undefined for "no observation".
@@ -42,7 +44,7 @@ export function mobileNativeChatStreamPreview(
 export function createMobileNativeChatStreamingGate(
   scopeKey: string | null = null
 ): MobileNativeChatStreamingGate {
-  return { scopeKey, prevText: '', baselineTailId: null }
+  return { scopeKey, prevText: '', baselineTailId: null, landedMessageId: null }
 }
 
 function assistantTailText(tail: NativeChatMessage | undefined): string {
@@ -61,11 +63,14 @@ function assistantTailText(tail: NativeChatMessage | undefined): string {
 function advanceGate(
   gate: MobileNativeChatStreamingGate,
   prevText: string,
-  baselineTailId: string | null
+  baselineTailId: string | null,
+  landedMessageId: string | null = null
 ): MobileNativeChatStreamingGate {
-  return gate.prevText === prevText && gate.baselineTailId === baselineTailId
+  return gate.prevText === prevText &&
+    gate.baselineTailId === baselineTailId &&
+    gate.landedMessageId === landedMessageId
     ? gate
-    : { ...gate, prevText, baselineTailId }
+    : { ...gate, prevText, baselineTailId, landedMessageId }
 }
 
 /** Advance the gate one tick and derive the visible streaming text (null hides
@@ -104,18 +109,24 @@ export function deriveMobileNativeChatStreaming(
   // A stream that is not an extension of the previous tick is a new segment
   // (next reply part); re-anchor to the tail that predates it.
   const segmentStart = scopedGate.prevText !== '' && !text.startsWith(scopedGate.prevText)
-  const baselineTailId = segmentStart ? tailId : scopedGate.baselineTailId
-  const tailText = assistantTailText(tail)
-  // Once this segment has its own transcript row, let that row own rendering
-  // even if its latest update is slightly behind the status preview. Otherwise
-  // each alternating update inserts/removes a second copy of the whole reply.
-  const tailMatchesStream =
-    tailText !== '' && (tailText.startsWith(text) || text.startsWith(tailText))
-  // A null baseline (text on the very first tick, no tail ever seen) is unequal
-  // to every real tail id, so this degrades to the legacy suppress-on-prefix rule.
-  const caughtUp = tailMatchesStream && tailId !== baselineTailId
+  // The previous delivered segment is the boundary, not the current tail:
+  // the next segment's transcript may already have beaten its status preview.
+  const baselineTailId = segmentStart
+    ? (scopedGate.landedMessageId ?? tailId)
+    : scopedGate.baselineTailId
+  let landedMessageId = !segmentStart ? scopedGate.landedMessageId : null
+  // A batch may contain this reply followed by another one. Match within the
+  // segment's new transcript rows, not only the tail, and keep delivery sticky.
+  const baselineIndex = folded.findIndex((message) => message.id === baselineTailId)
+  for (let index = folded.length - 1; !landedMessageId && index > baselineIndex; index -= 1) {
+    const candidate = folded[index]!
+    const candidateText = assistantTailText(candidate)
+    if (candidateText && (candidateText.startsWith(text) || text.startsWith(candidateText))) {
+      landedMessageId = candidate.id
+    }
+  }
   return {
-    gate: advanceGate(scopedGate, text, baselineTailId),
-    streaming: caughtUp ? null : text
+    gate: advanceGate(scopedGate, text, baselineTailId, landedMessageId),
+    streaming: landedMessageId ? null : text
   }
 }

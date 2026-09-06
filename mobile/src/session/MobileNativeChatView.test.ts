@@ -74,6 +74,8 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  hasMore?: boolean
+  onLoadEarlier?: () => void
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -167,7 +169,7 @@ describe('MobileNativeChatView', () => {
     const list = () => renderer!.root.findByType('FlatList')
     const nearBottom = {
       nativeEvent: {
-        contentOffset: { y: 480 },
+        contentOffset: { y: 20 },
         contentSize: { height: 1000 },
         layoutMeasurement: { height: 500 }
       }
@@ -181,6 +183,70 @@ describe('MobileNativeChatView', () => {
     expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
       0
     )
+  })
+
+  it('uses history anchoring only while the reader is away from the live edge', async () => {
+    await render({ folded: [assistantTurn('a1', 'Streaming reply')] })
+    const list = () => renderer!.root.findByType('FlatList')
+    expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+    act(() => list().props.onScrollBeginDrag())
+    expect(list().props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 0 })
+    act(() =>
+      renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
+    )
+    expect(list().props.maintainVisibleContentPosition).toBeUndefined()
+  })
+
+  it('loads older history only at the inverted history edge after the reader scrolls', async () => {
+    const onLoadEarlier = vi.fn()
+    await render({ folded: [assistantTurn('a1', 'Reply')], hasMore: true, onLoadEarlier })
+    const list = () => renderer!.root.findByType('FlatList')
+    const event = (y: number) => ({
+      nativeEvent: {
+        contentOffset: { y },
+        contentSize: { height: 2400 },
+        layoutMeasurement: { height: 400 }
+      }
+    })
+    act(() => list().props.onScroll(event(0)))
+    expect(onLoadEarlier).not.toHaveBeenCalled()
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScroll(event(1000)))
+    expect(onLoadEarlier).not.toHaveBeenCalled()
+    act(() => list().props.onScroll(event(1980)))
+    expect(onLoadEarlier).toHaveBeenCalledOnce()
+    expect(list().props.ListFooterComponent).not.toBeNull()
+  })
+
+  it('keeps the live edge at zero as content grows and shrinks, without moving a history reader', async () => {
+    const estimatedEnd = vi.fn()
+    const scrollToOffset = vi.fn()
+    await act(async () => {
+      renderer = create(chatViewElement({ folded: [assistantTurn('a1', 'Growing reply')] }), {
+        createNodeMock: (node) =>
+          node.type === 'FlatList'
+            ? {
+                scrollToEnd: estimatedEnd,
+                scrollToOffset
+              }
+            : null
+      })
+    })
+    const list = () => renderer!.root.findByType('FlatList')
+    expect(list().props.inverted).toBe(true)
+    act(() => list().props.onContentSizeChange(400, 2400))
+    act(() => list().props.onContentSizeChange(400, 2200))
+    act(() => list().props.onContentSizeChange(400, 2600))
+    expect(scrollToOffset.mock.calls).toEqual([
+      [{ offset: 0, animated: false }],
+      [{ offset: 0, animated: false }],
+      [{ offset: 0, animated: false }]
+    ])
+    expect(estimatedEnd).not.toHaveBeenCalled()
+    scrollToOffset.mockClear()
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onContentSizeChange(400, 2800))
+    expect(scrollToOffset).not.toHaveBeenCalled()
   })
 
   it('does not duplicate the route banner when the composer rejects', async () => {
@@ -217,7 +283,7 @@ describe('MobileNativeChatView', () => {
 
     await update({ folded, streaming: 'The tests' })
 
-    expect(listIds()).toEqual(['a1', 'streaming'])
+    expect(listIds()).toEqual(['streaming', 'a1'])
   })
 
   it('renders an accepted optimistic image send without a queued state', async () => {
