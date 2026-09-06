@@ -84,13 +84,16 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           scheduleDelayedAction(() => void fetchSessionTabs(), 500)
           return
         }
-        if (structured.kind === 'unknown') {
-          // Never create a legacy sibling when the host may already have committed.
-          setCreateError(structured.message)
-          triggerError()
-          showToast(structured.message, 1800)
-          return
-        }
+        // A requested server session must not silently become a terminal session.
+        // Unknown outcomes also must not create a sibling after a lost acknowledgement.
+        const message =
+          structured.kind === 'unsupported'
+            ? 'This Orca host cannot open a Codex server session. Check that the host supports Codex chat and try again.'
+            : structured.message
+        setCreateError(message)
+        triggerError()
+        showToast(message, 1800)
+        return
       }
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,

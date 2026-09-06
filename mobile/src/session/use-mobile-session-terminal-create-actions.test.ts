@@ -111,7 +111,7 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.unsubscribeTerminal).toHaveBeenCalledWith('existing-terminal')
   })
 
-  it('keeps the legacy terminal path when structured support is disabled', async () => {
+  it('reports unavailable structured support without launching a terminal', async () => {
     const client = clientReturning(
       { ok: false, error: { code: 'structured_agent_session_unsupported', message: 'off' } },
       terminalCreateResponse()
@@ -129,15 +129,14 @@ describe('mobile + Codex tab creation routing', () => {
       await actions?.handleCreateTerminal('codex')
     })
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      2,
-      'session.tabs.createTerminal',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' })
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      'This Orca host cannot open a Codex server session. Check that the host supports Codex chat and try again.'
     )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
   })
 
-  it('falls back to a terminal when structured creation is refused', async () => {
+  it('reports a refused structured creation without launching a terminal', async () => {
     const client = clientReturning(
       { ok: true, result: { supported: true } },
       {
@@ -162,12 +161,9 @@ describe('mobile + Codex tab creation routing', () => {
       await actions?.handleCreateTerminal('codex')
     })
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      3,
-      'session.tabs.createTerminal',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' })
-    )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(scope.setCreateError).toHaveBeenCalledWith('provider unavailable')
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
   })
 
   it('keeps prompted Codex launches on the legacy terminal path', async () => {
