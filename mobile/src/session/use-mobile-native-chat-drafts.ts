@@ -32,6 +32,8 @@ export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
+// Route remounts must not reuse the keys of bubbles restored from disk.
+let pendingCounter = 0
 
 // Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
 const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
@@ -107,7 +109,6 @@ export function useMobileNativeChatDrafts(args: {
   const [imagePreviewsBySession, setImagePreviewsBySession] = useState<
     Record<string, Record<string, string[]>>
   >({})
-  const pendingCounterRef = useRef(0)
   const draftEditGenerationsRef = useRef(new MobileNativeChatDraftEditGenerations())
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -197,8 +198,8 @@ export function useMobileNativeChatDrafts(args: {
       if (!origin.pendingKey && !images?.length) {
         return
       }
-      pendingCounterRef.current += 1
-      const id = `pending-${pendingCounterRef.current}`
+      pendingCounter += 1
+      const id = `pending-${Date.now()}-${pendingCounter}`
       const key = origin.pendingKey
       if (key) {
         setPendingBySession((previous) =>
@@ -337,12 +338,9 @@ export function useMobileNativeChatDrafts(args: {
       if (next === current) {
         return previous
       }
-      if (next.length > 0) {
-        return { ...previous, [pendingKey]: next }
-      }
-      const remaining = { ...previous }
-      delete remaining[pendingKey]
-      return remaining
+      // Keep the empty session entry so persistence removes its saved echoes.
+      // Deleting the key made the storage hook skip the write and replay them.
+      return { ...previous, [pendingKey]: next }
     })
   }, [messages, pending, pendingKey, transcriptSettled])
 

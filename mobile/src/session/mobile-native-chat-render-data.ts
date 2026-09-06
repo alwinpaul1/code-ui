@@ -49,6 +49,7 @@ export type MobileNativeChatPendingItem = {
    *  that row, so a send whose row never arrives stays where it was sent instead
    *  of trailing every turn that lands afterwards. */
   baselineTailMessageId?: string | null
+  restored?: boolean
 }
 
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
@@ -159,6 +160,12 @@ export function buildMobileNativeChatTransientData({
         ? baselineId
         : foldedAnchorByRawId.get(baselineId)
       : undefined
+    if ((baselineId || item.restored) && !anchor && renderedFolded.length > 0) {
+      // The captured history boundary has left the loaded window. Retain this
+      // older echo before the window, never present it as a new follow-up.
+      leadingPending.push(bubble)
+      continue
+    }
     if (!anchor || !foldedIds.has(anchor)) {
       trailingPending.push(bubble)
       continue

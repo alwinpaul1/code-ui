@@ -35,11 +35,19 @@ export function useMobileNativeChatPendingPersistence(
       }
       // Sends made meanwhile come after the stored ones, in send order.
       setPendingBySession((previous) => {
+        if (previous[sessionKey]?.length === 0) {
+          return previous
+        }
         const live = previous[sessionKey] ?? []
         const liveIds = new Set(live.map((item) => item.id))
         return {
           ...previous,
-          [sessionKey]: [...stored.filter((item) => !liveIds.has(item.id)), ...live]
+          [sessionKey]: [
+            ...stored
+              .filter((item) => !liveIds.has(item.id))
+              .map((item) => ({ ...item, restored: true })),
+            ...live
+          ]
         }
       })
     })
@@ -51,6 +59,10 @@ export function useMobileNativeChatPendingPersistence(
   const current = sessionKey ? pendingBySession[sessionKey] : undefined
   useEffect(() => {
     if (!sessionKey || current === undefined) {
+      return
+    }
+    if (current.length === 0) {
+      void writeNativeChatPendingEchoes(sessionKey, current)
       return
     }
     const timer = setTimeout(() => {

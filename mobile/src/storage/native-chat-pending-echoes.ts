@@ -37,6 +37,8 @@ export async function readNativeChatPendingEchoes(
   now = Date.now()
 ): Promise<MobileNativeChatPendingMessage[] | null> {
   try {
+    // A route can reopen while retirement is still removing its disk entry.
+    await barriers.get(sessionKey)
     const raw = await AsyncStorage.getItem(storageKey(sessionKey))
     if (!raw) {
       return null

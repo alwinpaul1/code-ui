@@ -12,6 +12,8 @@ export type MobileNativeChatPendingMessage = {
    *  and rebased onto the first authoritative read instead of reconciling
    *  against rows that may belong to another tab. */
   baselineResolved: boolean
+  /** Restored echoes with no retained boundary must not appear as new sends. */
+  restored?: boolean
 }
 
 export type MobileNativeChatSendOrigin = {

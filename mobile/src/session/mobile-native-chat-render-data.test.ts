@@ -348,14 +348,25 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
   })
 
-  it('falls back to the tail when the captured row left the raw window', () => {
+  it('keeps restored echoes without a captured baseline out of the recent tail', () => {
+    const messages = [row('recent', 'assistant', 'new reply')]
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded: messages,
+      streaming: null,
+      pending: [{ id: 'old', text: 'old send', restored: true }]
+    })
+    expect(data.map((message) => message.id)).toEqual(['old', 'recent'])
+  })
+
+  it('keeps an older echo before recent history when its captured row left the raw window', () => {
     const { data } = buildMobileNativeChatTransientData({
       messages: [row('m1', 'assistant', 'ready')],
       folded: [row('m1', 'assistant', 'ready')],
       streaming: null,
       pending: [{ id: 'p1', text: 'anchored to a folded-away row', baselineTailMessageId: 'gone' }]
     })
-    expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
+    expect(data.map((m) => m.id)).toEqual(['p1', 'm1'])
   })
 
   it('keeps an echo before later turns when its folded baseline leads the raw window', () => {
