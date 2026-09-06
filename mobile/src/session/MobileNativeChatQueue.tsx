@@ -24,14 +24,49 @@ export function MobileNativeChatQueue({
       style={{
         marginHorizontal: space.md,
         marginVertical: space.sm,
-        padding: space.md,
-        gap: space.sm,
         borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
         backgroundColor: colors.bgPanel
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Txt variant="caption" tone="secondary">{`Queued on agent · ${messages.length}`}</Txt>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minHeight: 48,
+          paddingLeft: space.md,
+          paddingRight: space.xs,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Txt variant="label" weight="medium" tone="secondary">
+            Queued
+          </Txt>
+          <View
+            style={{
+              minWidth: 22,
+              paddingHorizontal: space.xs,
+              paddingVertical: 2,
+              alignItems: 'center',
+              borderRadius: radius.xs,
+              backgroundColor: colors.bgRaised
+            }}
+          >
+            <Txt
+              variant="caption"
+              weight="medium"
+              tone="secondary"
+              accessibilityLabel={`${messages.length} queued messages`}
+            >
+              {messages.length}
+            </Txt>
+          </View>
+        </View>
         {onEdit && (agent === 'claude' || agent === 'codex') ? (
           <Pressable
             accessibilityRole="button"
@@ -44,20 +79,22 @@ export function MobileNativeChatQueue({
             style={({ pressed }) => ({
               minHeight: 44,
               minWidth: 44,
-              flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: space.xs,
-              paddingHorizontal: space.sm,
               borderRadius: radius.sm,
-              backgroundColor: pressed ? colors.border : colors.bgRaised
+              backgroundColor: pressed ? colors.bgRaised : 'transparent'
             })}
           >
             <Pencil size={16} color={colors.textSecondary} />
           </Pressable>
         ) : null}
       </View>
-      <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+      <ScrollView
+        style={{ maxHeight: 220 }}
+        contentContainerStyle={{ paddingHorizontal: space.md }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+      >
         {messages.map((entry, index) => {
           const text = typeof entry === 'string' ? entry : entry.text
           const images = typeof entry === 'string' ? [] : entry.images
@@ -68,12 +105,20 @@ export function MobileNativeChatQueue({
               style={{
                 flexDirection: 'row',
                 alignItems: 'flex-start',
-                gap: space.md,
-                paddingVertical: space.sm,
+                gap: space.sm,
+                paddingVertical: space.md,
                 borderTopWidth: index > 0 ? 1 : 0,
                 borderTopColor: colors.border
               }}
             >
+              <Txt
+                variant="caption"
+                tone="muted"
+                accessibilityLabel={`Message ${index + 1}`}
+                style={{ minWidth: 16, paddingTop: 3 }}
+              >
+                {index + 1}
+              </Txt>
               {images.length ? (
                 <View style={{ width: 48, gap: space.xs }}>
                   {images.map((uri, imageIndex) => (
@@ -93,7 +138,6 @@ export function MobileNativeChatQueue({
                 </View>
               ) : null}
               <View style={{ flex: 1, gap: space.xs }}>
-                <Txt variant="caption" tone="secondary">{`Message ${index + 1}`}</Txt>
                 {parsed.text ? (
                   <Txt variant="body" selectable>
                     {parsed.text}

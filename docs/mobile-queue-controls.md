@@ -68,3 +68,20 @@ the queue from visible captions could lose attachment state, reorder messages,
 or race the running agent consuming a message. Reliable arbitrary edits require
 an agent/Orca queue operation that identifies and updates entries atomically.
 This release does not implement that host integration.
+
+## Queue presentation, 0.2.45
+
+The queue card uses a compact count badge, numbered rows, subtle dividers, and an
+icon-only edit action with a 44-point touch target. Long messages wrap within a
+bounded, scrollable list. The chat editor uses the app's font and theme, with an
+inset text field, a primary Save action, and a distinct Delete action.
+
+The installed Android build (versionCode 47) was inspected on a physical phone
+with two desktop-origin Codex queue entries. Both rows and the longer caption
+were readable; the pencil recalled the latest entry into the chat editor.
+Cancel restored that entry, and a desktop read confirmed both messages remained
+queued in their original order. The existing queue tests cover both agents;
+this visual change does not extend which entries their native controls can edit.
+
+Validation: 555 test files passed (4,375 tests passed, 3 skipped), TypeScript and
+lint passed, and the Android release build succeeded.
