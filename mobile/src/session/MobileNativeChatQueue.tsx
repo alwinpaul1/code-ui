@@ -32,35 +32,48 @@ export function MobileNativeChatQueue({
           const images = typeof entry === 'string' ? [] : entry.images
           const parsed = splitOrcaPastedImagePaths(text)
           return (
-            <View key={`${index}:${text}`} style={{ gap: space.sm, marginBottom: space.md }}>
-              {parsed.text ? (
-                <Txt variant="body" selectable>
-                  {parsed.text}
-                </Txt>
-              ) : null}
+            <View
+              key={`${index}:${text}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: space.md,
+                paddingVertical: space.sm,
+                borderTopWidth: index > 0 ? 1 : 0,
+                borderTopColor: colors.border
+              }}
+            >
               {images.length ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+                <View style={{ width: 48, gap: space.xs }}>
                   {images.map((uri, imageIndex) => (
                     <Pressable
                       key={`${imageIndex}:${uri}`}
                       accessibilityRole="imagebutton"
-                      accessibilityLabel={`Preview queued image ${imageIndex + 1}`}
+                      accessibilityLabel={`Preview image ${imageIndex + 1} in queued message ${index + 1}`}
                       onPress={() => openImagePreview(uri, 'Queued image')}
                     >
                       <Image
                         source={{ uri }}
                         resizeMode="contain"
-                        style={{ width: 72, height: 72, borderRadius: radius.sm }}
+                        style={{ width: 48, height: 48, borderRadius: radius.sm }}
                       />
                     </Pressable>
                   ))}
                 </View>
-              ) : parsed.paths.length ? (
-                <Txt
-                  variant="caption"
-                  tone="secondary"
-                >{`${parsed.paths.length} attached image${parsed.paths.length === 1 ? '' : 's'}`}</Txt>
               ) : null}
+              <View style={{ flex: 1, gap: space.xs }}>
+                <Txt variant="caption" tone="secondary">{`Message ${index + 1}`}</Txt>
+                {parsed.text ? (
+                  <Txt variant="body" selectable>
+                    {parsed.text}
+                  </Txt>
+                ) : null}
+                {!images.length && parsed.paths.length ? (
+                  <Txt variant="caption" tone="secondary">
+                    {`${parsed.paths.length} attached image${parsed.paths.length === 1 ? '' : 's'}`}
+                  </Txt>
+                ) : null}
+              </View>
             </View>
           )
         })}

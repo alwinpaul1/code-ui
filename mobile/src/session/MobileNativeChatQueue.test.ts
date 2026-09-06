@@ -18,8 +18,11 @@ it('shows the desktop-confirmed image queue with a caption and tappable thumbnai
   const path =
     '/var/folders/0y/session/T/orca-paste-1788712836417-a0492b73-30c3-4c2f-9f7c-c9b7ca928614.png'
   const projected = projectMobileChatQueue(
-    [{ text: 'Same message', images: ['file:///photo.png'] }],
-    [path + ' Same message']
+    [
+      { text: 'Same message', images: ['file:///photo.png'] },
+      { text: 'Second message', images: ['file:///second.png'] }
+    ],
+    [path + ' Same message', path + ' Second message']
   )
   expect(projected.pending).toEqual([])
   let renderer: ReturnType<typeof create>
@@ -27,11 +30,18 @@ it('shows the desktop-confirmed image queue with a caption and tappable thumbnai
     renderer = create(createElement(MobileNativeChatQueue, { messages: projected.queue }))
   })
   const text = renderer!.root.findAllByType('Text').map((node) => node.props.children)
-  expect(text).toContain('Queued on agent · 1')
+  expect(text).toContain('Queued on agent · 2')
+  expect(text).toContain('Message 1')
+  expect(text).toContain('Message 2')
+  expect(text.filter((value) => value === 'Second message')).toHaveLength(1)
   expect(text).toContain('Same message')
   expect(text.join(' ')).not.toContain(path)
-  expect(renderer!.root.findByType('Image').props.source).toEqual({ uri: 'file:///photo.png' })
-  act(() => renderer!.root.findByType('Pressable').props.onPress())
+  expect(renderer!.root.findAllByType('ScrollView')).toHaveLength(1)
+  expect(renderer!.root.findAllByType('Image').map((node) => node.props.source)).toEqual([
+    { uri: 'file:///photo.png' },
+    { uri: 'file:///second.png' }
+  ])
+  act(() => renderer!.root.findAllByType('Pressable')[0]!.props.onPress())
   expect(openImagePreview).toHaveBeenCalledWith('file:///photo.png', 'Queued image')
   act(() => renderer!.unmount())
 })

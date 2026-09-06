@@ -67,11 +67,13 @@ export function MobileNativeChatOverlay({
   keyStrip
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
-  usePendingImageHistory(session, controller.chatPending, sendSurfaceId)
   const projectedQueue = projectMobileChatQueue(
     controller.chatPending,
     controller.nativeChatQueuedMessages ?? []
   )
+  // Confirmed queued photos cannot exist in history yet. Searching older pages
+  // for them repeatedly changes the list window during a live reply.
+  usePendingImageHistory(session, projectedQueue.pending, sendSurfaceId)
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
   const streaming = useMobileNativeChatStreamingBubble(
     folded,

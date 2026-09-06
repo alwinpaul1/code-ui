@@ -1,7 +1,11 @@
 import { sharedNativeChatTranscriptRetention } from './mobile-native-chat-transcript-cache'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
-import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
+import {
+  createNativeChatMerger,
+  mergeNativeChatMessages,
+  replaceList
+} from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
@@ -267,6 +271,7 @@ export function useMobileNativeChatSession(args: {
     // apply this read's result onto the new session (mirrors desktop's guard).
     const requestSessionId = sessionId
     const requestGeneration = streamGenerationRef.current
+    const requestMessages = new Map(mergerRef.current.list.map((message) => [message.id, message]))
     const nextLimit = Math.min(limitRef.current + PAGE, MAX_MESSAGES)
     const pageLimit = nextLimit - limitRef.current
     if (pageLimit <= 0) {
@@ -302,13 +307,18 @@ export function useMobileNativeChatSession(args: {
         limitRef.current = nextLimit
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
-          setList([...result.messages, ...mergerRef.current.list])
+          setList(mergeNativeChatMessages(result.messages, mergerRef.current.list))
           setHasMore(
             nextLimit < MAX_MESSAGES && (result.hasMore ?? result.messages.length >= pageLimit)
           )
         } else {
           // Older runtimes ignore the cursor and return the growing tail.
-          setList(result.messages)
+          // The read may predate live frames received while it was in flight.
+          // Preserve those updates without resurrecting the request's old base.
+          const liveUpdates = mergerRef.current.list.filter(
+            (message) => requestMessages.get(message.id) !== message
+          )
+          setList(mergeNativeChatMessages(result.messages, liveUpdates))
           setHasMore(result.messages.length >= nextLimit)
         }
       } finally {

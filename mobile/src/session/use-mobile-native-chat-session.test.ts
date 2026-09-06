@@ -72,6 +72,44 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages.map((row) => row.id)).toEqual(['a', 'b', 'c'])
   })
 
+  it.each([false, true])(
+    'keeps live updates when a stale history read resolves (cursor: %s)',
+    async (cursor) => {
+      let resolveEarlier: (response: unknown) => void = () => {}
+      const sendRequest = vi.fn(() => new Promise((resolve) => (resolveEarlier = resolve)))
+      const original = message('reply')
+      const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+        emit = onData
+        onData({
+          type: 'snapshot',
+          messages: [original],
+          hasMore: true,
+          ...(cursor ? { beforeOffset: 100 } : {})
+        })
+        return () => {}
+      })
+      await mount({ sendRequest, subscribe } as unknown as RpcClient)
+      act(() => state?.loadEarlier())
+      const updated = {
+        ...original,
+        blocks: [{ type: 'text' as const, text: 'Reply keeps growing' }]
+      }
+      act(() => emit({ type: 'appended', messages: [updated, message('latest')] }))
+      await act(async () => {
+        resolveEarlier({
+          ok: true,
+          result: {
+            messages: [message('older'), original],
+            hasMore: false,
+            ...(cursor ? { beforeOffset: 0 } : {})
+          }
+        })
+      })
+      expect(state?.messages.map((entry) => entry.id)).toEqual(['older', 'reply', 'latest'])
+      expect(state?.messages[1]).toEqual(updated)
+    }
+  )
+
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(
