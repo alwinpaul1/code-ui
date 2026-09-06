@@ -17,20 +17,6 @@ export type TerminalHudObservation = {
   /** Codex's collaboration mode from its footer ("Plan mode (shift+tab to
    *  cycle)" or nothing for Default). Absent for agents without one. */
   agentMode?: TerminalAgentMode | null
-  /** The subscription the `/status` box names ("Pro Lite" from
-   *  "Account: user@x (Pro Lite)"); null until a status box has been on screen. */
-  accountPlan?: string | null
-}
-
-const CODEX_STATUS_ACCOUNT = /Account:\s+\S+\s+\(([^)]+)\)/
-export function parseCodexAccountPlan(lines: readonly string[]): string | null {
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const match = CODEX_STATUS_ACCOUNT.exec(lines[index] ?? '')
-    if (match) {
-      return match[1]!.trim()
-    }
-  }
-  return null
 }
 
 export type TerminalAgentMode = 'default' | 'plan'
@@ -216,8 +202,7 @@ export function parseCodexHudObservation(lines: readonly string[]): TerminalHudO
       effort,
       context: parseCodexStatusContext(lines),
       permissionMode: parseTerminalPermissionMode(lines),
-      agentMode: parseCodexAgentMode(lines),
-      accountPlan: parseCodexAccountPlan(lines)
+      agentMode: parseCodexAgentMode(lines)
     }
   }
   return null

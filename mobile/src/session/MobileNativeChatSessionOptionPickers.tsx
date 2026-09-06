@@ -41,8 +41,6 @@ export type MobileNativeChatSessionOptionPickersProps = {
   /** False when this terminal's status line shows no model badge, so the phone
    *  cannot mirror what the desktop is running. */
   statusLineObserved?: boolean
-  /** Subscription name shown above the model list, when the agent reports one. */
-  planLabel?: string | null
   /** Bumped by the owner to open the model sheet (a typed `/model` in Codex chat). */
   openRequest?: number
   /** The agent's own model list is still being read (Codex scrapes its picker);
@@ -56,7 +54,6 @@ export function MobileNativeChatSessionOptionPickers({
   isWorking: _isWorking,
   sendInFlight = false,
   statusLineObserved = true,
-  planLabel = null,
   openRequest = 0,
   modelsPending = false
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
@@ -163,9 +160,6 @@ export function MobileNativeChatSessionOptionPickers({
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            {modelView && planLabel ? (
-              <SessionOptionCaption>{planLabel}</SessionOptionCaption>
-            ) : null}
             {modelView && !statusLineObserved ? (
               <SessionOptionCaption>
                 No model badge in this terminal's status line, so the phone can't see what the

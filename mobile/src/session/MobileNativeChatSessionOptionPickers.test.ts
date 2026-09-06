@@ -77,7 +77,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   const mount = (
     snapshot: SessionOptionDescriptor[],
     isWorking = false,
-    extra: { modelsPending?: boolean; planLabel?: string } = {}
+    extra: { modelsPending?: boolean } = {}
   ): void => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
@@ -241,15 +241,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   })
 
   it('shows a reader instead of the placeholder list while models are pending', async () => {
-    mount([MODEL_DESCRIPTOR], false, { modelsPending: true, planLabel: 'Pro Lite' })
+    mount([MODEL_DESCRIPTOR], false, { modelsPending: true })
     await act(async () => pill('Model').props.onPress())
     const texts = renderer!.root
       .findAll((node) => node.type === 'Text')
       .map((node) => String(node.props.children))
     expect(texts).toContain('Reading models from the agent…')
-    // The caption is the plan name exactly as the agent reports it, nothing more.
-    expect(texts).toContain('Pro Lite')
-    expect(texts.some((text) => text.includes('Models on your'))).toBe(false)
     expect(renderer!.root.findAll((node) => node.props.accessibilityRole === 'radio')).toEqual([])
   })
 

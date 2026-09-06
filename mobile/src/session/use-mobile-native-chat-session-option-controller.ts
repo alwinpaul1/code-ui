@@ -25,8 +25,6 @@ export function useMobileNativeChatSessionOptionController(args: {
   reportedEffort?: string | null
   /** A model badge was read from the terminal's status line (see the pickers' hint). */
   statusLineObserved?: boolean
-  /** Subscription name for the sheet caption (Codex: from /status), when known. */
-  planLabel?: string | null
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
   structured: {
@@ -58,7 +56,6 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModel,
     reportedEffort,
     statusLineObserved = true,
-    planLabel = null,
     openRequest = 0,
     structured,
     toggleTabChatView,
@@ -144,7 +141,6 @@ export function useMobileNativeChatSessionOptionController(args: {
               controller: sessionOptions,
               isWorking,
               statusLineObserved,
-              planLabel,
               openRequest,
               modelsPending: codex.modelsPending
             }
@@ -154,7 +150,6 @@ export function useMobileNativeChatSessionOptionController(args: {
       codex.modelsPending,
       isWorking,
       openRequest,
-      planLabel,
       sessionOptions,
       statusLineObserved,
       structuredController

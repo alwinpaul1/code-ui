@@ -38,8 +38,6 @@ export function useMobileTerminalHudObservation(args: {
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
-  const observationRef = useRef<TerminalHudObservation | null>(null)
-  observationRef.current = observation
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
@@ -78,12 +76,7 @@ export function useMobileTerminalHudObservation(args: {
         )
         const parsed =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
-        // Why: the /status box scrolls away but the plan does not change; keep
-        // the last one seen rather than blanking the sheet caption.
-        const next: TerminalHudObservation | null =
-          parsed && parsed.accountPlan == null && observationRef.current?.accountPlan
-            ? { ...parsed, accountPlan: observationRef.current.accountPlan }
-            : parsed
+        const next = parsed
         if (next) {
           setObservation((current) =>
             current &&
