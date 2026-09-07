@@ -7,6 +7,30 @@ import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send
 // the screen and let the orphaned paste glue onto the next message (#10228).
 const staleInputTerminals = new Set<string>()
 
+// A queue edit that stops after its recall leaves the agent holding a MULTI-LINE
+// draft — the whole recalled queue. The ordinary send path clears one logical
+// line, so without this the surviving lines are submitted glued to the user's
+// next message, and a line is destroyed on the way. Measured against Claude Code
+// 2.1.263: a three-line residue plus one Ctrl+U queued
+// "alpha first / bravo second / my brand new message" as a single message.
+const residueTerminals = new Map<string, string>()
+
+/** Record that `text` is sitting unsubmitted on the agent's input. */
+export function markMobileNativeChatInputResidue(terminal: string, text: string): void {
+  if (text.trim()) {
+    residueTerminals.set(terminal, text)
+  }
+}
+
+/** The unsubmitted text believed to be on this terminal, or null. */
+export function mobileNativeChatInputResidue(terminal: string): string | null {
+  return residueTerminals.get(terminal) ?? null
+}
+
+export function clearMobileNativeChatInputResidue(terminal: string): void {
+  residueTerminals.delete(terminal)
+}
+
 export function markMobileNativeChatInputStale(terminal: string): void {
   staleInputTerminals.add(terminal)
 }
@@ -22,6 +46,7 @@ export function clearMobileNativeChatInputStale(terminal: string): void {
 /** Test-only: module scope outlives a single test's hooks. */
 export function resetMobileNativeChatStaleInputForTests(): void {
   staleInputTerminals.clear()
+  residueTerminals.clear()
 }
 
 /** Clears a marked terminal's unsubmitted input line before a write that could

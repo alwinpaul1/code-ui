@@ -69,7 +69,7 @@ export type MobileNativeChatController = {
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   prepareNativeChatImageSend?: () => Promise<void>
   /** Uses the original agent input for desktop and mobile queued messages. */
-  openNativeChatQueueEditor?: (index: number) => Promise<void>
+  openNativeChatQueueEditor?: (index: number, tapped: string) => Promise<void>
   nativeChatQueueEditor?: InlineQueueEditor | null
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]

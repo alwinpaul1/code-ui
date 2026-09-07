@@ -7,6 +7,7 @@ import {
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
@@ -68,6 +69,13 @@ export function useMobileTerminalHudObservation(args: {
     const read = async (): Promise<TerminalHudObservation | null> => {
       const handle = handleRef.current
       if (!handle || inFlight) {
+        return null
+      }
+      // A composed write sequence (the queue editor) is reading this same
+      // screen as fast as the link allows. A poll on top of it competes for the
+      // connection and slows the save it is trying to watch. Only while it is
+      // actually driving the terminal, never while its sheet merely sits open.
+      if (isMobileNativeChatTerminalBurstActive(handle)) {
         return null
       }
       inFlight = true

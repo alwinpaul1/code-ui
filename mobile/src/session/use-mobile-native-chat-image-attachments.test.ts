@@ -4,7 +4,11 @@ import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-in
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
-import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
+import {
+  markMobileNativeChatInputResidue,
+  mobileNativeChatInputResidue,
+  resetMobileNativeChatStaleInputForTests
+} from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
@@ -231,6 +235,44 @@ describe('useMobileNativeChatImageAttachments', () => {
       enter: false
     })
     expect(firstSend?.params.text).not.toBe('\x15')
+  })
+
+  it('leads the image paste with a clear sized to a recalled queue left on the agent', async () => {
+    // The text path clears for the whole residue; the image path did not, so a
+    // queue edit that stopped after its recall left the surviving lines to
+    // submit glued to the photo's caption. Measured against Claude Code
+    // 2.1.263: a three-line residue plus one Ctrl+U queued them as one message
+    // and destroyed a line on the way.
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+    const client = makeClient([
+      methodNotFound('start'),
+      ok('save', '/tmp/a.png'),
+      sendResult(true),
+      sendResult(true)
+    ])
+    const residue = 'alpha first\nbravo second\ncharlie third'
+    markMobileNativeChatInputResidue('term-1', residue)
+    mount(
+      baseArgs({
+        client: client as unknown as RpcClient,
+        deviceTokenRef: { current: 'device-1' }
+      })
+    )
+
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    await act(async () => {
+      await hook!.sendNativeChat('look at this')
+    })
+
+    const firstSend = client.calls.find((c) => c.method === 'terminal.send')
+    expect(firstSend?.params).toMatchObject({
+      text: buildAgentTuiClearInputForText(residue),
+      enter: false
+    })
+    // A cleared residue must not be replayed against the next send.
+    expect(mobileNativeChatInputResidue('term-1')).toBeNull()
   })
 
   it('spends one budget across the image paste and the text body that follows', async () => {

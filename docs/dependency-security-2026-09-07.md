@@ -46,3 +46,23 @@ Advisories: [URI decoder](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr),
 [XML serializer](https://github.com/advisories/GHSA-6gmq-8vp8-gcm6),
 [ICNS parser](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr),
 [JXL/HEIF parsers](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq).
+
+## Correction, 2026-09-08: the patch does not cover every copy
+
+A review flagged an unpatched `image-size@1.2.1` in the tree. Checked: it is
+real and it is reachable, but not for the reason given — a clean
+`pnpm install --frozen-lockfile` does not remove it, because the lockfile itself
+declares a bare `metro@0.83.7` alongside the patched
+`metro@0.83.7(supports-color@8.1.1)`. Three packages resolve through the bare
+one, `@react-native/community-cli-plugin` among them, and it depends on
+`image-size@1.x`. `patchedDependencies` pins `image-size@2.0.2`, so a 1.x copy
+cannot receive that patch.
+
+Not fixed here, deliberately. `image-size` is Metro build tooling: it runs in the
+bundler on the developer's machine and is never shipped in the app, so the
+exposure is a hang in a dev or CI Metro process fed a hostile image, not
+anything reachable on a phone. Closing it properly means either authoring a
+second patch against the 1.x source layout, or forcing `image-size` to 2.x for
+Metro — a major bump to a dependency of the bundler, which needs a real bundling
+test rather than a lockfile edit. Recorded so the next person does not read
+"patched" as covering the whole tree.

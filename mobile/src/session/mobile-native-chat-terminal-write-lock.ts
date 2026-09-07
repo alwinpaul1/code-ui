@@ -28,4 +28,24 @@ export function releaseMobileNativeChatTerminalWrite(terminal: string): void {
 /** Test-only: module scope outlives a single test's hooks. */
 export function resetMobileNativeChatTerminalWritesForTests(): void {
   writeInFlightTerminals.clear()
+  burstTerminals.clear()
+}
+
+/** A burst is the window in which a composed sequence is actually issuing reads
+ * and writes, as opposed to holding the terminal while a user types into a
+ * sheet. A background poller should stand aside for the burst only: standing
+ * aside for the whole lock freezes permission detection for as long as the
+ * editor is open. */
+const burstTerminals = new Set<string>()
+
+export function beginMobileNativeChatTerminalBurst(terminal: string): void {
+  burstTerminals.add(terminal)
+}
+
+export function endMobileNativeChatTerminalBurst(terminal: string): void {
+  burstTerminals.delete(terminal)
+}
+
+export function isMobileNativeChatTerminalBurstActive(terminal: string): boolean {
+  return burstTerminals.has(terminal)
 }

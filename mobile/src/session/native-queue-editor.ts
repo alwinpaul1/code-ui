@@ -9,8 +9,10 @@ import {
   opaque,
   queueFromScreen,
   sameEntry,
+  sameText,
   segmentRecalledQueue,
   submitInput,
+  typeAndSubmit,
   typeInput,
   type QueueEditorAgent,
   type QueueEditorIo
@@ -82,7 +84,11 @@ async function selectClaudeEntry(
 export async function recallNativeQueue(
   io: QueueEditorIo,
   agent: QueueEditorAgent,
-  index?: number
+  index?: number,
+  /** The row the user actually tapped. The index came from a screen poll up to
+   *  a second old; if the agent consumed a message in between, that index now
+   *  addresses its neighbour — and Delete would silently take the wrong one. */
+  tapped?: string
 ): Promise<QueueEdit> {
   const before = await io.read()
   checkScreen(agent, before)
@@ -100,6 +106,9 @@ export async function recallNativeQueue(
   const target = index ?? queue.length - 1
   if (target < 0 || target >= queue.length) {
     throw new Error('That message is no longer queued.')
+  }
+  if (tapped !== undefined && !sameText(queue[target]!, tapped)) {
+    throw new Error('The queue moved on before that opened. Reopen it and try again.')
   }
   // Claude's legacy recall empties the whole queue into one draft. Mobile puts
   // it back message by message rather than asking for a host-side flag, so the
@@ -189,11 +198,25 @@ export async function finishNativeQueueEdit(
       return
     }
     await typeInput(io, agent, text, onReplaced)
+    await submitInput(io, agent, text, true)
+    return
   }
   if (!text) {
     return
   }
   await submitInput(io, agent, text)
+}
+
+/** Raised once part of a rebuild has reached the agent. Retrying from here
+ * would queue the messages that already landed a second time, so the editor
+ * must stop offering to write and let the user read what is left. */
+export class QueueRebuildError extends Error {
+  readonly remaining: string[]
+  constructor(message: string, remaining: string[]) {
+    super(message)
+    this.name = 'QueueRebuildError'
+    this.remaining = remaining
+  }
 }
 
 /** Retype the whole queue. Between the clear and the last submit the messages
@@ -213,19 +236,46 @@ async function rebuildQueue(
       'A queued message holds an attachment or collapsed paste that Orca cannot retype.'
     )
   }
-  await clearInput(io, 'claude', edit.draft, onReplaced)
-  for (let at = 0; at < parts.length; at++) {
-    const part = parts[at]!
-    try {
-      await typeInput(io, 'claude', part, onReplaced)
-      await submitInput(io, 'claude', part)
-    } catch (cause) {
-      const left = parts.slice(at)
-      throw new Error(
-        `${cause instanceof Error ? cause.message : 'The queue could not be rebuilt.'} ` +
-          `${left.length} message${left.length === 1 ? '' : 's'} left the queue and ` +
-          `${left.length === 1 ? 'was' : 'were'} not put back: ${left.map((item) => JSON.stringify(item)).join(', ')}`
-      )
+  // One budget for the whole save. Per-call deadlines multiply: a six-message
+  // queue could sit for over a minute with every control disabled.
+  const deadline = Date.now() + Math.min(15_000 + parts.length * 8_000, 60_000)
+  const sent: string[] = []
+  try {
+    await clearInput(io, 'claude', edit.draft, onReplaced, deadline)
+    for (const part of parts) {
+      // Counted with the same comparator the confirmation uses, or two parts
+      // that differ only in whitespace look distinct here and identical there.
+      const expected = sent.filter((done) => sameText(done, part)).length + 1
+      await typeAndSubmit(io, 'claude', part, expected, deadline)
+      sent.push(part)
+      onReplaced?.('')
     }
+  } catch (cause) {
+    // Everything from the first kill key on is destructive: the recall already
+    // emptied the queue into the composer and the composer is being cleared.
+    // A failure here cannot claim the input was kept, and it must strand, or
+    // the editor offers a Save that re-queues whatever did land.
+    const left = [...parts]
+    for (const done of sent) {
+      const at = left.indexOf(done)
+      if (at !== -1) {
+        left.splice(at, 1)
+      }
+    }
+    const why =
+      cause instanceof Error
+        ? cause.message
+            .replace(
+              /\s*(?:Your input has been kept|The agent input has been preserved|It has not been submitted)\.?/gi,
+              ''
+            )
+            .trim()
+        : ''
+    throw new QueueRebuildError(
+      `${why ? `${why} ` : ''}${left.length} message${left.length === 1 ? '' : 's'} left the queue and ` +
+        `${left.length === 1 ? 'is' : 'are'} not on the agent. Copy ${left.length === 1 ? 'it' : 'them'} before closing: ` +
+        left.map((item) => JSON.stringify(item)).join(', '),
+      left
+    )
   }
 }

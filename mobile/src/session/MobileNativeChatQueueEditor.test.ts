@@ -39,6 +39,9 @@ it('edits in a chat text field with short actions and no terminal instructions',
   expect(editor.setText).toHaveBeenCalledWith('updated message')
   expect(renderer.root.findAllByType('Text').map((node) => node.props.children)).toEqual([
     'Edit queued message',
+    // The agent is holding this text for as long as the sheet is open, and
+    // closing without saving leaves it there. Say so.
+    'This message is in the agent\u2019s input while this is open. Save or Cancel puts it back.',
     'Cancel',
     'Save'
   ])

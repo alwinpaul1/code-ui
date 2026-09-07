@@ -88,7 +88,7 @@ it('renders a queued image and caption once with its local thumbnail instead of 
     '/var/folders/0y/session/T/orca-paste-1788707946740-fd6147a9-5b2d-4051-8a87-dbd45992c21e.png'
   expect(projectMobileChatQueue([image], [path + ' See this', 'unrelated'])).toEqual({
     pending: [],
-    queue: [{ text: image.text, images: image.images }, 'unrelated']
+    queue: [{ text: image.text, images: image.images, caption: path + ' See this' }, 'unrelated']
   })
   expect(
     projectMobileChatQueue([image], [path + ' See this', path + ' See this']).queue
@@ -99,7 +99,7 @@ it('keeps both queue entries when a photo and another message repeat a caption',
   const image = { text: 'See this', images: ['file:///a.jpg'], id: 1 }
   expect(projectMobileChatQueue([image], ['[Image #1] See this', 'See this'])).toEqual({
     pending: [],
-    queue: [{ text: image.text, images: image.images }, 'See this']
+    queue: [{ text: image.text, images: image.images, caption: '[Image #1] See this' }, 'See this']
   })
 })
 

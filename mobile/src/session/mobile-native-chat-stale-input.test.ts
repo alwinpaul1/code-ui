@@ -5,8 +5,15 @@ import {
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale,
-  resetMobileNativeChatStaleInputForTests
+  resetMobileNativeChatStaleInputForTests,
+  markMobileNativeChatInputResidue,
+  mobileNativeChatInputResidue,
+  clearMobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
+import {
+  AGENT_TUI_CLEAR_INPUT_LINE,
+  buildAgentTuiClearInputForText
+} from '../../../src/shared/agent-tui-input-clear'
 
 function sendResult(accepted: boolean) {
   return {
@@ -75,4 +82,21 @@ describe('mobile native chat stale input markers', () => {
     ).resolves.toBe(false)
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
+})
+
+it('remembers a recalled queue left on the agent so the next send clears all of it', () => {
+  // Live regression, Claude Code 2.1.263: a three-line residue plus the send
+  // path's single Ctrl+U queued "alpha first / bravo second / my brand new
+  // message" as ONE message, destroying "charlie third" on the way.
+  const residue = 'alpha first\nbravo second\ncharlie third'
+  markMobileNativeChatInputResidue('term-1', residue)
+  expect(mobileNativeChatInputResidue('term-1')).toBe(residue)
+  expect(buildAgentTuiClearInputForText(residue)).not.toBe(AGENT_TUI_CLEAR_INPUT_LINE)
+  clearMobileNativeChatInputResidue('term-1')
+  expect(mobileNativeChatInputResidue('term-1')).toBeNull()
+})
+
+it('ignores a blank residue so an ordinary send keeps its single-line clear', () => {
+  markMobileNativeChatInputResidue('term-2', '   ')
+  expect(mobileNativeChatInputResidue('term-2')).toBeNull()
 })

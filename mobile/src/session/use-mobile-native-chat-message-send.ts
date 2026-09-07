@@ -21,6 +21,10 @@ import {
   AGENT_TUI_CLEAR_INPUT_LINE,
   buildAgentTuiClearInputForText
 } from '../../../src/shared/agent-tui-input-clear'
+import {
+  clearMobileNativeChatInputResidue,
+  mobileNativeChatInputResidue
+} from './mobile-native-chat-stale-input'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -155,18 +159,27 @@ export function useMobileNativeChatMessageSend(args: {
         !images?.length
       // Keep terminal controls in their own write. When bundled with the body,
       // a pasted burst can become literal prompt text instead of editing input.
+      const residue = mobileNativeChatInputResidue(handle)
       if (!images?.length && (seededLaunchDraft || !typesCodexCommand)) {
         const cleared = await clearMobileNativeChatInput({
           client,
           terminal: handle,
+          // A queue edit can leave the whole recalled queue on the agent. One
+          // Ctrl+U clears one logical line, so the survivors would be submitted
+          // glued to this message; clear for what is actually sitting there.
           clearInput: seededLaunchDraft
             ? buildAgentTuiClearInputForText(seededLaunchDraft.text)
-            : AGENT_TUI_CLEAR_INPUT_LINE,
+            : residue
+              ? buildAgentTuiClearInputForText(residue)
+              : AGENT_TUI_CLEAR_INPUT_LINE,
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
             : {})
         })
+        if (cleared) {
+          clearMobileNativeChatInputResidue(handle)
+        }
         if (!cleared) {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText)

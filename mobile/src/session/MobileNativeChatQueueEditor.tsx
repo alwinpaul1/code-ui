@@ -22,12 +22,20 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
   if (!editor) {
     return null
   }
+  // Once part of the queue has been rewritten, every write action would queue
+  // the messages that already landed a second time. Closing is all that is left.
   const cancel = () => {
-    if (!editor.busy) {
-      void editor.cancel()
+    if (editor.busy) {
+      return
     }
+    if (editor.stranded) {
+      editor.dismiss()
+      return
+    }
+    void editor.cancel()
   }
-  const saveDisabled = editor.busy || editor.text.trim().length === 0
+  const locked = editor.busy || editor.stranded
+  const saveDisabled = locked || editor.text.trim().length === 0
   return (
     <Modal
       transparent
@@ -120,6 +128,13 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
               }}
               selectionColor={colors.accent}
             />
+            {!editor.error ? (
+              <Txt variant="caption" tone="secondary">
+                {editor.rebuilds
+                  ? 'Your whole queue is in the agent\u2019s input while this is open. Save or Cancel puts it back — closing leaves it there unsent.'
+                  : 'This message is in the agent\u2019s input while this is open. Save or Cancel puts it back.'}
+              </Txt>
+            ) : null}
             {editor.movesToEnd && !editor.error ? (
               <Txt variant="caption" tone="secondary">
                 Claude re-queues an edited message last, so saving moves this one to the end of the
@@ -128,9 +143,30 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
             ) : null}
             {editor.error ? (
               <View style={{ gap: space.sm }}>
-                <Txt tone="danger" accessibilityRole="alert">
+                <Txt tone="danger" accessibilityRole="alert" selectable>
                   {editor.error}
                 </Txt>
+                {editor.remaining.length ? (
+                  <View
+                    style={{
+                      gap: space.sm,
+                      padding: space.md,
+                      borderRadius: radius.md,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.bgSunken
+                    }}
+                  >
+                    <Txt variant="caption" tone="secondary">
+                      Copy these before closing; they are no longer queued.
+                    </Txt>
+                    {editor.remaining.map((message, index) => (
+                      <Txt key={`${index}:${message}`} selectable>
+                        {message}
+                      </Txt>
+                    ))}
+                  </View>
+                ) : null}
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Close queue editor"
@@ -157,7 +193,7 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Delete queued message"
-              disabled={editor.busy}
+              disabled={locked}
               onPress={() => void editor.remove()}
               style={({ pressed }) => ({
                 minWidth: 44,
@@ -166,7 +202,7 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
                 justifyContent: 'center',
                 borderRadius: radius.sm,
                 backgroundColor: pressed ? colors.dangerSoft : 'transparent',
-                opacity: editor.busy ? 0.5 : 1
+                opacity: locked ? 0.5 : 1
               })}
             >
               <Trash2 size={19} color={colors.danger} />
@@ -174,7 +210,9 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
             <View style={{ flex: 1 }} />
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Cancel changes to queued message"
+              accessibilityLabel={
+                editor.stranded ? 'Close queue editor' : 'Cancel changes to queued message'
+              }
               disabled={editor.busy}
               onPress={cancel}
               style={({ pressed }) => ({
@@ -188,7 +226,7 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
               })}
             >
               <Txt weight="medium" tone="secondary">
-                Cancel
+                {editor.stranded ? 'Close' : 'Cancel'}
               </Txt>
             </Pressable>
             <Pressable

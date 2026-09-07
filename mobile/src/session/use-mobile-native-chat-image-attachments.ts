@@ -21,10 +21,12 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import {
+  clearMobileNativeChatInputResidue,
   clearMobileNativeChatInputStale,
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
-  markMobileNativeChatInputStale
+  markMobileNativeChatInputStale,
+  mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
@@ -267,6 +269,12 @@ export function useMobileNativeChatImageAttachments({
             return false
           }
           const seededLaunchDraft = readSeededLaunchDraft()
+          // A queue edit can leave the whole recalled queue on the agent. The
+          // paste's default clear kills one logical line, so the survivors
+          // would submit glued to this photo's caption — the text path already
+          // clears for the residue and this one must too.
+          const residue = mobileNativeChatInputResidue(handle)
+          const leadingClear = seededLaunchDraft ?? residue
           const pasted = await pasteMobileNativeChatImagePaths({
             client,
             terminal: handle,
@@ -274,9 +282,7 @@ export function useMobileNativeChatImageAttachments({
             imagePaths: pendingImages.map((attachment) => attachment.path),
             followedByText: text.trim().length > 0,
             deadline,
-            ...(seededLaunchDraft
-              ? { clearInput: buildAgentTuiClearInputForText(seededLaunchDraft) }
-              : {})
+            ...(leadingClear ? { clearInput: buildAgentTuiClearInputForText(leadingClear) } : {})
           })
           if (!pasted) {
             // Keep the chips so the user can retry; the failed paste never submitted.
@@ -287,6 +293,7 @@ export function useMobileNativeChatImageAttachments({
           }
           // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
           clearMobileNativeChatInputStale(handle)
+          clearMobileNativeChatInputResidue(handle)
           // Let the TUI absorb the image paste before the text + Enter follow. The
           // preview URIs ride along to baseSend so the sent bubble shows the photo
           // immediately (empty text still submits a bare Enter through baseSend).

@@ -18,7 +18,8 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
-vi.mock('./mobile-native-chat-stale-input', () => ({
+vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-stale-input')>()),
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
 

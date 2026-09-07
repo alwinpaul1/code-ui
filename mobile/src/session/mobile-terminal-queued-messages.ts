@@ -3,8 +3,9 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
 /** Verified against Claude Code 2.1.263. Two different queue footers exist:
  * the legacy whole-queue recall, and the per-message selector that only appears
  * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment. */
-const QUEUE_HINT = /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
-const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
+export const QUEUE_HINT =
+  /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
+export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
 
 export type ClaudeQueueView = {
   /** Empty while an entry is selected: the rows are ambiguous then. */
@@ -132,7 +133,10 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
   })
 }
 
-export type MobileChatQueueEntry = string | { text: string; images: string[] }
+/** A photo row shows the caption the phone sent, not the row Claude drew:
+ *  the drawn one carries the paste marker or the temp-file path. `caption`
+ *  keeps the drawn row, because that is what a recall has to match against. */
+export type MobileChatQueueEntry = string | { text: string; images: string[]; caption: string }
 
 /** Show each confirmed queued send once, retaining local photos in the queue. */
 export function projectMobileChatQueue<T extends { text: string; images?: string[] }>(
@@ -154,7 +158,7 @@ export function projectMobileChatQueue<T extends { text: string; images?: string
     }
     const item = available.splice(index, 1)[0]!
     matchedImages.add(item)
-    return { text: item.text, images: item.images! }
+    return { text: item.text, images: item.images!, caption: text }
   })
   return {
     pending: pendingOutsideVisibleQueue(

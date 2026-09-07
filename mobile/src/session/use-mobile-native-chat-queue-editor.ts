@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { createQueueEditorIo } from './mobile-native-chat-queue-editor-io'
 import {
-  buildTerminalSendParams,
-  TERMINAL_INPUT_SEND_OPTIONS
-} from '../terminal/terminal-send-request'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+  clearMobileNativeChatInputResidue,
+  markMobileNativeChatInputResidue
+} from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
+  beginMobileNativeChatTerminalBurst,
+  endMobileNativeChatTerminalBurst,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
   finishNativeQueueEdit,
+  QueueRebuildError,
   recallNativeQueue,
   type QueueEdit,
-  type QueueEditorAgent,
-  type QueueEditorIo
+  type QueueEditorAgent
 } from './native-queue-editor'
 export type { QueueEditorAgent } from './native-queue-editor'
+
+/** A recall whose read failed leaves an unknown amount on the agent. The line
+ *  count only biases the clear upward, and overshoot is free. */
+const RECALLED_QUEUE_RESIDUE = 'x\n'.repeat(24)
 
 export type InlineQueueEditor = {
   text: string
@@ -24,6 +30,13 @@ export type InlineQueueEditor = {
   error: string | null
   /** Claude re-queues an edited message last, so saving reorders the queue. */
   movesToEnd: boolean
+  /** Part of the queue was already rewritten, so writing again would double it.
+   *  Only closing is left. */
+  stranded: boolean
+  /** The messages that never made it back, verbatim, so they can be copied. */
+  remaining: string[]
+  /** The whole queue is in the agent's input, not just this message. */
+  rebuilds: boolean
   setText: (text: string) => void
   save: () => Promise<void>
   cancel: () => Promise<void>
@@ -56,6 +69,8 @@ export function useMobileNativeChatQueueEditor(args: {
 }) {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
+  const [stranded, setStranded] = useState(false)
+  const [remaining, setRemaining] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const latest = useRef(args)
   latest.current = args
@@ -66,6 +81,7 @@ export function useMobileNativeChatQueueEditor(args: {
   const lifetime = useRef(0)
   const release = useCallback(() => {
     if (locked.current) {
+      endMobileNativeChatTerminalBurst(locked.current)
       releaseMobileNativeChatTerminalWrite(locked.current)
     }
     locked.current = null
@@ -78,72 +94,35 @@ export function useMobileNativeChatQueueEditor(args: {
     [release]
   )
   useEffect(() => {
-    if (editing && (editing.tabId !== args.tabId || editing.handle !== args.handleRef.current)) {
+    // Never tear the sheet down mid-write. Doing so freed the terminal lock in
+    // the middle of a composed sequence and threw away the one record of the
+    // messages that had left the queue, because the catch that holds them can
+    // only render into a sheet that still exists.
+    if (
+      !inFlight.current &&
+      editing &&
+      (editing.tabId !== args.tabId || editing.handle !== args.handleRef.current)
+    ) {
       release()
       setEditing(null)
     }
   }, [args.tabId, args.handleRef, editing, release])
 
-  function ioFor(handle: string, tabId: string, generation: number): QueueEditorIo {
-    const assertCurrent = () => {
-      const current = latest.current
-      if (
-        lifetime.current !== generation ||
-        !current.enabled ||
-        !current.client ||
-        current.tabId !== tabId ||
-        current.handleRef.current !== handle
-      ) {
-        throw new Error('Connection or session changed. The agent input has been preserved.')
-      }
-      return current
-    }
-    return {
-      read: async () => {
-        const current = assertCurrent()
-        const response = await current.client!.sendRequest(
-          'terminal.read',
-          { terminal: handle, screen: true },
-          { timeoutMs: 2500, failWhenDisconnected: true }
-        )
-        assertCurrent()
-        if (!response.ok) {
-          throw new Error('Could not read the agent input.')
-        }
-        const result = response.result as {
-          terminal?: { tail?: string[]; lines?: string[]; draft?: string; source?: string }
-        }
-        const terminal = result.terminal
-        return {
-          lines: terminal?.tail ?? terminal?.lines ?? [],
-          draft: terminal?.draft ?? '',
-          source: terminal?.source ?? ''
-        }
-      },
-      write: async (text, idleOnly) => {
-        const current = assertCurrent()
-        const response = await current.client!.sendRequest(
-          'terminal.send',
-          {
-            ...buildTerminalSendParams({
-              terminal: handle,
-              text,
-              enter: false,
-              deviceToken: current.deviceTokenRef.current
-            }),
-            ...(idleOnly ? { requireAgentStatus: 'sendable' } : {})
-          },
-          { ...TERMINAL_INPUT_SEND_OPTIONS, timeoutMs: 5000 }
-        )
-        assertCurrent()
-        if (!isTerminalSendRpcAccepted(response)) {
-          throw new Error('The agent did not accept the edit. Your input has been kept.')
-        }
-      },
-      pause: () => new Promise((resolve) => setTimeout(resolve, 120))
-    }
-  }
-  const open = async (index?: number) => {
+  const ioFor = (handle: string, tabId: string, generation: number) =>
+    createQueueEditorIo({
+      handle,
+      tabId,
+      generation,
+      scope: () => ({
+        client: latest.current.client,
+        enabled: latest.current.enabled,
+        tabId: latest.current.tabId,
+        deviceToken: latest.current.deviceTokenRef.current,
+        handle: latest.current.handleRef.current,
+        generation: lifetime.current
+      })
+    })
+  const open = async (index?: number, tapped?: string) => {
     const start = latest.current
     const handle = start.handleRef.current
     const agent = start.agent
@@ -165,7 +144,26 @@ export function useMobileNativeChatQueueEditor(args: {
         throw new Error('Another input is still being sent. Try again.')
       }
       locked.current = handle
-      const recall = await recallNativeQueue(ioFor(handle, start.tabId, generation), agent, index)
+      beginMobileNativeChatTerminalBurst(handle)
+      let recall: QueueEdit
+      try {
+        recall = await recallNativeQueue(
+          ioFor(handle, start.tabId, generation),
+          agent,
+          index,
+          tapped
+        )
+      } catch (cause) {
+        // Up has already emptied the queue into the agent's composer. Whatever
+        // is there now must be cleared in full by the next send, or its lines
+        // ride along with the user's next message.
+        markMobileNativeChatInputResidue(handle, RECALLED_QUEUE_RESIDUE)
+        throw cause
+      } finally {
+        // The sheet is about to sit open while the user types. Let the HUD poll
+        // resume so a permission prompt on the desktop is still noticed.
+        endMobileNativeChatTerminalBurst(handle)
+      }
       // A recalled message is now an unsent draft. Its former optimistic bubble
       // must not reappear as delivered when the queue preview disappears.
       // Match the full original, never a truncated terminal preview.
@@ -175,6 +173,9 @@ export function useMobileNativeChatQueueEditor(args: {
       if (pending) {
         start.removePending?.(pending.id)
       }
+      markMobileNativeChatInputResidue(handle, recall.draft)
+      setStranded(false)
+      setRemaining([])
       setEditing({
         agent,
         handle,
@@ -201,12 +202,13 @@ export function useMobileNativeChatQueueEditor(args: {
   }
   const finish = async (action: 'save' | 'cancel' | 'remove') => {
     const entry = editRef.current
-    if (!entry || inFlight.current) {
+    if (!entry || inFlight.current || stranded) {
       return
     }
     inFlight.current = true
     setBusy(true)
     setError(null)
+    beginMobileNativeChatTerminalBurst(entry.handle)
     try {
       await finishNativeQueueEdit(
         ioFor(entry.handle, entry.tabId, lifetime.current),
@@ -218,11 +220,23 @@ export function useMobileNativeChatQueueEditor(args: {
             current?.handle === entry.handle ? { ...current, remote } : current
           )
       )
+      clearMobileNativeChatInputResidue(entry.handle)
       setEditing(null)
       release()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not confirm the edit.')
+      const message = cause instanceof Error ? cause.message : 'Could not confirm the edit.'
+      if (cause instanceof QueueRebuildError) {
+        setStranded(true)
+        setRemaining(cause.remaining)
+        // The sheet may already be unmounted; the list of messages that are no
+        // longer on the agent must not die with it.
+        if (!editRef.current) {
+          latest.current.onError(message)
+        }
+      }
+      setError(message)
     } finally {
+      endMobileNativeChatTerminalBurst(entry.handle)
       inFlight.current = false
       setBusy(false)
     }
@@ -235,6 +249,9 @@ export function useMobileNativeChatQueueEditor(args: {
           busy,
           error,
           movesToEnd: editing.movesToEnd,
+          stranded,
+          remaining,
+          rebuilds: editing.recall.segments !== null,
           setText: (text: string) =>
             setEditing((current) => (current ? { ...current, text } : null)),
           save: () => finish('save'),

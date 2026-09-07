@@ -13,7 +13,7 @@ export function MobileNativeChatQueue({
 }: {
   messages?: readonly MobileChatQueueEntry[]
   agent?: string | null
-  onEdit?: (index: number) => Promise<void>
+  onEdit?: (index: number, tapped: string) => Promise<void>
 }) {
   const { colors, space, radius } = useTheme()
   // Claude can select any entry natively; Codex only recalls its latest one.
@@ -83,6 +83,9 @@ export function MobileNativeChatQueue({
         {messages.map((entry, index) => {
           const text = typeof entry === 'string' ? entry : entry.text
           const images = typeof entry === 'string' ? [] : entry.images
+          // What the recall matches against is the row on screen, never the
+          // caption a photo row shows in its place.
+          const drawn = typeof entry === 'string' ? entry : entry.caption
           const parsed = splitOrcaPastedImagePaths(text)
           return (
             <View
@@ -138,7 +141,7 @@ export function MobileNativeChatQueue({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Edit queued message ${index + 1}`}
-                  onPress={() => void onEdit?.(index)}
+                  onPress={() => void onEdit?.(index, drawn)}
                   style={({ pressed }) => ({
                     minHeight: 44,
                     minWidth: 44,

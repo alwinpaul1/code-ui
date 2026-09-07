@@ -85,7 +85,7 @@ it('gives Claude a pencil on every queued message, addressed by position', async
   await act(async () =>
     renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 1' }).props.onPress()
   )
-  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0)
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0, 'first')
   await act(async () => renderer!.unmount())
 })
 
@@ -102,6 +102,51 @@ it('keeps Codex to the one queued message its native recall can reach', async ()
   await act(async () =>
     renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 3' }).props.onPress()
   )
-  expect(onEdit).toHaveBeenCalledExactlyOnceWith(2)
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(2, 'third')
+  await act(async () => renderer!.unmount())
+})
+
+it('opens the editor for a queued photo instead of claiming the queue moved on', async () => {
+  // The pencil sends what the recall matches against the drawn queue row. A
+  // photo row shows the caption without its paste marker, so sending that text
+  // made every photo refuse to open with "The queue moved on before that
+  // opened." Send the row as Claude drew it. Verified against Claude Code
+  // 2.1.263, whose marker for a mobile paste is "[Image #1]".
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const projected = projectMobileChatQueue(
+    [{ text: 'See this', images: ['file:///a.jpg'], id: 1 }],
+    ['[Image #1] See this', 'plain follow-up']
+  )
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, { messages: projected.queue, agent: 'claude', onEdit })
+    )
+  })
+  await act(async () =>
+    renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 1' }).props.onPress()
+  )
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0, '[Image #1] See this')
+  await act(async () => renderer!.unmount())
+})
+
+it('sends the pasted path row as drawn when a photo was queued from the desktop', async () => {
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const path =
+    '/var/folders/0y/session/T/orca-paste-1788707946740-fd6147a9-5b2d-4051-8a87-dbd45992c21e.png'
+  const projected = projectMobileChatQueue(
+    [{ text: 'See this', images: ['file:///a.jpg'], id: 1 }],
+    [`${path} See this`]
+  )
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, { messages: projected.queue, agent: 'claude', onEdit })
+    )
+  })
+  await act(async () =>
+    renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 1' }).props.onPress()
+  )
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0, `${path} See this`)
   await act(async () => renderer!.unmount())
 })
