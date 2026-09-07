@@ -71,3 +71,37 @@ it('shows the desktop-confirmed image queue with a caption and tappable thumbnai
   expect(openImagePreview).toHaveBeenCalledWith('file:///photo.png', 'Queued image')
   act(() => renderer!.unmount())
 })
+
+it('gives Claude a pencil on every queued message, addressed by position', async () => {
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const projected = projectMobileChatQueue([], ['first', 'second', 'third'])
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, { messages: projected.queue, agent: 'claude', onEdit })
+    )
+  })
+  expect(renderer!.root.findAllByType('Pencil')).toHaveLength(3)
+  await act(async () =>
+    renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 1' }).props.onPress()
+  )
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0)
+  await act(async () => renderer!.unmount())
+})
+
+it('keeps Codex to the one queued message its native recall can reach', async () => {
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const projected = projectMobileChatQueue([], ['first', 'second', 'third'])
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, { messages: projected.queue, agent: 'codex', onEdit })
+    )
+  })
+  expect(renderer!.root.findAllByType('Pencil')).toHaveLength(1)
+  await act(async () =>
+    renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 3' }).props.onPress()
+  )
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(2)
+  await act(async () => renderer!.unmount())
+})

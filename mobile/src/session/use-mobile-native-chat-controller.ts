@@ -424,6 +424,7 @@ export function useMobileNativeChatController(
     beforeOpen: settleDraftMirrorBeforeSend,
     pending: chatPending,
     removePending,
+    queued: visibleQueuedMessages,
     onError: onSendError
   })
 

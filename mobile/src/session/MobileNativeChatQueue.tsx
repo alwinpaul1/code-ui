@@ -13,9 +13,16 @@ export function MobileNativeChatQueue({
 }: {
   messages?: readonly MobileChatQueueEntry[]
   agent?: string | null
-  onEdit?: () => Promise<void>
+  onEdit?: (index: number) => Promise<void>
 }) {
   const { colors, space, radius } = useTheme()
+  // Claude can select any entry natively; Codex only recalls its latest one.
+  // Claude builds without the selector report that through the editor's own
+  // error, which names the flag that turns it on — silence would just repeat
+  // the original complaint that queued messages cannot be edited.
+  const editable = (index: number) =>
+    Boolean(onEdit) &&
+    (agent === 'claude' || (agent === 'codex' && index === (messages?.length ?? 0) - 1))
   if (!messages?.length) {
     return null
   }
@@ -37,8 +44,7 @@ export function MobileNativeChatQueue({
           alignItems: 'center',
           justifyContent: 'space-between',
           minHeight: 48,
-          paddingLeft: space.md,
-          paddingRight: space.xs,
+          paddingHorizontal: space.md,
           borderBottomWidth: 1,
           borderBottomColor: colors.border
         }}
@@ -67,27 +73,6 @@ export function MobileNativeChatQueue({
             </Txt>
           </View>
         </View>
-        {onEdit && (agent === 'claude' || agent === 'codex') ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              agent === 'codex'
-                ? 'Edit latest queued message in Codex'
-                : 'Edit queued messages in Claude'
-            }
-            onPress={() => void onEdit()}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              minWidth: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: radius.sm,
-              backgroundColor: pressed ? colors.bgRaised : 'transparent'
-            })}
-          >
-            <Pencil size={16} color={colors.textSecondary} />
-          </Pressable>
-        ) : null}
       </View>
       <ScrollView
         style={{ maxHeight: 220 }}
@@ -149,6 +134,24 @@ export function MobileNativeChatQueue({
                   </Txt>
                 ) : null}
               </View>
+              {editable(index) ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit queued message ${index + 1}`}
+                  onPress={() => void onEdit?.(index)}
+                  style={({ pressed }) => ({
+                    minHeight: 44,
+                    minWidth: 44,
+                    marginVertical: -space.sm,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: radius.sm,
+                    backgroundColor: pressed ? colors.bgRaised : 'transparent'
+                  })}
+                >
+                  <Pencil size={16} color={colors.textSecondary} />
+                </Pressable>
+              ) : null}
             </View>
           )
         })}

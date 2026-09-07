@@ -37,7 +37,7 @@ describe('terminal approval observation', () => {
                 : [
                     'Working',
                     '',
-                    '❯ desktop task',
+                    '  ❯ desktop task',
                     '─────',
                     '❯ Press up to select a queued message, then Enter to edit it'
                   ]

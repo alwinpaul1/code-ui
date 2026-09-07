@@ -120,6 +120,12 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
               }}
               selectionColor={colors.accent}
             />
+            {editor.movesToEnd && !editor.error ? (
+              <Txt variant="caption" tone="secondary">
+                Claude re-queues an edited message last, so saving moves this one to the end of the
+                queue.
+              </Txt>
+            ) : null}
             {editor.error ? (
               <View style={{ gap: space.sm }}>
                 <Txt tone="danger" accessibilityRole="alert">

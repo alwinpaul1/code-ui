@@ -106,3 +106,75 @@ guards after the phone changed state; it is not counted as a completed save test
 All 555 test files passed (4,375 tests, 3 skipped), including the queue operations
 and editor action/disabled-state checks. TypeScript, lint, and the Android release
 build passed.
+
+## Per-message editing on Claude Code, 0.2.48
+
+Any queued Claude message can now be edited or deleted from the phone, with no
+change to the desktop. A pencil sits on every Claude row and addresses the queue
+by position. Codex keeps its single pencil on the latest message, which is all
+its native recall reaches.
+
+Claude Code 2.1.263 has two queue behaviours, and mobile drives both.
+
+**Whole-queue recall, the stock behaviour.** One Up empties the queue into a
+single multiline draft: three messages came back as one input with the
+boundaries gone. Mobile splits that draft back apart by matching it word for
+word against the captions Claude drew before the recall — a caption's line
+breaks are display wrapping, the draft's are the author's, so only the words
+line up. Any mismatch refuses before a key is sent. It then clears the input and
+retypes the queue message by message, with one entry changed or dropped. Order
+is preserved exactly, and each retype is confirmed queued before the next.
+
+**The per-message selector.** A gate on `CLAUDE_CODE_KB_COHESION_FIXES` in the
+agent's environment, read out of the 2.1.263 binary and confirmed live, changes
+the composer hint and makes Up mark one entry at a time; Enter pops the marked
+entry into the composer with its images intact. Mobile walks that selector when
+the hint says it exists, verifying each press: the marked caption must still be
+the message the user tapped, and the hint must name history only on the oldest
+entry. A mismatch sends Escape, which clears the marker without interrupting the
+turn. This path is atomic and keeps attachments, but Claude appends the edited
+message, so any entry but the last comes back at the end. The editor says so.
+No host configuration is required to reach it or to do without it.
+
+### Limits of the retype path
+
+A queue holding an attachment or collapsed paste is refused before any key is
+sent: Orca exposes a placeholder, not the payload, so retyping would destroy it.
+A caption Claude shortened with an ellipsis — it does that for peer and
+task-notification entries, never for a plain typed message — cannot be matched
+word for word and is refused the same way.
+
+Between the clear and the last retype the messages exist only on the phone. Each
+step is verified, and a failure names the messages that did not make it back
+instead of pretending they were sent. If the recall itself cannot be read, the
+queue is left as one unsent draft in the desktop input and the error says so.
+Leaving the session mid-edit still leaves the agent holding an unsent draft.
+
+### Two defects the live run found
+
+The queue list was unreadable during a selection. Claude drops the marker from
+every unmarked row, leaving it at the same four-space indent a wrapped line
+uses, so the two cannot be told apart. The old parser merged them into invented
+entries. It now refuses to split the block while a selection is active and reads
+only the single marked row.
+
+Saving destroyed the message. Orca republishes Claude's composer placeholder in
+`draft`, so a cleared input arrived as the queue hint — longer than the text it
+replaced. The clear loop read that as the input growing, aborted, and left the
+entry already popped out of the queue and nowhere else. A draft showing a queue
+hint now counts as empty.
+
+### Validation
+
+Verified against Claude Code 2.1.263 at 80 columns through a tmux harness that
+drives `native-queue-editor.ts` with Orca's `terminal.read` shape.
+
+Stock, no environment changes, three queued messages: the middle one was
+recalled, edited, and the queue retyped as
+`alpha oldest / bravo EDITED WITH ZERO CONFIG / charlie newest` in its original
+order; the oldest was then recalled and deleted, leaving the other two in place.
+
+With the selector flag set: the oldest of three was recalled, edited and
+re-queued last with the other two untouched, then the middle one was recalled
+and deleted. Both agree with the unit tests, whose fixtures are captured
+screens rather than paraphrases.

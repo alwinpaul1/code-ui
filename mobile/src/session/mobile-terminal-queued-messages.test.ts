@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  claudeQueueViewFromScreen,
   queuedMessagesFromScreen,
   pendingOutsideVisibleQueue,
   projectMobileChatQueue
@@ -18,8 +19,8 @@ describe('visible agent queue', () => {
         '',
         '✻ Working…',
         '',
-        '❯ desktop follow-up',
-        '  with wrapped text',
+        '  ❯ desktop follow-up',
+        '    with wrapped text',
         '────────',
         ...footer
       ])
@@ -32,9 +33,9 @@ describe('visible agent queue', () => {
         '',
         '✻ Calculating…',
         '',
-        '❯ run on Willi',
-        '  and test and confirm',
-        '❯ another task',
+        '  ❯ run on Willi',
+        '    and test and confirm',
+        '  ❯ another task',
         '────────',
         '❯ Press up to edit queued messages'
       ])
@@ -116,4 +117,112 @@ it('excludes Claude’s right-aligned yank hint between the queue and composer',
       'Press up to edit queued messages'
     )
   ).toEqual(['queue verification alpha'])
+})
+
+// Captured with `tmux capture-pane -p` from Claude Code 2.1.263 at 80 columns,
+// three queued messages, two of them long enough to wrap.
+const QUEUE_ROWS = [
+  '  ❯ alpha this is a deliberately long first queued message that must wrap',
+  '    across at least two rendered terminal lines to reveal the continuation',
+  '    indent',
+  '  ❯ bravo short second',
+  '  ❯ charlie another very long third queued message written so that it also',
+  '    wraps onto a second line inside the queue block for comparison purposes',
+  '',
+  '────────────────────────────────────────',
+  '❯',
+  '────────────────────────────────────────',
+  '  [Haiku 4.5 | Team] ░░░░░░ 0% (0/200k) | qtest'
+]
+const ALPHA =
+  'alpha this is a deliberately long first queued message that must wrap\nacross at least two rendered terminal lines to reveal the continuation\nindent'
+const CHARLIE =
+  'charlie another very long third queued message written so that it also\nwraps onto a second line inside the queue block for comparison purposes'
+const dropMarker = (rows: readonly string[], keep: number) => {
+  const entryRows = [0, 3, 4]
+  return rows.map((line, index) => {
+    const entry = entryRows.indexOf(index)
+    return entry === -1 || entry === keep ? line : line.replace('  ❯ ', '    ')
+  })
+}
+
+describe('Claude queue selection', () => {
+  it('reads every wrapped entry while nothing is selected', () => {
+    const view = claudeQueueViewFromScreen(
+      QUEUE_ROWS,
+      'Press up to select a queued message, then Enter to edit it'
+    )
+    expect(view.entries).toEqual([ALPHA, 'bravo short second', CHARLIE])
+    expect(view.selectable).toBe(true)
+    expect(view.selecting).toBe(false)
+  })
+
+  it('keeps the queue readable while an entry is selected', () => {
+    // Claude drops the marker from the unselected rows, leaving them at the
+    // same indent as a wrapped line. Splitting the block then invents entries.
+    const view = claudeQueueViewFromScreen(
+      dropMarker(QUEUE_ROWS, 1),
+      'Press Enter to edit the selected message, or up again for an older one'
+    )
+    expect(view.entries).toEqual([])
+    expect(view.selecting).toBe(true)
+    expect(view.selected).toBe('bravo short second')
+    expect(view.selectedOldest).toBe(false)
+  })
+
+  it('reports when the marker has reached the oldest entry', () => {
+    const view = claudeQueueViewFromScreen(
+      dropMarker(QUEUE_ROWS, 0),
+      'Press Enter to edit the selected message, or up again for history'
+    )
+    expect(view.selected).toBe(
+      'alpha this is a deliberately long first queued message that must wrap'
+    )
+    expect(view.selectedOldest).toBe(true)
+  })
+
+  it('does not claim the selector on the legacy whole-queue footer', () => {
+    const view = claudeQueueViewFromScreen(
+      ['  ❯ alpha first', '  ❯ bravo second', '────────', '❯', '────────'],
+      'Press up to edit queued messages'
+    )
+    expect(view.entries).toEqual(['alpha first', 'bravo second'])
+    expect(view.selectable).toBe(false)
+  })
+})
+
+describe('Claude transcript echoes', () => {
+  // Captured from Claude Code 2.1.263: a message the running turn has already
+  // taken is redrawn in the transcript with the same marker as a queue row, but
+  // at column zero, and its own wrapped lines carry a queue-row indent.
+  const DELIVERED = [
+    '⏺ Running ping -c 8 127.0.0.1 · 2s',
+    '  ⎿  $ ping -c 8 127.0.0.1',
+    '❯ queued test two',
+    '  queued test one',
+    '  ❯ queued test three',
+    '────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────'
+  ]
+
+  it('does not glue a delivered message onto the queue entry above it', () => {
+    // On a real phone this drew "queued test two queued test one" as entry one.
+    expect(queuedMessagesFromScreen(DELIVERED, '')).toEqual(['queued test three'])
+  })
+
+  it('stops at the transcript instead of walking up into older turns', () => {
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '❯ an older prompt that the agent already answered',
+          '  wrapped across a second line',
+          '  ❯ still queued',
+          '────────',
+          '❯ Press up to edit queued messages'
+        ],
+        ''
+      )
+    ).toEqual(['still queued'])
+  })
 })

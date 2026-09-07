@@ -12,6 +12,7 @@ import {
 import {
   finishNativeQueueEdit,
   recallNativeQueue,
+  type QueueEdit,
   type QueueEditorAgent,
   type QueueEditorIo
 } from './native-queue-editor'
@@ -21,6 +22,8 @@ export type InlineQueueEditor = {
   text: string
   busy: boolean
   error: string | null
+  /** Claude re-queues an edited message last, so saving reorders the queue. */
+  movesToEnd: boolean
   setText: (text: string) => void
   save: () => Promise<void>
   cancel: () => Promise<void>
@@ -31,9 +34,10 @@ type Editing = {
   agent: QueueEditorAgent
   handle: string
   tabId: string
-  original: string
+  recall: QueueEdit
   remote: string
   text: string
+  movesToEnd: boolean
 }
 
 export function useMobileNativeChatQueueEditor(args: {
@@ -47,6 +51,8 @@ export function useMobileNativeChatQueueEditor(args: {
   onError: (message: string) => void
   pending?: readonly { id: string; text: string; images?: string[] }[]
   removePending?: (id: string) => void
+  /** The queue as drawn, oldest first; only its length is read. */
+  queued?: readonly unknown[]
 }) {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
@@ -137,7 +143,7 @@ export function useMobileNativeChatQueueEditor(args: {
       pause: () => new Promise((resolve) => setTimeout(resolve, 120))
     }
   }
-  const open = async () => {
+  const open = async (index?: number) => {
     const start = latest.current
     const handle = start.handleRef.current
     const agent = start.agent
@@ -159,17 +165,32 @@ export function useMobileNativeChatQueueEditor(args: {
         throw new Error('Another input is still being sent. Try again.')
       }
       locked.current = handle
-      const original = await recallNativeQueue(ioFor(handle, start.tabId, generation), agent)
+      const recall = await recallNativeQueue(ioFor(handle, start.tabId, generation), agent, index)
       // A recalled message is now an unsent draft. Its former optimistic bubble
       // must not reappear as delivered when the queue preview disappears.
       // Match the full original, never a truncated terminal preview.
       const pending = start.pending?.findLast(
-        (item) => !item.images?.length && item.text.trim() === original.trim()
+        (item) => !item.images?.length && item.text.trim() === recall.text.trim()
       )
       if (pending) {
         start.removePending?.(pending.id)
       }
-      setEditing({ agent, handle, tabId: start.tabId, original, remote: original, text: original })
+      setEditing({
+        agent,
+        handle,
+        tabId: start.tabId,
+        recall,
+        remote: recall.draft,
+        text: recall.text,
+        // Claude's native selector pops the entry out and appends the result,
+        // so anything but the last message comes back at the end. Retyping the
+        // whole queue puts every message back where it was.
+        movesToEnd:
+          agent === 'claude' &&
+          !recall.segments &&
+          index !== undefined &&
+          index < (start.queued?.length ?? 0) - 1
+      })
       setError(null)
     } catch (cause) {
       release()
@@ -190,8 +211,8 @@ export function useMobileNativeChatQueueEditor(args: {
       await finishNativeQueueEdit(
         ioFor(entry.handle, entry.tabId, lifetime.current),
         entry.agent,
-        entry.remote,
-        action === 'cancel' ? entry.original : action === 'remove' ? null : entry.text,
+        { ...entry.recall, draft: entry.remote },
+        action === 'cancel' ? entry.recall.text : action === 'remove' ? null : entry.text,
         (remote) =>
           setEditing((current) =>
             current?.handle === entry.handle ? { ...current, remote } : current
@@ -213,6 +234,7 @@ export function useMobileNativeChatQueueEditor(args: {
           text: editing.text,
           busy,
           error,
+          movesToEnd: editing.movesToEnd,
           setText: (text: string) =>
             setEditing((current) => (current ? { ...current, text } : null)),
           save: () => finish('save'),

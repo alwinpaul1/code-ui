@@ -47,7 +47,7 @@ export type MobileNativeChatViewProps = {
   getComposerEditGeneration: () => number
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   queuedMessages?: readonly MobileChatQueueEntry[]
-  onEditQueue?: () => Promise<void>
+  onEditQueue?: (index: number) => Promise<void>
   queueEditor?: InlineQueueEditor | null
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an
