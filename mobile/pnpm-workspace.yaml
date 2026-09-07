@@ -5,7 +5,14 @@ minimumReleaseAge: 4320
 
 overrides:
   xcode>uuid: 11.1.1
+  '@xmldom/xmldom': 0.9.12
+  '@expo/plist': 0.8.1
+  decode-uri-component: 0.5.0
+  query-string: 9.5.1
+  image-size: 2.0.2
 
 patchedDependencies:
+  '@expo/plist@0.8.1': patches/@expo__plist@0.8.1.patch
+  image-size@2.0.2: patches/image-size@2.0.2.patch
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch
