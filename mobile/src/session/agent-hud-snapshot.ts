@@ -17,7 +17,15 @@ export type AgentHudSnapshot = {
    *  A guessed window is worse than none: naming 500k for a 1M session reads as
    *  99% full when it is half full. */
   contextWindowTokens: number | null
-  contextWindowSource: 'reported-by-agent' | 'model-id' | 'statusline-cache' | 'unknown'
+  contextWindowSource:
+    | 'reported-by-agent'
+    | 'model-id'
+    | 'statusline-cache'
+    /** Derived from the session's own numbers — a session cannot have held more
+     *  tokens than its window. This is the case for a user with nothing
+     *  installed, so it must not be mislabelled as unknown. */
+    | 'inferred-from-session'
+    | 'unknown'
   /** Claude's own permission mode, or Codex's approval policy. */
   mode: string | null
   planType: string | null
@@ -60,7 +68,13 @@ function limitWindow(value: unknown): AgentHudLimitWindow | null {
   }
 }
 
-const WINDOW_SOURCES = new Set(['reported-by-agent', 'model-id', 'statusline-cache', 'unknown'])
+const WINDOW_SOURCES = new Set([
+  'reported-by-agent',
+  'model-id',
+  'statusline-cache',
+  'inferred-from-session',
+  'unknown'
+])
 
 /** Parse what the reader printed. Anything unrecognised degrades to null rather
  *  than throwing: a HUD that shows one field less is fine, one that disappears
@@ -207,9 +221,13 @@ export function buildAgentHudSnapshotCommand(args: {
     if (target.sessionId) {
       flags.push('--session', shellQuote(target.sessionId))
     }
-    if (target.cwd) {
-      flags.push('--cwd', shellQuote(target.cwd))
-    }
+    // Orca creates the terminal in the worktree, so the shell's own $PWD is the
+    // directory a Codex session there was started in — which is what its
+    // rollout records. That closes the case the phone cannot address: a Codex
+    // launched from the desktop carries no session id the phone can see.
+    // Deliberately unquoted at the outside so the host shell expands it, and
+    // double-quoted within so a path with spaces survives.
+    flags.push('--cwd', target.cwd ? shellQuote(target.cwd) : '"$PWD"')
   }
   // Nothing is written to the host but the small JSON result. The reader is
   // piped straight into node's stdin and never saved as a file: `node -` takes
@@ -219,7 +237,15 @@ export function buildAgentHudSnapshotCommand(args: {
   // seen half-written. A `> out` redirect would create it empty the instant the
   // shell started, which is exactly what the phone would then read.
   flags.push('--out', shellQuote(out))
-  const command = `printf %s ${encoded} | base64 -d | node - ${flags.join(' ')}; exit`
+  // node is not guaranteed: codex-cli is a Rust binary and Claude Code's native
+  // installer ships a standalone one. Without this the command wrote nothing,
+  // the phone read nothing, and a terminal was spawned every 30 s forever with
+  // no HUD and no explanation anywhere. Say so in the file instead.
+  const reader = `printf %s ${encoded} | base64 -d | node - ${flags.join(' ')}`
+  const noNode = `printf '{"agent":%s,"error":"node-missing","readerVersion":1}' ${shellQuote(
+    `"${target.agent}"`
+  )} > ${shellQuote(out)}`
+  const command = `if command -v node > /dev/null 2>&1; then ${reader}; else ${noNode}; fi; exit`
   return { command, outPath: out }
 }
 

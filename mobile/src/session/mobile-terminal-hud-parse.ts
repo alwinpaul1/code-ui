@@ -108,6 +108,11 @@ export function permissionModeLabel(mode: TerminalPermissionMode): string {
 
 export type TerminalHudContextWindow = {
   usedPercent: number
+  /** Windows the agent itself reported alongside its context — Codex carries
+   *  the ones its /status prints. Rides here rather than as a new prop because
+   *  every layer from the controller to the sheet already passes this object. */
+  limits?: readonly { usedPercent: number; windowMinutes: number | null; resetsAt: number | null }[]
+  planType?: string | null
   /** Human labels as printed, e.g. "537.2k" and "1M"; null when only a percent is shown. */
   usedLabel: string | null
   windowLabel: string | null

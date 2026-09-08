@@ -241,3 +241,26 @@ it('refuses an id that could carry shell syntax', () => {
     })
   ).toThrow('alphanumeric')
 })
+
+it('keeps the provenance of a window it worked out from the session', () => {
+  // The reader's own label for the no-status-line case was missing from the
+  // allowed set, so a legitimately derived window was reported as `unknown` —
+  // the number was right and its provenance was a lie, which is exactly the
+  // field a caller would gate a hedge on.
+  const snapshot = parseAgentHudSnapshot(
+    JSON.stringify({
+      agent: 'claude',
+      model: 'claude-opus-5',
+      contextUsedTokens: 767291,
+      contextWindowTokens: 1000000,
+      contextWindowSource: 'inferred-from-session'
+    })
+  )!
+  expect(snapshot.contextWindowSource).toBe('inferred-from-session')
+  expect(agentHudContextPercent(snapshot)).toBe(77)
+  // A label the reader never emits still degrades rather than being trusted.
+  expect(
+    parseAgentHudSnapshot(JSON.stringify({ agent: 'claude', contextWindowSource: 'made-up' }))
+      ?.contextWindowSource
+  ).toBe('unknown')
+})

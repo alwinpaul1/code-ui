@@ -48,7 +48,9 @@ export function mergeAgentHudObservation(
       : {
           usedPercent: percent,
           usedLabel: used === null ? null : short(used),
-          windowLabel: size === null ? null : short(size)
+          windowLabel: size === null ? null : short(size),
+          ...(snapshot.limits.length ? { limits: snapshot.limits } : {}),
+          ...(snapshot.planType ? { planType: snapshot.planType } : {})
         }
   // Only the screen sees the mode footer. Defaulting to 'default' when it has
   // not been seen asserts Manual for an agent launched with --permission-mode
