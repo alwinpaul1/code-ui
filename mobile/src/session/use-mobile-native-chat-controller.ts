@@ -27,7 +27,7 @@ import type {
 } from './mobile-native-chat-controller-contract'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
-import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
+import { useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import {
   withTerminalDialogOptions,
@@ -158,17 +158,21 @@ export function useMobileNativeChatController(
     terminalPermission,
     permissionDismissed,
     queuedMessages: visibleQueuedMessages
-  } = useMobileTerminalHudObservation({
+  } = useMobileNativeChatHud({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
-    handleKey: showNativeChat ? streamScopeKey : null,
+    scopeKey: showNativeChat ? streamScopeKey : null,
     agent: activeChatResolution?.agent ?? null,
     active:
       nativeChatAgentWorking ||
       nativeChatStatus?.state === 'blocked' ||
-      nativeChatStatus?.state === 'waiting'
+      nativeChatStatus?.state === 'waiting',
+    worktreeId,
+    transcriptPath: activeChatResolution?.transcriptPath ?? null,
+    sessionId: activeChatResolution?.sessionId ?? null
   })
+
   const {
     permission: reportedNativeChatPermission,
     question: legacyNativeChatQuestion,

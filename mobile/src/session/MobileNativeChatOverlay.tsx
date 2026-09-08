@@ -67,9 +67,14 @@ export function MobileNativeChatOverlay({
   keyStrip
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
-  const projectedQueue = projectMobileChatQueue(
-    controller.chatPending,
-    controller.nativeChatQueuedMessages ?? []
+  // Both halves are fresh arrays every call, and they are the `pending` dep of
+  // the render memo downstream whose comment says it exists to keep FlashList's
+  // data identity stable. Unmemoized, every 1 Hz screen poll rebuilt the whole
+  // list and re-ran the autoscroll — the layout churn 0.2.41 set out to remove.
+  const queuedMessages = controller.nativeChatQueuedMessages
+  const projectedQueue = useMemo(
+    () => projectMobileChatQueue(controller.chatPending, queuedMessages ?? []),
+    [controller.chatPending, queuedMessages]
   )
   // Confirmed queued photos cannot exist in history yet. Searching older pages
   // for them repeatedly changes the list window during a live reply.

@@ -279,3 +279,19 @@ on the selector path, which an idle agent that sent the message immediately
 also produces; and the editor strands rather than resuming, because a resume
 re-enters the rebuild from the first message and would queue the landed ones
 twice.
+
+## Codex Tab on an idle composer, 0.153.4
+
+A review round called the phone's Codex chat send a silent loss: it writes the
+text and then Tab, and Tab was assumed to queue only, so an idle Codex would
+hold the text unsubmitted while the phone painted a sent bubble.
+
+Measured instead of assumed. Codex 0.153.4, idle at `› Ask Codex to do
+anything`, typed `say ok`, sent Tab alone: the composer cleared and Codex
+answered. **Tab submits on an idle composer.** The send path is right and needs
+no Enter fallback.
+
+The queue editor's `submitInput` still sends Tab first and only then falls back
+to `\r` behind Orca's host-side sendable guard. That is not the same case: it
+covers Codex finishing a turn *while the editor is open*, where the screen the
+phone is holding is a turn old.

@@ -40,7 +40,13 @@ const EFFORT_HEADER = /^\s*Select Reasoning Level for\s+(\S+)\s*$/
 const FOOTER = /Press enter to confirm or esc to go back/
 // "› 2. gpt-5.6-sol (current)  description" — name runs to the flag or a
 // two-space gap; the description is whatever follows.
-const ROW = /^([›>]?)\s*(\d+)\.\s+(.+?)(?:\s+\((default|current)\))*(?:\s{2,}(.*))?$/
+// All three cursor glyphs, as every sibling parser accepts: codex-terminal-permission,
+// mobile-terminal-permission-options and mobile-terminal-queued-messages all take
+// [❯›>]. This one took [›>] only, so a build that draws ❯ would drop the highlighted
+// row entirely — no cursor and no current model, which fails every model change with
+// "Couldn't apply it through the Codex picker" and blanks the model pill.
+// Codex 0.153.4 draws ›; this is drift insurance, not a live break.
+const ROW = /^([❯›>]?)\s*(\d+)\.\s+(.+?)(?:\s+\((default|current)\))*(?:\s{2,}(.*))?$/
 
 function parseRow(line: string): CodexPickerRow | null {
   const match = ROW.exec(line.trimStart())
@@ -101,7 +107,7 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
       continue
     }
     rows.push(row)
-    if (/^[›>]/.test(line.trimStart())) {
+    if (/^[❯›>]/.test(line.trimStart())) {
       cursorIndex = row.index
     }
   }

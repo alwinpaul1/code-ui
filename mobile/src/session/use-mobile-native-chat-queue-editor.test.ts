@@ -4,6 +4,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
+import {
+  mobileNativeChatInputResidue,
+  resetMobileNativeChatStaleInputForTests
+} from './mobile-native-chat-stale-input'
 afterEach(() => {
   vi.useRealTimers()
   resetMobileNativeChatTerminalWritesForTests()
@@ -172,3 +176,100 @@ it.each(['tab', 'handle', 'unmount'])(
     await act(async () => renderer.unmount())
   }
 )
+
+
+function editorHarness(sendRequest: ReturnType<typeof vi.fn>) {
+  const handleRef = { current: 'terminal' as string | null }
+  let api!: ReturnType<typeof useMobileNativeChatQueueEditor>
+  function Harness() {
+    api = useMobileNativeChatQueueEditor({
+      agent: 'claude',
+      tabId: 'tab',
+      handleRef,
+      deviceTokenRef: { current: 'phone' },
+      client: { sendRequest } as unknown as RpcClient,
+      enabled: true,
+      beforeOpen: async () => {},
+      pending: [],
+      removePending: vi.fn(),
+      onError: vi.fn()
+    })
+    return null
+  }
+  return {
+    handleRef,
+    Harness,
+    get api() {
+      return api
+    }
+  }
+}
+
+function claudeQueueReply(queued: readonly string[], draft: string) {
+  return {
+    ok: true,
+    result: {
+      terminal: {
+        source: 'screen',
+        draft: !draft && queued.length ? 'Press up to edit queued messages' : draft,
+        tail: queued.length
+          ? [...queued.map((entry) => `  ❯ ${entry}`), '───', '❯', '───']
+          : ['• Working (1m · esc to interrupt)']
+      }
+    }
+  }
+}
+
+it('leaves the next send its ordinary clear when the pencil refused before touching the agent', async () => {
+  // The residue marker means "the agent is holding a recalled queue". Most
+  // recall refusals never send a key, and marking one anyway made the next
+  // phone send fire a forty-line kill burst that wipes what the user had
+  // typed on the desktop.
+  resetMobileNativeChatStaleInputForTests()
+  const sendRequest = vi.fn(async (method: string) =>
+    method === 'terminal.send'
+      ? { ok: true, result: { send: { accepted: true } } }
+      : claudeQueueReply(['only one queued'], '')
+  )
+  const harness = editorHarness(sendRequest)
+  let renderer!: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(harness.Harness))
+  })
+  await act(async () => {
+    await harness.api.open(5, 'a message that is no longer queued')
+  })
+  expect(harness.api.editor).toBeNull()
+  expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
+  expect(mobileNativeChatInputResidue('terminal')).toBeNull()
+  await act(async () => renderer.unmount())
+})
+
+it('marks the residue when the recall failed after its key reached the agent', async () => {
+  // The counterpart: Up went out and emptied the queue into the composer, so
+  // the next send has to clear all of it however the recall then failed.
+  resetMobileNativeChatStaleInputForTests()
+  let reads = 0
+  const sendRequest = vi.fn(async (method: string) => {
+    if (method === 'terminal.send') {
+      return { ok: true, result: { send: { accepted: true } } }
+    }
+    reads += 1
+    // The queue reads back, Up is sent, and every later read is unusable.
+    return reads === 1
+      ? claudeQueueReply(['alpha first', 'bravo second'], '')
+      : claudeQueueReply([], 'something else entirely')
+  })
+  const harness = editorHarness(sendRequest)
+  let renderer!: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(harness.Harness))
+  })
+  await act(async () => {
+    await harness.api.open(0, 'alpha first')
+  })
+  expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(true)
+  expect(mobileNativeChatInputResidue('terminal')).not.toBeNull()
+  resetMobileNativeChatStaleInputForTests()
+  await act(async () => renderer.unmount())
+})

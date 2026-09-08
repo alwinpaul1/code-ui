@@ -16,7 +16,8 @@ import {
   QueueRebuildError,
   recallNativeQueue,
   type QueueEdit,
-  type QueueEditorAgent
+  type QueueEditorAgent,
+  type QueueEditorIo
 } from './native-queue-editor'
 export type { QueueEditorAgent } from './native-queue-editor'
 
@@ -98,15 +99,18 @@ export function useMobileNativeChatQueueEditor(args: {
     // the middle of a composed sequence and threw away the one record of the
     // messages that had left the queue, because the catch that holds them can
     // only render into a sheet that still exists.
+    // A stranded sheet holds the only copy of messages that left the queue and
+    // has nothing left to write, so a tab or handle change must not close it.
     if (
       !inFlight.current &&
+      !stranded &&
       editing &&
       (editing.tabId !== args.tabId || editing.handle !== args.handleRef.current)
     ) {
       release()
       setEditing(null)
     }
-  }, [args.tabId, args.handleRef, editing, release])
+  }, [args.tabId, args.handleRef, editing, release, stranded])
 
   const ioFor = (handle: string, tabId: string, generation: number) =>
     createQueueEditorIo({
@@ -146,18 +150,29 @@ export function useMobileNativeChatQueueEditor(args: {
       locked.current = handle
       beginMobileNativeChatTerminalBurst(handle)
       let recall: QueueEdit
+      // Most recall refusals happen before a key goes out — a stale index, a
+      // dirty draft, an attachment. Marking a residue for those made the next
+      // ordinary send fire a forty-line kill burst that wipes whatever the user
+      // had typed on the desktop, so only a recall that actually wrote counts.
+      const io = ioFor(handle, start.tabId, generation)
+      let wrote = false
+      const watched: QueueEditorIo = {
+        read: io.read,
+        pause: io.pause,
+        write: async (text, idleOnly) => {
+          wrote = true
+          await io.write(text, idleOnly)
+        }
+      }
       try {
-        recall = await recallNativeQueue(
-          ioFor(handle, start.tabId, generation),
-          agent,
-          index,
-          tapped
-        )
+        recall = await recallNativeQueue(watched, agent, index, tapped)
       } catch (cause) {
-        // Up has already emptied the queue into the agent's composer. Whatever
-        // is there now must be cleared in full by the next send, or its lines
-        // ride along with the user's next message.
-        markMobileNativeChatInputResidue(handle, RECALLED_QUEUE_RESIDUE)
+        if (wrote) {
+          // Up has already emptied the queue into the agent's composer. Whatever
+          // is there now must be cleared in full by the next send, or its lines
+          // ride along with the user's next message.
+          markMobileNativeChatInputResidue(handle, RECALLED_QUEUE_RESIDUE)
+        }
         throw cause
       } finally {
         // The sheet is about to sit open while the user types. Let the HUD poll

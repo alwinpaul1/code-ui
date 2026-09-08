@@ -118,7 +118,13 @@ export function useMobileTerminalHudObservation(args: {
         setQueuedMessages((current) =>
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued
         )
-        if (permission) {
+        const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
+        // The screen parser names only Claude's Bash dialog, so tracking
+        // dismissal by it alone meant an Edit or MCP approval was never seen
+        // leaving the screen and its card stayed, digits and all, for the whole
+        // tool run. The numbered options are drawn by every dialog, so their
+        // presence is the honest "a prompt is on screen" signal.
+        if (permission || dialog) {
           sawPermission = true
           setPermissionDismissed(false)
         } else if (sawPermission) {
@@ -127,7 +133,6 @@ export function useMobileTerminalHudObservation(args: {
         setTerminalPermission((current) =>
           JSON.stringify(current) === JSON.stringify(permission) ? current : permission
         )
-        const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )

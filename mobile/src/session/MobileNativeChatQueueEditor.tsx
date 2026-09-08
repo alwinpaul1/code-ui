@@ -109,7 +109,7 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
               accessibilityLabel="Queued message text"
               multiline
               autoFocus
-              editable={!editor.busy}
+              editable={!locked}
               value={editor.text}
               onChangeText={editor.setText}
               style={{

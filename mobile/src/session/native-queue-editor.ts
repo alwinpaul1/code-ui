@@ -9,6 +9,7 @@ import {
   opaque,
   queueFromScreen,
   sameEntry,
+  QueueMaybeDeliveredError,
   sameText,
   segmentRecalledQueue,
   submitInput,
@@ -271,9 +272,17 @@ async function rebuildQueue(
             )
             .trim()
         : ''
+    // A message the agent may have taken as a live prompt cannot also be
+    // declared absent from the agent. Saying both in one breath left the user
+    // with nothing to act on, so the uncertain case only reports what left the
+    // queue and lets its own sentence carry the doubt.
+    const maybeDelivered = cause instanceof QueueMaybeDeliveredError
+    const fate = maybeDelivered
+      ? 'left the queue'
+      : `left the queue and ${left.length === 1 ? 'is' : 'are'} not on the agent`
     throw new QueueRebuildError(
-      `${why ? `${why} ` : ''}${left.length} message${left.length === 1 ? '' : 's'} left the queue and ` +
-        `${left.length === 1 ? 'is' : 'are'} not on the agent. Copy ${left.length === 1 ? 'it' : 'them'} before closing: ` +
+      `${why ? `${why} ` : ''}${left.length} message${left.length === 1 ? '' : 's'} ${fate}. ` +
+        `Copy ${left.length === 1 ? 'it' : 'them'} before closing: ` +
         left.map((item) => JSON.stringify(item)).join(', '),
       left
     )

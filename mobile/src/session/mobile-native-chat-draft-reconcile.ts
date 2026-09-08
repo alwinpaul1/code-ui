@@ -167,6 +167,22 @@ export function findLandedImagePreviewEchoes(
       )
       .map((message) => message.id)
   )
+  // A baseline id names the newest row that already existed when the photo was
+  // sent. Claude writes the "[Image: source: …]" companion AFTER the prompt and
+  // normalization folds it away, so that id is missing from the index above —
+  // and a missing id read as "no baseline" turned both later guards off and let
+  // the echo bind to the older photo's own turn. Resolve a folded-away row to
+  // the last surviving row at or before it; leave a row that is not in this
+  // window at all unresolved, which still means "no constraint".
+  const resolvedTailIndexByRawId = new Map<string, number>()
+  let lastSurviving = -1
+  for (const message of messages) {
+    const index = messageIndexById.get(message.id)
+    if (index !== undefined) {
+      lastSurviving = index
+    }
+    resolvedTailIndexByRawId.set(message.id, lastSurviving)
+  }
   const claimedMessageIds = new Set<string>()
   const landed: LandedImagePreviewEcho[] = []
 
@@ -200,7 +216,8 @@ export function findLandedImagePreviewEchoes(
       return message.blocks.length === 0 || imageCount >= entry.images!.length
     })
     const tailIndex = entry.baselineTailMessageId
-      ? messageIndexById.get(entry.baselineTailMessageId)
+      ? (messageIndexById.get(entry.baselineTailMessageId) ??
+        resolvedTailIndexByRawId.get(entry.baselineTailMessageId))
       : -1
     const occurrenceIndex = Math.max(0, entry.expectedOccurrence - 1)
     const candidate = targetText

@@ -765,3 +765,92 @@ it('accepts a message that queues on the very last read instead of calling it lo
     )
   ).resolves.toBeUndefined()
 })
+
+it('verifies at least once even when the save budget ran out before this message', async () => {
+  // The paste and its submit key go out before the deadline is consulted, so a
+  // budget already spent gave the loop zero passes: the message was written,
+  // almost certainly queued, and reported as never sent.
+  const pending = screen('charlie third')
+  const landed = screen('', [
+    '  ❯ charlie third',
+    '────────',
+    '❯ Press up to edit queued messages',
+    '────────'
+  ])
+  const read = vi.fn().mockResolvedValueOnce(pending).mockResolvedValue(landed)
+  const write = vi.fn().mockResolvedValue(undefined)
+  await expect(
+    typeAndSubmit(
+      { read, write, pause: async () => {} },
+      'claude',
+      'charlie third',
+      1,
+      Date.now() - 1
+    )
+  ).resolves.toBeUndefined()
+  expect(read.mock.calls.length).toBeGreaterThanOrEqual(2)
+})
+
+it('does not tell the user a message may be running when the queue is what refused it', async () => {
+  // The hedge and the strand summary were concatenated, so one sentence said
+  // the agent may have run the message and the next said it is not on the
+  // agent. Only one of those can be true.
+  const delivered = screen('', ['❯ charlie third', '────────', '❯', '────────'])
+  const read = vi
+    .fn()
+    .mockResolvedValueOnce(screen('charlie third'))
+    .mockResolvedValueOnce(screen(''))
+    .mockResolvedValue(delivered)
+  const failure = await finishNativeQueueEdit(
+    { read, write: vi.fn().mockResolvedValue(undefined), pause: async () => {} },
+    'claude',
+    {
+      text: 'charlie third',
+      draft: 'charlie third',
+      segments: ['charlie third'],
+      index: 0
+    },
+    'charlie third'
+  ).catch((cause: unknown) => cause as Error)
+  expect(failure).toBeInstanceOf(QueueRebuildError)
+  expect(failure.message).toContain('may have finished working')
+  expect(failure.message).not.toContain('not on the agent')
+})
+
+
+it('refuses a Codex tap whose latest queued message is not the one the card drew', async () => {
+  // Codex paints one recallable row and shortens it with an ellipsis, so the
+  // guard has to hold on its screen too — a card a second old addresses the
+  // message Codex has since taken.
+  const write = vi.fn()
+  const moved = screen('', [
+    '• Queued follow-up inputs',
+    '  ↳ bravo second',
+    '    ⌥ + ↑ edit last queued message'
+  ])
+  await expect(
+    recallNativeQueue(
+      { read: async () => moved, write, pause: async () => {} },
+      'codex',
+      undefined,
+      'alpha first'
+    )
+  ).rejects.toThrow('queue moved on')
+  expect(write).not.toHaveBeenCalled()
+})
+
+it('opens a Codex tap on the row the card drew', async () => {
+  const drawn = screen('', [
+    '• Queued follow-up inputs',
+    '  ↳ bravo second',
+    '    ⌥ + ↑ edit last queued message'
+  ])
+  const read = vi.fn().mockResolvedValueOnce(drawn).mockResolvedValue(screen('bravo second'))
+  const recall = await recallNativeQueue(
+    { read, write: vi.fn().mockResolvedValue(undefined), pause: async () => {} },
+    'codex',
+    undefined,
+    'bravo second'
+  )
+  expect(recall.text).toBe('bravo second')
+})

@@ -58,6 +58,51 @@ describe('mobile native chat image preview reconciliation', () => {
     ])
   })
 
+
+  it('does not hand a second photo to the turn the first one already landed in', () => {
+    // The baseline is the newest row that existed when this photo was sent. On
+    // Claude Code 2.1.263 that row is the "[Image: source: …]" companion the
+    // agent writes AFTER the prompt, and normalization folds it away — so the
+    // baseline id was absent from the index, both "after the baseline" guards
+    // went off, and the echo bound to the older photo's own turn. Photo A's
+    // bubble then showed photo B, and photo B's showed nothing.
+    const messages = [
+      userText('m1', 'hello'),
+      userText('P', '[Image #1] look at this'),
+      userText('S', '[Image: source: /var/folders/0y/T/orca-paste-1788707946740-a.png]')
+    ]
+    expect(
+      findLandedImagePreviewEchoes(messages, [
+        {
+          id: 'pending-2',
+          text: '',
+          images: ['file:///phone/second.jpg'],
+          expectedOccurrence: 1,
+          baselineTailMessageId: 'S'
+        }
+      ])
+    ).toEqual([])
+  })
+
+  it('still binds a photo that landed after its folded-away baseline', () => {
+    const messages = [
+      userText('P', '[Image #1] look at this'),
+      userText('S', '[Image: source: /var/folders/0y/T/orca-paste-1788707946740-a.png]'),
+      userText('P2', '[Image #1] and this one')
+    ]
+    expect(
+      findLandedImagePreviewEchoes(messages, [
+        {
+          id: 'pending-2',
+          text: 'and this one',
+          images: ['file:///phone/second.jpg'],
+          expectedOccurrence: 1,
+          baselineTailMessageId: 'S'
+        }
+      ])
+    ).toEqual([{ pendingId: 'pending-2', messageId: 'P2', images: ['file:///phone/second.jpg'] }])
+  })
+
   it('binds an image echo to the row it was glued into with a following send', () => {
     // Regression: a send issued while the agent was mid-turn glues onto the input line
     // with the send beside it, so the landed row's text is the concatenation. Demanding

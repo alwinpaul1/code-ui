@@ -114,3 +114,19 @@ it('reads an indented picker cursor while background output is visible', () => {
     rows: expect.arrayContaining([expect.objectContaining({ name: 'Extra high', index: 2 })])
   })
 })
+
+it('reads the highlighted row whichever cursor glyph Codex draws', () => {
+  // Every sibling parser accepts ❯, › and >. This one took › and > only, so a
+  // build drawing ❯ dropped the highlighted row: no cursor, no current model,
+  // every model change failing with "Couldn't apply it through the Codex
+  // picker" and the model pill blank. Codex 0.153.4 draws ›; this pins the
+  // other two so a build change cannot take the feature out silently.
+  for (const glyph of ['❯', '›', '>']) {
+    const screen = parseCodexPickerScreen(
+      MODEL_STEP.map((line) => (line.startsWith('›') ? `${glyph}${line.slice(1)}` : line))
+    )
+    expect(screen?.step).toBe('model')
+    expect(screen?.cursorIndex).toBe(2)
+    expect(screen?.rows.find((row) => row.isCurrent)?.name).toBe('gpt-5.6-sol')
+  }
+})

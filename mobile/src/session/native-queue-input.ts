@@ -141,6 +141,16 @@ export async function clearInput(
  * Only one message may travel per write. Claude coalesces a write holding
  * several paste-and-submit pairs into a single paste and drops the submits
  * between them, which queues every message concatenated into one. */
+/** The paste went out and the screen shows the text as a live prompt rather
+ * than a queue row. The message may be running, so a caller must not assert
+ * that it never reached the agent. */
+export class QueueMaybeDeliveredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'QueueMaybeDeliveredError'
+  }
+}
+
 export async function typeAndSubmit(
   io: QueueEditorIo,
   agent: QueueEditorAgent,
@@ -177,7 +187,10 @@ export async function typeAndSubmit(
   let resent = false
   let probed = false
   const submitBy = deadline ?? Date.now() + 10_000
-  for (let attempt = 0; attempt < 25 && Date.now() < submitBy; attempt++) {
+  // The paste and its submit key are already on the wire, so a budget that ran
+  // out before this message must still buy one look: reporting a written
+  // message unsent sends the user to queue it a second time.
+  for (let attempt = 0; attempt < 25 && (attempt === 0 || Date.now() < submitBy); attempt++) {
     await io.pause()
     const screen = await io.read()
     checkScreen(agent, screen)
@@ -210,7 +223,7 @@ export async function typeAndSubmit(
     return
   }
   if (last && delivered(last)) {
-    throw new Error(
+    throw new QueueMaybeDeliveredError(
       'The agent may have finished working and run this message as a prompt instead of queueing it. Check the desktop before sending it again.'
     )
   }

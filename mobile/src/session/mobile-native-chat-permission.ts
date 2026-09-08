@@ -15,6 +15,16 @@ export type MobileChatPermission = {
   options: Array<{ label: string; send: string }>
 }
 
+/** Identity of the prompt, not of its rendering. The card keys its remount on
+ *  this, and its in-flight guard is component-local, so keying on the whole
+ *  object remounted the card whenever the screen parse flipped its options —
+ *  re-enabling the buttons mid-send, with no "waiting for agent" left, while
+ *  the first keystroke was still crossing the relay. Options are presentation;
+ *  what identifies the prompt is what it is asking. */
+export function mobileChatPermissionKey(permission: MobileChatPermission): string {
+  return [permission.title, permission.command ?? '', permission.detail ?? ''].join('\u0000')
+}
+
 const ESCAPE = String.fromCharCode(27)
 
 /** Parse the live `agentStatus.interactivePrompt` approval envelope

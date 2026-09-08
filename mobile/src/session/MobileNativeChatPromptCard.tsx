@@ -3,6 +3,7 @@ import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
+import { mobileChatPermissionKey } from './mobile-native-chat-permission'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 
 export type MobileNativeChatPromptCardProps = {
@@ -57,7 +58,7 @@ export function MobileNativeChatPromptCard({
   if (permission) {
     return (
       <MobileNativeChatPermission
-        key={JSON.stringify(permission)}
+        key={mobileChatPermissionKey(permission)}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
       />

@@ -12,11 +12,17 @@ export function withTerminalDialogOptions(
   return { ...permission, options: dialogOptions }
 }
 
-/** A dismissed, screen-confirmed Bash prompt must not fall back to a sticky hook summary. */
+/** An answered prompt must not fall back to a sticky hook summary. This was
+ *  scoped to 'Allow Bash?' — the one dialog the screen parser names — so every
+ *  other approval kept its card, carrying digits scraped off the screen, until
+ *  the tool run ended. Answering an Edit prompt on the desktop and then tapping
+ *  the card wrote that digit into whatever dialog had replaced it. Dismissal is
+ *  only ever set after a dialog was seen and then left the screen, so it is
+ *  evidence about this prompt whatever the prompt was called. */
 export function resolveObservedPermission(
   screen: MobileChatPermission | null,
   reported: MobileChatPermission | null,
   dismissed: boolean
 ): MobileChatPermission | null {
-  return screen ?? (dismissed && reported?.title === 'Allow Bash?' ? null : reported)
+  return screen ?? (dismissed ? null : reported)
 }
