@@ -50,6 +50,47 @@ depends on undocumented TUI rendering that changes between agent releases:
   wrapped, truncated, and re-ordered by the agent. Drive the agent's own
   native keys and read back what it says its input is.
 
+## The user sets up nothing on their desktop
+
+Someone using Code UI configures **nothing** on the machine it talks to. No
+status line, no plugin, no settings change, no upstream Orca change — and no
+code written to their host either. The phone does all of it.
+
+**"Zero configuration" is not "zero execution", and neither is the bar.** A
+script saved to their disk is a change to their machine whatever it cleans up
+afterwards. A command that reads what the agents already write for themselves
+is not. If a design needs the user to install or run something first, it has
+failed the requirement — find another way or say plainly that there isn't one.
+
+The agents make this possible: Claude Code records the model, the effort and
+its token usage in its transcript, and Codex records those plus its own context
+window and rate-limit windows in its rollout. Read those. The terminal screen
+carries them only when a status line happens to be installed, which is exactly
+the assumption this rule exists to kill.
+
+**When a figure genuinely cannot be known, show what is known and say the rest
+is unknown.** Never invent a denominator. Claude Code never records its
+context-window size, and a 1M session logs an unmarked `claude-opus-5`: guessing
+from the name called a 493k session 246% full, and "smallest size that fits"
+called it 99% full while it was half empty. Derive it from evidence the session
+itself provides, or report the tokens with no percentage.
+
+## Every shipped version gets a tag and a release
+
+Bumping `mobile/app.json` is not shipping. Push the
+`mobile-android-v<version>` tag — the workflow runs the whole gate itself and
+publishes the signed APK, so the release carries a build that passed, not a
+local one.
+
+**Releases falling behind `main` is a bug, not untidiness.** The in-app update
+card reads the published release, so a user on an old build has no way to reach
+the new one. If several versions have landed untagged, tag the current one; the
+notes are generated from commit subjects since the previous tag and will cover
+the gap.
+
+**Never move a published tag.** Someone may already have that APK. Go forward
+to the next version instead.
+
 ## Checks before calling work done
 
 ```
