@@ -1,4 +1,5 @@
 import { AGENT_HUD_READER_SOURCE } from './agent-hud-reader-source'
+import { AGENT_HUD_TERMINAL_TITLE } from './agent-hud-tab-filter'
 
 /** One reading of an agent's own session record, taken on the host.
  *
@@ -297,7 +298,15 @@ export async function readAgentHudSnapshot(args: {
     const created = resultOf(
       await client.sendRequest(
         'terminal.create',
-        { worktree, command: built.command, presentation: 'background' },
+        {
+          worktree,
+          command: built.command,
+          presentation: 'background',
+          // Why: the desktop adopts even background terminals as tabs; the
+          // title lets the phone hide them, surfaceOwner asks it not to.
+          title: AGENT_HUD_TERMINAL_TITLE,
+          surfaceOwner: false
+        },
         { timeoutMs }
       )
     )

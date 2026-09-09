@@ -188,6 +188,11 @@ it('spawns, reads the file back, and always closes the shell it made', async () 
   // terminal.create returns when the terminal EXISTS, not when its command has
   // run, and the grant pins the file's identity — so the wait is what makes the
   // read deterministic instead of a race the link speed decides.
+  expect(client.calls[0]!.params).toMatchObject({
+    presentation: 'background',
+    title: 'Code UI HUD',
+    surfaceOwner: false
+  })
   expect(client.calls.map((call) => call.method)).toEqual([
     'terminal.create',
     'terminal.wait',

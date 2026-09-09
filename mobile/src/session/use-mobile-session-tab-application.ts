@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { hideAgentHudTabs } from './agent-hud-tab-filter'
 import { sessionTabsCacheKey, writeCachedSessionTabs } from './mobile-session-tabs-cache'
 import { recordSessionTabVisit } from './mobile-session-tab-history'
 import {
@@ -58,10 +59,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         return { accepted: false }
       }
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
-      let nextTabs = applyClosedTabTombstones(
-        result.tabs,
-        closedTabTombstonesRef.current,
-        Date.now()
+      let nextTabs = hideAgentHudTabs(
+        applyClosedTabTombstones(result.tabs, closedTabTombstonesRef.current, Date.now())
       )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []

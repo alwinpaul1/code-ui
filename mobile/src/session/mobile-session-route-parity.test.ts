@@ -69,7 +69,9 @@ const HEAD_MAIN_HOOK_SHA256 = 'ebfdb1f81c25f2ed54acaf75c503a826eea36ef16d3b271ae
 const HEAD_HOOK_BINDING_SHA256 = '59e832f8814beb98a10d0748f559e64192834cdbb7fdc13f82c5497d6044830f'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '4eb795ff870f31ccce483e196993f15756c380c7bf223f6af0342131d587054e'
-const HEAD_CALLBACK_BODY_SHA256 = 'aeab73f01a7625ca468aed9b0dce7d67f020caaeaf695cfa61864c3d834a4ada'
+// Callback bodies re-pinned 2026-09-09: applySessionTabs now drops the HUD
+// reader's own terminals (agent-hud-tab-filter.ts) before the strip sees them.
+const HEAD_CALLBACK_BODY_SHA256 = '997ba53a0dd7efeabef63a33771c90f05490a34479174c1062e30d18aaa3e1b4'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
