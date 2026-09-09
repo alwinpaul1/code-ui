@@ -183,4 +183,34 @@ describe('Codex mode and context from the screen', () => {
     ])
     expect(partly?.context?.usedPercent).toBe(38)
   })
+
+  // Wording taken from the Claude Code 2.1.266 binary's string table; the
+  // layout below is the footer as Claude Code paints it, not a live capture
+  // of a near-full session (none was available on 2026-09-09). The figures
+  // state what is LEFT; the ring shows what is used.
+  it('reads the context figure Claude Code paints itself when no status line is installed', () => {
+    const lowered = parseTerminalHudObservation([
+      '─────────────────────────────────────────────',
+      '⏵⏵ accept edits on (shift+tab to cycle) · 12% until auto-compact'
+    ])
+    expect(lowered?.context).toEqual({ usedPercent: 88, usedLabel: null, windowLabel: null })
+    expect(lowered?.permissionMode).toBe('acceptEdits')
+    // No badge: the model is not ours to state here; Orca's hook supplies it.
+    expect(lowered?.modelId).toBeNull()
+
+    const low = parseTerminalHudObservation([
+      'Context low (8% remaining) · Run /compact to compact & continue',
+      '⏵⏵ auto mode on (shift+tab to cycle)'
+    ])
+    expect(low?.context?.usedPercent).toBe(92)
+
+    const older = parseTerminalHudObservation([
+      '⏵⏵ auto mode on (shift+tab to cycle)   Context left until auto-compact: 30%'
+    ])
+    expect(older?.context?.usedPercent).toBe(70)
+  })
+
+  it('stays silent on a bare Claude footer with no figure rather than guessing', () => {
+    expect(parseTerminalHudObservation(['⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'])).toBeNull()
+  })
 })

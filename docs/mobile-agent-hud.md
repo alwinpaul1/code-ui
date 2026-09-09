@@ -6,6 +6,18 @@ Verified against Orca 1.4.197, Claude Code 2.1.263 and codex-cli 0.153.4.
 No status line, no plugin, no config, no Orca change — and no code written to
 their machine either. The phone does all of it.
 
+## Update 2026-09-09 (night): Claude Code's own context warning
+
+Claude Code paints a context figure itself once the window runs low, with no
+status line configured (strings in the 2.1.266 binary: "% until
+auto-compact", "Context low (", "% remaining)", "% context used"). The phone
+now reads those on a bare Claude footer (`REMAINING_PATTERNS` in
+`mobile-terminal-hud-parse.ts`): the ring appears for a user without a status
+line exactly when Claude Code starts warning, and stays absent before that
+rather than showing a guessed figure. The model still comes from Orca's hook.
+The threshold at which Claude Code starts painting the figure is its own and
+was not measured here (no near-full session was available).
+
 ## Update 2026-09-09 (evening): status-line flags tried and withdrawn
 
 Between 0.2.74 and 0.2.77 the phone switched on the agents' own status lines
