@@ -37,7 +37,14 @@ vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
+  Sparkles: 'Sparkles',
   Square: 'Square'
+}))
+
+// The sheet reaches BottomDrawer, whose styles call Platform.select — absent
+// from this file's react-native mock, and irrelevant to the banner tests.
+vi.mock('./MobileBackgroundTasksSheet', () => ({
+  MobileBackgroundTasksSheet: 'BackgroundTasksSheet'
 }))
 
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
@@ -411,8 +418,61 @@ it('keeps the confirmed queue inside the inverted list so it does not resize the
   await act(async () => {
     instance = create(chatViewElement({ queuedMessages: ['first', 'second'] }))
   })
-  const header = instance.root.findByType('FlashList').props.ListHeaderComponent
-  expect(header.props.messages).toEqual(['first', 'second'])
+  const queue = headerChild(instance, 'messages')
+  expect(queue.props.messages).toEqual(['first', 'second'])
   expect(instance.root.findAllByType('ScrollView')).toHaveLength(0)
+  await act(async () => instance.unmount())
+})
+
+/** The inverted list's header paints below the newest message; it holds both
+ *  the background-tasks row and the queue, so pick the one being asserted on. */
+function headerChild(
+  instance: ReturnType<typeof create>,
+  prop: string
+): { props: Record<string, unknown> } {
+  const header = instance.root.findByType('FlashList').props.ListHeaderComponent
+  const children: { props?: Record<string, unknown> }[] = header.props.children
+  const match = children.find((child) => child?.props?.[prop] !== undefined)
+  if (!match) {
+    throw new Error(`no list-header child carrying "${prop}"`)
+  }
+  return { props: match.props ?? {} }
+}
+
+it('counts a running background task under the last message, from the unfiltered transcript', async () => {
+  let instance!: ReturnType<typeof create>
+  const messages: NativeChatMessage[] = [
+    {
+      id: 'a1',
+      role: 'assistant',
+      timestamp: 1_000,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: { command: 'pnpm build', description: 'Build the APK', run_in_background: true }
+        }
+      ]
+    },
+    {
+      id: 'r1',
+      role: 'user',
+      timestamp: 1_100,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'tool-result',
+          output:
+            'Command running in background with ID: bpz1skord. Output is being written to: /private/tmp/tasks/bpz1skord.output. You will be notified when it completes.'
+        }
+      ]
+    }
+  ]
+  await act(async () => {
+    // `folded` drops the harness turns; the count must come off `messages`.
+    instance = create(chatViewElement({ messages, folded: [] }))
+  })
+  expect(headerChild(instance, 'runningCount').props.runningCount).toBe(1)
   await act(async () => instance.unmount())
 })

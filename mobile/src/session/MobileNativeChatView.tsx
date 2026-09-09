@@ -31,6 +31,9 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
+import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
+import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
+import { countRunningBackgroundTasks } from './mobile-background-tasks'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 
 const INPUT_LOCK_SETTLE_MS = 600
@@ -106,6 +109,11 @@ export function MobileNativeChatView({
   const listRef = useRef<FlashListRef<NativeChatMessage>>(null)
   const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
+  // Read from the UNFILTERED transcript on purpose. The `<task-notification>`
+  // turns that retire a task are harness noise, so the folded list drops them.
+  // Codex writes none of these records, so its tabs count zero and show no row.
+  const runningTaskCount = useMemo(() => countRunningBackgroundTasks(messages), [messages])
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -299,8 +307,20 @@ export function MobileNativeChatView({
             // Message descendants hold disclosure and copy state. Keep it
             // scoped to the message when off-screen cells leave the window.
             maxItemsInRecyclePool={0}
+            // Inverted list: the header paints below the newest message, so
+            // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={
-              <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
+              <>
+                <MobileBackgroundTasksRow
+                  runningCount={runningTaskCount}
+                  onPress={() => setBackgroundTasksOpen(true)}
+                />
+                <MobileNativeChatQueue
+                  messages={queuedMessages}
+                  agent={agent}
+                  onEdit={onEditQueue}
+                />
+              </>
             }
             ListFooterComponent={
               hasMore ? (
@@ -344,6 +364,11 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
+      <MobileBackgroundTasksSheet
+        visible={backgroundTasksOpen}
+        messages={messages}
+        onClose={() => setBackgroundTasksOpen(false)}
+      />
       <MobileNativeChatQueueEditor editor={queueEditor} />
       <MobileNativeChatPromptCard
         ask={ask}
