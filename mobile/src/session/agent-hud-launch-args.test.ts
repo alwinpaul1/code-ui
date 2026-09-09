@@ -68,11 +68,14 @@ describe('Claude status line switched on at launch, with sh and sed only', () =>
     expect(CLAUDE_HUD_STATUSLINE_SCRIPT).not.toContain("'")
   })
 
-  it('keeps the host\'s own default args in front and stays off Claude on Windows', () => {
+  it('keeps the host\'s own default args in front and adds the flag on every platform', () => {
     expect(
       buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '--verbose', hostPlatform: 'linux' })
     ).toMatch(/^--verbose --settings '/)
-    expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'win32' })).toBeNull()
+    // Windows too: Claude Code runs status-line commands through Git Bash there.
+    expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'win32' })).toMatch(
+      /^--settings '/
+    )
     expect(buildAgentHudLaunchArgs({ agent: 'opencode', hostDefaultArgs: '', hostPlatform: 'darwin' })).toBeNull()
   })
 })

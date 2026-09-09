@@ -29,10 +29,11 @@ moment anything changes.
 
 Limits, stated plainly: this covers **agents the phone launches**. A session
 started from the desktop has no flags and falls back to the sources below.
-The Claude status-line command is `sh`, so it is not added on a Windows host
-(Codex's flag is, being a plain CLI option); Windows Claude sessions keep
-model and mode from Orca and no context ring until a PowerShell variant is
-written and tested on a real Windows machine.
+The Claude status-line command is `sh`; on Windows Claude Code runs its shell
+commands through Git Bash (its own strings say "POSIX sh, not cmd.exe or
+PowerShell", and Git for Windows is a Claude Code requirement there), which
+ships `sed` and `printf`, so the flag is added on every platform. Not yet run
+on a real Windows host.
 
 ## Update 2026-09-09: the host-terminal reader is gone
 

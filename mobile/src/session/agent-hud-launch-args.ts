@@ -69,6 +69,7 @@ export function buildAgentHudLaunchArgs(args: {
   agent: TuiAgent
   /** The host's own default args for this agent, kept in front of ours. */
   hostDefaultArgs: string
+  /** Kept for callers and logs; no platform is excluded today (see Claude below). */
   hostPlatform: NodeJS.Platform | null
 }): string | null {
   const base = args.hostDefaultArgs.trim()
@@ -78,12 +79,11 @@ export function buildAgentHudLaunchArgs(args: {
     return join(`-c ${singleQuoted(buildCodexHudConfigOverride())}`)
   }
   if (args.agent === 'claude') {
-    // The status-line command is POSIX sh. On a Windows host Claude Code would
-    // hand it to cmd or PowerShell, so it stays off there rather than erroring
-    // on every repaint; model and mode still arrive from Orca and the footer.
-    if (args.hostPlatform === 'win32') {
-      return null
-    }
+    // Every platform: Claude Code runs status-line commands through its shell
+    // runner, which on Windows is Git Bash ("POSIX sh, not cmd.exe or
+    // PowerShell" in its own strings; Git for Windows is a Claude Code
+    // requirement there), and Git Bash ships sed and printf. Untested on a
+    // real Windows host; grounded in the binary's documented shell contract.
     return join(`--settings ${singleQuoted(buildClaudeHudSettingsJson())}`)
   }
   return null
