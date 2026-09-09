@@ -187,17 +187,6 @@ export default function NotificationsScreen() {
             </Txt>
           </Pressable>
         ) : null}
-        {backgroundAvailable ? (
-          <Txt
-            variant="label"
-            tone="secondary"
-            style={{ marginTop: space.md, paddingHorizontal: space.xs }}
-          >
-            With background delivery on, a quiet "Code UI" row stays in the notification shade
-            while the link is open, and alerts arrive the moment an agent finishes or needs you,
-            even after you swipe the app away. Nothing is installed or changed on your desktop.
-          </Txt>
-        ) : null}
       </ScrollView>
     </View>
   )
