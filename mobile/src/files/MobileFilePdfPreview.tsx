@@ -60,6 +60,63 @@ export function MobileFilePdfPreview({ uri, fileName }: { uri: string; fileName?
   }
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {/* Why a toolbar and not an overlay: a button floating on the document
+          covered the page, and one in the header fought the file name. This
+          row is its own space — page counter left, actions right. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          backgroundColor: colors.bgPanel
+        }}
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+          {pageCount !== null ? `Page ${page} of ${pageCount}` : ''}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {saveLabel ? (
+            <Text
+              style={{
+                color: saveState === 'failed' ? colors.danger : colors.textSecondary,
+                fontSize: 12
+              }}
+            >
+              {saveLabel}
+            </Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Download PDF"
+            onPress={() => void save()}
+            disabled={saveState === 'saving'}
+            hitSlop={8}
+            style={({ pressed }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 14,
+              backgroundColor: pressed ? colors.bgRaised : colors.bg,
+              borderWidth: 1,
+              borderColor: colors.border,
+              opacity: saveState === 'saving' ? 0.6 : 1
+            })}
+          >
+            {saveState === 'saved' ? (
+              <Check size={16} color={colors.text} strokeWidth={2.2} />
+            ) : (
+              <Download size={16} color={colors.text} strokeWidth={2.2} />
+            )}
+            <Text style={{ color: colors.text, fontSize: 13, fontWeight: '500' }}>Download</Text>
+          </Pressable>
+        </View>
+      </View>
       <Pdf
         source={{ uri, cache: false }}
         style={{ flex: 1, backgroundColor: colors.bg }}
@@ -73,77 +130,6 @@ export function MobileFilePdfPreview({ uri, fileName }: { uri: string; fileName?
           <ActivityIndicator size="small" color={colors.textSecondary} />
         )}
       />
-      <View
-        style={{
-          position: 'absolute',
-          right: 12,
-          top: 12,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8
-        }}
-      >
-        {saveLabel ? (
-          <Text
-            style={{
-              color: saveState === 'failed' ? colors.danger : colors.textSecondary,
-              fontSize: 12,
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 12,
-              backgroundColor: colors.bgPanel,
-              borderWidth: 1,
-              borderColor: colors.border
-            }}
-          >
-            {saveLabel}
-          </Text>
-        ) : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Download PDF"
-          onPress={() => void save()}
-          disabled={saveState === 'saving'}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? colors.bgRaised : colors.bgPanel,
-            borderWidth: 1,
-            borderColor: colors.border,
-            opacity: saveState === 'saving' ? 0.6 : 1
-          })}
-        >
-          {saveState === 'saved' ? (
-            <Check size={18} color={colors.text} strokeWidth={2.2} />
-          ) : (
-            <Download size={18} color={colors.text} strokeWidth={2.2} />
-          )}
-        </Pressable>
-      </View>
-      {pageCount !== null ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            right: 12,
-            bottom: 12,
-            paddingHorizontal: 10,
-            paddingVertical: 4,
-            borderRadius: 12,
-            backgroundColor: colors.bgPanel,
-            borderWidth: 1,
-            borderColor: colors.border
-          }}
-        >
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-            {page} / {pageCount}
-          </Text>
-        </View>
-      ) : null}
     </View>
   )
 }
