@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import Animated from 'react-native-reanimated'
+import { useUsageProgress } from '../components/use-usage-progress'
 import { View } from 'react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
@@ -61,14 +63,13 @@ export function MobileContextWindowSheet({
   context: TerminalHudContextWindow | null
   onClose: () => void
 }) {
-  const { colors, space } = useTheme()
+  const { space } = useTheme()
   // Read once when the sheet mounts: a reset countdown does not need to tick,
   // and calling the clock during render is neither pure nor stable.
   const [now] = useState(() => Date.now())
   const limits = context?.limits
   const planType = context?.planType
   const pct = context ? Math.max(0, Math.min(100, context.usedPercent)) : 0
-  const color = pct >= 90 ? colors.danger : pct >= 70 ? colors.warning : colors.info
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
       <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.sm }}>
@@ -80,11 +81,7 @@ export function MobileContextWindowSheet({
             {context ? formatContextWindowFigure(context) : 'Not reported'}
           </Txt>
         </View>
-        <View
-          style={{ height: 8, borderRadius: 4, backgroundColor: colors.bgSunken, overflow: 'hidden' }}
-        >
-          <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color, borderRadius: 4 }} />
-        </View>
+        <UsageBar percent={pct} height={8} />
         {limits?.length ? (
           <View style={{ gap: space.sm, paddingTop: space.sm }}>
             {planType ? (
@@ -95,8 +92,6 @@ export function MobileContextWindowSheet({
             {limits.map((window, index) => {
               const used = Math.max(0, Math.min(100, window.usedPercent))
               const reset = formatLimitReset(window.resetsAt, now)
-              const bar =
-                used >= 90 ? colors.danger : used >= 70 ? colors.warning : colors.info
               return (
                 <View key={`${window.windowMinutes ?? index}`} style={{ gap: space.xs }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -107,23 +102,7 @@ export function MobileContextWindowSheet({
                       {Math.round(used)}%{reset ? ` · ${reset}` : ''}
                     </Txt>
                   </View>
-                  <View
-                    style={{
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: colors.bgSunken,
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <View
-                      style={{
-                        width: `${used}%`,
-                        height: '100%',
-                        backgroundColor: bar,
-                        borderRadius: 3
-                      }}
-                    />
-                  </View>
+                  <UsageBar percent={used} height={6} />
                 </View>
               )
             })}
@@ -131,5 +110,23 @@ export function MobileContextWindowSheet({
         ) : null}
       </Surface>
     </BottomDrawer>
+  )
+}
+
+/** A track with an eased fill whose colour fades along the usage scale. */
+function UsageBar({ percent, height }: { percent: number; height: number }) {
+  const { colors } = useTheme()
+  const { barStyle } = useUsageProgress(percent)
+  return (
+    <View
+      style={{
+        height,
+        borderRadius: height / 2,
+        backgroundColor: colors.bgSunken,
+        overflow: 'hidden'
+      }}
+    >
+      <Animated.View style={[{ height: '100%', borderRadius: height / 2 }, barStyle]} />
+    </View>
   )
 }

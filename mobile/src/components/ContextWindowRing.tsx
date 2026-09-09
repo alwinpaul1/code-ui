@@ -1,10 +1,14 @@
 import { Pressable } from 'react-native'
+import Animated from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
 import { useTheme } from '../theme/theme-context'
+import { useUsageProgress } from './use-usage-progress'
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 /** Small ring showing how much of the model's context window is used; taps
- *  open the detail sheet. Colours follow Claude Code: calm, amber past 70,
- *  red past 90. */
+ *  open the detail sheet. The arc and its colour ease to each new reading:
+ *  green while calm, amber by 70, red from 90. */
 export function ContextWindowRing({
   usedPercent,
   onPress,
@@ -19,7 +23,7 @@ export function ContextWindowRing({
   const stroke = 2.5
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
-  const color = pct >= 90 ? colors.danger : pct >= 70 ? colors.warning : colors.info
+  const { ringProps } = useUsageProgress(pct, circumference)
   return (
     <Pressable
       accessibilityLabel={`Context window ${Math.round(pct)}% used`}
@@ -43,18 +47,17 @@ export function ContextWindowRing({
           strokeWidth={stroke}
           fill="none"
         />
-        <Circle
+        <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={color}
           strokeWidth={stroke}
           fill="none"
           strokeLinecap="round"
           strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={circumference * (1 - pct / 100)}
           rotation={-90}
           origin={`${size / 2}, ${size / 2}`}
+          animatedProps={ringProps}
         />
       </Svg>
     </Pressable>

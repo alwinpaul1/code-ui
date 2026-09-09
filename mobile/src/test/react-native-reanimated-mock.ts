@@ -38,6 +38,16 @@ export const runOnUI =
   (...args: A) =>
     fn(...args)
 export const interpolate = (value: number) => value
+export const interpolateColor = (value: number, input: number[], output: string[]) => {
+  let index = 0
+  for (let i = 0; i < input.length; i++) {
+    if (value >= input[i]!) {
+      index = i
+    }
+  }
+  return output[index] ?? output[0]
+}
+export const useAnimatedProps = <T,>(factory: () => T) => factory()
 export const Extrapolation = { CLAMP: 'clamp', EXTEND: 'extend', IDENTITY: 'identity' }
 export const Easing = {
   linear: (t: number) => t,
