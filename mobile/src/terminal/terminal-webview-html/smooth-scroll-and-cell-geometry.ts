@@ -26,16 +26,54 @@ export const TERMINAL_HTML_SMOOTH_SCROLL_AND_CELL_GEOMETRY = `  var SMOOTH_SCROL
     });
   }
 
+  // Why: the frame above is only a prediction of WHEN xterm paints. A write the
+  // agent streamed in the same frame has already booked xterm's next paint, so
+  // the committed rows land a frame before the remainder written for them — a
+  // whole row forward, then most of it back, at every boundary (measured in
+  // Chrome as +21px/-9px steps for a 6px finger). And under synchronized output
+  // xterm parks the repaint entirely until the closing sequence arrives over
+  // the relay. So term.onRender is the ground truth: record the row it painted
+  // and rewrite the transform right there, in the paint's own frame.
+  function syncTerminalScreenTransformToRender() {
+    if (!term || !term.buffer || !term.buffer.active) return;
+    renderedViewportY = term.buffer.active.viewportY;
+    renderedBufferType = term.buffer.active.type;
+    if (terminalScreenTransformFrameId !== null) {
+      cancelAnimationFrame(terminalScreenTransformFrameId);
+      terminalScreenTransformFrameId = null;
+      writeTerminalScreenTransform(pendingTerminalScreenOffsetY);
+      return;
+    }
+    writeTerminalScreenTransform(smoothScrollOffsetY);
+  }
+
+  // Why: rows the buffer has scrolled past but xterm has not painted yet must be
+  // carried by the transform, or the picture stands still (and later snaps)
+  // while the finger keeps moving. Once the paint lands the same call hands the
+  // distance back to the rows, so the content never jumps.
+  function unpaintedRowsOffsetY() {
+    if (renderedViewportY < 0 || !term || !term.buffer || !term.buffer.active) return 0;
+    // Why: a TUI switching to the alternate screen resets viewportY to 0 while
+    // the last paint was of the normal buffer; that gap is not unpainted rows.
+    if (term.buffer.active.type !== renderedBufferType) return 0;
+    var unpaintedRows = term.buffer.active.viewportY - renderedViewportY;
+    if (unpaintedRows === 0) return 0;
+    return -unpaintedRows * getCellHeight() * getTotalScale();
+  }
+
   function writeTerminalScreenTransform(offsetY) {
     var screenElement = getTerminalScreenElement();
     if (!screenElement) return;
     var scale = getTotalScale();
     if (!(scale > 0)) scale = 1;
+    var visualOffsetY = offsetY + unpaintedRowsOffsetY();
+    if (visualOffsetY === writtenTerminalScreenOffsetY) return;
+    writtenTerminalScreenOffsetY = visualOffsetY;
     // Why: the remainder is measured in on-screen px but .xterm-screen sits
     // inside the scaled surface, so divide the scale back out. translate3d on a
     // will-change: transform layer keeps the move on the compositor — no
     // relayout, no xterm repaint, and it survives at the display's refresh rate.
-    screenElement.style.transform = 'translate3d(0,' + (offsetY / scale) + 'px,0)';
+    screenElement.style.transform = 'translate3d(0,' + (visualOffsetY / scale) + 'px,0)';
   }
 
   function clampNormalScrollLines(lines) {
@@ -87,36 +125,20 @@ export const TERMINAL_HTML_SMOOTH_SCROLL_AND_CELL_GEOMETRY = `  var SMOOTH_SCROL
     return true;
   }
 
+  // Why: apply the finger's delta NOW. Chromium already hands the page one
+  // touchmove per display frame, and xterm's own RenderDebouncer folds every
+  // scrollLines() of a frame into one repaint, so parking the delta in a second
+  // animation frame coalesced nothing — it only added a whole frame of lag on
+  // top of the one xterm needs to paint: three frames finger-to-glass at 120 Hz.
   function enqueueNormalBufferScrollDelta(deltaY) {
     if (!term || deltaY === 0) return false;
-    if (!canScrollNormalBufferDelta(deltaY)) {
-      resetSmoothScrollOffset();
-      return false;
-    }
-    pendingNormalScrollDeltaY += deltaY;
+    if (!applyNormalBufferScrollDelta(deltaY)) return false;
     armSmoothScrollSettle();
-    if (normalScrollFrameId !== null) return true;
-    // Why: dense terminal rows are expensive to repaint. Coalesce touchmove
-    // deltas into one xterm row-scroll per frame instead of repainting from
-    // the input event stream.
-    normalScrollFrameId = requestAnimationFrame(function() {
-      normalScrollFrameId = null;
-      var delta = pendingNormalScrollDeltaY;
-      pendingNormalScrollDeltaY = 0;
-      if (!applyNormalBufferScrollDelta(delta)) {
-        resetSmoothScrollOffset();
-      }
-    });
     return true;
   }
 
   function resetSmoothScrollOffset() {
-    pendingNormalScrollDeltaY = 0;
     cancelSmoothScrollSettle();
-    if (normalScrollFrameId !== null) {
-      cancelAnimationFrame(normalScrollFrameId);
-      normalScrollFrameId = null;
-    }
     flushDeferredKeyboardAvoidanceMetrics();
     if (smoothScrollOffsetY === 0) return;
     smoothScrollOffsetY = 0;

@@ -98,22 +98,19 @@ describe('TerminalWebView scroll routing', () => {
     expect(momentumBlock).toContain('ts.momentumId = null;')
   })
 
-  it('coalesces normal touch scroll row commits onto animation frames', () => {
+  it('applies a touchmove to the buffer in the frame it arrives, not a frame later', () => {
+    // Why: Chromium already delivers one touchmove per display frame and xterm
+    // folds every scrollLines() of a frame into one repaint, so a second
+    // animation frame in between coalesced nothing and cost a frame of lag.
     const enqueueBlock = sliceBetween(
       'function enqueueNormalBufferScrollDelta(deltaY)',
       'function resetSmoothScrollOffset()'
     )
-    expect(enqueueBlock).toContain('pendingNormalScrollDeltaY += deltaY;')
-    expect(enqueueBlock).toContain('if (normalScrollFrameId !== null) return true;')
-    expect(enqueueBlock).toContain('normalScrollFrameId = requestAnimationFrame(function()')
-    expect(enqueueBlock).toContain('applyNormalBufferScrollDelta(delta)')
-
-    const resetBlock = sliceBetween(
-      'function resetSmoothScrollOffset()',
-      'function cellToViewportPx'
-    )
-    expect(resetBlock).toContain('pendingNormalScrollDeltaY = 0;')
-    expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
+    expect(enqueueBlock).toContain('if (!applyNormalBufferScrollDelta(deltaY)) return false;')
+    expect(enqueueBlock).toContain('armSmoothScrollSettle();')
+    expect(enqueueBlock).not.toContain('requestAnimationFrame')
+    expect(source).not.toContain('normalScrollFrameId')
+    expect(source).not.toContain('pendingNormalScrollDeltaY')
   })
 
   it('drains terminal writes without shifting the queued array', () => {
@@ -182,7 +179,7 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(screenTransformBlock).toContain("term.element.querySelector('.xterm-screen')")
     expect(screenTransformBlock).toContain(
-      "screenElement.style.transform = 'translate3d(0,' + (offsetY / scale) + 'px,0)';"
+      "screenElement.style.transform = 'translate3d(0,' + (visualOffsetY / scale) + 'px,0)';"
     )
     // xterm repaints a committed row on ITS next animation frame, so the
     // remainder has to be written on that frame too or every row boundary
@@ -195,6 +192,19 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(screenTransformBlock).toContain(
       'writeTerminalScreenTransform(pendingTerminalScreenOffsetY);'
+    )
+    // The frame is only a prediction: a write the agent streamed in the same
+    // frame has already booked xterm's paint, and synchronized output can park
+    // it for far longer. term.onRender is the truth, so the transform is
+    // rewritten there, and rows the paint has not caught up with ride on it.
+    expect(screenTransformBlock).toContain('function syncTerminalScreenTransformToRender()')
+    expect(screenTransformBlock).toContain('renderedViewportY = term.buffer.active.viewportY;')
+    expect(screenTransformBlock).toContain('var visualOffsetY = offsetY + unpaintedRowsOffsetY();')
+    expect(screenTransformBlock).toContain(
+      "if (term.buffer.active.type !== renderedBufferType) return 0;"
+    )
+    expect(source).toContain(
+      'termObserverDisposables.push(term.onRender(syncTerminalScreenTransformToRender));'
     )
 
     // The selection overlay is positioned outside the surface, so it has to add
@@ -292,9 +302,12 @@ describe('TerminalWebView scroll routing', () => {
       'function isScrollGestureActive()',
       'function requestKeyboardAvoidanceMetrics()'
     )
-    expect(gateBlock).toContain('if (normalScrollFrameId !== null) return true;')
     expect(gateBlock).toContain('if (smoothScrollSettleFrameId !== null) return true;')
-    expect(gateBlock).toContain('return !!(ts && ts.momentumId);')
+    expect(gateBlock).toContain('return !!(ts && (ts.dragging || ts.momentumId));')
+    // Why: the finger owns the frame from touchstart to touchend, whether or
+    // not a scroll frame happens to be pending.
+    expect(source).toContain('ts.dragging = true;')
+    expect(source).toContain('ts.dragging = false;')
 
     expect(source).toContain('emitModesIfChanged();\n          requestKeyboardAvoidanceMetrics();')
   })
@@ -310,7 +323,11 @@ describe('TerminalWebView scroll routing', () => {
     const screenCss = sliceBetween('.xterm .xterm-screen {', '}')
     expect(screenCss).toContain('will-change: transform;')
     expect(source).toContain('overScrollMode="never"')
-    expect(source).toContain('androidLayerType="hardware"')
+    // Why: LAYER_TYPE_HARDWARE makes the framework redraw the WebView's whole
+    // offscreen texture on every content change; Chromium's own compositor
+    // already moves the translate3d layer without it. 0.2.81 added it on a
+    // guess and the S23 stayed jittery.
+    expect(source).not.toContain('androidLayerType')
   })
 
   it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {

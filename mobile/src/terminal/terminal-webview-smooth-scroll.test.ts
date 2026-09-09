@@ -43,6 +43,11 @@ let posted: Record<string, unknown>[] = []
 let registeredListeners: Registered[] = []
 let scrollListeners: (() => void)[] = []
 let writeParsedListeners: (() => void)[] = []
+let renderListeners: (() => void)[] = []
+// Why: xterm buffers repaints while DEC 2026 synchronized output is on and
+// releases them on the closing sequence (or a 1 s timeout). Claude Code wraps
+// every frame in it, and the relay can split a frame across chunks.
+let paintWithheld = false
 
 function iifeSource(): string {
   const start = XTERM_HTML.indexOf('(function() {')
@@ -86,6 +91,8 @@ function makeTerminal() {
       }
     },
     write(_data: string, callback?: () => void) {
+      // Why: agent output books xterm's next paint exactly like a scroll does.
+      bookPaint()
       callback?.()
     },
     open(surface: HTMLElement) {
@@ -120,7 +127,9 @@ function makeTerminal() {
     },
     clear() {},
     reset() {},
-    refresh() {},
+    refresh() {
+      bookPaint()
+    },
     selectAll() {},
     clearSelection() {},
     select() {},
@@ -133,13 +142,7 @@ function makeTerminal() {
       // Why: xterm's RenderDebouncer paints committed rows on ITS OWN animation
       // frame, one frame after scrollLines() returns. Model that lag or the test
       // cannot see the whole-row overshoot that got fractional transforms banned.
-      if (!paintFramePending) {
-        paintFramePending = true
-        requestAnimationFrame(() => {
-          paintFramePending = false
-          paintedViewportY = buffer.viewportY
-        })
-      }
+      bookPaint()
       for (const listener of scrollListeners) {
         listener()
       }
@@ -158,9 +161,34 @@ function makeTerminal() {
       writeParsedListeners.push(callback)
       return { dispose() {} }
     },
+    onRender: (callback: () => void) => {
+      renderListeners.push(callback)
+      return { dispose() {} }
+    },
     dispose() {}
   }
   return terminal
+}
+
+// Why: xterm's RenderDebouncer paints on ITS OWN animation frame, one frame
+// after scrollLines()/write() returns, and one pending frame absorbs every
+// request made before it runs. Model that or the tests cannot see a row
+// landing a frame before (or after) the remainder written for it.
+function bookPaint(): void {
+  if (paintFramePending) {
+    return
+  }
+  paintFramePending = true
+  requestAnimationFrame(() => {
+    paintFramePending = false
+    if (paintWithheld) {
+      return
+    }
+    paintedViewportY = buffer.viewportY
+    for (const listener of renderListeners) {
+      listener()
+    }
+  })
 }
 
 function runFrame(stepMs: number): void {
@@ -256,6 +284,8 @@ function boot(state: Partial<BufferState> = {}): void {
   teardownBoot()
   scrollListeners = []
   writeParsedListeners = []
+  renderListeners = []
+  paintWithheld = false
   buffer = { baseY: 5000, type: 'normal', viewportY: 2500, ...state }
   document.body.innerHTML = bodyMarkup()
   // eslint-disable-next-line no-new-func
@@ -283,6 +313,8 @@ describe('terminal WebView touch scrolling', () => {
     registeredListeners = []
     scrollListeners = []
     writeParsedListeners = []
+    renderListeners = []
+    paintWithheld = false
     layoutReads = { innerHeight: 0, innerWidth: 0, scrollHeight: 0, scrollWidth: 0 }
     for (const target of [window, document] as EventTarget[]) {
       const original = target.addEventListener.bind(target)
@@ -500,5 +532,83 @@ describe('terminal WebView touch scrolling', () => {
     // term.onScroll, once from the scroll delta) and read innerHeight each time.
     expect(buffer.viewportY).toBe(2504)
     expect(thumbWrites).toBeLessThanOrEqual(1)
+  })
+  it('shows the finger\'s move on the very next frame, not two frames later', () => {
+    boot()
+
+    fireTouch('touchstart', [{ x: 100, y: 500 }])
+    fireTouch('touchmove', [{ x: 100, y: 494 }])
+    runFrame(FRAME_120HZ_MS)
+
+    // Why: Chromium already hands the page one touchmove per frame. Parking the
+    // delta in a second animation frame before scrolling added a whole frame of
+    // lag on top of the one xterm needs to paint — 3 frames finger-to-glass on
+    // the S23, which reads as "laggy" at 120 Hz.
+    expect(screenTranslateY()).toBeCloseTo(-6, 5)
+  })
+
+  it('keeps every frame\'s step even when agent output already booked xterm\'s repaint', () => {
+    boot()
+    const stepPx = 5
+    let y = 500
+    fireTouch('touchstart', [{ x: 100, y }])
+    const startRow = paintedViewportY
+    const visualY = (): number =>
+      -(paintedViewportY - startRow) * CELL_HEIGHT + screenTranslateY()
+
+    const samples: number[] = []
+    for (let i = 0; i < 12; i++) {
+      y -= stepPx
+      fireTouch('touchmove', [{ x: 100, y }])
+      // Why: a streaming agent lands a write in the same frame as the finger.
+      // xterm folds the scroll's repaint into the frame that write already
+      // booked, so the rows move a frame before the remainder written for them
+      // — the 21px-forward, 9px-back oscillation measured in Chrome.
+      bookPaint()
+      runFrame(FRAME_120HZ_MS)
+      samples.push(visualY())
+    }
+
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i] - samples[i - 1]).toBeCloseTo(-stepPx, 5)
+    }
+    expect(buffer.viewportY).toBeGreaterThan(startRow)
+  })
+
+  it('keeps the picture moving while synchronized output withholds the repaint', () => {
+    boot()
+    const stepPx = 5
+    let y = 500
+    fireTouch('touchstart', [{ x: 100, y }])
+    const startRow = paintedViewportY
+    const visualY = (): number =>
+      -(paintedViewportY - startRow) * CELL_HEIGHT + screenTranslateY()
+
+    // Claude Code opened a synchronized-output frame and the relay has not
+    // delivered the close yet: xterm parks every repaint, scroll included.
+    paintWithheld = true
+    const samples: number[] = []
+    for (let i = 0; i < 12; i++) {
+      y -= stepPx
+      fireTouch('touchmove', [{ x: 100, y }])
+      runFrame(FRAME_120HZ_MS)
+      samples.push(visualY())
+    }
+    expect(paintedViewportY).toBe(startRow)
+    expect(buffer.viewportY).toBeGreaterThan(startRow)
+    // Why: the rows xterm has not painted yet must be carried by the transform,
+    // or the content stands still (and snaps) while the finger keeps moving.
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i] - samples[i - 1]).toBeCloseTo(-stepPx, 5)
+    }
+
+    // The close arrives: xterm paints the committed rows in one go. The picture
+    // must not jump — the transform gives back exactly what the rows now carry.
+    paintWithheld = false
+    const before = visualY()
+    bookPaint()
+    runFrame(FRAME_120HZ_MS)
+    expect(paintedViewportY).toBe(buffer.viewportY)
+    expect(visualY()).toBeCloseTo(before, 5)
   })
 })

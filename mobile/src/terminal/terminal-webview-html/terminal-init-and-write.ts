@@ -29,6 +29,9 @@ export const TERMINAL_HTML_INIT_AND_WRITE = `${TERMINAL_WEBGL_RECOVERY_JS}
     // surface, so the cached one belongs to a terminal about to be disposed.
     terminalScreenElement = null;
     pendingTerminalScreenOffsetY = 0;
+    renderedViewportY = -1;
+    renderedBufferType = '';
+    writtenTerminalScreenOffsetY = 0;
     wheelAccumDeltaY = 0;
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';

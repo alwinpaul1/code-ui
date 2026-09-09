@@ -42,7 +42,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
   });
 
   var ts = {
-    lastX: 0, lastY: 0, lastTime: 0, velY: 0,
+    lastX: 0, lastY: 0, lastTime: 0, velY: 0, dragging: false,
     accumDelta: 0, momentumId: null, isPinching: false, canPanX: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
@@ -118,6 +118,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         ts.pinchSurfY = (my - panY) / total;
       } else if (e.touches.length === 1) {
         ts.isPinching = false;
+        ts.dragging = true;
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
         ts.lastTime = nowMs();
@@ -223,6 +224,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
       }
 
       if (e.touches.length === 0) {
+        ts.dragging = false;
         var vel = ts.velY;
         var momentumTime = 0;
         function momentumStep(frameTime) {

@@ -43,9 +43,8 @@ export const TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING = `  function emitModesI
   var keyboardAvoidanceMetricsDeferred = false;
 
   function isScrollGestureActive() {
-    if (normalScrollFrameId !== null) return true;
     if (smoothScrollSettleFrameId !== null) return true;
-    return !!(ts && ts.momentumId);
+    return !!(ts && (ts.dragging || ts.momentumId));
   }
 
   // Why: emitKeyboardAvoidanceMetrics walks rows x cols cells and serializes a
@@ -73,6 +72,11 @@ export const TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING = `  function emitModesI
     try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
     try {
       termObserverDisposables.push(term.onScroll(function() { scheduleScrollIndicatorUpdate(false); }));
+    } catch (e) {}
+    // Why: the frame xterm actually paints a scrolled row is the only frame the
+    // sub-row remainder may change on. See syncTerminalScreenTransformToRender.
+    try {
+      if (term.onRender) termObserverDisposables.push(term.onRender(syncTerminalScreenTransformToRender));
     } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.

@@ -81,8 +81,12 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
   }
   var panX = 0, panY = 0;
   var smoothScrollOffsetY = 0;
-  var pendingNormalScrollDeltaY = 0;
-  var normalScrollFrameId = null;
+  // Why: the buffer row xterm has actually PAINTED, read back from term.onRender.
+  // -1 until the first paint of a terminal; xterm can hold a scroll's repaint for
+  // a frame (a write already booked it) or much longer (synchronized output).
+  var renderedViewportY = -1;
+  var renderedBufferType = '';
+  var writtenTerminalScreenOffsetY = 0;
   // Why: the sub-row scroll remainder is painted as a compositor transform on
   // xterm's own .xterm-screen, one frame behind the delta that produced it —
   // see scheduleTerminalScreenTransform for why the frame of lag is required.
