@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, ScrollView, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
@@ -181,7 +182,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
         keyboardShouldPersistTaps="always"
       >
         <Txt variant="heading" weight="semibold" style={{ marginVertical: space.md }}>
-          {q.question}
+          {notificationPlainText(q.question)}
         </Txt>
         {q.options.map((opt, optIndex) => (
           <OptionRow
@@ -302,11 +303,11 @@ function OptionRow({
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Txt variant="body" weight="medium">
-          {label}
+          {notificationPlainText(label)}
         </Txt>
         {description ? (
           <Txt variant="caption" tone="secondary" numberOfLines={3}>
-            {description}
+            {notificationPlainText(description)}
           </Txt>
         ) : null}
       </View>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { styleText } from '../notifications/notification-plain-text'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
-  formatTimeAgo
+  formatTimeAgo,
+  previewLine
 } from './agent-row-display'
 
 function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeAgentRow {
@@ -102,5 +104,13 @@ describe('formatTimeAgo', () => {
     expect(formatTimeAgo(now - 5 * 60_000, now)).toBe('5m')
     expect(formatTimeAgo(now - 3 * 3_600_000, now)).toBe('3h')
     expect(formatTimeAgo(now - 2 * 86_400_000, now)).toBe('2d')
+  })
+
+  it('shows the agent\'s last message without Markdown markers, as one line', () => {
+    // Galaxy S23, 2026-09-09: the row painted "**Nothing is touched on the host** on a…".
+    expect(previewLine('**Nothing is touched on the host** on any platform.\n\n- one\n- two')).toBe(
+      `${styleText('Nothing is touched on the host', 'bold')} on any platform. · • one · • two`
+    )
+    expect(previewLine('  ')).toBe('')
   })
 })

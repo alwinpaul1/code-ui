@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { notificationPlainText } from '../notifications/notification-plain-text'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -167,7 +168,7 @@ function AgentHistoryCardRow({
           {previewTurns.map((turn, index) => (
             <View key={`${card.id}-turn-${index}`} style={styles.previewTurn}>
               <Text style={styles.previewRole}>{turn.role}</Text>
-              <Text style={styles.previewText}>{turn.text}</Text>
+              <Text style={styles.previewText}>{notificationPlainText(turn.text)}</Text>
             </View>
           ))}
         </View>

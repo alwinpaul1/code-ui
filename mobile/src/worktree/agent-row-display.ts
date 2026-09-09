@@ -1,4 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { notificationPlainText } from '../notifications/notification-plain-text'
 
 // Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
 // 30 min). Defined locally rather than imported because a runtime-value import
@@ -67,15 +68,30 @@ export function agentStateLabel(state: AgentDotState): string {
 // a human-readable state label so a row is never blank. Matches the desktop
 // DashboardAgentRow displayLabel fallback chain.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
-  const message = row.lastAssistantMessage?.trim()
+  const message = previewLine(row.lastAssistantMessage)
   if (message) {
     return message
   }
-  const prompt = row.prompt.trim()
+  const prompt = previewLine(row.prompt)
   if (prompt) {
     return prompt
   }
   return agentStateLabel(agentDotState(row, now))
+}
+
+/** One line of the agent's Markdown for a list row: markers gone, emphasis
+ *  kept as letterforms (as notifications do), paragraphs joined by " · ".
+ *  Seen on the S23 (2026-09-09): a row read "**Nothing is touched on the
+ *  host** on a…" with the asterisks painted. */
+export function previewLine(markdown: string | null | undefined): string {
+  if (!markdown) {
+    return ''
+  }
+  return notificationPlainText(markdown)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' · ')
 }
 
 // Short agent identity label by type (Claude/Codex/Gemini/…), used when no

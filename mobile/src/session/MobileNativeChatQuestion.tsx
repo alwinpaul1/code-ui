@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
@@ -101,7 +102,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
           style={{ marginTop: 3 }}
         />
         <Txt variant="heading" weight="semibold" style={{ flex: 1 }}>
-          {question.question}
+          {notificationPlainText(question.question)}
         </Txt>
       </View>
 
@@ -147,7 +148,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
                   </View>
                 ) : null}
                 <Txt variant="body" style={{ flex: 1 }}>
-                  {label}
+                  {notificationPlainText(label)}
                 </Txt>
               </Pressable>
             )
