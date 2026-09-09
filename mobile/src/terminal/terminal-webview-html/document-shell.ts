@@ -24,16 +24,30 @@ window.onerror = function(msg, src, line, col) {
     overflow: hidden;
     width: 100%;
     height: 100%;
+    /* Why: the injected handlers own every touch in this document — the page
+       itself cannot scroll or zoom. Without touch-action the compositor still
+       runs its own gesture detection first, which delays the touchmove stream
+       and is what a 120 Hz drag notices most. */
+    touch-action: none;
+    overscroll-behavior: none;
   }
   #terminal-container {
     overflow: hidden;
     position: relative;
     width: 100%;
     height: 100%;
+    touch-action: none;
   }
   #terminal-surface {
     transform-origin: top left;
     display: inline-block;
+    touch-action: none;
+    will-change: transform;
+  }
+  /* Why: the sub-row scroll remainder is written here as a translate3d, so keep
+     the layer promoted instead of re-promoting and re-rasterizing per gesture. */
+  .xterm .xterm-screen {
+    will-change: transform;
   }
   .xterm { -webkit-user-select: none; user-select: none; font-variant-emoji: text; }
   .xterm .xterm-viewport {

@@ -43,17 +43,34 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
 
   var ts = {
     lastX: 0, lastY: 0, lastTime: 0, velY: 0,
-    accumDelta: 0, momentumId: null, isPinching: false,
+    accumDelta: 0, momentumId: null, isPinching: false, canPanX: false,
     pinchDist: 0, pinchScale: 0, pinchSurfX: 0, pinchSurfY: 0
   };
 
+  // Why: every scroll constant below is per MILLISECOND, not per frame. The old
+  // per-frame friction and fixed 16ms step made a fling travel twice as far on a
+  // 120 Hz phone as on a 60 Hz one. VELOCITY_BLEND_WEIGHT and FRICTION_PER_MS
+  // are the old 0.45 blend and 0.972 friction expressed over a 60 Hz frame, so
+  // 60 Hz behaviour is unchanged and every other refresh rate now matches it.
+  var VELOCITY_BLEND_REFERENCE_MS = 1000 / 60;
+  var VELOCITY_BLEND_WEIGHT = 0.45;
+  var FRICTION_PER_MS = 0.998297482;
+  var MIN_VEL = 0.012;
+
   function updateTouchVelocity(deltaY, dt) {
-    if (dt <= 0) return;
+    if (!(dt > 0)) return;
     var instantVelocity = deltaY / dt;
     if (!isFinite(instantVelocity)) return;
+    if (ts.velY === 0) {
+      ts.velY = instantVelocity;
+      return;
+    }
     // Why: touchmove cadence is uneven in WebView. Blend recent samples so
-    // momentum launch doesn't inherit a one-frame spike or stall.
-    ts.velY = ts.velY === 0 ? instantVelocity : ts.velY * 0.55 + instantVelocity * 0.45;
+    // momentum launch doesn't inherit a one-frame spike or stall — weighted by
+    // elapsed TIME, because a per-sample weight lets a 120 Hz stream converge
+    // twice as fast and launch a different velocity from the same finger.
+    var weight = 1 - Math.pow(1 - VELOCITY_BLEND_WEIGHT, dt / VELOCITY_BLEND_REFERENCE_MS);
+    ts.velY = ts.velY * (1 - weight) + instantVelocity * weight;
   }
 
   function getDistance(a, b) {
@@ -78,9 +95,20 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         cancelAnimationFrame(ts.momentumId);
         ts.momentumId = null;
       }
+      cancelSmoothScrollSettle();
+      // Why: the finger owns the content from here, so stop any settle in
+      // flight — but re-arm it on the idle timer. Catching a fling and then
+      // holding still would otherwise leave the content off the row grid, and
+      // a long press (500ms) resolves the cell under the finger from the grid.
+      if (smoothScrollOffsetY !== 0) armSmoothScrollSettle();
+      // Why: content width, content height and the window box cannot change
+      // while a finger is down, so this is the one place per gesture that pays
+      // for a layout read; every touchmove then reads the cache.
+      invalidateSurfaceMetrics();
+      ts.canPanX = contentOverflowsViewportWidth();
       if (e.touches.length === 2) {
         ts.isPinching = true;
-        smoothScrollOffsetY = 0;
+        resetSmoothScrollOffset();
         ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
         ts.pinchScale = userScale;
         var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
@@ -92,7 +120,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         ts.isPinching = false;
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
-        ts.lastTime = Date.now();
+        ts.lastTime = nowMs();
         ts.velY = 0;
         ts.accumDelta = 0;
       }
@@ -126,14 +154,14 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
 
       } else if (e.touches.length === 1 && !ts.isPinching) {
         var x = e.touches[0].clientX, y = e.touches[0].clientY;
-        var now = Date.now(), dt = now - ts.lastTime;
+        var now = nowMs(), dt = now - ts.lastTime;
 
         // Why: pan horizontally only when content overflows the viewport (larger
-        // than fit) — same check clampPan() uses. Vertical always drives buffer
-        // scroll so scrollback stays reachable at any text size; calling the
-        // never-defined contentWiderThanViewport() here threw and killed all
-        // single-finger scrolling, scrollback included.
-        if (term.element && term.element.scrollWidth * getTotalScale() > window.innerWidth + 1) {
+        // than fit) — same check clampPan() uses, decided once at touchstart.
+        // Vertical always drives buffer scroll so scrollback stays reachable at
+        // any text size; calling the never-defined contentWiderThanViewport()
+        // here threw and killed all single-finger scrolling, scrollback included.
+        if (ts.canPanX) {
           panX += x - ts.lastX;
           clampPan();
           updateTransform();
@@ -182,9 +210,12 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
         notify({ type: 'font-scale-changed', fontScale: target });
         if (changed) notify({ type: 'haptic', kind: 'selection' });
         if (e.touches.length === 1) {
+          // Why: the pinch changed the scale, so the pan decision taken at
+          // touchstart no longer holds for the finger that is still down.
+          ts.canPanX = contentOverflowsViewportWidth();
           ts.lastX = e.touches[0].clientX;
           ts.lastY = e.touches[0].clientY;
-          ts.lastTime = Date.now();
+          ts.lastTime = nowMs();
           ts.velY = 0;
           ts.accumDelta = 0;
         }
@@ -193,12 +224,22 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
 
       if (e.touches.length === 0) {
         var vel = ts.velY;
-        var FRICTION = 0.972;
-        var MIN_VEL = 0.012;
-        function momentumStep() {
-          vel *= FRICTION;
-          if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-          var delta = vel * 16;
+        var momentumTime = 0;
+        function momentumStep(frameTime) {
+          var now = typeof frameTime === 'number' ? frameTime : nowMs();
+          if (momentumTime === 0) momentumTime = now - VELOCITY_BLEND_REFERENCE_MS;
+          var elapsed = now - momentumTime;
+          momentumTime = now;
+          if (elapsed <= 0) elapsed = 1;
+          // Why: a dropped frame must not teleport the content a screenful.
+          if (elapsed > SMOOTH_SCROLL_MAX_STEP_MS) elapsed = SMOOTH_SCROLL_MAX_STEP_MS;
+          vel *= Math.pow(FRICTION_PER_MS, elapsed);
+          if (Math.abs(vel) < MIN_VEL) {
+            ts.momentumId = null;
+            settleSmoothScrollOffset();
+            return;
+          }
+          var delta = vel * elapsed;
           if (shouldRouteScrollToTerminalInput()) {
             resetSmoothScrollOffset();
             var effectiveCellH = getCellHeight() * getTotalScale();
@@ -211,13 +252,17 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           } else {
             if (!applyNormalBufferScrollDelta(delta)) {
               ts.momentumId = null;
+              settleSmoothScrollOffset();
               return;
             }
           }
           ts.momentumId = requestAnimationFrame(momentumStep);
         }
         if (Math.abs(vel) > MIN_VEL) {
+          cancelSmoothScrollSettle();
           ts.momentumId = requestAnimationFrame(momentumStep);
+        } else {
+          settleSmoothScrollOffset();
         }
       }
     }, { capture: true, passive: true });

@@ -167,7 +167,8 @@ export function useMobileNativeChatController(
     active:
       nativeChatAgentWorking ||
       nativeChatStatus?.state === 'blocked' ||
-      nativeChatStatus?.state === 'waiting'
+      nativeChatStatus?.state === 'waiting',
+    agentStatus: activeSessionTab?.agentStatus ?? null
   })
 
   const {

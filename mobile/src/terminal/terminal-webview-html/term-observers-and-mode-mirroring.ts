@@ -40,12 +40,39 @@ export const TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING = `  function emitModesI
 
   ${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}
 
+  var keyboardAvoidanceMetricsDeferred = false;
+
+  function isScrollGestureActive() {
+    if (normalScrollFrameId !== null) return true;
+    if (smoothScrollSettleFrameId !== null) return true;
+    return !!(ts && ts.momentumId);
+  }
+
+  // Why: emitKeyboardAvoidanceMetrics walks rows x cols cells and serializes a
+  // JSON postMessage, and onWriteParsed fires it on EVERY parsed write. A busy
+  // agent therefore lands that work on the same main thread as the frame a
+  // 120 Hz scroll is trying to hit. Hold it while the gesture, fling or settle
+  // is live and emit once at the end — the keyboard cannot open mid-scroll.
+  function requestKeyboardAvoidanceMetrics() {
+    if (isScrollGestureActive()) {
+      keyboardAvoidanceMetricsDeferred = true;
+      return;
+    }
+    emitKeyboardAvoidanceMetrics();
+  }
+
+  function flushDeferredKeyboardAvoidanceMetrics() {
+    if (!keyboardAvoidanceMetricsDeferred) return;
+    keyboardAvoidanceMetricsDeferred = false;
+    emitKeyboardAvoidanceMetrics();
+  }
+
   function attachTermObservers() {
     if (!term) return;
     disposeTermObservers();
     try { termObserverDisposables.push(term.onLineFeed(logFeedAndEvict)); } catch (e) {}
     try {
-      termObserverDisposables.push(term.onScroll(function() { updateScrollIndicator(false); }));
+      termObserverDisposables.push(term.onScroll(function() { scheduleScrollIndicatorUpdate(false); }));
     } catch (e) {}
     // Why: emit modes on every parsed write so RN's mirror stays current
     // without round-trip; covers \\x1b[?2004h/l and alt-screen toggles.
@@ -53,7 +80,7 @@ export const TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING = `  function emitModesI
       if (term.onWriteParsed) {
         termObserverDisposables.push(term.onWriteParsed(function() {
           emitModesIfChanged();
-          emitKeyboardAvoidanceMetrics();
+          requestKeyboardAvoidanceMetrics();
         }));
       }
     } catch (e) {}

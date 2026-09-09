@@ -1,5 +1,7 @@
 import type { MutableRefObject } from 'react'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { applyAgentStatusHudFields, hudFieldsFromAgentStatus } from './hud-agent-status-fields'
 import { attachHudRateLimits, hudRateLimitsForAgent } from './hud-rate-limits'
 import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
@@ -20,6 +22,8 @@ export function useMobileNativeChatHud(args: {
   scopeKey: string | null
   agent: string | null
   active: boolean
+  /** The tab's agent status from Orca; a newer host puts effort and context tokens on it. */
+  agentStatus?: AgentStatusEntry | null
 }) {
   const screen = useMobileTerminalHudObservation({
     client: args.client,
@@ -30,8 +34,12 @@ export function useMobileNativeChatHud(args: {
     active: args.active
   })
   const accounts = useHostAccountsSnapshot(args.client, args.enabled)
+  const withHostFields = applyAgentStatusHudFields(
+    screen.observation,
+    hudFieldsFromAgentStatus(args.agentStatus)
+  )
   return {
     ...screen,
-    observation: attachHudRateLimits(screen.observation, hudRateLimitsForAgent(accounts, args.agent))
+    observation: attachHudRateLimits(withHostFields, hudRateLimitsForAgent(accounts, args.agent))
   }
 }

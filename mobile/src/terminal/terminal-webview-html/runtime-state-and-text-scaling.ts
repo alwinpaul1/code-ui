@@ -83,6 +83,18 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
   var smoothScrollOffsetY = 0;
   var pendingNormalScrollDeltaY = 0;
   var normalScrollFrameId = null;
+  // Why: the sub-row scroll remainder is painted as a compositor transform on
+  // xterm's own .xterm-screen, one frame behind the delta that produced it —
+  // see scheduleTerminalScreenTransform for why the frame of lag is required.
+  var terminalScreenElement = null;
+  var pendingTerminalScreenOffsetY = 0;
+  var terminalScreenTransformFrameId = null;
+  var smoothScrollSettleFrameId = null;
+  var smoothScrollSettleTimer = null;
+  var smoothScrollSettleTargetY = 0;
+  var smoothScrollSettleTime = 0;
+  var scrollIndicatorFrameId = null;
+  var pendingScrollIndicatorReveal = false;
   var initRows = 24;
   var terminalGeneration = 0;
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
@@ -117,6 +129,16 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
     } catch (e) {}
   }
 
+  // Why: Date.now() only resolves to a millisecond, so at 120 Hz a frame reads
+  // as 8, 9 or 0 ms — and a 0 used to drop the whole velocity sample, distance
+  // included. Every scroll timing decision reads the high-resolution clock.
+  function nowMs() {
+    if (window.performance && typeof window.performance.now === 'function') {
+      return window.performance.now();
+    }
+    return Date.now();
+  }
+
   function getCellWidth() {
     if (!term || !term._core) return 0;
     var core = term._core;
@@ -149,8 +171,23 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
 
   function updateTransform() {
     surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';
-    updateScrollIndicator(false);
+    scheduleScrollIndicatorUpdate(false);
     if (selMode === 'select') repositionOverlay();
+  }
+
+  // Why: the indicator used to repaint twice per committed row (term.onScroll
+  // and the scroll delta itself), reading window.innerHeight each time. A fling
+  // commits several rows a frame, so that was several forced layouts per frame
+  // for a 3px-wide thumb. One repaint per frame is more than the thumb can show.
+  function scheduleScrollIndicatorUpdate(reveal) {
+    if (reveal) pendingScrollIndicatorReveal = true;
+    if (scrollIndicatorFrameId !== null) return;
+    scrollIndicatorFrameId = requestAnimationFrame(function() {
+      scrollIndicatorFrameId = null;
+      var pendingReveal = pendingScrollIndicatorReveal;
+      pendingScrollIndicatorReveal = false;
+      updateScrollIndicator(pendingReveal);
+    });
   }
 
   function updateScrollIndicator(reveal) {
@@ -161,7 +198,7 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
       scrollIndicator.classList.remove('visible');
       return;
     }
-    var trackHeight = Math.max(0, window.innerHeight - 8);
+    var trackHeight = Math.max(0, getSurfaceMetrics().viewportH - 8);
     var totalRows = maxViewportY + (term.rows || 0);
     if (trackHeight <= 0 || totalRows <= 0) return;
     var thumbHeight = Math.max(24, trackHeight * (term.rows || 0) / totalRows);

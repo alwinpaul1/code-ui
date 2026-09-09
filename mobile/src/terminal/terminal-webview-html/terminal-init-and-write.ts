@@ -25,6 +25,10 @@ export const TERMINAL_HTML_INIT_AND_WRITE = `${TERMINAL_WEBGL_RECOVERY_JS}
     initRows = rows || 24;
     firstDataPending = true;
     smoothScrollOffsetY = 0;
+    // Why: term.open() builds a fresh .xterm-screen inside the replacement
+    // surface, so the cached one belongs to a terminal about to be disposed.
+    terminalScreenElement = null;
+    pendingTerminalScreenOffsetY = 0;
     wheelAccumDeltaY = 0;
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';

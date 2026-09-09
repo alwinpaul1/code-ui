@@ -35,7 +35,7 @@ describe('TerminalWebView scroll routing', () => {
   it('maps a downward pull at the bottom to older scrollback rows', () => {
     expect(source).toContain('var deltaY = ts.lastY - y;')
     expect(source).toContain('smoothScrollOffsetY -= deltaY;')
-    expect(source).toContain('var lines = Math.trunc(-smoothScrollOffsetY / effectiveCellH);')
+    expect(source).toContain('var lines = -Math.ceil(smoothScrollOffsetY / effectiveCellH);')
 
     const nextViewportY = simulateNormalBufferPull({
       baseY: 120,
@@ -62,7 +62,10 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(touchMoveBlock).toContain('routeScrollLines(lines, x, y);')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime)',
+      'if (Math.abs(vel) > MIN_VEL)'
+    )
     expect(momentumBlock.indexOf('if (shouldRouteScrollToTerminalInput())')).toBeLessThan(
       momentumBlock.indexOf('if (!applyNormalBufferScrollDelta(delta))')
     )
@@ -87,7 +90,10 @@ describe('TerminalWebView scroll routing', () => {
     expect(touchMoveBlock).toContain('if (enqueueNormalBufferScrollDelta(deltaY))')
     expect(touchMoveBlock).toContain('ts.velY = 0;')
 
-    const momentumBlock = sliceBetween('function momentumStep()', 'if (Math.abs(vel) > MIN_VEL)')
+    const momentumBlock = sliceBetween(
+      'function momentumStep(frameTime)',
+      'if (Math.abs(vel) > MIN_VEL)'
+    )
     expect(momentumBlock).toContain('if (!applyNormalBufferScrollDelta(delta))')
     expect(momentumBlock).toContain('ts.momentumId = null;')
   })
@@ -150,28 +156,161 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('buffer.viewportY / maxViewportY')
     expect(source).not.toContain('fractionalRows')
     expect(source).toContain('scrollThumb.style.transform =')
-    expect(source).toContain('updateScrollIndicator(true);')
+    expect(source).toContain('scheduleScrollIndicatorUpdate(true);')
+    // One repaint per frame, not one per committed row from two call sites.
+    expect(source).toContain('if (scrollIndicatorFrameId !== null) return;')
+    expect(source).toContain('scrollIndicatorFrameId = requestAnimationFrame(function()')
   })
 
-  it('does not apply fractional smooth scroll transforms to terminal content', () => {
+  it('shows the sub-row remainder as a compositor transform, a frame behind the commit', () => {
+    // Why: the pan/scale transform on the surface stays exactly as it was. The
+    // remainder rides on xterm's own .xterm-screen instead, so pinch, fit and
+    // the selection overlay keep reading one unchanged surface transform.
     const updateTransformBlock = sliceBetween(
       'function updateTransform()',
-      'function updateScrollIndicator(reveal)'
+      'function scheduleScrollIndicatorUpdate(reveal)'
     )
     expect(updateTransformBlock).toContain(
       "surface.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + getTotalScale() + ')';"
     )
-    expect(source).not.toContain("querySelector('.xterm-screen')")
-    expect(source).not.toContain('updateTerminalScreenTransform')
     expect(updateTransformBlock).not.toContain("getVisualPanY() + 'px) scale('")
     expect(updateTransformBlock).not.toContain('smoothScrollOffsetY')
+
+    const screenTransformBlock = sliceBetween(
+      'function getTerminalScreenElement()',
+      'function clampNormalScrollLines(lines)'
+    )
+    expect(screenTransformBlock).toContain("term.element.querySelector('.xterm-screen')")
+    expect(screenTransformBlock).toContain(
+      "screenElement.style.transform = 'translate3d(0,' + (offsetY / scale) + 'px,0)';"
+    )
+    // xterm repaints a committed row on ITS next animation frame, so the
+    // remainder has to be written on that frame too or every row boundary
+    // overshoots by a full row for one frame.
+    expect(screenTransformBlock).toContain(
+      'pendingTerminalScreenOffsetY = smoothScrollOffsetY;'
+    )
+    expect(screenTransformBlock).toContain(
+      'terminalScreenTransformFrameId = requestAnimationFrame(function()'
+    )
+    expect(screenTransformBlock).toContain(
+      'writeTerminalScreenTransform(pendingTerminalScreenOffsetY);'
+    )
+
+    // The selection overlay is positioned outside the surface, so it has to add
+    // the same remainder or its handles drift by up to a row during a scroll.
+    const cellToViewportBlock = sliceBetween(
+      'function cellToViewportPx(col, absRow)',
+      'function getLineText(absRow)'
+    )
+    expect(cellToViewportBlock).toContain(
+      'y: sy * total + panY + pendingTerminalScreenOffsetY'
+    )
+
+    // The remainder must not survive a new terminal or a re-fit.
+    expect(source).toContain('terminalScreenElement = null;')
+    expect(source).toContain('pendingTerminalScreenOffsetY = 0;')
+    const commitFitBlock = sliceBetween('function commitFitScale(reason, attempts, gate)', 'var cellW = getCellWidth();')
+    expect(commitFitBlock).toContain('resetSmoothScrollOffset();')
   })
 
-  it('smooths velocity samples and uses lower friction for mobile momentum', () => {
+  it('settles the remainder onto a row boundary when the gesture ends', () => {
+    const settleBlock = sliceBetween(
+      'function settleSmoothScrollOffset()',
+      'function cellToViewportPx(col, absRow)'
+    )
+    expect(settleBlock).toContain(
+      'smoothScrollSettleTargetY = smoothScrollOffsetY <= -effectiveCellH / 2 ? -effectiveCellH : 0;'
+    )
+    expect(settleBlock).toContain('applyNormalBufferScrollDelta(-step)')
+
+    const touchEndBlock = sliceBetween(
+      "targetSurface.addEventListener('touchend'",
+      '}, { capture: true, passive: true });'
+    )
+    expect(touchEndBlock).toContain('settleSmoothScrollOffset();')
+  })
+
+  it('flings on the clock, not on the frame counter', () => {
     expect(source).toContain('function updateTouchVelocity(deltaY, dt)')
-    expect(source).toContain('ts.velY * 0.55 + instantVelocity * 0.45')
-    expect(source).toContain('var FRICTION = 0.972;')
+    // Time-weighted blend: a 120 Hz sample stream must not converge twice as
+    // fast, or the same finger launches a different velocity.
+    expect(source).toContain(
+      'var weight = 1 - Math.pow(1 - VELOCITY_BLEND_WEIGHT, dt / VELOCITY_BLEND_REFERENCE_MS);'
+    )
+    expect(source).toContain('var VELOCITY_BLEND_WEIGHT = 0.45;')
+    expect(source).toContain('var VELOCITY_BLEND_REFERENCE_MS = 1000 / 60;')
+    expect(source).toContain('var FRICTION_PER_MS = 0.998297482;')
     expect(source).toContain('var MIN_VEL = 0.012;')
+    expect(source).toContain('vel *= Math.pow(FRICTION_PER_MS, elapsed);')
+    expect(source).toContain('var delta = vel * elapsed;')
+    expect(source).not.toContain('var delta = vel * 16;')
+    expect(source).not.toContain('var FRICTION = 0.972;')
+    // The per-ms constants are the old 60 Hz behaviour, restated so every other
+    // refresh rate matches it instead of diverging from it.
+    expect(0.998297482 ** (1000 / 60)).toBeCloseTo(0.972, 5)
+    expect(1 - (1 - 0.45) ** ((1000 / 60) / (1000 / 60))).toBeCloseTo(0.45, 10)
+
+    // Date.now() resolves to 1ms, which reads a 120 Hz frame as 8, 9 or 0 —
+    // and the 0 used to drop that sample's distance from the estimate.
+    expect(source).toContain('var now = nowMs(), dt = now - ts.lastTime;')
+    expect(source).not.toContain('var now = Date.now(), dt = now - ts.lastTime;')
+  })
+
+  it('reads the scroll layout once per gesture, not once per touchmove', () => {
+    const touchMoveBlock = sliceBetween(
+      "targetSurface.addEventListener('touchmove'",
+      '}, { capture: true, passive: false });'
+    )
+    expect(touchMoveBlock).toContain('if (ts.canPanX) {')
+    expect(touchMoveBlock).not.toContain('term.element.scrollWidth')
+    expect(touchMoveBlock).not.toContain('window.innerWidth')
+
+    const touchStartBlock = sliceBetween(
+      "targetSurface.addEventListener('touchstart'",
+      '}, { capture: true, passive: true });'
+    )
+    expect(touchStartBlock).toContain('invalidateSurfaceMetrics();')
+    expect(touchStartBlock).toContain('ts.canPanX = contentOverflowsViewportWidth();')
+
+    const clampPanBlock = sliceBetween('function clampPan()', 'function adjustRowsForViewport()')
+    expect(clampPanBlock).toContain('var metrics = getSurfaceMetrics();')
+    expect(clampPanBlock).not.toContain('term.element.scrollWidth')
+    expect(clampPanBlock).not.toContain('window.innerHeight')
+  })
+
+  it('keeps agent-write bookkeeping off the scrolling frame', () => {
+    const observerBlock = sliceBetween(
+      'function requestKeyboardAvoidanceMetrics()',
+      'function attachTermObservers()'
+    )
+    expect(observerBlock).toContain('if (isScrollGestureActive()) {')
+    expect(observerBlock).toContain('keyboardAvoidanceMetricsDeferred = true;')
+    expect(observerBlock).toContain('function flushDeferredKeyboardAvoidanceMetrics()')
+
+    const gateBlock = sliceBetween(
+      'function isScrollGestureActive()',
+      'function requestKeyboardAvoidanceMetrics()'
+    )
+    expect(gateBlock).toContain('if (normalScrollFrameId !== null) return true;')
+    expect(gateBlock).toContain('if (smoothScrollSettleFrameId !== null) return true;')
+    expect(gateBlock).toContain('return !!(ts && ts.momentumId);')
+
+    expect(source).toContain('emitModesIfChanged();\n          requestKeyboardAvoidanceMetrics();')
+  })
+
+  it('hands the whole touch stream to the injected handlers', () => {
+    // Why: with no touch-action the Android compositor runs its own scroll and
+    // zoom detection before the page sees a touchmove, which is latency the
+    // gesture cannot get back.
+    expect(source).toContain('touch-action: none;')
+    expect(source).toContain('overscroll-behavior: none;')
+    const surfaceCss = sliceBetween('#terminal-surface {', '}')
+    expect(surfaceCss).toContain('will-change: transform;')
+    const screenCss = sliceBetween('.xterm .xterm-screen {', '}')
+    expect(screenCss).toContain('will-change: transform;')
+    expect(source).toContain('overScrollMode="never"')
+    expect(source).toContain('androidLayerType="hardware"')
   })
 
   it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {
@@ -278,7 +417,9 @@ function simulateNormalBufferPull({
     return viewportY
   }
   const smoothScrollOffsetY = -deltaY
-  const lines = Math.trunc(-smoothScrollOffsetY / cellHeight)
+  // Why: ceil, not trunc — the row commits as soon as the finger crosses into
+  // it, so the leftover remainder is always negative (content pulled UP).
+  const lines = -Math.ceil(smoothScrollOffsetY / cellHeight)
   const applied = Math.max(lines, -viewportY)
   return viewportY + applied
 }

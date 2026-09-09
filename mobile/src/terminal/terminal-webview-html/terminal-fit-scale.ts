@@ -12,16 +12,49 @@ export const TERMINAL_HTML_FIT_SCALE = `${TERMINAL_WEBVIEW_THEME_JS}
     return 15;
   }
 
+  // Why: scrollWidth/scrollHeight and window.innerWidth/innerHeight are layout
+  // reads. clampPan() and the horizontal-overflow test took them on EVERY
+  // touchmove, immediately before the style write that dirties layout again —
+  // a forced synchronous layout per finger sample. None of these change while a
+  // finger is down, so measure once (at touchstart, and after anything that can
+  // resize the grid or the window) and read the cache in between.
+  var surfaceMetrics = { contentH: 0, contentW: 0, valid: false, viewportH: 0, viewportW: 0 };
+
+  function invalidateSurfaceMetrics() {
+    surfaceMetrics.valid = false;
+  }
+
+  function getSurfaceMetrics() {
+    if (surfaceMetrics.valid) return surfaceMetrics;
+    surfaceMetrics.viewportW = window.innerWidth;
+    surfaceMetrics.viewportH = window.innerHeight;
+    if (term && term.element) {
+      surfaceMetrics.contentW = term.element.scrollWidth || 0;
+      surfaceMetrics.contentH = term.element.scrollHeight || 0;
+      surfaceMetrics.valid = true;
+    }
+    return surfaceMetrics;
+  }
+
+  // Why: pan horizontally only when content overflows the viewport (larger than
+  // fit) — the same test clampPan() applies. Named so the touchmove path reads
+  // the decision instead of re-deriving it from a fresh layout read.
+  function contentOverflowsViewportWidth() {
+    var metrics = getSurfaceMetrics();
+    return metrics.contentW * getTotalScale() > metrics.viewportW + 1;
+  }
+
   // Why: clamp pan so the terminal content always covers the viewport
   // when zoomed in. When content is smaller than viewport in a
   // dimension, pin to top-left (no floating in the middle).
   function clampPan() {
     if (!term || !term.element) return;
-    var ts = getTotalScale();
-    var cw = term.element.scrollWidth * ts;
-    var ch = term.element.scrollHeight * ts;
-    var vpW = window.innerWidth;
-    var vpH = window.innerHeight;
+    var scale = getTotalScale();
+    var metrics = getSurfaceMetrics();
+    var cw = metrics.contentW * scale;
+    var ch = metrics.contentH * scale;
+    var vpW = metrics.viewportW;
+    var vpH = metrics.viewportH;
     if (cw > vpW) {
       panX = Math.min(0, Math.max(vpW - cw, panX));
     } else {
@@ -91,6 +124,10 @@ export const TERMINAL_HTML_FIT_SCALE = `${TERMINAL_WEBVIEW_THEME_JS}
 
   function commitFitScale(reason, attempts, gate) {
     if (!term || !term.element) return;
+    // Why: every fit runs after the grid or the window changed (init replay,
+    // resize, reflow, text scale, orientation), which is exactly when the
+    // cached content and viewport sizes stop being true.
+    invalidateSurfaceMetrics();
     var preSnapScale = computeFitScale();
     currentScale = preSnapScale;
     // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
@@ -100,7 +137,9 @@ export const TERMINAL_HTML_FIT_SCALE = `${TERMINAL_WEBVIEW_THEME_JS}
     userScale = 1;
     panX = 0;
     panY = 0;
-    smoothScrollOffsetY = 0;
+    // Why: a fit follows a grid or viewport change, so the sub-row remainder no
+    // longer describes anything. Clear it AND the transform it painted.
+    resetSmoothScrollOffset();
     updateTransform();
     adjustRowsForViewport();
 

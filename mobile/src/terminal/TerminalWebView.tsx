@@ -375,6 +375,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // Why: Android parent gesture containers can intercept vertical drags
         // before the injected xterm scroll router sees them.
         nestedScrollEnabled
+        // Why: the document is overflow:hidden and JS owns the gesture, so the
+        // platform's own overscroll glow/stretch is pure work against the frame.
+        overScrollMode="never"
+        // Why: keep the WebView on its own hardware layer so the injected
+        // translate3d scroll stays a compositor move on Android.
+        androidLayerType="hardware"
         scalesPageToFit={false}
         // Why: Android WebView defaults textZoom to the system font scale, inflating
         // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.

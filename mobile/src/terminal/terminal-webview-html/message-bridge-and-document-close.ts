@@ -25,6 +25,7 @@ export const TERMINAL_HTML_MESSAGE_BRIDGE_AND_DOCUMENT_CLOSE = `  function handl
     // size update). Re-fit so the scale matches the new vpWidth — without
     // this, opening the keyboard leaves the terminal at the old scale even
     // though there's now less vertical room and the fit ratio may differ.
+    invalidateSurfaceMetrics();
     applyFitScale('window-resize');
     adjustRowsForViewport();
     repositionOverlay();
