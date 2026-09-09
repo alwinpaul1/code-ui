@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+
+// Decoding is covered by accounts-snapshot.test.ts; here the wire traffic is the subject.
+vi.mock('../components/accounts-snapshot', () => ({
+  decodeAccountsSnapshot: (value: unknown) => value
+}))
 import { refreshAccountUsage } from './refresh-account-usage'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
