@@ -39,6 +39,9 @@ export type AgentHudBeacon = {
    *  derived from a window we guessed at. */
   usedPercent: number | null
   limits: AgentHudBeaconLimit[]
+  /** Background tasks whose completion Claude has written to its transcript,
+   *  mid-turn ones included — the notifications Orca's reader never surfaces. */
+  doneTaskIds: string[]
   receivedAt: number
 }
 
@@ -115,6 +118,9 @@ export function parseAgentHudBeaconPayload(
     windowTokens: toInt(values.get('win')),
     usedPercent: toInt(values.get('pct')),
     limits,
+    doneTaskIds: (values.get('done') ?? '')
+      .split(',')
+      .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
     receivedAt
   }
 }

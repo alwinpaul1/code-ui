@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -30,9 +30,21 @@ const rolloutJsonl = readFileSync(
 
 const ESC = '\u001b'
 const BEL = '\u0007'
+// Captured 2026-09-09 from this machine's own Claude Code 2.1.266 transcript:
+// a task-notification written as a user turn (task finished while idle) and
+// the queue-operation enqueue/remove pair Claude writes when one finishes
+// MID-TURN — the kind Orca's transcript reader never surfaces. Paths redacted.
+const transcriptWithNotifications = readFileSync(
+  fileURLToPath(
+    new URL('./fixtures/claude-transcript-task-notifications-2.1.266.jsonl', import.meta.url)
+  ),
+  'utf8'
+)
 
-/** Shells only; CI runners have no zsh, and Claude Code hands the command to sh. */
-const SHELLS = ['sh', 'bash'] as const
+/** Shells only; CI runners have no zsh, and Claude Code hands the command to sh.
+ *  `dash` is Debian/Ubuntu's /bin/sh and the strictest of the three, so it is
+ *  included wherever it exists — a Linux host runs this script under it. */
+const SHELLS: readonly string[] = ['sh', 'bash', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])]
 
 type Run = { stdout: string; beacon: string | null }
 
@@ -42,7 +54,7 @@ function runScript(
     input?: string
     args?: string[]
     env?: Record<string, string>
-    shell?: 'sh' | 'bash'
+    shell?: string
     /** Prepended to PATH; used to put a fake `uname` in front of the real one. */
     pathShim?: string
     /** Leaves CUIHUD_TTY unset, so the script has to find a device itself. */
@@ -386,5 +398,67 @@ describe('the flags survive the trip through Orca to the host shell', () => {
       /^--search -c '/
     )
     expect(buildAgentHudLaunchArgs({ agent: 'opencode', hostDefaultArgs: '', hostPlatform: 'darwin' })).toBeNull()
+  })
+})
+
+describe('finished background tasks ride the Claude beacon', () => {
+  function withTranscript(json: string, transcriptPath: string): string {
+    const parsed = JSON.parse(json)
+    parsed.transcript_path = transcriptPath
+    return JSON.stringify(parsed)
+  }
+
+  for (const shell of SHELLS) {
+    it(`beacons every task id Claude has written a notification for, mid-turn ones included (${shell})`, () => {
+      const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
+      const transcript = join(dir, 'session.jsonl')
+      writeFileSync(transcript, transcriptWithNotifications)
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: withTranscript(statusJson, transcript),
+        shell
+      })
+      // bqo82xkjk landed as a user turn; b5v3z4u8o only as queue-operation
+      // records (enqueue + remove — one id, not two). bnotdone1 is prose.
+      expect(run.beacon).toContain(' done=bqo82xkjk,b5v3z4u8o')
+      expect(run.beacon).not.toContain('bnotdone1')
+    })
+  }
+
+  for (const shell of SHELLS) {
+    it(`opens a Windows transcript path, which arrives JSON-escaped with backslashes (${shell})`, () => {
+      // Claude Code runs the status-line command through Git Bash on Windows
+      // and says so itself: a backslash path "will not resolve" there. The
+      // value in the JSON is C:\\Users\\me\\… , so the script converts the
+      // separators before opening the file.
+      const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
+      const transcript = join(dir, 'session.jsonl')
+      writeFileSync(transcript, transcriptWithNotifications)
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: withTranscript(statusJson, transcript.replace(/\//g, '\\')),
+        shell
+      })
+      expect(run.beacon).toContain(' done=bqo82xkjk,b5v3z4u8o')
+    })
+  }
+
+  it('reads the transcript with only the tools Git for Windows, BusyBox and coreutils all ship', () => {
+    // Why: this line runs on every status-line refresh on Windows, macOS and
+    // Linux. Anything outside this set breaks one of them silently.
+    const line = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ').find((part) => part.includes('tail -c'))
+    expect(line).toBeDefined()
+    const commands = (line ?? '').match(/\b(tail|grep|sed|awk|tr|printf|cat|head|cut|sort|uniq|perl|python3?|node|jq|xargs|rev|tac|mapfile|readarray)\b/g)
+    expect([...new Set(commands ?? [])].sort()).toEqual(['awk', 'grep', 'sed', 'tail', 'tr'])
+  })
+
+  it('leaves the done field off when the transcript has no notifications, or is unreadable', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
+    const empty = join(dir, 'empty.jsonl')
+    writeFileSync(empty, '{"type":"user","message":{"role":"user","content":"hi"}}\n')
+    expect(runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: withTranscript(statusJson, empty) }).beacon).not.toContain('done=')
+    expect(
+      runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: withTranscript(statusJson, join(dir, 'missing.jsonl'))
+      }).beacon
+    ).not.toContain('done=')
   })
 })

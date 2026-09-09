@@ -361,3 +361,9 @@ Nine cases across both agents: real record shapes, the sidechain filter, a turn
 larger than the first tail window (21% of the transcripts on this machine have
 one), the window with nothing installed, a compaction, Codex's full reading, its
 cwd discriminator, and its refusal to guess when a session id is unknown.
+
+### Beacon field `done` (added 2026-09-09, late)
+
+`done=id1,id2,…` — background-task ids whose completion Claude has written to
+its transcript, read by the status-line script from `transcript_path`. Only
+Claude emits it. Consumed by `mobile-background-tasks.ts`, not by the HUD.

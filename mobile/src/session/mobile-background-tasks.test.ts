@@ -538,3 +538,38 @@ describe('background tasks bounded by the current working run', () => {
     expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([['b6ishmlqf', 'completed']])
   })
 })
+
+// ─── The agent's own beacon ─────────────────────────────────────────────────
+// The status-line script reads Claude's transcript on every refresh and
+// beacons the ids of every task-notification it finds, including the
+// queue-operation kind Orca never surfaces — so a shell that finishes while
+// Claude is still working retires within seconds instead of at turn end.
+describe('background tasks retired by the beacon', () => {
+  it('retires a shell the beacon says finished while the pane is still working and no notification landed', () => {
+    const transcript = [
+      call('Bash', { command: 'sleep 45; echo done', description: 'A 45 s background sleep', run_in_background: true }, T0),
+      result(backgroundStartOutput('b5v3z4u8o'), T0 + 500),
+      call('Bash', { command: 'sleep 600', description: 'Still going', run_in_background: true }, T0 + 1000),
+      result(backgroundStartOutput('bstillrun'), T0 + 1500)
+    ]
+    const tasks = deriveBackgroundTasks(
+      transcript,
+      NOW,
+      { state: 'working', stateStartedAt: T0 - 1 },
+      { finishedTaskIds: ['b5v3z4u8o'] }
+    )
+    expect(tasks.running.map((task) => task.id)).toEqual(['bstillrun'])
+    expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([['b5v3z4u8o', 'completed']])
+    expect(countRunningBackgroundTasks(transcript, { state: 'working' }, { finishedTaskIds: ['b5v3z4u8o'] })).toBe(1)
+  })
+
+  it('keeps the transcript notification\'s own status when both sources name a task', () => {
+    const transcript = [
+      call('Bash', { command: './deploy.sh', description: 'Deploy', run_in_background: true }, T0),
+      result(backgroundStartOutput('bhlua4cdn'), T0 + 500),
+      userText(taskNotification({ id: 'bhlua4cdn', status: 'failed', summary: 'failed' }), T0 + 9000)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, null, { finishedTaskIds: ['bhlua4cdn'] })
+    expect(tasks.finished.map((task) => task.status)).toEqual(['failed'])
+  })
+})

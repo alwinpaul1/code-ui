@@ -114,3 +114,16 @@ describe('what the payload is allowed to say', () => {
     expect(beacon?.limits).toEqual([{ name: 'Session', usedPercent: 12, resetsAt: null }])
   })
 })
+
+describe('finished task ids on the beacon', () => {
+  it('reads the done list and ignores anything that is not an id', () => {
+    const beacon = parseAgentHudBeaconPayload(
+      'CUIHUD1 agent=claude model=claude-fable-5-1 done=bqo82xkjk,b5v3z4u8o,,a63a93c4664bb92cc'
+    )
+    expect(beacon?.doneTaskIds).toEqual(['bqo82xkjk', 'b5v3z4u8o', 'a63a93c4664bb92cc'])
+  })
+
+  it('reports no finished tasks when the beacon carries none', () => {
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude')?.doneTaskIds).toEqual([])
+  })
+})

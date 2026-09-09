@@ -50,6 +50,8 @@ export type MobileNativeChatController = {
   nativeChatAgentWorking: boolean
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire. */
   nativeChatAgentStatus: AgentStatusEntry | null
+  /** Task ids the active tab's HUD beacon reports finished; see agent-hud-beacon.ts. */
+  nativeChatFinishedTaskIds: readonly string[]
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

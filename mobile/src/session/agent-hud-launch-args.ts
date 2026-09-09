@@ -109,6 +109,20 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'wa=$(g "\\"seven_day\\":\\{\\"used_percentage\\":([0-9.]+)")',
   'wb=$(g "\\"seven_day\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
   'wd=$(g "\\"cwd\\":\\"([^\\"]*)\\"")',
+  // Finished background tasks. Claude appends a `<task-notification>` carrying
+  // `<task-id>` to its own transcript the moment a task ends — as a user turn
+  // when idle, as a queue-operation record when mid-turn. The phone never sees
+  // the mid-turn kind through Orca, so the ids ride the beacon: the newest 32,
+  // deduplicated, from the last 256 KB of the file. Ids are [A-Za-z0-9_-].
+  'tp=$(g "\\"transcript_path\\":\\"([^\\"]*)\\"")',
+  // Windows: the path arrives JSON-escaped (C:\\Users\\me\\...), and Claude Code
+  // runs this command through Git Bash, which cannot open a backslash path —
+  // its own /statusline agent warns about exactly this. Slashes work on all
+  // three platforms (repeated ones collapse), and a POSIX transcript path
+  // never contains a backslash, so the conversion is a no-op there.
+  '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
+  'dn=""',
+  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 262144 "$tp" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]*</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -118,6 +132,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$pc" ] && o="$o pct=${pc%.*}"',
   '[ -n "$ha" ] && o="$o h5=${ha%.*}:${hb:-0}"',
   '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
+  '[ -n "$dn" ] && o="$o done=${dn%,}"',
   ...TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
   // exactly their bar. settings.json is multi-line JSON, so sed is not reliable

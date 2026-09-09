@@ -40,3 +40,42 @@ transcript bytes, plus "background tasks reconciled against the host agent
 status" (roster retirement with no notification, absent roster, pane `done`
 retiring shells, roster-only agents, idle teammates, null status).
 `MobileBackgroundTasksSheet.test.tsx`: rendering in both themes.
+
+## 2026-09-09 (late): finished shells retire live, via the beacon
+
+The remaining gap was a shell that finishes while Claude is still working:
+no hook fires for it, the notification is a `queue-operation` record Orca's
+reader skips, and Claude's footer count proved unreliable. The fix rides the
+existing HUD beacon (`docs/mobile-agent-hud.md`): Claude re-runs the
+status-line command on every message and tool event with `transcript_path`
+in hand, so the script greps the last 256 KB of that transcript for
+`<task-id>…</task-id>` (every occurrence is a task-notification — as a user
+turn when idle, as queue-operation records mid-turn), deduplicates, keeps the
+newest 32, and appends `done=id1,id2` to the beacon. The phone parses it into
+`doneTaskIds`, the controller exposes the active tab's list, and
+`deriveBackgroundTasks` treats those ids as completed. Verified with the real
+records this machine wrote on 2026-09-09 (`fixtures/claude-transcript-task-
+notifications-2.1.266.jsonl`). Claude Code only; Codex has no background
+shells. Needs the tab to carry the beacon flag (phone-launched, or desktop
+with the settings switch on).
+
+### Cross-platform notes (verified 2026-09-09, Claude Code 2.1.267)
+
+- **The reader is five tools every platform ships**: `tail -c`, `grep -o`,
+  `sed`, `awk`, `tr`. All are in coreutils, BusyBox and Git for Windows'
+  `usr/bin`. A test asserts the line uses nothing else.
+- **Windows path conversion.** `transcript_path` arrives JSON-escaped
+  (`C:\\Users\\me\\…`) and Claude Code runs the status-line command through
+  Git Bash, which cannot open a backslash path — its own `/statusline` agent
+  warns about exactly this. The script converts separators to `/` before
+  opening the file; repeated slashes collapse, and a POSIX transcript path has
+  no backslash, so it is a no-op on macOS and Linux. Tested with a
+  Windows-escaped path under every shell.
+- **Shells.** The whole script is exercised under `sh`, `bash` and `dash`
+  (Debian/Ubuntu's `/bin/sh`, the strictest of the three) wherever `/bin/dash`
+  exists.
+- **The one Windows host this cannot reach**: Claude Code accepts either Git
+  for Windows *or* PowerShell 7. With PowerShell only, Git Bash is absent and
+  the status-line command never runs, so no beacon arrives — not for finished
+  tasks and not for the HUD either. That is a limit of the whole beacon
+  channel, not of this feature.

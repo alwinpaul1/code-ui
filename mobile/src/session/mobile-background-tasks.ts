@@ -42,6 +42,14 @@ import {
 export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'> &
   Partial<Pick<AgentStatusEntry, 'stateStartedAt'>>
 
+export type BackgroundTaskDeriveOptions = {
+  /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`).
+   *  Why: a completion that lands mid-turn is written to Claude's transcript as
+   *  a queue-operation record Orca never surfaces, but the status-line script
+   *  reads that transcript on every refresh and beacons the ids within seconds. */
+  finishedTaskIds?: readonly string[]
+}
+
 export type BackgroundTaskKind = 'shell' | 'agent'
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed'
 
@@ -94,7 +102,8 @@ type Notification = { status: string; summary: string | null; at: number }
 export function deriveBackgroundTasks(
   messages: readonly NativeChatMessage[],
   now: number,
-  hostStatus: BackgroundTaskHostStatus | null = null
+  hostStatus: BackgroundTaskHostStatus | null = null,
+  options: BackgroundTaskDeriveOptions = {}
 ): BackgroundTasks {
   const pending: PendingCall[] = []
   const launches = new Map<string, Launch>()
@@ -132,6 +141,11 @@ export function deriveBackgroundTasks(
     }
     for (const notification of readNotifications(text, position)) {
       notifications.set(notification.id, notification.value)
+    }
+  }
+  for (const id of options.finishedTaskIds ?? []) {
+    if (!notifications.has(id)) {
+      notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
     }
   }
   return splitByStatus(launches, notifications, now, hostStatus, position + 1)
@@ -323,9 +337,10 @@ function readNotifications(
  *  shows that. */
 export function countRunningBackgroundTasks(
   messages: readonly NativeChatMessage[],
-  hostStatus: BackgroundTaskHostStatus | null = null
+  hostStatus: BackgroundTaskHostStatus | null = null,
+  options: BackgroundTaskDeriveOptions = {}
 ): number {
-  return deriveBackgroundTasks(messages, 0, hostStatus).running.length
+  return deriveBackgroundTasks(messages, 0, hostStatus, options).running.length
 }
 
 /** "19m 8s" while a job runs; "2h 19m" once it is past the hour. Null when the

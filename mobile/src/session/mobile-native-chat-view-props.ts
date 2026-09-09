@@ -33,6 +33,8 @@ export type MobileNativeChatViewProps = {
   agentWorking?: boolean
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
+  /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
+  finishedTaskIds?: readonly string[]
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated
