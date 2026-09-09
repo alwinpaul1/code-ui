@@ -7,6 +7,7 @@ import type {
 } from './mobile-terminal-hud-parse'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
@@ -30,6 +31,8 @@ export type MobileNativeChatViewProps = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
+  agentStatus?: AgentStatusEntry | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated

@@ -382,3 +382,111 @@ describe('background task labels', () => {
     expect(formatRunningTaskCount(3)).toBe('3 running tasks')
   })
 })
+
+// ─── The host's own view of what is still running ───────────────────────────
+// Observed 2026-09-09 on the S23 (Claude Code 2.1.266): five tasks shown running
+// while the desktop had two. A completion that lands MID-TURN is never written
+// as a user turn — Claude stores it as an `attachment` record (type
+// `queued_command`) that Orca's transcript reader does not surface — so the
+// transcript alone cannot retire it. Orca's hooks can: SubagentStop keeps the
+// pane's `agentStatus.subagents` roster current, and the pane only reports
+// `done` once Claude's Stop hook lists no running background task.
+describe('background tasks reconciled against the host agent status', () => {
+  const launchedAgent = (id: string, description: string, at: number) => [
+    call('Agent', { description, prompt: 'go', subagent_type: 'general-purpose' }, at),
+    result(agentLaunchOutput(id), at + 500)
+  ]
+  const launchedShell = (id: string, description: string, at: number) => [
+    call('Bash', { command: 'sleep 600', description, run_in_background: true }, at),
+    result(backgroundStartOutput(id), at + 500)
+  ]
+
+  it('retires a subagent the host roster no longer lists, even when its notification never landed', () => {
+    const transcript = [
+      ...launchedAgent('a63a93c4664bb92cc', 'Build the invisible HUD beacon', T0),
+      ...launchedAgent('a133c7d30f4292f25', 'Build background tasks pill and sheet', T0 + 1000)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, {
+      state: 'working',
+      subagents: [
+        {
+          id: 'a133c7d30f4292f25',
+          description: 'Build background tasks pill and sheet',
+          state: 'working',
+          startedAt: T0 + 1000
+        }
+      ]
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['a133c7d30f4292f25'])
+    expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([
+      ['a63a93c4664bb92cc', 'completed']
+    ])
+  })
+
+  it('treats an absent roster as no live subagents once the host reports status at all', () => {
+    const tasks = deriveBackgroundTasks(
+      launchedAgent('a63a93c4664bb92cc', 'Build the invisible HUD beacon', T0),
+      NOW,
+      { state: 'working' }
+    )
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => task.id)).toEqual(['a63a93c4664bb92cc'])
+  })
+
+  it('retires every background shell once the pane reports done', () => {
+    // Orca holds the pane `working` while Claude's Stop hook still lists a
+    // running non-agent task, so `done` means the shells have all reported.
+    const transcript = [
+      ...launchedShell('bbbinbop5', 'Run the full gate (tsc, oxlint, vitest) in the background', T0),
+      ...launchedShell('bmq54z1i3', 'Build the release APK locally in the background', T0 + 1000)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, { state: 'done' })
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => task.id).sort()).toEqual(['bbbinbop5', 'bmq54z1i3'])
+  })
+
+  it('keeps a shell running while the pane is still working and nothing has reported', () => {
+    const tasks = deriveBackgroundTasks(
+      launchedShell('biifjm40h', 'CI run for mobile-android-v0.2.82 release', T0),
+      NOW,
+      { state: 'working' }
+    )
+    expect(tasks.running.map((task) => task.id)).toEqual(['biifjm40h'])
+  })
+
+  it('lists a roster subagent the loaded transcript window never showed', () => {
+    const tasks = deriveBackgroundTasks([], NOW, {
+      state: 'working',
+      subagents: [
+        { id: 'a0bfd776754906628', description: 'Sweep formatting', agentType: 'general-purpose', state: 'working', startedAt: T0 }
+      ]
+    })
+    expect(tasks.running).toEqual([
+      expect.objectContaining({
+        id: 'a0bfd776754906628',
+        kind: 'agent',
+        title: 'Sweep formatting',
+        status: 'running',
+        elapsedMs: NOW - T0
+      })
+    ])
+  })
+
+  it('does not count an idle teammate as a running task', () => {
+    const tasks = deriveBackgroundTasks([], NOW, {
+      state: 'working',
+      subagents: [{ id: 'areviewer-1a2b', description: 'reviewer', state: 'idle', startedAt: T0 }]
+    })
+    expect(tasks.running).toEqual([])
+  })
+
+  it('still trusts the transcript when the host has no status for the pane', () => {
+    const tasks = deriveBackgroundTasks(
+      launchedAgent('a63a93c4664bb92cc', 'Build the invisible HUD beacon', T0),
+      NOW,
+      null
+    )
+    expect(tasks.running.map((task) => task.id)).toEqual(['a63a93c4664bb92cc'])
+    expect(countRunningBackgroundTasks(launchedAgent('a63a93c4664bb92cc', 'x', T0), { state: 'done' })).toBe(0)
+  })
+})

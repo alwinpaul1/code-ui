@@ -18,12 +18,28 @@
 // running-tasks row never appears for it. Nothing here is gated on the agent
 // name. The records in the transcript are what decide.
 
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import {
   isTextBlock,
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
+
+/**
+ * What Orca's hooks know about the pane, to reconcile against the transcript.
+ *
+ * Why the transcript is not enough: a completion that lands MID-TURN is never
+ * written as a user turn — Claude Code 2.1.266 stores it as an `attachment`
+ * record (type `queued_command`) that Orca's transcript reader does not
+ * surface. Observed 2026-09-09: five tasks shown running while two were. The
+ * hooks fill the gap. SubagentStop keeps `subagents` current (absent = none
+ * tracked, which is how Orca's own sidebar reads it), and Orca holds the pane
+ * `working` while Claude's Stop hook still lists a running non-agent task, so
+ * `done` means every background shell has reported. `null` = no host status
+ * for this pane (an older host, or hooks not attached): trust the transcript.
+ */
+export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'>
 
 export type BackgroundTaskKind = 'shell' | 'agent'
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed'
@@ -76,7 +92,8 @@ type Notification = { status: string; summary: string | null; at: number }
  *  has reported back. Pure: `now` is the only clock, so tests set it. */
 export function deriveBackgroundTasks(
   messages: readonly NativeChatMessage[],
-  now: number
+  now: number,
+  hostStatus: BackgroundTaskHostStatus | null = null
 ): BackgroundTasks {
   const pending: PendingCall[] = []
   const launches = new Map<string, Launch>()
@@ -110,19 +127,33 @@ export function deriveBackgroundTasks(
       notifications.set(notification.id, notification.value)
     }
   }
-  return splitByStatus(launches, notifications, now)
+  return splitByStatus(launches, notifications, now, hostStatus, position + 1)
 }
 
 function splitByStatus(
   launches: ReadonlyMap<string, Launch>,
   notifications: ReadonlyMap<string, Notification>,
-  now: number
+  now: number,
+  hostStatus: BackgroundTaskHostStatus | null,
+  afterTranscript: number
 ): BackgroundTasks {
   const running: BackgroundTask[] = []
   const finished: { task: BackgroundTask; at: number }[] = []
+  const roster = liveSubagentRoster(hostStatus)
+  const paneDone = hostStatus?.state === 'done'
   for (const launch of launches.values()) {
     const notification = notifications.get(launch.id)
     if (!notification) {
+      // Why: an idle teammate is alive but not working, so it is not "running".
+      const hostSaysFinished =
+        paneDone || (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
+      if (hostSaysFinished) {
+        finished.push({
+          at: afterTranscript,
+          task: { ...launch, status: 'completed', elapsedMs: null }
+        })
+        continue
+      }
       running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
       continue
     }
@@ -137,10 +168,44 @@ function splitByStatus(
       }
     })
   }
+  // A subagent the host is tracking but the loaded transcript window never
+  // showed (launched before the page, or its launch record paginated out).
+  if (roster && !paneDone) {
+    for (const [id, snapshot] of roster) {
+      if (launches.has(id)) {
+        continue
+      }
+      running.push({
+        id,
+        kind: 'agent',
+        title: truncate(snapshot.description?.trim() || snapshot.agentType?.trim() || id),
+        status: 'running',
+        startedAt: snapshot.startedAt,
+        elapsedMs: elapsedSince(snapshot.startedAt, now)
+      })
+    }
+  }
   // Running stays in launch order (the oldest job is the one people look for);
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)
   return { running, finished: finished.map((entry) => entry.task) }
+}
+
+/** Subagents the host still counts as busy, by id; null when the host gave no
+ *  status at all (then only the transcript can speak). */
+function liveSubagentRoster(
+  hostStatus: BackgroundTaskHostStatus | null
+): Map<string, NonNullable<AgentStatusEntry['subagents']>[number]> | null {
+  if (!hostStatus) {
+    return null
+  }
+  const roster = new Map<string, NonNullable<AgentStatusEntry['subagents']>[number]>()
+  for (const snapshot of hostStatus.subagents ?? []) {
+    if (snapshot.state !== 'idle') {
+      roster.set(snapshot.id, snapshot)
+    }
+  }
+  return roster
 }
 
 /** A notification means the task stopped. Only an explicitly bad status is
@@ -236,8 +301,11 @@ function readNotifications(
  *  not depend on the clock, so the chat view can read the count for its row
  *  without holding one — only `elapsedMs` needs `now`, and only the sheet
  *  shows that. */
-export function countRunningBackgroundTasks(messages: readonly NativeChatMessage[]): number {
-  return deriveBackgroundTasks(messages, 0).running.length
+export function countRunningBackgroundTasks(
+  messages: readonly NativeChatMessage[],
+  hostStatus: BackgroundTaskHostStatus | null = null
+): number {
+  return deriveBackgroundTasks(messages, 0, hostStatus).running.length
 }
 
 /** "19m 8s" while a job runs; "2h 19m" once it is past the hour. Null when the

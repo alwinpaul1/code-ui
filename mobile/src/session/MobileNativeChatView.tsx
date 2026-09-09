@@ -49,6 +49,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  agentStatus,
   onStop,
   streaming,
   hasMore,
@@ -113,7 +114,10 @@ export function MobileNativeChatView({
   // Read from the UNFILTERED transcript on purpose. The `<task-notification>`
   // turns that retire a task are harness noise, so the folded list drops them.
   // Codex writes none of these records, so its tabs count zero and show no row.
-  const runningTaskCount = useMemo(() => countRunningBackgroundTasks(messages), [messages])
+  const runningTaskCount = useMemo(
+    () => countRunningBackgroundTasks(messages, agentStatus ?? null),
+    [agentStatus, messages]
+  )
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -367,6 +371,7 @@ export function MobileNativeChatView({
       <MobileBackgroundTasksSheet
         visible={backgroundTasksOpen}
         messages={messages}
+        agentStatus={agentStatus ?? null}
         onClose={() => setBackgroundTasksOpen(false)}
       />
       <MobileNativeChatQueueEditor editor={queueEditor} />

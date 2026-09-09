@@ -452,6 +452,7 @@ export function useMobileNativeChatController(
     ),
     nativeChatSession,
     nativeChatAgentWorking,
+    nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,

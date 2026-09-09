@@ -10,6 +10,7 @@ import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
   deriveBackgroundTasks,
+  type BackgroundTaskHostStatus,
   formatBackgroundTaskElapsed,
   type BackgroundTask
 } from './mobile-background-tasks'
@@ -25,15 +26,17 @@ const TICK_MS = 1000
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
+  agentStatus,
   onClose
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
+  agentStatus?: BackgroundTaskHostStatus | null
   onClose: () => void
 }) {
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
-      <MobileBackgroundTasksSheetBody messages={messages} />
+      <MobileBackgroundTasksSheetBody messages={messages} agentStatus={agentStatus ?? null} />
     </BottomDrawer>
   )
 }
@@ -41,9 +44,11 @@ export function MobileBackgroundTasksSheet({
 /** The sheet's contents, exported so render tests can mount them without the
  *  drawer's gesture/animation stack. */
 export function MobileBackgroundTasksSheetBody({
-  messages
+  messages,
+  agentStatus
 }: {
   messages: readonly NativeChatMessage[]
+  agentStatus?: BackgroundTaskHostStatus | null
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -54,8 +59,8 @@ export function MobileBackgroundTasksSheetBody({
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
   const { running, finished } = useMemo(
-    () => deriveBackgroundTasks(messages, now),
-    [messages, now]
+    () => deriveBackgroundTasks(messages, now, agentStatus ?? null),
+    [agentStatus, messages, now]
   )
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
