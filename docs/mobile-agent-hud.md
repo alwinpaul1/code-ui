@@ -27,8 +27,18 @@ Orca's argument tokenizer. Codex needs no command at all. The phone's screen
 parser reads both lines, so the HUD is repainted by the agent itself the
 moment anything changes.
 
-Limits, stated plainly: this covers **agents the phone launches**. A session
-started from the desktop has no flags and falls back to the sources below.
+**Desktop-started agents get the same flags** through Orca's own launch
+profile: Orca appends its per-agent `agentDefaultArgs` setting to every agent
+it launches, manages that field itself (yolo mode writes it), and lets a paired
+phone update it over `settings.update`. On every host connect the phone brings
+that profile in line with the switch in Settings → Chat UI ("Desktop agents
+show model and context", default on): it appends the two flags after the
+user's own arguments, replaces an older version of ours, and removes exactly
+ours when the switch is off (`agent-hud-desktop-launch-args.ts`). A user who
+runs their own Claude status line turns the switch off, because `--settings`
+on the launch line takes precedence over their `settings.json` status line for
+agents Orca launches. Agents started by typing `claude` into a plain terminal
+are outside Orca's launch path and get no flags.
 The Claude status-line command is `sh`; on Windows Claude Code runs its shell
 commands through Git Bash (its own strings say "POSIX sh, not cmd.exe or
 PowerShell", and Git for Windows is a Claude Code requirement there), which

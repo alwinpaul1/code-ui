@@ -67,7 +67,10 @@ What the host gives us for free: Orca's hooks report the model per session
 rest, the agents themselves can paint a status line when asked **at launch,
 from the command line** (Claude `--settings '<json>'`, Codex
 `-c tui.status_line=[...]`), which writes nothing to the host; the phone adds
-those flags to every agent it launches and reads the agent's own footer. A
+those flags to every agent it launches, and, through Orca's own
+`agentDefaultArgs` setting over `settings.update`, to the agents the desktop
+launches (a switch in Settings → Chat UI, default on). Reading the agent's own
+footer is the data path. A
 reader that opened a host terminal to read transcript files was removed on
 2026-09-09 (see `docs/mobile-agent-hud.md`). When a figure is not on screen,
 show nothing rather than a number from anywhere else.
