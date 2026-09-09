@@ -43,13 +43,26 @@ export function isTerminalCoveredByNativeChat(
   return showNativeChat && activeHandle === handle
 }
 
-export function mobileNativeChatTerminalCapabilities(covered: boolean): {
+/**
+ * A covered subscribe used to ask for `mobileInputLeaseOnly`, so the host sent
+ * `subscribed` and nothing else. It cannot any more: the agents' HUD beacon
+ * (`agent-hud-beacon.ts`) rides the PTY byte stream, and chat is exactly when
+ * the phone needs to read it, so a covered stream has to carry output.
+ *
+ * The bytes still never reach xterm — the subscription callback strips the
+ * beacon and then returns early for a covered handle — and the subscribe still
+ * carries no viewport, so the host does not phone-fit a PTY chat never renders
+ * (see `mobileNativeChatSubscribeViewport`). The covered stream remains the
+ * input-floor lease; `leaseOnlyHandlesRef` still records that it is not a
+ * rendering stream, which is what the rearm and resume logic reads.
+ *
+ * The cost is deliberate and known: a covered tab now streams the agent's
+ * output over the link while native chat is showing it in its own words.
+ */
+export function mobileNativeChatTerminalCapabilities(_covered: boolean): {
   terminalBinaryStream: 1
-  mobileInputLeaseOnly?: 1
 } {
-  return covered
-    ? { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
-    : { terminalBinaryStream: 1 }
+  return { terminalBinaryStream: 1 }
 }
 
 // Why: a covered subscribe is only an input lease — carrying phone dims would make the host phone-fit a PTY native chat never renders.

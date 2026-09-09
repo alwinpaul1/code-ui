@@ -1,0 +1,316 @@
+// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' because
+// Metro cannot resolve Node builtins in a React Native bundle.
+import { Buffer } from 'buffer'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
+
+/**
+ * The HUD's data source: the agents' own live state, carried to the phone on
+ * an INVISIBLE escape sequence written straight to the PTY. Nothing is drawn
+ * in the user's terminal, nothing is written to their disk, and no terminal is
+ * opened on the host.
+ *
+ * How it works, verified live 2026-09-09 on macOS against Claude Code 2.1.266
+ * and codex-cli 0.153.4:
+ *
+ *  - Claude Code takes `--settings '{"statusLine":{"type":"command",…}}'` on
+ *    the command line and pipes its own state (model, effort, context tokens,
+ *    rate limits) to that command's stdin on every repaint. When the command
+ *    prints NOTHING, Claude Code draws no status row at all — so the user's
+ *    terminal is unchanged.
+ *  - Codex takes `-c 'notify=["sh","-c",…]'` and runs that command after each
+ *    turn with one JSON argument. Codex draws nothing for it.
+ *  - Claude Code STRIPS OSC escapes from a status-line command's stdout, so
+ *    the payload cannot ride on stdout. Instead each script finds the agent's
+ *    own PTY by walking its parent processes (`ps -o tty= -p <pid>`, which
+ *    gives `ttys003` on macOS and `pts/3` on Linux) and writes ONE
+ *    `ESC ] 7777 ; <payload> BEL` to `/dev/<tty>`. Terminals draw nothing for
+ *    an unknown OSC; the phone already receives the raw PTY byte stream and
+ *    sniffs the sequence out of it (`agent-hud-beacon.ts`).
+ *  - Windows has no PTY device path to walk to, so both halves take a
+ *    different route there. Claude Code runs its status-line command through
+ *    Git Bash, so the same sh script detects MSYS from `uname -s` and writes
+ *    to `/dev/tty` (MSYS's name for the attached console, which is Claude's
+ *    own under ConPTY), then `/dev/conout`. Codex spawns notify with NO shell
+ *    and Git for Windows puts no `sh.exe` on PATH, so a win32 host gets a
+ *    PowerShell notify command instead (`CODEX_HUD_NOTIFY_POWERSHELL`).
+ *    **The whole Windows path is untested on a real Windows machine.**
+ *
+ * The POSIX scripts use `sed`, `printf`, `tail`, `tr` and `ps` only: no node,
+ * no jq, no python for the payload itself. (Claude's DELEGATION step below
+ * does reach for node/python3/jq, but only to read the user's own settings
+ * file, and Claude Code is itself a Node program.)
+ */
+
+/**
+ * Finds the terminal to write to and writes `$o` there. Two ways in:
+ *
+ *  - Unix: the child has no controlling tty of its own, so walk up at most six
+ *    parents for one (`ps -o tty=` → `ttys003` on macOS, `pts/3` on Linux) and
+ *    write to `/dev/<that>`. Every `ps` is guarded: MSYS's own `ps` has no
+ *    `-o tty=`, and the walk must never make noise or fail the script.
+ *  - Windows: Claude Code runs status-line commands through Git Bash, where
+ *    there is no PTY device to walk to. MSYS maps `/dev/tty` to the attached
+ *    console instead, and the command inherits Claude's console under ConPTY —
+ *    which is the stream Orca forwards. `/dev/conout` is the second try.
+ *    UNTESTED on a real Windows host; see docs/mobile-agent-hud.md.
+ *
+ * One `printf`, so the whole sequence is a single write() the phone sees whole
+ * far more often than not. The sniffer stitches a split one anyway.
+ *
+ * `CUIHUD_TTY` overrides the device; `CUIHUD_WIN_TTY` and `CUIHUD_WIN_CONOUT`
+ * override the two Windows ones. Tests point them at temp files.
+ * Quoted case patterns: an unquoted `?` would glob-match any single char.
+ */
+const TTY_WRITE = [
+  // `2>/dev/null` FIRST: a failing `>>` is reported by the shell on fd 2, and
+  // that must already be /dev/null or a Windows host with no console would
+  // print an error into the terminal this exists to leave alone.
+  'w(){ printf "\\033]7777;%s\\007" "$o" 2>/dev/null >> "$1"; }',
+  'tt=$CUIHUD_TTY',
+  'wn=0',
+  'case $(uname -s 2>/dev/null || true) in MSYS*|MINGW*|CYGWIN*) wn=1;; esac',
+  'if [ -z "$tt" ] && [ "$wn" = 0 ]; then pw=$PPID; nw=0; while [ -n "$pw" ] && [ "$pw" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p "$pw" 2>/dev/null | tr -d " " || true); case "$dv" in ""|"?"|"??") pw=$(ps -o ppid= -p "$pw" 2>/dev/null | tr -d " " || true);; *) tt="/dev/$dv"; break;; esac; nw=$((nw+1)); done; fi',
+  'if [ -n "$tt" ]; then w "$tt"; elif [ "$wn" = 1 ]; then w "${CUIHUD_WIN_TTY:-/dev/tty}" || w "${CUIHUD_WIN_CONOUT:-/dev/conout}"; fi'
+]
+
+/** Percent-encodes what would otherwise break the `key=value` grammar:
+ *  `%` first (or it would double-encode), then space and `;`. */
+const ENCODE_FN = 'q(){ printf %s "$1" | sed -e "s/%/%25/g" -e "s/ /%20/g" -e "s/;/%3B/g"; }'
+
+/**
+ * Claude Code's status-line command.
+ *
+ * The JSON Claude Code pipes in is a SINGLE line, so anchored `sed` captures
+ * are safe; the greedy `.*` prefix takes the last match of each pattern, and
+ * `used_percentage` is disambiguated by the `remaining_percentage` that only
+ * the context block carries. `current_usage` and `used_percentage` are null
+ * before the first reply, in which case those keys are simply left off the
+ * payload — the phone shows what is known and nothing else.
+ *
+ * NO SINGLE QUOTES ANYWHERE: the whole script travels inside a JSON string
+ * inside a single-quoted shell token. Orca tokenizes agent args with the Unix
+ * grammar once and re-quotes per shell (`tokenizeStartupCommand`), and a
+ * single quote would end the token. A test asserts their absence.
+ */
+export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
+  'i=$(cat)',
+  'g(){ printf %s "$i" | sed -nE "s/.*$1.*/\\1/p"; }',
+  ENCODE_FN,
+  'mi=$(g "\\"model\\":\\{\\"id\\":\\"([^\\"]*)\\"")',
+  'mn=$(g "\\"display_name\\":\\"([^\\"]*)\\"")',
+  'ef=$(g "\\"effort\\":\\{\\"level\\":\\"([^\\"]*)\\"")',
+  'pc=$(g "\\"used_percentage\\":([0-9.]+),\\"remaining_percentage\\"")',
+  'cw=$(g "\\"context_window_size\\":([0-9]+)")',
+  'ta=$(g "\\"current_usage\\":\\{\\"input_tokens\\":([0-9]+)")',
+  'tb=$(g "\\"cache_creation_input_tokens\\":([0-9]+)")',
+  'tc=$(g "\\"cache_read_input_tokens\\":([0-9]+)")',
+  'ha=$(g "\\"five_hour\\":\\{\\"used_percentage\\":([0-9.]+)")',
+  'hb=$(g "\\"five_hour\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
+  'wa=$(g "\\"seven_day\\":\\{\\"used_percentage\\":([0-9.]+)")',
+  'wb=$(g "\\"seven_day\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
+  'wd=$(g "\\"cwd\\":\\"([^\\"]*)\\"")',
+  'o="CUIHUD1 agent=claude"',
+  '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
+  '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
+  '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
+  '[ -n "$ta" ] && o="$o used=$((ta+${tb:-0}+${tc:-0}))"',
+  '[ -n "$cw" ] && o="$o win=$cw"',
+  '[ -n "$pc" ] && o="$o pct=${pc%.*}"',
+  '[ -n "$ha" ] && o="$o h5=${ha%.*}:${hb:-0}"',
+  '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
+  ...TTY_WRITE,
+  // Delegation: a user who already runs their own status line must keep seeing
+  // exactly their bar. settings.json is multi-line JSON, so sed is not reliable
+  // for it — node, else python3, else jq. (Claude Code is a Node program, so
+  // `node` is on PATH wherever it runs.) Found nothing: print nothing, and
+  // Claude Code draws no row.
+  'x(){ [ -r "$1" ] || return 1; if command -v node >/dev/null 2>&1; then node -e "const s=JSON.parse(require(\\"fs\\").readFileSync(process.argv[1],\\"utf8\\"));const c=s.statusLine&&s.statusLine.type===\\"command\\"&&s.statusLine.command;if(c)process.stdout.write(c)" "$1"; elif command -v python3 >/dev/null 2>&1; then python3 -c "import json,sys;s=json.load(open(sys.argv[1])).get(\\"statusLine\\") or {};c=s.get(\\"command\\") if s.get(\\"type\\")==\\"command\\" else None;sys.stdout.write(c or \\"\\")" "$1"; elif command -v jq >/dev/null 2>&1; then jq -r ".statusLine.command // empty" "$1"; fi; }',
+  'y=""',
+  'for f in "$wd/.claude/settings.local.json" "$wd/.claude/settings.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.local.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do y=$(x "$f" 2>/dev/null); [ -n "$y" ] && break; done',
+  'if [ -n "$y" ] && ! printf %s "$y" | grep -q CUIHUD; then printf %s "$i" | sh -c "$y" 2>/dev/null; fi',
+  'exit 0'
+].join('; ')
+
+/**
+ * Codex's notify command.
+ *
+ * Codex appends one JSON argument (`{"type":"agent-turn-complete","thread-id":
+ * "01a08736-…","cwd":…}`). `sh -c <script> <argv0> <argv1>` makes the first
+ * trailing word `$0`, so the flag passes a dummy `$0` and the JSON lands in
+ * `$1`; the `case` still falls back to `$0` if a future Codex appends
+ * differently.
+ *
+ * The figures live in the rollout Codex writes for itself, under
+ * `${CODEX_HOME:-$HOME/.codex}/sessions/YYYY/MM/DD/rollout-*-<thread-id>.jsonl`:
+ * `event_msg` records with `payload.type=="token_count"` carry
+ * `payload.info.last_token_usage.total_tokens` (the CURRENT context, not the
+ * running total) and `payload.info.model_context_window`; `turn_context`
+ * records carry `payload.model` and `payload.effort`. Shapes read from real
+ * rollouts on 2026-09-09 (codex-cli 0.153.4, `model_context_window` 258400).
+ *
+ * `"effort":"` cannot match `"reasoning_effort":"` — the byte before `effort`
+ * must be a quote — so the greedy prefix lands on the real one either way.
+ */
+export const CODEX_HUD_NOTIFY_SCRIPT = [
+  'j=$1',
+  'case $j in {*) ;; *) j=$0;; esac',
+  'ti=$(printf %s "$j" | sed -nE "s/.*\\"thread-id\\":\\"([^\\"]*)\\".*/\\1/p")',
+  'ch=${CODEX_HOME:-$HOME/.codex}',
+  'rf=""',
+  // Rollout names start with an ISO timestamp, so the last glob match is newest.
+  'if [ -n "$ti" ]; then for c in "$ch"/sessions/*/*/*/rollout-*-$ti.jsonl; do [ -f "$c" ] && rf=$c; done; fi',
+  'md=""; ef=""; tk=""; cw=""',
+  'if [ -n "$rf" ]; then md=$(sed -nE "/\\"type\\":\\"turn_context\\"/s/.*\\"model\\":\\"([^\\"]*)\\".*/\\1/p" "$rf" | tail -n 1); ef=$(sed -nE "/\\"type\\":\\"turn_context\\"/s/.*\\"effort\\":\\"([^\\"]*)\\".*/\\1/p" "$rf" | tail -n 1); tk=$(tail -n 400 "$rf" | sed -nE "s/.*\\"last_token_usage\\":\\{[^}]*\\"total_tokens\\":([0-9]+).*/\\1/p" | tail -n 1); cw=$(tail -n 400 "$rf" | sed -nE "s/.*\\"model_context_window\\":([0-9]+).*/\\1/p" | tail -n 1); fi',
+  ENCODE_FN,
+  'o="CUIHUD1 agent=codex"',
+  '[ -n "$md" ] && o="$o model=$(q "$md")"',
+  '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
+  '[ -n "$tk" ] && o="$o used=$tk"',
+  '[ -n "$cw" ] && o="$o win=$cw"',
+  ...TTY_WRITE,
+  // Delegation: our `-c notify=[…]` overrides whatever the user configured, so
+  // run theirs too. Best effort, and deliberately narrow: only a SINGLE-LINE
+  // `notify = ["a","b"]` array is supported, and an argument containing a comma
+  // would be split. Anything else is left alone rather than guessed at.
+  'nc=$ch/config.toml',
+  'un=""',
+  '[ -r "$nc" ] && un=$(sed -nE "s/^[[:space:]]*notify[[:space:]]*=[[:space:]]*\\[(.*)\\].*/\\1/p" "$nc" | head -n 1)',
+  'case $un in *CUIHUD*) un="";; esac',
+  'if [ -n "$un" ]; then eval "set -- $(printf %s "$un" | tr "," " ")"; [ -n "$1" ] && "$@" "$j" >/dev/null 2>&1; fi',
+  'exit 0'
+].join('; ')
+
+/**
+ * Codex's notify command on a Windows host.
+ *
+ * Codex spawns notify DIRECTLY, with no shell, and Git for Windows does not
+ * put `sh.exe` on PATH (only `git.exe`, under `Git\cmd`). So a Windows host
+ * gets `powershell` instead of `sh`.
+ *
+ * Two Windows-only hazards shape the script, and both are why this is not a
+ * transliteration of the sh one:
+ *
+ *  - `powershell -Command <string> <more args>` does NOT bind the extra args
+ *    to `$args`; it APPENDS them to the command text. A raw JSON token pasted
+ *    onto the end would be re-parsed by PowerShell (whose strings do not
+ *    understand `\"`) and would fail the whole command, script and all. So the
+ *    script ends in a `#`, which makes whatever is appended a comment, and…
+ *  - …the thread id is read from `[Environment]::GetCommandLineArgs()`, which
+ *    is the real argv as Windows parsed it, not PowerShell's re-parse.
+ *
+ * No single quotes: PowerShell's literal-string quote is the one character
+ * that would end the token Orca hands the host shell, so every string here is
+ * double-quoted and every embedded quote comes from `$q = [char]34`. Likewise
+ * ESC and BEL are built from `[char]27`/`[char]7` rather than `` `e ``, which
+ * Windows PowerShell 5.1 does not know.
+ *
+ * UNTESTED on a real Windows host: there is no PowerShell on the machine this
+ * was written on. Only its shape is asserted (see the tests) — treat it as
+ * unproven until someone runs it.
+ */
+export const CODEX_HUD_NOTIFY_POWERSHELL = [
+  '$ErrorActionPreference="SilentlyContinue"',
+  '$q=[char]34',
+  '$E={param($s) ($s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
+  '$a=[Environment]::GetCommandLineArgs()',
+  '$t=""',
+  'if(($a -join " ") -match "thread.id[^0-9A-Za-z]{1,4}([0-9A-Za-z-]{8,64})"){$t=$Matches[1]}',
+  '$h=$env:CODEX_HOME',
+  'if(-not $h){$h=Join-Path $env:USERPROFILE ".codex"}',
+  // With no thread id, the newest rollout is the session that just replied.
+  '$g="sessions\\*\\*\\*\\rollout-*.jsonl"',
+  'if($t){$g="sessions\\*\\*\\*\\rollout-*-"+$t+".jsonl"}',
+  '$f=Get-ChildItem -Path (Join-Path $h $g) | Sort-Object LastWriteTime | Select-Object -Last 1',
+  '$o="CUIHUD1 agent=codex"',
+  'if($f){$L=Get-Content -LiteralPath $f.FullName -Tail 400',
+  '$c=$L | Where-Object {$_ -match ($q+"type"+$q+":"+$q+"turn_context"+$q)} | Select-Object -Last 1',
+  'if($c -match ($q+"model"+$q+":"+$q+"([^"+$q+"]*)"+$q)){$o=$o+" model="+(& $E $Matches[1])}',
+  // "effort":" cannot match inside "reasoning_effort":" — the byte before
+  // `effort` must be a quote — so the first match is the real one.
+  'if($c -match ($q+"effort"+$q+":"+$q+"([^"+$q+"]*)"+$q)){$o=$o+" effort="+(& $E $Matches[1])}',
+  '$k=$L | Where-Object {$_ -match ($q+"type"+$q+":"+$q+"token_count"+$q)} | Select-Object -Last 1',
+  'if($k -match ($q+"last_token_usage"+$q+":\\{[^}]*"+$q+"total_tokens"+$q+":(\\d+)")){$o=$o+" used="+$Matches[1]}',
+  'if($k -match ($q+"model_context_window"+$q+":(\\d+)")){$o=$o+" win="+$Matches[1]}}',
+  // [char]27/[char]7 rather than `e, which Windows PowerShell 5.1 does not know.
+  '[Console]::Out.Write([string][char]27+"]7777;"+$o+[string][char]7)',
+  // Delegation, best effort and deliberately narrow: a single-line
+  // `notify = ["a","b"]` in config.toml, run with the same JSON argument.
+  '$cf=Join-Path $h "config.toml"',
+  '$m=Select-String -Path $cf -Pattern "^\\s*notify\\s*=\\s*\\[(.*)\\]" | Select-Object -First 1',
+  'if($m -and $m.Matches[0].Groups[1].Value -notmatch "CUIHUD"){$p=@($m.Matches[0].Groups[1].Value -split "," | ForEach-Object {$_.Trim().Trim($q)})',
+  '$r=$a | Select-Object -Last 1',
+  'if($p.Count -gt 1){Start-Process -FilePath $p[0] -ArgumentList (@($p[1..($p.Count-1)])+@($r)) -NoNewWindow}',
+  'elseif($p.Count -eq 1){Start-Process -FilePath $p[0] -ArgumentList @($r) -NoNewWindow}}',
+  // Everything PowerShell appends after the command string lands in here.
+  '#'
+].join('; ')
+
+export function buildClaudeHudSettingsJson(): string {
+  return JSON.stringify({
+    statusLine: { type: 'command', command: CLAUDE_HUD_STATUSLINE_SCRIPT }
+  })
+}
+
+/**
+ * Codex parses a `-c key=value` override as TOML.
+ *
+ * The sh script cannot be inlined: a TOML basic string rejects the `\033` in
+ * it outright. Base64 keeps the value to `[A-Za-z0-9+/=]` plus a fixed
+ * wrapper, and no quoting can break it. `base64 -d` is spelled the same on
+ * macOS and GNU coreutils.
+ *
+ * The PowerShell script goes in as text, because its ESC comes from
+ * `[char]27` and not an escape — but its `\*`, `\{`, `\s` and `\d` would still
+ * be invalid TOML escapes, so every backslash is doubled (which is exactly
+ * what `JSON.stringify` does, and TOML decodes back). A TOML literal string
+ * would avoid that, but its delimiter is the single quote, which is the one
+ * character that would end the shell token Orca hands the host.
+ */
+export function buildCodexHudNotifyOverride(hostPlatform: NodeJS.Platform | null): string {
+  if (hostPlatform === 'win32') {
+    const script = JSON.stringify(CODEX_HUD_NOTIFY_POWERSHELL)
+    return `notify=["powershell","-NoProfile","-NonInteractive","-Command",${script}]`
+  }
+  const encoded = Buffer.from(CODEX_HUD_NOTIFY_SCRIPT, 'utf8').toString('base64')
+  return `notify=["sh","-c","eval \\"$(printf %s ${encoded} | base64 -d)\\"","cuihud"]`
+}
+
+/** Escape for a single-quoted POSIX token: Orca tokenizes agent args with the
+ *  Unix grammar once and re-quotes each token for the host shell itself. */
+function singleQuoted(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+export function agentHudLaunchFlag(
+  agent: 'claude' | 'codex',
+  hostPlatform: NodeJS.Platform | null
+): string {
+  return agent === 'claude'
+    ? // Identical on every platform: only the sh script inside it branches,
+      // because Claude Code runs status-line commands through Git Bash there.
+      `--settings ${singleQuoted(buildClaudeHudSettingsJson())}`
+    : `-c ${singleQuoted(buildCodexHudNotifyOverride(hostPlatform))}`
+}
+
+/**
+ * The launch arguments for one agent: the host's own defaults kept in front,
+ * ours appended. Null for an agent with no beacon channel, so the host
+ * launches exactly as it always did.
+ *
+ * A null platform is treated as POSIX: an older host that does not report one
+ * is a host the phone has only ever seen on macOS and Linux.
+ */
+export function buildAgentHudLaunchArgs(args: {
+  agent: TuiAgent
+  /** The host's own default args for this agent, kept in front of ours. */
+  hostDefaultArgs: string
+  /** From `status.get`; decides which Codex notify command the host can run. */
+  hostPlatform: NodeJS.Platform | null
+}): string | null {
+  if (args.agent !== 'claude' && args.agent !== 'codex') {
+    return null
+  }
+  const base = args.hostDefaultArgs.trim()
+  const flag = agentHudLaunchFlag(args.agent, args.hostPlatform)
+  return base ? `${base} ${flag}` : flag
+}

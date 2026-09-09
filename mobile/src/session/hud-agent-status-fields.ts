@@ -32,7 +32,9 @@ export function hudFieldsFromAgentStatus(
   return fields
 }
 
-function short(tokens: number): string {
+/** "649.5k", "1.0M": the label the sheet prints beside the ring. Shared with
+ *  the beacon merge so one formatter serves every source. */
+export function shortTokenLabel(tokens: number): string {
   if (tokens >= 1_000_000) {
     const m = tokens / 1_000_000
     return `${m >= 10 ? Math.round(m) : m.toFixed(1)}M`
@@ -65,8 +67,8 @@ export function applyAgentStatusHudFields(
     ? fields.contextWindowTokens
       ? {
           usedPercent: Math.min(100, Math.round((fields.contextUsedTokens! / fields.contextWindowTokens) * 100)),
-          usedLabel: short(fields.contextUsedTokens!),
-          windowLabel: short(fields.contextWindowTokens),
+          usedLabel: shortTokenLabel(fields.contextUsedTokens!),
+          windowLabel: shortTokenLabel(fields.contextWindowTokens),
           ...(base.context?.limits ? { limits: base.context.limits } : {})
         }
       : (base.context ?? null)

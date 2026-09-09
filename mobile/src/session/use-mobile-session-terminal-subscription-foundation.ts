@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { resetAgentHudBeacons } from './agent-hud-beacon'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -78,6 +79,10 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
+    // The HUD beacons belong to handles that no longer exist; a half-arrived
+    // sequence certainly does. (Kept across a mere unsubscribe: the last thing
+    // the agent said about itself is still true while its tab is open.)
+    resetAgentHudBeacons()
     setTerminalKeyboardMetrics(new Map())
     for (const term of terminalRefs.current.values()) {
       term.clear()

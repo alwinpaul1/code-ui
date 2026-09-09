@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { View, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -7,6 +8,13 @@ import { SectionLabel } from '../src/ui/SectionLabel'
 import { Surface } from '../src/ui/Surface'
 import { Txt } from '../src/ui/Txt'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
+import {
+  loadDesktopHudLaunchEnabled,
+  saveDesktopHudLaunchEnabled
+} from '../src/session/desktop-hud-launch-preference'
+import { syncAgentHudDesktopLaunchArgs } from '../src/session/agent-hud-desktop-launch-args'
+import { useAllHostClients } from '../src/transport/use-all-host-clients'
+import { loadHostCatalog } from '../src/transport/host-store'
 
 export default function NativeChatSettingsScreen() {
   const router = useRouter()
@@ -15,6 +23,26 @@ export default function NativeChatSettingsScreen() {
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
+  const [desktopHud, setDesktopHud] = useState(true)
+  useEffect(() => {
+    void loadDesktopHudLaunchEnabled().then(setDesktopHud)
+  }, [])
+  const [hostIds, setHostIds] = useState<string[]>([])
+  useEffect(() => {
+    void loadHostCatalog()
+      .then((catalog) => setHostIds(catalog.map((host) => host.id)))
+      .catch(() => setHostIds([]))
+  }, [])
+  const clients = useAllHostClients(hostIds, { autoConnectHostIds: [], closeUnusedOnRelease: false })
+  const toggleDesktopHud = async (next: boolean) => {
+    setDesktopHud(next)
+    await saveDesktopHudLaunchEnabled(next)
+    for (const entry of clients) {
+      if (entry.client.getState() === 'connected') {
+        void syncAgentHudDesktopLaunchArgs(entry.client, next).catch(() => null)
+      }
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -57,6 +85,40 @@ export default function NativeChatSettingsScreen() {
           Chat-capable agents (Claude, Codex and others) can open as a readable transcript instead of
           the raw terminal. The terminal is always one long-press away on the session tab, and the
           agent keeps running on your desktop either way.
+        </Txt>
+        <SectionLabel style={{ marginTop: space.lg }}>Model and context on the desktop</SectionLabel>
+        <Surface
+          rounded="lg"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            paddingVertical: space.md,
+            paddingHorizontal: space.lg
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="body" weight="medium">
+              Desktop agents report model and context
+            </Txt>
+            <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+              {desktopHud ? 'On' : 'Off'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Desktop agents report model and context"
+            value={desktopHud}
+            onValueChange={(next) => void toggleDesktopHud(next)}
+            trackColor={{ false: colors.borderStrong, true: colors.accent }}
+            thumbColor={colors.bgPanel}
+          />
+        </Surface>
+        <Txt variant="label" tone="secondary" style={{ marginTop: space.md, paddingHorizontal: space.xs }}>
+          Agents you start on the desktop send their model, effort, context and usage to the phone
+          the way ones you start here already do. Nothing appears in your terminal and nothing is
+          installed: the figures travel on an escape sequence terminals draw nothing for. A Claude
+          status line of your own keeps working exactly as it does now. Turning this off removes
+          the flags from Orca's launch profile again.
         </Txt>
       </ScrollView>
     </View>

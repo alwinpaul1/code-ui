@@ -29,10 +29,13 @@ describe('mobile native-chat terminal stream lifecycle', () => {
       })
     ).toBe('pause')
     expect(isTerminalCoveredByNativeChat(true, 'pty-1', 'pty-1')).toBe(true)
-    expect(mobileNativeChatTerminalCapabilities(true)).toEqual({
-      terminalBinaryStream: 1,
-      mobileInputLeaseOnly: 1
-    })
+  })
+
+  it('keeps a covered stream carrying output, so the HUD beacon still arrives', () => {
+    // Why not mobileInputLeaseOnly any more: the agents' HUD beacon rides the
+    // PTY bytes, and chat is exactly when the phone needs to read it. The
+    // bytes are stripped and dropped before xterm; only the wire changes.
+    expect(mobileNativeChatTerminalCapabilities(true)).toEqual({ terminalBinaryStream: 1 })
     expect(mobileNativeChatTerminalCapabilities(false)).toEqual({ terminalBinaryStream: 1 })
   })
 

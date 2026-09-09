@@ -62,23 +62,40 @@ afterwards. A command that reads what the agents already write for themselves
 is not. If a design needs the user to install or run something first, it has
 failed the requirement — find another way or say plainly that there isn't one.
 
-What the host gives us for free: Orca's hooks report the model per session
-(`agentStatus.model`) and `accounts.subscribe` reports rate limits. Nothing may be
-added to the user's terminals either: a status line the user never asked for
-was tried on 2026-09-09 (launch flags for Claude and Codex) and withdrawn the
-same day. Effort and context for an agent with no status line of its own need
-Orca to forward what its hooks and transcript reader already hold; that is an
-upstream change (`docs/orca-upstream-agent-status-usage.md`), not a phone trick. A
-reader that opened a host terminal to read transcript files was removed on
-2026-09-09 (see `docs/mobile-agent-hud.md`). When a figure is not on screen,
-show nothing rather than a number from anywhere else.
+**Nothing may be drawn in the user's terminal.** Not a status row, not a
+footer item, not one extra line. A status line the user never asked for was
+tried on 2026-09-09 and withdrawn the same day, and that verdict stands: a
+visible row is a change to their screen, which is a change to their machine.
+
+The HUD reads the agents' own state instead, on an **invisible OSC beacon**
+they write to their own PTY. Launch flags (Claude Code `--settings`, Codex
+`-c notify`) make each agent run a small `sh` command that emits
+`ESC ] 7777 ; … BEL` to `/dev/<its tty>`; terminals draw nothing for an unknown
+OSC, the phone already receives those bytes, and it strips them before xterm
+ever sees them. Claude's command also runs the user's own status line and
+prints its output verbatim, so a user with one keeps exactly their bar, and a
+user without one still gets no row. Windows takes a different route (MSYS
+`/dev/tty` for Claude, a PowerShell notify command for Codex) and is **written
+but unrun** — do not report it as working. The design, the verified field
+shapes and what is still unproven are in `docs/mobile-agent-hud.md`; the code
+is `mobile/src/session/agent-hud-*`. Orca's hooks (`agentStatus.model`) and
+`accounts.subscribe` remain the fallback sources, and the screen still owns the
+permission mode.
+
+When a figure is not on the beacon and not on screen, show nothing rather than
+a number from anywhere else. A reader that opened a host terminal to read
+transcript files was removed on 2026-09-09; opening a terminal is still out.
 
 **When a figure genuinely cannot be known, show what is known and say the rest
-is unknown.** Never invent a denominator. Claude Code never records its
-context-window size, and a 1M session logs an unmarked `claude-opus-5`: guessing
-from the name called a 493k session 246% full, and "smallest size that fits"
-called it 99% full while it was half empty. Derive it from evidence the session
-itself provides, or report the tokens with no percentage.
+is unknown.** Never invent a denominator. Claude Code's TRANSCRIPT never
+records its context-window size, and a 1M session logs an unmarked
+`claude-opus-5`: guessing from the name called a 493k session 246% full, and
+"smallest size that fits" called it 99% full while it was half empty. Derive it
+from evidence the session itself provides, or report the tokens with no
+percentage. (The beacon is such evidence — Claude Code states
+`context_window_size` in its own status-line payload, and Codex states
+`model_context_window` in its rollout. That is the agent telling us, not us
+guessing from a model name. With tokens and no window, still show no ring.)
 
 ## Every shipped version gets a tag and a release
 

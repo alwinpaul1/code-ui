@@ -1,0 +1,390 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+import { tokenizeStartupCommand } from '../../../src/shared/tui-agent-startup-shell'
+import {
+  buildAgentHudLaunchArgs,
+  buildClaudeHudSettingsJson,
+  buildCodexHudNotifyOverride,
+  CLAUDE_HUD_STATUSLINE_SCRIPT,
+  CODEX_HUD_NOTIFY_POWERSHELL,
+  CODEX_HUD_NOTIFY_SCRIPT
+} from './agent-hud-launch-args'
+
+// Captured 2026-09-09 from Claude Code 2.1.266 on macOS: the JSON it pipes to a
+// status-line command, paths redacted. This is the real contract, not a guess.
+const statusJson = readFileSync(
+  fileURLToPath(new URL('./fixtures/claude-statusline-2.1.266.json', import.meta.url)),
+  'utf8'
+)
+// Captured 2026-09-09 from a real codex-cli 0.153.4 rollout: the first and last
+// `turn_context` and `token_count` records, paths and ids redacted, long prompt
+// strings trimmed. Two token counts, so "the last one wins" is actually tested.
+const rolloutJsonl = readFileSync(
+  fileURLToPath(new URL('./fixtures/codex-rollout-0.153.4.jsonl', import.meta.url)),
+  'utf8'
+)
+
+const ESC = '\u001b'
+const BEL = '\u0007'
+
+/** Shells only; CI runners have no zsh, and Claude Code hands the command to sh. */
+const SHELLS = ['sh', 'bash'] as const
+
+type Run = { stdout: string; beacon: string | null }
+
+function runScript(
+  script: string,
+  options: {
+    input?: string
+    args?: string[]
+    env?: Record<string, string>
+    shell?: 'sh' | 'bash'
+    /** Prepended to PATH; used to put a fake `uname` in front of the real one. */
+    pathShim?: string
+    /** Leaves CUIHUD_TTY unset, so the script has to find a device itself. */
+    noTtyOverride?: boolean
+  }
+): Run {
+  const home = mkdtempSync(join(tmpdir(), 'cuihud-home-'))
+  const tty = join(mkdtempSync(join(tmpdir(), 'cuihud-tty-')), 'pty')
+  const path = options.pathShim
+    ? `${options.pathShim}:${process.env.PATH ?? ''}`
+    : (process.env.PATH ?? '')
+  const stdout = execFileSync(options.shell ?? 'sh', ['-c', script, ...(options.args ?? [])], {
+    input: options.input ?? '',
+    encoding: 'utf8',
+    env: {
+      PATH: path,
+      HOME: home,
+      ...(options.noTtyOverride ? {} : { CUIHUD_TTY: tty }),
+      ...options.env
+    }
+  })
+  let beacon: string | null = null
+  try {
+    beacon = readFileSync(tty, 'utf8')
+  } catch {
+    beacon = null
+  }
+  return { stdout, beacon }
+}
+
+function withUsage(
+  json: string,
+  usage: { input: number; create: number; read: number; pct: number }
+): string {
+  const parsed = JSON.parse(json)
+  parsed.context_window.current_usage = {
+    input_tokens: usage.input,
+    cache_creation_input_tokens: usage.create,
+    cache_read_input_tokens: usage.read,
+    output_tokens: 900
+  }
+  parsed.context_window.used_percentage = usage.pct
+  parsed.context_window.remaining_percentage = 100 - usage.pct
+  return JSON.stringify(parsed)
+}
+
+describe("the phone reads Claude Code's own state without drawing a row", () => {
+  it('sends model, effort, window and both limits on an invisible escape, printing nothing', () => {
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
+    // Empty stdout is the whole point: Claude Code draws no status row for it.
+    expect(run.stdout).toBe('')
+    expect(run.beacon).toBe(
+      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+    )
+  })
+
+  it('adds the token total and the percentage once Claude Code has replied once', () => {
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+      input: withUsage(statusJson, { input: 12000, create: 30000, read: 607540, pct: 64.95 })
+    })
+    // The percentage is truncated to an integer, not passed through as 64.95.
+    expect(run.beacon).toBe(
+      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
+    )
+    expect(run.stdout).toBe('')
+  })
+
+  it('reads the same under sh and bash, the shells Claude Code may hand it to', () => {
+    for (const shell of SHELLS) {
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson, shell })
+      expect(run.beacon).toContain('model=claude-fable-5-1')
+      expect(run.beacon).toContain('effort=medium')
+    }
+  })
+
+  it("keeps a user's own status line exactly as it was", () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'cuihud-cwd-'))
+    mkdirSync(join(cwd, '.claude'))
+    writeFileSync(
+      join(cwd, '.claude', 'settings.json'),
+      JSON.stringify(
+        { statusLine: { type: 'command', command: 'printf "my own bar"' } },
+        null,
+        2
+      )
+    )
+    const json = JSON.parse(statusJson)
+    json.cwd = cwd
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: JSON.stringify(json) })
+    expect(run.stdout).toBe('my own bar')
+    // …and the beacon still went out alongside it.
+    expect(run.beacon).toContain('CUIHUD1 agent=claude')
+  })
+
+  it('writes nothing anywhere when it cannot find the terminal', () => {
+    const home = mkdtempSync(join(tmpdir(), 'cuihud-home-'))
+    const stdout = execFileSync('sh', ['-c', CLAUDE_HUD_STATUSLINE_SCRIPT], {
+      input: statusJson,
+      encoding: 'utf8',
+      // No CUIHUD_TTY and no reachable parent tty: the Windows/Git Bash case.
+      env: { PATH: process.env.PATH ?? '', HOME: home, CUIHUD_TTY: '' }
+    })
+    expect(stdout).toBe('')
+  })
+})
+
+describe('a Windows host has no PTY device, so the script writes to the console', () => {
+  /** Git Bash reports MINGW64_NT-10.0; a PATH shim is the honest way to reach
+   *  that branch from a Mac, since only `uname -s` selects it. */
+  function msysShim(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-shim-'))
+    writeFileSync(join(dir, 'uname'), '#!/bin/sh\nprintf %s "MINGW64_NT-10.0-22631"\n', {
+      mode: 0o755
+    })
+    return dir
+  }
+
+  it('writes the beacon to /dev/tty instead of walking to a PTY device', () => {
+    const console_ = join(mkdtempSync(join(tmpdir(), 'cuihud-con-')), 'tty')
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+      input: statusJson,
+      pathShim: msysShim(),
+      noTtyOverride: true,
+      env: { CUIHUD_WIN_TTY: console_ }
+    })
+    expect(run.stdout).toBe('')
+    expect(readFileSync(console_, 'utf8')).toBe(
+      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+    )
+  })
+
+  it('falls back to /dev/conout when the console cannot be opened', () => {
+    const conout = join(mkdtempSync(join(tmpdir(), 'cuihud-con-')), 'conout')
+    runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+      input: statusJson,
+      pathShim: msysShim(),
+      noTtyOverride: true,
+      env: {
+        // A path under a directory that does not exist: the open fails.
+        CUIHUD_WIN_TTY: '/cuihud-no-such-dir/tty',
+        CUIHUD_WIN_CONOUT: conout
+      }
+    })
+    expect(readFileSync(conout, 'utf8')).toContain('CUIHUD1 agent=claude')
+  })
+
+  it('says nothing and fails nothing when neither console can be opened', () => {
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+      input: statusJson,
+      pathShim: msysShim(),
+      noTtyOverride: true,
+      env: {
+        CUIHUD_WIN_TTY: '/cuihud-no-such-dir/tty',
+        CUIHUD_WIN_CONOUT: '/cuihud-no-such-dir/conout'
+      }
+    })
+    expect(run.stdout).toBe('')
+  })
+
+  it("survives an MSYS ps that does not understand -o tty=", () => {
+    // MSYS ships its own `ps`; the walk must never error out on it. Faked here
+    // by a shim that fails the way that one does, with uname left as the Mac's
+    // so the POSIX walk is the branch under test.
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-shim-'))
+    writeFileSync(join(dir, 'ps'), '#!/bin/sh\necho "ps: unknown option" >&2\nexit 1\n', {
+      mode: 0o755
+    })
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+      input: statusJson,
+      pathShim: dir,
+      noTtyOverride: true
+    })
+    expect(run.stdout).toBe('')
+  })
+})
+
+describe("the phone reads Codex's own rollout without drawing a row", () => {
+  const threadId = '01a00000-0000-7000-8000-000000000000'
+  const notifyJson = JSON.stringify({
+    type: 'agent-turn-complete',
+    'thread-id': threadId,
+    'turn-id': '01a00000-0000-7000-8000-000000000001',
+    cwd: '/Users/me/Project',
+    client: 'codex-tui',
+    'input-messages': ['hello'],
+    'last-assistant-message': 'done'
+  })
+
+  function codexHome(): string {
+    const home = mkdtempSync(join(tmpdir(), 'cuihud-codex-'))
+    const day = join(home, 'sessions', '2026', '09', '07')
+    mkdirSync(day, { recursive: true })
+    writeFileSync(join(day, `rollout-2026-09-07T00-17-44-${threadId}.jsonl`), rolloutJsonl)
+    return home
+  }
+
+  it('sends model, effort and the latest context figures for the thread that just replied', () => {
+    const run = runScript(CODEX_HUD_NOTIFY_SCRIPT, {
+      args: ['cuihud', notifyJson],
+      env: { CODEX_HOME: codexHome() }
+    })
+    expect(run.stdout).toBe('')
+    // 22147 is the LAST token_count in the fixture, not the first (21364).
+    expect(run.beacon).toBe(
+      `${ESC}]7777;CUIHUD1 agent=codex model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+    )
+  })
+
+  it('reads the same under sh and bash', () => {
+    for (const shell of SHELLS) {
+      const run = runScript(CODEX_HUD_NOTIFY_SCRIPT, {
+        args: ['cuihud', notifyJson],
+        env: { CODEX_HOME: codexHome() },
+        shell
+      })
+      expect(run.beacon).toContain('used=22147 win=258400')
+    }
+  })
+
+  it('says nothing at all when the thread has no rollout to read', () => {
+    const run = runScript(CODEX_HUD_NOTIFY_SCRIPT, {
+      args: ['cuihud', JSON.stringify({ 'thread-id': 'no-such-thread' })],
+      env: { CODEX_HOME: codexHome() }
+    })
+    expect(run.beacon).toBe(`${ESC}]7777;CUIHUD1 agent=codex${BEL}`)
+  })
+
+  it("still runs the user's own notify command", () => {
+    const home = codexHome()
+    const marker = join(mkdtempSync(join(tmpdir(), 'cuihud-notify-')), 'ran')
+    writeFileSync(
+      join(home, 'config.toml'),
+      `model = "gpt-6-astra"\nnotify = ["/bin/sh","-c","printf %s \\"$1\\" > ${marker}","x"]\n`
+    )
+    runScript(CODEX_HUD_NOTIFY_SCRIPT, {
+      args: ['cuihud', notifyJson],
+      env: { CODEX_HOME: home }
+    })
+    expect(readFileSync(marker, 'utf8')).toContain('agent-turn-complete')
+  })
+})
+
+describe('the flags survive the trip through Orca to the host shell', () => {
+  it("travels as exactly two tokens and carries no single quote of its own", () => {
+    const claude = buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'darwin' })!
+    const claudeTokens = tokenizeStartupCommand(claude, 'posix')
+    expect(claudeTokens.ok).toBe(true)
+    if (claudeTokens.ok) {
+      expect(claudeTokens.tokens).toEqual(['--settings', buildClaudeHudSettingsJson()])
+      expect(JSON.parse(claudeTokens.tokens[1]!).statusLine.command).toBe(
+        CLAUDE_HUD_STATUSLINE_SCRIPT
+      )
+    }
+    expect(CLAUDE_HUD_STATUSLINE_SCRIPT).not.toContain("'")
+
+    const codex = buildAgentHudLaunchArgs({ agent: 'codex', hostDefaultArgs: '', hostPlatform: 'darwin' })!
+    const codexTokens = tokenizeStartupCommand(codex, 'posix')
+    expect(codexTokens.ok).toBe(true)
+    if (codexTokens.ok) {
+      expect(codexTokens.tokens[0]).toBe('-c')
+      expect(codexTokens.tokens[1]).toBe(buildCodexHudNotifyOverride('darwin'))
+    }
+    expect(CODEX_HUD_NOTIFY_SCRIPT).not.toContain("'")
+  })
+
+  it('base64-wraps the Codex script, because TOML rejects the escapes in it', () => {
+    const value = buildCodexHudNotifyOverride('darwin')
+    // TOML would reject a raw \033; the wrapper is plain base64 plus fixed text.
+    expect(value).not.toContain('\\033')
+    const encoded = /printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(value)?.[1]
+    expect(encoded).toBeTruthy()
+    expect(Buffer.from(encoded!, 'base64').toString('utf8')).toBe(CODEX_HUD_NOTIFY_SCRIPT)
+  })
+
+  // No PowerShell on this machine (`which pwsh powershell` finds neither), so
+  // this can only assert the string's shape. The Windows path has NOT been run.
+  it('gives a Windows host a PowerShell notify command it can actually spawn', () => {
+    const value = buildCodexHudNotifyOverride('win32')
+    expect(value.startsWith('notify=["powershell","-NoProfile","-NonInteractive","-Command",')).toBe(
+      true
+    )
+    expect(value).not.toContain('"sh"')
+    for (const piece of [
+      // Reads the real argv, because -Command appends extra args to the
+      // command TEXT rather than binding them to $args.
+      '[Environment]::GetCommandLineArgs()',
+      'thread.id',
+      '$env:CODEX_HOME',
+      '$env:USERPROFILE',
+      'rollout-*-',
+      'Get-Content -LiteralPath $f.FullName -Tail 400',
+      'turn_context',
+      'token_count',
+      'total_tokens',
+      'model_context_window',
+      // ESC and BEL as [char] codes: `e does not exist in Windows PowerShell 5.1.
+      '[Console]::Out.Write([string][char]27+"]7777;"+$o+[string][char]7)',
+      'CUIHUD1 agent=codex',
+      'config.toml'
+    ]) {
+      expect(CODEX_HUD_NOTIFY_POWERSHELL).toContain(piece)
+    }
+    // The trailing comment is what makes the appended JSON argument inert.
+    expect(CODEX_HUD_NOTIFY_POWERSHELL.endsWith('; #')).toBe(true)
+    expect(CODEX_HUD_NOTIFY_POWERSHELL).not.toContain('\n')
+  })
+
+  it('rides through the tokenizer as one -c value, with no single quote in it', () => {
+    expect(CODEX_HUD_NOTIFY_POWERSHELL).not.toContain("'")
+    const args = buildAgentHudLaunchArgs({
+      agent: 'codex',
+      hostDefaultArgs: '',
+      hostPlatform: 'win32'
+    })!
+    const tokens = tokenizeStartupCommand(args, 'posix')
+    expect(tokens.ok).toBe(true)
+    if (tokens.ok) {
+      expect(tokens.tokens).toHaveLength(2)
+      expect(tokens.tokens[0]).toBe('-c')
+      expect(tokens.tokens[1]).toBe(buildCodexHudNotifyOverride('win32'))
+      // TOML would reject \*, \{, \s and \d, so every backslash is doubled and
+      // the parser hands PowerShell the script back verbatim.
+      const script = /,"-Command",(".*")\]$/.exec(tokens.tokens[1]!)?.[1]
+      expect(script).toBeTruthy()
+      expect(JSON.parse(script!)).toBe(CODEX_HUD_NOTIFY_POWERSHELL)
+    }
+  })
+
+  it("gives Claude the very same flag on Windows as everywhere else", () => {
+    // Only the sh script inside it branches, on `uname -s`.
+    expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'win32' })).toBe(
+      buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'darwin' })
+    )
+  })
+
+  it("keeps the host's own default args in front, and leaves other agents alone", () => {
+    expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '--verbose', hostPlatform: 'linux' })).toMatch(
+      /^--verbose --settings '/
+    )
+    expect(buildAgentHudLaunchArgs({ agent: 'codex', hostDefaultArgs: '--search', hostPlatform: 'linux' })).toMatch(
+      /^--search -c '/
+    )
+    expect(buildAgentHudLaunchArgs({ agent: 'opencode', hostDefaultArgs: '', hostPlatform: 'darwin' })).toBeNull()
+  })
+})

@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
+import { consumeAgentHudBeacons } from './agent-hud-beacon'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import {
@@ -114,6 +115,13 @@ export function useMobileSessionTerminalSubscription(
           if (data.type === 'subscribed') {
             markNativeChatInputLeaseReady(handle)
             return
+          }
+          // Why here, above the covered return: the HUD beacon is the agent's
+          // own state written to its PTY, and chat is exactly when the phone
+          // needs it. Stripping it here also means the sequence never reaches
+          // xterm, covered or not — the terminal shows what it always showed.
+          if (data.type === 'data' && typeof data.chunk === 'string') {
+            data.chunk = consumeAgentHudBeacons(handle, data.chunk)
           }
           // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.
           if (
