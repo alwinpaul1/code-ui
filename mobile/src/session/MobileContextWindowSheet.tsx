@@ -101,7 +101,7 @@ export function MobileContextWindowSheet({
                 <View key={`${window.windowMinutes ?? index}`} style={{ gap: space.xs }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
                     <Txt variant="caption" style={{ flex: 1 }}>
-                      {formatLimitWindowName(window.windowMinutes)}
+                      {window.name ?? formatLimitWindowName(window.windowMinutes)}
                     </Txt>
                     <Txt variant="caption" tone="secondary">
                       {Math.round(used)}%{reset ? ` · ${reset}` : ''}

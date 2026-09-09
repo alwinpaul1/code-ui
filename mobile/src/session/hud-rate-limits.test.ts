@@ -26,7 +26,13 @@ const screen: TerminalHudObservation = {
 
 describe('HUD rate limits come from the host, not from a terminal', () => {
   it('maps the session, weekly and Fable windows in that order', () => {
-    expect(hudLimitsFromRateLimits(limits).map((row) => row.usedPercent)).toEqual([100, 33, 48])
+    const rows = hudLimitsFromRateLimits(limits)
+    expect(rows.map((row) => row.usedPercent)).toEqual([100, 33, 48])
+    // Names as the home card shows them, so the third bar is not a second "Weekly".
+    expect(rows.map((row) => row.name)).toEqual(['Session', 'Weekly', 'Fable'])
+    // Seen on the S23: "resets in 20684933d 9h" — host milliseconds fed to a
+    // seconds clock. The sheet compares against Date.now() / 1000.
+    expect(rows[0]!.resetsAt).toBe(1_788_960_000)
     expect(hudLimitsFromRateLimits(null)).toEqual([])
   })
 

@@ -8,13 +8,20 @@ export function hudLimitsFromRateLimits(
   if (!limits) {
     return []
   }
-  const rows: { usedPercent: number; windowMinutes: number | null; resetsAt: number | null }[] = []
-  for (const window of [limits.session, limits.weekly, limits.fableWeekly ?? null]) {
+  const rows: NonNullable<TerminalHudContextWindow['limits']>[number][] = []
+  const windows: [string, ProviderRateLimits['session']][] = [
+    ['Session', limits.session],
+    ['Weekly', limits.weekly],
+    ['Fable', limits.fableWeekly ?? null]
+  ]
+  for (const [name, window] of windows) {
     if (window) {
       rows.push({
+        name,
         usedPercent: window.usedPercent,
         windowMinutes: window.windowMinutes,
-        resetsAt: window.resetsAt
+        // The host stamps epoch milliseconds; the sheet's clock is seconds.
+        resetsAt: window.resetsAt === null ? null : Math.floor(window.resetsAt / 1000)
       })
     }
   }

@@ -111,7 +111,14 @@ export type TerminalHudContextWindow = {
   /** Windows the agent itself reported alongside its context — Codex carries
    *  the ones its /status prints. Rides here rather than as a new prop because
    *  every layer from the controller to the sheet already passes this object. */
-  limits?: readonly { usedPercent: number; windowMinutes: number | null; resetsAt: number | null }[]
+  limits?: readonly {
+    usedPercent: number
+    windowMinutes: number | null
+    /** Epoch SECONDS, as Codex prints them; the sheet formats against Date.now()/1000. */
+    resetsAt: number | null
+    /** Label when the host names the window (e.g. "Fable"); else derived from its length. */
+    name?: string
+  }[]
   planType?: string | null
   /** Human labels as printed, e.g. "537.2k" and "1M"; null when only a percent is shown. */
   usedLabel: string | null
