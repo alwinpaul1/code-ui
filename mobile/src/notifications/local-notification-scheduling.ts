@@ -62,15 +62,61 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
   maxScheduledNotifications = max ?? MAX_SCHEDULED_NOTIFICATIONS
 }
 
+/** Android takes the channel from the TRIGGER, never from the content.
+ *  `NotificationContentInput` has no `channelId` at all — a spread put one
+ *  there and TypeScript allowed it because a spread skips excess-property
+ *  checks, so it compiled and was silently dropped. With `trigger: null`,
+ *  `BaseNotificationBuilder` logs "Couldn't get channel for the notifications -
+ *  trigger is 'null'" and uses `expo_notifications_fallback_notification_channel`.
+ *
+ *  Measured on a Galaxy S23: every notification this app has ever posted landed
+ *  on that fallback, on 0.2.56 AND on the build that first tried to fix this by
+ *  awaiting the channel — the log line still said "trigger is 'null'", which is
+ *  what tells the two causes apart.
+ *
+ *  A channel-aware trigger delivers immediately, exactly as `trigger: null`
+ *  does; it is not a schedule. */
+const ANDROID_CHANNEL_TRIGGER = { channelId: 'orca-desktop' } as const
+
+function notificationTrigger(): { channelId: string } | null {
+  return Platform.OS === 'android' ? ANDROID_CHANNEL_TRIGGER : null
+}
+
+/** Secondary guard. Once the trigger names a channel, a channel that does not
+ *  exist yet IS substituted for the fallback — a different branch, logged as
+ *  "Channel '%s' doesn't exists". Memoised as one promise rather than a boolean
+ *  so concurrent posts at startup share the single round trip to Android's
+ *  NotificationManager instead of repeating it. */
+let channelReady: Promise<void> | null = null
+
 export function configureNotificationChannel(): void {
-  if (Platform.OS === 'android') {
-    void Notifications.setNotificationChannelAsync('orca-desktop', {
-      name: 'Desktop Notifications',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250],
-      lightColor: '#6366f1'
-    })
+  void ensureNotificationChannel()
+}
+
+export function ensureNotificationChannel(): Promise<void> {
+  if (Platform.OS !== 'android') {
+    return Promise.resolve()
   }
+  channelReady ??= Notifications.setNotificationChannelAsync('orca-desktop', {
+    name: 'Desktop Notifications',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 250],
+    lightColor: '#6366f1'
+  }).then(
+    () => undefined,
+    () => {
+      // A channel that cannot be created is not a reason to lose the alert:
+      // Android falls back on its own and the user still hears about the agent.
+      // Left resolved so later posts do not retry on every notification.
+      return undefined
+    }
+  )
+  return channelReady
+}
+
+/** Test-only: the memo outlives a single test's hooks. */
+export function resetNotificationChannelForTests(): void {
+  channelReady = null
 }
 
 export async function showLocalNotification(
@@ -92,14 +138,14 @@ export async function showLocalNotification(
       return
     }
 
+    await ensureNotificationChannel()
     await Notifications.scheduleNotificationAsync({
       content: {
         title: event.title,
         body: event.body,
-        data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        data: buildLocalNotificationData(event, hostId)
       },
-      trigger: null
+      trigger: notificationTrigger()
     })
     return
   }
@@ -130,14 +176,14 @@ export async function showLocalNotification(
       notificationState.identifier = undefined
     }
 
+    await ensureNotificationChannel()
     return Notifications.scheduleNotificationAsync({
       content: {
         title: event.title,
         body: event.body,
-        data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        data: buildLocalNotificationData(event, hostId)
       },
-      trigger: null
+      trigger: notificationTrigger()
     })
   })()
   notificationState.pending = pending
