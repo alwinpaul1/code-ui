@@ -16,6 +16,7 @@ export function Button({
   disabled = false,
   loading = false,
   block = false,
+  align = 'start',
   accessibilityLabel,
   style
 }: {
@@ -27,6 +28,10 @@ export function Button({
   disabled?: boolean
   loading?: boolean
   block?: boolean
+  /** Where the button sits in a column: 'start' hugs the left, 'center' follows a
+   *  centred parent. Ignored when `block`. Default 'start' keeps every existing
+   *  compact button where it was. */
+  align?: 'start' | 'center'
   accessibilityLabel?: string
   style?: StyleProp<ViewStyle>
 }) {
@@ -66,7 +71,7 @@ export function Button({
           alignItems: 'center',
           justifyContent: 'center',
           gap: space.sm,
-          alignSelf: block ? 'stretch' : 'flex-start',
+          alignSelf: block ? 'stretch' : align === 'center' ? 'center' : 'flex-start',
           opacity: disabled ? 0.5 : 1
         },
         style

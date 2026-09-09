@@ -153,6 +153,7 @@ export function MobileSessionActiveContent({
       <Button
         label={createTabBusy ? 'Creating…' : 'New tab'}
         variant="accent"
+        align="center"
         disabled={createTabBusy || connState !== 'connected'}
         loading={createTabBusy}
         onPress={() => {
@@ -238,6 +239,7 @@ export function MobileSessionActiveContent({
         <Button
           label="Retry"
           variant="secondary"
+          align="center"
           accessibilityLabel="Retry loading terminal"
           onPress={() => void retryPendingTerminalRecovery()}
         />

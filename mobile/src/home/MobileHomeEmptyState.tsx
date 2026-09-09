@@ -62,7 +62,14 @@ export function MobileHomeEmptyState(props: {
           Pair with Orca on your computer to watch your agents, read any terminal, and reply
           from your phone.
         </Txt>
-        <Button label="Pair desktop" icon={QrCode} variant="accent" size="lg" onPress={props.onPairDesktop} />
+        <Button
+          label="Pair desktop"
+          icon={QrCode}
+          variant="accent"
+          size="lg"
+          align="center"
+          onPress={props.onPairDesktop}
+        />
       </View>
       <View style={{ paddingHorizontal: space.lg, paddingBottom: space.lg }}>
         <SectionLabel style={{ marginTop: 0 }}>How it works</SectionLabel>

@@ -277,12 +277,14 @@ export default function PairScanScreen() {
             icon={canAskAgain ? QrCode : undefined}
             variant="accent"
             size="lg"
+            align="center"
             onPress={canAskAgain ? () => void requestPermission() : () => void Linking.openSettings()}
           />
           <Button
             label="Paste code instead"
             icon={ClipboardIcon}
             variant="ghost"
+            align="center"
             onPress={() => setPasteVisible(true)}
           />
         </View>

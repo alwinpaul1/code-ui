@@ -60,7 +60,7 @@ export default function PairRedirectScreen() {
           <Txt variant="body" tone="danger" align="center">
             Missing pairing code
           </Txt>
-          <Button label="Back to home" onPress={goHome} />
+          <Button label="Back to home" align="center" onPress={goHome} />
         </>
       ) : (
         <ActivityIndicator size="large" color={colors.textSecondary} />

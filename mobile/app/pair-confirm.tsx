@@ -195,7 +195,7 @@ export default function PairConfirmScreen() {
                 <ConnectionLog entries={logs} title="Pairing log" />
               </View>
             )}
-            <Button label="Back to home" variant="primary" onPress={cancel} />
+            <Button label="Back to home" variant="primary" align="center" onPress={cancel} />
           </>
         )}
       </View>
