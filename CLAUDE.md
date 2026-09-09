@@ -62,11 +62,13 @@ afterwards. A command that reads what the agents already write for themselves
 is not. If a design needs the user to install or run something first, it has
 failed the requirement — find another way or say plainly that there isn't one.
 
-The agents make this possible: Claude Code records the model, the effort and
-its token usage in its transcript, and Codex records those plus its own context
-window and rate-limit windows in its rollout. Read those. The terminal screen
-carries them only when a status line happens to be installed, which is exactly
-the assumption this rule exists to kill.
+What the host computes for us: Orca's own hooks report the model per session
+(`agentStatus.model`) and `accounts.subscribe` reports rate limits. Use those
+first. Reading the agents' transcript files needs a terminal on the host, and
+opening one every 30 s put flashing tabs in the strip, so that reader was
+removed on 2026-09-09 (see `docs/mobile-agent-hud.md`). The terminal screen
+carries the context figure only when a status line happens to be installed;
+when it is not there, show nothing rather than a number from anywhere else.
 
 **When a figure genuinely cannot be known, show what is known and say the rest
 is unknown.** Never invent a denominator. Claude Code never records its

@@ -6,6 +6,32 @@ Verified against Orca 1.4.197, Claude Code 2.1.263 and codex-cli 0.153.4.
 No status line, no plugin, no config, no Orca change — and no code written to
 their machine either. The phone does all of it.
 
+## Update 2026-09-09: the host-terminal reader is gone
+
+The reader below opened a background terminal on the desktop to run a small
+Node script that read the agents' own files. It worked, but every read gave
+the desktop a tab, so "Terminal" pills flashed next to the agent tabs on the
+phone every 30 s. The user asked for no host terminals at all, so the reader
+was removed in 0.2.69. What the HUD reads now, with nothing opened on the host:
+
+| Field | Source | Notes |
+|---|---|---|
+| model | `agentStatus.model` on the session tab (Orca's agent hooks), else the agent's screen | host-computed, live |
+| effort | the agent's screen, else the option the phone itself set | Claude paints it only with a status line |
+| context | the agent's screen | Codex paints it on its footer; **Claude Code paints it only when a status line is installed** |
+| rate limits | `accounts.subscribe` | host-computed, same feed as the home screen |
+| permission mode | the agent's screen | as before |
+
+Checked and ruled out as sources (Orca 1.4.197 mobile RPC surface): the native
+chat stream (`nativeChat.subscribe` messages carry id, role, blocks, timestamp,
+source only), agent status (has `model`, no effort or tokens), the dashboard
+snapshot, and structured `agentSession.*` (model and effort, no usage). The
+transcript and rollout files are reachable from the phone only through a
+terminal, which is the path that was removed.
+
+So on a bare host the Claude HUD shows model and mode but no context ring;
+Codex shows everything. The section below is kept as the record of the reader.
+
 ## What it used to read, and why that was wrong
 
 The model, the effort and the context figure were parsed out of the agent's
