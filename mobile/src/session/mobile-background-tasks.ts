@@ -39,7 +39,8 @@ import {
  * `done` means every background shell has reported. `null` = no host status
  * for this pane (an older host, or hooks not attached): trust the transcript.
  */
-export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'>
+export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'> &
+  Partial<Pick<AgentStatusEntry, 'stateStartedAt'>>
 
 export type BackgroundTaskKind = 'shell' | 'agent'
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed'
@@ -105,6 +106,12 @@ export function deriveBackgroundTasks(
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
         pending.push({ name: block.name, input: block.input, startedAt: message.timestamp })
+        // Why: stopping a task is the one completion the transcript records
+        // even mid-turn — the model asked for it, so the call itself is there.
+        const stoppedId = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
+        if (stoppedId) {
+          notifications.set(stoppedId, { status: 'stopped', summary: null, at: position })
+        }
       } else if (isToolResultBlock(block)) {
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
         // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts).
@@ -141,12 +148,25 @@ function splitByStatus(
   const finished: { task: BackgroundTask; at: number }[] = []
   const roster = liveSubagentRoster(hostStatus)
   const paneDone = hostStatus?.state === 'done'
+  // Why: the pane only leaves `working` when Claude's Stop hook lists no live
+  // background task, so the current working run's start is the last moment at
+  // which everything launched earlier was known to have finished. Without it,
+  // a `done` that retired old launches flipped them back to running on the
+  // next prompt (eight hours-old shells shown running, 2026-09-09).
+  const runStartedAt =
+    hostStatus?.state === 'working' && typeof hostStatus.stateStartedAt === 'number'
+      ? hostStatus.stateStartedAt
+      : null
   for (const launch of launches.values()) {
     const notification = notifications.get(launch.id)
     if (!notification) {
       // Why: an idle teammate is alive but not working, so it is not "running".
+      const launchedBeforeRun =
+        runStartedAt !== null && launch.startedAt !== null && launch.startedAt < runStartedAt
       const hostSaysFinished =
-        paneDone || (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
+        paneDone ||
+        launchedBeforeRun ||
+        (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
       if (hostSaysFinished) {
         finished.push({
           at: afterTranscript,

@@ -490,3 +490,51 @@ describe('background tasks reconciled against the host agent status', () => {
     expect(countRunningBackgroundTasks(launchedAgent('a63a93c4664bb92cc', 'x', T0), { state: 'done' })).toBe(0)
   })
 })
+
+// ─── The working run's own start ────────────────────────────────────────────
+// Observed 2026-09-09 (0.2.85, S23): eight shells from hours earlier shown
+// running during a long turn. The pane only leaves `working` when Claude's Stop
+// hook lists no live background task, so anything launched before the current
+// working run began (`stateStartedAt`) had already finished — and a `done` that
+// retires them must not flip back to running on the next prompt.
+describe('background tasks bounded by the current working run', () => {
+  const shellAt = (id: string, description: string, at: number) => [
+    call('Bash', { command: 'sleep 600', description, run_in_background: true }, at),
+    result(backgroundStartOutput(id), at + 500)
+  ]
+
+  it('retires every launch from before the current working run began', () => {
+    const runStart = T0 + 60 * 60_000
+    const transcript = [
+      ...shellAt('b0278rel', 'Full gate, commit, push, tag 0.2.78, build and install', T0),
+      ...shellAt('b0279rel', 'Full gate, commit, push, tag 0.2.79 for the table fix', T0 + 9 * 60_000),
+      ...shellAt('bnewgate', 'Run the full gate in the background', runStart + 5 * 60_000)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, runStart + 20 * 60_000, {
+      state: 'working',
+      stateStartedAt: runStart
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bnewgate'])
+    expect(tasks.finished.map((task) => task.id).sort()).toEqual(['b0278rel', 'b0279rel'])
+  })
+
+  it('keeps a launch with no timestamp running rather than guessing it old', () => {
+    const transcript = [
+      call('Bash', { command: 'sleep 600', run_in_background: true }, null),
+      result(backgroundStartOutput('bnotime1'), null)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, { state: 'working', stateStartedAt: T0 })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bnotime1'])
+  })
+
+  it('treats a TaskStop call as the end of that task', () => {
+    const transcript = [
+      ...shellAt('b6ishmlqf', 'Simulate 45 s of Doze on the phone', T0),
+      call('TaskStop', { task_id: 'b6ishmlqf' }, T0 + 30_000),
+      result('{"message":"Successfully stopped task: b6ishmlqf"}', T0 + 30_500)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, { state: 'working', stateStartedAt: T0 - 1 })
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([['b6ishmlqf', 'completed']])
+  })
+})
