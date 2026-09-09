@@ -1,43 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { tokenizeStartupCommand } from '../../../src/shared/tui-agent-startup-shell'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  agentHudDesktopFlag,
-  hasAgentHudDesktopFlag,
   syncAgentHudDesktopLaunchArgs,
-  withAgentHudDesktopFlag,
   withoutAgentHudDesktopFlag
 } from './agent-hud-desktop-launch-args'
 
-// Asked for on 2026-09-09: the desktop is the main place agents are started,
-// the phone is for when the user is away, so desktop-started agents must paint
-// the HUD too. Orca appends `agentDefaultArgs` to every agent it launches.
-describe('desktop launch profile carries the status-line flags', () => {
-  it('appends our flag after the user\'s own args and never stacks a second copy', () => {
-    const once = withAgentHudDesktopFlag('claude', '--dangerously-skip-permissions')
-    expect(once).toBe(`--dangerously-skip-permissions ${agentHudDesktopFlag('claude')}`)
-    expect(withAgentHudDesktopFlag('claude', once)).toBe(once)
-    const tokens = tokenizeStartupCommand(once, 'posix')
-    expect(tokens.ok && tokens.tokens.length).toBe(3)
+const claudeFlag = `--settings '{"statusLine":{"type":"command","command":"i=$(cat); printf x"}}'`
+const codexFlag = `-c 'tui.status_line=["model-with-reasoning","context-remaining"]'`
+
+// 0.2.77 wrote these into Orca's launch profile for a few hours on 2026-09-09.
+// They put a line in the user's terminals; every later build removes them.
+describe('cleanup of the 0.2.77 launch-profile flags', () => {
+  it('removes exactly our flags and leaves the user\'s arguments as they were', () => {
+    expect(withoutAgentHudDesktopFlag('claude', `--verbose ${claudeFlag}`)).toBe('--verbose')
+    expect(withoutAgentHudDesktopFlag('codex', `--search ${codexFlag}`)).toBe('--search')
+    expect(withoutAgentHudDesktopFlag('claude', '--dangerously-skip-permissions')).toBe(
+      '--dangerously-skip-permissions'
+    )
   })
 
-  it('replaces an older version of our flag instead of keeping both', () => {
-    const old = `--settings '{"statusLine":{"type":"command","command":"echo old"}}'`
-    const next = withAgentHudDesktopFlag('claude', `--verbose ${old}`)
-    expect(next.startsWith('--verbose --settings ')).toBe(true)
-    expect(next).not.toContain('echo old')
-    expect((next.match(/--settings/g) ?? []).length).toBe(1)
-  })
-
-  it('removes exactly our flag and leaves the user\'s args as they were', () => {
-    const withOurs = withAgentHudDesktopFlag('codex', '--search')
-    expect(hasAgentHudDesktopFlag('codex', withOurs)).toBe(true)
-    expect(withoutAgentHudDesktopFlag('codex', withOurs)).toBe('--search')
-    expect(withoutAgentHudDesktopFlag('codex', '--search')).toBe('--search')
-  })
-
-  it('writes the profile once when switched on, and nothing on a reconnect', async () => {
-    let stored: Record<string, string> = { claude: '--verbose' }
+  it('writes once when a host still carries them, and never again after that', async () => {
+    let stored: Record<string, string> = { claude: `--verbose ${claudeFlag}`, codex: codexFlag }
     const sendRequest = vi.fn(async (method: string, params?: unknown) => {
       if (method === 'settings.get') {
         return { ok: true, result: { agentDefaultArgs: { ...stored } } }
@@ -47,18 +30,12 @@ describe('desktop launch profile carries the status-line flags', () => {
     })
     const client = { sendRequest } as unknown as RpcClient
 
-    const written = await syncAgentHudDesktopLaunchArgs(client, true)
-    expect(written?.claude).toBe(`--verbose ${agentHudDesktopFlag('claude')}`)
-    expect(written?.codex).toBe(agentHudDesktopFlag('codex'))
+    const written = await syncAgentHudDesktopLaunchArgs(client, false)
+    expect(written).toEqual({ claude: '--verbose' })
     expect(sendRequest.mock.calls.map(([m]) => m)).toEqual(['settings.get', 'settings.update'])
 
     sendRequest.mockClear()
-    expect(await syncAgentHudDesktopLaunchArgs(client, true)).toBeNull()
+    expect(await syncAgentHudDesktopLaunchArgs(client, false)).toBeNull()
     expect(sendRequest.mock.calls.map(([m]) => m)).toEqual(['settings.get'])
-
-    sendRequest.mockClear()
-    const removed = await syncAgentHudDesktopLaunchArgs(client, false)
-    expect(removed?.claude).toBe('--verbose')
-    expect(removed?.codex).toBeUndefined()
   })
 })

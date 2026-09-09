@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { decodeAccountsSnapshot } from '../components/AccountUsage'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
 import { syncAgentHudDesktopLaunchArgs } from '../session/agent-hud-desktop-launch-args'
-import { loadDesktopHudLaunchEnabled } from '../session/desktop-hud-launch-preference'
 import { usePrimeHosts } from '../transport/client-context'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
@@ -43,12 +42,10 @@ function wireMobileHomeHostSubscriptions(
   const wireState = (state: ConnectionState): void => {
     const reconnected = refetchGate.observe(state)
     if (state === 'connected') {
-      // Why here: the host's agent launch profile is brought in line with the
-      // phone's switch on every connect (one settings.get; a write only when
-      // something differs), so desktop-started agents paint the HUD too.
-      void loadDesktopHudLaunchEnabled().then((enabled) =>
-        syncAgentHudDesktopLaunchArgs(entry.client, enabled).catch(() => null)
-      )
+      // Why: 0.2.77 briefly wrote status-line flags into the host's agent launch
+      // profile; that put a line in the user's terminals, which is not allowed.
+      // Remove exactly ours if present (one settings.get, a write only if found).
+      void syncAgentHudDesktopLaunchArgs(entry.client, false).catch(() => null)
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
       unsubscribeAccounts ??= entry.client.subscribe('accounts.subscribe', null, (payload) => {
         if (!payload || typeof payload !== 'object') {

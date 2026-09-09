@@ -1,54 +1,23 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
-import {
-  buildClaudeHudSettingsJson,
-  buildCodexHudConfigOverride
-} from './agent-hud-launch-args'
 
 /**
- * Agents started on the DESKTOP get their status line the same way the
- * phone's own launches do, through Orca's per-agent default arguments
- * (`agentDefaultArgs`), which Orca appends to every agent it launches. Orca
- * manages that field itself (its yolo mode writes it too) and lets a paired
- * phone update it over `settings.update`. So the phone adds two flags there
- * once, and removes them again when the switch is turned off. Nothing else on
- * the host is touched: no file of the user's, no plugin, no script.
- *
- * The user's own arguments are preserved in front; ours are recognised by
- * their exact text, so the write is idempotent and the removal surgical.
+ * Cleanup for a short-lived 0.2.77 experiment that wrote status-line launch
+ * flags into Orca's per-agent `agentDefaultArgs`. Those flags put a line in
+ * the user's own terminals, which Code UI must never do, so every connect now
+ * removes exactly our flags if a host still carries them. The user's own
+ * arguments are left untouched. This module can go once no host is on 0.2.77.
  */
 const HUD_AGENTS = ['claude', 'codex'] as const
 type HudAgent = (typeof HUD_AGENTS)[number]
 
-function singleQuoted(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-export function agentHudDesktopFlag(agent: HudAgent): string {
-  return agent === 'claude'
-    ? `--settings ${singleQuoted(buildClaudeHudSettingsJson())}`
-    : `-c ${singleQuoted(buildCodexHudConfigOverride())}`
-}
-
-/** Marker that identifies an earlier version of our flag, so an upgrade
- *  replaces it instead of stacking a second one. */
 const MARKERS: Record<HudAgent, RegExp> = {
   claude: /\s*--settings '\{"statusLine":\{"type":"command","command":"[^']*'/,
   codex: /\s*-c 'tui\.status_line=\[[^']*\]'/
 }
 
-export function withAgentHudDesktopFlag(agent: HudAgent, current: string | undefined): string {
-  const base = (current ?? '').replace(MARKERS[agent], '').trim()
-  const flag = agentHudDesktopFlag(agent)
-  return base ? `${base} ${flag}` : flag
-}
-
 export function withoutAgentHudDesktopFlag(agent: HudAgent, current: string | undefined): string {
   return (current ?? '').replace(MARKERS[agent], '').trim()
-}
-
-export function hasAgentHudDesktopFlag(agent: HudAgent, current: string | undefined): boolean {
-  return (current ?? '').includes(agentHudDesktopFlag(agent))
 }
 
 type HostSettingsLike = { agentDefaultArgs?: Partial<Record<TuiAgent, string>> }
@@ -60,14 +29,10 @@ function resultOf(response: unknown): Record<string, unknown> | null {
     : null
 }
 
-/**
- * Bring the host's launch profile in line with the switch. Reads the current
- * profile first and writes only when something changes, so a reconnect costs
- * one `settings.get` and nothing else. Returns what was written, or null.
- */
+/** Strip our flags from the host's launch profile; writes only if any were found. */
 export async function syncAgentHudDesktopLaunchArgs(
   client: RpcClient,
-  enabled: boolean
+  _enabled: false
 ): Promise<Partial<Record<TuiAgent, string>> | null> {
   const settings = resultOf(await client.sendRequest('settings.get').catch(() => null))
   if (!settings) {
@@ -79,9 +44,7 @@ export async function syncAgentHudDesktopLaunchArgs(
   const next: Partial<Record<TuiAgent, string>> = { ...current }
   let changed = false
   for (const agent of HUD_AGENTS) {
-    const value = enabled
-      ? withAgentHudDesktopFlag(agent, current[agent])
-      : withoutAgentHudDesktopFlag(agent, current[agent])
+    const value = withoutAgentHudDesktopFlag(agent, current[agent])
     if (value !== (current[agent] ?? '')) {
       changed = true
       if (value) {
