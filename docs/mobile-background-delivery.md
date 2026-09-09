@@ -77,3 +77,35 @@ Behind **Settings → Notifications → "Deliver while the app is closed"**
 - iOS has no equivalent. The toggle is hidden there.
 - The persistent row is the price: Android shows it whenever the service
   runs. Turning the toggle off removes it.
+
+## 2026-09-09: "notifications arrive when I open the app", and delays
+
+Reported on the S23 with "Deliver while the app is closed" on. Checked on the
+device: the foreground service was running (`isForeground=true`), the app was
+**not** on the battery-optimisation allowlist (`dumpsys deviceidle whitelist`
+had no entry), and adaptive battery was enabled.
+
+**Cause.** Doze suspends the app's network access and ignores its wake locks
+for every app that is still under battery optimisation. A foreground service
+does not lift that; only the exemption does ("Unrestricted" in the app's
+battery settings). With the phone idle the relay socket goes silent, nothing
+reaches the phone until a Doze maintenance window or the next screen-on, and
+the UI's reconnect catch-up (`notifications.getMissedSince`) then delivers the
+backlog a few seconds after the app opens. Shorter delays come from the same
+mechanism at the edge of Doze, plus the ~40 s it takes the relay liveness
+probe (30 s idle, 2 × 4 s missed) to notice a dead socket and reconnect.
+
+**Fix (0.2.85).** The background-link module gained
+`isIgnoringBatteryOptimizations` / `requestIgnoreBatteryOptimizations`
+(`Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, falling back to the
+optimisation list), with `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` declared. The
+Notifications screen asks for the exemption the moment background delivery is
+switched on and, while it is missing, shows an "Allow unrestricted battery
+use" row explaining why. `adviseBackgroundDeliveryPower` decides both.
+
+Not verified on the device yet: the phone was unplugged while this shipped.
+To verify: switch the row off/on, grant the dialog, check
+`dumpsys deviceidle whitelist | grep codeui`, then leave the phone idle for
+30+ minutes with an agent running and confirm the notification arrives before
+the screen is touched. Samsung "Sleeping apps" is a separate list; the
+exemption normally keeps the app out of it, but check there if it recurs.

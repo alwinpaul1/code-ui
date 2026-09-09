@@ -7,6 +7,12 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
   <!-- HeadlessJsTaskService.startTask() takes a partial wake lock. -->
   <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <!-- Why: Doze suspends network and ignores wake locks for every app that is
+       not exempt from battery optimisation — a foreground service does not
+       change that. The app asks for the exemption when background delivery is
+       switched on; it is what Play permits for apps whose core job is a live
+       messaging link. -->
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
   <application>
     <service

@@ -22,8 +22,11 @@ import {
 } from '../src/background/background-link-preference'
 import {
   applyBackgroundDelivery,
-  isBackgroundDeliveryAvailable
+  isBackgroundDeliveryAvailable,
+  isBackgroundDeliveryUnrestricted,
+  requestBackgroundDeliveryUnrestricted
 } from '../src/background/background-link'
+import { adviseBackgroundDeliveryPower } from '../src/background/background-delivery-power'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -39,6 +42,7 @@ export default function NotificationsScreen() {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [backgroundEnabled, setBackgroundEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
+  const [unrestricted, setUnrestricted] = useState(true)
   const backgroundAvailable = isBackgroundDeliveryAvailable()
 
   const refreshSettings = useCallback(async () => {
@@ -50,6 +54,7 @@ export default function NotificationsScreen() {
     setPushEnabled(enabled)
     setBackgroundEnabled(background)
     setPermissionState(permission)
+    setUnrestricted(isBackgroundDeliveryUnrestricted())
   }, [])
 
   useFocusEffect(
@@ -87,10 +92,21 @@ export default function NotificationsScreen() {
   const toggleBackground = async (value: boolean) => {
     setBackgroundEnabled(value)
     await saveBackgroundDeliveryEnabled(value)
-    applyBackgroundDelivery(value && pushEnabled && permissionState.granted)
+    const on = value && pushEnabled && permissionState.granted
+    applyBackgroundDelivery(on)
+    // Why: without the battery exemption Doze silences the link while the phone
+    // idles, and the notifications only show up when the app is opened. Ask the
+    // moment the feature is switched on, while we are still in the foreground.
+    if (on && adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted }).promptOnEnable) {
+      requestBackgroundDeliveryUnrestricted()
+    }
   }
 
   const switchEnabled = pushEnabled && permissionState.granted
+  const power = adviseBackgroundDeliveryPower({
+    deliveryOn: backgroundAvailable && backgroundEnabled && switchEnabled,
+    unrestricted
+  })
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
     ? 'Notifications are disabled in system settings.'
@@ -164,6 +180,45 @@ export default function NotificationsScreen() {
                 trackColor={{ false: colors.borderStrong, true: colors.accent }}
                 thumbColor={colors.bgPanel}
               />
+            </View>
+          ) : null}
+          {power.showRow ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.md,
+                paddingVertical: space.md,
+                paddingHorizontal: space.lg,
+                borderTopWidth: 1,
+                borderTopColor: colors.border
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Txt variant="body" weight="medium">
+                  Allow unrestricted battery use
+                </Txt>
+                <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                  {power.caption}
+                </Txt>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Allow unrestricted battery use"
+                onPress={() => {
+                  requestBackgroundDeliveryUnrestricted()
+                }}
+                style={({ pressed }) => ({
+                  paddingVertical: space.sm,
+                  paddingHorizontal: space.md,
+                  borderRadius: 10,
+                  backgroundColor: pressed ? colors.bgRaised : colors.accent
+                })}
+              >
+                <Txt variant="body" weight="medium" style={{ color: colors.onAccent }}>
+                  Allow
+                </Txt>
+              </Pressable>
             </View>
           ) : null}
         </Surface>

@@ -1,6 +1,8 @@
 import { AppState, Platform } from 'react-native'
 import {
   isBackgroundLinkSupported,
+  isBackgroundLinkUnrestricted,
+  requestBackgroundLinkUnrestricted,
   startBackgroundLink,
   stopBackgroundLink
 } from '@codeui/expo-background-link'
@@ -66,6 +68,23 @@ export function getBackgroundLinkWatcher(): BackgroundNotificationWatcher {
 
 export function isBackgroundDeliveryAvailable(): boolean {
   return Platform.OS === 'android' && isBackgroundLinkSupported
+}
+
+/**
+ * Whether Android will leave the link's network alone while the phone idles.
+ *
+ * Why it matters: Doze suspends network and ignores wake locks for every app
+ * that is still under battery optimisation, foreground service or not. The
+ * socket then goes silent until a maintenance window or the next screen-on,
+ * which is exactly "notifications arrive when I open the app".
+ */
+export function isBackgroundDeliveryUnrestricted(): boolean {
+  return !isBackgroundDeliveryAvailable() || isBackgroundLinkUnrestricted()
+}
+
+/** Opens the system prompt for the exemption. Must run from the foreground. */
+export function requestBackgroundDeliveryUnrestricted(): boolean {
+  return requestBackgroundLinkUnrestricted()
 }
 
 /**

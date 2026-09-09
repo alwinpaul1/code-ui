@@ -9,6 +9,8 @@ type NativeBackgroundLink = {
   update(title: string, text: string): void
   stop(): void
   isRunning(): boolean
+  isIgnoringBatteryOptimizations(): boolean
+  requestIgnoreBatteryOptimizations(): boolean
 }
 
 // Why optional: the module is Android-only and absent from iOS, web and the
@@ -33,4 +35,16 @@ export function stopBackgroundLink(): void {
 
 export function isBackgroundLinkRunning(): boolean {
   return native?.isRunning() ?? false
+}
+
+/** True when Android will not Doze this app's network — the "Unrestricted"
+ *  battery setting. Platforms without the module report true: nothing to lift. */
+export function isBackgroundLinkUnrestricted(): boolean {
+  return native?.isIgnoringBatteryOptimizations() ?? true
+}
+
+/** Opens the system prompt (or the optimisation list) for the exemption.
+ *  Returns false when the OS offered no screen to open. */
+export function requestBackgroundLinkUnrestricted(): boolean {
+  return native?.requestIgnoreBatteryOptimizations() ?? false
 }
