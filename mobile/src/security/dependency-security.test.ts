@@ -23,6 +23,17 @@ it('no longer ships image-size at all, patched or otherwise', () => {
   expect(lockfile).not.toMatch(/^\s+'?\/?image-size@/m)
 })
 
+it('carries no js-yaml 3.x older than 3.15.2 (GHSA: maxTotalMergeKeys CPU exhaustion)', () => {
+  // Dependabot alert #6, 2026-09-09. Only @istanbuljs/load-nyc-config still
+  // asks for 3.x; the pnpm override `js-yaml@3: 3.15.2` answers it.
+  const versions = [...lockfile.matchAll(/^\s+'?js-yaml@(3\.\d+\.\d+)/gm)].map((m) => m[1]!)
+  expect(versions.length).toBeGreaterThan(0)
+  for (const version of versions) {
+    const [, minor, patch] = version.split('.').map(Number) as [number, number, number]
+    expect(minor > 15 || (minor === 15 && patch >= 2), `js-yaml@${version}`).toBe(true)
+  }
+})
+
 it('keeps Expo Router query decoding compatible with the fixed decoder', () => {
   const query = router('query-string').default
   expect(query.parse('message=hello%20world&name=%E2%9C%93&repeat=1&repeat=2')).toEqual({

@@ -9,6 +9,8 @@ overrides:
   '@expo/plist': 0.8.1
   decode-uri-component: 0.5.0
   query-string: 9.5.1
+  # GHSA for js-yaml < 3.15.2 (Dependabot alert #6); only @istanbuljs/load-nyc-config still asks for 3.x.
+  'js-yaml@3': 3.15.2
 
 patchedDependencies:
   '@expo/plist@0.8.1': patches/@expo__plist@0.8.1.patch
