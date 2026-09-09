@@ -163,4 +163,24 @@ describe('Codex mode and context from the screen', () => {
       windowLabel: '258K'
     })
   })
+
+  it('reads the "N% context left" footer codex-cli 0.153.4 paints after /status', () => {
+    // Captured from a live Galaxy S23 session on 2026-09-09 (orca terminal show):
+    // the figure sits right-aligned on the line above the composer, and the
+    // `/status` box with token figures is gone.
+    const observation = parseTerminalHudObservation([
+      '› Reply with the single word ready.   tab to queue message',
+      '                                                                        100% context left',
+      '› Reply with the single word ready.',
+      '  gpt-5.6-terra xhigh · ~/Desktop/Project/Code UI'
+    ])
+    expect(observation?.context).toEqual({ usedPercent: 0, usedLabel: null, windowLabel: null })
+    expect(observation?.modelId).toBe('gpt-5.6-terra')
+    const partly = parseTerminalHudObservation([
+      '                                            62% context left',
+      '› Ask Codex to do anything',
+      '  gpt-5.6-terra xhigh · ~/p'
+    ])
+    expect(partly?.context?.usedPercent).toBe(38)
+  })
 })

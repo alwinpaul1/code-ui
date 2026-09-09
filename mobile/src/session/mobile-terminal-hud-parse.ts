@@ -36,23 +36,32 @@ export function parseCodexAgentMode(lines: readonly string[]): TerminalAgentMode
   return /Plan mode \(shift\+tab to cycle\)/.test(lines.slice(-4).join('\n')) ? 'plan' : 'default'
 }
 
-// Codex only states its context window in the `/status` box:
-//   "│  Context window:              97% left (19.5K used / 258K)   │"
-// It reports what is LEFT; the ring shows what is used.
+// Codex states its context window as what is LEFT; the ring shows what is used.
+// Two paintings, both verified live:
+//   codex-cli 0.15x `/status` box: "│  Context window:   97% left (19.5K used / 258K)  │"
+//   codex-cli 0.153.4 footer, after `/status`: "100% context left" (no token figures)
 const CODEX_STATUS_CONTEXT =
   /Context window:\s+(\d{1,3})%\s+left\s*\(\s*([\d.]+[kKmM]?)\s+used\s*\/\s*([\d.]+[kKmM]?)\s*\)/
+const CODEX_FOOTER_CONTEXT = /(?:^|\s)(\d{1,3})%\s+context\s+left(?:\s|$)/
 
 export function parseCodexStatusContext(lines: readonly string[]): TerminalHudContextWindow | null {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const match = CODEX_STATUS_CONTEXT.exec(lines[index] ?? '')
-    if (!match) {
-      continue
+    const line = lines[index] ?? ''
+    const boxed = CODEX_STATUS_CONTEXT.exec(line)
+    if (boxed) {
+      const left = Number(boxed[1])
+      if (Number.isFinite(left) && left >= 0 && left <= 100) {
+        return { usedPercent: 100 - left, usedLabel: boxed[2] ?? null, windowLabel: boxed[3] ?? null }
+      }
     }
-    const left = Number(match[1])
-    if (!Number.isFinite(left) || left < 0 || left > 100) {
-      continue
+    const footer = CODEX_FOOTER_CONTEXT.exec(line)
+    if (footer) {
+      const left = Number(footer[1])
+      if (Number.isFinite(left) && left >= 0 && left <= 100) {
+        // No token figures on this painting: percent only, labels honestly null.
+        return { usedPercent: 100 - left, usedLabel: null, windowLabel: null }
+      }
     }
-    return { usedPercent: 100 - left, usedLabel: match[2] ?? null, windowLabel: match[3] ?? null }
   }
   return null
 }
