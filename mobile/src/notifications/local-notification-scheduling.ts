@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications'
+import { notificationPlainText } from './notification-plain-text'
 import { Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
@@ -141,8 +142,8 @@ export async function showLocalNotification(
     await ensureNotificationChannel()
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: event.title,
-        body: event.body,
+        title: notificationPlainText(event.title),
+        body: notificationPlainText(event.body),
         data: buildLocalNotificationData(event, hostId)
       },
       trigger: notificationTrigger()
@@ -179,8 +180,8 @@ export async function showLocalNotification(
     await ensureNotificationChannel()
     return Notifications.scheduleNotificationAsync({
       content: {
-        title: event.title,
-        body: event.body,
+        title: notificationPlainText(event.title),
+        body: notificationPlainText(event.body),
         data: buildLocalNotificationData(event, hostId)
       },
       trigger: notificationTrigger()
