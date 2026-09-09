@@ -113,8 +113,8 @@ export function makeMarkdownStyles(theme: Theme) {
       flexDirection: 'row'
     },
     tableCell: {
-      minWidth: 112,
-      maxWidth: 220,
+      // Width comes from the table's shared column widths (MobileMarkdown.tsx);
+      // a cell must never size itself or the columns stagger row by row.
       borderRightWidth: 1,
       borderBottomWidth: 1,
       borderColor: colors.border,

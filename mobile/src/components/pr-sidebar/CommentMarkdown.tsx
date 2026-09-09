@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { computeTableColumnWidths, tableColumnCount } from '../mobile-markdown-table-layout'
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -167,8 +168,17 @@ function TableBlock({
   block: Extract<MarkdownBlock, { kind: 'table' }>
   base: number
 }) {
-  const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
+  const columnCount = tableColumnCount(block.headers, block.rows)
   const columns = Array.from({ length: columnCount }, (_, c) => c)
+  // One width per column shared by every row; a cell that sizes itself makes
+  // the grid stagger row by row (same defect as the chat table, 2026-09-09).
+  const columnWidths = computeTableColumnWidths({
+    headers: block.headers,
+    rows: block.rows,
+    columnCount,
+    fontSize: base - 1,
+    horizontalPadding: 8
+  })
   return (
     <ScrollView
       horizontal
@@ -179,7 +189,10 @@ function TableBlock({
       <View>
         <View style={[styles.tableRow, styles.tableHeaderRow]}>
           {columns.map((c) => (
-            <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
+            <View
+              key={c}
+              style={[styles.tableCell, { width: columnWidths[c], alignItems: alignToFlex(block.align[c]) }]}
+            >
               <Text style={[styles.tableHeaderText, { fontSize: base - 1 }]}>
                 <Inline text={block.headers[c] ?? ''} base={base} />
               </Text>
@@ -189,7 +202,10 @@ function TableBlock({
         {block.rows.map((row, r) => (
           <View key={r} style={styles.tableRow}>
             {columns.map((c) => (
-              <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
+              <View
+                key={c}
+                style={[styles.tableCell, { width: columnWidths[c], alignItems: alignToFlex(block.align[c]) }]}
+              >
                 <Text style={[styles.tableCellText, { fontSize: base - 1 }]}>
                   <Inline text={row[c] ?? ''} base={base} />
                 </Text>
@@ -311,7 +327,7 @@ const styles = StyleSheet.create({
   },
   tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
   tableCell: {
-    minWidth: 96,
+    // width is set per column by TableBlock (shared across rows)
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderLeftWidth: StyleSheet.hairlineWidth,

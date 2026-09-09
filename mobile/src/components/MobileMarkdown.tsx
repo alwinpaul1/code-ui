@@ -1,4 +1,5 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react'
+import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { MARKDOWN_BASE_SIZE, useMarkdownStyles, type MarkdownStyles } from './mobile-markdown-styles'
@@ -249,24 +250,41 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           )
         }
         if (block.type === 'table') {
-          const visibleHeaders = block.headers.slice(0, MAX_TABLE_COLUMNS)
+          const totalColumns = tableColumnCount(block.headers, block.rows)
+          const columnCount = Math.min(totalColumns, MAX_TABLE_COLUMNS)
           const visibleRows = block.rows.slice(0, MAX_TABLE_ROWS)
           const hiddenRows = Math.max(0, block.rows.length - visibleRows.length)
-          const hiddenColumns = Math.max(0, block.headers.length - visibleHeaders.length)
+          const hiddenColumns = Math.max(0, totalColumns - columnCount)
+          // One width per column, shared by the header and every row; see
+          // mobile-markdown-table-layout.ts for why rows must not size themselves.
+          const columnWidths = computeTableColumnWidths({
+            headers: block.headers,
+            rows: visibleRows,
+            columnCount,
+            fontSize: (MARKDOWN_BASE_SIZE - 2) * textScale,
+            horizontalPadding: styles.tableCell.paddingHorizontal
+          })
+          const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)
           return (
             <ScrollView key={index} horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.table}>
                 <View style={styles.tableRow}>
-                  {visibleHeaders.map((header, cellIndex) => (
-                    <Text key={cellIndex} style={[styles.tableCell, styles.tableHeader]}>
-                      {renderInline(styles, header, onOpenFile)}
+                  {columns.map((cellIndex) => (
+                    <Text
+                      key={cellIndex}
+                      style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
+                    >
+                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile)}
                     </Text>
                   ))}
                 </View>
                 {visibleRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.tableRow}>
-                    {visibleHeaders.map((_, cellIndex) => (
-                      <Text key={cellIndex} style={styles.tableCell}>
+                    {columns.map((cellIndex) => (
+                      <Text
+                        key={cellIndex}
+                        style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
+                      >
                         {renderInline(styles, row[cellIndex] ?? '', onOpenFile)}
                       </Text>
                     ))}

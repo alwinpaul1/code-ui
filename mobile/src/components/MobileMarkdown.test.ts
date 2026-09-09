@@ -305,4 +305,9 @@ describe('parseMobileMarkdown', () => {
       `${'x'.repeat(4095)}\nx`
     )
   })
+
+  it('accepts the `|:-:|` and single-dash separators agents emit, and escaped pipes in cells', () => {
+    const blocks = parseMobileMarkdown('| Job | Result |\n|:-:|-|\n| 2621 | a \\| b |')
+    expect(blocks).toEqual([{ type: 'table', headers: ['Job', 'Result'], rows: [['2621', 'a | b']] }])
+  })
 })

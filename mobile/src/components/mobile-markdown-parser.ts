@@ -8,18 +8,23 @@ export type MobileMarkdownBlock =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'rule' }
 
+const ESCAPED_PIPE = '\u0000'
+
 function splitTableRow(line: string): string[] {
+  // An escaped pipe (`\|`) is a literal inside a cell, not a column break.
   return line
     .trim()
+    .replace(/\\\|/g, ESCAPED_PIPE)
     .replace(/^\|/, '')
     .replace(/\|$/, '')
     .split('|')
-    .map((cell) => cell.trim())
+    .map((cell) => cell.trim().split(ESCAPED_PIPE).join('|'))
 }
 
 function isTableSeparator(line: string): boolean {
   const cells = splitTableRow(line)
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
+  // Agents emit `|:-:|` and `| - |` as often as `| --- |`; GFM accepts one dash.
+  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell))
 }
 
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
