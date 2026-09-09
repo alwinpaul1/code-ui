@@ -1,6 +1,6 @@
-import { expect, it } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import {
-  agentHudContextPercent,
+  agentHudReaderTiming,  agentHudContextPercent,
   buildAgentHudSnapshotCommand,
   parseAgentHudSnapshot,
   readAgentHudSnapshot,
@@ -110,9 +110,11 @@ it('names an absolute output path the phone can ask the host to read back', () =
   expect(built.command).toContain('| node - ')
   expect(built.command).not.toMatch(/orca-hud-abc123\.js\b/)
   expect(built.command).toContain(`--out '/tmp/orca-hud-abc123.json'`)
-  // The shell exits on its own, so the tab closes even if the phone loses the
+  // The reader shell stays open between reads (bash TMOUT ends it after 15
+  // idle minutes), so the command itself must not end the shell.
   // connection before it can close it.
-  expect(built.command.trimEnd().endsWith('exit')).toBe(true)
+  expect(built.command.trimEnd().endsWith('exit')).toBe(false)
+  expect(built.command).toContain(`echo '/tmp/orca-hud-abc123.json'`)
 })
 
 it('passes Codex its session id when known and the cwd when not', () => {
@@ -159,117 +161,158 @@ function fakeClient(responses: Record<string, unknown>) {
   }
 }
 
-it('spawns, reads the file back, and always closes the shell it made', async () => {
+function resolvedFile(path: string) {
+  return {
+    ok: true,
+    result: {
+      worktree: 'wt-1',
+      openTarget: { kind: 'absolute-file', absolutePath: path, grantId: 'grant-1' }
+    }
+  }
+}
+
+beforeEach(() => {
+  agentHudReaderTiming.delay = async () => {}
+})
+
+it('opens one reader shell for a host and worktree and types every read into it', async () => {
+  // Before 2026-09-09 each read spawned and closed its own terminal: with two
+  // Claude tabs open, two "Terminal" pills flashed on the S23 every 30 s.
   const client = fakeClient({
-    'terminal.create': { ok: true, result: { terminal: 'hud-1' } },
-    'files.resolveTerminalPath': {
-      ok: true,
-      result: {
-        worktree: 'wt-1',
-        openTarget: {
-          kind: 'absolute-file',
-          absolutePath: '/tmp/orca-hud-x.json',
-          grantId: 'grant-1'
-        }
-      }
-    },
-    'files.readTerminalArtifact': { ok: true, result: { content: CODEX_JSON } },
-    'terminal.wait': { ok: true, result: { wait: 'exit' } },
-    'terminal.close': { ok: true, result: {} }
+    'terminal.create': { ok: true, result: { terminal: 'hud-shell' } },
+    'terminal.send': { ok: true, result: { accepted: true } },
+    'files.resolveTerminalPath': resolvedFile('/tmp/orca-hud-x.json'),
+    'files.readTerminalArtifact': { ok: true, result: { content: CODEX_JSON } }
   })
-  const snapshot = await readAgentHudSnapshot({
+  const first = await readAgentHudSnapshot({
     client,
     worktree: 'id:wt-1',
     target: { agent: 'codex', cwd: '/w' },
     id: 'x',
     readerBase64: 'QQ=='
   })
-  expect(snapshot?.model).toBe('gpt-5.6-terra')
-  // terminal.create returns when the terminal EXISTS, not when its command has
-  // run, and the grant pins the file's identity — so the wait is what makes the
-  // read deterministic instead of a race the link speed decides.
+  expect(first?.model).toBe('gpt-5.6-terra')
   expect(client.calls[0]!.params).toMatchObject({
     presentation: 'background',
     title: 'Code UI HUD',
     surfaceOwner: false
   })
+  expect(String(client.calls[0]!.params.command)).toContain('TMOUT=900')
   expect(client.calls.map((call) => call.method)).toEqual([
     'terminal.create',
-    'terminal.wait',
+    'terminal.send',
     'files.resolveTerminalPath',
-    'files.readTerminalArtifact',
-    'terminal.close'
+    'files.readTerminalArtifact'
   ])
-  expect(client.calls[1]?.params.for).toBe('exit')
-  expect(client.calls[2]?.params.pathText).toBe('/tmp/orca-hud-x.json')
-  expect(client.calls[0]?.params.presentation).toBe('background')
+  expect(client.calls[1]!.params).toMatchObject({ terminal: 'hud-shell', enter: true })
+  expect(String(client.calls[1]!.params.text)).toContain("--out '/tmp/orca-hud-x.json'")
+
+  client.calls.length = 0
+  const second = await readAgentHudSnapshot({
+    client,
+    worktree: 'id:wt-1',
+    target: { agent: 'codex', cwd: '/w' },
+    id: 'x2',
+    readerBase64: 'QQ=='
+  })
+  expect(second?.model).toBe('gpt-5.6-terra')
+  // The shell is reused: no create, no close.
+  expect(client.calls.map((call) => call.method)).toEqual([
+    'terminal.send',
+    'files.resolveTerminalPath',
+    'files.readTerminalArtifact'
+  ])
 })
 
-it('reports the snapshot without waiting for the shell to close', async () => {
-  // The close is bookkeeping after the fact; awaiting it inside `finally` held
-  // the returned promise for one more round trip on every read.
+it('keeps polling until the reader has renamed its file into place', async () => {
+  let resolves = 0
   const client = fakeClient({
-    'terminal.create': { ok: true, result: { terminal: 'hud-3' } },
-    'terminal.wait': { ok: true, result: { wait: 'exit' } },
-    'files.resolveTerminalPath': {
-      ok: true,
-      result: {
-        worktree: 'wt-1',
-        openTarget: { kind: 'absolute-file', absolutePath: '/tmp/orca-hud-w.json', grantId: 'g' }
-      }
-    },
+    'terminal.create': { ok: true, result: { terminal: 'hud-poll' } },
+    'terminal.send': { ok: true, result: {} },
     'files.readTerminalArtifact': { ok: true, result: { content: CODEX_JSON } }
   })
   const original = client.sendRequest
   client.sendRequest = (method, params) => {
-    if (method !== 'terminal.close') {
-      return original(method, params)
+    if (method === 'files.resolveTerminalPath') {
+      client.calls.push({ method, params })
+      resolves += 1
+      return Promise.resolve(resolves < 3 ? { ok: false } : resolvedFile('/tmp/orca-hud-p.json'))
     }
-    client.calls.push({ method, params })
-    return new Promise(() => {})
+    return original(method, params)
   }
-  let settled = false
-  const reading = readAgentHudSnapshot({
+  const snapshot = await readAgentHudSnapshot({
     client,
-    worktree: 'id:wt-1',
+    worktree: 'id:wt-2',
     target: { agent: 'codex', cwd: '/w' },
-    id: 'w',
+    id: 'p',
     readerBase64: 'QQ=='
-  }).then((snapshot) => {
-    settled = true
-    return snapshot
   })
-  for (let tick = 0; tick < 50; tick++) {
-    await Promise.resolve()
-  }
-  expect(settled).toBe(true)
-  expect((await reading)?.model).toBe('gpt-5.6-terra')
-  expect(client.calls.at(-1)?.method).toBe('terminal.close')
+  expect(snapshot?.model).toBe('gpt-5.6-terra')
+  expect(resolves).toBe(3)
 })
 
-it('closes the shell even when the read fails, and reports nothing rather than guessing', async () => {
+it('reopens the shell when the remembered one is gone, and gives up cleanly if that fails too', async () => {
   const client = fakeClient({
-    'terminal.create': { ok: true, result: { terminal: 'hud-2' } },
-    'terminal.wait': { ok: true, result: { wait: 'exit' } },
-    'files.resolveTerminalPath': { ok: false },
-    'terminal.close': { ok: true, result: {} }
+    'terminal.create': { ok: true, result: { terminal: 'hud-a' } },
+    'terminal.send': { ok: true, result: {} },
+    'files.resolveTerminalPath': resolvedFile('/tmp/orca-hud-r1.json'),
+    'files.readTerminalArtifact': { ok: true, result: { content: CODEX_JSON } }
+  })
+  const target = { agent: 'codex' as const, cwd: '/w' }
+  await readAgentHudSnapshot({ client, worktree: 'id:wt-3', target, id: 'r1', readerBase64: 'QQ==' })
+
+  // The host closed hud-a (TMOUT): the send is refused, a new shell is made.
+  const original = client.sendRequest
+  let sends = 0
+  client.sendRequest = (method, params) => {
+    if (method === 'terminal.send') {
+      sends += 1
+      client.calls.push({ method, params })
+      return Promise.resolve(sends === 1 ? { ok: false } : { ok: true, result: {} })
+    }
+    return original(method, params)
+  }
+  client.calls.length = 0
+  const snapshot = await readAgentHudSnapshot({
+    client,
+    worktree: 'id:wt-3',
+    target,
+    id: 'r2',
+    readerBase64: 'QQ=='
+  })
+  expect(snapshot?.model).toBe('gpt-5.6-terra')
+  expect(client.calls.map((call) => call.method)).toEqual([
+    'terminal.send',
+    'terminal.create',
+    'terminal.send',
+    'files.resolveTerminalPath',
+    'files.readTerminalArtifact'
+  ])
+})
+
+it('reports nothing rather than guessing when the file never appears', async () => {
+  const client = fakeClient({
+    'terminal.create': { ok: true, result: { terminal: 'hud-none' } },
+    'terminal.send': { ok: true, result: {} },
+    'files.resolveTerminalPath': { ok: false }
   })
   const snapshot = await readAgentHudSnapshot({
     client,
-    worktree: 'id:wt-1',
+    worktree: 'id:wt-4',
     target: { agent: 'claude', transcriptPath: '/t.jsonl' },
     id: 'y',
-    readerBase64: 'QQ=='
+    readerBase64: 'QQ==',
+    timeoutMs: 20
   })
   expect(snapshot).toBeNull()
-  expect(client.calls.some((call) => call.method === 'terminal.close')).toBe(true)
+  expect(client.calls.some((call) => call.method === 'terminal.close')).toBe(false)
 })
 
 it('makes no terminal at all when the host refuses to create one', async () => {
   const client = fakeClient({ 'terminal.create': { ok: false } })
   const snapshot = await readAgentHudSnapshot({
     client,
-    worktree: 'id:wt-1',
+    worktree: 'id:wt-5',
     target: { agent: 'claude', transcriptPath: '/t.jsonl' },
     id: 'z',
     readerBase64: 'QQ=='

@@ -1,5 +1,16 @@
 import { AGENT_HUD_READER_SOURCE } from './agent-hud-reader-source'
-import { AGENT_HUD_TERMINAL_TITLE } from './agent-hud-tab-filter'
+import {
+  openReaderTerminal,
+  readReaderOutput,
+  rememberReader,
+  rememberedReader,
+  sendReaderCommand,
+  agentHudReaderTiming,
+  READER_POLL_FIRST_MS,
+  READER_POLL_MS
+} from './agent-hud-reader-shell'
+
+export { agentHudReaderTiming } from './agent-hud-reader-shell'
 
 /** One reading of an agent's own session record, taken on the host.
  *
@@ -246,7 +257,9 @@ export function buildAgentHudSnapshotCommand(args: {
   const noNode = `printf '{"agent":%s,"error":"node-missing","readerVersion":1}' ${shellQuote(
     `"${target.agent}"`
   )} > ${shellQuote(out)}`
-  const command = `if command -v node > /dev/null 2>&1; then ${reader}; else ${noNode}; fi; exit`
+  // The fallback echoes the path too: the host grants a read on a temp file
+  // only when that path appeared in the terminal's recent output.
+  const command = `if command -v node > /dev/null 2>&1; then ${reader}; else ${noNode}; echo ${shellQuote(out)}; fi`
   return { command, outPath: out }
 }
 
@@ -258,21 +271,12 @@ export type AgentHudRpcClient = {
   ) => Promise<unknown>
 }
 
-type RpcResult = { ok?: boolean; result?: unknown }
-
-function resultOf(response: unknown): Record<string, unknown> | null {
-  const envelope = response as RpcResult | null
-  if (!envelope || envelope.ok !== true || typeof envelope.result !== 'object') {
-    return null
-  }
-  return (envelope.result ?? null) as Record<string, unknown> | null
-}
-
-/** Take one snapshot: spawn a throwaway shell that writes the JSON, read the
- *  file back through the grant the host already gives for temp-dir artifacts,
- *  and close the tab. Every step is allowlisted for mobile clients on stock
- *  Orca, and a mobile client's terminal is created in the background, so the
- *  desktop does not steal focus.
+/** Take one snapshot through the host+worktree's reader shell: type the
+ *  reader command into it, then read the JSON back through the grant the host
+ *  already gives for temp-dir artifacts, polling until the reader's rename
+ *  lands. Every step is allowlisted for mobile clients on stock Orca, and a
+ *  mobile client's terminal is created in the background, so the desktop
+ *  does not steal focus.
  *
  *  Returns null rather than throwing: the HUD keeps its previous reading and
  *  the screen parse stays available underneath. */
@@ -293,86 +297,40 @@ export async function readAgentHudSnapshot(args: {
     id: args.id,
     ...(args.readerBase64 ? { readerBase64: args.readerBase64 } : {})
   })
-  let terminal: string | null = null
   try {
-    const created = resultOf(
-      await client.sendRequest(
-        'terminal.create',
-        {
-          worktree,
-          command: built.command,
-          presentation: 'background',
-          // Why: the desktop adopts even background terminals as tabs; the
-          // title lets the phone hide them, surfaceOwner asks it not to.
-          title: AGENT_HUD_TERMINAL_TITLE,
-          surfaceOwner: false
-        },
-        { timeoutMs }
-      )
-    )
-    const handle = created?.terminal
-    terminal = typeof handle === 'string' ? handle : readHandle(handle)
-    if (!terminal) {
-      return null
+    let terminal: string | null = rememberedReader(client, worktree)
+    let sent = terminal ? await sendReaderCommand(client, terminal, built.command, timeoutMs) : false
+    if (!sent || !terminal) {
+      // No shell yet, or the remembered one is gone (TMOUT, host restart,
+      // closed by hand): open a fresh one and try once more.
+      rememberReader(client, worktree, null)
+      const opened = await openReaderTerminal(client, worktree, timeoutMs)
+      if (!opened) {
+        return null
+      }
+      terminal = opened
+      sent = await sendReaderCommand(client, terminal, built.command, timeoutMs)
+      if (!sent) {
+        rememberReader(client, worktree, null)
+        return null
+      }
     }
-    // terminal.create returns when the terminal EXISTS, not when its command
-    // has run. The reader takes ~130 ms, so resolving straight away either
-    // found nothing or pinned the grant to a file the reader then rewrote,
-    // which the host rejects as stale. The client deadline must exceed the
-    // server's, or the transport rejects before the host's own answer can get
-    // back and the `finally` below closes the terminal mid-read.
-    await client.sendRequest(
-      'terminal.wait',
-      { terminal, for: 'exit', timeoutMs },
-      { timeoutMs: timeoutMs + 5_000 }
-    )
-    const resolved = resultOf(
-      await client.sendRequest(
-        'files.resolveTerminalPath',
-        { worktree, pathText: built.outPath, terminal, crossWorkspace: true },
-        { timeoutMs }
-      )
-    )
-    const target = resolved?.openTarget as
-      | { kind?: string; absolutePath?: string; grantId?: string }
-      | undefined
-    if (target?.kind !== 'absolute-file' || !target.absolutePath || !target.grantId) {
-      return null
+    // terminal.send returns when the bytes are in, not when the reader has
+    // written its file (~130 ms). The reader renames the file into place, so a
+    // read either misses it or gets the whole thing; poll until it lands.
+    const deadline = Date.now() + timeoutMs
+    let wait = READER_POLL_FIRST_MS
+    while (Date.now() < deadline) {
+      await agentHudReaderTiming.delay(wait)
+      wait = READER_POLL_MS
+      const content = await readReaderOutput(client, worktree, terminal, built.outPath, timeoutMs)
+      if (content !== null) {
+        return parseAgentHudSnapshot(content)
+      }
     }
-    const read = resultOf(
-      await client.sendRequest(
-        'files.readTerminalArtifact',
-        {
-          worktree: resolved?.worktree ? `id:${String(resolved.worktree)}` : worktree,
-          absolutePath: target.absolutePath,
-          grantId: target.grantId
-        },
-        { timeoutMs }
-      )
-    )
-    const content = read?.content
-    return typeof content === 'string' ? parseAgentHudSnapshot(content) : null
+    return null
   } catch {
     return null
-  } finally {
-    if (terminal) {
-      // Best effort and NOT awaited: the reader ends with `exit`, so the shell
-      // is already gone if this never lands, and the snapshot is in hand —
-      // waiting for the close was one more round trip before the pills painted.
-      client.sendRequest('terminal.close', { terminal }, { timeoutMs: 4_000 }).catch(() => {
-        /* the shell exits on its own */
-      })
-    }
   }
 }
 
-function readHandle(value: unknown): string | null {
-  if (typeof value !== 'object' || value === null) {
-    return null
-  }
-  const record = value as { handle?: unknown; id?: unknown }
-  if (typeof record.handle === 'string') {
-    return record.handle
-  }
-  return typeof record.id === 'string' ? record.id : null
-}
