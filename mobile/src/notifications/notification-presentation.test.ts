@@ -12,7 +12,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'Code UI / Code UI - Claude finished',
       body: '**Fixed** the queue parser in `native-queue-input.ts`. Two tests cover it.'
     })
-    expect(presented.title).toBe('Claude finished · Code UI')
+    expect(presented.title).toBe('✅ Claude finished · Code UI')
     expect(presented.body).toBe(
       `${styleText('Fixed', 'bold')} the queue parser in ${styleText('native-queue-input.ts', 'mono')}. Two tests cover it.`
     )
@@ -24,7 +24,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'nexos / feature/route-planner - Codex needs your input',
       body: 'Allow `rm -rf dist`?'
     })
-    expect(presented.title).toBe('Codex needs your input · nexos / feature/route-planner')
+    expect(presented.title).toBe('❓ Codex needs your input · nexos / feature/route-planner')
     expect(presented.body).toBe(`Allow ${styleText('rm -rf dist', 'mono')}?`)
   })
 
@@ -34,7 +34,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'Code UI / Code UI - Claude finished',
       body: 'Claude finished.'
     })
-    expect(presented).toEqual({ title: 'Claude finished · Code UI', body: '' })
+    expect(presented).toEqual({ title: '✅ Claude finished · Code UI', body: '' })
   })
 
   it('trims a long summary at a sentence boundary', () => {
@@ -54,7 +54,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'Terminal bell',
       body: 'make: *** [all] Error 2'
     })
-    expect(presented.title).toBe('Terminal bell')
+    expect(presented.title).toBe('🔔 Terminal bell')
     expect(presented.body).toBe('make: *** [all] Error 2')
   })
 })

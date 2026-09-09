@@ -19,13 +19,30 @@ export function presentDesktopNotification(event: {
   body: string
 }): PresentedNotification {
   const parsed = parseDesktopTitle(event.title)
-  const title = parsed
-    ? parsed.location
-      ? `${parsed.headline} · ${parsed.location}`
-      : parsed.headline
-    : notificationPlainText(event.title)
+  const headline = parsed?.headline ?? notificationPlainText(event.title)
+  const glyph = statusGlyph(event.source, headline)
+  const title = parsed?.location ? `${glyph}${headline} · ${parsed.location}` : `${glyph}${headline}`
   const summary = summarize(event.body, parsed?.headline)
   return { title, body: summary }
+}
+
+/**
+ * One glyph up front says what happened before a word is read, the way a
+ * status bot does: done, waiting on you, or a plain bell. Nothing else in the
+ * title gets an emoji.
+ */
+function statusGlyph(source: DesktopNotificationSource, headline: string): string {
+  const text = headline.toLowerCase()
+  if (/\b(needs?|waiting|approve|permission|question|input)\b/.test(text)) {
+    return '❓ '
+  }
+  if (source === 'terminal-bell') {
+    return '🔔 '
+  }
+  if (/\b(finished|done|complete[d]?)\b/.test(text)) {
+    return '✅ '
+  }
+  return ''
 }
 
 function parseDesktopTitle(title: string): { headline: string; location: string } | null {
