@@ -24,6 +24,7 @@ import {
   readLastVisitedWorktreeRecord
 } from '../worktree/last-visited-worktree-repo'
 import { selectHomeResumeCard } from '../worktree/home-resume-card'
+import { refreshAccountUsage } from './refresh-account-usage'
 import {
   fetchMobileHomeAccounts,
   fetchMobileHomeStats,
@@ -131,6 +132,16 @@ export function useMobileHomeData() {
     }, [router])
   )
 
+  const [refreshingAccounts, setRefreshingAccounts] = useState(false)
+  const refreshAccounts = useCallback(async () => {
+    setRefreshingAccounts(true)
+    try {
+      await refreshAccountUsage(allClientsRef.current, setAccountsByHost)
+    } finally {
+      setRefreshingAccounts(false)
+    }
+  }, [])
+
   const sortedHosts = useMemo(() => sortHostsByLastConnected(hosts), [hosts])
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
@@ -184,6 +195,8 @@ export function useMobileHomeData() {
     hostPendingPaths: hostConnectionProjection.hostPendingPaths,
     primaryHost,
     primaryTaskProviders,
+    refreshAccounts,
+    refreshingAccounts,
     resumeCard,
     router,
     setHostCatalog,

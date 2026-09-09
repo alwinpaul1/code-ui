@@ -1,5 +1,5 @@
 import { memo, useCallback, type ReactElement } from 'react'
-import { FlatList, View } from 'react-native'
+import { FlatList, RefreshControl, View } from 'react-native'
 import type { ListRenderItemInfo } from 'react-native'
 import { MobileHostCard } from '../components/MobileHostCard'
 import { useTheme } from '../theme/theme-context'
@@ -28,10 +28,13 @@ type MobileHomeHostListProps = {
   onOpen: (host: HostCatalogEntry) => void
   onLongPress: (host: HostCatalogEntry) => void
   onOpenActions: (host: HostCatalogEntry) => void
+  /** Pull-to-refresh re-reads account usage only; see refresh-account-usage.ts. */
+  onRefreshAccounts: () => void
+  refreshingAccounts: boolean
 }
 
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
-  const { space } = useTheme()
+  const { colors, space } = useTheme()
   const renderHost = useCallback(
     ({ item }: ListRenderItemInfo<HostCatalogEntry>) => (
       <MobileHomeHostRow
@@ -79,6 +82,15 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
           alignSelf: 'center'
         }
       ]}
+      refreshControl={
+        <RefreshControl
+          refreshing={props.refreshingAccounts}
+          onRefresh={props.onRefreshAccounts}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+          progressBackgroundColor={colors.bgPanel}
+        />
+      }
       ListHeaderComponent={<MobileHomeListHeader />}
       ItemSeparatorComponent={CardGap}
       renderItem={renderHost}
