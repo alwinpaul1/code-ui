@@ -17,10 +17,7 @@ import {
 } from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
-import {
-  AGENT_TUI_CLEAR_INPUT_LINE,
-  buildAgentTuiClearInputForText
-} from '../../../src/shared/agent-tui-input-clear'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import {
   clearMobileNativeChatInputResidue,
   mobileNativeChatInputResidue
@@ -164,14 +161,12 @@ export function useMobileNativeChatMessageSend(args: {
         const cleared = await clearMobileNativeChatInput({
           client,
           terminal: handle,
-          // A queue edit can leave the whole recalled queue on the agent. One
-          // Ctrl+U clears one logical line, so the survivors would be submitted
-          // glued to this message; clear for what is actually sitting there.
-          clearInput: seededLaunchDraft
-            ? buildAgentTuiClearInputForText(seededLaunchDraft.text)
-            : residue
-              ? buildAgentTuiClearInputForText(residue)
-              : AGENT_TUI_CLEAR_INPUT_LINE,
+          // A queue edit can leave the whole recalled queue on the agent, and the
+          // draft mirror has typed this very draft onto the line. One Ctrl+U
+          // clears one VISUAL line (Claude Code 2.1.266), so anything longer
+          // would be submitted glued to this message; clear for the longest
+          // text believed to be sitting there.
+          clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft?.text, residue, text),
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }

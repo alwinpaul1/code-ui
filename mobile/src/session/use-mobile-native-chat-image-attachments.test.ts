@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
@@ -110,7 +110,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     const trackedClient: Pick<RpcClient, 'sendRequest'> = {
       sendRequest: (method, params) => {
         if (method === 'terminal.send') {
-          order.push((params as { text?: string }).text === '\x15' ? 'clear' : 'paste')
+          order.push((params as { text?: string }).text?.startsWith('\x15') ? 'clear' : 'paste')
         }
         return client.sendRequest(method, params)
       }
@@ -138,9 +138,12 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
-    // Ctrl+U clear, then the bracketed image paste.
+    // Clear burst sized to the mirrored caption, then the bracketed image paste.
     expect(sendCalls).toHaveLength(2)
-    expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
+    expect(sendCalls[0]?.params).toMatchObject({
+      text: buildMobileNativeChatClearInputForText('look at this'),
+      enter: false
+    })
     expect(sendCalls[1]?.params).toMatchObject({
       text: '\x1b[200~/tmp/a.png\x1b[201~ ',
       enter: false
@@ -184,7 +187,7 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     const firstSend = client.calls.find((c) => c.method === 'terminal.send')
     expect(firstSend?.params).toMatchObject({
-      text: buildAgentTuiClearInputForText(draft),
+      text: buildMobileNativeChatClearInputForText(draft),
       enter: false
     })
     expect(firstSend?.params.text).not.toBe('\x15')
@@ -221,7 +224,7 @@ describe('useMobileNativeChatImageAttachments', () => {
 
     const firstSend = client.calls.find((c) => c.method === 'terminal.send')
     expect(firstSend?.params).toMatchObject({
-      text: buildAgentTuiClearInputForText(residue),
+      text: buildMobileNativeChatClearInputForText(residue),
       enter: false
     })
     // A cleared residue must not be replayed against the next send.

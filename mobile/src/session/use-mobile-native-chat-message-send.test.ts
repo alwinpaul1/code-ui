@@ -29,7 +29,7 @@ import {
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
-import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
@@ -117,7 +117,7 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       await api!.send('hello')
     })
-    expect(clearArgs().clearInput).toBe(buildAgentTuiClearInputForText(DRAFT))
+    expect(clearArgs().clearInput).toBe(buildMobileNativeChatClearInputForText(DRAFT))
   })
 
   it('issues the burst as its OWN write, before the body', async () => {
@@ -156,12 +156,19 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('writes a single Ctrl+U separately when no launch draft is parked', async () => {
+  it('clears every wrapped line of the mirrored draft, not just the last one', async () => {
+    // Claude Code 2.1.266: one Ctrl+U on a wrapped input removes only the last
+    // visual line. The draft mirror had typed the message onto the line, the
+    // single Ctrl+U left " review … /unslop " standing, and the body was typed
+    // after it — the transcript shows the message glued onto its own residue.
     mount(() => null)
+    const wrapped =
+      'Ok now review my paper each section with opus and Sonnet 5 agents and fable as main orchestator and final reviewer go through each section with each agent use /unslop skill to write'
     await act(async () => {
-      await api!.send('hello')
+      await api!.send(wrapped)
     })
-    expect(clearArgs().clearInput).toBe('\x15')
+    expect(clearArgs().clearInput).toBe(buildMobileNativeChatClearInputForText(wrapped))
+    expect(clearArgs().clearInput).not.toBe('\x15')
     expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
   })
@@ -189,9 +196,11 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     expect(clearInputWrite).toHaveBeenCalledTimes(2)
     expect(clearInputWrite.mock.calls[0]![0]).toMatchObject({
-      clearInput: buildAgentTuiClearInputForText(DRAFT)
+      clearInput: buildMobileNativeChatClearInputForText(DRAFT)
     })
-    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({ clearInput: '\x15' })
+    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({
+      clearInput: buildMobileNativeChatClearInputForText('second')
+    })
   })
 
   it('does not clear an image send after the image was pasted', async () => {

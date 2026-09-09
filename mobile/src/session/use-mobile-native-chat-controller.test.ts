@@ -156,6 +156,7 @@ import {
   type MobileNativeChatController
 } from './use-mobile-native-chat-controller'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
 
@@ -244,9 +245,17 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(accepted).toBe(true)
     expect(clientStub.sendRequest).toHaveBeenCalledTimes(2)
-    for (const call of clientStub.sendRequest.mock.calls) {
-      expect(call[1]).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
-    }
+    // The heal is one Ctrl+U; the send's own clear is the visual-line burst.
+    expect(clientStub.sendRequest.mock.calls[0]![1]).toMatchObject({
+      terminal: 'term-1',
+      text: '\x15',
+      enter: false
+    })
+    expect(clientStub.sendRequest.mock.calls[1]![1]).toMatchObject({
+      terminal: 'term-1',
+      text: buildMobileNativeChatClearInputForText('answer'),
+      enter: false
+    })
     expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
@@ -397,7 +406,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(clientStub.sendRequest).toHaveBeenCalledWith(
       'terminal.send',
-      expect.objectContaining({ text: '\x15', enter: false }),
+      expect.objectContaining({
+        text: buildMobileNativeChatClearInputForText('answer'),
+        enter: false
+      }),
       expect.any(Object)
     )
     expect(sendWithOutcome).toHaveBeenLastCalledWith(

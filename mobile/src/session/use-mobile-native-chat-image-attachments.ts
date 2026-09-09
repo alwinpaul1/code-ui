@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
@@ -269,12 +269,11 @@ export function useMobileNativeChatImageAttachments({
             return false
           }
           const seededLaunchDraft = readSeededLaunchDraft()
-          // A queue edit can leave the whole recalled queue on the agent. The
-          // paste's default clear kills one logical line, so the survivors
-          // would submit glued to this photo's caption — the text path already
-          // clears for the residue and this one must too.
+          // A queue edit can leave the whole recalled queue on the agent, and the
+          // draft mirror has typed this caption onto the line. One Ctrl+U clears
+          // one VISUAL line (Claude Code 2.1.266), so the survivors would submit
+          // glued to this photo's caption — size the clear for whatever is there.
           const residue = mobileNativeChatInputResidue(handle)
-          const leadingClear = seededLaunchDraft ?? residue
           const pasted = await pasteMobileNativeChatImagePaths({
             client,
             terminal: handle,
@@ -282,7 +281,7 @@ export function useMobileNativeChatImageAttachments({
             imagePaths: pendingImages.map((attachment) => attachment.path),
             followedByText: text.trim().length > 0,
             deadline,
-            ...(leadingClear ? { clearInput: buildAgentTuiClearInputForText(leadingClear) } : {})
+            clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft, residue, text)
           })
           if (!pasted) {
             // Keep the chips so the user can retry; the failed paste never submitted.
