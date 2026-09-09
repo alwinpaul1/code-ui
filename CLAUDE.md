@@ -62,13 +62,15 @@ afterwards. A command that reads what the agents already write for themselves
 is not. If a design needs the user to install or run something first, it has
 failed the requirement — find another way or say plainly that there isn't one.
 
-What the host computes for us: Orca's own hooks report the model per session
-(`agentStatus.model`) and `accounts.subscribe` reports rate limits. Use those
-first. Reading the agents' transcript files needs a terminal on the host, and
-opening one every 30 s put flashing tabs in the strip, so that reader was
-removed on 2026-09-09 (see `docs/mobile-agent-hud.md`). The terminal screen
-carries the context figure only when a status line happens to be installed;
-when it is not there, show nothing rather than a number from anywhere else.
+What the host gives us for free: Orca's hooks report the model per session
+(`agentStatus.model`) and `accounts.subscribe` reports rate limits. For the
+rest, the agents themselves can paint a status line when asked **at launch,
+from the command line** (Claude `--settings '<json>'`, Codex
+`-c tui.status_line=[...]`), which writes nothing to the host; the phone adds
+those flags to every agent it launches and reads the agent's own footer. A
+reader that opened a host terminal to read transcript files was removed on
+2026-09-09 (see `docs/mobile-agent-hud.md`). When a figure is not on screen,
+show nothing rather than a number from anywhere else.
 
 **When a figure genuinely cannot be known, show what is known and say the rest
 is unknown.** Never invent a denominator. Claude Code never records its

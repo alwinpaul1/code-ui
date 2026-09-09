@@ -6,6 +6,34 @@ Verified against Orca 1.4.197, Claude Code 2.1.263 and codex-cli 0.153.4.
 No status line, no plugin, no config, no Orca change — and no code written to
 their machine either. The phone does all of it.
 
+## Update 2026-09-09 (later): the agents paint the HUD themselves
+
+Both agents have a status-line feature that can be switched on **for one
+process, from the command line, with nothing written to the host**. The phone
+does that for every agent tab it launches (`agent-hud-launch-args.ts`,
+`agent-hud-launch-config.ts`), keeping the host's own default args in front:
+
+| Agent | Flag added at launch | What the agent then paints on its own footer |
+|---|---|---|
+| Claude Code 2.1.266 | `--settings '{"statusLine":{"type":"command","command":"<sh>"}}'` | `[Fable 5.1 medium] ctx 64% 649k/1.0M · 5h 37% · 7d 36%` |
+| codex-cli 0.153.4 | `-c 'tui.status_line=["model-with-reasoning","context-remaining","five-hour-limit","weekly-limit"]'` | `gpt-5.6-terra xhigh · Context 100% left · monthly 94% left` |
+
+Claude Code pipes its own state to the status-line command on every repaint
+(model, effort, `context_window.used_percentage`, `context_window_size`,
+`current_usage`, both rate-limit windows; captured in
+`fixtures/claude-statusline-2.1.266.json`). The command is POSIX `sh` with
+`sed` and `printf` only: no Node, no jq, no single quotes, so it survives
+Orca's argument tokenizer. Codex needs no command at all. The phone's screen
+parser reads both lines, so the HUD is repainted by the agent itself the
+moment anything changes.
+
+Limits, stated plainly: this covers **agents the phone launches**. A session
+started from the desktop has no flags and falls back to the sources below.
+The Claude status-line command is `sh`, so it is not added on a Windows host
+(Codex's flag is, being a plain CLI option); Windows Claude sessions keep
+model and mode from Orca and no context ring until a PowerShell variant is
+written and tested on a real Windows machine.
+
 ## Update 2026-09-09: the host-terminal reader is gone
 
 The reader below opened a background terminal on the desktop to run a small

@@ -11,6 +11,7 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
+import { resolveAgentHudLaunchConfig } from './agent-hud-launch-config'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -95,10 +96,16 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         showToast(message, 1800)
         return
       }
+      // Why: an agent the phone launches paints its own HUD line when asked to
+      // at launch (Claude `--settings`, Codex `tui.status_line`); nothing on the
+      // host changes. A startup command of the user's own is left untouched.
+      const launchConfig =
+        agent && !options?.startupCommand ? await resolveAgentHudLaunchConfig(client, agent) : null
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
         clientMutationId,
+        ...(launchConfig ? { launchConfig } : {}),
         ...(options?.startupCommand ? { command: options.startupCommand } : {}),
         ...(options?.startupCommandDelivery
           ? { startupCommandDelivery: options.startupCommandDelivery }

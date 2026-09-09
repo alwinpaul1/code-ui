@@ -42,7 +42,9 @@ export function parseCodexAgentMode(lines: readonly string[]): TerminalAgentMode
 //   codex-cli 0.153.4 footer, after `/status`: "100% context left" (no token figures)
 const CODEX_STATUS_CONTEXT =
   /Context window:\s+(\d{1,3})%\s+left\s*\(\s*([\d.]+[kKmM]?)\s+used\s*\/\s*([\d.]+[kKmM]?)\s*\)/
-const CODEX_FOOTER_CONTEXT = /(?:^|\s)(\d{1,3})%\s+context\s+left(?:\s|$)/
+// "100% context left" (transient) and "Context 100% left" (the `context-remaining`
+// status-line item, painted permanently when launched with tui.status_line).
+const CODEX_FOOTER_CONTEXT = /(?:^|\s)(?:(\d{1,3})%\s+context\s+left|Context\s+(\d{1,3})%\s+left)(?:\s|$|\s·)/
 
 export function parseCodexStatusContext(lines: readonly string[]): TerminalHudContextWindow | null {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -56,7 +58,7 @@ export function parseCodexStatusContext(lines: readonly string[]): TerminalHudCo
     }
     const footer = CODEX_FOOTER_CONTEXT.exec(line)
     if (footer) {
-      const left = Number(footer[1])
+      const left = Number(footer[1] ?? footer[2])
       if (Number.isFinite(left) && left >= 0 && left <= 100) {
         // No token figures on this painting: percent only, labels honestly null.
         return { usedPercent: 100 - left, usedLabel: null, windowLabel: null }
@@ -188,10 +190,11 @@ const FILLER = new Set(['·', '•', '|', '-', '—', ':', 'effort', 'effort:'])
 // effort as "<model> <effort> · <cwd>", e.g. "gpt-6-astra medium · ~/Project".
 // Effort may read "default" (the model's own default) or be absent. Match a
 // model token that looks like a provider id (a digit or a dash rules out prose
-// like "done · 1:32 PM") followed by a path after the middot.
+// like "done · 1:32 PM") followed by a path after the middot — or, when Codex
+// was launched with `tui.status_line`, by its "Context N% left" item instead.
 const CODEX_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
 const CODEX_FOOTER =
-  /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+[~/]/i
+  /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+(?:[~/]|Context\s+\d{1,3}%\s+left)/i
 
 /** Whether the Codex input footer ("<model> <effort> · <cwd>") is on screen. */
 export function hasCodexFooter(lines: readonly string[]): boolean {

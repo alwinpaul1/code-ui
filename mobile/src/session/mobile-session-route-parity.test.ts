@@ -75,7 +75,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '72a366846cd56bd27e4a12cac7ba8f11fb24984e422b2c784184ae3ea5c186ce'
+  'e60043e75cc6a884a74e1c0093c3c0de666cda17269bd20c4e737c4208c251c2'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =
