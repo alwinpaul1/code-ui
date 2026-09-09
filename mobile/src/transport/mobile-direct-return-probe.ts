@@ -1,10 +1,17 @@
 import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
+import {
+  directEndpointUrls,
+  directEndpointsPlausibleOnNetwork
+} from './mobile-direct-endpoint-list'
 import type { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile } from './types'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
+// Why longer: with no plausible address on this network there is nothing to
+// learn until the network changes, and a change nudges the probe anyway.
+const NO_PLAUSIBLE_ENDPOINT_RECHECK_MS = 60_000
 
 // While the runtime channel rides the relay, periodically probe the direct
 // endpoint and migrate back once hysteresis proves it stable.
@@ -18,6 +25,8 @@ export class DirectReturnProbe {
       setTimer: typeof setTimeout
       clearTimer: typeof clearTimeout
       openDirect: (endpoint: string) => RpcClient
+      /** expo-network's `NetworkStateType` name, or null when unknown. */
+      networkType?: () => Promise<string | null>
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
@@ -55,8 +64,29 @@ export class DirectReturnProbe {
     this.inFlight?.abort()
   }
 
+  private async plausibleEndpoints(): Promise<string[]> {
+    const all = directEndpointUrls(this.hooks.host())
+    if (!this.deps.networkType) {
+      return all
+    }
+    const type = await this.deps.networkType().catch(() => null)
+    return directEndpointsPlausibleOnNetwork(all, type)
+  }
+
   private async probe(): Promise<void> {
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
+      this.schedule()
+      return
+    }
+    const endpoints = await this.plausibleEndpoints()
+    if (endpoints.length === 0) {
+      // Why no failure record: nothing was dialed, so nothing was proven. On a
+      // Galaxy S23 on cellular the old behaviour re-dialled the LAN address
+      // every cycle and each socket hung the whole 12 s connect timeout.
+      this.schedule(NO_PLAUSIBLE_ENDPOINT_RECHECK_MS)
+      return
+    }
+    if (!this.hooks.canAttempt()) {
       this.schedule()
       return
     }
@@ -69,7 +99,8 @@ export class DirectReturnProbe {
         this.hooks.host(),
         this.deps.openDirect,
         12_000,
-        controller.signal
+        controller.signal,
+        endpoints
       )
       if (!successful) {
         // Why: an aborted probe proved nothing about the endpoint.

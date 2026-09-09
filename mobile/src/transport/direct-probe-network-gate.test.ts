@@ -1,0 +1,90 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { directEndpointsPlausibleOnNetwork } from './mobile-direct-endpoint-list'
+import { DirectReturnProbe } from './mobile-direct-return-probe'
+import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
+import type { HostProfile } from './types'
+
+// Read off a Galaxy S23 on 2026-09-09: while the phone rode the relay it
+// re-dialled 192.168.1.154:6768 and 100.72.20.78:6768 every probe cycle and
+// each socket hung the full 12 s connect timeout. On cellular a private LAN
+// address can never answer, so dialing it is pure radio and battery.
+describe('direct endpoints plausible on the current network', () => {
+  const lan = 'ws://192.168.1.154:6768'
+  const lanTen = 'ws://10.0.0.5:6768'
+  const linkLocal = 'ws://169.254.3.4:6768'
+  const mdns = 'ws://studio.local:6768'
+  const tailscaleIp = 'ws://100.72.20.78:6768'
+  const tailscaleName = 'wss://studio.tail1234.ts.net:6768'
+  const publicName = 'wss://desk.example.com:6768'
+
+  it('drops private-LAN addresses on cellular and keeps Tailscale and public ones', () => {
+    expect(
+      directEndpointsPlausibleOnNetwork(
+        [lan, lanTen, linkLocal, mdns, tailscaleIp, tailscaleName, publicName],
+        'CELLULAR'
+      )
+    ).toEqual([tailscaleIp, tailscaleName, publicName])
+  })
+
+  it('keeps everything on Wi-Fi, Ethernet, or when the network type is unknown', () => {
+    const all = [lan, tailscaleIp, publicName]
+    expect(directEndpointsPlausibleOnNetwork(all, 'WIFI')).toEqual(all)
+    expect(directEndpointsPlausibleOnNetwork(all, 'ETHERNET')).toEqual(all)
+    expect(directEndpointsPlausibleOnNetwork(all, 'UNKNOWN')).toEqual(all)
+    expect(directEndpointsPlausibleOnNetwork(all, null)).toEqual(all)
+  })
+})
+
+describe('direct-return probe on cellular', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const host: HostProfile = {
+    id: 'host-1',
+    name: 'Studio',
+    endpoint: 'ws://192.168.1.154:6768',
+    deviceToken: 'device-token',
+    publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+  } as HostProfile
+
+  it('dials nothing for a LAN-only host, records no failure, and re-checks later', async () => {
+    const openDirect = vi.fn()
+    const hysteresis = new MobileEndpointHysteresis(Date.now(), {
+      directSuccessesRequired: 3,
+      directObservationMs: 30_000,
+      failureCooldownMs: 60_000,
+      minimumDwellMs: 60_000,
+      maxFailureCooldownMs: 600_000
+    })
+    const onDirectUnreachable = vi.fn()
+    const probe = new DirectReturnProbe(
+      {
+        now: Date.now,
+        setTimer: setTimeout,
+        clearTimer: clearTimeout,
+        openDirect,
+        networkType: async () => 'CELLULAR'
+      },
+      {
+        hysteresis,
+        host: () => host,
+        canSchedule: () => true,
+        canAttempt: () => true,
+        beginOperation: () => {},
+        migrate: async () => {},
+        onDirectMigrated: async () => {},
+        onDirectUnreachable,
+        afterProbe: () => {}
+      }
+    )
+
+    probe.schedule(0)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(openDirect).not.toHaveBeenCalled()
+    expect(onDirectUnreachable).not.toHaveBeenCalled()
+    // Nothing was proven about the endpoint, so the cooldown ladder must not move.
+    expect(hysteresis.canProbe(Date.now())).toBe(true)
+    probe.clear()
+  })
+})

@@ -85,13 +85,16 @@ export class RpcClientSocketCloseController {
       streamCount: this.options.streams.size(),
       attempt: this.options.reconnect.getAttempt()
     })
+    const closeDetail = closeCode == null ? 'Close code unavailable' : `Close code ${closeCode}`
     this.options.emitWarning(
       'WebSocket closed',
-      `${closeCode == null ? 'Close code unavailable' : `Close code ${closeCode}`}; reconnect scheduled`,
+      this.options.reconnect.willRetry()
+        ? `${closeDetail}; reconnect scheduled`
+        : `${closeDetail}; probe gave up`,
       { code: 'socket-closed' }
     )
     this.options.requests.rejectAll('Connection interrupted', { deliveryUnknown: true })
-    this.options.connectionState.publish('reconnecting')
+    this.options.connectionState.publish(this.options.reconnect.stateAfterClose())
     this.options.reconnect.schedule()
   }
 }

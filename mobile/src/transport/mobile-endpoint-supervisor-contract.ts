@@ -23,4 +23,9 @@ export type MobileEndpointSupervisorDependencies = {
   setTimer: typeof setTimeout
   clearTimer: typeof clearTimeout
   onLog?: ConnectionLogSink
+  /** Current network type (expo-network name) so direct probes skip addresses
+   *  that cannot answer on it. Absent: probe everything. */
+  networkType?: () => Promise<string | null>
+  /** A background listener keeps its relay and never probes for a direct return. */
+  directReturnProbe?: boolean
 }

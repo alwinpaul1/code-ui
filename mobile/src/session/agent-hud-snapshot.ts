@@ -347,13 +347,12 @@ export async function readAgentHudSnapshot(args: {
     return null
   } finally {
     if (terminal) {
-      // Best effort: the reader ends with `exit`, so the shell is already gone
-      // if this never lands.
-      try {
-        await client.sendRequest('terminal.close', { terminal }, { timeoutMs: 4_000 })
-      } catch {
+      // Best effort and NOT awaited: the reader ends with `exit`, so the shell
+      // is already gone if this never lands, and the snapshot is in hand —
+      // waiting for the close was one more round trip before the pills painted.
+      client.sendRequest('terminal.close', { terminal }, { timeoutMs: 4_000 }).catch(() => {
         /* the shell exits on its own */
-      }
+      })
     }
   }
 }

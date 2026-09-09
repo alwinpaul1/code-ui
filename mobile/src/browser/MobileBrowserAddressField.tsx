@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     fontFamily: typography.monoFamily
   },
   fileLabelHost: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
     borderRadius: radii.input,

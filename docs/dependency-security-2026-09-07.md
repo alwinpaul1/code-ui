@@ -66,3 +66,25 @@ second patch against the 1.x source layout, or forcing `image-size` to 2.x for
 Metro — a major bump to a dependency of the bundler, which needs a real bundling
 test rather than a lockfile edit. Recorded so the next person does not read
 "patched" as covering the whole tree.
+
+## Update, 2026-09-09: `image-size` is gone from the tree
+
+The Expo SDK 57 upgrade (Metro 0.84.5, React Native 0.86.3) removed
+`image-size` from Metro's dependencies, and nothing else in the lockfile pulls
+it — neither the patched 2.0.2 nor the unpatched 1.2.1 the correction above
+records. That is the condition this document set for removing the patch
+("until an upstream fix replaces it"), met by the dependency disappearing
+rather than being fixed. `patches/image-size@2.0.2.patch` and its
+`patchedDependencies` entry are removed; pnpm refuses to link with a patch that
+applies to nothing (`ERR_PNPM_UNUSED_PATCH`), so the entry could not have
+stayed even as a belt-and-braces.
+
+The ICNS/JXL/HEIF regression tests went with it: they resolved `image-size`
+relative to Metro, and with no project copy Node's resolution walks up out of
+the repository and finds whatever sits in `~/node_modules` — on one machine an
+unpatched 1.2.1 that hung the harness. Their replacement asserts that the
+lockfile has no `image-size` entry, which is the fact that matters now. The
+query-string, xmldom and plist checks are unchanged; `@expo/plist@0.8.1` still
+carries its compatibility patch.
+
+GitHub alerts #1 and #2 can now be closed as resolved rather than dismissed.

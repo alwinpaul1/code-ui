@@ -6,6 +6,33 @@ import {
   type AgentHudSnapshot,
   type AgentHudSnapshotTarget
 } from './agent-hud-snapshot'
+import {
+  agentHudCacheKey,
+  hydrateAgentHudSnapshot,
+  peekAgentHudSnapshot,
+  rememberAgentHudSnapshot
+} from './agent-hud-snapshot-cache'
+
+/** A host's platform does not change while a client is connected to it, but
+ *  every tab open asked again — one round trip, then a React re-render before
+ *  the reader could even start. Keyed by the client object so a new pairing
+ *  cannot inherit an old answer. */
+const hostPlatformByClient = new WeakMap<object, NodeJS.Platform>()
+
+function snapshotTarget(args: {
+  agent: string | null | undefined
+  transcriptPath?: string | null
+  sessionId?: string | null
+  cwd?: string | null
+}): AgentHudSnapshotTarget | null {
+  if (args.agent === 'claude') {
+    return { agent: 'claude', transcriptPath: args.transcriptPath ?? null }
+  }
+  if (args.agent === 'codex') {
+    return { agent: 'codex', sessionId: args.sessionId ?? null, cwd: args.cwd ?? null }
+  }
+  return null
+}
 
 /** The command is a POSIX shell one-liner — `printf | base64 -d | node -`,
  *  `/tmp`, `2>/dev/null`. On a Windows host every part of that is wrong, and
@@ -42,22 +69,52 @@ export function useAgentHudSnapshot(args: {
   /** Changes whenever the active terminal changes; restarts the snapshot. */
   scopeKey: string | null
 }): { snapshot: AgentHudSnapshot | null; refresh: () => Promise<AgentHudSnapshot | null> } {
-  const [snapshot, setSnapshot] = useState<AgentHudSnapshot | null>(null)
+  const cacheKey = agentHudCacheKey(snapshotTarget(args) ?? { agent: 'claude', transcriptPath: null })
+  // The last snapshot this exact session gave, before any round trip: the
+  // pills paint with the tab instead of a second after it.
+  const [snapshot, setSnapshot] = useState<AgentHudSnapshot | null>(() =>
+    peekAgentHudSnapshot(cacheKey)
+  )
+  const snapshotRef = useRef(snapshot)
+  snapshotRef.current = snapshot
   const latest = useRef(args)
   latest.current = args
   const readRef = useRef<() => Promise<AgentHudSnapshot | null>>(async () => null)
-  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
+  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(() =>
+    args.client ? (hostPlatformByClient.get(args.client) ?? null) : null
+  )
   const hostPlatformRef = useRef<NodeJS.Platform | null>(null)
   hostPlatformRef.current = hostPlatform
 
   useEffect(() => {
-    setSnapshot(null)
-  }, [args.scopeKey])
+    // Another tab, or another session in the same tab: its own last snapshot
+    // or nothing — never the previous session's numbers.
+    const cached = peekAgentHudSnapshot(cacheKey)
+    setSnapshot(cached)
+    if (cached || !cacheKey) {
+      return
+    }
+    let current = true
+    void hydrateAgentHudSnapshot(cacheKey).then((stored) => {
+      // A live read that landed meanwhile is fresher than anything stored.
+      if (current && stored && snapshotRef.current === null) {
+        setSnapshot(stored)
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [args.scopeKey, cacheKey])
 
   useEffect(() => {
     let active = true
     const client = args.client
     if (!client || !args.enabled) {
+      return
+    }
+    const known = hostPlatformByClient.get(client)
+    if (known) {
+      setHostPlatform(known)
       return
     }
     void (async () => {
@@ -66,8 +123,12 @@ export function useAgentHudSnapshot(args: {
         const result = (response as { ok?: boolean; result?: unknown })?.ok
           ? (response as { result?: unknown }).result
           : null
+        const platform = readMobileRuntimeHostPlatform(result)
+        if (platform) {
+          hostPlatformByClient.set(client, platform)
+        }
         if (active) {
-          setHostPlatform(readMobileRuntimeHostPlatform(result))
+          setHostPlatform(platform)
         }
       } catch {
         // Left unknown, which the gate below treats as unsupported.
@@ -83,7 +144,7 @@ export function useAgentHudSnapshot(args: {
     let inFlight = false
     const read = async (): Promise<AgentHudSnapshot | null> => {
       const current = latest.current
-      const agent = current.agent === 'codex' ? 'codex' : 'claude'
+      const target = snapshotTarget(current)
       if (
         !active ||
         inFlight ||
@@ -91,21 +152,17 @@ export function useAgentHudSnapshot(args: {
         !current.enabled ||
         !current.worktree ||
         !isPosixHost(hostPlatformRef.current) ||
-        (current.agent !== 'claude' && current.agent !== 'codex')
+        !target
       ) {
         return null
       }
       // Claude is addressed by its transcript; without one there is nothing to
       // read and guessing another session's file would report someone else's
       // context as this tab's.
-      const target: AgentHudSnapshotTarget =
-        agent === 'claude'
-          ? { agent, transcriptPath: current.transcriptPath ?? null }
-          : { agent, sessionId: current.sessionId ?? null, cwd: current.cwd ?? null }
-      if (agent === 'claude' && !target.transcriptPath) {
+      if (target.agent === 'claude' && !target.transcriptPath) {
         return null
       }
-      if (agent === 'codex' && !target.sessionId && !target.cwd) {
+      if (target.agent === 'codex' && !target.sessionId && !target.cwd) {
         return null
       }
       inFlight = true
@@ -119,6 +176,7 @@ export function useAgentHudSnapshot(args: {
         if (!active || !next || next.error) {
           return null
         }
+        rememberAgentHudSnapshot(agentHudCacheKey(target), next)
         setSnapshot(next)
         return next
       } finally {

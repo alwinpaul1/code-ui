@@ -49,6 +49,11 @@ export type RpcClient = {
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink
+  /** One socket to establish. A socket that closes before it authenticates
+   *  ends the client ('disconnected') instead of starting the reconnect
+   *  ladder. Once authenticated the client reconnects as usual — a probe
+   *  that wins is migrated in as the live connection, so it has to. */
+  dialOnce?: boolean
 }
 
 export function connect(

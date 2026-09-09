@@ -240,7 +240,7 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['하', '\x7f', '한']))
   })
 
-  it('Given Hangul pending text When submit is requested Then sends composed text before carriage return', async () => {
+  it('Given Hangul pending text When submit is requested Then the composed text and the carriage return ride one frame', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
     changeLiveInput(handlers, '한')
@@ -248,9 +248,10 @@ describe('terminal live input commit hook', () => {
     // When
     const accepted = await handlers.handleLiveInputSubmit()
 
-    // Then
+    // Then: one terminal.send, text first, so Enter no longer costs a second
+    // relay round trip (Galaxy S23 over relay, 2026-09-09).
     expect(accepted).toBe(true)
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given no pending text When submit is requested Then sends only carriage return', async () => {
@@ -292,9 +293,9 @@ describe('terminal live input commit hook', () => {
     // When
     const accepted = await handlers.handleLiveInputSubmit()
 
-    // Then: the held commit went out but was not accepted, so no \r follows
+    // Then: the frame carried both and was refused as one; nothing follows it
     expect(accepted).toBe(false)
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given a rejected carriage return When submit is requested Then reports rejection', async () => {
@@ -315,7 +316,8 @@ describe('terminal live input commit hook', () => {
     changeLiveInput(handlers, 'ab')
 
     // Then
-    await vi.waitFor(() => expect(sent).toEqual(['a', 'b']))
+    // Both changes land in one tick, so they share one frame.
+    await vi.waitFor(() => expect(sent).toEqual(['ab']))
   })
 
   it('Given iOS smart-dash text When the change arrives Then the capture echoes the raw field text and the PTY gets normalized bytes', async () => {
@@ -341,7 +343,7 @@ describe('terminal live input commit hook', () => {
 
     // Then: captures only echo the field; the mirror repairs the PTY with DELs
     expect(captures).toEqual(['high', 'hi there'])
-    await vi.waitFor(() => expect(sent).toEqual(['high', '\x7f\x7f there']))
+    await vi.waitFor(() => expect(sent).toEqual(['high\x7f\x7f there']))
   })
 
   it('Given a trailing space after Hangul When the change arrives Then the space commits the held syllable', async () => {
@@ -428,7 +430,7 @@ describe('terminal live input commit hook', () => {
     handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
 
     // Then
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\t']))
+    await vi.waitFor(() => expect(sent).toEqual(['한\t']))
   })
 
   it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
@@ -441,7 +443,7 @@ describe('terminal live input commit hook', () => {
     handlers.handleLiveInputSubmit()
 
     // Then: an unknown tab type is not "left the terminal", so pending still flushes
-    await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
+    await vi.waitFor(() => expect(sent).toEqual(['한\r']))
   })
 
   it('Given Hangul pending When the tab genuinely changes to non-terminal Then clears the composition state', async () => {

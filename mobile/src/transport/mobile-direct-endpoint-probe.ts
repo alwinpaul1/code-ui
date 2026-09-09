@@ -54,14 +54,16 @@ export async function openAuthenticatedDirectEndpoint(
   timeoutMs: number,
   // Why: a relay replacement (network handoff) must not sit behind a 12s probe
   // of an endpoint that is not answering; aborting settles this null at once.
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Subset of the host's direct addresses to dial; defaults to all of them. */
+  candidateEndpoints: readonly string[] = directEndpointUrls(host)
 ): Promise<{
   client: RpcClient
   path: Exclude<MobileConnectionPath, 'relay'>
   endpoint: string
 } | null> {
-  const endpoints = directEndpointUrls(host)
-  if (signal?.aborted) {
+  const endpoints = [...candidateEndpoints]
+  if (signal?.aborted || endpoints.length === 0) {
     return null
   }
   return await new Promise((resolve) => {

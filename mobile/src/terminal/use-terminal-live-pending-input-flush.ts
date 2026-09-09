@@ -37,6 +37,14 @@ type TerminalLivePendingInputFlush = {
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  /** Commit any held text and queue `bytes` behind it in the same frame. With
+   *  `endsEditingSession` the local mirror model resets once it lands, as an
+   *  explicit flush does. */
+  readonly sendControlBytesAfterPendingText: (
+    handle: string,
+    bytes: string,
+    options?: { endsEditingSession?: boolean }
+  ) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
@@ -187,6 +195,42 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
+  const sendControlBytesAfterPendingText = useCallback(
+    async (
+      handle: string,
+      bytes: string,
+      options?: { endsEditingSession?: boolean }
+    ): Promise<boolean> => {
+      const pendingHandle = pendingLiveInputHandleRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        clearPendingLiveInputCommit()
+      }
+      const heldText = pendingHandle === handle ? heldLiveInputTextRef.current : ''
+      // Why both pushes happen in one tick: the queue coalesces them into one
+      // terminal.send, so Enter after typed text costs one relay round trip
+      // instead of the two it cost when the control waited for the text's reply.
+      // runMirrorStep queues synchronously before its first await.
+      const heldSend =
+        heldText.length > 0
+          ? runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
+          : null
+      const controlSend = queueTerminalLiveMirrorSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        bytes,
+        sendQueuedMirrorPayload,
+        { requiresPriorSuccess: true }
+      )
+      const [heldSent, controlSent] = await Promise.all([heldSend ?? true, controlSend])
+      if (options?.endsEditingSession && pendingHandle === handle) {
+        // Why: the echoed PTY text stays, so local mirror state restarts from empty.
+        clearPendingLiveInputCommit()
+      }
+      return heldSent && controlSent
+    },
+    [clearPendingLiveInputCommit, runMirrorStep, sendQueuedMirrorPayload]
+  )
+
   useEffect(() => {
     return () => {
       if (heldCommitTimerRef.current) {
@@ -208,6 +252,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
+    sendControlBytesAfterPendingText,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   }

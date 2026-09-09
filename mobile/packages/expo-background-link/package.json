@@ -1,0 +1,13 @@
+{
+  "name": "@codeui/expo-background-link",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Android foreground service that keeps the phone's link to the desktop alive while the app is off screen, so agent notifications arrive in real time without any change on the host.",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}

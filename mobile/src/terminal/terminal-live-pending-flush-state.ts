@@ -9,6 +9,14 @@ type TerminalLivePendingBatch = {
   payload: string
   readonly requests: TerminalLivePendingRequest[]
   readonly sender: TerminalLiveMirrorSender
+  /** Carries control bytes (Enter, Tab, arrows): skipped, not sent, when an
+   *  earlier frame of this drain was refused, so a control never lands on a
+   *  PTY line whose text did not. */
+  requiresPriorSuccess: boolean
+}
+
+export type TerminalLiveMirrorSendOptions = {
+  requiresPriorSuccess?: boolean
 }
 
 export type TerminalLivePendingFlushState = {
@@ -57,6 +65,10 @@ async function drainTerminalLiveMirrorSends(
       return allSent
     }
 
+    if (batch.requiresPriorSuccess && !allSent) {
+      batch.requests.forEach(({ resolve }) => resolve(false))
+      continue
+    }
     state.activeRequests = batch.requests
     const sent = await batch.sender(batch.handle, batch.payload).catch(() => false)
     if (state.generation !== generation) {
@@ -75,7 +87,8 @@ export function queueTerminalLiveMirrorSend(
   state: TerminalLivePendingFlushState,
   handle: string,
   payload: string,
-  sender: TerminalLiveMirrorSender
+  sender: TerminalLiveMirrorSender,
+  options: TerminalLiveMirrorSendOptions = {}
 ): Promise<boolean> {
   let resolveRequest: (sent: boolean) => void = () => {}
   const request = new Promise<boolean>((resolve) => {
@@ -85,18 +98,26 @@ export function queueTerminalLiveMirrorSend(
   if (pendingTail?.handle === handle && pendingTail.sender === sender) {
     pendingTail.payload += payload
     pendingTail.requests.push({ resolve: resolveRequest })
+    pendingTail.requiresPriorSuccess ||= options.requiresPriorSuccess === true
   } else {
     state.pendingBatches.push({
       handle,
       payload,
       requests: [{ resolve: resolveRequest }],
-      sender
+      sender,
+      requiresPriorSuccess: options.requiresPriorSuccess === true
     })
   }
 
   if (!state.current) {
     const generation = state.generation
-    const drain = drainTerminalLiveMirrorSends(state, generation).catch(() => false)
+    // Why a microtask: the drain used to take the first batch synchronously, so
+    // text and the Enter queued right after it always went as two frames — two
+    // relay round trips per command. Deferring one tick lets everything pushed
+    // in the same turn coalesce into one terminal.send, at no visible cost.
+    const drain = Promise.resolve()
+      .then(() => drainTerminalLiveMirrorSends(state, generation))
+      .catch(() => false)
     state.current = drain
     void drain.then(() => {
       if (state.current === drain) {

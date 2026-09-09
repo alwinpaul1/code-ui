@@ -75,6 +75,15 @@ function createAccessoryInputCommitHarness({
   )
   const clearPendingLiveInputCommit = vi.fn(() => {})
   const flushPendingLiveInputText = vi.fn(async (_expectedHandle: string | null) => flushResult)
+  // Models the real helper: held text and control bytes share one frame, so a
+  // refused frame refuses both.
+  const sendControlBytesAfterPendingText = vi.fn(async (handle: string, bytes: string) => {
+    const flushed = await flushPendingLiveInputText(handle)
+    if (!flushed) {
+      return false
+    }
+    return sendLiveTerminalInputRef.current(handle, bytes)
+  })
   const waitForPendingLiveInputFlush = vi.fn(async () => waitResult)
   const setLiveInputCapture = vi.fn((_text: string) => {})
 
@@ -86,15 +95,14 @@ function createAccessoryInputCommitHarness({
       activeHandle,
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
-      flushPendingLiveInputText,
       heldLiveInputTextRef,
       liveInputComposingRef,
       liveInputRef,
       liveInputTerminalHandles,
       onInteraction: vi.fn(),
       pendingLiveInputHandleRef,
+      sendControlBytesAfterPendingText,
       sentLiveInputTextRef,
-      sendLiveTerminalInputRef,
       setLiveInputCapture,
       waitForPendingLiveInputFlush
     })

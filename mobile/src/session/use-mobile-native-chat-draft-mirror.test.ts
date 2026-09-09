@@ -68,7 +68,8 @@ describe('useMobileNativeChatDraftMirror', () => {
       expect(params.terminal).toBe('term-1')
       return params.text
     })
-    expect(texts).toEqual([CTRL_U, 'fi', 'x'])
+    // The clear and the first text go out as one frame (one relay round trip).
+    expect(texts).toEqual([CTRL_U + 'fi', 'x'])
   })
 
   it('forgets the line on settleBeforeSend so the emptied composer sends nothing', async () => {
@@ -86,7 +87,7 @@ describe('useMobileNativeChatDraftMirror', () => {
     // The next edit after a send starts a fresh line.
     update({ enabled: true, text: 'a' })
     await flush()
-    expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U, 'a'])
+    expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U + 'a'])
   })
 
   it('sends nothing while disabled', async () => {

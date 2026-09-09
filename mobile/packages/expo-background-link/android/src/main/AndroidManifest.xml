@@ -1,0 +1,18 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <!-- Why: Android 14 refuses startForeground() unless the declared type's
+       permission is held. The service relays messages between the desktop
+       agents and this phone, which is what REMOTE_MESSAGING is for; unlike
+       DATA_SYNC it carries no daily time budget on Android 15. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+  <!-- HeadlessJsTaskService.startTask() takes a partial wake lock. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <application>
+    <service
+      android:name="expo.modules.backgroundlink.BackgroundLinkService"
+      android:exported="false"
+      android:foregroundServiceType="remoteMessaging"
+      android:stopWithTask="false" />
+  </application>
+</manifest>

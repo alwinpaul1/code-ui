@@ -9,6 +9,7 @@ import {
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { saveHost } from './host-store'
+import { readMobileNetworkType } from './mobile-network-type'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -23,10 +24,17 @@ type EndpointOwner = EndpointLifecycle & {
   start(): Promise<void>
 }
 
+export type MobileEndpointLifecycleOptions = {
+  /** Keep whatever path connects and never probe for a direct return; for the
+   *  background notification listener, which has no user waiting on latency. */
+  directReturnProbe?: boolean
+}
+
 export function startMobileEndpointLifecycle(
   logical: StableLogicalRpcClient,
   initialHost: HostProfile,
-  onLog: ConnectionLogSink
+  onLog: ConnectionLogSink,
+  options: MobileEndpointLifecycleOptions = {}
 ): EndpointLifecycle {
   let stopped = false
   let foreground = true
@@ -36,7 +44,7 @@ export function startMobileEndpointLifecycle(
     if (stopped) {
       return
     }
-    const supervisor = createSupervisor(logical, host, onLog)
+    const supervisor = createSupervisor(logical, host, onLog, options)
     owner.stop()
     owner = supervisor
     supervisor.setForeground(foreground)
@@ -44,7 +52,7 @@ export function startMobileEndpointLifecycle(
   }
 
   if (initialHost.relay) {
-    owner = createSupervisor(logical, initialHost, onLog)
+    owner = createSupervisor(logical, initialHost, onLog, options)
     void owner.start()
   } else {
     owner = new MobileRelayDirectUpgradeController(logical, initialHost, {
@@ -82,10 +90,15 @@ export function startMobileEndpointLifecycle(
 function createSupervisor(
   logical: StableLogicalRpcClient,
   host: HostProfile,
-  onLog: ConnectionLogSink
+  onLog: ConnectionLogSink,
+  options: MobileEndpointLifecycleOptions
 ): MobileEndpointSupervisor {
   return new MobileEndpointSupervisor(logical, host, {
-    openDirect: (endpoint) => connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog }),
+    // Probes only (the launch race and the direct-return probe); the live
+    // direct client is host-logical-client's. A probe's first refusal is its
+    // verdict — see ConnectOptions.dialOnce.
+    openDirect: (endpoint) =>
+      connect(endpoint, host.deviceToken, host.publicKeyB64, { onLog, dialOnce: true }),
     openRelay: (relay, credential, confirmReqId, onHostCloseReason) =>
       connectMobileRelayRpcSession({
         relay,
@@ -105,6 +118,8 @@ function createSupervisor(
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
     setTimer: setTimeout,
-    clearTimer: clearTimeout
+    clearTimer: clearTimeout,
+    networkType: readMobileNetworkType,
+    ...(options.directReturnProbe === undefined ? {} : { directReturnProbe: options.directReturnProbe })
   })
 }

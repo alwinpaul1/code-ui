@@ -8,6 +8,46 @@ export function directEndpointUrls(host: HostProfile): string[] {
   return [...new Set([host.endpoint, ...endpoints])]
 }
 
+/**
+ * The direct addresses worth dialing on the current network. On cellular a
+ * private-LAN address (RFC 1918, link-local, .local) cannot answer, and every
+ * attempt hangs the full connect timeout; Tailscale and public names can. Any
+ * other network type — Wi-Fi, Ethernet, unknown, or none reported — keeps
+ * the whole list, because a wrong guess there would hide a working LAN.
+ */
+export function directEndpointsPlausibleOnNetwork(
+  urls: readonly string[],
+  networkType: string | null | undefined
+): string[] {
+  if (networkType !== 'CELLULAR') {
+    return [...urls]
+  }
+  return urls.filter((url) => !isPrivateLanAddress(url))
+}
+
+function isPrivateLanAddress(url: string): boolean {
+  let hostname: string
+  try {
+    hostname = new URL(url).hostname
+  } catch {
+    return false
+  }
+  if (hostname.endsWith('.local')) {
+    return true
+  }
+  const octets = hostname.split('.').map(Number)
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false
+  }
+  const [a, b] = octets as [number, number, number, number]
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254)
+  )
+}
+
 /** Tailscale addresses are 100.64/10 literals or *.ts.net names; the rest is LAN. */
 export function directEndpointKind(url: string): 'lan' | 'tailscale' {
   try {

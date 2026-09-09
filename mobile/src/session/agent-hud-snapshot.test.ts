@@ -200,6 +200,48 @@ it('spawns, reads the file back, and always closes the shell it made', async () 
   expect(client.calls[0]?.params.presentation).toBe('background')
 })
 
+it('reports the snapshot without waiting for the shell to close', async () => {
+  // The close is bookkeeping after the fact; awaiting it inside `finally` held
+  // the returned promise for one more round trip on every read.
+  const client = fakeClient({
+    'terminal.create': { ok: true, result: { terminal: 'hud-3' } },
+    'terminal.wait': { ok: true, result: { wait: 'exit' } },
+    'files.resolveTerminalPath': {
+      ok: true,
+      result: {
+        worktree: 'wt-1',
+        openTarget: { kind: 'absolute-file', absolutePath: '/tmp/orca-hud-w.json', grantId: 'g' }
+      }
+    },
+    'files.readTerminalArtifact': { ok: true, result: { content: CODEX_JSON } }
+  })
+  const original = client.sendRequest
+  client.sendRequest = (method, params) => {
+    if (method !== 'terminal.close') {
+      return original(method, params)
+    }
+    client.calls.push({ method, params })
+    return new Promise(() => {})
+  }
+  let settled = false
+  const reading = readAgentHudSnapshot({
+    client,
+    worktree: 'id:wt-1',
+    target: { agent: 'codex', cwd: '/w' },
+    id: 'w',
+    readerBase64: 'QQ=='
+  }).then((snapshot) => {
+    settled = true
+    return snapshot
+  })
+  for (let tick = 0; tick < 50; tick++) {
+    await Promise.resolve()
+  }
+  expect(settled).toBe(true)
+  expect((await reading)?.model).toBe('gpt-5.6-terra')
+  expect(client.calls.at(-1)?.method).toBe('terminal.close')
+})
+
 it('closes the shell even when the read fails, and reports nothing rather than guessing', async () => {
   const client = fakeClient({
     'terminal.create': { ok: true, result: { terminal: 'hud-2' } },

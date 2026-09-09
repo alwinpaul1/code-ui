@@ -15,12 +15,19 @@ import {
   type RelayDialTimings
 } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
+import { waitForRelaySessionConnected } from './relay-session-wait-for-connected'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
+// Why 30 s: long enough that an active session almost never pays for it (any
+// inbound frame defers it), short enough that a half-open relay socket — cell
+// restart with no FIN, NAT rebind on cellular — is noticed in well under a
+// minute instead of only when the user next foregrounds the app. Before
+// 2026-09-09 the relay had no idle probe at all.
+const RELAY_IDLE_PROBE_MS = 30_000
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
@@ -106,6 +113,16 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
+      // Why: publishState is edge-triggered, so a request arriving after fail()
+      // would never see a state event and could only die on the 30 s timer —
+      // one such keystroke parked the live-input queue for 30 s on a Galaxy S23.
+      if (closed) {
+        throw new Error(`relay session ${state}: ${failure?.message ?? 'closed'}`)
+      }
+      if (options?.failWhenDisconnected && state !== 'connected') {
+        // Same contract the direct client honours (rpc-client-request-tracker).
+        throw new Error(`Not connected: ${method}`)
+      }
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
       return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
@@ -155,7 +172,7 @@ export function connectMobileRelayRpcSession(args: {
   }
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
-    idleProbeMs: null,
+    idleProbeMs: RELAY_IDLE_PROBE_MS,
     probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
@@ -270,31 +287,10 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function waitForConnected(timeoutMs = requestTimeoutMs): Promise<void> {
-    if (state === 'connected') {
-      return Promise.resolve()
-    }
-    return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout> | null = null
-      const unsubscribe = client.onStateChange((next) => {
-        if (next === 'connected') {
-          finish()
-          resolve()
-        } else if (next === 'disconnected' || next === 'auth-failed') {
-          finish()
-          reject(new Error(`relay session ${next}`))
-        }
-      })
-      timer = setTimeout(() => {
-        finish()
-        reject(new Error('relay session connection timed out'))
-      }, timeoutMs)
-      function finish(): void {
-        if (timer) {
-          clearTimeout(timer)
-        }
-        unsubscribe()
-      }
-    })
+    return waitForRelaySessionConnected(
+      { getState: () => state, isClosed: () => closed, onStateChange: client.onStateChange },
+      timeoutMs
+    )
   }
 
   function publishState(next: ConnectionState): void {

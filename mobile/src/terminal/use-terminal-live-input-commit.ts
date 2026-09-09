@@ -4,7 +4,6 @@ import {
   getTerminalLiveSpecialKeyDecision,
   isTerminalLiveCursorRepositionBytes
 } from './terminal-live-text-commit'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
@@ -78,6 +77,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
+    sendControlBytesAfterPendingText,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   } = useTerminalLivePendingInputFlush({
@@ -190,9 +190,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           return
         case 'send-now': {
           const repositionBytes = decision.bytes
-          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-            sendLiveTerminalInputRef.current(activeHandle, repositionBytes)
-          ).then(() => {
+          void sendControlBytesAfterPendingText(activeHandle, repositionBytes).then(() => {
             // Why: a cursor move from the keyboard leaves the field's linear
             // model out of step with the TUI line, so reset it — the next typed
             // run inserts fresh at the TUI's new cursor (same as the strip path).
@@ -203,10 +201,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
           return
         }
         case 'commit-held-then-send':
-          void sendTerminalLiveControlAfterPendingFlush(
-            () => flushPendingLiveInputText(activeHandle),
-            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+          void sendControlBytesAfterPendingText(activeHandle, decision.bytes, {
+            endsEditingSession: true
+          })
           return
         default:
           decision satisfies never
@@ -216,10 +213,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       activeHandle,
       advanceLiveInputInteractionGeneration,
       clearPendingLiveInputCommit,
-      flushPendingLiveInputText,
       liveInputTerminalHandles,
-      sendLiveTerminalInputRef,
-      waitForPendingLiveInputFlush
+      sendControlBytesAfterPendingText
     ]
   )
 
@@ -227,15 +222,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     activeHandle,
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
-    flushPendingLiveInputText,
     heldLiveInputTextRef,
     liveInputComposingRef,
     liveInputRef,
     liveInputTerminalHandles,
     onInteraction: advanceLiveInputInteractionGeneration,
     pendingLiveInputHandleRef,
+    sendControlBytesAfterPendingText,
     sentLiveInputTextRef,
-    sendLiveTerminalInputRef,
     setLiveInputCapture,
     waitForPendingLiveInputFlush
   })
@@ -245,16 +239,12 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       return Promise.resolve(false)
     }
     advanceLiveInputInteractionGeneration()
-    return sendTerminalLiveControlAfterPendingFlush(
-      () => flushPendingLiveInputText(activeHandle),
-      () => sendLiveTerminalInputRef.current(activeHandle, '\r')
-    )
+    return sendControlBytesAfterPendingText(activeHandle, '\r', { endsEditingSession: true })
   }, [
     activeHandle,
     advanceLiveInputInteractionGeneration,
-    flushPendingLiveInputText,
     liveInputTerminalHandles,
-    sendLiveTerminalInputRef
+    sendControlBytesAfterPendingText
   ])
 
   return {

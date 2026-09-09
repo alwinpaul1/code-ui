@@ -1,9 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
-import { AppState, Linking, View, Text, StyleSheet, Pressable, Switch } from 'react-native'
+import { AppState, Linking, Pressable, ScrollView, Switch, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { useTheme } from '../src/theme/theme-context'
+import { ScreenHeader } from '../src/ui/ScreenHeader'
+import { SectionLabel } from '../src/ui/SectionLabel'
+import { Surface } from '../src/ui/Surface'
+import { Txt } from '../src/ui/Txt'
 import {
   loadPushNotificationsEnabled,
   savePushNotificationsEnabled
@@ -13,6 +16,14 @@ import {
   getNotificationPermissionState,
   type NotificationPermissionState
 } from '../src/notifications/mobile-notifications'
+import {
+  loadBackgroundDeliveryEnabled,
+  saveBackgroundDeliveryEnabled
+} from '../src/background/background-link-preference'
+import {
+  applyBackgroundDelivery,
+  isBackgroundDeliveryAvailable
+} from '../src/background/background-link'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -24,15 +35,20 @@ const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
 export default function NotificationsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { colors, space } = useTheme()
   const [pushEnabled, setPushEnabled] = useState(false)
+  const [backgroundEnabled, setBackgroundEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
+  const backgroundAvailable = isBackgroundDeliveryAvailable()
 
   const refreshSettings = useCallback(async () => {
-    const [enabled, permission] = await Promise.all([
+    const [enabled, background, permission] = await Promise.all([
       loadPushNotificationsEnabled(),
+      loadBackgroundDeliveryEnabled(),
       getNotificationPermissionState()
     ])
     setPushEnabled(enabled)
+    setBackgroundEnabled(background)
     setPermissionState(permission)
   }, [])
 
@@ -64,6 +80,14 @@ export default function NotificationsScreen() {
     }
     setPushEnabled(value)
     await savePushNotificationsEnabled(value)
+    // Background delivery rides on agent notifications; off means off for both.
+    applyBackgroundDelivery(value && backgroundEnabled)
+  }
+
+  const toggleBackground = async (value: boolean) => {
+    setBackgroundEnabled(value)
+    await saveBackgroundDeliveryEnabled(value)
+    applyBackgroundDelivery(value && pushEnabled && permissionState.granted)
   }
 
   const switchEnabled = pushEnabled && permissionState.granted
@@ -73,106 +97,108 @@ export default function NotificationsScreen() {
     : 'Get notified on this device when an agent needs your input or finishes a task.'
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Notifications</Text>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Agent notifications</Text>
-          <Switch
-            value={switchEnabled}
-            disabled={notificationsBlocked}
-            onValueChange={(v) => void togglePush(v)}
-            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-            thumbColor={colors.textPrimary}
-          />
-        </View>
-        <Text style={styles.hint}>{hint}</Text>
-        {notificationsBlocked && (
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsButton,
-              pressed && styles.settingsButtonPressed
-            ]}
-            onPress={() => void Linking.openSettings()}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <ScreenHeader title="Notifications" onBack={() => router.back()} large />
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: space.lg,
+          paddingBottom: insets.bottom + space.xl
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <SectionLabel style={{ marginTop: space.sm }}>From your desktop</SectionLabel>
+        <Surface rounded="lg" style={{ overflow: 'hidden' }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.md,
+              paddingVertical: space.md,
+              paddingHorizontal: space.lg
+            }}
           >
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
+            <View style={{ flex: 1 }}>
+              <Txt variant="body" weight="medium">
+                Agent notifications
+              </Txt>
+              <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                {hint}
+              </Txt>
+            </View>
+            <Switch
+              accessibilityLabel="Agent notifications"
+              value={switchEnabled}
+              disabled={notificationsBlocked}
+              onValueChange={(v) => void togglePush(v)}
+              trackColor={{ false: colors.borderStrong, true: colors.accent }}
+              thumbColor={colors.bgPanel}
+            />
+          </View>
+          {backgroundAvailable ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.md,
+                paddingVertical: space.md,
+                paddingHorizontal: space.lg,
+                borderTopWidth: 1,
+                borderTopColor: colors.border
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Txt variant="body" weight="medium">
+                  Deliver while the app is closed
+                </Txt>
+                <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+                  {switchEnabled
+                    ? 'Keeps a link to your desktop open in the background.'
+                    : 'Turn on agent notifications first.'}
+                </Txt>
+              </View>
+              <Switch
+                accessibilityLabel="Deliver while the app is closed"
+                value={backgroundEnabled && switchEnabled}
+                disabled={!switchEnabled}
+                onValueChange={(v) => void toggleBackground(v)}
+                trackColor={{ false: colors.borderStrong, true: colors.accent }}
+                thumbColor={colors.bgPanel}
+              />
+            </View>
+          ) : null}
+        </Surface>
+        {notificationsBlocked ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void Linking.openSettings()}
+            style={({ pressed }) => ({
+              marginTop: space.md,
+              alignSelf: 'flex-start',
+              paddingVertical: space.sm,
+              paddingHorizontal: space.lg,
+              borderRadius: 10,
+              backgroundColor: pressed ? colors.bgRaised : colors.bgPanel,
+              borderWidth: 1,
+              borderColor: colors.border
+            })}
+          >
+            <Txt variant="body" weight="medium">
+              Open Settings
+            </Txt>
           </Pressable>
-        )}
-      </View>
+        ) : null}
+        {backgroundAvailable ? (
+          <Txt
+            variant="label"
+            tone="secondary"
+            style={{ marginTop: space.md, paddingHorizontal: space.xs }}
+          >
+            With background delivery on, a quiet "Code UI" row stays in the notification shade
+            while the link is open, and alerts arrive the moment an agent finishes or needs you,
+            even after you swipe the app away. Nothing is installed or changed on your desktop.
+          </Txt>
+        ) : null}
+      </ScrollView>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xl
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  hint: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18,
-    paddingHorizontal: spacing.md + 2,
-    paddingBottom: spacing.md
-  },
-  settingsButton: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md + 2,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  settingsButtonPressed: {
-    opacity: 0.6
-  },
-  settingsButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
-})

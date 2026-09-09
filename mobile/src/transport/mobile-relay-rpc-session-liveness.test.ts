@@ -104,14 +104,38 @@ describe('mobile relay RPC session liveness', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('sends no periodic traffic while an authenticated relay is idle', async () => {
+  // Reversal, 2026-09-09: this file used to assert that an idle relay sends
+  // nothing. That left a half-open relay socket (cell restart with no FIN, NAT
+  // rebind on cellular) invisible until the user happened to background and
+  // foreground the app; the direct path has probed idle sockets all along.
+  it('probes an idle relay after 30 s of silence and lets inbound traffic defer it', async () => {
     const session = await authenticateSession()
 
-    await vi.advanceTimersByTimeAsync(60_000)
-
+    await vi.advanceTimersByTimeAsync(29_000)
     expect(fakes.sendText).not.toHaveBeenCalled()
+    fakes.linkOptions!.onText(JSON.stringify({ id: 'unsolicited', ok: true, result: {} }))
+    await vi.advanceTimersByTimeAsync(29_000)
+    expect(fakes.sendText).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
     expect(session.getState()).toBe('connected')
     session.close()
+  })
+
+  it('declares a half-open relay dead after two unanswered idle probes', async () => {
+    const onLog = vi.fn<ConnectionLogSink>()
+    const session = await authenticateSession(onLog)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(fakes.sendText).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(session.getState()).toBe('connected')
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(session.getState()).toBe('disconnected')
+    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ code: 'liveness-timeout' }))
   })
 
   it('disconnects after two fair foreground misses', async () => {
@@ -189,9 +213,13 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('does not probe when work follows prolonged inbound silence', async () => {
+  it('lets work go straight out after silence once the idle probe was answered', async () => {
     const session = await authenticateSession()
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(30_000)
+    const probe = sentRequests()[0]!
+    expect(probe.method).toBe('status.get')
+    fakes.linkOptions!.onText(JSON.stringify({ id: probe.id, ok: true, result: {} }))
+    await vi.advanceTimersByTimeAsync(20_000)
 
     const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
     const outcome = pending.catch(() => undefined)
@@ -199,9 +227,11 @@ describe('mobile relay RPC session liveness', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(sentRequests().map(({ method }) => method)).toEqual([
+      'status.get',
       'terminal.send',
       'terminal.subscribe'
     ])
+    expect(session.getState()).toBe('connected')
     session.close()
     await outcome
   })

@@ -49,7 +49,8 @@ export class DirectRpcClient implements RpcClient {
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),
       emitLog: (message, detail) =>
-        this.connectionLog.emit('info', message, detail, { code: 'retry-scheduled' })
+        this.connectionLog.emit('info', message, detail, { code: 'retry-scheduled' }),
+      dialOnce: options.dialOnce
     })
     this.connectionState = new RpcClientConnectionState({
       endpoint,
@@ -272,7 +273,7 @@ export class DirectRpcClient implements RpcClient {
     this.streams.markForReplay()
     this.requests.rejectAll(reason)
     closing?.close()
-    this.connectionState.publish('reconnecting')
+    this.connectionState.publish(this.reconnect.stateAfterClose())
     this.reconnect.schedule()
   }
 
@@ -288,11 +289,7 @@ export class DirectRpcClient implements RpcClient {
     if (this.socketSession) {
       return this.socketSession.sendEncrypted(request)
     }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
+    console.log('[net] sendEncrypted FAILED — channel not ready', { state: this.getState() })
     return false
   }
 

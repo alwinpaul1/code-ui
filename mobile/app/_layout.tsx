@@ -14,6 +14,7 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
+import { syncBackgroundLinkFromPreferences } from '../src/background/background-link'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -55,6 +56,12 @@ function ThemedRoot() {
   // loading fails (then the fallback stack renders rather than a hung splash).
   const [fontsLoaded, fontError] = useAppFonts()
   const fontsReady = fontsLoaded || fontError !== null
+
+  useEffect(() => {
+    // Why here: a foreground service may only be started from the foreground,
+    // and launch is the one moment that is certain.
+    void syncBackgroundLinkFromPreferences()
+  }, [])
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must
