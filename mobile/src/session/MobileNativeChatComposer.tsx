@@ -421,7 +421,8 @@ export function MobileNativeChatComposer({
               accessibilityLabel="Send message"
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}
-              style={[iconButton, { backgroundColor: canSend ? colors.accent : colors.bgRaised }]}
+              // Extra margin: two filled circles on the row's 4 px gap read as one blob.
+              style={[iconButton, { marginLeft: space.xs, backgroundColor: canSend ? colors.accent : colors.bgRaised }]}
               pressedScale={0.9}
               onPress={handleSend}
               disabled={!canSend}
