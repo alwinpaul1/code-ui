@@ -32,7 +32,7 @@ export type StructuredAgentSessionAction =
   | { type: 'handoff'; handoff: AgentSessionHandoffStatus }
   | { type: 'event'; event: AgentSessionSubscribeEvent }
   | { type: 'tail-page'; page: AgentSessionHistoryPage }
-  | { type: 'older-page'; requestedEpoch: string; page: AgentSessionHistoryPage }
+  | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
 
 export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   epoch: null,
@@ -187,7 +187,15 @@ export function reduceStructuredAgentSession(
     }
   }
   if (action.type === 'older-page') {
-    if (state.epoch !== action.requestedEpoch || action.page.epoch !== action.requestedEpoch) {
+    const requested = action.requestedCursor
+    if (state.epoch !== requested.epoch || action.page.epoch !== requested.epoch) {
+      return state
+    }
+    const head = state.items[0]
+    // A live batch head-trimmed past the anchor while this read was in flight, so the
+    // page no longer abuts the retained window; merging it would leave a silent hole.
+    // The caller re-anchors on the new head and asks again.
+    if (head && head.sequence > requested.sequence) {
       return state
     }
     return {
