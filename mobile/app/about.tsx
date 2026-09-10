@@ -12,6 +12,8 @@ import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { SectionLabel } from '../src/ui/SectionLabel'
 import { Surface } from '../src/ui/Surface'
 import { Txt } from '../src/ui/Txt'
+import { useAppUpdateTouchShield } from '../src/app-update/use-app-update-touch-shield'
+import { useAppUpdateDialogVisible } from '../src/app-update/AppUpdateDialog'
 
 // Why: read version + native build identifier from expo-constants at
 // runtime so the About screen never drifts out of sync with app.json.
@@ -119,6 +121,7 @@ function CheckForUpdatesRow() {
 }
 
 export default function AboutScreen() {
+  const touchShield = useAppUpdateTouchShield(useAppUpdateDialogVisible())
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { colors, space } = useTheme()
@@ -193,6 +196,16 @@ export default function AboutScreen() {
           </Txt>
         </Pressable>
       </ScrollView>
+      {/* Why: the dialog is its own Android window. When it closes, the system
+          hands the rest of the gesture to this one, and the row under the
+          finger flashes pressed. See use-app-update-touch-shield.ts. */}
+      {touchShield ? (
+        <View
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          pointerEvents="auto"
+          collapsable={false}
+        />
+      ) : null}
       <AppUpdateDialog />
     </View>
   )

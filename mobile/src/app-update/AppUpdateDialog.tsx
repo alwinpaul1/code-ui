@@ -390,3 +390,9 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
       return null
   }
 }
+
+/** Whether a dialog is on screen right now, for a host screen that must stop
+ *  taking touches while it closes. */
+export function useAppUpdateDialogVisible(): boolean {
+  return useDialogState().kind !== 'hidden'
+}
