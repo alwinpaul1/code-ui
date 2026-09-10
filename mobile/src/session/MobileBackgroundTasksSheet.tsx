@@ -16,15 +16,13 @@ import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
-  backgroundTaskKindLabel,
-  backgroundTaskStatusLabel,
   deriveBackgroundTasks,
   type BackgroundTaskHostStatus,
   type BackgroundTaskKind,
-  formatBackgroundTaskElapsed,
   type BackgroundTask
 } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
+import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */

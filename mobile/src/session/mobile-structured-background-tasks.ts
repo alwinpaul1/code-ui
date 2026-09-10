@@ -22,12 +22,12 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from '../../../src/shared/agent-session-wire'
-import {
-  backgroundTaskKindLabel,
-  type BackgroundTask,
-  type BackgroundTaskKind,
-  type BackgroundTasks
+import type {
+  BackgroundTask,
+  BackgroundTaskKind,
+  BackgroundTasks
 } from './mobile-background-tasks'
+import { backgroundTaskKindLabel } from './mobile-background-task-labels'
 
 /** The host's roster in the shape the tasks row and sheet already render, or
  *  `null` when the host has said nothing and the transcript reader still owns

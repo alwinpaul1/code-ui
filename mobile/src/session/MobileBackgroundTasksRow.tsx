@@ -2,7 +2,8 @@ import { Pressable } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { formatRunningTaskCount } from './mobile-background-tasks'
+import { formatRunningTaskCount } from './mobile-background-task-labels'
+
 
 /** "✳ 2 running tasks" under the last message, in the accent, opening the
  *  background-tasks sheet. Renders nothing when the agent has nothing in

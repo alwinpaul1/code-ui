@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countRunningBackgroundTasks,
-  deriveBackgroundTasks,
-  formatBackgroundTaskElapsed,
-  formatRunningTaskCount
+  deriveBackgroundTasks
 } from './mobile-background-tasks'
+import { formatBackgroundTaskElapsed, formatRunningTaskCount } from './mobile-background-task-labels'
 
 // ─── Real transcript bytes ──────────────────────────────────────────────────
 // Every string below is copied verbatim out of Claude Code's own JSONL
