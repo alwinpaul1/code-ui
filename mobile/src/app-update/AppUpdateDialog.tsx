@@ -19,6 +19,10 @@ import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
 import { getInstalledVersion } from './installed-version'
 import { releaseNotesExcerpt } from './release-notes-excerpt'
+import {
+  claimAppUpdateDialogPresenter,
+  releaseAppUpdateDialogPresenter
+} from './app-update-dialog-presenter'
 
 // One centered dialog for the whole update journey, after the update dialogs
 // of Flighty (app tile + version), Xbox ("What's new" list) and Rivian
@@ -72,8 +76,19 @@ function useDialogState(): DialogState {
 
 export function AppUpdateDialog() {
   const { colors, space, radius } = useTheme()
+  // Why: Home and About each mount this dialog, and a router stack keeps both
+  // screens alive, so without a single presenter one store change opens two
+  // modals and dismissing the front one leaves the second over the list.
+  const owner = useRef({}).current
+  const [presenting, setPresenting] = useState(() => claimAppUpdateDialogPresenter(owner))
+  useEffect(() => {
+    // Re-claim on mount: the previous holder may have unmounted since render.
+    setPresenting(claimAppUpdateDialogPresenter(owner))
+    return () => releaseAppUpdateDialogPresenter(owner)
+  }, [owner])
+
   const state = useDialogState()
-  const visible = state.kind !== 'hidden'
+  const visible = presenting && state.kind !== 'hidden'
   const reveal = useRef(new Animated.Value(0)).current
   const [mounted, setMounted] = useState(visible)
   const previousKind = useRef(state.kind)
