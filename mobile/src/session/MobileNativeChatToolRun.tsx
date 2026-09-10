@@ -9,6 +9,11 @@ import {
 } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
+import {
+  editFilesFromToolPair,
+  isEditToolName
+} from '../../../src/shared/native-chat-edit-normalize'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
@@ -75,6 +80,31 @@ function ResultBody({
   )
 }
 
+/** The files one edit call changed, or null when the model refuses to claim an
+ *  edit — a failed call, one still running, or a turn that stopped before its
+ *  call was answered. Those keep the generic tool view and its error body. */
+function editFilesForPair(pair: ToolPair) {
+  const { call, result } = pair
+  if (!call) {
+    return null
+  }
+  const files = editFilesFromToolPair({
+    name: call.name,
+    input: call.input,
+    ...(call.state ? { state: call.state } : {}),
+    ...(result
+      ? {
+          result: {
+            output: result.output,
+            isError: result.isError,
+            editPatch: result.editPatch
+          }
+        }
+      : {})
+  })
+  return files && files.length > 0 ? files : null
+}
+
 /** One request: a tool call and its result rendered together as a single
  *  expandable line. `defaultExpanded` lets the group toggle open every line. */
 function ToolLine({
@@ -98,9 +128,16 @@ function ToolLine({
   const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
   // Why: collapsed tool rows are the common path; defer bounded diff parsing
   // and detail formatting until the user asks to reveal the detail.
-  const callDiff = expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
-  const resultDiff = expanded && result ? diffFromText(result.output, diffLineLimit) : null
-  const callDetail = expanded && inputDisplay && !callDiff ? inputDisplay.formatDetail() : undefined
+  // An edit renders as one card per file it changed, which speaks for the call
+  // AND its result — the raw flat diff and the result body are suppressed, so
+  // one turn never shows two presentations of the same change.
+  const editFiles = expanded && call && isEditToolName(call.name) ? editFilesForPair(pair) : null
+  const callDiff =
+    !editFiles && expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
+  const resultDiff =
+    !editFiles && expanded && result ? diffFromText(result.output, diffLineLimit) : null
+  const callDetail =
+    expanded && inputDisplay && !callDiff && !editFiles ? inputDisplay.formatDetail() : undefined
   const hasDetail = callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true
   // The group toggle opens every line at once, bypassing the tap guard, so the
   // panel has to consult it too — else a detail-less row echoes its own label
@@ -136,9 +173,16 @@ function ToolLine({
       </Pressable>
       {showDetail ? (
         <View style={styles.toolDetail}>
+          {editFiles?.map((file, index) => (
+            <MobileNativeChatDiffCard
+              key={`${file.path}:${index}`}
+              file={file}
+              rowLimit={diffLineLimit}
+            />
+          ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
           {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {result ? (
+          {!editFiles && result ? (
             <ResultBody
               output={result.output}
               isError={result.isError}

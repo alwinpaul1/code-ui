@@ -36,5 +36,11 @@ src/shared/native-chat-turn-status.ts: b0c67eaf8
 src/shared/native-chat-turn-status.test.ts: b0c67eaf8
 src/shared/native-chat-tool-summary.ts: c1e15c400 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-edit-model.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-unified-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-begin-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-edit-normalize.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-edit-normalize.test.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.

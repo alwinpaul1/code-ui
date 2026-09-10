@@ -96,7 +96,12 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   be re-vendored at 2f828e446: its base-to-there delta also brings
   `projectStructuredAgentSessionStatusSummary` (#18776/#19137), which is the
   desktop sidebar's feed and has no reader here.
-
+- `native-chat-types.ts` and `structured-agent-session-projection.ts` also carry
+  hunks from Orca #18765 (172aa1ac3): the `NativeChatEditPatch` shapes plus the
+  `editPatch` field on a tool-result block, and `stripBoundedTextMarker`, which
+  `native-chat-edit-normalize.ts` imports. Neither file can be re-vendored whole
+  at that commit, because both also carry the forward-ported #19228 hints above.
+  Both hunks are marked `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
 - `native-chat-tool-summary.ts` and `native-chat-tool-summary.test.ts` —
   `ToolRunMember` drops upstream's `mcpIdentity` field. It is typed
   `NativeChatMcpIdentity` from `native-chat-tool-identity.ts`, and it is read

@@ -30,6 +30,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | e89deb63c #18757, f8780a2c8 #18807, 5868fdc9e #19346, 2bf298d1d #19311 | background tasks over the wire | shared contract hand-applied; the structured lane now reads the host's roster and the transcript reader keeps terminal tabs. `#18757`'s journal-unchanged short-circuit came with it |
 | b0c67eaf8 #18761 (remainder) | the chat lane wiring out of the controller | the extraction skipped when the rest of #18761 landed; taken verbatim for the room |
 | 2f828e446 #19822 (working half) | a structured send reads as working before the provider echoes it, and Stop waits for a turn | the optimistic-bubble half stays unported; see `scratchpad/19822-assessment.md` |
+| 172aa1ac3 #18765 | agent file edits as inline diff cards | upstream shipped it desktop-only; the five shared edit modules are vendored verbatim and the phone got its own card. `native-chat-types.ts` and `structured-agent-session-projection.ts` took hand-applied hunks |
 
 ## Already solved here
 
