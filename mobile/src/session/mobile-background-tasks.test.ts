@@ -609,3 +609,60 @@ describe('background tasks retired by the beacon', () => {
     expect(tasks.finished.map((task) => task.status)).toEqual(['failed'])
   })
 })
+
+// The row under the last message and the background-tasks sheet must never
+// disagree about how many tasks are running. On screen they did: the sheet
+// listed sec4-opus and sec4-sonnet while the row said one. The derivations were
+// always identical — the row is fed a `now` of 0 because only the sheet draws a
+// clock — so these pin that the shortcut really is free, and the staleness is
+// the list's, not the maths'.
+describe('the running-tasks row agrees with the sheet', () => {
+  const options = { finishedTaskIds: [], runningTaskIds: null }
+
+  it('counts what the sheet lists, whatever the clock says', () => {
+    const messages = conversation()
+
+    const rowCount = countRunningBackgroundTasks(messages, null, options)
+    const sheet = deriveBackgroundTasks(messages, NOW, null, options)
+
+    expect(rowCount).toBe(sheet.running.length)
+    expect(rowCount).toBeGreaterThan(1)
+  })
+
+  it('still agrees an hour later, with every elapsed clock moved on', () => {
+    const messages = conversation()
+
+    expect(countRunningBackgroundTasks(messages, null, options)).toBe(
+      deriveBackgroundTasks(messages, NOW + 60 * 60_000, null, options).running.length
+    )
+  })
+
+  it('agrees after the agent retires one through its Stop hook', () => {
+    const messages = conversation()
+    const running = deriveBackgroundTasks(messages, NOW, null, options).running
+    const keptIds = running.slice(1).map((task) => task.id)
+    const retired = { finishedTaskIds: [], runningTaskIds: keptIds }
+
+    const rowCount = countRunningBackgroundTasks(messages, null, retired)
+    const sheet = deriveBackgroundTasks(messages, NOW, null, retired)
+
+    expect(rowCount).toBe(sheet.running.length)
+    expect(rowCount).toBe(running.length - 1)
+  })
+
+  it('drops a finished task out of running and into finished, never nowhere', () => {
+    const messages = conversation()
+    const before = deriveBackgroundTasks(messages, NOW, null, options)
+    const stopped = before.running[0]!
+    const after = deriveBackgroundTasks(messages, NOW, null, {
+      finishedTaskIds: [],
+      runningTaskIds: before.running.slice(1).map((task) => task.id)
+    })
+
+    expect(after.running.map((task) => task.id)).not.toContain(stopped.id)
+    expect(after.finished.map((task) => task.id)).toContain(stopped.id)
+    expect(after.running.length + after.finished.length).toBe(
+      before.running.length + before.finished.length
+    )
+  })
+})

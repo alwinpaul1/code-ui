@@ -22,6 +22,7 @@ import {
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
+import { useNativeChatListHeaderExtraData } from './mobile-native-chat-list-extra-data'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import {
   MobileNativeChatComposerTasks,
@@ -232,6 +233,15 @@ export function MobileNativeChatView({
     scopeKey: sendSurfaceId
   })
 
+  const headerExtraData = useNativeChatListHeaderExtraData({
+    agentStatus,
+    backgroundTaskReport,
+    hostBackgroundTasks,
+    queuedMessages,
+    unanchoredTurnStatus: turns.activeTurnIsUnanchored ? turns.active : null,
+    turnActivity
+  })
+
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
@@ -288,6 +298,11 @@ export function MobileNativeChatView({
             ref={listRef}
             renderScrollComponent={ChatScrollView}
             data={newestFirst}
+            // Why: FlashList is a PureComponent, so its header keeps whatever
+            // it last rendered unless `data` or this marker changes. The
+            // running-tasks row, the queue and the turn status all live outside
+            // `data`, and the row went stale while the sheet stayed correct.
+            extraData={headerExtraData}
             inverted
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
