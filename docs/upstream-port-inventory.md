@@ -74,48 +74,31 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 
 ## Pending
 
-Grouped so each batch can be one agent without fighting another over the same files.
+**Blocked on one pass, not deferred** — f7d521601 #19055, provider activity in
+chat turn tails. Every shared file it needs belongs to the structured-session
+batch: the wire shape, the reducer that carries it, the coalescer that merges
+it across a batch. Its producer is host code this repo does not vendor. Port it
+with that batch in one pass, or two agents edit the reducer twice.
 
-**Chat content rendering** — 5a1acfec1 #18712, 172aa1ac3 #18765, 20eea184c #19130,
-9f044031f #19228, d0506bf5d #19226, f7d521601 #19055, 0252fe5c3 #18773, dda103d2c #19832.
-**Background tasks over the wire** — e89deb63c #18757, 2bf298d1d #19311, 5868fdc9e #19346,
-f8780a2c8 #18807. Code UI has a parallel implementation that reads the transcript on the
-phone and must keep working for terminal tabs, so this is a reconciliation, not a copy.
+**New upstream, not yet looked at** — f2d5711b2 #19845, "keep an older page from
+punching a hole in the transcript". Touches a mobile file this fork has plus the
+reducer. This is the closest thing upstream has to the reported symptom where
+scrolling back shows user messages with the replies missing, so it goes first.
 
-**Structured session lifecycle** — 2513e2139 #18776, 6494f2a4f #18933, 39cbc68f1 #19040,
-c7bcfa750 #19137, fa5ef9988 #19122, ce4a3a418 #19235, cb7f7dd11 #18756.
-
-**Chat content rendering** — done. #18765, #19226, #19228 and #19832 landed;
-#18712 was already solved here; #19130 and #18773 are skipped with their reasons
-above. One is left:
-
-- f7d521601 #19055, provider activity in chat turn tails — **BLOCKED, not
-  deferred.** Every `src/shared/` file it touches belongs to the structured
-  session batch: `agent-session-wire.ts` (the `AgentSessionTurnActivity` shape
-  on all three subscribe events), `structured-agent-session-reducer.ts` (carry
-  and compare it) and `structured-agent-session-coalescer.ts` (merge it across
-  a batch). Nothing else of it is vendorable — the producer is
-  `src/main/agent-session-wire/provider-frame-activity.ts` and the two provider
-  translators. Port it with that batch, in one pass, or the reducer is edited
-  twice by two agents.
-
-**Shared-path performance** — done. #19496, #19468, #19469 and #19465 landed as
-one commit; #19364 and #19841 are skipped with their reason above.
-
-**Assess before porting** — f4c282116 #18652 moves the journal onto SQLite, which is host
-storage; confirm nothing mobile depends on the old shape before touching it.
+**Assess before porting** — f4c282116 #18652 moves the session journal onto
+SQLite. That is host storage; confirm nothing on the phone depends on the old
+shape before touching it. The #19822 verdict lives in
+`scratchpad/19822-assessment.md`; its working-state half is already ported.
 
 ## Known gaps left behind
 
-- The background-task roster has **not been watched arriving from a live host**. The
-  contract and the projection are tested; no real desktop has published one to this phone.
-  The fallback is the safe direction — a host that publishes nothing leaves the tab on the
-  transcript reader.
-- The wire's per-task `totalTokens` is read by the equality check and then dropped; the
-  phone sheet has nowhere to render it.
-- `structured-agent-session-reducer.ts` still lacks upstream's `activity` (f7d521601 #19055)
-  and its `retainedItemLimit` head trim. Both belong to other batches.
-**Assess before porting** — 2f828e446 #19822 collides with Code UI's own pending-echo
-system; it was assessed in 8d0d36b, whose verdict sits in `scratchpad/19822-assessment.md`
-rather than here — fold it into this file. f4c282116 #18652 moves the journal onto SQLite,
-which is host storage; confirm nothing mobile depends on the old shape before touching it.
+- The background-task roster has **not been watched arriving from a live host**.
+  The contract and the projection are tested; no real desktop has published one
+  to this phone. The fallback is the safe direction: a host that publishes
+  nothing leaves the tab on the transcript reader.
+- The wire's per-task `totalTokens` is read by the equality check and then
+  dropped, because the sheet has nowhere to show it.
+- `structured-agent-session-reducer.ts` still lacks upstream's `activity`
+  (#19055) and its `retainedItemLimit` head trim. Both belong to batches above.
+- The Windows status line and Stop hook run for real under PowerShell 7 in
+  tests, and have never run on Windows.
