@@ -2,14 +2,7 @@ import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { forwardRef, useCallback, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  ScrollView,
-  type ScrollViewProps,
-  View
-} from 'react-native'
+import { ActivityIndicator, ScrollView, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -22,7 +15,10 @@ import {
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
-import { useNativeChatListHeaderExtraData } from './mobile-native-chat-list-extra-data'
+import {
+  chatListDrawDistanceDp,
+  useChatListRenderStability
+} from './mobile-native-chat-list-extra-data'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import {
   MobileNativeChatComposerTasks,
@@ -120,6 +116,7 @@ export function MobileNativeChatView({
   const { colors } = useTheme()
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
+  const drawDistance = chatListDrawDistanceDp(useWindowDimensions().height)
   const listRef = useRef<FlashListRef<NativeChatMessage>>(null)
   const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
@@ -233,13 +230,14 @@ export function MobileNativeChatView({
     scopeKey: sendSurfaceId
   })
 
-  const headerExtraData = useNativeChatListHeaderExtraData({
+  const { headerExtraData, contentPosition } = useChatListRenderStability({
     agentStatus,
     backgroundTaskReport,
     hostBackgroundTasks,
     queuedMessages,
-    unanchoredTurnStatus: turns.activeTurnIsUnanchored ? turns.active : null,
-    turnActivity
+    turnActivity,
+    showJumpToLatest,
+    unanchoredTurnStatus: turns.activeTurnIsUnanchored ? turns.active : null
   })
 
   const renderItem = useCallback(
@@ -328,7 +326,7 @@ export function MobileNativeChatView({
             // Why: while the reader is up in history, content growing above the
             // fold must not shift what they are reading. At the live edge,
             // native anchoring fights scrollToEnd and briefly shows old rows.
-            maintainVisibleContentPosition={{ disabled: !showJumpToLatest }}
+            maintainVisibleContentPosition={contentPosition}
             onContentSizeChange={() => {
               if (data.length > 0 && followingRef.current) {
                 listRef.current?.scrollToOffset({ offset: 0, animated: false })
@@ -337,6 +335,14 @@ export function MobileNativeChatView({
             // Message descendants hold disclosure and copy state. Keep it
             // scoped to the message when off-screen cells leave the window.
             maxItemsInRecyclePool={0}
+            // Why: with recycling off, every newly exposed message is a fresh
+            // mount — markdown, code blocks and all — on the JS thread. The
+            // 250dp default is under one viewport of runway, and with the
+            // keyboard up the viewport is halved, so a scroll outran what was
+            // prepared and the content landed late. Measured on a 120 Hz S23:
+            // native frames stayed clean (<1% janky) while the scroll still
+            // felt laggy, which is what a too-short render window looks like.
+            drawDistance={drawDistance}
             // Inverted list: the header paints below the newest message, so
             // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={

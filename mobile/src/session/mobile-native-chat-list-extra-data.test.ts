@@ -1,7 +1,13 @@
+import { createElement } from 'react'
+import { act, create } from 'react-test-renderer'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { nativeChatListHeaderExtraData } from './mobile-native-chat-list-extra-data'
+import {
+  chatListDrawDistanceDp,
+  nativeChatListHeaderExtraData,
+  useChatListContentPosition
+} from './mobile-native-chat-list-extra-data'
 
 const BASE = {
   agentStatus: { state: 'working' },
@@ -63,7 +69,7 @@ describe('the chat list declares what its header depends on', () => {
 
   it('hands FlashList the marker', () => {
     expect(source).toContain('extraData={headerExtraData}')
-    expect(source).toContain('useNativeChatListHeaderExtraData({')
+    expect(source).toContain('useChatListRenderStability({')
   })
 
   it('builds that marker from the same values it gives the header', () => {
@@ -73,7 +79,7 @@ describe('the chat list declares what its header depends on', () => {
     )
     const headerProps = listBlock.slice(listBlock.indexOf('<MobileNativeChatListHeader'))
     const markerBlock = source.slice(
-      source.indexOf('useNativeChatListHeaderExtraData({'),
+      source.indexOf('useChatListRenderStability({'),
       source.indexOf('const renderItem')
     )
 
@@ -89,5 +95,98 @@ describe('the chat list declares what its header depends on', () => {
       expect(headerProps).toContain(prop)
       expect(markerBlock).toContain(prop)
     }
+  })
+})
+
+// maintainVisibleContentPosition is a native scroll-anchoring config. Handing
+// the list a new object re-sends it to the native scroll view, and with the
+// keyboard up the chat re-renders on every keystroke and streamed frame — so
+// an inline literal reconfigured anchoring under an active scroll.
+describe('the list scroll-anchoring config', () => {
+  function mount(initial: boolean) {
+    const seen: { disabled: boolean }[] = []
+    function Probe({ jump }: { jump: boolean }) {
+      seen.push(useChatListContentPosition(jump))
+      return null
+    }
+    let renderer!: ReturnType<typeof create>
+    act(() => {
+      renderer = create(createElement(Probe, { jump: initial }))
+    })
+    return {
+      seen,
+      render(jump: boolean) {
+        act(() => {
+          renderer.update(createElement(Probe, { jump }))
+        })
+      }
+    }
+  }
+
+  it('hands back the very same object while the flag holds', () => {
+    const probe = mount(false)
+
+    probe.render(false)
+    probe.render(false)
+
+    expect(probe.seen).toHaveLength(3)
+    expect(probe.seen[1]).toBe(probe.seen[0])
+    expect(probe.seen[2]).toBe(probe.seen[0])
+  })
+
+  it('changes only when the flag actually flips', () => {
+    const probe = mount(false)
+
+    probe.render(true)
+
+    expect(probe.seen[1]).not.toBe(probe.seen[0])
+    expect(probe.seen[0]).toEqual({ disabled: true })
+    expect(probe.seen[1]).toEqual({ disabled: false })
+  })
+
+  it('is not written back as an inline literal on the list', () => {
+    const source = readFileSync(join(import.meta.dirname, 'MobileNativeChatView.tsx'), 'utf8')
+
+    expect(source).toContain('maintainVisibleContentPosition={contentPosition}')
+    expect(source).not.toContain('maintainVisibleContentPosition={{')
+  })
+})
+
+// Measured on a 120 Hz S23 with the keyboard up: native frames stayed clean
+// (<1% janky) while the scroll still felt laggy — the signature of content
+// arriving late, not of dropped frames. FlashList prepares 250dp past the
+// window by default, under a third of a phone screen, and recycling is off
+// here so every newly exposed message is a fresh mount.
+describe('how far ahead the chat list prepares messages', () => {
+  it('keeps a screen of runway on a phone', () => {
+    // Galaxy S23: 2316px at density 2.8125.
+    expect(chatListDrawDistanceDp(2316 / 2.8125)).toBe(823)
+  })
+
+  it('scales with the device rather than pinning one phone size', () => {
+    const small = chatListDrawDistanceDp(640)
+    const large = chatListDrawDistanceDp(900)
+
+    expect(large).toBeGreaterThan(small)
+  })
+
+  it('never prepares less than FlashList would on its own', () => {
+    // A short window — a small phone, a split screen, a foldable cover display.
+    expect(chatListDrawDistanceDp(180)).toBe(250)
+    expect(chatListDrawDistanceDp(0)).toBe(250)
+  })
+
+  it('does not mount half a conversation ahead on a tablet', () => {
+    expect(chatListDrawDistanceDp(4000)).toBe(1200)
+  })
+
+  it('is measured against the window, so the keyboard cannot cut the runway', () => {
+    // The keyboard shrinks the visible list but not how far a flick travels.
+    // Sizing off the visible area would shorten the runway exactly when the
+    // reported jitter appears.
+    const source = readFileSync(join(import.meta.dirname, 'MobileNativeChatView.tsx'), 'utf8')
+
+    expect(source).toContain('chatListDrawDistanceDp(useWindowDimensions().height)')
+    expect(source).not.toContain('chatListDrawDistanceDp(keyboardInset')
   })
 })
