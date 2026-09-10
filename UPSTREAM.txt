@@ -27,7 +27,7 @@ src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, se
 src/shared/structured-agent-session-options.ts: 546fd9b21
 src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
-src/shared/agent-session-wire.ts: 546fd9b21
+src/shared/agent-session-wire.ts: bf4e27050
 src/shared/agent-session-record.ts: 546fd9b21
 src/shared/native-chat-tool-summary.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 src/shared/native-chat-tool-summary.test.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a

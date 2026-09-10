@@ -4,6 +4,7 @@ import type {
   AgentJournalSubmission
 } from './agent-session-journal-types'
 import type {
+  AgentSessionSlashCommand,
   AgentSessionHandoffStatus,
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent
@@ -19,6 +20,7 @@ export type StructuredAgentSessionState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
   handoff: AgentSessionHandoffStatus | null
+  commands?: AgentSessionSlashCommand[] | null
 }
 
 export type StructuredAgentSessionAction =
@@ -133,7 +135,8 @@ export function reduceStructuredAgentSession(
         : action.page.submissions,
       hasOlder: action.page.hasOlder,
       status: 'ready',
-      handoff: state.handoff
+      handoff: state.handoff,
+      ...(sameEpoch ? { commands: state.commands } : {})
     }
   }
   if (action.type === 'older-page') {
@@ -152,7 +155,10 @@ export function reduceStructuredAgentSession(
     return state
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
-    return replacePage(event.page, event.fence, event.handoff)
+    return {
+      ...replacePage(event.page, event.fence, event.handoff),
+      commands: event.commands
+    }
   }
   if (state.epoch !== event.batch.cursor.epoch) {
     return state
@@ -168,7 +174,8 @@ export function reduceStructuredAgentSession(
     submissions: mergeSubmissions(state.submissions, event.batch.submissions),
     status: 'ready',
     error: undefined,
-    handoff: event.handoff ?? state.handoff
+    handoff: event.handoff ?? state.handoff,
+    commands: event.commands !== undefined ? event.commands : state.commands
   }
 }
 

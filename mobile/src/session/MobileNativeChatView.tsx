@@ -89,6 +89,7 @@ export function MobileNativeChatView({
   filePaths,
   onNeedFiles,
   skills,
+  sessionCommands,
   onNeedSkills,
   sessionOptions,
   ask,
@@ -430,6 +431,7 @@ export function MobileNativeChatView({
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
         skills={skills}
+        sessionCommands={sessionCommands}
         onNeedSkills={onNeedSkills}
       />
       <ImagePreviewModal />

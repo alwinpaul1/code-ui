@@ -23,4 +23,24 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
 - `native-chat-session-option-state.ts` — when the agent reports a different
   model than the one the user picked, the user's own non-reported picks are
   carried onto the reported model instead of being dropped.
+- `native-chat-slash-commands.ts` (and its test) — Code UI enumerated Claude
+  Code 2.1.261's and Codex 0.153.4's real command tables in place of upstream's
+  five-entry catalogs, and added `opensOverlay`, `isSlashCommandToken` and
+  `slashCommandOpensOverlay`. Upstream has none of it. A whole-file re-vendor
+  would delete the catalogs the `/` menu is built from.
+
+## Vendored files carrying a hand-applied upstream hunk
+
+Not a clean copy of any upstream commit: an upstream change was applied by hand
+because the file had diverged, or because the surrounding upstream commit is not
+vendored here. Re-vendoring one of these at a later commit is fine and drops the
+entry; re-vendoring it at an EARLIER one silently reverts the hunk.
+
+- `structured-agent-session-reducer.ts`, `structured-agent-session-coalescer.ts`
+  — the per-session `/` command catalog from bf4e27050. These files otherwise
+  sit at the base commit: #19147's `backgroundTasks`/`activity` handling and its
+  journal-unchanged short-circuit are NOT vendored, so the reducer's own
+  identity-preservation behaviour differs from upstream's.
+- `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
+  `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type {
   AgentSessionCancelResult,
-  AgentSessionSendResult
+  AgentSessionSendResult,
+  AgentSessionSlashCommand
 } from '../../../src/shared/agent-session-wire'
 import type {
   SessionOptionDescriptor,
@@ -54,6 +55,8 @@ type StructuredMobileSession = {
   optionSnapshot: SessionOptionDescriptor[]
   optionSurface: SessionOptionsSurface
   pendingOptionId: string | null
+  /** The `/` surface the running session reports; undefined until it reports one. */
+  sessionCommands: readonly AgentSessionSlashCommand[] | undefined
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
@@ -266,6 +269,9 @@ export function useMobileStructuredAgentSession(args: {
     optionSnapshot,
     optionSurface,
     pendingOptionId,
+    // `null` is the provider clearing a catalog it once reported; both that and
+    // "never reported" mean the composer keeps its curated catalog.
+    sessionCommands: state.commands ?? undefined,
     respondPermission,
     respondQuestion,
     setStructuredOption,

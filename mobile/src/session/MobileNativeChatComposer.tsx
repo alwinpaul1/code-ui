@@ -12,19 +12,14 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
-import {
-  getNativeChatAgentProfile,
-  getVerifiedNativeChatCommands
-} from '../../../src/shared/native-chat-agent-profiles'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
-import { filterNativeChatSkillsForAgent } from './mobile-native-chat-skill-command'
+import { mobileNativeChatSlashSuggestions } from './mobile-native-chat-session-catalog'
 import { PressScale } from '../ui/PressScale'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
-  rankSkillSuggestions,
-  rankSlashCommandSuggestions,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
 import {
@@ -39,8 +34,6 @@ import {
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 const NO_FILE_PATHS: string[] = []
-/** Enough for any catalog plus every installed skill; the list virtualizes. */
-const SLASH_MENU_LIMIT = 500
 const NO_SKILLS: DiscoveredSkill[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
@@ -91,6 +84,10 @@ type Props = {
   onNeedFiles?: (query: string) => void
   /** Installed skills / plugin commands merged into the `/` menu. */
   skills?: readonly DiscoveredSkill[]
+  /** The `/` surface the running structured session reports for itself. When
+   *  present it decides which commands and skills the menu offers; undefined
+   *  keeps the curated catalog and the host disk scan. */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   /** Asked once the slash menu opens so the host scan is lazy. */
   onNeedSkills?: () => void
 }
@@ -127,6 +124,7 @@ export function MobileNativeChatComposer({
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
   skills = NO_SKILLS,
+  sessionCommands,
   onNeedSkills
 }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
@@ -169,34 +167,18 @@ export function MobileNativeChatComposer({
       return []
     }
     if (trigger.kind === 'slash') {
-      const commands = agent ? getVerifiedNativeChatCommands(agent) : []
-      // Why: a bare `/` lists everything the terminal would, built-ins first
-      // and then every installed skill. The suggestion list virtualizes rows,
-      // so the size of the catalog is not a render cost.
-      const commandItems: ComposerSuggestion[] = rankSlashCommandSuggestions(
-        commands,
-        trigger.query,
-        SLASH_MENU_LIMIT
-      ).map((command) => ({ kind: 'command' as const, command }))
-      // Installed skills and plugin commands follow the curated commands. For
-      // agents that invoke skills with `/`, a name already in the catalog is a
-      // command, not a skill (desktop picker parity); `$` agents keep both.
-      const prefix = (agent ? getNativeChatAgentProfile(agent)?.skillPrefix : null) ?? '/'
-      const commandNames = new Set(commands.map((command) => command.name))
-      const skillItems: ComposerSuggestion[] = rankSkillSuggestions(
-        filterNativeChatSkillsForAgent(skills, agent ?? null),
-        trigger.query,
-        SLASH_MENU_LIMIT
-      )
-        .filter((skill) => !(prefix === '/' && commandNames.has(skill.name)))
-        .map((skill) => ({ kind: 'skill' as const, skill, prefix }))
-      return [...commandItems, ...skillItems]
+      return mobileNativeChatSlashSuggestions({
+        agent: agent ?? null,
+        scannedSkills: skills,
+        sessionCommands,
+        query: trigger.query
+      })
     }
     return rankSuggestions(filePaths, trigger.query).map((path) => ({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent, skills])
+  }, [trigger, filePaths, agent, skills, sessionCommands])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {

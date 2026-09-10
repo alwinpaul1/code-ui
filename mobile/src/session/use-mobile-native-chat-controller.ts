@@ -478,6 +478,9 @@ export function useMobileNativeChatController(
     nativeChatFilePaths,
     loadNativeChatFiles,
     nativeChatSkills,
+    // Only a structured session reports its own `/` surface; the PTY lane keeps
+    // the curated catalog plus the disk scan.
+    nativeChatCommands: activeChatStructured ? structuredNativeChat.sessionCommands : undefined,
     loadNativeChatSkills,
     handleNativeChatQuestionAnswer: activeChatStructured
       ? structuredNativeChat.respondQuestion

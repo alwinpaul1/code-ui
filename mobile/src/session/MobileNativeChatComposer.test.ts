@@ -435,6 +435,39 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/cost')
   })
 
+  it('lists the commands and skills the session says it loaded, not the curated guess', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          // A repo command and a plugin skill the curated catalog and the disk
+          // scan both miss; `/compact` is curated but this session never loaded it.
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'opsx:apply', kind: 'command' },
+            { name: 'claude-mem:mem-search', kind: 'skill' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts).toContain('/clear')
+    expect(texts).toContain('/opsx:apply')
+    expect(texts).toContain('/claude-mem:mem-search')
+    expect(texts).not.toContain('/compact')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()

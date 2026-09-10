@@ -4,6 +4,8 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
+  sessionReportedSkillNames,
+  sessionSlashCommandSuggestions,
   slashCommandDispatchText,
   slashCommandOpensOverlay
 } from './native-chat-slash-commands'
@@ -91,5 +93,30 @@ describe('slashCommandOpensOverlay (Codex)', () => {
   })
   it('assumes an unknown command needs the terminal', () => {
     expect(slashCommandOpensOverlay('codex', '/whatever')).toBe(true)
+  })
+})
+
+describe('a session that reports its own command surface', () => {
+  const reported = [
+    { name: 'clear', kind: 'command' as const },
+    { name: 'opsx:apply', kind: 'command' as const },
+    { name: 'ref-oss', kind: 'skill' as const }
+  ]
+
+  it('offers exactly the reported commands, described from the curated catalog', () => {
+    expect(sessionSlashCommandSuggestions('claude', reported)).toEqual([
+      // Code UI's Claude catalog carries its own description for `/clear`.
+      { name: 'clear', description: 'Start a new session with empty context' },
+      { name: 'opsx:apply' }
+    ])
+  })
+
+  it('does not resurrect a curated command the session never reported', () => {
+    const names = sessionSlashCommandSuggestions('claude', reported).map((c) => c.name)
+    expect(names).not.toContain('compact')
+  })
+
+  it('splits skills out for the picker to group on its own', () => {
+    expect(sessionReportedSkillNames(reported)).toEqual(['ref-oss'])
   })
 })

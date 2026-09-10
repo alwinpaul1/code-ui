@@ -7,6 +7,7 @@ import type {
 } from './mobile-terminal-hud-parse'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -87,6 +88,8 @@ export type MobileNativeChatViewProps = {
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
   skills?: readonly DiscoveredSkill[]
+  /** The `/` surface the running structured session reports for itself. */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
   onNeedSkills?: () => void
   /** Model/session-option pickers for the composer action row (desktop parity). */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
