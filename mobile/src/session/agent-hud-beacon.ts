@@ -1,4 +1,8 @@
 import { useSyncExternalStore } from 'react'
+import {
+  readWarmStartBeacons,
+  rememberWarmStartBeacon
+} from './agent-hud-beacon-warm-start'
 
 /**
  * The phone half of the invisible HUD channel.
@@ -136,14 +140,56 @@ function splitPrefixLength(text: string): number {
   return 0
 }
 
+/** What the warm start actually needs; a repainting agent must not write to
+ *  disk on every frame just because its token count moved. */
+function beaconIdentity(beacon: AgentHudBeacon): string {
+  return `${beacon.agent}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}`
+}
+
+const WARM_START_REWRITE_MS = 30_000
+const lastStored = new Map<string, { identity: string; at: number }>()
+
+function storeForWarmStart(handle: string, beacon: AgentHudBeacon): void {
+  const identity = beaconIdentity(beacon)
+  const previous = lastStored.get(handle)
+  if (previous && previous.identity === identity && beacon.receivedAt - previous.at < WARM_START_REWRITE_MS) {
+    return
+  }
+  lastStored.set(handle, { identity, at: beacon.receivedAt })
+  void rememberWarmStartBeacon(handle, beacon)
+}
+
 function publish(handle: string, payload: string): void {
   const beacon = parseAgentHudBeaconPayload(payload)
   if (!beacon) {
     return
   }
   beacons.set(handle, beacon)
+  storeForWarmStart(handle, beacon)
   for (const listener of listeners) {
     listener()
+  }
+}
+
+/**
+ * Bring back what each tab's agent last said about itself, for the window
+ * between opening the app and the agent's next status-line repaint. A live
+ * beacon always wins; this only fills a hole that would otherwise be filled by
+ * a staler source. See `agent-hud-beacon-warm-start.ts`.
+ */
+export async function hydrateAgentHudBeacons(): Promise<void> {
+  const stored = await readWarmStartBeacons()
+  let restored = false
+  for (const [handle, beacon] of Object.entries(stored)) {
+    if (!beacons.has(handle)) {
+      beacons.set(handle, beacon)
+      restored = true
+    }
+  }
+  if (restored) {
+    for (const listener of listeners) {
+      listener()
+    }
   }
 }
 
