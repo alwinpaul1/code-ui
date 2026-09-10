@@ -368,67 +368,73 @@ cwd discriminator, and its refusal to guess when a session id is unknown.
 its transcript, read by the status-line script from `transcript_path`. Only
 Claude emits it. Consumed by `mobile-background-tasks.ts`, not by the HUD.
 
-## Windows, researched and tested as far as a Mac allows (2026-09-10)
+## Windows (2026-09-10): what actually reaches the phone, and how
 
-The question was whether an escape sequence written by the status-line child
-can reach the phone on a Windows host at all. It can, and every link now has a
-source behind it:
+An earlier version of this section claimed the sh script's MSYS branch reached
+the pseudoconsole. It cannot, and the reason shapes the whole Windows design:
 
-1. **Claude Code runs the status-line command through Git Bash** on Windows.
-   Its own `/statusline` agent text says so, and warns that a backslash path
-   "will not resolve" there — which is why the script converts the JSON-escaped
-   `transcript_path` to forward slashes before opening it.
-2. **Git Bash's console writer passes an unknown OSC through.** Cygwin's
-   `fhandler/console.cc` (MSYS2 is a Cygwin fork): an `ESC ] Ps ;` with an
-   unrecognised `Ps` enters `eattitle`, and on the terminating byte the whole
-   buffered sequence is sent with `wpbuf_send()` whenever
-   `has_con_24bit_colors() && !con_is_legacy` — every Windows 10 1703+ console
-   in ConPTY mode. Two consequences shape the script: the terminator must be
-   **BEL**, because `eattitle` ends on any control byte, so an `ESC \` ST would
-   end the sequence at the ESC and print the backslash; and the writer's
-   buffer is 256 bytes, flushed and continued when full, so a long `done=`
-   list arrives in chunks but as one contiguous byte stream.
-3. **ConPTY forwards unknown OSC sequences verbatim** since OpenConsole 1.22
-   ([microsoft/terminal#17741](https://github.com/microsoft/terminal/pull/17741),
-   "flush unhandled sequences", Aug 2024). Before it they were dropped.
-4. **Orca's terminals run that ConPTY.** Orca ships node-pty 1.1.0, whose
-   package bundles `third_party/conpty/1.23.251008001` (OpenConsole 1.23,
-   Oct 2025), and every desktop terminal pane passes `useConptyDll: true` — the
-   bundled OpenConsole, not the OS's inbox conhost. The relay-hosted PTY path
-   does not pass it and falls back to inbox conhost, whose version depends on
-   the Windows build.
+- **Hook children have no console of their own to reach.** Claude Code spawns
+  status-line and hook commands with `windowsHide`. Bun, like Node, maps that
+  to `CREATE_NO_WINDOW` when every stdio is a pipe (libuv `src/win/process.c`),
+  so the child gets a fresh hidden console — `/dev/tty`, `/dev/conout` and
+  `[Console]::Out` all end there, not in the pseudoconsole Orca reads. Codex is
+  the other way round: it spawns notify with stdin, stdout and stderr all
+  `Stdio::null()` (`codex-rs/hooks/src/legacy_notify.rs`) and no creation
+  flags, so the child shares Codex's console but its stdout goes nowhere.
+- **Which shell runs the status line.** Claude Code 2.1.267:
+  `shell ?? (gitBashFound ? "bash" : "powershell")`. With Git Bash it is sh;
+  without, PowerShell (`pwsh`, else `System32\...\powershell.exe`). So a host
+  with only PowerShell *does* run the status line — the sh script just fails
+  in it.
 
-What was tested here, and how:
+Both facts point at one design: **a PowerShell status line for every Windows
+host, writing through the Win32 console API.**
 
-- **Claude script**: the MSYS branch via a `uname` shim, the backslash path,
-  `/dev/tty` → `/dev/conout` fallback, and the no-runtime delegation, under
-  `sh`, `bash` and `dash`.
-- **Delegation without node/python3/jq**: Claude Code's native install is one
-  binary, so a Windows or minimal Linux host may have none of them. The
-  settings reader now tries node, python3, jq, then a pure-`sed` reader that
-  joins the file to one line, extracts `statusLine.command`, and undoes the
-  `\"` and `\\` escapes. Tested with broken runtimes standing in for missing
-  ones.
-- **Codex PowerShell script, executed for real** under PowerShell 7.6.6
-  (portable tarball on macOS), invoked exactly as Codex invokes it. That run
-  found three defects the shape-only tests had passed:
-  - the thread id was read from `[Environment]::GetCommandLineArgs()` joined,
-    which includes the script's own `-Command` text, so its own regex literal
-    matched first and the id came out as `0-9A-Za-z` — now only the last
-    argument is read;
-  - the rollout glob used backslashes, which pwsh on macOS/Linux does not treat
-    as separators — now forward slashes, which Windows accepts everywhere;
-  - `Start-Process -ArgumentList` re-joins and re-splits arguments, so an
-    `sh -c` script with a space arrived in pieces — now the call operator `&`
-    with a splatted array, one argv entry per element, and TOML `\"`/`\\`
-    unescaped first;
-  - and `-notmatch` is case-insensitive, so the guard against re-running our
-    own command fired on the sh notify's `cuihud` argv0 — now `-cnotmatch`.
-  The tests run whenever `pwsh` is on PATH or `CUIHUD_PWSH` names one, and
-  skip with a warning otherwise (CI has no PowerShell).
+- `CLAUDE_HUD_STATUSLINE_POWERSHELL` reads the JSON from stdin
+  (`ConvertFrom-Json`), builds the same payload as the sh script (a test
+  asserts byte-for-byte equality), reads finished task ids from
+  `transcript_path`, and delegates to the user's own status line from
+  `settings.json` — under `sh` when Git Bash exists, else under PowerShell.
+- It is handed to Claude Code as `powershell -NoProfile -NonInteractive
+  -EncodedCommand <UTF-16LE base64>`. That text parses identically under sh
+  and under PowerShell (no quotes in it), and `powershell` is Windows
+  PowerShell 5.1, present on every Windows.
+- `POWERSHELL_CONSOLE_WRITER`, shared with the Codex notify script, walks up
+  the process tree to the agent (`claude`, `node`, `bun` or `codex`),
+  `FreeConsole` + `AttachConsole` to it (Claude's case; Codex's child already
+  shares the console), opens `CONOUT$` and `WriteConsoleW`s the OSC. The
+  P/Invoke type is built with Reflection.Emit — ~2 ms — because `Add-Type`
+  compiles C# on every run and this runs on every refresh.
+- From the console on, the chain has sources: OpenConsole forwards unhandled
+  OSC sequences since v1.22
+  ([microsoft/terminal#17741](https://github.com/microsoft/terminal/pull/17741)),
+  Orca ships node-pty 1.1.0 which bundles OpenConsole 1.23 and its desktop
+  panes pass `useConptyDll: true`, and Orca's PTY reader is what the phone
+  subscribes to.
 
-Still not run: **Windows PowerShell 5.1** (the script avoids `` `e `` and single
-quotes for it, but that is by construction), and an **end-to-end pass on a
-real Windows console**, which needs a Windows machine. A host with PowerShell
-and **no Git Bash** runs no status line at all and gets no beacon; nothing on
-the phone can change that.
+Tested here, under PowerShell 7.6.6 (portable tarball on macOS, found via
+`CUIHUD_PWSH` or `pwsh` on PATH; skipped with a warning where absent):
+
+- Claude: identical beacon to the sh script from the same JSON; token total
+  and percentage after a reply; finished task ids from a real transcript
+  (idle and mid-turn kinds); the user's own bar kept; the encoded form run
+  with JSON on stdin; and the dynamic P/Invoke type defining all five kernel32
+  entry points. The console write is redirected to a file with
+  `CUIHUD_WIN_CONOUT`.
+- Codex: model, effort, used and win from a real rollout; the newest rollout
+  when no thread is named; the user's own notify run with the JSON as its last
+  argument. Executing it found four defects the shape checks had passed: the
+  thread id was read from the script's own `-Command` text, the rollout glob
+  used backslashes, `Start-Process` split the user's arguments, and the
+  recursion guard was case-insensitive (`cuihud` argv0 matched `CUIHUD`).
+- The sh script still has its own no-runtime delegation fallback (pure `sed`)
+  for a Linux host without node, python3 or jq, and runs under sh, bash and
+  dash in tests.
+
+**Still not run, and cannot be from a Mac**: the kernel32 calls themselves
+(`AttachConsole` to a pseudoconsole owner, `CreateFileW("CONOUT$")`,
+`WriteConsoleW`), Windows PowerShell 5.1 (the scripts avoid `` `e ``, single
+quotes and `$IsWindows` for it, and use the `AppDomain` assembly fallback), and
+the end-to-end pass on a Windows console. A Windows host with Git Bash *or*
+PowerShell now has a path; the first run on real Windows decides whether the
+console attach lands where the reasoning says it does.

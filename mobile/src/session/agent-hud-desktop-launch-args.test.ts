@@ -94,8 +94,9 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
     const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
     expect(written?.codex).toContain('powershell')
     expect(written?.codex).not.toContain('"sh"')
-    // Claude's flag is the same everywhere; only the sh script inside branches.
-    expect(written?.claude).toBe(agentHudLaunchFlag('claude', 'darwin'))
+    // A Windows host gets the PowerShell status line, base64-encoded.
+    expect(written?.claude).toBe(agentHudLaunchFlag('claude', 'win32'))
+    expect(written?.claude).toContain('-EncodedCommand')
   })
 
   it('gives the profile back exactly as it was when the switch is turned off', async () => {

@@ -205,6 +205,57 @@ export const CODEX_HUD_NOTIFY_SCRIPT = [
 ].join('; ')
 
 /**
+ * The console writer both Windows scripts share. PowerShell, no single quotes.
+ *
+ * Why P/Invoke: on Windows the beacon has to reach the pseudoconsole Orca
+ * reads, and neither script starts attached to it. Claude Code spawns hook
+ * and status-line children with `windowsHide` — Bun, like Node, maps that to
+ * CREATE_NO_WINDOW when every stdio is a pipe (libuv `process.c`), so the child
+ * gets its own hidden console. Codex spawns its notify with stdout, stderr and
+ * stdin all `Stdio::null()` (`codex-rs/hooks/src/legacy_notify.rs`), so
+ * `[Console]::Out` goes nowhere. The only route in is the Win32 console API:
+ * find the agent up the process tree, `AttachConsole` to it (Claude's case;
+ * Codex's child already shares the console), open `CONOUT$`, `WriteConsoleW`.
+ * ConPTY 1.22+ then forwards the unknown OSC verbatim (see the docs).
+ *
+ * Why Reflection.Emit and not Add-Type: Add-Type compiles C# on every run,
+ * half a second to two seconds, and this runs on every status refresh. A
+ * dynamic P/Invoke type costs ~2 ms (measured under pwsh 7.6.6).
+ * `AssemblyBuilder.DefineDynamicAssembly` is .NET Core; the `AppDomain` form
+ * is the .NET Framework (Windows PowerShell 5.1) fallback.
+ *
+ * `CUIHUD_WIN_CONOUT` names a file to append to instead — the test seam, and
+ * a bypass for a host where the console write must be inspected. Off
+ * Windows with no override the function writes nothing.
+ */
+export const POWERSHELL_CONSOLE_WRITER = [
+  'function K(){ if($script:KT){return $script:KT}',
+  '$an=New-Object Reflection.AssemblyName("cuihud")',
+  '$ab=$null',
+  'try{$ab=[Reflection.Emit.AssemblyBuilder]::DefineDynamicAssembly($an,[Reflection.Emit.AssemblyBuilderAccess]::Run)}catch{$ab=[AppDomain]::CurrentDomain.DefineDynamicAssembly($an,[Reflection.Emit.AssemblyBuilderAccess]::Run)}',
+  '$tb=$ab.DefineDynamicModule("cuihud").DefineType("K",[Reflection.TypeAttributes]::Public)',
+  '$ma=[Reflection.MethodAttributes]"Public,Static,PinvokeImpl"',
+  '$d=@(@("FreeConsole",[bool],@()),@("AttachConsole",[bool],@([uint32])),@("CloseHandle",[bool],@([IntPtr])),@("CreateFileW",[IntPtr],@([string],[uint32],[uint32],[IntPtr],[uint32],[uint32],[IntPtr])),@("WriteConsoleW",[bool],@([IntPtr],[string],[uint32],[uint32].MakeByRefType(),[IntPtr])))',
+  'foreach($x in $d){$m=$tb.DefinePInvokeMethod($x[0],"kernel32.dll",$ma,[Reflection.CallingConventions]::Standard,$x[1],[Type[]]$x[2],[Runtime.InteropServices.CallingConvention]::Winapi,[Runtime.InteropServices.CharSet]::Unicode); $m.SetImplementationFlags([Reflection.MethodImplAttributes]::PreserveSig)}',
+  '$script:KT=$tb.CreateType(); return $script:KT }',
+  // Parent pid: Process.Parent is PowerShell 7; CIM is the 5.1 fallback.
+  'function P($p){ try{$x=(Get-Process -Id $p -ErrorAction Stop).Parent; if($x){return [int]$x.Id}}catch{}; try{return [int](Get-CimInstance Win32_Process -Filter ("ProcessId=" + $p)).ParentProcessId}catch{}; return $null }',
+  'function W($o){ $s=[string][char]27+"]7777;"+$o+[string][char]7',
+  'if($env:CUIHUD_WIN_CONOUT){[IO.File]::AppendAllText($env:CUIHUD_WIN_CONOUT,$s); return}',
+  'if([Environment]::OSVersion.Platform -ne "Win32NT"){return}',
+  '$k=K; $t=$null; $p=$PID',
+  // Up to eight ancestors: our pwsh ← (powershell runner | sh) ← claude, or
+  // pwsh ← codex. The agent is the process whose console is the pseudoconsole.
+  'for($n=0;$n -lt 8;$n++){ $pp=P $p; if(-not $pp -or $pp -le 4){break}; $nm=""; try{$nm=(Get-Process -Id $pp -ErrorAction Stop).ProcessName}catch{}; if($nm -match "^(claude|node|bun|codex)$"){$t=$pp;break}; $p=$pp }',
+  'if($t){ [void]$k::FreeConsole(); [void]$k::AttachConsole([uint32]$t) }',
+  // GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, OPEN_EXISTING.
+  '$h=$k::CreateFileW("CONOUT$",[uint32]3221225472,[uint32]3,[IntPtr]::Zero,[uint32]3,[uint32]0,[IntPtr]::Zero)',
+  'if($h -ne [IntPtr]::Zero -and $h -ne [IntPtr](-1)){ $n=[uint32]0; [void]$k::WriteConsoleW($h,$s,[uint32]$s.Length,[ref]$n,[IntPtr]::Zero); [void]$k::CloseHandle($h) } }',
+  // Test seam: prove the P/Invoke type defines on this PowerShell.
+  'if($env:CUIHUD_WIN_SELFTEST){ $kk=K; [Console]::Out.Write((($kk.GetMethods() | Where-Object {$_.DeclaringType -eq $kk} | ForEach-Object {$_.Name} | Sort-Object) -join ",")) }'
+]
+
+/**
  * Codex's notify command on a Windows host.
  *
  * Codex spawns notify DIRECTLY, with no shell, and Git for Windows does not
@@ -266,8 +317,10 @@ export const CODEX_HUD_NOTIFY_POWERSHELL = [
   '$k=$L | Where-Object {$_ -match ($q+"type"+$q+":"+$q+"token_count"+$q)} | Select-Object -Last 1',
   'if($k -match ($q+"last_token_usage"+$q+":\\{[^}]*"+$q+"total_tokens"+$q+":(\\d+)")){$o=$o+" used="+$Matches[1]}',
   'if($k -match ($q+"model_context_window"+$q+":(\\d+)")){$o=$o+" win="+$Matches[1]}}',
-  // [char]27/[char]7 rather than `e, which Windows PowerShell 5.1 does not know.
-  '[Console]::Out.Write([string][char]27+"]7777;"+$o+[string][char]7)',
+  // Not stdout: Codex spawns notify with every stdio nulled, so the beacon
+  // goes to the console it shares with Codex, via the shared writer.
+  ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
+  'W $o',
   // Delegation, best effort and deliberately narrow: a single-line
   // `notify = ["a","b"]` in config.toml, run with the same JSON argument.
   '$cf=Join-Path $h "config.toml"',
@@ -288,9 +341,79 @@ export const CODEX_HUD_NOTIFY_POWERSHELL = [
   '#'
 ].join('; ')
 
-export function buildClaudeHudSettingsJson(): string {
+
+/**
+ * Claude Code's status-line command for a Windows host.
+ *
+ * Why a second script: on Windows the sh script cannot work. If Git Bash is
+ * present, Claude Code runs the command through it, but the child sits in a
+ * hidden console (see POWERSHELL_CONSOLE_WRITER) and `/dev/tty` is that hidden
+ * console, not the pseudoconsole. If Git Bash is absent, Claude Code runs the
+ * command under PowerShell (`shell ?? (bash-found ? "bash" : "powershell")`,
+ * read from 2.1.267) and sh syntax fails outright. Both cases need PowerShell
+ * with a console attach, so both get this script.
+ *
+ * Why -EncodedCommand: the same command text is parsed by sh on one host and
+ * by PowerShell on another, and no quoting survives both. Base64 (UTF-16LE,
+ * what -EncodedCommand expects) has no quotes at all; `powershell` is Windows
+ * PowerShell 5.1, present on every Windows. Line breaks separate statements,
+ * so no `;` and no trailing `#` are needed.
+ *
+ * Verified under PowerShell 7.6.6 on macOS with the console write redirected
+ * to a file (CUIHUD_WIN_CONOUT); the kernel32 path itself needs Windows.
+ */
+export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
+  '$ErrorActionPreference="SilentlyContinue"',
+  '$i=[Console]::In.ReadToEnd()',
+  '$j=$null',
+  'try{$j=$i | ConvertFrom-Json}catch{}',
+  '$E={param($s) ([string]$s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
+  '$o="CUIHUD1 agent=claude"',
+  'if($j.model.id){$o=$o+" model="+(& $E $j.model.id)}',
+  'if($j.model.display_name){$o=$o+" name="+(& $E $j.model.display_name)}',
+  'if($j.effort.level){$o=$o+" effort="+(& $E $j.effort.level)}',
+  '$cu=$j.context_window.current_usage',
+  'if($cu -and $cu.input_tokens -ne $null){$o=$o+" used="+([int64]$cu.input_tokens+[int64]$cu.cache_creation_input_tokens+[int64]$cu.cache_read_input_tokens)}',
+  'if($j.context_window.context_window_size){$o=$o+" win="+[int64]$j.context_window.context_window_size}',
+  'if($j.context_window.used_percentage -ne $null){$o=$o+" pct="+[int][math]::Floor([double]$j.context_window.used_percentage)}',
+  '$f=$j.rate_limits.five_hour',
+  'if($f -and $f.used_percentage -ne $null){$ra=0; if($f.resets_at){$ra=[int64]$f.resets_at}; $o=$o+" h5="+[int][math]::Floor([double]$f.used_percentage)+":"+$ra}',
+  '$w=$j.rate_limits.seven_day',
+  'if($w -and $w.used_percentage -ne $null){$rb=0; if($w.resets_at){$rb=[int64]$w.resets_at}; $o=$o+" d7="+[int][math]::Floor([double]$w.used_percentage)+":"+$rb}',
+  // Finished background tasks, as in the sh script: every <task-id> in the
+  // transcript tail is a task-notification, mid-turn ones included.
+  '$tp=[string]$j.transcript_path',
+  'if($tp -and (Test-Path -LiteralPath $tp)){$ids=@(Get-Content -LiteralPath $tp -Tail 600 | Select-String -Pattern "<task-id>([A-Za-z0-9_-]+)</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}}',
+  // Delegation: the user keeps their own bar. Their command runs under Git
+  // Bash when it exists (what Claude Code itself would have used), else under
+  // this same PowerShell. Its stdout is ours, which Claude Code draws.
+  '$c=""',
+  '$wd=[string]$j.cwd',
+  '$cd=$env:CLAUDE_CONFIG_DIR',
+  'if(-not $cd){ $hp=$env:USERPROFILE; if(-not $hp){$hp=$HOME}; $cd=Join-Path $hp ".claude" }',
+  '$cands=@()',
+  'if($wd){$cands=$cands+@((Join-Path $wd ".claude/settings.local.json"),(Join-Path $wd ".claude/settings.json"))}',
+  '$cands=$cands+@((Join-Path $cd "settings.local.json"),(Join-Path $cd "settings.json"))',
+  'foreach($sf in $cands){ if(-not $c -and (Test-Path -LiteralPath $sf)){ try{ $st=Get-Content -LiteralPath $sf -Raw | ConvertFrom-Json; if($st.statusLine.type -eq "command" -and $st.statusLine.command){$c=[string]$st.statusLine.command} }catch{} } }',
+  'if($c -and $c -cnotmatch "CUIHUD"){ if(Get-Command sh -ErrorAction SilentlyContinue){ $i | & sh -c $c } else { $i | & powershell -NoProfile -NonInteractive -Command $c } }',
+  ...POWERSHELL_CONSOLE_WRITER,
+  'W $o',
+  'exit 0'
+].join('\n')
+
+/** `powershell -EncodedCommand` takes UTF-16LE base64. */
+export function encodePowerShellCommand(script: string): string {
+  return Buffer.from(script, 'utf16le').toString('base64')
+}
+
+export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(CLAUDE_HUD_STATUSLINE_POWERSHELL)}`
+
+export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null = null): string {
   return JSON.stringify({
-    statusLine: { type: 'command', command: CLAUDE_HUD_STATUSLINE_SCRIPT }
+    statusLine: {
+      type: 'command',
+      command: hostPlatform === 'win32' ? CLAUDE_HUD_WINDOWS_COMMAND : CLAUDE_HUD_STATUSLINE_SCRIPT
+    }
   })
 }
 
@@ -329,9 +452,8 @@ export function agentHudLaunchFlag(
   hostPlatform: NodeJS.Platform | null
 ): string {
   return agent === 'claude'
-    ? // Identical on every platform: only the sh script inside it branches,
-      // because Claude Code runs status-line commands through Git Bash there.
-      `--settings ${singleQuoted(buildClaudeHudSettingsJson())}`
+    ? // Same flag everywhere; a win32 host gets the PowerShell command inside it.
+      `--settings ${singleQuoted(buildClaudeHudSettingsJson(hostPlatform))}`
     : `-c ${singleQuoted(buildCodexHudNotifyOverride(hostPlatform))}`
 }
 

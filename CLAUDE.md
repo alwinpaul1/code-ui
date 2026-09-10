@@ -74,9 +74,11 @@ they write to their own PTY. Launch flags (Claude Code `--settings`, Codex
 OSC, the phone already receives those bytes, and it strips them before xterm
 ever sees them. Claude's command also runs the user's own status line and
 prints its output verbatim, so a user with one keeps exactly their bar, and a
-user without one still gets no row. Windows takes a different route (MSYS
-`/dev/tty` for Claude, a PowerShell notify command for Codex) and is **written
-but unrun** — do not report it as working. The design, the verified field
+user without one still gets no row. Windows takes a different route: hook
+children there sit in a hidden console, so both agents get a PowerShell script
+that attaches to the agent's console via P/Invoke and writes there. It runs
+for real under PowerShell 7 in tests but **has not run on a Windows machine**
+— do not report it as working. The design, the verified field
 shapes and what is still unproven are in `docs/mobile-agent-hud.md`; the code
 is `mobile/src/session/agent-hud-*`. Orca's hooks (`agentStatus.model`) and
 `accounts.subscribe` remain the fallback sources, and the screen still owns the

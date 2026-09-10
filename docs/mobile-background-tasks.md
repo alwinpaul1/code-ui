@@ -74,8 +74,7 @@ with the settings switch on).
 - **Shells.** The whole script is exercised under `sh`, `bash` and `dash`
   (Debian/Ubuntu's `/bin/sh`, the strictest of the three) wherever `/bin/dash`
   exists.
-- **The one Windows host this cannot reach**: Claude Code accepts either Git
-  for Windows *or* PowerShell 7. With PowerShell only, Git Bash is absent and
-  the status-line command never runs, so no beacon arrives — not for finished
-  tasks and not for the HUD either. That is a limit of the whole beacon
-  channel, not of this feature.
+- **Windows hosts get the PowerShell status line** (`docs/mobile-agent-hud.md`,
+  Windows section), whether or not Git Bash is present, and it carries the
+  same `done=` list. Its console write is the one link that has not run on a
+  real Windows machine.

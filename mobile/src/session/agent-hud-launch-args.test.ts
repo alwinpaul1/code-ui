@@ -6,12 +6,16 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { tokenizeStartupCommand } from '../../../src/shared/tui-agent-startup-shell'
 import {
+  agentHudLaunchFlag,
   buildAgentHudLaunchArgs,
   buildClaudeHudSettingsJson,
   buildCodexHudNotifyOverride,
+  CLAUDE_HUD_STATUSLINE_POWERSHELL,
   CLAUDE_HUD_STATUSLINE_SCRIPT,
+  CLAUDE_HUD_WINDOWS_COMMAND,
   CODEX_HUD_NOTIFY_POWERSHELL,
-  CODEX_HUD_NOTIFY_SCRIPT
+  CODEX_HUD_NOTIFY_SCRIPT,
+  encodePowerShellCommand
 } from './agent-hud-launch-args'
 
 // Captured 2026-09-09 from Claude Code 2.1.266 on macOS: the JSON it pipes to a
@@ -386,8 +390,12 @@ describe('the flags survive the trip through Orca to the host shell', () => {
       'token_count',
       'total_tokens',
       'model_context_window',
-      // ESC and BEL as [char] codes: `e does not exist in Windows PowerShell 5.1.
-      '[Console]::Out.Write([string][char]27+"]7777;"+$o+[string][char]7)',
+      // Not stdout (Codex nulls it): the shared console writer, ESC and BEL as
+      // [char] codes because `e does not exist in Windows PowerShell 5.1.
+      'W $o',
+      '$s=[string][char]27+"]7777;"+$o+[string][char]7',
+      'AttachConsole',
+      'CreateFileW("CONOUT$"',
       'CUIHUD1 agent=codex',
       'config.toml'
     ]) {
@@ -419,11 +427,22 @@ describe('the flags survive the trip through Orca to the host shell', () => {
     }
   })
 
-  it("gives Claude the very same flag on Windows as everywhere else", () => {
-    // Only the sh script inside it branches, on `uname -s`.
-    expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'win32' })).toBe(
-      buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform: 'darwin' })
+  it('gives a Windows host a PowerShell status line, base64-encoded so sh and PowerShell both run it', () => {
+    // Why: with Git Bash present Claude Code hands the command to sh; without
+    // it, to PowerShell (read from 2.1.267). No quoting survives both parsers,
+    // so the command is `powershell -EncodedCommand <UTF-16LE base64>`.
+    const flag = agentHudLaunchFlag('claude', 'win32')
+    const json = JSON.parse(flag.replace(/^--settings '/, '').replace(/'$/, ''))
+    expect(json.statusLine.command).toBe(CLAUDE_HUD_WINDOWS_COMMAND)
+    expect(CLAUDE_HUD_WINDOWS_COMMAND).toMatch(
+      /^powershell -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
     )
+    expect(
+      Buffer.from(CLAUDE_HUD_WINDOWS_COMMAND.split(' ').pop() ?? '', 'base64').toString('utf16le')
+    ).toBe(CLAUDE_HUD_STATUSLINE_POWERSHELL)
+    expect(CLAUDE_HUD_STATUSLINE_POWERSHELL).not.toContain("'")
+    expect(agentHudLaunchFlag('claude', 'darwin')).not.toContain('EncodedCommand')
+    expect(agentHudLaunchFlag('claude', null)).toBe(agentHudLaunchFlag('claude', 'darwin'))
   })
 
   it("keeps the host's own default args in front, and leaves other agents alone", () => {
@@ -535,12 +554,21 @@ describe('the Codex notify script under a real PowerShell', () => {
     return { home, marker }
   }
 
+  /** Runs the script as Codex does and returns what reached the console seam:
+   *  Codex nulls the child's stdout, so the beacon goes to CONOUT$, which the
+   *  tests redirect to a file with CUIHUD_WIN_CONOUT. */
   function runPowerShell(home: string, jsonArg: string): string {
-    return execFileSync(
+    const conout = join(home, 'conout.txt')
+    execFileSync(
       pwsh ?? 'pwsh',
       ['-NoProfile', '-NonInteractive', '-Command', CODEX_HUD_NOTIFY_POWERSHELL, jsonArg],
-      { encoding: 'utf8', env: { ...process.env, CODEX_HOME: home } }
+      { encoding: 'utf8', env: { ...process.env, CODEX_HOME: home, CUIHUD_WIN_CONOUT: conout } }
     )
+    try {
+      return readFileSync(conout, 'utf8')
+    } catch {
+      return ''
+    }
   }
 
   run('beacons model, effort and the context figures for the thread that just replied', () => {
@@ -585,5 +613,106 @@ describe('the Codex notify script under a real PowerShell', () => {
       console.warn('[agent-hud] pwsh not found: the Codex Windows script was NOT executed here')
     }
     expect(true).toBe(true)
+  })
+})
+
+// ─── The Claude Windows status line, executed for real ──────────────────────
+describe('the Claude status line for Windows under a real PowerShell', () => {
+  const pwsh = (() => {
+    const fromEnv = process.env.CUIHUD_PWSH
+    if (fromEnv && existsSync(fromEnv)) {
+      return fromEnv
+    }
+    for (const dir of (process.env.PATH ?? '').split(':')) {
+      if (dir && existsSync(join(dir, 'pwsh'))) {
+        return join(dir, 'pwsh')
+      }
+    }
+    return null
+  })()
+  const run = pwsh ? it : it.skip
+
+  function runClaudePowerShell(options: {
+    json: string
+    home?: string
+    selftest?: boolean
+    encoded?: boolean
+  }): { stdout: string; beacon: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-ps-'))
+    const conout = join(dir, 'conout.txt')
+    const args = options.encoded
+      ? [
+          '-NoProfile',
+          '-NonInteractive',
+          '-EncodedCommand',
+          encodePowerShellCommand(CLAUDE_HUD_STATUSLINE_POWERSHELL)
+        ]
+      : ['-NoProfile', '-NonInteractive', '-Command', CLAUDE_HUD_STATUSLINE_POWERSHELL]
+    const stdout = execFileSync(pwsh ?? 'pwsh', args, {
+      input: options.json,
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: options.home ?? dir,
+        CUIHUD_WIN_CONOUT: conout,
+        ...(options.selftest ? { CUIHUD_WIN_SELFTEST: '1' } : {})
+      }
+    })
+    let beacon = ''
+    try {
+      beacon = readFileSync(conout, 'utf8')
+    } catch {
+      beacon = ''
+    }
+    return { stdout, beacon }
+  }
+
+  run('emits the very same beacon bytes as the sh script, from the same JSON', () => {
+    const shell = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
+    const ps = runClaudePowerShell({ json: statusJson })
+    expect(ps.beacon).toBe(shell.beacon)
+    expect(ps.stdout).toBe('')
+  })
+
+  run('runs as Claude Code would run it: -EncodedCommand, JSON on stdin', () => {
+    const ps = runClaudePowerShell({ json: statusJson, encoded: true })
+    expect(ps.beacon).toContain('CUIHUD1 agent=claude model=claude-fable-5-1')
+  })
+
+  run('adds the token total and percentage once Claude Code has replied', () => {
+    const json = withUsage(statusJson, { input: 500000, create: 100000, read: 49540, pct: 64.9 })
+    const ps = runClaudePowerShell({ json })
+    expect(ps.beacon).toContain(' used=649540 win=1000000 pct=64 ')
+  })
+
+  run('beacons finished task ids from the transcript, mid-turn ones included', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
+    const transcript = join(dir, 'session.jsonl')
+    writeFileSync(transcript, transcriptWithNotifications)
+    const parsed = JSON.parse(statusJson)
+    parsed.transcript_path = transcript
+    const ps = runClaudePowerShell({ json: JSON.stringify(parsed) })
+    expect(ps.beacon).toContain(' done=bqo82xkjk,b5v3z4u8o')
+  })
+
+  run("keeps a user's own status line exactly as it was", () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'cuihud-cwd-'))
+    mkdirSync(join(cwd, '.claude'))
+    writeFileSync(
+      join(cwd, '.claude', 'settings.json'),
+      JSON.stringify({ statusLine: { type: 'command', command: 'printf "my own bar"' } }, null, 2)
+    )
+    const parsed = JSON.parse(statusJson)
+    parsed.cwd = cwd
+    const ps = runClaudePowerShell({ json: JSON.stringify(parsed) })
+    expect(ps.stdout).toBe('my own bar')
+    expect(ps.beacon).toContain('CUIHUD1 agent=claude')
+  })
+
+  run('defines every kernel32 entry point it needs without compiling anything', () => {
+    // The Win32 calls themselves need Windows; that the dynamic P/Invoke type
+    // builds on this PowerShell is what can be proven here.
+    const ps = runClaudePowerShell({ json: statusJson, selftest: true })
+    expect(ps.stdout).toBe('AttachConsole,CloseHandle,CreateFileW,FreeConsole,WriteConsoleW')
   })
 })
