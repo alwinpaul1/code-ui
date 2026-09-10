@@ -537,7 +537,9 @@ describe('the Codex notify script under a real PowerShell', () => {
     }
     return null
   })()
-  const run = pwsh ? it : it.skip
+  // Why 60 s: a cold pwsh on a CI runner can take several seconds to start
+  // (first-run assembly caching); the default 5 s timed out on GitHub Actions.
+  const run = (name: string, fn: () => void) => (pwsh ? it(name, fn, 60_000) : it.skip(name, fn))
   const threadId = '01a08736-aaaa-bbbb-cccc-000000000001'
 
   /** `notify` may reference the marker path as `MARKER`. */
@@ -630,7 +632,9 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
     }
     return null
   })()
-  const run = pwsh ? it : it.skip
+  // Why 60 s: a cold pwsh on a CI runner can take several seconds to start
+  // (first-run assembly caching); the default 5 s timed out on GitHub Actions.
+  const run = (name: string, fn: () => void) => (pwsh ? it(name, fn, 60_000) : it.skip(name, fn))
 
   function runClaudePowerShell(options: {
     json: string
