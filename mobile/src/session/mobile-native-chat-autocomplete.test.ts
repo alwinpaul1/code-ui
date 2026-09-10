@@ -57,6 +57,14 @@ describe('rankSuggestions', () => {
   it('returns the head of the list for an empty query', () => {
     expect(rankSuggestions(['a', 'b', 'c'], '', 2)).toEqual(['a', 'b'])
   })
+
+  it('matches a basename prefix on a bare filename with no directory', () => {
+    // perf: the basename is now sliced off the last '/' instead of split+pop;
+    // a candidate with no '/' at all must still match on its own full text.
+    const out = rankSuggestions(['README.md', 'src/readme-notes.ts'], 'read')
+    expect(out).toContain('README.md')
+    expect(out).toContain('src/readme-notes.ts')
+  })
 })
 
 describe('rankSlashCommandSuggestions', () => {
