@@ -1,9 +1,9 @@
 // The shared reducer's own test file (src/shared/structured-agent-session-reducer.test.ts)
 // is vendored but never collected here — this fork's vitest root is `mobile/`.
-// So the catalog behaviour is pinned where the gate actually runs it, and
-// against this fork's reducer: upstream's version of this test also asserts
-// that a journal-free batch returns the identical state object, which is
-// #19147's coalescing short-circuit and is not vendored here.
+// So the catalog behaviour is pinned where the gate actually runs it. A batch
+// that reports a catalog is never dropped by the journal-unchanged
+// short-circuit (Orca #18757): the check compares `commands` by reference, and
+// a reported catalog is a fresh array.
 
 import { describe, expect, it } from 'vitest'
 import type {

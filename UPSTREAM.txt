@@ -22,7 +22,7 @@ src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, se
 src/shared/structured-agent-session-options.ts: 546fd9b21
 src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
-src/shared/agent-session-wire.ts: f1d854502
+src/shared/agent-session-wire.ts: f1d854502 (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
 src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502

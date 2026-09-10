@@ -55,10 +55,28 @@ vendored here. Re-vendoring one of these at a later commit is fine and drops the
 entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 
 - `structured-agent-session-reducer.ts`, `structured-agent-session-coalescer.ts`
-  — the per-session `/` command catalog from bf4e27050. These files otherwise
-  sit at the base commit: #19147's `backgroundTasks`/`activity` handling and its
-  journal-unchanged short-circuit are NOT vendored, so the reducer's own
-  identity-preservation behaviour differs from upstream's.
+  — the per-session `/` command catalog from bf4e27050, plus the background-task
+  half of e89deb63c (#18757), f8780a2c8 (#18807), 5868fdc9e (#19346) and
+  2bf298d1d (#19311): `backgroundTasks` in the reducer's state, the roster
+  equality that guards it, the journal-unchanged short-circuit that arrived with
+  it, and the coalescer's roster merge. Neither file can be re-vendored at
+  2bf298d1d: the same range adds `activity` (f7d521601, #19055) and the
+  `retainedItemLimit` head trim, neither of which is ported here. `activity` and
+  the item trim are the only parts of upstream's reducer still missing.
+  (An earlier note here credited the short-circuit to #19147; it is #18757's,
+  and it arrived with the background-task handling for exactly that reason — a
+  task edge rides a batch whose journal delta is empty.)
+
+- `agent-session-wire.ts` — the background-task fields from the same four
+  commits, on top of its f1d854502 pin: `AgentSessionBackgroundTaskRunState`,
+  `name`/`state`/`startedAt`/`totalTokens` on a task, `settledTasks`,
+  `supportsStopAll`, and `agentSessionBackgroundTasksEqual`. A whole-file
+  re-vendor at 2bf298d1d would drag in the rewind surface (ce4a3a418, #19235 —
+  it imports `agent-session-rewind.ts`, not vendored here) and
+  `hostExecutionOwned` from 1c1cb7115, which is the orchestration-worker feature
+  this fork does not implement. `AgentSessionStatusSummary.backgroundTasks` from
+  2bf298d1d is deliberately NOT taken: it feeds a session list this app has no
+  surface for.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`

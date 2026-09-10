@@ -3,11 +3,13 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type {
-  AgentSessionSlashCommand,
-  AgentSessionHandoffStatus,
-  AgentSessionHistoryPage,
-  AgentSessionSubscribeEvent
+import {
+  agentSessionBackgroundTasksEqual,
+  type AgentSessionBackgroundTaskState,
+  type AgentSessionSlashCommand,
+  type AgentSessionHandoffStatus,
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent
 } from './agent-session-wire'
 
 export type StructuredAgentSessionState = {
@@ -20,6 +22,7 @@ export type StructuredAgentSessionState = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
   handoff: AgentSessionHandoffStatus | null
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
 }
 
@@ -44,10 +47,33 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
 
 const MAX_RETAINED_SUBMISSIONS = 256
 
+function backgroundTaskStatesEqual(
+  left: AgentSessionBackgroundTaskState | null | undefined,
+  right: AgentSessionBackgroundTaskState | null | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (
+    !left ||
+    !right ||
+    left.state !== right.state ||
+    left.supportsTaskStop !== right.supportsTaskStop ||
+    left.supportsStopAll !== right.supportsStopAll
+  ) {
+    return false
+  }
+  return (
+    agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
+    agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)
+  )
+}
+
 function replacePage(
   page: AgentSessionHistoryPage,
   fence: number,
-  handoff?: AgentSessionHandoffStatus
+  handoff?: AgentSessionHandoffStatus,
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
 ): StructuredAgentSessionState {
   return {
     epoch: page.epoch,
@@ -57,7 +83,12 @@ function replacePage(
     submissions: page.submissions,
     hasOlder: page.hasOlder,
     status: 'ready',
-    handoff: handoff ?? null
+    handoff: handoff ?? null,
+    ...(backgroundTasks !== undefined
+      ? { backgroundTasks }
+      : page.backgroundTasks !== undefined
+        ? { backgroundTasks: page.backgroundTasks }
+        : {})
   }
 }
 
@@ -115,12 +146,23 @@ export function reduceStructuredAgentSession(
       state.cursor &&
       (!pageCursor || pageCursor.sequence <= state.cursor.sequence)
     ) {
+      const backgroundTasksChanged =
+        action.page.backgroundTasks !== undefined &&
+        !backgroundTaskStatesEqual(action.page.backgroundTasks, state.backgroundTasks)
       if (
         pageCursor?.sequence === state.cursor.sequence &&
-        action.page.fence !== undefined &&
-        action.page.fence !== state.fence
+        ((action.page.fence !== undefined && action.page.fence !== state.fence) ||
+          backgroundTasksChanged)
       ) {
-        return { ...state, fence: action.page.fence, status: 'ready', error: undefined }
+        return {
+          ...state,
+          ...(action.page.fence !== undefined ? { fence: action.page.fence } : {}),
+          ...(action.page.backgroundTasks !== undefined
+            ? { backgroundTasks: action.page.backgroundTasks }
+            : {}),
+          status: 'ready',
+          error: undefined
+        }
       }
       return state
     }
@@ -136,7 +178,12 @@ export function reduceStructuredAgentSession(
       hasOlder: action.page.hasOlder,
       status: 'ready',
       handoff: state.handoff,
-      ...(sameEpoch ? { commands: state.commands } : {})
+      ...(sameEpoch ? { commands: state.commands } : {}),
+      ...(action.page.backgroundTasks !== undefined
+        ? { backgroundTasks: action.page.backgroundTasks }
+        : state.backgroundTasks !== undefined
+          ? { backgroundTasks: state.backgroundTasks }
+          : {})
     }
   }
   if (action.type === 'older-page') {
@@ -156,7 +203,7 @@ export function reduceStructuredAgentSession(
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
-      ...replacePage(event.page, event.fence, event.handoff),
+      ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks),
       commands: event.commands
     }
   }
@@ -166,16 +213,43 @@ export function reduceStructuredAgentSession(
   if (state.cursor && event.batch.cursor.sequence < state.cursor.sequence) {
     return state
   }
+  const backgroundTasks =
+    event.backgroundTasks !== undefined ? event.backgroundTasks : state.backgroundTasks
+  // A background-task edge rides a batch with an empty journal delta. Rebuilding
+  // `items` for it hands the transcript list a new array identity every tick, so
+  // an unchanged journal returns the arrays it already had — and an unchanged
+  // everything returns the state object itself.
+  const journalUnchanged =
+    event.batch.items.length === 0 &&
+    event.batch.removedItemIds.length === 0 &&
+    event.batch.submissions.length === 0
+  if (
+    event.batch.cursor.sequence === state.cursor?.sequence &&
+    journalUnchanged &&
+    (event.fence === undefined || event.fence === state.fence) &&
+    (event.handoff === undefined || event.handoff === state.handoff) &&
+    (event.commands === undefined || event.commands === state.commands) &&
+    backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
+    state.status === 'ready' &&
+    state.error === undefined
+  ) {
+    return state
+  }
   return {
     ...state,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
-    items: mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
-    submissions: mergeSubmissions(state.submissions, event.batch.submissions),
+    items: journalUnchanged
+      ? state.items
+      : mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
+    submissions: journalUnchanged
+      ? state.submissions
+      : mergeSubmissions(state.submissions, event.batch.submissions),
     status: 'ready',
     error: undefined,
     handoff: event.handoff ?? state.handoff,
-    commands: event.commands !== undefined ? event.commands : state.commands
+    commands: event.commands !== undefined ? event.commands : state.commands,
+    ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
   }
 }
 
