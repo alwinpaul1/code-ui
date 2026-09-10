@@ -8,14 +8,13 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
-import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
 import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
 import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'
-import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
@@ -87,27 +86,19 @@ export function useMobileNativeChatController(
     nativeChatTranscriptIsLocalReadable
   })
 
-  const legacyNativeChatSession = useMobileNativeChatSession({
-    client,
-    sourceIdentity,
-    agent: activeChatStructured ? null : (activeChatResolution?.agent ?? null),
-    sessionId: activeChatStructured ? null : activeChatSessionId,
-    transcriptPath: activeChatStructured ? null : (activeChatResolution?.transcriptPath ?? null)
-  })
-  const structuredNativeChat = useMobileStructuredAgentSession({
-    client,
-    sessionId: activeChatStructured ? activeChatSessionId : null,
-    sourceIdentity,
-    enabled: showNativeChat,
-    // Holds are connection-scoped; dropping this on transport loss lets the hook
-    // reacquire the provider without clearing the cached transcript.
-    connected: connState === 'connected',
-    agent: activeChatStructured ? activeChatAgent : null,
-    onSendError
-  })
-  const nativeChatSession = activeChatStructured
-    ? structuredNativeChat.session
-    : legacyNativeChatSession
+  const { structuredSession: structuredNativeChat, session: nativeChatSession } =
+    useMobileNativeChatSessionLane({
+      client,
+      structured: activeChatStructured,
+      agent: activeChatAgent,
+      resolvedAgent: activeChatResolution?.agent ?? null,
+      transcriptPath: activeChatResolution?.transcriptPath ?? null,
+      sessionId: activeChatSessionId,
+      sourceIdentity,
+      enabled: showNativeChat,
+      connState,
+      onSendError
+    })
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
