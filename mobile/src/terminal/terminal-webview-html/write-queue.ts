@@ -7,6 +7,9 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drain
   function resetWriteQueue() {
     writeQueue = [];
     writeQueueHead = 0;
+    // A replacement terminal owes nothing to the gesture the old one saw.
+    scrollGestureActive = false;
+    cancelHeldWritePump();
   }
 
   function isStatusDotPresentationSelector(value) {
@@ -105,6 +108,21 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drain
     return nowMs() - scrollGestureStartedAt <= SCROLL_WRITE_HOLD_MAX_MS;
   }
 
+  function scheduleHeldWritePump(gen) {
+    if (heldWritePumpTimer !== null) return;
+    var remaining = SCROLL_WRITE_HOLD_MAX_MS - (nowMs() - scrollGestureStartedAt);
+    heldWritePumpTimer = setTimeout(function() {
+      heldWritePumpTimer = null;
+      pumpWrites(gen);
+    }, remaining > 0 ? remaining + 1 : 1);
+  }
+
+  function cancelHeldWritePump() {
+    if (heldWritePumpTimer === null) return;
+    clearTimeout(heldWritePumpTimer);
+    heldWritePumpTimer = null;
+  }
+
   function beginScrollGestureWriteHold() {
     if (scrollGestureActive) return;
     scrollGestureActive = true;
@@ -114,12 +132,20 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drain
   function endScrollGestureWriteHold() {
     if (!scrollGestureActive) return;
     scrollGestureActive = false;
+    cancelHeldWritePump();
     pumpWrites(terminalGeneration);
   }
 
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
-    if (writesHeldForScrollGesture()) return;
+    if (writesHeldForScrollGesture()) {
+      // Why: the hold can also end by simply timing out, and a terminal with
+      // nothing more to say would then never pump again — the queued bytes
+      // (a resize's re-serialised buffer, for one) would sit there and the
+      // view would stay blank. Wake it when the cap expires.
+      scheduleHeldWritePump(gen);
+      return;
+    }
     var next = nextQueuedWrite();
     if (typeof next !== 'string') {
       if (typeof next === 'function') return next(), pumpWrites(gen);

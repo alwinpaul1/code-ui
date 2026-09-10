@@ -581,6 +581,36 @@ describe('terminal WebView touch scrolling', () => {
     expect(parsedWrites).toEqual(['mid-scroll output'])
   })
 
+  it('lands held output even when the finger never lifts', () => {
+    // The regression this exists for: switching display mode enqueues a
+    // re-serialised buffer, the hold refuses it, and on a terminal with
+    // nothing further to say no later write ever restarts the pump — the view
+    // stayed blank. Measured on device as 0 pixels of terminal content.
+    boot()
+    // performance.now already follows the harness clock; only the pump's own
+    // timer needs driving, so fake that alone and leave the clock spy alive.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      fireTouch('touchstart', [{ x: 100, y: 500 }])
+      parsedWrites.length = 0
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'write', data: 'resize snapshot' })
+        })
+      )
+      runFrames(4, FRAME_120HZ_MS)
+      expect(parsedWrites).toEqual([])
+
+      // No touchend and no further writes — only the cap expiring.
+      clock += 2000
+      vi.advanceTimersByTime(2000)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(parsedWrites).toEqual(['resize snapshot'])
+  })
+
   it('never freezes the live view, however long the reader keeps scrolling', () => {
     boot()
     fireTouch('touchstart', [{ x: 100, y: 500 }])

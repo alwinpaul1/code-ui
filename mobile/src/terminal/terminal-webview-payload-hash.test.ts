@@ -17,8 +17,10 @@ import { XTERM_HTML } from './terminal-webview-html'
 // Then: agent output is held out of xterm's parser while a finger is
 // scrolling, because write() parses and repaints on the same WebView thread
 // that owes the finger its frames.
-const EXPECTED_SHA256 = 'c70d91dd8d6210cbd15631ed2243e9a33a52aa1be962a86ff21898a3daf7d1ae'
-const EXPECTED_LENGTH = 756001
+// Then: the write hold wakes its own pump when the cap expires, or a resize's
+// re-serialised buffer could sit in the queue forever and leave a blank view.
+const EXPECTED_SHA256 = '0e28ba7e2d66d389f01087164e3e82e5cbfac60bcbd6042c55fbb62b9f4c8df0'
+const EXPECTED_LENGTH = 757011
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {
