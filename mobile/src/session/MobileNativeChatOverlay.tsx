@@ -105,7 +105,7 @@ export function MobileNativeChatOverlay({
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
         agentStatus={controller.nativeChatAgentStatus}
-        finishedTaskIds={controller.nativeChatFinishedTaskIds}
+        backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
         onStopBackgroundTask={
           controller.nativeChatBackgroundTasks?.supportsTaskStop === true

@@ -9,6 +9,7 @@ import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
+import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Everything that paints below the newest bubble. The transcript list is
  *  inverted, so its "header" is the bottom of the conversation: the live turn's
@@ -18,7 +19,7 @@ export function MobileNativeChatListHeader({
   messages,
   agent,
   agentStatus,
-  finishedTaskIds,
+  backgroundTaskReport,
   hostBackgroundTasks,
   queuedMessages,
   onEditQueue,
@@ -33,7 +34,7 @@ export function MobileNativeChatListHeader({
   messages: NativeChatMessage[]
   agent?: string | null
   agentStatus?: AgentStatusEntry | null
-  finishedTaskIds?: readonly string[]
+  backgroundTaskReport?: ActiveTabBackgroundTaskReport
   /** The structured lane's own roster from the host. Authoritative when the
    *  host has reported one — including when it has cleared it to `null`. */
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
@@ -48,8 +49,11 @@ export function MobileNativeChatListHeader({
   const runningTaskCount = useMemo(
     () =>
       projectStructuredBackgroundTasks(hostBackgroundTasks, 0)?.running.length ??
-      countRunningBackgroundTasks(messages, agentStatus ?? null, { finishedTaskIds }),
-    [agentStatus, finishedTaskIds, hostBackgroundTasks, messages]
+      countRunningBackgroundTasks(messages, agentStatus ?? null, {
+        finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
+        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null
+      }),
+    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages]
   )
   return (
     <>

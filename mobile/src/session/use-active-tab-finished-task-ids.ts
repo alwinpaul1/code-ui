@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 
@@ -30,4 +30,25 @@ export function useActiveTabFinishedTaskIds(handle: string | null): readonly str
     ids: rememberFinishedTaskIds(memory.current.ids, reported)
   }
   return memory.current.ids
+}
+
+export type ActiveTabBackgroundTaskReport = {
+  /** Ids the beacon has ever named finished, remembered across refreshes. */
+  finishedTaskIds: readonly string[]
+  /** What the agent's own Stop hook says is still running, or null before it
+   *  has answered. Null and empty differ: empty means nothing is running,
+   *  which is what clears the row on the last task. */
+  runningTaskIds: readonly string[] | null
+}
+
+/** Both halves of what the agent has said about its background work. */
+export function useActiveTabBackgroundTaskReport(
+  handle: string | null
+): ActiveTabBackgroundTaskReport {
+  const finishedTaskIds = useActiveTabFinishedTaskIds(handle)
+  const runningTaskIds = useAgentHudBeacon(handle)?.runningTaskIds ?? null
+  return useMemo(
+    () => ({ finishedTaskIds, runningTaskIds }),
+    [finishedTaskIds, runningTaskIds]
+  )
 }

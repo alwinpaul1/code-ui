@@ -23,6 +23,7 @@ import {
 } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
+import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -38,7 +39,7 @@ export function MobileBackgroundTasksSheet({
   visible,
   messages,
   agentStatus,
-  finishedTaskIds,
+  backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
   onClose
@@ -46,7 +47,7 @@ export function MobileBackgroundTasksSheet({
   visible: boolean
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
-  finishedTaskIds?: readonly string[]
+  backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
   onClose: () => void
@@ -56,7 +57,7 @@ export function MobileBackgroundTasksSheet({
       <MobileBackgroundTasksSheetBody
         messages={messages}
         agentStatus={agentStatus ?? null}
-        finishedTaskIds={finishedTaskIds}
+        backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={onStopTask}
       />
@@ -69,13 +70,13 @@ export function MobileBackgroundTasksSheet({
 export function MobileBackgroundTasksSheetBody({
   messages,
   agentStatus,
-  finishedTaskIds,
+  backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
-  finishedTaskIds?: readonly string[]
+  backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
 }) {
@@ -90,8 +91,11 @@ export function MobileBackgroundTasksSheetBody({
   const { running, finished } = useMemo(
     () =>
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
-      deriveBackgroundTasks(messages, now, agentStatus ?? null, { finishedTaskIds }),
-    [agentStatus, finishedTaskIds, hostBackgroundTasks, messages, now]
+      deriveBackgroundTasks(messages, now, agentStatus ?? null, {
+        finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
+        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null
+      }),
+    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
   )
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {

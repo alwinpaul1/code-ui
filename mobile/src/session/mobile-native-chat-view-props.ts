@@ -21,6 +21,7 @@ import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-da
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -46,7 +47,7 @@ export type MobileNativeChatViewProps = {
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
-  finishedTaskIds?: readonly string[]
+  backgroundTaskReport?: ActiveTabBackgroundTaskReport
   /** The host's own background-task roster, on the structured lane. When the
    *  host has reported one it is the whole answer and the two props above go
    *  unread; `undefined` leaves the tab to the transcript reader. */

@@ -27,6 +27,7 @@ import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-dr
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -61,7 +62,7 @@ export type MobileNativeChatController = {
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire. */
   nativeChatAgentStatus: AgentStatusEntry | null
   /** Task ids the active tab's HUD beacon reports finished; see agent-hud-beacon.ts. */
-  nativeChatFinishedTaskIds: readonly string[]
+  nativeChatBackgroundTaskReport: ActiveTabBackgroundTaskReport
   /** The host's own background-task roster on the structured lane. `undefined`
    *  leaves the tab to the transcript reader; see mobile-structured-background-tasks.ts. */
   nativeChatBackgroundTasks: AgentSessionBackgroundTaskState | null | undefined
