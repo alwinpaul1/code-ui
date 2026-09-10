@@ -6,7 +6,8 @@ import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
 import {
-  formatQuestionAnswer,
+  formatQuestionAnswerByIndexes,
+  formatQuestionAnswerWithOtherByIndexes,
   formatQuestionFreeTextAnswer,
   type MobileChatQuestion
 } from './mobile-native-chat-question'
@@ -22,7 +23,7 @@ type Props = {
  *  options or none apply. */
 export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
-  const [selected, setSelected] = useState<string[]>([])
+  const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState('')
   const [sending, setSending] = useState(false)
   const sendingRef = useRef(false)
@@ -31,9 +32,13 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
   const hasOptions = question.options.length > 0
   const trimmedFreeText = freeText.trim()
 
-  const toggle = (option: string): void => {
-    setSelected((prev) =>
-      prev.includes(option) ? prev.filter((o) => o !== option) : [...prev, option]
+  // Keyed by position, not by label: an agent may repeat a label inside one
+  // question, and label-keyed selection makes both rows toggle as one.
+  const toggle = (optionIndex: number): void => {
+    setSelectedOptionIndexes((prev) =>
+      prev.includes(optionIndex)
+        ? prev.filter((index) => index !== optionIndex)
+        : [...prev, optionIndex]
     )
   }
 
@@ -51,34 +56,51 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
     }
   }
 
-  const answerSingle = async (option: string, optionIndex: number): Promise<void> => {
+  const answerSingle = async (optionIndex: number): Promise<void> => {
     const token = question.optionTokens[optionIndex]
-    await sendAnswer(token && token.length > 0 ? token : formatQuestionAnswer(question, [option]))
+    await sendAnswer(
+      token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
+    )
   }
 
   const submitMulti = async (): Promise<void> => {
-    if (selected.length === 0) {
+    if (selectedOptionIndexes.length === 0) {
       return
     }
-    await sendAnswer(formatQuestionAnswer(question, selected))
+    const answer =
+      question.freeTextToken && trimmedFreeText.length > 0
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
+        : formatQuestionAnswerByIndexes(question, selectedOptionIndexes)
+    if (await sendAnswer(answer)) {
+      setFreeText('')
+    }
   }
 
   const submitFreeText = async (): Promise<void> => {
     if (trimmedFreeText.length === 0) {
       return
     }
-    if (await sendAnswer(formatQuestionFreeTextAnswer(question, trimmedFreeText))) {
+    const answer =
+      question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
+        : formatQuestionFreeTextAnswer(question, trimmedFreeText)
+    if (await sendAnswer(answer)) {
       setFreeText('')
     }
   }
 
-  const canSubmitMulti = selected.length > 0 && !sending
+  const canSubmitMulti = selectedOptionIndexes.length > 0 && !sending
   const canSendFreeText = allowOther && trimmedFreeText.length > 0 && !sending
 
   // Stable keys for option rows even if an agent repeats a label.
   const optionRows = useMemo(
-    () => question.options.map((label, index) => ({ label, key: `${index}:${label}` })),
-    [question.options]
+    () =>
+      question.options.map((label, index) => ({
+        label,
+        description: question.optionDescriptions?.[index],
+        key: `${index}:${label}`
+      })),
+    [question.optionDescriptions, question.options]
   )
 
   return (
@@ -108,8 +130,8 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
 
       {hasOptions ? (
         <View style={{ gap: space.xs + 2 }}>
-          {optionRows.map(({ label, key }, optIndex) => {
-            const isSelected = selected.includes(label)
+          {optionRows.map(({ label, description, key }, optIndex) => {
+            const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
               <Pressable
                 key={key}
@@ -127,9 +149,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
                   borderWidth: 1,
                   borderColor: isSelected ? colors.accent : colors.border
                 })}
-                onPress={() =>
-                  question.multiSelect ? toggle(label) : answerSingle(label, optIndex)
-                }
+                onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
               >
                 {question.multiSelect ? (
                   <View
@@ -147,9 +167,14 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
                     {isSelected ? <Check size={13} color={colors.onAccent} strokeWidth={3} /> : null}
                   </View>
                 ) : null}
-                <Txt variant="body" style={{ flex: 1 }}>
-                  {notificationPlainText(label)}
-                </Txt>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Txt variant="body">{notificationPlainText(label)}</Txt>
+                  {description ? (
+                    <Txt variant="caption" tone="muted" numberOfLines={2}>
+                      {notificationPlainText(description)}
+                    </Txt>
+                  ) : null}
+                </View>
               </Pressable>
             )
           })}
@@ -158,7 +183,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
 
       {question.multiSelect && hasOptions ? (
         <Button
-          label={`Submit${selected.length > 0 ? ` (${selected.length})` : ''}`}
+          label={`Submit${selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}`}
           accessibilityLabel="Submit selected options"
           variant="accent"
           block
