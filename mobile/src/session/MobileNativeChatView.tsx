@@ -1,7 +1,7 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   type NativeScrollEvent,
@@ -34,8 +34,8 @@ import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
+import { useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
 
-const INPUT_LOCK_SETTLE_MS = 600
 /** Within this many px of the bottom the list is "at the live edge". */
 const LIVE_EDGE_THRESHOLD_PX = 48
 
@@ -273,18 +273,7 @@ export function MobileNativeChatView({
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
-  // A dead PTY emits subscribed→end; settle both edges so its false lease cannot flash the composer enabled.
-  const rawLockReason = inputLockReason ?? null
-  const rawLockHeld = rawLockReason !== null
-  const [lockHeld, setLockHeld] = useState(false)
-  useEffect(() => {
-    if (rawLockHeld === lockHeld) {
-      return
-    }
-    const timer = setTimeout(() => setLockHeld(rawLockHeld), INPUT_LOCK_SETTLE_MS)
-    return () => clearTimeout(timer)
-  }, [lockHeld, rawLockHeld])
-  const lockReason = lockHeld ? (rawLockReason ?? 'waiting') : null
+  const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
