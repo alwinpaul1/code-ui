@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { AppState } from 'react-native'
 import { mobileVisibleTerminalDisplayMode } from './mobile-session-route-helpers'
+import { releaseFloorUntilAccepted, shouldReleaseFloor } from './mobile-terminal-floor-release'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 
 /**
@@ -83,6 +85,65 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
   }, [activeHandle, showNativeChat])
   const setDisplayModeRef = useRef(setDisplayMode)
   setDisplayModeRef.current = setDisplayMode
+  const activeHandleStateRef = useRef(activeHandle)
+  activeHandleStateRef.current = activeHandle
+  const showNativeChatStateRef = useRef(showNativeChat)
+  showNativeChatStateRef.current = showNativeChat
+
+  /** Hand one handle back, retrying, unless the reader is driving it again.
+   *
+   *  The app being FOREGROUND is part of "driving it": backgrounded, the
+   *  terminal is still the active view and `showNativeChat` is still false, so
+   *  a reclaim check that looked only at those two fired instantly on the very
+   *  case it exists to handle and the release never went out. Measured: HOME
+   *  left the desk at COLS=51 with this fix in place. */
+  const releaseHandle = useCallback((handle: string) => {
+    const driven = drivenHandlesRef.current
+    if (!shouldReleaseFloor({ drivenHandles: driven, handle })) {
+      return
+    }
+    driven.delete(handle)
+    void releaseFloorUntilAccepted({
+      release: () => setDisplayModeRef.current(handle, 'desktop'),
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      isReclaimed: () =>
+        AppState.currentState === 'active' &&
+        activeHandleStateRef.current === handle &&
+        !showNativeChatStateRef.current
+    })
+  }, [])
+
+  // Measured: HOME left the desk at 51 columns indefinitely. Backgrounding
+  // unmounts nothing, so without this nothing ever hands the floor back.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        return
+      }
+      // Snapshot first: releasing removes the handle from the same set.
+      const driven = Array.from(drivenHandlesRef.current)
+      for (const handle of driven) {
+        releaseHandle(handle)
+      }
+    })
+    return () => subscription.remove()
+  }, [releaseHandle])
+
+  // Measured: switching to another tab left the desk at 51 columns too. The
+  // switch nulls activeHandle before the effect above runs, so the handle the
+  // phone actually drove has to be remembered and released by name.
+  const lastDrivenHandleRef = useRef<string | null>(null)
+  useEffect(() => {
+    const previous = lastDrivenHandleRef.current
+    const current = mobileVisibleTerminalDisplayMode(activeHandle, showNativeChat) === 'auto'
+      ? activeHandle
+      : null
+    lastDrivenHandleRef.current = current
+    if (previous && previous !== current) {
+      releaseHandle(previous)
+    }
+  }, [activeHandle, releaseHandle, showNativeChat])
+
   useEffect(() => {
     const driven = drivenHandlesRef.current
     return () => {

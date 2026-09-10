@@ -1,6 +1,12 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
+// The hook listens for the app leaving the foreground; the real module is
+// Flow-typed and unparseable here, and these cases never background.
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => undefined }) }
+}))
+
 import { useMobileSessionViewSwitch } from './use-mobile-session-view-switch'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 
