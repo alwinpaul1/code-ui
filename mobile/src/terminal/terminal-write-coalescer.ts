@@ -1,7 +1,12 @@
 // Why: the WebView bridge + WebKit IPC + paint cost is paid per postMessage; a busy
-// PTY streams ~200 frames/s (#9302). Batching at ~60Hz keeps keystroke echo
-// inside one frame without going back to a postMessage per PTY chunk.
-export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 16
+// PTY streams ~200 frames/s (#9302), so batching writes at ~20Hz cuts sustained CPU.
+//
+// This window does NOT govern keystroke echo. The leading edge below delivers the
+// first write after an idle gap synchronously, so echo costs 0ms whatever this is.
+// 0.3.5 cut it to 16ms "to keep keystroke echo inside one frame" — echo was already
+// instant, and the change tripled bridge crossings on a busy PTY, which is the cost
+// #9302 tuned this window to avoid.
+export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 48
 
 // Why: defense-in-depth only — server ack flow control bounds inflow; this cap keeps
 // an upstream flow-control bug from growing the buffer unboundedly. UTF-16 code units.
@@ -52,7 +57,7 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
       return
     }
     if (flushTimer === null) {
-      // One trailing timer per window: the stream flushes at most once per 48ms.
+      // One trailing timer per window: the stream flushes at most once per window.
       // Why: Date.now() is not monotonic — a backwards NTP/timezone jump would
       // otherwise arm the timer for the whole jump and stall the stream.
       const remainderMs = Math.min(

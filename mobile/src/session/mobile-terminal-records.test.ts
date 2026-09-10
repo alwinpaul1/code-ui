@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { sessionTabCloseAddress, sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
 import {
-  getTerminalRecordsFromSessionTabs,
   appendUnlistedConnectedTerminalTabs,
+  reconcileSessionTabsWithTerminalList
+} from './mobile-session-tab-terminal-reconcile'
+import {
+  getTerminalRecordsFromSessionTabs,
   hasConnectedTerminalAbsentFromSessionTabs,
-  reconcileSessionTabsWithTerminalList,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
@@ -225,7 +227,11 @@ describe('mobile terminal records', () => {
   })
 
   it('puts a split pane the tab snapshot omitted onto the strip', () => {
-    const tabs = [terminalTab('pty-1')]
+    // The host addresses a terminal tab as `parentTabId::leafId`; a fixture that
+    // invents an unrelated tab id agrees with a parser that ignores the group.
+    const tabs = [
+      { ...terminalTab('pty-1'), id: 'tab-1::leaf-1', parentTabId: 'tab-1', leafId: 'leaf-1' }
+    ]
     const listed = [
       record({ handle: 'pty-1', connected: true, tabId: 'tab-1', leafId: 'leaf-1' }),
       record({
@@ -284,16 +290,12 @@ describe('mobile terminal records', () => {
   })
 
   it('closes a split sibling by its handle, not the parent tab', () => {
-    expect(
-      sessionTabClosesByHandle({
-        id: 'tab-1:leaf-2',
-        type: 'terminal',
-        terminal: 'pty-2',
-        title: 'shell',
-        parentTabId: 'tab-1',
-        isActive: false
-      })
-    ).toBe(true)
+    const first = { id: 'tab-1::leaf-1', type: 'terminal' as const, parentTabId: 'tab-1' }
+    const second = { id: 'tab-1::leaf-2', type: 'terminal' as const, parentTabId: 'tab-1' }
+
+    expect(sessionTabClosesByHandle(second, [first, second])).toBe(true)
+    // The only leaf in its tab IS the tab, however the host addresses it.
+    expect(sessionTabClosesByHandle(second, [second])).toBe(false)
     expect(
       sessionTabClosesByHandle({
         id: 'tab-1',
@@ -355,5 +357,134 @@ describe('mobile terminal records', () => {
         (terminal) => terminal.handle
       )
     ).toEqual(['pty-1', 'pty-2'])
+  })
+})
+
+// The shape a real host publishes: `session.tabs` addresses every terminal tab
+// as `parentTabId::leafId`, with parentTabId and leafId both required
+// (`RuntimeMobileSessionTerminalTab`). Captured from the mock server's
+// contract-complete fixture, which mirrors Orca 1.4.x:
+//   { type: 'terminal', id: 'tab-1::f47ac10b-…', parentTabId: 'tab-1',
+//     leafId: 'f47ac10b-…', status: 'ready', terminal: 'term-1', isActive: true }
+describe('session tabs reconciled against terminal.list', () => {
+  const hostTerminalTab = (
+    over: Partial<MobileTerminalSessionTab> = {}
+  ): MobileTerminalSessionTab => ({
+    type: 'terminal',
+    id: 'tab-1::f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    title: 'zsh',
+    parentTabId: 'tab-1',
+    leafId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    status: 'ready',
+    terminal: 'term-1',
+    isActive: true,
+    ...over
+  })
+  const listed = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({
+    title: 'zsh',
+    isActive: false,
+    connected: true,
+    tabId: 'tab-1',
+    leafId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    ...over
+  })
+
+  it('keeps the agent a Claude tab was launched with, so the Chat toggle stays on the header', () => {
+    const tabs = [hostTerminalTab({ launchAgent: 'claude' })]
+
+    const next = reconcileSessionTabsWithTerminalList(tabs, [listed({ handle: 'term-1' })])
+
+    expect(next).toHaveLength(1)
+    const kept = next[0]
+    expect(kept?.type).toBe('terminal')
+    if (kept?.type === 'terminal') {
+      expect(kept.launchAgent).toBe('claude')
+      expect(kept.id).toBe('tab-1::f47ac10b-58cc-4372-a567-0e02b2c3d479')
+    }
+  })
+
+  it('keeps the live agent status a Codex tab reports, so it still opens in Chat UI', () => {
+    const agentStatus = {
+      agentType: 'codex',
+      state: 'idle',
+      providerSession: { id: 'codex-session-1' }
+    } as unknown as MobileTerminalSessionTab['agentStatus']
+    const tabs = [hostTerminalTab({ title: 'Codex', agentStatus })]
+
+    const next = reconcileSessionTabsWithTerminalList(tabs, [listed({ handle: 'term-1' })])
+
+    const kept = next[0]
+    expect(kept?.type === 'terminal' ? kept.agentStatus : null).toEqual(agentStatus)
+  })
+
+  it('leaves a closed tab closed while its PTY is still in the last terminal.list', () => {
+    // The host drops the tab from session.tabs the moment it closes; its PTY
+    // lingers as connected until the next sweep lands.
+    const next = reconcileSessionTabsWithTerminalList([], [listed({ handle: 'term-1' })])
+
+    expect(next).toEqual([])
+  })
+
+  it('still puts a split leaf the tab snapshot omitted onto the strip', () => {
+    const tabs = [hostTerminalTab()]
+
+    const next = reconcileSessionTabsWithTerminalList(tabs, [
+      listed({ handle: 'term-1' }),
+      listed({ handle: 'term-2', leafId: 'leaf-2', title: 'shell' })
+    ])
+
+    expect(next).toHaveLength(2)
+    const leaf = next[1]
+    expect(leaf?.type).toBe('terminal')
+    if (leaf?.type === 'terminal') {
+      // The host's own address for a leaf; a churning tab id loses the per-tab
+      // chat/terminal override, which is keyed by it.
+      expect(leaf.id).toBe('tab-1::leaf-2')
+      expect(leaf.parentTabId).toBe('tab-1')
+      expect(leaf.title).toBe('shell')
+    }
+  })
+
+  it('carries the agent terminal.list names onto a leaf it had to synthesize', () => {
+    const next = reconcileSessionTabsWithTerminalList(
+      [hostTerminalTab()],
+      [
+        listed({ handle: 'term-1' }),
+        listed({ handle: 'term-2', leafId: 'leaf-2', agentIdentity: 'claude' })
+      ]
+    )
+
+    const leaf = next[1]
+    expect(leaf?.type === 'terminal' ? leaf.launchAgent : null).toBe('claude')
+  })
+
+  it('drops a synthesized leaf once terminal.list no longer lists it', () => {
+    const withLeaf = reconcileSessionTabsWithTerminalList(
+      [hostTerminalTab()],
+      [listed({ handle: 'term-1' }), listed({ handle: 'term-2', leafId: 'leaf-2' })]
+    )
+    expect(withLeaf).toHaveLength(2)
+
+    expect(
+      reconcileSessionTabsWithTerminalList(withLeaf, [listed({ handle: 'term-1' })])
+    ).toHaveLength(1)
+  })
+
+  it('leaves a healthy strip untouched, so a sweep cannot remount the terminal', () => {
+    // Every terminal.list sweep feeds its result back through reconcile. A
+    // reconcile that returns a differently-shaped strip makes the route call
+    // setSessionTabs, re-resolve the active tab and resubscribe the PTY — on a
+    // cadence — which is what made live keyboard input drop characters.
+    const tabs = [hostTerminalTab({ launchAgent: 'claude' })]
+
+    const next = reconcileSessionTabsWithTerminalList(tabs, [listed({ handle: 'term-1' })])
+
+    expect(mobileSessionTabsEqual(tabs, next)).toBe(true)
+  })
+
+  it('never drops a host tab just because a sweep raced the terminal list', () => {
+    const tabs = [hostTerminalTab({ launchAgent: 'claude' })]
+
+    expect(reconcileSessionTabsWithTerminalList(tabs, [])).toEqual(tabs)
   })
 })

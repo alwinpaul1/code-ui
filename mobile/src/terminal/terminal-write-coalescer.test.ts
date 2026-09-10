@@ -97,6 +97,38 @@ describe('terminal write coalescer', () => {
     expect(sink.delivered.join('')).toBe(Array.from({ length: 200 }, (_, i) => `c${i};`).join(''))
   })
 
+  it('keeps a busy PTY under ~25 bridge crossings a second', () => {
+    // The invariant #9302 tuned the window for, pinned in absolute terms rather
+    // than relative to the constant — a shrunken window passes every
+    // window-relative test in this file while tripling sustained CPU.
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    // One second of a busy PTY: ~200 chunks/s, the desktop runtime's flush rate.
+    for (let i = 0; i < 200; i += 1) {
+      coalescer.write(`c${i};`)
+      vi.advanceTimersByTime(5)
+    }
+    vi.runOnlyPendingTimers()
+
+    expect(sink.delivered.length).toBeLessThanOrEqual(25)
+  })
+
+  it('echoes a keystroke on an idle terminal with no delay, whatever the window is', () => {
+    vi.useFakeTimers()
+    const sink = createDeliverySink()
+    const coalescer = createTerminalWriteCoalescer(sink.deliver)
+
+    // Idle long enough that the window has expired: the leading edge, not the
+    // window size, is what makes echo instant.
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS * 4)
+    coalescer.write('x')
+
+    expect(sink.delivered).toEqual(['x'])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('flushes within one window even when the wall clock jumps backwards mid-stream', () => {
     vi.useFakeTimers()
     vi.setSystemTime(100_000)

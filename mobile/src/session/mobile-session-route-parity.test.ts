@@ -88,8 +88,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // with every other file of this port in place, so create-actions is the sole
 // cause of both moved pins.
 // 2026-09-10: visible terminals request phone cols even when Chat UI is off.
+// 2026-09-10: a tab close now plans against the current strip, so a lone leaf
+// closes through session.tabs.close instead of being addressed as a split.
+// Moved by one line in handleCloseSessionTab (planSessionTabClose gains the
+// sibling argument); no other nested body changed.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '41abb6a12ebcdb24bdb15039fec4b85df6c4956d2c18d405da0b91436c9f84af'
+  '0e9ea1c28a28acec1311801787f148236fec08b26485282fb63a504a7f35a079'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =

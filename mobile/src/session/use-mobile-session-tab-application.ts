@@ -5,9 +5,9 @@ import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
-  reconcileSessionTabsWithTerminalList,
   terminalRecordsEqual
 } from './mobile-terminal-records'
+import { reconcileSessionTabsWithTerminalList } from './mobile-session-tab-terminal-reconcile'
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,

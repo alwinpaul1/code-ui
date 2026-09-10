@@ -10,11 +10,31 @@ type ClosableSessionTab = {
   terminal?: string | null
 }
 
-/** A split leaf `session.tabs` omitted. Closing it must not close the parent tab. */
+type SessionTabContext = Pick<ClosableSessionTab, 'id' | 'parentTabId' | 'type'>
+
+/**
+ * A split leaf sharing its tab with another leaf. Closing one of those must not
+ * close the parent tab, so it goes by PTY handle instead.
+ *
+ * The sibling is what makes it a split. The host addresses EVERY terminal tab
+ * as `parentTabId::leafId` — `RuntimeMobileSessionTerminalTab` requires both
+ * fields — so `parentTabId !== id` is true of a lone tab too, and reading it as
+ * "split" sent every tab close down the handle path, which kills the PTY and
+ * leaves the tab (0.3.4).
+ */
 export function sessionTabClosesByHandle(
-  tab: Pick<ClosableSessionTab, 'id' | 'parentTabId' | 'type'>
+  tab: SessionTabContext,
+  siblings: readonly SessionTabContext[] = []
 ): boolean {
-  return tab.type === 'terminal' && tab.parentTabId != null && tab.parentTabId !== tab.id
+  if (tab.type !== 'terminal' || tab.parentTabId == null || tab.parentTabId === tab.id) {
+    return false
+  }
+  return siblings.some(
+    (candidate) =>
+      candidate.type === 'terminal' &&
+      candidate.id !== tab.id &&
+      (candidate.parentTabId ?? candidate.id) === tab.parentTabId
+  )
 }
 
 /** Host close addresses a split leaf as `parentTabId::leafId`. A single colon
@@ -35,10 +55,16 @@ export function sessionTabCloseAddress(
  * stays on desktop. A second `terminal.close`, with the PTY already dead,
  * is what sends `closeTerminal(tabId, paneRuntimeId)` and collapses it.
  */
-export function planSessionTabClose(tab: ClosableSessionTab): SessionTabClosePlan {
+/** `siblings` is the current tab strip. Without it no tab reads as split, so a
+ *  close falls back to `session.tabs.close` — the safe answer, since that closes
+ *  a whole tab rather than orphaning a pane. */
+export function planSessionTabClose(
+  tab: ClosableSessionTab,
+  siblings: readonly SessionTabContext[] = []
+): SessionTabClosePlan {
   if (
     tab.type === 'terminal' &&
-    sessionTabClosesByHandle(tab) &&
+    sessionTabClosesByHandle(tab, siblings) &&
     typeof tab.terminal === 'string'
   ) {
     return { via: 'terminal-handle', handle: tab.terminal, repeats: 2 }

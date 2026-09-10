@@ -103,7 +103,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     if (!client) {
       return
     }
-    const plan = planSessionTabClose(tab)
+    const plan = planSessionTabClose(tab, sessionTabsRef.current)
     if (plan.via === 'terminal-handle') {
       const target = { handle: plan.handle, title: tab.title, isActive: tab.isActive }
       for (let index = 0; index < plan.repeats; index += 1) {

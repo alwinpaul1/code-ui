@@ -3,9 +3,9 @@ import type { RpcSuccess } from '../transport/types'
 import {
   mergeTerminalListWithKnownRecords,
   mobileSessionTabsEqual,
-  reconcileSessionTabsWithTerminalList,
   terminalRecordsEqual
 } from './mobile-terminal-records'
+import { reconcileSessionTabsWithTerminalList } from './mobile-session-tab-terminal-reconcile'
 import {
   createTerminalPrunePredicate,
   pruneTerminalKeyboardMetrics,

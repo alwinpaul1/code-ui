@@ -1,6 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 export type TerminalRecord = {
   handle: string
@@ -11,8 +11,13 @@ export type TerminalRecord = {
   connected?: boolean
   /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
   orphaned?: boolean
+  /** From `terminal.list` (`RuntimeTerminalSummary`); the tab this PTY's leaf
+   *  belongs to, and the leaf itself. Together they are the host's address for
+   *  the leaf: `tabId::leafId`. */
   tabId?: string
   leafId?: string
+  /** Host-resolved agent identity, when `terminal.list` names one. */
+  agentIdentity?: TuiAgent
 }
 
 export type MobileTerminalSessionTab = {
@@ -24,6 +29,13 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  /** Agent Orca launched in this terminal. Chat eligibility reads it before the
+   *  first live agent-status update arrives, so a reconcile must never lose it. */
+  launchAgent?: TuiAgent
+  /** Set only on a leaf THIS client built from `terminal.list` because the
+   *  session snapshot omitted it. A host tab never carries it, and only a
+   *  synthesized leaf may be pruned when its handle leaves the list. */
+  synthesizedFromTerminalList?: true
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
@@ -31,7 +43,7 @@ export type MobileTerminalSessionTab = {
   isActive: boolean
 }
 
-type MobileSessionTabLike =
+export type MobileSessionTabLike =
   | MobileTerminalSessionTab
   | {
       type: 'markdown'
@@ -139,6 +151,7 @@ function mobileSessionTabEqual(
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        a.launchAgent === b.launchAgent &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)
       )
@@ -205,45 +218,6 @@ export function mergeTerminalRecordsByCurrentOrder(
     }),
     ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
   ]
-}
-
-export function reconcileSessionTabsWithTerminalList(
-  tabs: readonly MobileSessionTabLike[],
-  terminals: readonly TerminalRecord[]
-): MobileSessionTabLike[] {
-  const hostTabs = tabs.filter((tab) => tab.type !== 'terminal' || !sessionTabClosesByHandle(tab))
-  return appendUnlistedConnectedTerminalTabs(hostTabs, terminals)
-}
-
-export function appendUnlistedConnectedTerminalTabs(
-  tabs: readonly MobileSessionTabLike[],
-  terminals: readonly TerminalRecord[]
-): MobileSessionTabLike[] {
-  const listedHandles = new Set(
-    getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
-  )
-  const extras: MobileTerminalSessionTab[] = []
-  for (const terminal of terminals) {
-    if (terminal.connected !== true || terminal.orphaned === true || listedHandles.has(terminal.handle)) {
-      continue
-    }
-    listedHandles.add(terminal.handle)
-    const parentTabId = terminal.tabId
-    extras.push({
-      type: 'terminal',
-      id:
-        parentTabId && tabs.some((tab) => tab.id === parentTabId)
-          ? `${parentTabId}::${terminal.leafId ?? terminal.handle}`
-          : terminal.handle,
-      title: terminal.title || 'Terminal',
-      parentTabId,
-      leafId: terminal.leafId,
-      terminal: terminal.handle,
-      terminalTheme: terminal.terminalTheme,
-      isActive: false
-    })
-  }
-  return extras.length === 0 ? [...tabs] : [...tabs, ...extras]
 }
 
 export function hasConnectedTerminalAbsentFromSessionTabs(
