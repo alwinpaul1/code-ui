@@ -120,6 +120,13 @@ export function useMobileNativeChatMessageSend(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
+      // Why: after the desktop's relay peer drops, the supervisor books a 60 s
+      // cooldown and a write inside it would wait out its whole budget and fail.
+      // The tap on Send is the user asking for the link now; the write below
+      // then rides the reconnect (budgetSpansConnect) instead of the cooldown.
+      if (client.getState() !== 'connected') {
+        client.notifyForeground('user-send')
+      }
       if (syncComposer && beforeSend) {
         await beforeSend()
       }

@@ -77,6 +77,8 @@ export type BackgroundTasks = {
 // because none of the id alphabets include one.
 const SHELL_STARTED = /Command running in background with ID:\s*([A-Za-z0-9_-]+)/
 const SHELL_MOVED = /moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
+// `Monitor started (task biifjm40h, timeout 3000000ms). You will be notified…`
+const MONITOR_STARTED = /Monitor started \(task\s+([A-Za-z0-9_-]+)/
 const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
 // Tolerant of both observed layouts — one tag per line, and the whole record on
 // a single line — plus the attributed opening tag and a record the transcript
@@ -272,6 +274,12 @@ function readLaunch(call: PendingCall, output: string): Launch | null {
   if (call.name === 'Agent') {
     const id = AGENT_LAUNCHED.exec(output)?.[1]
     return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt } : null
+  }
+  if (call.name === 'Monitor') {
+    // A monitor is a long-running shell; its event notifications carry no
+    // status and never retire it — only the "stream ended" one does.
+    const id = MONITOR_STARTED.exec(output)?.[1]
+    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
   }
   return null
 }

@@ -168,6 +168,43 @@ function conversation(): NativeChatMessage[] {
   ]
 }
 
+// Verbatim from this machine's transcript, 2026-09-09: the Monitor tool's result.
+const monitorStartOutput = (id: string) =>
+  `Monitor started (task ${id}, timeout 3000000ms). You will be notified on each event. Keep working — do not poll or sleep. Events may arrive while you are waiting for the user — an event is not their reply.`
+
+// A Monitor emits one of these per event WHILE STILL RUNNING: task id, no status.
+const monitorEventNotification = (id: string) =>
+  `<task-notification>\n<task-id>${id}</task-id>\n<summary>Monitor event: "CI run for mobile-android-v0.2.82 release"</summary>\n<event>release-0.2.82 completed success</event>\n</task-notification>`
+
+describe('a Monitor is a background task too', () => {
+  it('lists a started monitor as running under its description', () => {
+    const tasks = deriveBackgroundTasks(
+      [
+        call('Monitor', { command: 'while true; do …; done', description: 'CI run for mobile-android-v0.2.82 release', timeout_ms: 3000000, persistent: false }, T0),
+        result(monitorStartOutput('biifjm40h'), T0 + 500)
+      ],
+      NOW
+    )
+    expect(tasks.running).toEqual([
+      expect.objectContaining({ id: 'biifjm40h', kind: 'shell', title: 'CI run for mobile-android-v0.2.82 release', status: 'running' })
+    ])
+  })
+
+  it('keeps a monitor running through its event notifications and retires it when the stream ends', () => {
+    const transcript = [
+      call('Monitor', { command: 'while true; do …; done', description: 'CI run for mobile-android-v0.2.82 release' }, T0),
+      result(monitorStartOutput('biifjm40h'), T0 + 500),
+      userText(monitorEventNotification('biifjm40h'), T0 + 60_000)
+    ]
+    expect(deriveBackgroundTasks(transcript, NOW).running.map((task) => task.id)).toEqual(['biifjm40h'])
+    const ended = [
+      ...transcript,
+      userText(taskNotification({ id: 'biifjm40h', status: 'completed', summary: 'Monitor "CI run for mobile-android-v0.2.82 release" stream ended' }), T0 + 120_000)
+    ]
+    expect(deriveBackgroundTasks(ended, NOW).running).toEqual([])
+  })
+})
+
 describe('background tasks derived from the chat transcript', () => {
   it('counts a background shell as running until its task-notification arrives', () => {
     const { running, finished } = deriveBackgroundTasks(conversation(), NOW)

@@ -473,9 +473,12 @@ describe('finished background tasks ride the Claude beacon', () => {
         shell
       })
       // bqo82xkjk landed as a user turn; b5v3z4u8o only as queue-operation
-      // records (enqueue + remove — one id, not two). bnotdone1 is prose.
+      // records (enqueue + remove — one id, not two). bnotdone1 is prose, and
+      // biifjm40h is a Monitor EVENT: a task id with no <status>, from a task
+      // that is still running — it must not be reported finished.
       expect(run.beacon).toContain(' done=bqo82xkjk,b5v3z4u8o')
       expect(run.beacon).not.toContain('bnotdone1')
+      expect(run.beacon).not.toContain('biifjm40h')
     })
   }
 
@@ -697,6 +700,7 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
     parsed.transcript_path = transcript
     const ps = runClaudePowerShell({ json: JSON.stringify(parsed) })
     expect(ps.beacon).toContain(' done=bqo82xkjk,b5v3z4u8o')
+    expect(ps.beacon).not.toContain('biifjm40h')
   })
 
   run("keeps a user's own status line exactly as it was", () => {

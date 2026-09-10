@@ -89,7 +89,9 @@ export type ConnectionState =
 
 // Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
 // network-change nudge marks the socket suspect enough to replace it.
-export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
+/** `user-send`: the user tapped Send while the tab was not connected — a manual
+ *  retry, so it bypasses the relay's transport cooldown exactly like an app resume. */
+export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change' | 'user-send'
 
 export type HostProfile = {
   id: string

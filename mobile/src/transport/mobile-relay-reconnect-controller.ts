@@ -79,8 +79,12 @@ export class RelayReconnectController {
     if (this.recoveryGate === 'external-signal') {
       this.liftGate()
     }
-    // Manual app-resume retries bypass transport cooldown, but never a fresh-credential gate.
-    const disconnectedOnResume = reason === 'app-resume' && logical.getState() === 'disconnected'
+    // Manual retries — an app resume, or the user tapping Send on a dead link —
+    // bypass the transport cooldown, but never a fresh-credential gate. Seen
+    // 2026-09-10: the desktop's relay peer dropped, the 60 s cooldown was booked,
+    // and a message sent inside it waited out its budget as "Message not sent".
+    const disconnectedOnResume =
+      (reason === 'app-resume' || reason === 'user-send') && logical.getState() === 'disconnected'
     if (disconnectedOnResume && this.recoveryGate !== 'fresh-credential') {
       this.reset()
     }

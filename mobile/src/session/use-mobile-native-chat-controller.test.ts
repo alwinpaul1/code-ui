@@ -177,7 +177,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   const onSendResolved = vi.fn()
   // Only the stale-input heal reaches the transport directly (the message send
   // itself is mocked above).
-  const clientStub = { sendRequest: vi.fn() }
+  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
 
   function Harness({
     connState = 'connected',
@@ -498,7 +498,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
 describe('useMobileNativeChatController launch-draft wiring', () => {
   let renderer: ReactTestRenderer | null = null
-  const clientStub = { sendRequest: vi.fn() }
+  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
 
   const chatTab = {
     type: 'terminal',
@@ -591,7 +591,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
 describe('useMobileNativeChatController ask dismissal across a transcript reload', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
-  const clientStub = { sendRequest: vi.fn() }
+  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
   const PROMPT = { questions: [{ question: 'Which path?', multiSelect: false, options: [] }] }
 
   const chatTab = { type: 'terminal', id: 'tab-1', launchAgent: 'claude' }
@@ -865,7 +865,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
 describe('useMobileNativeChatController streaming scope', () => {
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
-  const clientStub = { sendRequest: vi.fn() }
+  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
 
   const workingTab = {
     type: 'terminal',

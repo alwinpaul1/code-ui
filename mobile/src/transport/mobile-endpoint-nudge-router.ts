@@ -2,7 +2,7 @@ import type { RelayReconnectController } from './mobile-relay-reconnect-controll
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './types'
 
-// Routes attention/network nudges: focus and app-resume probe a healthy relay,
+// Routes attention/network nudges: focus, app-resume and user-send probe a healthy relay,
 // a network change replaces it make-before-break, everything else re-enters recovery.
 export class MobileEndpointNudgeRouter {
   constructor(

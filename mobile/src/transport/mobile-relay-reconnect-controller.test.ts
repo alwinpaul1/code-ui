@@ -37,6 +37,21 @@ describe('relay reconnect controller', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
+  it("a user's send while disconnected bypasses the transport cooldown, like an app resume", () => {
+    // Seen 2026-09-10 (S23, 0.2.88): the desktop's relay peer dropped
+    // (relay_outer_4408), the phone booked its 60 s cooldown, and a message sent
+    // inside that minute waited out its 15 s budget and came back "Message not
+    // sent". A tap on Send is the user asking for the connection now.
+    const onRetry = vi.fn()
+    const reconnect = createController(onRetry)
+    const logical = { getState: () => 'disconnected', getActivePath: () => 'relay' } as never
+    reconnect.registerFailure(new RelayOuterError(4408))
+    expect(reconnect.shouldDefer()).toBe(true)
+
+    expect(reconnect.handleActiveNudge(logical, 'user-send')).toBe('recover')
+    expect(reconnect.shouldDefer()).toBe(false)
+  })
+
   it('drops a pending relay retry after direct connectivity wins', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)

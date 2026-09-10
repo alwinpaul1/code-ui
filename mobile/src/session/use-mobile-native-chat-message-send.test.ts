@@ -48,6 +48,9 @@ describe('useMobileNativeChatMessageSend', () => {
   const agentRef = { current: null as string | null }
   let onSendError = vi.fn()
 
+  let clientState: 'connected' | 'disconnected' | 'reconnecting' = 'connected'
+  const notifyForeground = vi.fn()
+
   const mount = (
     readSeededLaunchDraftSeed: () => { text: string; createdAt: number | null } | null,
     agent: string | null = 'claude'
@@ -55,7 +58,7 @@ describe('useMobileNativeChatMessageSend', () => {
     agentRef.current = agent
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
-        client: { sendRequest: vi.fn() } as never,
+        client: { sendRequest: vi.fn(), getState: () => clientState, notifyForeground } as never,
         enabled: true,
         handleRef: { current: 'term' },
         deviceTokenRef: { current: 'device' },
@@ -110,6 +113,34 @@ describe('useMobileNativeChatMessageSend', () => {
     })
     renderer = null
     api = null
+  })
+
+  it('wakes a cooled-down relay before writing when the tab is not connected', async () => {
+    // Why: the relay supervisor books a 60 s cooldown after the desktop's peer
+    // drops, and a write that arrives inside it waits out its 15 s budget and
+    // fails as "Message not sent". The tap on Send is the user asking for the
+    // connection now — nudge first, then let the write ride the reconnect.
+    clientState = 'disconnected'
+    notifyForeground.mockClear()
+    mount(() => null)
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(notifyForeground).toHaveBeenCalledWith('user-send')
+    expect(notifyForeground.mock.invocationCallOrder[0]).toBeLessThan(
+      clearInputWrite.mock.invocationCallOrder[0]!
+    )
+    clientState = 'connected'
+  })
+
+  it('does not nudge a connection that is already up', async () => {
+    clientState = 'connected'
+    notifyForeground.mockClear()
+    mount(() => null)
+    await act(async () => {
+      await api!.send('hello')
+    })
+    expect(notifyForeground).not.toHaveBeenCalled()
   })
 
   it('sizes the pre-clear to every line of a parked launch draft', async () => {
