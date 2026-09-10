@@ -19,6 +19,7 @@ import {
   createBackgroundNotificationWatcher,
   type BackgroundNotificationWatcher
 } from './background-notification-watcher'
+import { releaseBackgroundLinkTask } from './background-link-task-hold'
 
 const SERVICE_TITLE = 'Code UI'
 const SERVICE_TEXT = 'Listening for agent notifications'
@@ -99,6 +100,10 @@ export function applyBackgroundDelivery(enabled: boolean): void {
   if (on) {
     startBackgroundLink(SERVICE_TITLE, SERVICE_TEXT)
   } else {
+    // Why first: the parked headless task is what holds Android's wake lock.
+    // Ending it lets the service stop itself and the lock go; stopping the
+    // service without it would leave the task parked in a dead service.
+    releaseBackgroundLinkTask()
     stopBackgroundLink()
   }
 }
