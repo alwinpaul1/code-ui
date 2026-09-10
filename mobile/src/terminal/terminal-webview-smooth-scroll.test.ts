@@ -468,6 +468,65 @@ describe('terminal WebView touch scrolling', () => {
     expect(Math.abs(rowsAt120 - rowsAt60)).toBeLessThanOrEqual(1)
   })
 
+  it('does not stall a fling when the compositor drops a frame', () => {
+    // The fling is time-based, so a frame that arrives late should cover the
+    // time it actually took. Clamping that catch-up to a single 60 Hz frame
+    // makes a janky frame eat the fling's travel AND its friction, which reads
+    // as the scroll snagging mid-flight.
+    function flingRows(dropAtFrame: number | null): number {
+      boot()
+      dragUp({ frameMs: FRAME_60HZ_MS, moves: 10, pxPerMs: 1.2 })
+      const atLift = buffer.viewportY
+      fireTouch('touchend', [])
+      let frames = 0
+      while (pendingFrames.length > 0 && frames < 4000) {
+        // One janky frame: the phone missed two vsyncs.
+        runFrame(frames === dropAtFrame ? FRAME_60HZ_MS * 3 : FRAME_60HZ_MS)
+        frames++
+      }
+      return buffer.viewportY - atLift
+    }
+
+    const smooth = flingRows(null)
+    const janky = flingRows(3)
+
+    expect(smooth).toBeGreaterThan(20)
+    expect(Math.abs(janky - smooth)).toBeLessThanOrEqual(1)
+  })
+
+  it('bends at the top of the scrollback instead of stopping dead', () => {
+    // The one place this scroller still reads as a web page rather than a
+    // native one: at either end of the buffer the content simply refuses to
+    // move. Native scrollers let it follow the finger with rising resistance
+    // and spring back. UIScrollView's own curve is f(x,d,c) = x*d*c/(d+c*x)
+    // with c = 0.55, which is what this pulls against.
+    boot({ viewportY: 0 })
+
+    // Already at the oldest row: drag further back.
+    let y = 200
+    fireTouch('touchstart', [{ x: 100, y }])
+    for (let i = 0; i < 8; i++) {
+      clock += FRAME_60HZ_MS
+      y += 12
+      fireTouch('touchmove', [{ x: 100, y }])
+      runFrames(3, 0)
+    }
+
+    const pulled = screenTranslateY()
+    expect(buffer.viewportY).toBe(0)
+    // It should have followed the finger somewhat, but far less than the 96px
+    // the finger travelled — that gap is the resistance.
+    expect(pulled).toBeGreaterThan(0)
+    expect(pulled).toBeLessThan(96)
+
+    fireTouch('touchend', [])
+    runUntilIdle(FRAME_60HZ_MS)
+
+    // And it must come all the way back: a resting offset breaks every
+    // cell-to-pixel mapping (taps, selection handles, mouse reports).
+    expect(screenTranslateY()).toBe(0)
+  })
+
   it('does not read layout on every touchmove', () => {
     boot()
 

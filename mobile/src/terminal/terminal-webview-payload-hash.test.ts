@@ -6,10 +6,12 @@ import { XTERM_HTML } from './terminal-webview-html'
 // uncovered region ships silently. A diff here means the emitted WebView source changed —
 // update these values only when that change is deliberate, and only after checking the
 // document still runs. Refactors that merely move slice boundaries must leave them alone.
-// Last deliberate change: settle-step cap 32ms → 16ms so a 120 Hz fling does
-// not stair-step while the remainder eases onto a row.
-const EXPECTED_SHA256 = '5f1a9c010b88a5203d1620aba973343c27054338fe92f01f613f72ad1b482c42'
-const EXPECTED_LENGTH = 750102
+// Last deliberate change: the buffer ends bend and spring back instead of
+// refusing to move (UIScrollView's f(x,d,c) = x*d*c/(d+c*x), c = 0.55). The
+// bend is visual only — no row is committed and the spring returns the offset
+// to exactly 0, so the at-rest row-boundary invariant is unchanged.
+const EXPECTED_SHA256 = '9eaead84877193bad9a4ba5586cf0ffa9182366103a5fedbd835240ddab4a693'
+const EXPECTED_LENGTH = 753185
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

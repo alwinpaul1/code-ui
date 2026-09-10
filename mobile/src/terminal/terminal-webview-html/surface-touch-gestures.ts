@@ -184,6 +184,9 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           if (enqueueNormalBufferScrollDelta(deltaY)) {
             updateTouchVelocity(deltaY, dt);
           } else {
+            // The buffer end. Let the content follow the finger with rising
+            // resistance rather than stopping dead; touchend springs it back.
+            pullOverscroll(deltaY);
             ts.velY = 0;
           }
         }
@@ -225,6 +228,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
 
       if (e.touches.length === 0) {
         ts.dragging = false;
+        releaseOverscroll();
         var vel = ts.velY;
         var momentumTime = 0;
         function momentumStep(frameTime) {
@@ -254,6 +258,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           } else {
             if (!applyNormalBufferScrollDelta(delta)) {
               ts.momentumId = null;
+              releaseOverscroll();
               settleSmoothScrollOffset();
               return;
             }

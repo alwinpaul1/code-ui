@@ -199,7 +199,9 @@ describe('TerminalWebView scroll routing', () => {
     // rewritten there, and rows the paint has not caught up with ride on it.
     expect(screenTransformBlock).toContain('function syncTerminalScreenTransformToRender()')
     expect(screenTransformBlock).toContain('renderedViewportY = term.buffer.active.viewportY;')
-    expect(screenTransformBlock).toContain('var visualOffsetY = offsetY + unpaintedRowsOffsetY();')
+    expect(screenTransformBlock).toContain(
+      'var visualOffsetY = offsetY + unpaintedRowsOffsetY() + overscrollY;'
+    )
     expect(screenTransformBlock).toContain(
       "if (term.buffer.active.type !== renderedBufferType) return 0;"
     )
