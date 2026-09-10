@@ -116,6 +116,20 @@ export function makeChatMessageStyles(theme: Theme) {
       fontFamily: fonts.mono,
       fontSize: MONO_SIZE
     },
+    // The live row that stands in for the batch summary while a call runs.
+    toolRunActive: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.sm,
+      paddingVertical: 3
+    },
+    toolRunActiveLabel: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontFamily: fonts.regular,
+      fontSize: 13
+    },
     toolRunBody: {
       paddingLeft: space.sm + 2,
       borderLeftWidth: 2,

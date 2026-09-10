@@ -10,6 +10,7 @@ import {
   Sparkles
 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
@@ -25,6 +26,8 @@ import {
 } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { ToolRun } from './MobileNativeChatToolRun'
+import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
 /** Collapsed reasoning shows this many characters of its first line. */
 const REASONING_PREVIEW_CHARS = 96
@@ -205,7 +208,13 @@ function MobileNativeChatMessageImpl({
   messageIndex,
   onScrollToMessage,
   onOpenFile,
-  onCancelQueued
+  onCancelQueued,
+  turnStatus,
+  turnExpanded,
+  turnKey,
+  onToggleTurn,
+  activeTurnIsWorking,
+  structuredActivityUi = false
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -218,6 +227,18 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  /** This turn's status row, rendered under a user message (desktop parity). */
+  turnStatus?: NativeChatTurnStatus | null
+  /** Whether the turn caret has disclosed this turn's activity. */
+  turnExpanded?: boolean
+  /** Set only when this row's turn has settled and can disclose its activity. */
+  turnKey?: string
+  /** Stable across renders; the row supplies its own key when tapped. */
+  onToggleTurn?: (turnKey: string) => void
+  /** Session-level working state for this message's turn; gates the live tool row. */
+  activeTurnIsWorking?: boolean
+  /** Structured lane only: live tool progress plus the turn-status disclosure. */
+  structuredActivityUi?: boolean
 }) {
   const styles = useChatMessageStyles()
   const isUser = message.role === 'user'
@@ -252,6 +273,20 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // a soft bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+  const activeCall = structuredActivityUi
+    ? selectActiveToolCall(tools, { activeTurnIsWorking })
+    : null
+  // A completed turn's activity belongs behind the turn-status caret. Leaving the
+  // grouped row visible made a failed child command read as a failed response.
+  // The composer's global Tools toggle still overrides this, or it would silently
+  // do nothing on every settled turn.
+  const settledToolsHidden =
+    structuredActivityUi &&
+    activeCall == null &&
+    activeTurnIsWorking === false &&
+    !turnExpanded &&
+    !toolsExpanded
+  const showToolRun = tools.length > 0 && !settledToolsHidden
 
   const handleCopy = (): void => {
     const text = nativeChatMessageText(message.blocks)
@@ -279,51 +314,64 @@ function MobileNativeChatMessageImpl({
   ) : null
 
   return (
-    <View style={[styles.row, isUser && styles.rowUser]}>
-      <View style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}>
-        {prose.map((block, index) => (
-          <Prose
-            key={index}
-            block={block}
-            invert={isUser}
-            fontScale={fontScale}
-            onOpenFile={onOpenFile}
-            styles={styles}
-          />
-        ))}
-        {tools.length > 0 ? (
-          <ToolRun
-            // Why: a global toggle intentionally resets all per-run/per-line
-            // overrides in one remount, avoiding an effect-driven second render.
-            key={toolsExpanded ? 'expanded' : 'collapsed'}
-            blocks={tools}
-            defaultExpanded={toolsExpanded}
-            trailing={controls}
-            onOpenFile={onOpenFile}
-            styles={styles}
-          />
-        ) : onCancelQueued ? (
-          <View style={styles.controlsRow}>
-            <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
-              Queued
-            </Txt>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cancel queued message"
-              hitSlop={8}
-              onPress={onCancelQueued}
-              style={({ pressed }) => ({ marginLeft: 12, opacity: pressed ? 0.5 : 1 })}
-            >
-              <Txt variant="caption" weight="semibold" tone="danger">
-                Cancel
+    <>
+      <View style={[styles.row, isUser && styles.rowUser]}>
+        <View style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}>
+          {prose.map((block, index) => (
+            <Prose
+              key={index}
+              block={block}
+              invert={isUser}
+              fontScale={fontScale}
+              onOpenFile={onOpenFile}
+              styles={styles}
+            />
+          ))}
+          {showToolRun ? (
+            <ToolRun
+              // Why: a global toggle intentionally resets all per-run/per-line
+              // overrides in one remount, avoiding an effect-driven second render.
+              key={`${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
+              blocks={tools}
+              defaultExpanded={turnExpanded || toolsExpanded}
+              expandChildren={turnExpanded ? false : toolsExpanded}
+              activeCall={activeCall}
+              trailing={controls}
+              onOpenFile={onOpenFile}
+              styles={styles}
+            />
+          ) : onCancelQueued ? (
+            <View style={styles.controlsRow}>
+              <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
+                Queued
               </Txt>
-            </Pressable>
-          </View>
-        ) : controls ? (
-          <View style={styles.controlsRow}>{controls}</View>
-        ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel queued message"
+                hitSlop={8}
+                onPress={onCancelQueued}
+                style={({ pressed }) => ({ marginLeft: 12, opacity: pressed ? 0.5 : 1 })}
+              >
+                <Txt variant="caption" weight="semibold" tone="danger">
+                  Cancel
+                </Txt>
+              </Pressable>
+            </View>
+          ) : controls ? (
+            <View style={styles.controlsRow}>{controls}</View>
+          ) : null}
+        </View>
       </View>
-    </View>
+      {turnStatus ? (
+        <MobileNativeChatTurnStatus
+          startedAt={turnStatus.startedAt}
+          thinking={turnStatus.thinking}
+          workedSeconds={turnStatus.workedSeconds}
+          expanded={turnExpanded ?? false}
+          onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+        />
+      ) : null}
+    </>
   )
 }
 

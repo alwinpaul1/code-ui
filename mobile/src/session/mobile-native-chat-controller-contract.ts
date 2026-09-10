@@ -49,6 +49,8 @@ export type MobileNativeChatController = {
   nativeChatQueuedMessages?: string[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
+  /** Structured lane: drives the per-turn status row and live tool progress. */
+  nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire. */
   nativeChatAgentStatus: AgentStatusEntry | null

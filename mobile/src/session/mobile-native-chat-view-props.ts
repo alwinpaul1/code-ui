@@ -33,6 +33,9 @@ export type MobileNativeChatViewProps = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  /** Structured lane: per-turn "Working for N" status plus live tool progress,
+   *  replacing the bridge lane's static three-dot working row (desktop parity). */
+  structuredActivityUi?: boolean
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */

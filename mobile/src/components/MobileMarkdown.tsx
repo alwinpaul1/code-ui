@@ -198,6 +198,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <Text
               key={index}
+              selectable
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
               {renderInline(styles, block.text, onOpenFile)}
@@ -207,7 +208,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text style={[styles.quoteText, proseScale]}>
+              <Text selectable style={[styles.quoteText, proseScale]}>
                 {renderInline(styles, block.text, onOpenFile)}
               </Text>
             </View>
@@ -231,7 +232,9 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text style={styles.codeText}>{block.text}</Text>
+              <Text selectable style={styles.codeText}>
+                {block.text}
+              </Text>
             </View>
           )
         }
@@ -272,6 +275,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                   {columns.map((cellIndex) => (
                     <Text
                       key={cellIndex}
+                      selectable
                       style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
                     >
                       {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile)}
@@ -283,6 +287,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                     {columns.map((cellIndex) => (
                       <Text
                         key={cellIndex}
+                        selectable
                         style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
                       >
                         {renderInline(styles, row[cellIndex] ?? '', onOpenFile)}
@@ -315,7 +320,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                         ? '☑'
                         : '☐'}
                   </Text>
-                  <Text style={[styles.listText, proseScale]}>
+                  <Text selectable style={[styles.listText, proseScale]}>
                     {renderInline(styles, item.text, onOpenFile)}
                   </Text>
                 </View>

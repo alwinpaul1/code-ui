@@ -6,14 +6,28 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+    React.createElement('Text', props, children)
   return {
+    Animated: {
+      Text,
+      Value: class {
+        constructor(private value: number) {}
+        setValue(next: number): void {
+          this.value = next
+        }
+      },
+      loop: (animation: unknown) => animation,
+      sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
+      timing: () => ({ start: vi.fn(), stop: vi.fn() })
+    },
     Image: 'Image',
     Pressable: 'Pressable',
-    Text: ({ children, ...props }: { children?: unknown }) =>
-      React.createElement('Text', props, children),
+    Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    useColorScheme: () => 'light'
   }
 })
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
@@ -24,7 +38,9 @@ vi.mock('lucide-react-native', () => ({
   Copy: 'Copy',
   Image: 'ImageIcon',
   Sparkles: 'Sparkles',
-  SquareChevronRight: 'SquareChevronRight'
+  SquareChevronRight: 'SquareChevronRight',
+  SquareTerminal: 'SquareTerminal',
+  Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
@@ -48,7 +64,7 @@ describe('MobileNativeChatMessage', () => {
 
   function render(
     message: NativeChatMessage,
-    props: { toolsExpanded?: boolean; onOpenFile?: (path: string) => void } = {}
+    props: Omit<Parameters<typeof MobileNativeChatMessage>[0], 'message'> = {}
   ): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
@@ -179,5 +195,66 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+  })
+
+  describe('the structured lane', () => {
+    const settledRun: NativeChatMessage['blocks'] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, state: 'failed' },
+      { type: 'tool-result', output: '1 failing', isError: true }
+    ]
+
+    it('hangs the turn status under the user message it belongs to', () => {
+      const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
+        structuredActivityUi: true,
+        turnStatus: { startedAt: 1_000, thinking: false, workedSeconds: 184 },
+        turnKey: 'u1',
+        onToggleTurn: vi.fn()
+      })
+      expect(textIn(tree.root)).toContain('Worked for 3m 4s')
+    })
+
+    it("does not leave a settled turn's failed command reading as a failed reply", () => {
+      const tree = render(toolMessage(settledRun), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false
+      })
+      // The run is behind the turn caret now, not loose in the transcript.
+      expect(textIn(tree.root).join(' ')).not.toContain('pnpm test')
+    })
+
+    it('brings that run back the moment the turn caret discloses it', () => {
+      const tree = render(toolMessage(settledRun), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        turnExpanded: true
+      })
+      expect(textIn(tree.root).join(' ')).toContain('pnpm test')
+    })
+
+    it('still answers the global Tools toggle on a settled turn', () => {
+      const tree = render(toolMessage(settledRun), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        toolsExpanded: true
+      })
+      expect(textIn(tree.root).join(' ')).toContain('pnpm test')
+    })
+
+    it('keeps the run visible while the turn is still working', () => {
+      const running: NativeChatMessage['blocks'] = [
+        { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, state: 'running' }
+      ]
+      const tree = render(toolMessage(running), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: true
+      })
+      expect(textIn(tree.root)).toContain('Running pnpm test')
+    })
+
+    it('leaves the bridge lane exactly as it was', () => {
+      const tree = render(toolMessage(settledRun), { activeTurnIsWorking: false })
+      expect(textIn(tree.root)).toContain('1×')
+      expect(textIn(tree.root).some((text) => text.startsWith('Running'))).toBe(false)
+    })
   })
 })

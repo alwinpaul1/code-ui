@@ -98,6 +98,7 @@ export function MobileNativeChatOverlay({
         error={session.error}
         agent={controller.nativeChatAgent}
         agentWorking={controller.nativeChatAgentWorking}
+        structuredActivityUi={controller.nativeChatStructured}
         agentStatus={controller.nativeChatAgentStatus}
         finishedTaskIds={controller.nativeChatFinishedTaskIds}
         streaming={streaming}

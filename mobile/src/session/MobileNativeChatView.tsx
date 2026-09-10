@@ -24,16 +24,15 @@ import {
   mobileNativeChatEmptyState
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
-import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
-import { countRunningBackgroundTasks } from './mobile-background-tasks'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 
 const INPUT_LOCK_SETTLE_MS = 600
@@ -49,6 +48,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  structuredActivityUi = false,
   agentStatus,
   finishedTaskIds,
   onStop,
@@ -114,13 +114,6 @@ export function MobileNativeChatView({
   const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
-  // Read from the UNFILTERED transcript on purpose. The `<task-notification>`
-  // turns that retire a task are harness noise, so the folded list drops them.
-  // Codex writes none of these records, so its tabs count zero and show no row.
-  const runningTaskCount = useMemo(
-    () => countRunningBackgroundTasks(messages, agentStatus ?? null, { finishedTaskIds }),
-    [agentStatus, finishedTaskIds, messages]
-  )
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -233,6 +226,15 @@ export function MobileNativeChatView({
     [setFollowing]
   )
 
+  // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
+  // owns them; the bridge lane keeps its three-dot indicator.
+  const turns = useMobileNativeChatTurnDisclosure({
+    messages: data,
+    enabled: structuredActivityUi,
+    isWorking: agentWorking === true,
+    scopeKey: sendSurfaceId
+  })
+
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
@@ -247,9 +249,25 @@ export function MobileNativeChatView({
             ? () => void onCancelQueued(item.id)
             : undefined
         }
+        structuredActivityUi={structuredActivityUi}
+        onToggleTurn={turns.onToggleTurn}
+        // The list is inverted, so `index` counts from the newest row while the
+        // disclosure walks the transcript in order. Flip it, or every row reads
+        // another turn's status.
+        {...turns.resolveRow(data.length - 1 - index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile, agentWorking, onCancelQueued]
+    [
+      toolsExpanded,
+      fontScale,
+      onScrollToMessage,
+      onOpenFile,
+      agentWorking,
+      onCancelQueued,
+      structuredActivityUi,
+      turns,
+      data.length
+    ]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
@@ -317,17 +335,16 @@ export function MobileNativeChatView({
             // Inverted list: the header paints below the newest message, so
             // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={
-              <>
-                <MobileBackgroundTasksRow
-                  runningCount={runningTaskCount}
-                  onPress={() => setBackgroundTasksOpen(true)}
-                />
-                <MobileNativeChatQueue
-                  messages={queuedMessages}
-                  agent={agent}
-                  onEdit={onEditQueue}
-                />
-              </>
+              <MobileNativeChatListHeader
+                messages={messages}
+                agent={agent}
+                agentStatus={agentStatus}
+                finishedTaskIds={finishedTaskIds}
+                queuedMessages={queuedMessages}
+                onEditQueue={onEditQueue}
+                unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
+                onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
+              />
             }
             ListFooterComponent={
               hasMore ? (
@@ -390,6 +407,9 @@ export function MobileNativeChatView({
       />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
+        // The structured lane says "Working for N" per turn; a second, static
+        // three-dot row under it would report the same fact twice.
+        showWorkingIndicator={!structuredActivityUi}
         onStop={onStop}
         toolsExpanded={toolsExpanded}
         onToggleTools={() => setToolsExpanded((v) => !v)}

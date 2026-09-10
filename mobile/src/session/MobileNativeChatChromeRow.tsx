@@ -10,6 +10,7 @@ import type { ChatViewStyles } from './mobile-native-chat-view-styles'
  *  the send-failure banner beneath. */
 export function MobileNativeChatChromeRow({
   agentWorking,
+  showWorkingIndicator = true,
   onStop,
   toolsExpanded,
   onToggleTools,
@@ -17,6 +18,9 @@ export function MobileNativeChatChromeRow({
   styles
 }: {
   agentWorking?: boolean
+  /** False on the structured lane, whose per-turn status row already says the
+   *  agent is working — a second static row would report it twice. */
+  showWorkingIndicator?: boolean
   onStop?: () => void
   toolsExpanded: boolean
   onToggleTools: () => void
@@ -28,7 +32,7 @@ export function MobileNativeChatChromeRow({
     <>
       <View style={styles.chromeRow}>
         <View style={styles.chromeLeft}>
-          {agentWorking ? <MobileAgentWorkingIndicator /> : null}
+          {agentWorking && showWorkingIndicator ? <MobileAgentWorkingIndicator /> : null}
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
             onPress={onToggleTools}

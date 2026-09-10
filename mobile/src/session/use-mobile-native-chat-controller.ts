@@ -455,6 +455,8 @@ export function useMobileNativeChatController(
       hostImagePreviews
     ),
     nativeChatSession,
+    /** Structured lane: drives the per-turn status row and live tool progress. */
+    nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
     nativeChatFinishedTaskIds: finishedTaskIds,

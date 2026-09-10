@@ -1,6 +1,12 @@
-import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, SquareChevronRight } from 'lucide-react-native'
+import { useEffect, useRef, useState } from 'react'
+import { Animated, Pressable, Text, View } from 'react-native'
+import {
+  ChevronDown,
+  ChevronRight,
+  SquareChevronRight,
+  SquareTerminal,
+  Wrench
+} from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
@@ -11,10 +17,16 @@ import {
   truncateToolDetail
 } from '../../../src/shared/native-chat-tool-summary'
 import {
+  describeActiveToolCall,
+  formatActiveToolLabel,
   formatToolCallCount,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY
 } from '../../../src/shared/native-chat-tool-activity'
-import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock
+} from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
@@ -140,18 +152,61 @@ function ToolLine({
   )
 }
 
+/** Breathing label for a still-running tool, matching desktop's `animate-pulse`. */
+function PulsingText({
+  style,
+  numberOfLines,
+  testID,
+  children
+}: {
+  style?: React.ComponentProps<typeof Animated.Text>['style']
+  numberOfLines?: number
+  testID?: string
+  children: React.ReactNode
+}) {
+  const pulse = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true })
+      ])
+    )
+    animation.start()
+    return () => animation.stop()
+  }, [pulse])
+  return (
+    <Animated.Text
+      style={[style, { opacity: pulse }]}
+      numberOfLines={numberOfLines}
+      testID={testID}
+    >
+      {children}
+    </Animated.Text>
+  )
+}
+
 /** A run of a message's tool calls/results, collapsed to a one-line summary
  *  ("2×  Read src/app.ts · Edit …", Codex-app style) that expands to the inline
  *  tool lines. `defaultExpanded` lets the global toolbar toggle drive every run. */
 export function ToolRun({
   blocks,
   defaultExpanded,
+  expandChildren,
+  activeCall = null,
   trailing,
   onOpenFile,
   styles
 }: {
   blocks: NativeChatBlock[]
   defaultExpanded: boolean
+  /** Child tool lines stay collapsed when the turn caret drove the run open.
+   *  Omitted, the children follow the run — which is what the global Tools
+   *  toggle has always done, and the only behaviour the bridge lane has. */
+  expandChildren?: boolean
+  /** The still-running call, when the turn is live (desktop parity). Null on
+   *  the bridge lane, which has no per-call lifecycle to read. */
+  activeCall?: NativeChatToolCallBlock | null
   trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
@@ -175,6 +230,38 @@ export function ToolRun({
   // and that tone change is the boundary.
   const summaryMembers = toolRunSummaryMembers(blocks)
   const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
+  // The call's input, not its word: Codex names a classified shell row
+  // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
+  // shares that word and ran none.
+  const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
+  if (activeCall) {
+    return (
+      <View style={styles.toolRun}>
+        <View style={styles.toolRunHeader}>
+          <Pressable
+            style={styles.toolRunActive}
+            onPress={() => setOpen((v) => !v)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: open }}
+            accessibilityLiveRegion="polite"
+          >
+            <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
+            <PulsingText
+              style={styles.toolRunActiveLabel}
+              numberOfLines={1}
+              testID="tool-run-active-label"
+            >
+              {formatActiveToolLabel(describeActiveToolCall(activeCall))}
+            </PulsingText>
+            {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
+          </Pressable>
+          {trailing}
+        </View>
+        {open ? renderBody() : null}
+      </View>
+    )
+  }
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -227,23 +314,27 @@ export function ToolRun({
         </Pressable>
         {trailing}
       </View>
-      {open ? (
-        <View style={styles.toolRunBody}>
-          {pairs.map((pair, i) => (
-            <ToolLine
-              key={i}
-              pair={pair}
-              defaultExpanded={defaultExpanded}
-              diffLineLimit={diffLineLimit}
-              onOpenFile={onOpenFile}
-              styles={styles}
-            />
-          ))}
-          {callCount > pairs.length ? (
-            <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
-          ) : null}
-        </View>
-      ) : null}
+      {open ? renderBody() : null}
     </View>
   )
+
+  function renderBody(): React.JSX.Element {
+    return (
+      <View style={styles.toolRunBody}>
+        {pairs.map((pair, i) => (
+          <ToolLine
+            key={i}
+            pair={pair}
+            defaultExpanded={expandChildren ?? defaultExpanded}
+            diffLineLimit={diffLineLimit}
+            onOpenFile={onOpenFile}
+            styles={styles}
+          />
+        ))}
+        {callCount > pairs.length ? (
+          <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
+        ) : null}
+      </View>
+    )
+  }
 }

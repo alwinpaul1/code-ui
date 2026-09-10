@@ -2,12 +2,25 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 
 vi.mock('react-native', () => ({
+  Animated: {
+    Text: 'Text',
+    Value: class {
+      constructor(private value: number) {}
+      setValue(next: number): void {
+        this.value = next
+      }
+    },
+    loop: (animation: unknown) => animation,
+    sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
+    timing: () => ({ start: vi.fn(), stop: vi.fn() })
+  },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -17,7 +30,9 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
-  SquareChevronRight: 'SquareChevronRight'
+  SquareChevronRight: 'SquareChevronRight',
+  SquareTerminal: 'SquareTerminal',
+  Wrench: 'Wrench'
 }))
 
 // Two names that each carry the character a joined summary uses to separate
@@ -37,9 +52,28 @@ const LONG_RUN: NativeChatBlock[] = [
   { type: 'tool-call', name: 'Read', input: { file_path: 'd.ts' } }
 ]
 
-function Harness({ blocks }: { blocks: NativeChatBlock[] }): React.JSX.Element {
+function Harness({
+  blocks,
+  activeTurnIsWorking,
+  defaultExpanded = false,
+  expandChildren
+}: {
+  blocks: NativeChatBlock[]
+  activeTurnIsWorking?: boolean
+  defaultExpanded?: boolean
+  expandChildren?: boolean
+}): React.JSX.Element {
   const styles = useChatMessageStyles()
-  return createElement(ToolRun, { blocks, defaultExpanded: false, styles })
+  return createElement(ToolRun, {
+    blocks,
+    defaultExpanded,
+    expandChildren,
+    activeCall:
+      activeTurnIsWorking === undefined
+        ? null
+        : selectActiveToolCall(blocks, { activeTurnIsWorking }),
+    styles
+  })
 }
 
 type Rendered = { members: { name: string; color: string | undefined }[]; texts: string[] }
@@ -125,5 +159,109 @@ describe('a batch of tool calls in one run header', () => {
   it('falls back to a plain call count when no call has a name', () => {
     const nameless: NativeChatBlock[] = [{ type: 'tool-call', name: '  ', input: {} }]
     expect(render(nameless).texts).toContain('1 tool call')
+  })
+})
+
+// A live turn: a `shell` call still running, and one already settled behind it.
+const LIVE_SHELL_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'completed' },
+  { type: 'tool-result', output: 'ok' },
+  { type: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'running' }
+]
+// Codex's classified shell row: the word is `read`, but it really ran a command.
+const LIVE_CLASSIFIED_RUN: NativeChatBlock[] = [
+  {
+    type: 'tool-call',
+    name: 'read',
+    input: { command: 'cat src/app.ts', path: 'src/app.ts' },
+    state: 'running'
+  }
+]
+// Claude's `Read` shares that word and ran no command at all.
+const LIVE_CLAUDE_READ_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Read', input: { file_path: 'src/app.ts' }, state: 'running' }
+]
+
+describe('a tool run while the turn is still working', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function render(
+    props: Parameters<typeof Harness>[0],
+    scheme: 'light' | 'dark' = 'light'
+  ): ReactTestRenderer {
+    act(() => {
+      renderer = create(
+        createElement(ThemeProvider, { initialPreference: scheme }, createElement(Harness, props))
+      )
+    })
+    return renderer!
+  }
+
+  function texts(tree: ReactTestRenderer): string[] {
+    // `{callCount}×` arrives as `[2, '×']`, so join primitive children rather
+    // than only taking the ones that are already a single string.
+    return tree.root.findAllByType('Text').map((node) => {
+      const children = node.props.children
+      return (Array.isArray(children) ? children : [children])
+        .filter((child) => typeof child === 'string' || typeof child === 'number')
+        .join('')
+    })
+  }
+
+  function activeLabelColor(tree: ReactTestRenderer): string | undefined {
+    const label = tree.root.findAll((node) => node.props?.testID === 'tool-run-active-label')[0]
+    return flattenColor(label?.props.style)
+  }
+
+  it('names the call that is still running instead of counting the settled ones', () => {
+    const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    expect(texts(tree)).toContain('Running pnpm test')
+    // The `2×  Read a.ts …` batch summary is what the live row replaces.
+    expect(texts(tree)).not.toContain('2×')
+  })
+
+  it('goes back to the batch summary the moment the turn settles', () => {
+    const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: false })
+    expect(texts(tree)).toContain('2×')
+    expect(texts(tree).some((text) => text.startsWith('Running'))).toBe(false)
+  })
+
+  it('gives a Codex row that really ran a command the terminal glyph', () => {
+    const tree = render({ blocks: LIVE_CLASSIFIED_RUN, activeTurnIsWorking: true })
+    expect(tree.root.findAllByType('SquareTerminal')).toHaveLength(1)
+    expect(tree.root.findAllByType('Wrench')).toHaveLength(0)
+  })
+
+  it("does not claim a shell ran for Claude's Read, which shares the word", () => {
+    const tree = render({ blocks: LIVE_CLAUDE_READ_RUN, activeTurnIsWorking: true })
+    expect(tree.root.findAllByType('Wrench')).toHaveLength(1)
+    expect(tree.root.findAllByType('SquareTerminal')).toHaveLength(0)
+  })
+
+  it('keeps the running label on the theme, in light and in dark', () => {
+    const lightColor = activeLabelColor(
+      render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    )
+    act(() => renderer?.unmount())
+    renderer = null
+    const darkColor = activeLabelColor(
+      render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true }, 'dark')
+    )
+    expect(lightColor).toBe(lightColors.textSecondary)
+    expect(darkColor).toBe(darkColors.textSecondary)
+    expect(darkColor).not.toBe(lightColor)
+  })
+
+  it('leaves the child rows shut when the turn caret is what opened the run', () => {
+    const tree = render({ blocks: LIVE_SHELL_RUN, defaultExpanded: true, expandChildren: false })
+    // The run body is open — the settled call's row is on screen — but the row
+    // itself has not disclosed its result.
+    expect(texts(tree)).toContain('a.ts')
+    expect(texts(tree)).not.toContain('ok')
   })
 })
