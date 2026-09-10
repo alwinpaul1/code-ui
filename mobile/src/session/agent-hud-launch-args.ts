@@ -124,7 +124,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'dn=""',
   // Only records that carry a <status>: a Monitor emits a <task-id> with no
   // status for every EVENT while it is still running.
-  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 262144 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]*</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 1048576 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]*</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -385,7 +385,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   // Finished background tasks, as in the sh script: every <task-id> in the
   // transcript tail is a task-notification, mid-turn ones included.
   '$tp=[string]$j.transcript_path',
-  'if($tp -and (Test-Path -LiteralPath $tp)){$ids=@(Get-Content -LiteralPath $tp -Tail 600 | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]+)</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}}',
+  'if($tp -and (Test-Path -LiteralPath $tp)){$ids=@(Get-Content -LiteralPath $tp -Tail 2000 | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]+)</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}}',
   // Delegation: the user keeps their own bar. Their command runs under Git
   // Bash when it exists (what Claude Code itself would have used), else under
   // this same PowerShell. Its stdout is ours, which Claude Code draws.

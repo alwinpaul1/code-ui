@@ -78,3 +78,29 @@ with the settings switch on).
   Windows section), whether or not Git Bash is present, and it carries the
   same `done=` list. Its console write is the one link that has not run on a
   real Windows machine.
+
+## The beacon's window is a window, so the phone remembers what it saw
+
+Measured 2026-09-10, Claude Code 2.1.266, on a 40 MB session transcript. The
+status-line command reads a fixed tail of that transcript to find the
+`<task-id>`s of tasks that finished mid-turn. A busy session wrote past that
+tail in **87 seconds**: a subagent's failure notice sat 1.27 MB behind the end
+of the file by the next refresh, so the beacon stopped naming it. The phone
+kept only the newest beacon's list, so the id was lost for good and a dead
+agent sat in the running row for 25 minutes while the desktop showed it gone.
+
+Two changes, because either alone still loses ids:
+
+- The phone remembers the union of every id a beacon has named, per terminal
+  handle (`mobile-finished-task-id-memory.ts`). An id now has to be seen once,
+  not continuously. Capped at 512, oldest dropped first, and reset when the
+  handle changes so one tab never retires another tab's tasks.
+- The tail grew from 256 KB to 1 MB (`sh`), and from 600 to 2000 lines
+  (PowerShell). That is roughly six minutes of the busiest session measured
+  here, which covers a phone that was backgrounded for a few minutes and saw
+  no beacons at all.
+
+This does not make the window unnecessary. A phone that has been away longer
+than the window still misses ids, and those tasks stay in the running row
+until the turn ends and the pane reports `done`.
+
