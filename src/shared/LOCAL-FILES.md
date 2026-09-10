@@ -12,6 +12,24 @@ any commit. A re-vendor must not delete them and must not be surprised by them.
 Everything else under `src/shared/` came from upstream. When a file is re-vendored
 past the base commit in `UPSTREAM.txt`, record its own commit there.
 
+## Vendored files carrying a forward-ported hunk
+
+These sit at their recorded commit plus one hunk lifted from a LATER upstream
+commit, because re-vendoring the whole file at that commit would drag in
+changes this fork cannot compile. A re-vendor past that commit makes the hunk
+redundant — check before re-applying it.
+
+- `native-chat-types.ts`, `agent-session-journal-types.ts`,
+  `agent-session-journal-schemas.ts` and
+  `structured-agent-session-projection.ts` all carry the optional
+  `presentation` / `tone` display hints from Orca #19228 (9f044031), so a
+  compaction notice, a plan document or a toned line survives the journey from
+  the host's journal to the phone's transcript. The rest of 9f044031 lives in
+  `src/main/`, which this fork does not vendor. `agent-session-journal-types.ts`
+  in particular cannot be re-vendored at 9f044031: the same commit range makes
+  `AgentJournalToolCallItem` extend `NativeChatToolMetadata` from
+  `native-chat-tool-identity.ts`, and that module is not vendored (Orca #19226).
+
 ## Vendored files carrying a local hunk
 
 These came from upstream and were then edited here. A re-vendor must

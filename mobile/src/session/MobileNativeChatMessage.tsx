@@ -27,6 +27,10 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { ToolRun } from './MobileNativeChatToolRun'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import {
+  isRenderableNativeChatNotice,
+  MobileNativeChatNoticeRow
+} from './MobileNativeChatNoticeRow'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
 /** Collapsed reasoning shows this many characters of its first line. */
@@ -265,6 +269,21 @@ function MobileNativeChatMessageImpl({
           onOpenFile={onOpenFile}
           styles={styles}
         />
+      </View>
+    )
+  }
+
+  // A host-authored notice — a compaction boundary, a plan document, a toned
+  // line — is not something the agent said, so it never gets a bubble or the
+  // copy/scroll controls. An unknown hint falls through to ordinary prose.
+  const notice =
+    message.role === 'system'
+      ? message.blocks.find((block) => isTextBlock(block) && isRenderableNativeChatNotice(block))
+      : undefined
+  if (notice !== undefined && isTextBlock(notice)) {
+    return (
+      <View style={styles.row}>
+        <MobileNativeChatNoticeRow block={notice} fontScale={fontScale} onOpenFile={onOpenFile} />
       </View>
     )
   }
