@@ -34,6 +34,18 @@ export function isGestureMouseTrackingMode(
   return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'
 }
 
+/** Phone-visible terminals use phone cols. Chat covering the PTY leaves the
+ *  desk at desktop width. */
+export function mobileVisibleTerminalDisplayMode(
+  activeHandle: string | null,
+  chatCoveringTerminal: boolean
+): 'auto' | 'desktop' | null {
+  if (!activeHandle) {
+    return null
+  }
+  return chatCoveringTerminal ? 'desktop' : 'auto'
+}
+
 export function isTerminalPhoneDisplayMode(
   handle: string | null,
   terminalModes: ReadonlyMap<string, 'auto' | 'phone' | 'desktop'>

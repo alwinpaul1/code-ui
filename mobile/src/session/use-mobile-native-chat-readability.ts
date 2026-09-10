@@ -15,7 +15,7 @@ export function useMobileNativeChatReadability(
   const [state, setState] = useState<ReadabilityState>({
     client: null,
     worktreeId: '',
-    readable: false
+    readable: true
   })
   useEffect(() => {
     // Why: the floating workspace always runs on the paired host and has no repo connection to resolve.
@@ -46,7 +46,7 @@ export function useMobileNativeChatReadability(
       })
       .catch(() => {
         if (active) {
-          setState({ client, worktreeId, readable: false })
+          setState({ client, worktreeId, readable: true })
         }
       })
     return () => {
@@ -58,5 +58,11 @@ export function useMobileNativeChatReadability(
   }
   // Why: route reuse renders before its new effect resolves; never expose the
   // previous repo's readability under a different client/worktree key.
-  return state.client === client && state.worktreeId === worktreeId ? state.readable : false
+  if (state.client === client && state.worktreeId === worktreeId) {
+    return state.readable
+  }
+  // First paint of a route: assume the paired host can read transcripts so
+  // Grok gets a Chat UI toggle without waiting on repo.list. A worktree
+  // switch still fails closed until the new repo resolves (Model-A SSH).
+  return state.worktreeId === ''
 }

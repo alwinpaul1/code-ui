@@ -60,15 +60,17 @@ export function resolveMobileNativeChat(
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
   const launchAgent = tab.launchAgent ?? null
+  const usableLive =
+    liveAgent && liveAgent !== 'unknown' && isNativeChatSupportedAgent(liveAgent)
+      ? liveAgent
+      : null
   // Grok and omp do not write the Claude/Codex hook shape. A HUD that names
   // Claude on a Grok-launched tab is guessing; keep the agent Orca started.
+  // An unidentified or unsupported HUD must not take Chat UI away from a
+  // Claude/Codex launch either.
   const agent = nativeChatRequiresLocalTranscript(launchAgent)
     ? launchAgent
-    : liveAgent
-      ? isNativeChatSupportedAgent(liveAgent)
-        ? liveAgent
-        : null
-      : launchAgent
+    : (usableLive ?? (isNativeChatSupportedAgent(launchAgent) ? launchAgent : null))
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

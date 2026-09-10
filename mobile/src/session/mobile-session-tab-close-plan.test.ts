@@ -35,6 +35,18 @@ describe('planSessionTabClose', () => {
     })
   })
 
+  it('still plans a handle close for a split pill whose terminal is already dead', () => {
+    expect(
+      planSessionTabClose({
+        type: 'terminal',
+        id: 'tab-1::leaf-2',
+        parentTabId: 'tab-1',
+        leafId: 'leaf-2',
+        terminal: 'pty-dead'
+      }).via
+    ).toBe('terminal-handle')
+  })
+
   it('does not encode a split sibling as parentTabId::leafId for session.tabs.close', () => {
     const plan = planSessionTabClose({
       type: 'terminal',

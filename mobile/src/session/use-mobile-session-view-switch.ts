@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { mobileVisibleTerminalDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
-
-type DisplayMode = 'auto' | 'desktop'
 
 /**
  * Chat and terminal want different PTY widths. Under Chat UI the terminal is
  * covered, so it should run at desktop width and the person at the desk keeps
  * a full-width TUI; when the terminal view is shown on the phone it should run
- * at phone width ('auto'). Switching view therefore switches display mode too.
+ * at phone width ('auto'), including a plain shell and an agent already in
+ * terminal mode. Switching view therefore switches display mode too.
  *
  * Order matters for the glitch: going chat → terminal, the mode is requested
  * and acknowledged BEFORE the view flips, so the terminal is first painted at
@@ -16,8 +16,7 @@ type DisplayMode = 'auto' | 'desktop'
  */
 export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActionsModel) {
   const { activeHandle, sessionTabs, setDisplayMode, nativeChatController } = scope
-  const { isTabChatView, toggleTabChatView, showNativeChat, activeChatEligible } =
-    nativeChatController
+  const { isTabChatView, toggleTabChatView, showNativeChat } = nativeChatController
 
   const handleForTab = useCallback(
     (tabId: string): string | null => {
@@ -60,15 +59,15 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
   useEffect(() => {
     const last = lastRef.current
     lastRef.current = { handle: activeHandle, chat: showNativeChat }
-    if (!activeHandle || !activeChatEligible) {
+    const want = mobileVisibleTerminalDisplayMode(activeHandle, showNativeChat)
+    if (!activeHandle || !want) {
       return
     }
     if (last && last.handle === activeHandle && last.chat === showNativeChat) {
       return
     }
-    const want: DisplayMode = showNativeChat ? 'desktop' : 'auto'
     void setDisplayMode(activeHandle, want)
-  }, [activeChatEligible, activeHandle, setDisplayMode, showNativeChat])
+  }, [activeHandle, setDisplayMode, showNativeChat])
 
   return { switchTabView }
 }

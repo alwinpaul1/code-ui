@@ -21,6 +21,7 @@ import {
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
 import { mobileModelPillLabel } from './mobile-native-chat-session-option-labels'
+import { mobileSessionChatViewToggle } from './mobile-session-view-default'
 import { useTheme } from '../theme/theme-context'
 import { IconButton } from '../ui/IconButton'
 import { Txt } from '../ui/Txt'
@@ -80,14 +81,21 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   // switches between them from the header instead of the tab long-press sheet.
   const { activeChatEligible, showNativeChat } = controller.nativeChatController
   const { switchTabView } = controller
-  const viewToggle =
-    activeChatEligible && activeSessionTabId
-      ? {
-          label: showNativeChat ? 'Show terminal' : 'Show chat',
-          icon: showNativeChat ? Terminal : MessageSquare,
-          onPress: () => void switchTabView(activeSessionTabId)
+  const viewToggle = mobileSessionChatViewToggle({
+    eligible: activeChatEligible,
+    chatVisible: showNativeChat,
+    tabId: activeSessionTabId
+  })
+    ? {
+        label: showNativeChat ? 'Show terminal' : 'Show chat',
+        icon: showNativeChat ? Terminal : MessageSquare,
+        onPress: () => {
+          if (activeSessionTabId) {
+            void switchTabView(activeSessionTabId)
+          }
         }
-      : null
+      }
+    : null
   const createDisabled =
     creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
 

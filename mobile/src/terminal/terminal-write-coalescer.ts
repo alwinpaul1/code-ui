@@ -1,6 +1,7 @@
 // Why: the WebView bridge + WebKit IPC + paint cost is paid per postMessage; a busy
-// PTY streams ~200 frames/s (#9302), so batching writes at ~20Hz cuts sustained CPU.
-export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 48
+// PTY streams ~200 frames/s (#9302). Batching at ~60Hz keeps keystroke echo
+// inside one frame without going back to a postMessage per PTY chunk.
+export const TERMINAL_WRITE_FLUSH_WINDOW_MS = 16
 
 // Why: defense-in-depth only — server ack flow control bounds inflow; this cap keeps
 // an upstream flow-control bug from growing the buffer unboundedly. UTF-16 code units.

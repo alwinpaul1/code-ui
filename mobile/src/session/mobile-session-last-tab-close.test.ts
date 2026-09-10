@@ -21,6 +21,7 @@ describe('mobile session last-tab close', () => {
     expect(block).toContain('planSessionTabClose')
     expect(block).toContain('plan.repeats')
     expect(block).toContain('handleCloseTerminal(target)')
+    expect(block).not.toContain('if (!closed)')
   })
 
   it('clears stale active identity when closing leaves no tabs', () => {

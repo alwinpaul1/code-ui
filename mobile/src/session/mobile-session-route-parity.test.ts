@@ -87,8 +87,9 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // saying "Codex". Ablated against the pre-change tree: the whole suite passed
 // with every other file of this port in place, so create-actions is the sole
 // cause of both moved pins.
+// 2026-09-10: visible terminals request phone cols even when Chat UI is off.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '574d8a885c0425d0bb0376b881f90ab34870ee446849d1d534edebed1caa5da4'
+  '41abb6a12ebcdb24bdb15039fec4b85df6c4956d2c18d405da0b91436c9f84af'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =

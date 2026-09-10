@@ -66,12 +66,12 @@ describe('terminal write coalescer', () => {
     const coalescer = createTerminalWriteCoalescer(sink.deliver)
 
     coalescer.write('a')
-    vi.advanceTimersByTime(40)
+    vi.advanceTimersByTime(10)
     coalescer.write('b')
     expect(sink.delivered).toEqual(['a'])
 
     // The trailing timer covers only the remainder of the window.
-    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - 40 - 1)
+    vi.advanceTimersByTime(TERMINAL_WRITE_FLUSH_WINDOW_MS - 10 - 1)
     expect(sink.delivered).toEqual(['a'])
     vi.advanceTimersByTime(1)
     expect(sink.delivered).toEqual(['a', 'b'])

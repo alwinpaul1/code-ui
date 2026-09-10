@@ -49,7 +49,17 @@ describe('resolveMobileNativeChat', () => {
     ).toMatchObject({ agent: 'codex', sessionId: 'codex-session' })
   })
 
-  it('rejects an unsupported live agent instead of combining it with a stale hint', () => {
+  it('keeps a Claude launch when the HUD has not identified the agent yet', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'claude',
+        agentStatus: status({ agentType: 'unknown' })
+      })
+    ).toMatchObject({ agent: 'claude' })
+  })
+
+  it('keeps a Claude launch when the HUD names an unsupported agent', () => {
     expect(
       resolveMobileNativeChat({
         type: 'terminal',
@@ -59,7 +69,7 @@ describe('resolveMobileNativeChat', () => {
           providerSession: { id: 'gemini-session', transcriptPath: '/tmp/gemini.jsonl' }
         }
       } as never)
-    ).toBeNull()
+    ).toMatchObject({ agent: 'claude' })
   })
   it('resolves agent + sessionId from launchAgent and provider session', () => {
     expect(

@@ -40,6 +40,20 @@ describe('useMobileNativeChatReadability', () => {
     return sendRequest
   }
 
+  it('assumes the paired host is readable before repo.list returns so Grok gets Chat UI', async () => {
+    const client = {
+      sendRequest: vi.fn(() => new Promise(() => {}))
+    } as unknown as RpcClient
+    function Harness(): null {
+      readable = useMobileNativeChatReadability(client, 'repo::/worktree')
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    expect(readable).toBe(true)
+  })
+
   it('admits local and runtime-owned transcript hosts', async () => {
     await mount(null)
     expect(readable).toBe(true)

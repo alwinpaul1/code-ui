@@ -91,12 +91,13 @@ describe('useMobileSessionViewMode', () => {
 
   it('follows the default when a tab has no override', async () => {
     await mount({ defaultView: 'terminal' })
-    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(false)
 
     act(() => renderer?.unmount())
     renderer = null
     await mount({ defaultView: 'chat' })
-    expect(controller?.isTabChatView('t1')).toBe(true)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(true)
+    expect(controller?.isTabChatView('t1', 'grok')).toBe(false)
   })
 
   it('lets a per-tab override win over the default', async () => {
@@ -104,13 +105,13 @@ describe('useMobileSessionViewMode', () => {
       defaultView: 'chat',
       overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
     })
-    expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(controller?.isTabChatView('t2')).toBe(true)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(false)
+    expect(controller?.isTabChatView('t2', 'claude')).toBe(true)
   })
 
   it('reloads the default on refocus after Settings changes it', async () => {
     await mount({ defaultView: 'terminal' })
-    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(false)
     vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
 
     await act(async () => {
@@ -118,19 +119,19 @@ describe('useMobileSessionViewMode', () => {
       await Promise.resolve()
     })
 
-    expect(controller?.isTabChatView('t1')).toBe(true)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(true)
   })
 
   it('toggles from the effective view and persists the override', async () => {
     await mount({ defaultView: 'chat' })
 
     await act(async () => {
-      controller?.toggleTabChatView('t1')
+      controller?.toggleTabChatView('t1', 'claude')
       await Promise.resolve()
     })
 
     expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
-    expect(controller?.isTabChatView('t1')).toBe(false)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(false)
     expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
   })
 
@@ -138,12 +139,12 @@ describe('useMobileSessionViewMode', () => {
     await mount({ defaultView: 'terminal' })
 
     await act(async () => {
-      controller?.toggleTabChatView('t1')
+      controller?.toggleTabChatView('t1', 'claude')
       await Promise.resolve()
     })
 
     expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'chat')
-    expect(controller?.isTabChatView('t1')).toBe(true)
+    expect(controller?.isTabChatView('t1', 'claude')).toBe(true)
   })
 
   it('does not expose overrides from the previous host while the next scope loads', async () => {

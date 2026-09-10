@@ -10,6 +10,7 @@ import {
   type MobileSessionView,
   type SessionViewOverridesPreference
 } from '../storage/session-view-preferences'
+import { defaultSessionViewForAgent } from './mobile-session-view-default'
 
 type ViewOverridesState = {
   hostId: string
@@ -172,7 +173,7 @@ export function useMobileSessionViewMode(args: {
   )
 
   const isTabChatView = useCallback(
-    (tabId: string, _agent?: string | null): boolean => {
+    (tabId: string, agent?: string | null): boolean => {
       if (tabId === peekedTerminalTabId) {
         return false
       }
@@ -182,7 +183,9 @@ export function useMobileSessionViewMode(args: {
       const override = viewOverridesState.overrides.get(tabId)
       // Until this scope loads, only an immediate user toggle is authoritative;
       // defaulting other tabs to terminal avoids activating stale cross-host chat.
-      const fallback = viewOverridesState.loaded ? defaultView : 'terminal'
+      const fallback = viewOverridesState.loaded
+        ? defaultSessionViewForAgent(agent, defaultView)
+        : 'terminal'
       return tabFollowsChatView(override, fallback)
     },
     [defaultView, hostId, peekedTerminalTabId, viewOverridesState, worktreeId]
@@ -196,7 +199,7 @@ export function useMobileSessionViewMode(args: {
   }, [])
 
   const toggleTabChatView = useCallback(
-    (tabId: string, _agent?: string | null) => {
+    (tabId: string, agent?: string | null) => {
       // A peeked tab is still a chat tab underneath; toggling it just ends the peek.
       if (peekedTerminalTabIdRef.current === tabId) {
         setPeekedTerminalTabId(null)
@@ -214,7 +217,9 @@ export function useMobileSessionViewMode(args: {
       const overrides = new Map(currentScope.overrides)
       // Flip from the tab's effective view (its override, else the default), so
       // a tab following a chat default can still be pinned back to terminal.
-      const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
+      const fallbackView = currentScope.loaded
+        ? defaultSessionViewForAgent(agent, defaultViewRef.current)
+        : 'terminal'
       const currentlyChat = tabFollowsChatView(overrides.get(tabId), fallbackView)
       const nextView = currentlyChat ? 'terminal' : 'chat'
       overrides.set(tabId, nextView)
