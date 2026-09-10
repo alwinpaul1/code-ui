@@ -37,18 +37,6 @@ export function sessionTabClosesByHandle(
   )
 }
 
-/** Host close addresses a split leaf as `parentTabId::leafId`. A single colon
- *  is not that address, and `session.tabs.close` on the parent id closes the
- *  whole tab. */
-export function sessionTabCloseAddress(
-  tab: Pick<ClosableSessionTab, 'id' | 'parentTabId' | 'leafId' | 'type'>
-): { tabId: string; leafId?: string } {
-  if (tab.type === 'terminal' && tab.parentTabId && tab.leafId) {
-    return { tabId: `${tab.parentTabId}::${tab.leafId}`, leafId: tab.leafId }
-  }
-  return { tabId: tab.id, leafId: tab.leafId }
-}
-
 /**
  * Host `session.tabs.close` on a live split leaf only kills the PTY. The
  * renderer then skips pane close while siblings remain, so the empty shell
@@ -69,8 +57,8 @@ export function planSessionTabClose(
   ) {
     return { via: 'terminal-handle', handle: tab.terminal, repeats: 2 }
   }
-  const address = sessionTabCloseAddress(
-    tab.type === 'terminal' ? tab : { id: tab.id, type: 'terminal' }
-  )
-  return { via: 'session-tab', tabId: address.tabId, leafId: address.leafId }
+  // The tab's own id is already the host's address for it — a terminal tab is
+  // published as `parentTabId::leafId`. Naming a leafId as well asks the host to
+  // close one pane of a split, which this tab is not.
+  return { via: 'session-tab', tabId: tab.id }
 }

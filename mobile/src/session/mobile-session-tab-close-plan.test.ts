@@ -68,10 +68,11 @@ describe('planSessionTabClose', () => {
   }
 
   it('closes a tab the user tapped, when its leaf is the only one in the tab', () => {
+    // Exactly what 0.3.0 sent: the tab's own id, no leafId. A leafId asks the
+    // host to close one pane of a split, which this tab is not.
     expect(planSessionTabClose(soleLeaf, [soleLeaf])).toEqual({
       via: 'session-tab',
-      tabId: 'tab-1::f47ac10b-58cc-4372-a567-0e02b2c3d479',
-      leafId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+      tabId: 'tab-1::f47ac10b-58cc-4372-a567-0e02b2c3d479'
     })
   })
 

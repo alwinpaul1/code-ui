@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { sessionTabCloseAddress, sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
+import { sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
 import {
   appendUnlistedConnectedTerminalTabs,
   reconcileSessionTabsWithTerminalList
@@ -268,25 +268,6 @@ describe('mobile terminal records', () => {
     expect(reconcileSessionTabsWithTerminalList(tabs, [record({ handle: 'pty-1', connected: true })])).toHaveLength(
       1
     )
-  })
-
-  it('addresses a split sibling as parentTabId::leafId so Close does not take the whole tab', () => {
-    expect(
-      sessionTabCloseAddress({
-        id: 'tab-1:leaf-2',
-        type: 'terminal',
-        parentTabId: 'tab-1',
-        leafId: 'leaf-2'
-      })
-    ).toEqual({ tabId: 'tab-1::leaf-2', leafId: 'leaf-2' })
-    expect(
-      sessionTabCloseAddress({
-        id: 'tab-1',
-        type: 'terminal',
-        parentTabId: undefined,
-        leafId: undefined
-      })
-    ).toEqual({ tabId: 'tab-1' })
   })
 
   it('closes a split sibling by its handle, not the parent tab', () => {
