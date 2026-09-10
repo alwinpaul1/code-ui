@@ -63,6 +63,19 @@ describe('describeToolInput', () => {
     expect(describeToolInput({ file_path: 'src/a.ts', offset: 3 })).toBe('src/a.ts')
     expect(describeToolInput('{"cmd":"git status"}')).toBe('git status')
   })
+
+  it('labels a classified Codex shell row by what it did, not the raw command', () => {
+    // Codex's `commandActions` classification lifts a search term or a listed
+    // directory onto the same input that still carries the raw command for the
+    // detail view; the row must read by the classification, not the argv.
+    const search = { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', path: '.' }
+    expect(describeToolInput(search)).toBe('beta')
+    expect(briefToolArg(search)).toBe('beta')
+
+    const listing = { command: 'ls src', cwd: '/repo', directory: 'src' }
+    expect(describeToolInput(listing)).toBe('src')
+    expect(briefToolArg(listing)).toBe('src')
+  })
 })
 
 describe('briefToolArg', () => {
