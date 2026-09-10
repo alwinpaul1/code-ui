@@ -527,6 +527,30 @@ describe('terminal WebView touch scrolling', () => {
     expect(screenTranslateY()).toBe(0)
   })
 
+  it('flings the same distance at 30, 60 and 120 Hz', () => {
+    // The fling is a function of elapsed time. Capping how much time a single
+    // momentum frame may account for breaks that: a 33ms frame travelled only
+    // 16ms worth, so the slower the frames the shorter the fling — and when
+    // frame lengths vary, as they do in a WebView, the content stops tracking
+    // the clock and the scroll stutters.
+    function flingRows(frameMs: number): number {
+      boot()
+      dragUp({ frameMs: FRAME_120HZ_MS, moves: 10, pxPerMs: 1.2 })
+      const atLift = buffer.viewportY
+      fireTouch('touchend', [])
+      runUntilIdle(frameMs)
+      return buffer.viewportY - atLift
+    }
+
+    const at30 = flingRows(1000 / 30)
+    const at60 = flingRows(FRAME_60HZ_MS)
+    const at120 = flingRows(FRAME_120HZ_MS)
+
+    expect(at120).toBeGreaterThan(20)
+    expect(Math.abs(at60 - at120)).toBeLessThanOrEqual(1)
+    expect(Math.abs(at30 - at120)).toBeLessThanOrEqual(1)
+  })
+
   it('does not read layout on every touchmove', () => {
     boot()
 

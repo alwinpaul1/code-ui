@@ -8,6 +8,7 @@ import { TERMINAL_HTML_HOST_MESSAGE_ROUTER } from './terminal-webview-html/host-
 import { TERMINAL_HTML_SELECTION_STATE_AND_EVICTION } from './terminal-webview-html/selection-state-and-eviction'
 import { TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING } from './terminal-webview-html/term-observers-and-mode-mirroring'
 import { TERMINAL_HTML_MOUSE_REPORT_AND_SCROLL_ROUTING } from './terminal-webview-html/mouse-report-and-scroll-routing'
+import { TERMINAL_HTML_OVERSCROLL_BEND } from './terminal-webview-html/overscroll-bend'
 import { TERMINAL_HTML_SMOOTH_SCROLL_AND_CELL_GEOMETRY } from './terminal-webview-html/smooth-scroll-and-cell-geometry'
 import { TERMINAL_HTML_SELECTION_OVERLAY } from './terminal-webview-html/selection-overlay'
 import { TERMINAL_HTML_SURFACE_TOUCH_GESTURES } from './terminal-webview-html/surface-touch-gestures'
@@ -30,6 +31,7 @@ export const XTERM_HTML = [
   TERMINAL_HTML_OBSERVERS_AND_MODE_MIRRORING,
   TERMINAL_HTML_MOUSE_REPORT_AND_SCROLL_ROUTING,
   TERMINAL_HTML_SMOOTH_SCROLL_AND_CELL_GEOMETRY,
+  TERMINAL_HTML_OVERSCROLL_BEND,
   TERMINAL_HTML_SELECTION_OVERLAY,
   TERMINAL_HTML_SURFACE_TOUCH_GESTURES,
   TERMINAL_HTML_MESSAGE_BRIDGE_AND_DOCUMENT_CLOSE

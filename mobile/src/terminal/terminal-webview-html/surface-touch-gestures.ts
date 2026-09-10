@@ -55,6 +55,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
   var VELOCITY_BLEND_REFERENCE_MS = 1000 / 60;
   var VELOCITY_BLEND_WEIGHT = 0.45;
   var FRICTION_PER_MS = 0.998297482;
+
   var MIN_VEL = 0.012;
 
   function updateTouchVelocity(deltaY, dt) {
@@ -237,8 +238,10 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           var elapsed = now - momentumTime;
           momentumTime = now;
           if (elapsed <= 0) elapsed = 1;
-          // Why: a dropped frame must not teleport the content a screenful.
-          if (elapsed > SMOOTH_SCROLL_MAX_STEP_MS) elapsed = SMOOTH_SCROLL_MAX_STEP_MS;
+          // Why: a long stall must not teleport the content a screenful. Ordinary
+          // frame variance has to pass through untouched, or the fling stops
+          // tracking the clock.
+          if (elapsed > MOMENTUM_MAX_STEP_MS) elapsed = MOMENTUM_MAX_STEP_MS;
           vel *= Math.pow(FRICTION_PER_MS, elapsed);
           if (Math.abs(vel) < MIN_VEL) {
             ts.momentumId = null;

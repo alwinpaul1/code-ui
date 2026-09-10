@@ -27,7 +27,9 @@ describe('relay base64', () => {
   })
 
   it('round-trips a payload the size of a pasted screenshot', () => {
-    const bytes = new Uint8Array(2 * 1024 * 1024).map((_, i) => (i * 17) & 0xff)
+    // 512 KB exercises every batch boundary; 2 MB only made the per-character
+    // reference decoder in this file slow enough to look like a hang.
+    const bytes = new Uint8Array(512 * 1024).map((_, i) => (i * 17) & 0xff)
 
     expect(base64ToUint8(uint8ToBase64(bytes))).toEqual(bytes)
   })

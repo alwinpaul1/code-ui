@@ -92,6 +92,7 @@
       "./plugins/android-respect-rotation-lock.js",
       "./plugins/android-gradle-memory.js",
       "./plugins/android-soft-input-mode.js",
+      "./plugins/android-high-refresh-rate.js",
       [
         "expo-notifications",
         {

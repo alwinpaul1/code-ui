@@ -12,8 +12,10 @@ import { XTERM_HTML } from './terminal-webview-html'
 // to exactly 0, so the at-rest row-boundary invariant is unchanged.
 // Then: the overscroll dimension comes from rows x cell height instead of
 // reading clientHeight, which forced layout on every frame of a pull.
-const EXPECTED_SHA256 = 'b86b1e1591fd9655c16db8fcda1419cc7339a80c52a8c53c351d5ef608a759e8'
-const EXPECTED_LENGTH = 753387
+// Then: momentum got its own frame-step cap. The settle keeps 16ms; a fling
+// must not have ordinary frame variance clamped out of its clock.
+const EXPECTED_SHA256 = '1fa51306b54f31e25c5e11ef8e67592f904565c59f2d88efeffc08949d03646f'
+const EXPECTED_LENGTH = 754275
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {
