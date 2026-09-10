@@ -174,6 +174,7 @@ export const AccountsSnapshotSchema = z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
         codex: ProviderRateLimitsSchema.nullable(),
+        grok: ProviderRateLimitsSchema.nullable().optional(),
         // Why: protocol-compatible hosts from before runtime targeting omit
         // these fields; their account selection semantics were host-only.
         claudeTarget: RateLimitRuntimeTargetSchema.default(HostRateLimitRuntimeTarget),

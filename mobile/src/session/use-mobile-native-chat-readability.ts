@@ -41,7 +41,9 @@ export function useMobileNativeChatReadability(
         setState({
           client,
           worktreeId,
-          readable: repo ? isMobileNativeChatTranscriptReadable(repo.connectionId ?? null) : false
+          readable: repo
+            ? isMobileNativeChatTranscriptReadable(repo.connectionId ?? null)
+            : true
         })
       })
       .catch(() => {

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
+import { useAgentHudBeacon } from './agent-hud-beacon'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 
@@ -51,23 +52,22 @@ export function useMobileNativeChatActiveResolution(args: {
     viewResolved
   } = useMobileSessionViewMode({ hostId, worktreeId })
   const terminalPeekActive = activeSessionTabId != null && peekedTerminalTabId === activeSessionTabId
+  const beaconAgent = useAgentHudBeacon(activeHandleRef.current)?.agent ?? null
+  const chatIdentity =
+    activeSessionTab != null
+      ? resolveMobileNativeChat(
+          activeSessionTab,
+          nativeChatTranscriptIsLocalReadable,
+          beaconAgent
+        )
+      : null
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
-    (activeSessionTabId
-      ? isTabChatView(
-          activeSessionTabId,
-          activeSessionTab?.launchAgent ?? activeSessionTab?.agentStatus?.agentType ?? null
-        )
-      : false)
+    (activeSessionTabId ? isTabChatView(activeSessionTabId, chatIdentity?.agent ?? null) : false)
   const activeChatResolution =
-    activeSessionTab && activeSessionTabId && tabWantsChat
-      ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)
-      : null
+    activeSessionTab && activeSessionTabId && tabWantsChat ? chatIdentity : null
   const showNativeChat = activeChatResolution != null
-  const activeChatEligible =
-    activeSessionTab != null &&
-    activeSessionTabId != null &&
-    resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable) != null
+  const activeChatEligible = activeSessionTab != null && activeSessionTabId != null && chatIdentity != null
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
   const activeChatAgentRef = useRef<string | null>(activeChatAgent)

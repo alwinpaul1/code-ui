@@ -32,6 +32,7 @@ function makeSnapshot(
   overrides: {
     claudeLimits?: ProviderRateLimits | null
     codexLimits?: ProviderRateLimits | null
+    grokLimits?: ProviderRateLimits | null
     claudeAccounts?: AccountsSnapshot['claude']['accounts']
     codexAccounts?: AccountsSnapshot['codex']['accounts']
     inactiveClaudeAccounts?: InactiveAccountUsage[]
@@ -52,6 +53,7 @@ function makeSnapshot(
     rateLimits: {
       claude: overrides.claudeLimits ?? null,
       codex: overrides.codexLimits ?? null,
+      grok: overrides.grokLimits ?? null,
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
       inactiveClaudeAccounts: overrides.inactiveClaudeAccounts ?? [],
@@ -113,6 +115,18 @@ describe('hasRenderableUsage', () => {
     })
     expect(hasRenderableUsage(snapshot, 'claude')).toBe(false)
     expect(hasRenderableUsage(makeSnapshot(), 'claude')).toBe(false)
+  })
+
+  it('shows Grok only when the host reported usage windows', () => {
+    expect(hasRenderableUsage(makeSnapshot(), 'grok')).toBe(false)
+    const snapshot = makeSnapshot({
+      grokLimits: makeLimits({
+        provider: 'grok',
+        status: 'ok',
+        monthly: { usedPercent: 22, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+      })
+    })
+    expect(hasRenderableUsage(snapshot, 'grok')).toBe(true)
   })
 })
 

@@ -64,6 +64,23 @@ describe('useMobileNativeChatReadability', () => {
     expect(readable).toBe(true)
   })
 
+  it('treats a worktree whose repo is not listed as readable so Grok Chat UI stays available', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { repos: [{ id: 'other-repo', connectionId: null }] }
+    })
+    const client = { sendRequest } as unknown as RpcClient
+    function Harness(): null {
+      readable = useMobileNativeChatReadability(client, 'repo::/worktree')
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
+    expect(readable).toBe(true)
+  })
+
   it('fails closed for Model-A SSH transcript hosts', async () => {
     await mount('model-a-ssh')
     expect(readable).toBe(false)

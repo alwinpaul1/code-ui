@@ -23,7 +23,11 @@ import { Txt } from '../ui/Txt'
 // window, then the managed accounts as a radio list with their own compact
 // meters.
 
-const PROVIDER_NAME: Record<ProviderKey, string> = { claude: 'Claude', codex: 'Codex' }
+const PROVIDER_NAME: Record<ProviderKey, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  grok: 'Grok'
+}
 
 export type AccountsProviderAccountRow = {
   id: string

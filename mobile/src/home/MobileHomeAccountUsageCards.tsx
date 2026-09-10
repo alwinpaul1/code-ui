@@ -1,5 +1,6 @@
 import { View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
   getActiveProviderRateLimits,
   getUsageBarState,
@@ -20,7 +21,11 @@ import { Txt } from '../ui/Txt'
 // — with the per-window meters underneath, one column per window the plan
 // reports. Tapping opens the Usage screen.
 
-const PROVIDER_NAME: Record<ProviderKey, string> = { claude: 'Claude', codex: 'Codex' }
+const PROVIDER_NAME: Record<ProviderKey, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  grok: 'Grok'
+}
 
 export function MobileHomeAccountUsageCards(props: {
   items: { host: HostProfile; snapshot: AccountsSnapshot }[]
@@ -60,12 +65,14 @@ export function MobileHomeAccountUsageCards(props: {
               {host.name}
             </Txt>
           ) : null}
-          {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
-            const state = provider === 'claude' ? snapshot.claude : snapshot.codex
-            const active =
-              state.accounts.find((account) => account.id === state.activeAccountId) ?? null
+          {(['claude', 'codex', 'grok'] as ProviderKey[]).map((provider) => {
+            const state =
+              provider === 'claude' ? snapshot.claude : provider === 'codex' ? snapshot.codex : null
+            const active = state
+              ? (state.accounts.find((account) => account.id === state.activeAccountId) ?? null)
+              : null
             const limits = getActiveProviderRateLimits(snapshot, provider)
-            if (state.accounts.length === 0 && !hasActiveProviderUsage(limits)) {
+            if ((state?.accounts.length ?? 0) === 0 && !hasActiveProviderUsage(limits)) {
               return null
             }
             const windows = getVisibleUsageWindows(limits)
@@ -85,8 +92,10 @@ export function MobileHomeAccountUsageCards(props: {
                   >
                     {provider === 'claude' ? (
                       <ClaudeIcon size={18} />
-                    ) : (
+                    ) : provider === 'codex' ? (
                       <OpenAIIcon size={18} color={colors.text} />
+                    ) : (
+                      <MobileAgentIcon agentId="grok" size={18} />
                     )}
                   </View>
                   <View style={{ flex: 1, minWidth: 0, gap: 1 }}>

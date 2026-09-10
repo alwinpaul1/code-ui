@@ -91,6 +91,15 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
+  it('uses the HUD beacon agent when launch and hook have not named one', () => {
+    expect(resolveMobileNativeChat({ type: 'terminal' }, false, 'claude')).toMatchObject({
+      agent: 'claude'
+    })
+    expect(resolveMobileNativeChat({ type: 'terminal' }, true, 'grok')).toMatchObject({
+      agent: 'grok'
+    })
+  })
+
   it('falls back to agentStatus.agentType when no launchAgent', () => {
     expect(
       resolveMobileNativeChat({

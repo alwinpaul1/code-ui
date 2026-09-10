@@ -43,7 +43,8 @@ export type MobileNativeChatTab = {
  *  hint or the live status; session id from the captured provider session. */
 export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
-  nativeChatTranscriptIsLocalReadable = false
+  nativeChatTranscriptIsLocalReadable = false,
+  beaconAgent: string | null = null
 ): MobileNativeChatResolution | null {
   if (!tab) {
     return null
@@ -64,13 +65,16 @@ export function resolveMobileNativeChat(
     liveAgent && liveAgent !== 'unknown' && isNativeChatSupportedAgent(liveAgent)
       ? liveAgent
       : null
-  // Grok and omp do not write the Claude/Codex hook shape. A HUD that names
-  // Claude on a Grok-launched tab is guessing; keep the agent Orca started.
-  // An unidentified or unsupported HUD must not take Chat UI away from a
-  // Claude/Codex launch either.
+  const usableBeacon =
+    beaconAgent && isNativeChatSupportedAgent(beaconAgent) ? beaconAgent : null
+  // Identity comes from what the session actually reports: the agent Orca
+  // launched, the live hook, or the HUD beacon on this PTY. Tab titles are
+  // not used.
   const agent = nativeChatRequiresLocalTranscript(launchAgent)
     ? launchAgent
-    : (usableLive ?? (isNativeChatSupportedAgent(launchAgent) ? launchAgent : null))
+    : (usableLive ??
+      (isNativeChatSupportedAgent(launchAgent) ? launchAgent : null) ??
+      usableBeacon)
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }

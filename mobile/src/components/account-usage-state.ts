@@ -25,7 +25,7 @@ export {
   type RateLimitWindow
 } from './accounts-snapshot'
 
-export type ProviderKey = 'claude' | 'codex'
+export type ProviderKey = 'claude' | 'codex' | 'grok'
 
 /** `fableWeekly` is the Fable model's own 7-day window; the host reports it
  *  only for accounts that have one, so callers show that bar conditionally. */
@@ -45,7 +45,18 @@ export function getActiveProviderRateLimits(
   snapshot: AccountsSnapshot,
   provider: ProviderKey
 ): ProviderRateLimits | null {
-  return provider === 'claude' ? snapshot.rateLimits.claude : snapshot.rateLimits.codex
+  switch (provider) {
+    case 'claude':
+      return snapshot.rateLimits.claude
+    case 'codex':
+      return snapshot.rateLimits.codex
+    case 'grok':
+      return snapshot.rateLimits.grok ?? null
+    default: {
+      const _exhaustive: never = provider
+      return _exhaustive
+    }
+  }
 }
 
 export function getInactiveProviderUsage(
@@ -53,11 +64,24 @@ export function getInactiveProviderUsage(
   provider: ProviderKey,
   accountId: string
 ): InactiveAccountUsage | null {
-  const list =
-    provider === 'claude'
-      ? snapshot.rateLimits.inactiveClaudeAccounts
-      : snapshot.rateLimits.inactiveCodexAccounts
-  return list.find((u) => u.accountId === accountId) ?? null
+  switch (provider) {
+    case 'claude':
+      return (
+        snapshot.rateLimits.inactiveClaudeAccounts.find((entry) => entry.accountId === accountId) ??
+        null
+      )
+    case 'codex':
+      return (
+        snapshot.rateLimits.inactiveCodexAccounts.find((entry) => entry.accountId === accountId) ??
+        null
+      )
+    case 'grok':
+      return null
+    default: {
+      const _exhaustive: never = provider
+      return _exhaustive
+    }
+  }
 }
 
 // Why: rate limits are fetched for the active target even when no Orca-managed
@@ -189,6 +213,15 @@ export function formatUsageUpdatedLabel(
 // Orca-managed accounts. Show a provider when it has at least one managed
 // account OR active rate-limit data for the system-default target.
 export function hasRenderableUsage(snapshot: AccountsSnapshot, provider: ProviderKey): boolean {
+  if (provider === 'grok') {
+    const limits = getActiveProviderRateLimits(snapshot, provider)
+    return Boolean(
+      limits?.session ||
+        limits?.weekly ||
+        limits?.monthly ||
+        (limits?.buckets && limits.buckets.length > 0)
+    )
+  }
   const accounts = provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
   if (accounts.length > 0) {
     return true

@@ -145,7 +145,7 @@ export default function AccountsScreen() {
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
-      if (!client) {
+      if (!client || provider === 'grok') {
         return
       }
       const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
@@ -186,16 +186,17 @@ export default function AccountsScreen() {
     if (!snapshot || !hasRenderableUsage(snapshot, provider)) {
       return null
     }
-    const state = provider === 'claude' ? snapshot.claude : snapshot.codex
+    const state =
+      provider === 'claude' ? snapshot.claude : provider === 'codex' ? snapshot.codex : null
     const activeAccountId =
       provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
-        : state.activeAccountId
+        : (state?.activeAccountId ?? null)
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeEmail =
-      state.accounts.find((account) => account.id === activeAccountId)?.email ?? null
+      state?.accounts.find((account) => account.id === activeAccountId)?.email ?? null
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
-    const accounts = state.accounts.map((account) => {
+    const accounts = (state?.accounts ?? []).map((account) => {
       const isActive = activeAccountId === account.id
       const inactive = isActive ? null : getInactiveProviderUsage(snapshot, provider, account.id)
       return {
@@ -281,6 +282,7 @@ export default function AccountsScreen() {
           <>
             {renderProvider('claude')}
             {renderProvider('codex')}
+            {renderProvider('grok')}
           </>
         )}
       </ScrollView>
