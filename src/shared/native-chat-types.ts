@@ -7,6 +7,8 @@
 // instances, Maps, or Dates.
 
 import type { AgentType } from './agent-status-types'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
 export type { AgentType }
 
@@ -50,7 +52,9 @@ export type NativeChatTextBlock = {
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
  *  argument payload; kept as `unknown` because each tool's shape differs and
  *  the renderer only previews it. */
-export type NativeChatToolCallBlock = {
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d): the execution
+// and MCP-identity metadata a tool call may carry.
+export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   type: 'tool-call'
   name: string
   input: unknown

@@ -262,12 +262,9 @@ describe('toolRunSummaryMembers', () => {
       { type: 'tool-call', name: 'tools/read', input: { file_path: 'README.md' } }
     ]
 
-    // CODE UI LOCAL HUNK — see src/shared/LOCAL-FILES.md. Upstream also expects
-    // `mcpIdentity: undefined` on each member; this fork does not vendor that
-    // field. The whole `carries provider MCP identity through` case goes with it.
     expect(toolRunSummaryMembers(blocks)).toEqual([
-      { name: 'Bash', arg: 'ls -la' },
-      { name: 'tools/read', arg: 'README.md' }
+      { name: 'Bash', arg: 'ls -la', mcpIdentity: undefined },
+      { name: 'tools/read', arg: 'README.md', mcpIdentity: undefined }
     ])
   })
 
@@ -300,10 +297,28 @@ describe('toolRunSummaryMembers', () => {
     )
   })
 
+  it('carries provider MCP identity through, so a pill can draw the server glyph', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'mcp__linear__list_issues',
+        input: {},
+        mcpIdentity: { server: 'linear', tool: 'list_issues' }
+      }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)[0]?.mcpIdentity).toEqual({
+      server: 'linear',
+      tool: 'list_issues'
+    })
+  })
+
   it('reports a blank argument rather than standing raw JSON in for one', () => {
     const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: '' } }]
 
-    expect(toolRunSummaryMembers(blocks)).toEqual([{ name: 'Bash', arg: '' }])
+    expect(toolRunSummaryMembers(blocks)).toEqual([
+      { name: 'Bash', arg: '', mcpIdentity: undefined }
+    ])
   })
 })
 

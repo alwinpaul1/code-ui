@@ -1,3 +1,4 @@
+import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
 const MAX_PREVIEW_LENGTH = 80
@@ -266,11 +267,7 @@ export type ToolRunMember = {
   name: string
   /** Brief argument, or '' when the call has none worth showing. */
   arg: string
-  // CODE UI LOCAL HUNK — see src/shared/LOCAL-FILES.md. Upstream also carries
-  // `mcpIdentity?: NativeChatMcpIdentity` here, from `native-chat-tool-identity`
-  // (Orca #19226). Neither that module nor the `mcpIdentity` field on a
-  // tool-call block is vendored in this fork, so the key is dropped rather than
-  // typed against something that does not exist.
+  mcpIdentity?: NativeChatMcpIdentity
 }
 
 /** The run header's leading calls. Capped at the same limit the joined string
@@ -286,8 +283,7 @@ export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolR
     if (!name) {
       continue
     }
-    // CODE UI LOCAL HUNK: upstream also carries `mcpIdentity: block.mcpIdentity`.
-    members.push({ name, arg: briefToolArg(block.input) })
+    members.push({ name, arg: briefToolArg(block.input), mcpIdentity: block.mcpIdentity })
     if (members.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }

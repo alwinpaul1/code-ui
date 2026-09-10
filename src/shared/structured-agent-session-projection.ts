@@ -41,7 +41,21 @@ function itemBlocks(item: AgentJournalRenderItem): {
     return {
       role: 'assistant',
       blocks: [
-        { type: 'tool-call', name: body.name, input: body.input, state: body.state },
+        // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d): the
+        // execution and MCP-identity metadata, carried only when the host
+        // actually recorded it, so an older host projects exactly what it did.
+        {
+          type: 'tool-call',
+          name: body.name,
+          input: body.input,
+          state: body.state,
+          ...(body.mcpIdentity !== undefined ? { mcpIdentity: body.mcpIdentity } : {}),
+          ...(body.exitCode !== undefined ? { exitCode: body.exitCode } : {}),
+          ...(body.durationMs !== undefined ? { durationMs: body.durationMs } : {}),
+          ...(body.webSearchResults !== undefined
+            ? { webSearchResults: body.webSearchResults }
+            : {})
+        },
         ...(body.output
           ? [
               {

@@ -25,10 +25,10 @@ redundant — check before re-applying it.
   `presentation` / `tone` display hints from Orca #19228 (9f044031), so a
   compaction notice, a plan document or a toned line survives the journey from
   the host's journal to the phone's transcript. The rest of 9f044031 lives in
-  `src/main/`, which this fork does not vendor. `agent-session-journal-types.ts`
-  in particular cannot be re-vendored at 9f044031: the same commit range makes
-  `AgentJournalToolCallItem` extend `NativeChatToolMetadata` from
-  `native-chat-tool-identity.ts`, and that module is not vendored (Orca #19226).
+  `src/main/`, which this fork does not vendor. (`native-chat-tool-identity.ts`
+  IS vendored now — Orca #19226 landed — so that is no longer what blocks a
+  whole-file re-vendor of `agent-session-journal-types.ts`; the #19228 hints
+  are.)
 
 ## Vendored files carrying a local hunk
 
@@ -102,11 +102,17 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `native-chat-edit-normalize.ts` imports. Neither file can be re-vendored whole
   at that commit, because both also carry the forward-ported #19228 hints above.
   Both hunks are marked `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
-- `native-chat-tool-summary.ts` and `native-chat-tool-summary.test.ts` —
-  `ToolRunMember` drops upstream's `mcpIdentity` field. It is typed
-  `NativeChatMcpIdentity` from `native-chat-tool-identity.ts`, and it is read
-  off `block.mcpIdentity`; neither that module nor that block field exists in
-  this fork, because Orca #19226 is not vendored here. Restore the field, the
-  import and the `carries provider MCP identity through` test the moment
-  #19226 lands. Both hunks are marked `CODE UI LOCAL HUNK` in the source.
+- `native-chat-types.ts`, `agent-session-journal-types.ts`,
+  `agent-session-journal-schemas.ts` and
+  `structured-agent-session-projection.ts` also carry hunks from Orca #19226
+  (d0506bf5d): `NativeChatToolMetadata` on a tool call, the same fields on the
+  journal item and its zod shape, and the projection carrying them onto the
+  block. The rest of #19226 is `src/main/` translation code this fork does not
+  vendor. No file here can be re-vendored whole at d0506bf5d, because all four
+  also carry the forward-ported #19228 hints above. Every hunk is marked
+  `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
+
+`native-chat-tool-summary.ts` and its test used to sit here for dropping
+upstream's `mcpIdentity` field. #19226 landed, so both were re-vendored whole at
+their c1e15c400 pin and the field is back; the entry is gone.
 

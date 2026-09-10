@@ -8,6 +8,8 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -81,7 +83,9 @@ export type AgentJournalMessageItem = {
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 
-export type AgentJournalToolCallItem = {
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d): the execution
+// and MCP-identity metadata the host records for a tool call.
+export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
   input: unknown

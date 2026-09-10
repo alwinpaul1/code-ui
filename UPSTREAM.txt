@@ -28,14 +28,16 @@ src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
 src/shared/structured-agent-session-composer.ts: f1d854502
 src/shared/native-chat-diff.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
-src/shared/native-chat-tool-icon.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
-src/shared/native-chat-tool-icon.test.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
+src/shared/native-chat-tool-icon.ts: d0506bf5de0da490025d94c6507378be75194a60
+src/shared/native-chat-tool-icon.test.ts: d0506bf5de0da490025d94c6507378be75194a60
+src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a60
+src/shared/native-chat-tool-identity.test.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-tool-activity.ts: c1e15c400
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: b0c67eaf8
 src/shared/native-chat-turn-status.test.ts: b0c67eaf8
-src/shared/native-chat-tool-summary.ts: c1e15c400 (plus a local hunk, see LOCAL-FILES.md)
-src/shared/native-chat-tool-summary.test.ts: c1e15c400 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/native-chat-tool-summary.ts: c1e15c400
+src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-model.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-unified-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a

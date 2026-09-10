@@ -202,6 +202,49 @@ export function makeChatMessageStyles(theme: Theme) {
       borderWidth: 1,
       borderColor: colors.border
     },
+    // Orca #19226: what the row's own execution details look like — an MCP
+    // call's server and tool, its exit code, and how long it took.
+    toolNameServer: {
+      color: colors.text,
+      fontFamily: fonts.mono,
+      fontSize: MONO_SIZE + 1
+    },
+    toolNameSeparator: {
+      color: colors.textMuted,
+      fontFamily: fonts.mono,
+      fontSize: MONO_SIZE + 1
+    },
+    toolNameTool: {
+      color: colors.textSecondary,
+      fontFamily: fonts.mono,
+      fontSize: MONO_SIZE + 1
+    },
+    toolMeta: {
+      flexDirection: 'row',
+      gap: space.xs + 2
+    },
+    toolMetaText: {
+      color: colors.textMuted,
+      fontFamily: fonts.mono,
+      fontSize: MONO_SIZE - 1
+    },
+    toolMetaFailed: {
+      color: colors.danger
+    },
+    toolSearchResults: {
+      gap: 2
+    },
+    toolSearchTitle: {
+      color: colors.accentText,
+      fontFamily: fonts.regular,
+      fontSize: MONO_SIZE + 1,
+      textDecorationLine: 'underline'
+    },
+    toolSearchUrl: {
+      color: colors.textMuted,
+      fontFamily: fonts.regular,
+      fontSize: MONO_SIZE - 1
+    },
     diff: {
       borderRadius: radius.sm,
       backgroundColor: colors.codeBg,

@@ -14,6 +14,11 @@ import {
   isEditToolName
 } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import {
+  ToolExecutionMeta,
+  ToolRowName,
+  ToolSearchResults
+} from './MobileNativeChatToolAnnotations'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
@@ -138,7 +143,10 @@ function ToolLine({
     !editFiles && expanded && result ? diffFromText(result.output, diffLineLimit) : null
   const callDetail =
     expanded && inputDisplay && !callDiff && !editFiles ? inputDisplay.formatDetail() : undefined
-  const hasDetail = callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true
+  const searchResults = call?.webSearchResults
+  const hasResults = (searchResults?.length ?? 0) > 0
+  const hasDetail =
+    callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true || hasResults
   // The group toggle opens every line at once, bypassing the tap guard, so the
   // panel has to consult it too — else a detail-less row echoes its own label
   // under itself and no tap can dismiss it.
@@ -159,7 +167,11 @@ function ToolLine({
         ) : (
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
         )}
-        <Text style={styles.toolName}>{name}</Text>
+        {call ? (
+          <ToolRowName name={name} mcpIdentity={call.mcpIdentity} styles={styles} />
+        ) : (
+          <Text style={styles.toolName}>{name}</Text>
+        )}
         {preview ? (
           <Text
             style={[styles.toolPreview, openable && styles.toolPreviewLink]}
@@ -170,9 +182,11 @@ function ToolLine({
             {preview}
           </Text>
         ) : null}
+        {call ? <ToolExecutionMeta block={call} styles={styles} /> : null}
       </Pressable>
       {showDetail ? (
         <View style={styles.toolDetail}>
+          {hasResults ? <ToolSearchResults results={searchResults} styles={styles} /> : null}
           {editFiles?.map((file, index) => (
             <MobileNativeChatDiffCard
               key={`${file.path}:${index}`}
