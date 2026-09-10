@@ -19,10 +19,15 @@ export type AutocompleteTrigger = {
 
 const TOKEN_CHAR = /[^\s]/
 
-/** Detect an active autocomplete trigger at the cursor. A `@` mention triggers
- *  anywhere it follows whitespace/start; a `/` command only at the very start of
- *  the input (slash commands are line-leading). Returns null when the cursor is
- *  not inside such a token. */
+/** Detect an active autocomplete trigger at the cursor. Both `@` and `/`
+ *  trigger wherever their token opens — at the start of the draft, or after
+ *  whitespace. `/` used to be start-only, which meant a skill named mid-sentence
+ *  ("validate it with /electron") offered nothing (Orca #19832). A slash inside
+ *  a word is still nothing: `and/or` and `src/app.ts` never open a picker,
+ *  because the walk left stops at the token's own first character. Whether a
+ *  pick is DISPATCHABLE is a separate question, and `classifyNativeChatSend`
+ *  already answers it off the draft's first token alone. Returns null when the
+ *  cursor is not inside such a token. */
 export function detectAutocompleteTrigger(
   text: string,
   cursor: number
@@ -39,11 +44,7 @@ export function detectAutocompleteTrigger(
     return null
   }
   const before = triggerIndex === 0 ? '' : text[triggerIndex - 1]!
-  if (triggerChar === '/' && triggerIndex !== 0) {
-    // Slash commands are only offered at the very start of the message.
-    return null
-  }
-  if (triggerChar === '@' && triggerIndex !== 0 && !/\s/.test(before)) {
+  if (triggerIndex !== 0 && !/\s/.test(before)) {
     return null
   }
   const query = text.slice(triggerIndex + 1, pos)

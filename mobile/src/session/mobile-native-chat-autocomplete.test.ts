@@ -7,14 +7,40 @@ import {
 } from './mobile-native-chat-autocomplete'
 
 describe('detectAutocompleteTrigger', () => {
-  it('detects a slash command only at the start', () => {
+  it('detects a slash command at the start', () => {
     expect(detectAutocompleteTrigger('/rev', 4)).toEqual({
       kind: 'slash',
       query: 'rev',
       start: 0,
       end: 4
     })
-    expect(detectAutocompleteTrigger('hi /rev', 7)).toBeNull()
+  })
+
+  // Orca #19832: naming a skill mid-sentence — "validate it with /electron" —
+  // offered nothing at all, because the picker only opened on the first
+  // character of the draft.
+  it('offers the picker for a command named mid-prompt', () => {
+    expect(detectAutocompleteTrigger('validate it with /elec', 22)).toEqual({
+      kind: 'slash',
+      query: 'elec',
+      start: 17,
+      end: 22
+    })
+  })
+
+  it('offers the picker on a fresh line of a multi-line draft', () => {
+    expect(detectAutocompleteTrigger('ship it\n/rev', 12)).toMatchObject({
+      kind: 'slash',
+      query: 'rev',
+      start: 8
+    })
+  })
+
+  it('leaves a slash inside a word alone', () => {
+    // `and/or` is prose, and `src/app.ts` is a path: neither opens a picker,
+    // because neither token begins with the trigger.
+    expect(detectAutocompleteTrigger('and/or', 6)).toBeNull()
+    expect(detectAutocompleteTrigger('see src/app.ts', 14)).toBeNull()
   })
 
   it('detects an @ mention after whitespace or at start', () => {
