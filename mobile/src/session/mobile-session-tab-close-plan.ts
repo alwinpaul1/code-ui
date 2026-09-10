@@ -1,5 +1,5 @@
 export type SessionTabClosePlan =
-  | { via: 'terminal-handle'; handle: string; repeats: 2 }
+  | { via: 'terminal-handle'; handle: string }
   | { via: 'session-tab'; tabId: string; leafId?: string }
 
 type ClosableSessionTab = {
@@ -38,10 +38,16 @@ export function sessionTabClosesByHandle(
 }
 
 /**
- * Host `session.tabs.close` on a live split leaf only kills the PTY. The
- * renderer then skips pane close while siblings remain, so the empty shell
- * stays on desktop. A second `terminal.close`, with the PTY already dead,
- * is what sends `closeTerminal(tabId, paneRuntimeId)` and collapses it.
+ * A split leaf closes through `terminal.close` on its own handle — the host's
+ * own CLI calls that "closes one terminal pane/session", and closing the whole
+ * tab is a separate `--tab` mode it reports back as `closeMode: 'tab'`.
+ *
+ * Exactly ONE call. Checked against a live host on a real two-leaf tab: the
+ * first close answers `ptyKilled: true` and leaves the sibling connected; a
+ * second close on that same, now-dead handle answers `ptyKilled: false` and
+ * takes the WHOLE TAB, sibling included. 0.3.4 sent two on the theory that the
+ * desktop pane needed a second nudge to collapse — it does not, and the repeat
+ * is why closing the lower pane from the phone closed the window.
  */
 /** `siblings` is the current tab strip. Without it no tab reads as split, so a
  *  close falls back to `session.tabs.close` — the safe answer, since that closes
@@ -55,7 +61,7 @@ export function planSessionTabClose(
     sessionTabClosesByHandle(tab, siblings) &&
     typeof tab.terminal === 'string'
   ) {
-    return { via: 'terminal-handle', handle: tab.terminal, repeats: 2 }
+    return { via: 'terminal-handle', handle: tab.terminal }
   }
   // The tab's own id is already the host's address for it — a terminal tab is
   // published as `parentTabId::leafId`. Naming a leafId as well asks the host to

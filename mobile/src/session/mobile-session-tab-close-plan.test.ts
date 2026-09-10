@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { planSessionTabClose } from './mobile-session-tab-close-plan'
 
 describe('planSessionTabClose', () => {
-  it('closes the extra split pill by handle twice so the leftover desktop pane collapses', () => {
+  it('closes the extra split pill by its own handle, leaving the parent tab alone', () => {
     expect(
       planSessionTabClose(
         {
@@ -31,8 +31,7 @@ describe('planSessionTabClose', () => {
       )
     ).toEqual({
       via: 'terminal-handle',
-      handle: 'term_a2a5b040',
-      repeats: 2
+      handle: 'term_a2a5b040'
     })
   })
 
@@ -80,6 +79,33 @@ describe('planSessionTabClose', () => {
     expect(planSessionTabClose(soleLeaf).via).toBe('session-tab')
   })
 
+  it('closes a split leaf with a single terminal.close, never a repeat', () => {
+    // Verified against a live Orca host (1.4.x) on a real two-leaf tab:
+    //   close #1 on the leaf  -> {ptyKilled: true},  sibling survives, tab intact
+    //   close #2 on that same, now-dead handle -> {ptyKilled: false}, and the
+    //   host resolves the stale handle to its TAB: the surviving sibling is
+    //   closed too. That second call is why closing the lower pane from the
+    //   phone took the whole window with it.
+    const first = {
+      type: 'terminal' as const,
+      id: 'tab-1::leaf-1',
+      parentTabId: 'tab-1',
+      terminal: 'term-1'
+    }
+    const second = {
+      type: 'terminal' as const,
+      id: 'tab-1::leaf-2',
+      parentTabId: 'tab-1',
+      leafId: 'leaf-2',
+      terminal: 'term-2'
+    }
+
+    expect(planSessionTabClose(second, [first, second])).toEqual({
+      via: 'terminal-handle',
+      handle: 'term-2'
+    })
+  })
+
   it('closes a leaf by handle only while a sibling shares its tab', () => {
     const sibling = {
       ...soleLeaf,
@@ -91,8 +117,7 @@ describe('planSessionTabClose', () => {
 
     expect(planSessionTabClose(sibling, [soleLeaf, sibling])).toEqual({
       via: 'terminal-handle',
-      handle: 'term-2',
-      repeats: 2
+      handle: 'term-2'
     })
   })
 

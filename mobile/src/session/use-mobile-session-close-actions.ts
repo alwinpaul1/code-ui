@@ -106,9 +106,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     const plan = planSessionTabClose(tab, sessionTabsRef.current)
     if (plan.via === 'terminal-handle') {
       const target = { handle: plan.handle, title: tab.title, isActive: tab.isActive }
-      for (let index = 0; index < plan.repeats; index += 1) {
-        await handleCloseTerminal(target)
-      }
+      await handleCloseTerminal(target)
       const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
       sessionTabsRef.current = remainingTabs
       setSessionTabs(remainingTabs)

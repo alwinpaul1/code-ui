@@ -13,14 +13,17 @@ describe('mobile session last-tab close', () => {
     expect(block).toContain('retainMissingSurfaces: result.tabs.length === 0')
   })
 
-  it('repeats handle close for a split sibling so the leftover desktop pane collapses', () => {
+  it('closes a split sibling exactly once, never in a loop', () => {
     const start = sessionRouteSource.indexOf('async function handleCloseSessionTab')
     const end = sessionRouteSource.indexOf('const bulkCloseActions', start)
     const block = sessionRouteSource.slice(start, end)
 
     expect(block).toContain('planSessionTabClose')
-    expect(block).toContain('plan.repeats')
     expect(block).toContain('handleCloseTerminal(target)')
+    // A second terminal.close on the same, now-dead handle makes the host close
+    // the whole TAB — verified against a live host. Any loop here is that bug.
+    expect(block).not.toContain('plan.repeats')
+    expect(block).not.toMatch(/for \(let index = 0/)
     expect(block).not.toContain('if (!closed)')
   })
 

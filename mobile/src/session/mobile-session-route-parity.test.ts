@@ -92,8 +92,11 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // closes through session.tabs.close instead of being addressed as a split.
 // Moved by one line in handleCloseSessionTab (planSessionTabClose gains the
 // sibling argument); no other nested body changed.
+// 2026-09-10: the split-leaf close stopped repeating — the repeat loop in
+// handleCloseSessionTab became a single await, because a second terminal.close
+// on the dead handle made the host close the whole tab. Same one function.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '0e9ea1c28a28acec1311801787f148236fec08b26485282fb63a504a7f35a079'
+  '7044f3795d62da3f565d7a4968abfeaba3071e93dbb8c41d7e60424e69b8b968'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =

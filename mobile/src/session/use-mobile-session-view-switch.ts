@@ -69,5 +69,29 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     void setDisplayMode(activeHandle, want)
   }, [activeHandle, setDisplayMode, showNativeChat])
 
+  // Why: asking for phone dims is also the presence-lock take-floor gesture, so
+  // a terminal this route drove leaves the desk showing "Your phone is in
+  // control" with its keyboard paused. Leaving the route is the phone saying it
+  // is done with that PTY; hand it back to desktop width rather than making
+  // someone click "Take back this terminal".
+  const drivenHandlesRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const want = mobileVisibleTerminalDisplayMode(activeHandle, showNativeChat)
+    if (activeHandle && want === 'auto') {
+      drivenHandlesRef.current.add(activeHandle)
+    }
+  }, [activeHandle, showNativeChat])
+  const setDisplayModeRef = useRef(setDisplayMode)
+  setDisplayModeRef.current = setDisplayMode
+  useEffect(() => {
+    const driven = drivenHandlesRef.current
+    return () => {
+      for (const handle of driven) {
+        void setDisplayModeRef.current(handle, 'desktop')
+      }
+      driven.clear()
+    }
+  }, [])
+
   return { switchTabView }
 }
