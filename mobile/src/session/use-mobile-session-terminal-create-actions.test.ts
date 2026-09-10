@@ -32,6 +32,20 @@ function terminalCreateResponse() {
   }
 }
 
+/** Answers by method name, because the terminal path also asks the host for its
+ *  launch defaults (settings.get, status.get) before creating anything. */
+function clientAnswering(byMethod: Record<string, unknown>): RpcClient {
+  return {
+    sendRequest: vi.fn(async (method: string) => {
+      const answer = byMethod[method]
+      if (answer === undefined) {
+        throw new Error(`unexpected method ${method}`)
+      }
+      return typeof answer === 'function' ? (answer as () => unknown)() : answer
+    })
+  } as unknown as RpcClient
+}
+
 function createScope(client: RpcClient) {
   return {
     worktreeId: 'workspace-1',
@@ -223,5 +237,121 @@ describe('mobile + Codex tab creation routing', () => {
     ])
     expect(scope.setCreateError).toHaveBeenCalledWith('still unknown')
     expect(scope.showToast).toHaveBeenCalledWith('still unknown', 1800)
+  })
+  it('opens a structured chat for a bare Claude launch instead of a terminal', async () => {
+    const client = clientAnswering({
+      'agentSession.createSupport': { ok: true, result: { supported: true } },
+      'agentSession.create': { ok: true, result: { ok: true, value: { sessionId: 'claude_s1' } } }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('claude')
+    })
+
+    expect(client.sendRequest).toHaveBeenNthCalledWith(1, 'agentSession.createSupport', {
+      worktree: 'id:workspace-1',
+      agent: 'claude'
+    })
+    expect(client.sendRequest).not.toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.anything()
+    )
+    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('agent-session:claude_s1')
+  })
+
+  it('a Claude launch the host cannot support still opens a terminal, with its HUD beacon flags', async () => {
+    const client = clientAnswering({
+      'agentSession.createSupport': { ok: true, result: { supported: false } },
+      'settings.get': { ok: true, result: {} },
+      'status.get': { ok: true, result: { platform: 'darwin' } },
+      'session.tabs.createTerminal': terminalCreateResponse()
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('claude')
+    })
+
+    const createCall = (
+      client.sendRequest as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls.find(([method]) => method === 'session.tabs.createTerminal')
+    expect(createCall).toBeDefined()
+    const createParams = createCall?.[1] as
+      | { agent?: string; launchConfig?: { agentArgs?: unknown } }
+      | undefined
+    expect(createParams).toMatchObject({ agent: 'claude' })
+    expect(createParams?.launchConfig?.agentArgs).toBeTruthy()
+    expect(scope.setCreateError).not.toHaveBeenCalledWith(expect.stringContaining('Codex'))
+    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+  })
+
+  it('a Codex launch the host cannot support still refuses instead of opening a terminal', async () => {
+    const client = clientAnswering({
+      'agentSession.createSupport': { ok: true, result: { supported: false } }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('codex')
+    })
+
+    expect(client.sendRequest).not.toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.anything()
+    )
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      'This Orca host cannot open a Codex server session. Check that the host supports Codex chat and try again.'
+    )
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
+  })
+
+  it('an unconfirmed Claude create never opens a sibling terminal', async () => {
+    const client = clientAnswering({
+      'agentSession.createSupport': { ok: true, result: { supported: true } },
+      'agentSession.create': {
+        ok: false,
+        error: { code: 'agent_session_operation_unknown', message: 'create outcome ambiguous' }
+      }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('claude')
+    })
+
+    expect(client.sendRequest).not.toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.anything()
+    )
+    expect(scope.setCreateError).toHaveBeenCalledWith('create outcome ambiguous')
   })
 })

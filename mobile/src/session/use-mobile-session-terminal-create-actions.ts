@@ -10,7 +10,9 @@ import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
-import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 import { resolveAgentHudLaunchConfig } from './agent-hud-launch-config'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
@@ -64,9 +66,10 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       .slice(2, 10)}`
 
     try {
-      // Bare Codex launches follow structured support; prompted launches keep their startup semantics.
-      if (agent === 'codex' && options === undefined) {
-        const structured = await createMobileStructuredCodexSession(client, worktreeId)
+      // Bare launches of a structured-capable provider follow host createSupport;
+      // prompted launches keep their startup semantics.
+      if (isAgentSessionHandleProvider(agent) && options === undefined) {
+        const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
         if (structured.kind === 'created') {
           const previous = activeHandleRef.current
           if (previous) {
@@ -85,16 +88,28 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           scheduleDelayedAction(() => void fetchSessionTabs(), 500)
           return
         }
-        // A requested server session must not silently become a terminal session.
-        // Unknown outcomes also must not create a sibling after a lost acknowledgement.
-        const message =
-          structured.kind === 'unsupported'
-            ? 'This Orca host cannot open a Codex server session. Check that the host supports Codex chat and try again.'
-            : structured.message
-        setCreateError(message)
-        triggerError()
-        showToast(message, 1800)
-        return
+        // Why the two agents part company here. Codex has refused rather than
+        // downgraded since 2026-09-06 (d3e102b): tapping Codex asks for a server
+        // session, and handing back a terminal instead is not what was asked for.
+        // Claude has never had a structured lane on this phone, so tapping Claude
+        // means "open Claude" — a host that cannot open a structured one must still
+        // open the terminal it opens today, carrying its HUD beacon flags, rather
+        // than opening nothing at all.
+        // 'unknown' never falls back for either agent: the host may already have
+        // committed the create, and a sibling terminal would be a second session
+        // for one intent.
+        const mayOpenTerminalInstead = agent === 'claude' && structured.kind !== 'unknown'
+        if (!mayOpenTerminalInstead) {
+          const agentName = agent ? TUI_AGENT_DISPLAY_NAMES[agent] : 'agent'
+          const message =
+            structured.kind === 'unsupported'
+              ? `This Orca host cannot open a ${agentName} server session. Check that the host supports ${agentName} chat and try again.`
+              : structured.message
+          setCreateError(message)
+          triggerError()
+          showToast(message, 1800)
+          return
+        }
       }
       // Why: an agent the phone launches reports its own model, effort and
       // context on the invisible HUD beacon when asked to at launch (Claude

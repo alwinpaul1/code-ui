@@ -78,8 +78,15 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
+// 2026-09-10: a bare launch gates on isAgentSessionHandleProvider instead of the
+// 'codex' literal, so Claude opens a structured chat too. Claude still falls
+// through to the terminal (and its HUD beacon) when the host cannot open one,
+// Codex still refuses, and the refusal copy names the agent instead of always
+// saying "Codex". Ablated against the pre-change tree: the whole suite passed
+// with every other file of this port in place, so create-actions is the sole
+// cause of both moved pins.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'e60043e75cc6a884a74e1c0093c3c0de666cda17269bd20c4e737c4208c251c2'
+  '137407d7d6f8bb4910e6b1ce2c6c194f5685a34a279a5c217008274abfd5eb49'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -88,7 +95,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   '8b2229f4a3c880c0e21f546a1bfabb27b3536b9a2344cf3b39f5b7da82e24dba'
 const HEAD_TIMER_CLEANUP_SHA256 = 'be3117bde057916619602341bef132f1bd8767d1dff4bacdfd547ca690f5640a'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'fb830a33f89c4d959b36699e9b99d1d9c52fdfcd245e513ef964a5154da63937'
+  'c317eb43c866e545842dba4d79046482ed1040f0a0eac1cb57669640190169c7'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -532,7 +539,7 @@ describe('mobile session route extraction parity', () => {
     // 620 since 2026-09-09: two align="center" props on the empty-state buttons.
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
-    expect(strings).toHaveLength(622)
+    expect(strings).toHaveLength(626)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)
