@@ -120,6 +120,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
       } else if (e.touches.length === 1) {
         ts.isPinching = false;
         ts.dragging = true;
+        beginScrollGestureWriteHold();
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
         ts.lastTime = nowMs();
@@ -245,6 +246,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           vel *= Math.pow(FRICTION_PER_MS, elapsed);
           if (Math.abs(vel) < MIN_VEL) {
             ts.momentumId = null;
+            endScrollGestureWriteHold();
             settleSmoothScrollOffset();
             return;
           }
@@ -261,6 +263,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           } else {
             if (!applyNormalBufferScrollDelta(delta)) {
               ts.momentumId = null;
+              endScrollGestureWriteHold();
               releaseOverscroll();
               settleSmoothScrollOffset();
               return;
@@ -272,6 +275,7 @@ export const TERMINAL_HTML_SURFACE_TOUCH_GESTURES = `  ${TERMINAL_TAP_DISPATCH_J
           cancelSmoothScrollSettle();
           ts.momentumId = requestAnimationFrame(momentumStep);
         } else {
+          endScrollGestureWriteHold();
           settleSmoothScrollOffset();
         }
       }

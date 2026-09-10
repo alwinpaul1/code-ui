@@ -14,8 +14,11 @@ import { XTERM_HTML } from './terminal-webview-html'
 // reading clientHeight, which forced layout on every frame of a pull.
 // Then: momentum got its own frame-step cap. The settle keeps 16ms; a fling
 // must not have ordinary frame variance clamped out of its clock.
-const EXPECTED_SHA256 = '1fa51306b54f31e25c5e11ef8e67592f904565c59f2d88efeffc08949d03646f'
-const EXPECTED_LENGTH = 754275
+// Then: agent output is held out of xterm's parser while a finger is
+// scrolling, because write() parses and repaints on the same WebView thread
+// that owes the finger its frames.
+const EXPECTED_SHA256 = 'c70d91dd8d6210cbd15631ed2243e9a33a52aa1be962a86ff21898a3daf7d1ae'
+const EXPECTED_LENGTH = 756001
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

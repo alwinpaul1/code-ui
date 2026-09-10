@@ -1,6 +1,10 @@
 // Also carries disposeTermObservers() and extractMouseModeScanTail(): both belong to
 // other concerns, but emitted-document order pins them inside this queue.
-export const TERMINAL_HTML_WRITE_QUEUE = `  function resetWriteQueue() {
+export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drains anyway: a reader parked in scrollback
+  // must not freeze the live view indefinitely.
+  var SCROLL_WRITE_HOLD_MAX_MS = 1200;
+
+  function resetWriteQueue() {
     writeQueue = [];
     writeQueueHead = 0;
   }
@@ -82,8 +86,40 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  function resetWriteQueue() {
     return '';
   }
 
+  /**
+   * xterm.write() parses AND repaints, on the same WebView JS thread that has
+   * to move the finger's pixels. A Claude or Codex TUI repaints its whole
+   * screen several times a second, so a drag spent most of its frames waiting
+   * on a parse.
+   *
+   * Measured on a 120 Hz S23, real finger, same gesture back to back: the chat
+   * held a flat 120 fps with zero frames over 16.7ms, while the terminal
+   * managed 15 fps with 42% of frames over 16.7ms and a p90 of 193ms — and its
+   * median frame was 9.5ms, so it was fast whenever it was not blocked.
+   *
+   * Nothing is dropped. The bytes stay queued and land the moment the gesture
+   * settles, and the cap below means a long scroll cannot freeze the view.
+   */
+  function writesHeldForScrollGesture() {
+    if (!scrollGestureActive) return false;
+    return nowMs() - scrollGestureStartedAt <= SCROLL_WRITE_HOLD_MAX_MS;
+  }
+
+  function beginScrollGestureWriteHold() {
+    if (scrollGestureActive) return;
+    scrollGestureActive = true;
+    scrollGestureStartedAt = nowMs();
+  }
+
+  function endScrollGestureWriteHold() {
+    if (!scrollGestureActive) return;
+    scrollGestureActive = false;
+    pumpWrites(terminalGeneration);
+  }
+
   function pumpWrites(gen) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
+    if (writesHeldForScrollGesture()) return;
     var next = nextQueuedWrite();
     if (typeof next !== 'string') {
       if (typeof next === 'function') return next(), pumpWrites(gen);

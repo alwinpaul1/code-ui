@@ -11,6 +11,9 @@ vi.mock('react-native', () => ({
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
+  // The list sizes its render-ahead window from the screen, so the stub has to
+  // report one — a Galaxy S23's 2316px at density 2.8125.
+  useWindowDimensions: () => ({ height: 823, width: 384, scale: 2.8125, fontScale: 1 }),
   View: 'View'
 }))
 

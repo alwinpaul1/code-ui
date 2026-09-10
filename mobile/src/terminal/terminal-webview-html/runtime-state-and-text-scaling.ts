@@ -13,6 +13,9 @@ export const TERMINAL_HTML_RUNTIME_STATE_AND_TEXT_SCALING = `  var PRIVATE_MODE_
   var writeQueue = [];
   var writeQueueHead = 0;
   var writesDraining = false;
+  // A finger (or its fling) owns the WebView's JS thread until it settles.
+  var scrollGestureActive = false;
+  var scrollGestureStartedAt = 0;
   var afterDrainCallbacks = [];
   var termObserverDisposables = [];
   var ready = false;

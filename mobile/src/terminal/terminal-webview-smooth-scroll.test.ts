@@ -43,6 +43,7 @@ let posted: Record<string, unknown>[] = []
 let registeredListeners: Registered[] = []
 let scrollListeners: (() => void)[] = []
 let writeParsedListeners: (() => void)[] = []
+let parsedWrites: string[] = []
 let renderListeners: (() => void)[] = []
 // Why: xterm buffers repaints while DEC 2026 synchronized output is on and
 // releases them on the closing sequence (or a 1 s timeout). Claude Code wraps
@@ -90,8 +91,9 @@ function makeTerminal() {
         getNullCell: () => ({})
       }
     },
-    write(_data: string, callback?: () => void) {
+    write(data: string, callback?: () => void) {
       // Why: agent output books xterm's next paint exactly like a scroll does.
+      parsedWrites.push(data)
       bookPaint()
       callback?.()
     },
@@ -284,6 +286,7 @@ function boot(state: Partial<BufferState> = {}): void {
   teardownBoot()
   scrollListeners = []
   writeParsedListeners = []
+  parsedWrites = []
   renderListeners = []
   paintWithheld = false
   buffer = { baseY: 5000, type: 'normal', viewportY: 2500, ...state }
@@ -549,6 +552,50 @@ describe('terminal WebView touch scrolling', () => {
     expect(at120).toBeGreaterThan(20)
     expect(Math.abs(at60 - at120)).toBeLessThanOrEqual(1)
     expect(Math.abs(at30 - at120)).toBeLessThanOrEqual(1)
+  })
+
+  it('holds agent output out of the parser while a finger is scrolling', () => {
+    // xterm.write() parses AND repaints on the same WebView JS thread that has
+    // to move the finger's pixels, and a Claude TUI repaints its whole screen
+    // several times a second. Measured on a 120 Hz S23 with a real finger: the
+    // chat held 120 fps with zero frames over 16.7ms while the terminal managed
+    // 15 fps with 42% over 16.7ms — its median frame was 9.5ms, so it was fast
+    // whenever it was not blocked on a parse.
+    boot()
+    parsedWrites.length = 0
+
+    fireTouch('touchstart', [{ x: 100, y: 500 }])
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: 'mid-scroll output' })
+      })
+    )
+    runFrames(4, FRAME_120HZ_MS)
+
+    expect(parsedWrites).toEqual([])
+
+    fireTouch('touchend', [])
+    runUntilIdle(FRAME_120HZ_MS)
+
+    // Nothing is dropped — it lands the moment the gesture settles.
+    expect(parsedWrites).toEqual(['mid-scroll output'])
+  })
+
+  it('never freezes the live view, however long the reader keeps scrolling', () => {
+    boot()
+    fireTouch('touchstart', [{ x: 100, y: 500 }])
+    parsedWrites.length = 0
+
+    // A finger still down well past the hold cap.
+    clock += 2000
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: 'late output' })
+      })
+    )
+    runFrames(4, FRAME_120HZ_MS)
+
+    expect(parsedWrites).toEqual(['late output'])
   })
 
   it('does not read layout on every touchmove', () => {
