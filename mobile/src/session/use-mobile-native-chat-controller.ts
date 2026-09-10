@@ -49,6 +49,7 @@ export function useMobileNativeChatController(
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    activeHandle,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
@@ -82,6 +83,7 @@ export function useMobileNativeChatController(
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    activeHandle,
     activeHandleRef,
     nativeChatTranscriptIsLocalReadable
   })
@@ -129,7 +131,7 @@ export function useMobileNativeChatController(
     onUnconfirmedSendLanded: onSendResolved
   })
 
-  const backgroundTaskReport = useActiveTabBackgroundTaskReport(activeHandleRef.current)
+  const backgroundTaskReport = useActiveTabBackgroundTaskReport(activeHandle)
   const nativeChatAgentWorking = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeChatResolution != null && activeTabAgentWorking

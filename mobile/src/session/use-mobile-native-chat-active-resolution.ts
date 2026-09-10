@@ -9,6 +9,13 @@ export function useMobileNativeChatActiveResolution(args: {
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
   activeSessionTabId: string | null
+  /** The active PTY as this render knows it. Everything derived below reads
+   *  THIS, never `activeHandleRef`: a ref is mutated outside React, so reading
+   *  one during render makes the render impure — the value is not tracked, and
+   *  `useSyncExternalStore` keeps a snapshot closed over whichever handle the
+   *  last render happened to see. */
+  activeHandle: string | null
+  /** Kept for callbacks and effects, which run after the ref has settled. */
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
 }): {
@@ -36,7 +43,7 @@ export function useMobileNativeChatActiveResolution(args: {
   streamScopeKey: string
 } {
   const {
-    activeHandleRef,
+    activeHandle,
     activeSessionTab,
     activeSessionTabId,
     hostId,
@@ -52,7 +59,7 @@ export function useMobileNativeChatActiveResolution(args: {
     viewResolved
   } = useMobileSessionViewMode({ hostId, worktreeId })
   const terminalPeekActive = activeSessionTabId != null && peekedTerminalTabId === activeSessionTabId
-  const beaconAgent = useAgentHudBeacon(activeHandleRef.current)?.agent ?? null
+  const beaconAgent = useAgentHudBeacon(activeHandle)?.agent ?? null
   const chatIdentity =
     activeSessionTab != null
       ? resolveMobileNativeChat(
@@ -85,9 +92,9 @@ export function useMobileNativeChatActiveResolution(args: {
     activeTabStatus?.state === 'working' && activeTabStatus.workingMode !== 'monitoring'
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
-  const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandleRef.current ?? ''}`
+  const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandle ?? ''}`
   const providerSessionId = activeSessionTab?.agentStatus?.providerSession?.id ?? ''
-  const streamScopeKey = `${routeKey}\0${activeChatSessionId ?? providerSessionId}\0${activeHandleRef.current ?? ''}`
+  const streamScopeKey = `${routeKey}\0${activeChatSessionId ?? providerSessionId}\0${activeHandle ?? ''}`
 
   return {
     isTabChatView,

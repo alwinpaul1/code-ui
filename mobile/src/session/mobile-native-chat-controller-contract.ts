@@ -147,6 +147,9 @@ export type MobileNativeChatControllerArgs = {
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
   activeSessionTabId: string | null
+  /** The active PTY as the caller's render knows it — what every render-time
+   *  derivation must use. `activeHandleRef` is for callbacks and effects. */
+  activeHandle: string | null
   activeHandleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean

@@ -71,6 +71,7 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     activeSessionTab,
     activeSessionTabId,
+    activeHandle,
     activeHandleRef,
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
