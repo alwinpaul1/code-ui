@@ -11,6 +11,8 @@ import {
   typeMobileNativeChatCommandWithOutcome
 } from './mobile-native-chat-send'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { AGENT_TUI_MAX_KEY_WRITE_BYTES } from './agent-tui-clear-write-chunks'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 
 afterEach(() => vi.useRealTimers())
 
@@ -359,6 +361,44 @@ describe('clearMobileNativeChatInput', () => {
   }
   const params = (client: RpcClient) =>
     vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
+
+  it('splits a long clear so the agent never reads it as one pasted block', async () => {
+    // Live Claude Code 2.1.266, 60 columns, 2026-09-10: one write of 63 Ctrl+U
+    // cleared a 400-character draft and 64 did nothing at all. On the phone the
+    // 74-byte burst was carried into the message, and the transcript received
+    // the text, the literal control bytes, and the text again as one turn.
+    const client = clientWithResponse(accepted)
+    const clearInput = buildMobileNativeChatClearInputForText('a long draft '.repeat(40))
+    expect(clearInput.length).toBeGreaterThanOrEqual(AGENT_TUI_MAX_KEY_WRITE_BYTES)
+
+    await expect(
+      clearMobileNativeChatInput({ client, terminal: 'terminal-1', clearInput })
+    ).resolves.toBe(true)
+
+    const writes = vi
+      .mocked(client.sendRequest)
+      .mock.calls.map(([, sendParams]) => sendParams as { text: string; enter: boolean })
+    expect(writes.length).toBeGreaterThan(1)
+    for (const write of writes) {
+      expect(write.text.length).toBeLessThan(AGENT_TUI_MAX_KEY_WRITE_BYTES)
+      expect(write.enter).toBe(false)
+    }
+    expect(writes.map((write) => write.text).join('')).toBe(clearInput)
+  })
+
+  it('reports a clear as failed when one of its writes is rejected', async () => {
+    const client = {
+      sendRequest: vi
+        .fn()
+        .mockResolvedValueOnce(accepted)
+        .mockResolvedValue({ id: 'request', ok: false, error: { code: 'nope', message: 'no' } })
+    } as unknown as RpcClient
+    const clearInput = buildMobileNativeChatClearInputForText('a long draft '.repeat(40))
+
+    await expect(
+      clearMobileNativeChatInput({ client, terminal: 'terminal-1', clearInput })
+    ).resolves.toBe(false)
+  })
 
   it('writes the burst as its OWN non-submitting write', async () => {
     // Bundling the burst into the body write reached the agent as LITERAL Ctrl+U

@@ -3,7 +3,7 @@
 // reports nothing — a reported preedit is not text yet and must never time out.
 export const TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS = 300
 
-const TERMINAL_DEL_BYTE = '\x7f'
+export const TERMINAL_DEL_BYTE = '\x7f'
 const LAST_ASCII_CODE_POINT = 0x7f
 
 export type TerminalLiveMirrorStep = {

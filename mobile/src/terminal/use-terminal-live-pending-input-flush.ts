@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import {
-  buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
   TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS
 } from './terminal-live-preedit-mirror'
@@ -12,6 +11,7 @@ import {
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
+import { buildTerminalLiveMirrorWrites } from './terminal-live-mirror-writes'
 
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
@@ -137,16 +137,23 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         }, TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
       }
 
-      const payload = buildTerminalLiveMirrorPayload(step)
-      if (payload.length === 0) {
+      // Why several: a long erase run read as one chunk is pasted rather than
+      // applied. See AGENT_TUI_MAX_KEY_WRITE_BYTES; the common edit is still
+      // one write.
+      const payloadWrites = buildTerminalLiveMirrorWrites(step)
+      if (payloadWrites.length === 0) {
         return waitForPendingLiveInputFlush()
       }
-      return queueTerminalLiveMirrorSend(
-        pendingLiveInputFlushRef.current,
-        handle,
-        payload,
-        sendQueuedMirrorPayload
-      )
+      let queued = waitForPendingLiveInputFlush()
+      for (const payload of payloadWrites) {
+        queued = queueTerminalLiveMirrorSend(
+          pendingLiveInputFlushRef.current,
+          handle,
+          payload,
+          sendQueuedMirrorPayload
+        )
+      }
+      return queued
     },
     [
       activeHandleRef,

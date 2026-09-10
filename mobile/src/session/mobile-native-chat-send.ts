@@ -3,6 +3,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { typeAgentTuiCommand } from '../../../src/shared/agent-tui-command-typing'
+import { splitAgentTuiClearWrites } from './agent-tui-clear-write-chunks'
 
 type MobileTerminalClient = {
   id: string
@@ -157,17 +158,30 @@ export async function clearMobileNativeChatInput(args: {
     return false
   }
   try {
-    const response = await args.client.sendRequest(
-      'terminal.send',
-      {
-        terminal: args.terminal,
-        text: args.clearInput,
-        enter: false,
-        ...(args.mobileClient ? { client: args.mobileClient } : {})
-      },
-      { timeoutMs, budgetSpansConnect: true }
-    )
-    return isTerminalSendRpcAccepted(response)
+    // Why several writes: an agent reads a big enough chunk as pasted text, not
+    // as keys, and a long draft needs a burst past that bound. See
+    // AGENT_TUI_MAX_KEY_WRITE_BYTES — measured, not guessed.
+    for (const text of splitAgentTuiClearWrites(args.clearInput)) {
+      const remainingMs =
+        args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
+      if (remainingMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
+        return false
+      }
+      const response = await args.client.sendRequest(
+        'terminal.send',
+        {
+          terminal: args.terminal,
+          text,
+          enter: false,
+          ...(args.mobileClient ? { client: args.mobileClient } : {})
+        },
+        { timeoutMs: remainingMs, budgetSpansConnect: true }
+      )
+      if (!isTerminalSendRpcAccepted(response)) {
+        return false
+      }
+    }
+    return true
   } catch {
     // A failed clear must not send the body on top of an uncleared line.
     return false

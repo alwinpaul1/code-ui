@@ -6,6 +6,7 @@ import {
   openMobileNativeChatSendBudget
 } from './mobile-native-chat-send'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { splitAgentTuiClearWrites } from './agent-tui-clear-write-chunks'
 
 // Give the agent TUI a beat to register each bracketed image paste before the
 // message text + Enter arrive, so the image attaches instead of being treated as
@@ -57,7 +58,10 @@ export async function pasteMobileNativeChatImagePaths({
   // once and let each write draw from what's left.
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
   for (const text of [
-    clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+    // Why split: an agent reads a big enough chunk as pasted text rather than
+    // as keys, and a long draft needs a clear burst past that bound. See
+    // AGENT_TUI_MAX_KEY_WRITE_BYTES.
+    ...splitAgentTuiClearWrites(clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT),
     ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
   ]) {
     const remainingMs = deadline - Date.now()

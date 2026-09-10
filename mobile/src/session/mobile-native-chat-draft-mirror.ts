@@ -1,8 +1,8 @@
 import { AGENT_TUI_CLEAR_INPUT_LINE } from '../../../src/shared/agent-tui-input-clear'
 import {
-  buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep
 } from '../terminal/terminal-live-preedit-mirror'
+import { buildTerminalLiveMirrorWrites } from '../terminal/terminal-live-mirror-writes'
 
 export type NativeChatDraftMirrorPlan = {
   /** Ordered PTY writes, each its own `terminal.send`. Empty when nothing changed. */
@@ -41,13 +41,11 @@ export function planNativeChatDraftMirror(
     return { writes: [], nextSentText: sentText }
   }
   const step = computeTerminalLiveMirrorStep(sentText, line, { commitHeld: true })
-  const payload = buildTerminalLiveMirrorPayload(step)
+  const payloadWrites = buildTerminalLiveMirrorWrites(step)
   const writes: string[] = []
   if (sentText.length === 0 && line.length > 0) {
     writes.push(AGENT_TUI_CLEAR_INPUT_LINE)
   }
-  if (payload.length > 0) {
-    writes.push(payload)
-  }
+  writes.push(...payloadWrites)
   return { writes, nextSentText: step.nextSentText }
 }
