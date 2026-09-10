@@ -172,7 +172,7 @@ export class MobileEndpointSupervisor {
         this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
-      migrate: (client, path) => this.logical.migrateTo(client, path),
+      migrate: (client, path, abort) => this.logical.migrateTo(client, path, undefined, abort),
       onDirectUnreachable: () => this.rememberDirectVerdict(false),
       onDirectMigrated: async () => {
         this.rememberDirectVerdict(true)
@@ -314,6 +314,9 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    // Why: without this the probe keeps its timer and can still migrate the
+    // connection after its owner has gone (upstream #18940).
+    this.directProbe.stop()
     this.launchRace?.abort()
     this.launchRace = null
     this.unsubscribeState?.()

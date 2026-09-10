@@ -310,6 +310,9 @@ export function connectMobileRelayRpcSession(args: {
     closed = true
     failure = error
     livenessWatchdog.stop(livenessIdentity)
+    // Why: a closed session must not leave the host publishing into streams
+    // nobody reads. Upstream #18926.
+    streams.clear()
     link.close()
     pending.rejectAll(error)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')

@@ -18,6 +18,10 @@ const NO_PLAUSIBLE_ENDPOINT_RECHECK_MS = 60_000
 export class DirectReturnProbe {
   private timer: ReturnType<typeof setTimeout> | null = null
   private inFlight: AbortController | null = null
+  // Why a latch and not just an abort: stop() must also fence work already past
+  // its await, or a probe that authenticated a millisecond earlier still
+  // migrates the connection its owner has just given up (upstream #18940).
+  private stopped = false
 
   constructor(
     private readonly deps: {
@@ -34,7 +38,11 @@ export class DirectReturnProbe {
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
-      migrate: (client: RpcClient, path: MobileConnectionPath) => Promise<void>
+      migrate: (
+        client: RpcClient,
+        path: MobileConnectionPath,
+        shouldAbort: () => boolean
+      ) => Promise<void>
       onDirectMigrated: () => Promise<void>
       /** A probe timed out or was refused (not aborted). */
       onDirectUnreachable?: () => void
@@ -43,7 +51,7 @@ export class DirectReturnProbe {
   ) {}
 
   schedule(delayMs = DIRECT_PROBE_INTERVAL_MS): void {
-    if (!this.hooks.canSchedule() || this.timer) {
+    if (this.stopped || !this.hooks.canSchedule() || this.timer) {
       return
     }
     this.timer = this.deps.setTimer(() => {
@@ -64,6 +72,13 @@ export class DirectReturnProbe {
     this.inFlight?.abort()
   }
 
+  /** The owner is gone for good: cancel the probe and never schedule another. */
+  stop(): void {
+    this.stopped = true
+    this.clear()
+    this.inFlight?.abort()
+  }
+
   private async plausibleEndpoints(): Promise<string[]> {
     const all = directEndpointUrls(this.hooks.host())
     if (!this.deps.networkType) {
@@ -74,6 +89,9 @@ export class DirectReturnProbe {
   }
 
   private async probe(): Promise<void> {
+    if (this.stopped) {
+      return
+    }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule()
       return
@@ -102,6 +120,9 @@ export class DirectReturnProbe {
         controller.signal,
         endpoints
       )
+      if (this.stopped) {
+        return
+      }
       if (!successful) {
         // Why: an aborted probe proved nothing about the endpoint.
         if (!controller.signal.aborted) {
@@ -114,8 +135,14 @@ export class DirectReturnProbe {
         successful.client.close()
         return
       }
-      await this.hooks.migrate(successful.client, successful.path)
+      const candidate = successful
+      // migrate owns the candidate from here, including closing it when the
+      // cutover is fenced off.
       successful = null
+      await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+      if (this.stopped) {
+        return
+      }
       this.hooks.hysteresis.recordMigration(this.deps.now())
       await this.hooks.onDirectMigrated()
     } finally {
