@@ -48,6 +48,12 @@ export type BackgroundTaskDeriveOptions = {
    *  a queue-operation record Orca never surfaces, but the status-line script
    *  reads that transcript on every refresh and beacons the ids within seconds. */
   finishedTaskIds?: readonly string[]
+  /** What the agent itself says is still running, from its Stop hook beacon.
+   *  When present this OUTRANKS the transcript: a launch missing from it has
+   *  ended, whatever the transcript does or does not record. Null or absent
+   *  means the agent has not answered yet — mid-turn, the Stop hook has not
+   *  fired — and the transcript remains the only source. */
+  runningTaskIds?: readonly string[] | null
 }
 
 export type BackgroundTaskKind = 'shell' | 'agent'
@@ -150,7 +156,14 @@ export function deriveBackgroundTasks(
       notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
     }
   }
-  return splitByStatus(launches, notifications, now, hostStatus, position + 1)
+  return splitByStatus(
+    launches,
+    notifications,
+    now,
+    hostStatus,
+    position + 1,
+    options.runningTaskIds ?? null
+  )
 }
 
 function splitByStatus(
@@ -158,8 +171,10 @@ function splitByStatus(
   notifications: ReadonlyMap<string, Notification>,
   now: number,
   hostStatus: BackgroundTaskHostStatus | null,
-  afterTranscript: number
+  afterTranscript: number,
+  reportedRunning: readonly string[] | null
 ): BackgroundTasks {
+  const agentSaysRunning = reportedRunning === null ? null : new Set(reportedRunning)
   const running: BackgroundTask[] = []
   const finished: { task: BackgroundTask; at: number }[] = []
   const roster = liveSubagentRoster(hostStatus)
@@ -182,6 +197,8 @@ function splitByStatus(
       const hostSaysFinished =
         paneDone ||
         launchedBeforeRun ||
+        // The agent's own answer, when it has given one.
+        (agentSaysRunning !== null && !agentSaysRunning.has(launch.id)) ||
         (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
       if (hostSaysFinished) {
         finished.push({
@@ -203,6 +220,16 @@ function splitByStatus(
         ...(summary ? { summary } : {})
       }
     })
+  }
+  // A task the agent reports but the loaded transcript never showed: launched
+  // before the page the phone holds, or paginated out of it.
+  if (agentSaysRunning) {
+    for (const id of agentSaysRunning) {
+      if (launches.has(id) || notifications.has(id)) {
+        continue
+      }
+      running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })
+    }
   }
   // A subagent the host is tracking but the loaded transcript window never
   // showed (launched before the page, or its launch record paginated out).

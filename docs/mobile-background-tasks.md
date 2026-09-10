@@ -104,3 +104,31 @@ This does not make the window unnecessary. A phone that has been away longer
 than the window still misses ids, and those tasks stay in the running row
 until the turn ends and the pane reports `done`.
 
+## The agent is the authority now, not the transcript
+
+Measured 2026-09-10 against this project's own 40 MB transcript: reading the
+transcript alone reported **36 background tasks running when 3 were**. Every
+retirement path the reader has is indirect — a completion that lands mid-turn
+is written as a record Orca's transcript reader never surfaces, so almost
+nothing ever retired on its own.
+
+Claude Code's Stop hook payload carries `background_tasks`, each with an `id`
+and a `status` (captured from Claude Code 2.1.267; the payload is a fixture
+next to `agent-hud-stop-hook.test.ts`). The phone now installs that hook
+through the same `--settings` launch flag as the status line — still no file
+and no configuration on the host — and the hook beacons the ids still running.
+
+`runningTaskIds` outranks everything the transcript says: a launch missing
+from it has ended. It is deliberately three-valued. Absent means the agent has
+not answered, which is the normal state mid-turn, and the transcript stays the
+only source until the turn ends. Empty means nothing is running, which is what
+clears the row on the last task.
+
+The two beacons are merged rather than replacing one another: the status line
+says what the agent IS, the Stop hook says what it still has RUNNING, and
+neither carries the other's fields.
+
+**This only takes effect for a tab opened after the phone is updated.** The
+launch flags are fixed when the agent starts, so a session already running
+keeps the old settings, hook and all, until its tab is opened again.
+

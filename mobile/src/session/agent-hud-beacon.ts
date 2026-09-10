@@ -46,6 +46,10 @@ export type AgentHudBeacon = {
   /** Background tasks whose completion Claude has written to its transcript,
    *  mid-turn ones included — the notifications Orca's reader never surfaces. */
   doneTaskIds: string[]
+  /** Ids the agent itself reports as still running, from its Stop hook. Null
+   *  when this beacon did not carry the field, which is not the same as an
+   *  empty list: empty means "nothing is running", null means "no answer". */
+  runningTaskIds: string[] | null
   receivedAt: number
 }
 
@@ -125,6 +129,9 @@ export function parseAgentHudBeaconPayload(
     doneTaskIds: (values.get('done') ?? '')
       .split(',')
       .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
+    runningTaskIds: values.has('run')
+      ? (values.get('run') ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
+      : null,
     receivedAt
   }
 }
@@ -164,8 +171,22 @@ function publish(handle: string, payload: string): void {
   if (!beacon) {
     return
   }
-  beacons.set(handle, beacon)
-  storeForWarmStart(handle, beacon)
+  // Why merge: two beacons describe one tab. The status line says what the
+  // agent IS (model, effort, context) on every repaint; the Stop hook says
+  // what it still has RUNNING, and carries none of the rest. Replacing
+  // wholesale would blank the HUD every time a turn ended.
+  const previous = beacons.get(handle)
+  const merged: AgentHudBeacon = previous
+    ? {
+        ...previous,
+        ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
+        runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
+        doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
+        receivedAt: beacon.receivedAt
+      }
+    : beacon
+  beacons.set(handle, merged)
+  storeForWarmStart(handle, merged)
   for (const listener of listeners) {
     listener()
   }

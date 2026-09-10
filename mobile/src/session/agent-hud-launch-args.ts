@@ -410,11 +410,82 @@ export function encodePowerShellCommand(script: string): string {
 
 export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(CLAUDE_HUD_STATUSLINE_POWERSHELL)}`
 
+/**
+ * Claude Code's Stop hook, as the authority on what is still running.
+ *
+ * Why this exists: the phone used to infer background tasks from the
+ * transcript, because nothing told it. That inference cannot see a completion
+ * recorded mid-turn — Claude writes those as records Orca's reader never
+ * surfaces — so tasks piled up. Measured 2026-09-10 against a real session:
+ * the reader claimed 36 running when 3 were.
+ *
+ * The agent knows exactly. Its Stop payload carries `background_tasks` with an
+ * `id` and a `status` each (verified against Claude Code 2.1.267; the captured
+ * payload is the fixture beside this file's test). The hook beacons the ids
+ * still running, and the phone takes that over its own guesswork.
+ *
+ * Parsed with tr, grep and sed alone: a Claude Code native install is a single
+ * binary, so the host may have no node, python3 or jq — the same reason the
+ * status line carries four readers. Splitting on `{` puts one task per line;
+ * the id is read only from a line that also says it is running.
+ *
+ * `run=` is always emitted, empty included: an absent field means "no answer",
+ * an empty one means "nothing is running", and the phone needs the difference
+ * to clear the row on the last task.
+ */
+export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
+  'i=$(cat 2>/dev/null || true)',
+  'rn=$(printf %s "$i" | tr "{" "\\n" | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
+  'o="CUIHUD1 agent=claude run=${rn%,}"',
+  ...TTY_WRITE
+].join('; ')
+
+/**
+ * The Stop hook on a Windows host with no Git Bash, which runs hooks under
+ * PowerShell. Same contract as the sh script: beacon the ids the agent says
+ * are still running, always emitting `run=` even when empty. Written to the
+ * agent's own console through the same P/Invoke writer the status line uses,
+ * because a hook child there sits in a hidden console.
+ *
+ * Runs for real under PowerShell 7 in tests. It has NOT run on Windows.
+ */
+export const CLAUDE_HUD_STOP_HOOK_POWERSHELL = [
+  '$ErrorActionPreference="SilentlyContinue"',
+  '$i=[Console]::In.ReadToEnd()',
+  '$j=$null',
+  'try{$j=$i | ConvertFrom-Json}catch{}',
+  '$ids=@()',
+  'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
+  '$o="CUIHUD1 agent=claude run=" + ($ids -join ",")',
+  ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
+  'W $o'
+].join('\n')
+
+export const CLAUDE_HUD_STOP_HOOK_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(CLAUDE_HUD_STOP_HOOK_POWERSHELL)}`
+
 export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null = null): string {
   return JSON.stringify({
     statusLine: {
       type: 'command',
       command: hostPlatform === 'win32' ? CLAUDE_HUD_WINDOWS_COMMAND : CLAUDE_HUD_STATUSLINE_SCRIPT
+    },
+    // Why a hook as well as the status line: the status line says what the
+    // agent IS, the Stop hook says what it still has running. Both ride the
+    // same --settings flag, so the host still gains no file and no config.
+    hooks: {
+      Stop: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command:
+                hostPlatform === 'win32'
+                  ? CLAUDE_HUD_STOP_HOOK_WINDOWS_COMMAND
+                  : CLAUDE_HUD_STOP_HOOK_SCRIPT
+            }
+          ]
+        }
+      ]
     }
   })
 }
