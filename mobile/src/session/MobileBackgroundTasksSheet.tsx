@@ -14,7 +14,6 @@ import {
   formatBackgroundTaskElapsed,
   type BackgroundTask
 } from './mobile-background-tasks'
-import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -28,13 +27,13 @@ export function MobileBackgroundTasksSheet({
   visible,
   messages,
   agentStatus,
-  backgroundTaskReport,
+  finishedTaskIds,
   onClose
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
-  backgroundTaskReport?: ActiveTabBackgroundTaskReport
+  finishedTaskIds?: readonly string[]
   onClose: () => void
 }) {
   return (
@@ -42,7 +41,7 @@ export function MobileBackgroundTasksSheet({
       <MobileBackgroundTasksSheetBody
         messages={messages}
         agentStatus={agentStatus ?? null}
-        backgroundTaskReport={backgroundTaskReport}
+        finishedTaskIds={finishedTaskIds}
       />
     </BottomDrawer>
   )
@@ -53,11 +52,11 @@ export function MobileBackgroundTasksSheet({
 export function MobileBackgroundTasksSheetBody({
   messages,
   agentStatus,
-  backgroundTaskReport
+  finishedTaskIds
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
-  backgroundTaskReport?: ActiveTabBackgroundTaskReport
+  finishedTaskIds?: readonly string[]
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -68,12 +67,8 @@ export function MobileBackgroundTasksSheetBody({
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
   const { running, finished } = useMemo(
-    () =>
-      deriveBackgroundTasks(messages, now, agentStatus ?? null, {
-        finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
-        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null
-      }),
-    [agentStatus, backgroundTaskReport, messages, now]
+    () => deriveBackgroundTasks(messages, now, agentStatus ?? null, { finishedTaskIds }),
+    [agentStatus, finishedTaskIds, messages, now]
   )
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {

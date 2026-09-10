@@ -33,7 +33,7 @@ import {
   withTerminalDialogOptions,
   resolveObservedPermission
 } from './mobile-terminal-permission-options-merge'
-import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import { useActiveTabFinishedTaskIds } from './use-active-tab-finished-task-ids'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -138,7 +138,7 @@ export function useMobileNativeChatController(
     onUnconfirmedSendLanded: onSendResolved
   })
 
-  const backgroundTasks = useActiveTabBackgroundTaskReport(activeHandleRef.current)
+  const finishedTaskIds = useActiveTabFinishedTaskIds(activeHandleRef.current)
   const nativeChatAgentWorking = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeChatResolution != null && activeTabAgentWorking
@@ -459,7 +459,7 @@ export function useMobileNativeChatController(
     nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
-    nativeChatBackgroundTaskReport: backgroundTasks,
+    nativeChatFinishedTaskIds: finishedTaskIds,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,

@@ -16,23 +16,6 @@ const NONE: readonly string[] = []
  *  session scrolls past that in well under two minutes. See
  *  `mobile-finished-task-id-memory.ts`. Memory is per terminal handle, so
  *  switching tabs never carries one tab's finished ids into another. */
-export type ActiveTabBackgroundTaskReport = {
-  /** Ids the beacon has ever named finished, remembered across refreshes. */
-  finishedTaskIds: readonly string[]
-  /** What the agent's Stop hook says is still running, or null before it has
-   *  answered. Null and empty differ: empty means nothing is running. */
-  runningTaskIds: readonly string[] | null
-}
-
-export function useActiveTabBackgroundTaskReport(
-  handle: string | null
-): ActiveTabBackgroundTaskReport {
-  return {
-    finishedTaskIds: useActiveTabFinishedTaskIds(handle),
-    runningTaskIds: useAgentHudBeacon(handle)?.runningTaskIds ?? null
-  }
-}
-
 export function useActiveTabFinishedTaskIds(handle: string | null): readonly string[] {
   const memory = useRef<{ handle: string | null; ids: readonly string[] }>({
     handle,

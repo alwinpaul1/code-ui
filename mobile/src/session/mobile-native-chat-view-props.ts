@@ -18,7 +18,6 @@ import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-da
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -40,7 +39,7 @@ export type MobileNativeChatViewProps = {
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
-  backgroundTaskReport?: ActiveTabBackgroundTaskReport
+  finishedTaskIds?: readonly string[]
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated
