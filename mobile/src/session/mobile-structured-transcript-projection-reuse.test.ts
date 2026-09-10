@@ -62,6 +62,8 @@ describe('a transcript row that did not change on this stream frame', () => {
 
   it('answers the single-item projection with the same object as the list projection', () => {
     const item = textItem('row-1', 'first')
-    expect(projectStructuredItemToNativeChat(item)).toBe(projectStructuredItemsToNativeChat([item])[0])
+    expect(projectStructuredItemToNativeChat(item)).toBe(
+      projectStructuredItemsToNativeChat([item])[0]
+    )
   })
 })

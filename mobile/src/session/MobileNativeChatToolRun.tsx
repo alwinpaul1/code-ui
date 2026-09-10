@@ -14,6 +14,12 @@ import {
   isEditToolName
 } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
+import {
+  mobileTaskListPreview,
+  mobileTaskListRows,
+  type MobileTaskListRow
+} from './mobile-native-chat-task-list-rows'
 import {
   ToolExecutionMeta,
   ToolRowName,
@@ -114,12 +120,16 @@ function editFilesForPair(pair: ToolPair) {
  *  expandable line. `defaultExpanded` lets the group toggle open every line. */
 function ToolLine({
   pair,
+  taskList,
   defaultExpanded,
   diffLineLimit,
   onOpenFile,
   styles
 }: {
   pair: ToolPair
+  /** Set when this pair is the agent revising its plan, in which case the
+   *  checklist speaks for the call AND its result. */
+  taskList: MobileTaskListRow | null
   defaultExpanded: boolean
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
@@ -130,19 +140,26 @@ function ToolLine({
   const { call, result } = pair
   const name = call ? call.name : 'Result'
   const inputDisplay = call ? createToolInputDisplay(call.input) : null
-  const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
+  // A plan's input has no path and no primary argument, so the generic label
+  // falls through to a bounded JSON preview — `{"todos":[{"content":…` on the
+  // one line the phone gives a collapsed row. Say how far along it is instead.
+  const preview = taskList
+    ? mobileTaskListPreview(taskList.list)
+    : (inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? '')
   // Why: collapsed tool rows are the common path; defer bounded diff parsing
   // and detail formatting until the user asks to reveal the detail.
   // An edit renders as one card per file it changed, which speaks for the call
   // AND its result — the raw flat diff and the result body are suppressed, so
   // one turn never shows two presentations of the same change.
-  const editFiles = expanded && call && isEditToolName(call.name) ? editFilesForPair(pair) : null
+  const editFiles =
+    !taskList && expanded && call && isEditToolName(call.name) ? editFilesForPair(pair) : null
+  const rendered = editFiles !== null || taskList !== null
   const callDiff =
-    !editFiles && expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
+    !rendered && expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
   const resultDiff =
-    !editFiles && expanded && result ? diffFromText(result.output, diffLineLimit) : null
+    !rendered && expanded && result ? diffFromText(result.output, diffLineLimit) : null
   const callDetail =
-    expanded && inputDisplay && !callDiff && !editFiles ? inputDisplay.formatDetail() : undefined
+    expanded && inputDisplay && !callDiff && !rendered ? inputDisplay.formatDetail() : undefined
   const searchResults = call?.webSearchResults
   const hasResults = (searchResults?.length ?? 0) > 0
   const hasDetail =
@@ -174,6 +191,7 @@ function ToolLine({
         )}
         {preview ? (
           <Text
+            testID="tool-line-preview"
             style={[styles.toolPreview, openable && styles.toolPreviewLink]}
             numberOfLines={1}
             onPress={openable ? () => onOpenFile!(filePath!) : undefined}
@@ -187,6 +205,12 @@ function ToolLine({
       {showDetail ? (
         <View style={styles.toolDetail}>
           {hasResults ? <ToolSearchResults results={searchResults} styles={styles} /> : null}
+          {taskList ? (
+            <MobileNativeChatTaskList
+              list={taskList.list}
+              {...(taskList.previous ? { previous: taskList.previous } : {})}
+            />
+          ) : null}
           {editFiles?.map((file, index) => (
             <MobileNativeChatDiffCard
               key={`${file.path}:${index}`}
@@ -196,7 +220,7 @@ function ToolLine({
           ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
           {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {!editFiles && result ? (
+          {!rendered && result ? (
             <ResultBody
               output={result.output}
               isError={result.isError}
@@ -272,6 +296,9 @@ export function ToolRun({
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
+  // Cheap enough to run collapsed: it also decides the one-line row preview, so
+  // a plan row says how far along it is before anyone opens it.
+  const taskLists = mobileTaskListRows(pairs)
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
   let callCount = 0
   for (const block of blocks) {
@@ -383,6 +410,7 @@ export function ToolRun({
           <ToolLine
             key={i}
             pair={pair}
+            taskList={taskLists[i] ?? null}
             defaultExpanded={expandChildren ?? defaultExpanded}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}

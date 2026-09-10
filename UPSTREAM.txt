@@ -28,8 +28,10 @@ src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
 src/shared/structured-agent-session-composer.ts: f1d854502
 src/shared/native-chat-diff.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
-src/shared/native-chat-tool-icon.ts: d0506bf5de0da490025d94c6507378be75194a60
-src/shared/native-chat-tool-icon.test.ts: d0506bf5de0da490025d94c6507378be75194a60
+src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
+src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
+src/shared/native-chat-task-list.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
+src/shared/native-chat-task-list.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-tool-identity.test.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-agent-profiles.ts: dda103d2cf69dbdd730d0a7179bb3021b6467501

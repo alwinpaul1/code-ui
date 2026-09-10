@@ -75,16 +75,8 @@ describe('the patch text behind a diff card, after the extraction', () => {
   })
 
   it('still breaks two hunks apart with one gap, and never opens or ends on one', () => {
-    const parsed = editLinesFromUnifiedPatch(
-      '@@ -1,1 +1,1 @@\n-a\n+b\n@@ -40,1 +40,1 @@\n-c\n+d'
-    )
-    expect(parsed?.lines.map((line) => line.kind)).toEqual([
-      'del',
-      'add',
-      'gap',
-      'del',
-      'add'
-    ])
+    const parsed = editLinesFromUnifiedPatch('@@ -1,1 +1,1 @@\n-a\n+b\n@@ -40,1 +40,1 @@\n-c\n+d')
+    expect(parsed?.lines.map((line) => line.kind)).toEqual(['del', 'add', 'gap', 'del', 'add'])
     expect(parsed?.lineNumbersKnown).toBe(true)
   })
 
