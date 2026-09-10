@@ -34,6 +34,15 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | 6a9c5d8ce #19496, 44eb95fc6 #19468, 063c1caa6 #19469, 2c5cd845a #19465 | the shared-path allocation work | one commit; pure refactors, guarded rather than test-first. `native-chat-tool-fold.ts` took hand-applied hunks (whole-file would drag in unported #18773). Upstream's own tests are vendored but never run here, so the running guards live under `mobile/src/` |
 | dda103d2c #19832 | one `/` picker for every agent, anywhere in the prompt | mobile already had the grouped menu and the draft-leading dispatch rule; the mid-prompt trigger was the real gap. `native-chat-agent-profiles.ts` re-vendored to drop `groupedSlash`, which nothing here read |
 | d0506bf5d #19226 | execution details and tool row identity | the shared half plus a mobile annotations row. Unblocked the `mcpIdentity` field `native-chat-tool-summary.ts` had been dropping, so that file and its test went back to a clean c1e15c400. The `src/main/` Codex translation that fills `exitCode`/`durationMs` is not vendored — the host supplies those |
+| 9f044031f #19228 | a compaction, a plan and a toned line drawn as what they are | landed in 8d80263 as the `presentation`/`tone` hints, which is what LOCAL-FILES.md records; the rest of #19228 is `src/main/` |
+
+**This table is behind `main` for work outside the chat-rendering and
+shared-path batches.** It was last rewritten at 588b199, and several ports have
+landed since without adding a row — the pins in `UPSTREAM.txt` for
+`native-chat-tool-activity.ts` (c1e15c400), `native-chat-turn-status.ts`
+(b0c67eaf8), `structured-agent-session-*` (1ae7aa8bb, f1d854502) and the
+per-session `/` catalog (bf4e27050) all name commits no row here mentions.
+Whoever owns those batches should fill them in; they are not guessed at here.
 
 ## Already solved here
 
@@ -41,6 +50,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 |---|---|---|
 | c300913f9 #17731 | double-scaled commit timestamps | Code UI accepts both units, for older hosts too |
 | 1dae024ab #19380 | xmldom security patch | the fixed versions are already pinned through workspace overrides |
+| 5a1acfec1 #18712 | clickable document paths and links in chat | `mobile/src/components/markdown-file-path-detection.ts` (241 lines, 312 lines of test) already turns bare paths in prose and path-shaped code spans into tappable text, and `markdown-href-routing.ts` already routes a markdown link through `routeNativeChatHref` — file targets to the viewer, web and mailto to the system handler. Upstream's shared delta is only `createNativeChatFileHref` and its decode loop, an encoding internal to desktop's remark pipeline. Mobile has its own parser and no remark, so porting it would add an unreachable export to a vendored file |
 
 ## Skipped, with the reason
 
@@ -58,6 +68,9 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | cb7f7dd11 #18756 | host-side fallback that retitles a structured tab for a client which does NOT advertise `agent-session.structured.v1`. Code UI advertises it, so it never sees the row. Its `protocol-version.ts` half is already vendored at d07c47593 |
 | 6494f2a4f #18933 | resume from the desktop's Agent Session History panel, which this app does not have. The `reveal` capability and `isAgentSessionWireRefusalCode` are already vendored at d07c47593 / f1d854502 |
 | ce4a3a418 #19235 | the rewind backend, by its own commit title. Entirely host and renderer; vendoring `agent-session-rewind.ts` with no phone surface would be half-building it |
+| 20eea184c #19130 | the link-action popover. Entirely desktop renderer: the popover component, `http-link-destinations.ts` and the chat link owner all live under `src/renderer/`, and the one `src/shared/` line is a doc-comment on `terminalLinkActionPopoverEnabled` — a setting `mobile/` never imports. The phone has no link-routing preference and no popover; giving it one is a Code UI product decision, not a port |
+| 0252fe5c3 #18773 | Codex subagent activity. Upstream designed this so a client without a roster renderer needs nothing: the host freezes a plain-text twin (`Ran 3 subagents (1 failed)`) into the journal beside the block, and `native-chat-subagent-summary.ts` says in its own header that mobile shows exactly that sentence. So the phone already reads a new host correctly. The producer is ~1,400 lines of `src/main/codex/` this fork does not vendor, and `worker-transcript-text.ts` belongs to the orchestration-worker feature already skipped above. **Residual:** without #18773's `native-chat-tool-fold.ts` hunk, a roster row landing mid-turn ends the tool run it sits inside, so one run draws as two. Cosmetic, and the fix is that hunk plus the `subagent-group` block type |
+| ef6ad2243 #19364, 0b60b0dcb #19841 | the two shared-path perf commits that are not in the batch above. #19364 is renderer work plus one line in `structured-agent-session-message-projection.ts`; #19841 is `structured-agent-session-reducer.ts` alone. Both files belong to the structured-session batch |
 
 ## Pending
 
@@ -65,9 +78,29 @@ Grouped so each batch can be one agent without fighting another over the same fi
 
 **Chat content rendering** — 5a1acfec1 #18712, 172aa1ac3 #18765, 20eea184c #19130,
 9f044031f #19228, d0506bf5d #19226, f7d521601 #19055, 0252fe5c3 #18773, dda103d2c #19832.
+**Background tasks over the wire** — e89deb63c #18757, 2bf298d1d #19311, 5868fdc9e #19346,
+f8780a2c8 #18807. Code UI has a parallel implementation that reads the transcript on the
+phone and must keep working for terminal tabs, so this is a reconciliation, not a copy.
 
-**Shared-path performance** — ef6ad2243 #19364, 6a9c5d8ce #19496, 44eb95fc6 #19468,
-063c1caa6 #19469, 2c5cd845a #19465, 0b60b0dcb #19841.
+**Structured session lifecycle** — 2513e2139 #18776, 6494f2a4f #18933, 39cbc68f1 #19040,
+c7bcfa750 #19137, fa5ef9988 #19122, ce4a3a418 #19235, cb7f7dd11 #18756.
+
+**Chat content rendering** — done. #18765, #19226, #19228 and #19832 landed;
+#18712 was already solved here; #19130 and #18773 are skipped with their reasons
+above. One is left:
+
+- f7d521601 #19055, provider activity in chat turn tails — **BLOCKED, not
+  deferred.** Every `src/shared/` file it touches belongs to the structured
+  session batch: `agent-session-wire.ts` (the `AgentSessionTurnActivity` shape
+  on all three subscribe events), `structured-agent-session-reducer.ts` (carry
+  and compare it) and `structured-agent-session-coalescer.ts` (merge it across
+  a batch). Nothing else of it is vendorable — the producer is
+  `src/main/agent-session-wire/provider-frame-activity.ts` and the two provider
+  translators. Port it with that batch, in one pass, or the reducer is edited
+  twice by two agents.
+
+**Shared-path performance** — done. #19496, #19468, #19469 and #19465 landed as
+one commit; #19364 and #19841 are skipped with their reason above.
 
 **Assess before porting** — f4c282116 #18652 moves the journal onto SQLite, which is host
 storage; confirm nothing mobile depends on the old shape before touching it.
@@ -82,3 +115,7 @@ storage; confirm nothing mobile depends on the old shape before touching it.
   phone sheet has nowhere to render it.
 - `structured-agent-session-reducer.ts` still lacks upstream's `activity` (f7d521601 #19055)
   and its `retainedItemLimit` head trim. Both belong to other batches.
+**Assess before porting** — 2f828e446 #19822 collides with Code UI's own pending-echo
+system; it was assessed in 8d0d36b, whose verdict sits in `scratchpad/19822-assessment.md`
+rather than here — fold it into this file. f4c282116 #18652 moves the journal onto SQLite,
+which is host storage; confirm nothing mobile depends on the old shape before touching it.
