@@ -11,13 +11,7 @@ src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b
 src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/structured-agent-session-create.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/runtime-mobile-session-tab-contracts.ts: a65332a8bdaec95a48cc0ade4a7c482586bb9370, plus
-  RuntimeMobileTerminalTheme.minimumContrastRatio from 53852c9ca4a34e741d68115caa474ebb622bed4e.
-  NOT fully re-vendored to that commit: the intervening f1d854502 (structured /clear
-  and /compact) touches this same file (RuntimeMobileSessionAgentTab.replacesSessionId)
-  and is owned by a concurrent agent working the structured-session lane — pulling the
-  whole file forward would collide with that in-flight work. Re-vendor the rest once
-  that lane lands.
+src/shared/runtime-mobile-session-tab-contracts.ts: 53852c9ca4a34e741d68115caa474ebb622bed4e
 src/shared/native-chat-session-option-defaults.ts: 546fd9b21
 src/shared/native-chat-session-option-defaults.test.ts: 546fd9b21
 src/shared/native-chat-session-options.ts: 546fd9b21
@@ -27,8 +21,11 @@ src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, se
 src/shared/structured-agent-session-options.ts: 546fd9b21
 src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
-src/shared/agent-session-wire.ts: bf4e27050
-src/shared/agent-session-record.ts: 546fd9b21
+src/shared/agent-session-wire.ts: f1d854502
+src/shared/agent-session-record.ts: f1d854502
+src/shared/agent-session-conversation-command.ts: f1d854502
+src/shared/agent-session-operation-ledger.ts: f1d854502
+src/shared/structured-agent-session-composer.ts: f1d854502
 src/shared/native-chat-tool-summary.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 src/shared/native-chat-tool-summary.test.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 

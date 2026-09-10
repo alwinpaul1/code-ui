@@ -12,6 +12,7 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
@@ -88,6 +89,9 @@ type Props = {
    *  present it decides which commands and skills the menu offers; undefined
    *  keeps the curated catalog and the host disk scan. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Conversation commands this chat host supports. Defined only on the
+   *  structured lane, where the menu narrows to what the dispatcher honors. */
+  conversationCommands?: readonly AgentSessionConversationCommand[]
   /** Asked once the slash menu opens so the host scan is lazy. */
   onNeedSkills?: () => void
 }
@@ -125,6 +129,7 @@ export function MobileNativeChatComposer({
   onNeedFiles,
   skills = NO_SKILLS,
   sessionCommands,
+  conversationCommands,
   onNeedSkills
 }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
@@ -171,6 +176,7 @@ export function MobileNativeChatComposer({
         agent: agent ?? null,
         scannedSkills: skills,
         sessionCommands,
+        conversationCommands,
         query: trigger.query
       })
     }
@@ -178,7 +184,7 @@ export function MobileNativeChatComposer({
       kind: 'file' as const,
       path
     }))
-  }, [trigger, filePaths, agent, skills, sessionCommands])
+  }, [trigger, filePaths, agent, skills, sessionCommands, conversationCommands])
 
   useEffect(() => {
     if (trigger?.kind === 'file') {

@@ -90,6 +90,7 @@ export function MobileNativeChatView({
   onNeedFiles,
   skills,
   sessionCommands,
+  conversationCommands,
   onNeedSkills,
   sessionOptions,
   ask,
@@ -432,6 +433,7 @@ export function MobileNativeChatView({
         onNeedFiles={onNeedFiles}
         skills={skills}
         sessionCommands={sessionCommands}
+        conversationCommands={conversationCommands}
         onNeedSkills={onNeedSkills}
       />
       <ImagePreviewModal />

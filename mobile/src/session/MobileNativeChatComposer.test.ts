@@ -468,6 +468,35 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/compact')
   })
 
+  it('offers a structured chat only the commands it can carry out', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          conversationCommands: ['clear', 'compact']
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts).toContain('/clear')
+    expect(texts).toContain('/compact')
+    expect(texts).toContain('/model')
+    expect(texts).toContain('/effort')
+    // A chat session cannot open a TUI overlay, so `/rewind` is not offered.
+    expect(texts).not.toContain('/rewind')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()

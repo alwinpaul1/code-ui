@@ -9,7 +9,9 @@
 // know about. A host that predates the report leaves `sessionCommands`
 // undefined and the menu is exactly what it was.
 
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import { structuredSlashCommands } from '../../../src/shared/structured-agent-session-composer'
 import {
   getNativeChatAgentProfile,
   getVerifiedNativeChatCommands
@@ -66,10 +68,18 @@ export function mobileNativeChatSlashCatalog(args: {
   /** The `/` surface the running structured session reports. Undefined keeps the
    *  curated catalog and the disk scan — the PTY lane and older hosts. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Conversation commands this chat host supports. Defined only on the
+   *  structured lane, whose menu must be strictly what the dispatcher honors —
+   *  a chat session cannot open a TUI overlay, so offering `/vim` only earns a
+   *  "not available in chat sessions". */
+  conversationCommands?: readonly AgentSessionConversationCommand[]
 }): MobileNativeChatSlashCatalog {
-  const { agent, scannedSkills, sessionCommands } = args
+  const { agent, conversationCommands, scannedSkills, sessionCommands } = args
   const scanned = filterNativeChatSkillsForAgent(scannedSkills, agent)
   if (sessionCommands === undefined) {
+    if (conversationCommands !== undefined) {
+      return { commands: structuredSlashCommands(conversationCommands), skills: scanned }
+    }
     return { commands: agent ? getVerifiedNativeChatCommands(agent) : [], skills: scanned }
   }
   const byToken = new Map<string, DiscoveredSkill>()
@@ -112,6 +122,7 @@ export function mobileNativeChatSlashSuggestions(args: {
   agent: string | null
   scannedSkills: readonly DiscoveredSkill[]
   sessionCommands: readonly AgentSessionSlashCommand[] | undefined
+  conversationCommands: readonly AgentSessionConversationCommand[] | undefined
   query: string
 }): ComposerSuggestion[] {
   const { agent, query } = args

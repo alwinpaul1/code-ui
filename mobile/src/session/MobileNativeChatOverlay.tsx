@@ -148,7 +148,8 @@ export function MobileNativeChatOverlay({
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         skills={controller.nativeChatSkills}
-        sessionCommands={controller.nativeChatCommands}
+        sessionCommands={controller.nativeChatCommandSurface?.sessionCommands}
+        conversationCommands={controller.nativeChatCommandSurface?.conversationCommands}
         onNeedSkills={controller.loadNativeChatSkills}
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}

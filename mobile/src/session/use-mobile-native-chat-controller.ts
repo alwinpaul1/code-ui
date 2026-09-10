@@ -368,6 +368,8 @@ export function useMobileNativeChatController(
           : (hudObservation?.effort ?? null),
       openRequest: modelSheetRequest,
       structured: {
+        optionPickerRequest: structuredNativeChat.optionPickerRequest,
+        conversationCommands: structuredNativeChat.conversationCommands,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
         setOption: structuredNativeChat.setStructuredOption,
@@ -480,7 +482,7 @@ export function useMobileNativeChatController(
     nativeChatSkills,
     // Only a structured session reports its own `/` surface; the PTY lane keeps
     // the curated catalog plus the disk scan.
-    nativeChatCommands: activeChatStructured ? structuredNativeChat.sessionCommands : undefined,
+    nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined,
     loadNativeChatSkills,
     handleNativeChatQuestionAnswer: activeChatStructured
       ? structuredNativeChat.respondQuestion

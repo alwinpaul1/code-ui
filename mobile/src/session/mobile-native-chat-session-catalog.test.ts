@@ -143,3 +143,48 @@ describe('the `/` menu without a session report', () => {
     expect(mobileNativeChatSlashCatalog({ agent: null, scannedSkills: [] }).commands).toEqual([])
   })
 })
+
+describe('the `/` menu of a structured chat that has not reported its surface', () => {
+  it('offers only what a chat session can carry out, not the whole TUI catalog', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [],
+      conversationCommands: ['clear', 'compact']
+    })
+    expect(catalog.commands.map((command) => command.name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact'
+    ])
+  })
+
+  it('drops a conversation command this host cannot carry out', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [],
+      conversationCommands: []
+    })
+    expect(catalog.commands.map((command) => command.name)).toEqual(['model', 'effort'])
+  })
+
+  it('still offers the scanned skills', () => {
+    const scanned = skill({ name: 'unslop' })
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [scanned],
+      conversationCommands: ['compact']
+    })
+    expect(catalog.skills).toEqual([scanned])
+  })
+
+  it('yields to the session report once one arrives', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [],
+      conversationCommands: ['clear', 'compact'],
+      sessionCommands: [{ name: 'clear', kind: 'command' }]
+    })
+    expect(catalog.commands.map((command) => command.name)).toEqual(['clear'])
+  })
+})

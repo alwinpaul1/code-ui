@@ -9,6 +9,7 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type {
@@ -82,10 +83,15 @@ export type MobileNativeChatController = {
   loadNativeChatFiles: (query: string) => void
   /** Installed skills and plugin commands for the `/` menu (lazy, per worktree). */
   nativeChatSkills: DiscoveredSkill[]
-  /** The `/` surface the running structured session reports for itself, which
-   *  beats both the curated catalog and the disk scan. Undefined on the PTY lane
-   *  and against a host that predates the report. */
-  nativeChatCommands?: readonly AgentSessionSlashCommand[]
+  /** What a structured chat can put on its `/` menu: the surface the running
+   *  session reports for itself (which beats both the curated catalog and the
+   *  disk scan, and is undefined until it reports one), and the conversation
+   *  commands the host can carry out. Undefined on the PTY lane, which keeps
+   *  the curated catalog. */
+  nativeChatCommandSurface?: {
+    sessionCommands: readonly AgentSessionSlashCommand[] | undefined
+    conversationCommands: readonly AgentSessionConversationCommand[]
+  }
   loadNativeChatSkills: () => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>

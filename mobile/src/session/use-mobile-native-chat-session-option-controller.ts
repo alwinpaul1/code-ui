@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
   SessionOptionDescriptor,
@@ -26,6 +27,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
   structured: {
+    conversationCommands?: readonly AgentSessionConversationCommand[]
+    optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
@@ -113,6 +116,8 @@ export function useMobileNativeChatSessionOptionController(args: {
       activeChatStructured && structuredSnapshot.length > 0
         ? {
             snapshot: structuredSnapshot,
+            optionPickerRequest: structured.optionPickerRequest,
+            conversationCommands: structured.conversationCommands,
             pendingId: structuredPendingId,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
@@ -124,7 +129,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       invokeStructuredAction,
       setStructuredOption,
       structuredPendingId,
-      structuredSnapshot
+      structuredSnapshot,
+      structured.conversationCommands,
+      structured.optionPickerRequest
     ]
   )
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
