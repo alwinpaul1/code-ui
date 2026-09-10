@@ -1,4 +1,5 @@
 import { forgetSessionTab, pickNextSessionTabAfterClose } from './mobile-session-tab-history'
+import { planSessionTabClose } from './mobile-session-tab-close-plan'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
@@ -63,35 +64,38 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
   }
 
-  async function handleCloseTerminal(target: Terminal) {
+  async function handleCloseTerminal(target: Terminal): Promise<boolean> {
     if (!client) {
-      return
+      return false
     }
 
     try {
       const response = await client.sendRequest('terminal.close', {
         terminal: target.handle
       })
-      if (response.ok) {
-        unsubscribeTerminal(target.handle)
-        terminalRefs.current.delete(target.handle)
-        initializedHandlesRef.current.delete(target.handle)
-        clearTerminalLiveInputDefault(target.handle)
-        const next = terminals.filter((terminal) => terminal.handle !== target.handle)
-        setTerminals(next)
-        terminalsRef.current = next
-        if (activeHandleRef.current === target.handle) {
-          const replacement = next[0] ?? null
-          activeHandleRef.current = replacement?.handle ?? null
-          pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
-          setActiveHandle(replacement?.handle ?? null)
-          if (replacement) {
-            subscribeToTerminal(replacement.handle)
-          }
+      if (!response.ok) {
+        return false
+      }
+      unsubscribeTerminal(target.handle)
+      terminalRefs.current.delete(target.handle)
+      initializedHandlesRef.current.delete(target.handle)
+      clearTerminalLiveInputDefault(target.handle)
+      const next = terminals.filter((terminal) => terminal.handle !== target.handle)
+      setTerminals(next)
+      terminalsRef.current = next
+      if (activeHandleRef.current === target.handle) {
+        const replacement = next[0] ?? null
+        activeHandleRef.current = replacement?.handle ?? null
+        pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
+        setActiveHandle(replacement?.handle ?? null)
+        if (replacement) {
+          subscribeToTerminal(replacement.handle)
         }
       }
+      return true
     } catch {
       // Close failed — keep the local tab list unchanged.
+      return false
     }
   }
 
@@ -99,10 +103,40 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     if (!client) {
       return
     }
+    const plan = planSessionTabClose(tab)
+    if (plan.via === 'terminal-handle') {
+      const target = { handle: plan.handle, title: tab.title, isActive: tab.isActive }
+      let closed = false
+      for (let index = 0; index < plan.repeats; index += 1) {
+        if (await handleCloseTerminal(target)) {
+          closed = true
+        }
+      }
+      if (!closed) {
+        return
+      }
+      const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
+      sessionTabsRef.current = remainingTabs
+      setSessionTabs(remainingTabs)
+      closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+      forgetSessionTab(visitedSessionTabIdsRef.current, tab.id)
+      if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        const nextTab = pickNextSessionTabAfterClose(
+          remainingTabs,
+          visitedSessionTabIdsRef.current,
+          tab.id
+        )
+        if (nextTab && switchSessionTabRef.current) {
+          switchSessionTabRef.current(nextTab)
+        }
+      }
+      return
+    }
     try {
       const response = await client.sendRequest('session.tabs.close', {
         worktree: `id:${worktreeId}`,
-        tabId: tab.id,
+        tabId: plan.tabId,
+        ...(plan.leafId ? { leafId: plan.leafId } : {}),
         // Why: a tapped tab close is explicit user intent; older hosts strip
         // the unknown field and keep their legacy behavior.
         reason: 'user'

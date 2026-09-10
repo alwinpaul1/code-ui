@@ -220,6 +220,7 @@ function MobileNativeChatMessageImpl({
   onToggleTurn,
   activeTurnIsWorking,
   structuredActivityUi = false,
+  turnActivity = null,
   taskListPredecessors
 }: {
   message: NativeChatMessage
@@ -247,6 +248,7 @@ function MobileNativeChatMessageImpl({
   taskListPredecessors?: MobileTaskListPredecessors
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
+  turnActivity?: { kind: 'description'; text: string } | null
 }) {
   const styles = useChatMessageStyles()
   const isUser = message.role === 'user'
@@ -393,6 +395,7 @@ function MobileNativeChatMessageImpl({
           workedSeconds={turnStatus.workedSeconds}
           expanded={turnExpanded ?? false}
           onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+          activityText={turnStatus.workedSeconds == null ? (turnActivity?.text ?? undefined) : undefined}
         />
       ) : null}
     </>

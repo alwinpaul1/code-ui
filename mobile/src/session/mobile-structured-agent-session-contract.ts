@@ -5,6 +5,7 @@ import type {
 import type { StructuredAgentSessionAttachment } from '../../../src/shared/structured-agent-session-outbox'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
+import type { NativeChatTurnActivity } from './mobile-native-chat-turn-activity'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
@@ -20,6 +21,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
    *  before the provider opens one, and cancelling that has nothing to act on. */
   canStop: boolean
   turnId: string | null
+  /** Provider-authored copy for the live turn tail. Null when there is none. */
+  turnActivity: NativeChatTurnActivity | null
   sendWithOutcome: (
     text: string,
     images?: string[],

@@ -33,19 +33,25 @@ export function MobileNativeChatTurnStatus({
   thinking,
   workedSeconds,
   expanded = false,
-  onToggleExpanded
+  onToggleExpanded,
+  activityText
 }: {
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
   expanded?: boolean
   onToggleExpanded?: () => void
+  /** Provider-authored tail copy while the turn is live (Orca #19055). */
+  activityText?: string
 }): React.JSX.Element {
   const theme = useTheme()
   const styles = useMemo(() => makeTurnStatusStyles(theme), [theme])
   const counting = !thinking && workedSeconds == null
   const elapsedSeconds = useElapsedSeconds(startedAt, counting)
-  const label = formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+  const label =
+    activityText && workedSeconds == null
+      ? activityText
+      : formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
 
   const pulse = useRef(new Animated.Value(1)).current
   useEffect(() => {

@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import { presentDesktopNotification } from './notification-presentation'
+import { uniqueWorktreeLaunchAgent } from './worktree-launch-agents'
 import { Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
@@ -120,6 +121,16 @@ export function resetNotificationChannelForTests(): void {
   channelReady = null
 }
 
+function presentedNotificationContent(event: NotificationEvent, hostId: string) {
+  return {
+    ...presentDesktopNotification({
+      ...event,
+      agent: uniqueWorktreeLaunchAgent(event.worktreeId)
+    }),
+    data: buildLocalNotificationData(event, hostId)
+  }
+}
+
 export async function showLocalNotification(
   event: NotificationEvent,
   hostId: string
@@ -141,10 +152,7 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     await Notifications.scheduleNotificationAsync({
-      content: {
-        ...presentDesktopNotification(event),
-        data: buildLocalNotificationData(event, hostId)
-      },
+      content: presentedNotificationContent(event, hostId),
       trigger: notificationTrigger()
     })
     return
@@ -178,10 +186,7 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     return Notifications.scheduleNotificationAsync({
-      content: {
-        ...presentDesktopNotification(event),
-        data: buildLocalNotificationData(event, hostId)
-      },
+      content: presentedNotificationContent(event, hostId),
       trigger: notificationTrigger()
     })
   })()

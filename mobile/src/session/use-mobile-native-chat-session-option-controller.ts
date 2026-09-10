@@ -20,7 +20,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   agent: string | null
   dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
   hostId: string
-  isTabChatView: (tabId: string) => boolean
+  isTabChatView: (tabId: string, agent?: string | null) => boolean
   isWorking: boolean
   reportedModel: string | null
   reportedEffort?: string | null
@@ -34,7 +34,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
     invokeAction: (id: string) => Promise<boolean>
   }
-  toggleTabChatView: (tabId: string) => void
+  toggleTabChatView: (tabId: string, agent?: string | null) => void
   worktreeId: string
   /** Codex drives its own picker over the terminal; these reach it. */
   client: RpcClient | null
@@ -74,10 +74,10 @@ export function useMobileNativeChatSessionOptionController(args: {
   } = structured
 
   const handleAgentPicker = useCallback(() => {
-    if (activeSessionTabId && isTabChatView(activeSessionTabId)) {
-      toggleTabChatView(activeSessionTabId)
+    if (activeSessionTabId && isTabChatView(activeSessionTabId, agent)) {
+      toggleTabChatView(activeSessionTabId, agent)
     }
-  }, [activeSessionTabId, isTabChatView, toggleTabChatView])
+  }, [activeSessionTabId, agent, isTabChatView, toggleTabChatView])
 
   // Why a ref: the Codex hook needs the model the sheet shows, which is only
   // known once the options hook below has built its snapshot.

@@ -49,6 +49,14 @@ export function nextTouchShieldState(input: {
  */
 export type UpdateDialogPointerBlock = 'none' | 'backdrop' | 'full'
 
+/** The card is the rounded sheet that sits over alwinpaul1/code-ui.
+ *  It must not stay on screen after Done, even while the shield tail
+ *  still eats leftover presses. Recorded on a Galaxy S23 running 0.3.2:
+ *  the fading card was the "press" on the github row. */
+export function updateDialogShowsCard(dialogVisible: boolean): boolean {
+  return dialogVisible
+}
+
 export function pointerBlockForUpdateDialog(input: {
   dialogVisible: boolean
   shielded: boolean

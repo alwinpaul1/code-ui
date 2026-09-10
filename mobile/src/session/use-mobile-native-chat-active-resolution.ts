@@ -11,8 +11,8 @@ export function useMobileNativeChatActiveResolution(args: {
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
 }): {
-  isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
+  isTabChatView: (tabId: string, agent?: string | null) => boolean
+  toggleTabChatView: (tabId: string, agent?: string | null) => void
   peekTerminalTab: (tabId: string) => void
   endTerminalPeek: () => void
   /** The active tab is a chat tab currently showing its terminal via a peek. */
@@ -53,7 +53,12 @@ export function useMobileNativeChatActiveResolution(args: {
   const terminalPeekActive = activeSessionTabId != null && peekedTerminalTabId === activeSessionTabId
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
-    (activeSessionTabId ? isTabChatView(activeSessionTabId) : false)
+    (activeSessionTabId
+      ? isTabChatView(
+          activeSessionTabId,
+          activeSessionTab?.launchAgent ?? activeSessionTab?.agentStatus?.agentType ?? null
+        )
+      : false)
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat
       ? resolveMobileNativeChat(activeSessionTab, nativeChatTranscriptIsLocalReadable)

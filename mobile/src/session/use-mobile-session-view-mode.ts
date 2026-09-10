@@ -30,6 +30,13 @@ function isOverrideScope(state: ViewOverridesState, hostId: string, worktreeId: 
   return state.hostId === hostId && state.worktreeId === worktreeId
 }
 
+function tabFollowsChatView(
+  override: MobileSessionView | undefined,
+  fallback: MobileSessionView
+): boolean {
+  return (override ?? fallback) === 'chat'
+}
+
 function mergeOverrides(
   persisted: ReadonlyMap<string, MobileSessionView>,
   current: ReadonlyMap<string, MobileSessionView>
@@ -43,8 +50,8 @@ function mergeOverrides(
 
 export type MobileSessionViewModeController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
-  isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
+  isTabChatView: (tabId: string, agent?: string | null) => boolean
+  toggleTabChatView: (tabId: string, agent?: string | null) => void
   /** Show a chat tab's terminal without persisting anything, so a slash command
    *  dispatched from chat can be watched in the TUI; `endTerminalPeek` returns. */
   peekTerminalTab: (tabId: string) => void
@@ -165,7 +172,7 @@ export function useMobileSessionViewMode(args: {
   )
 
   const isTabChatView = useCallback(
-    (tabId: string): boolean => {
+    (tabId: string, _agent?: string | null): boolean => {
       if (tabId === peekedTerminalTabId) {
         return false
       }
@@ -175,7 +182,8 @@ export function useMobileSessionViewMode(args: {
       const override = viewOverridesState.overrides.get(tabId)
       // Until this scope loads, only an immediate user toggle is authoritative;
       // defaulting other tabs to terminal avoids activating stale cross-host chat.
-      return (override ?? (viewOverridesState.loaded ? defaultView : 'terminal')) === 'chat'
+      const fallback = viewOverridesState.loaded ? defaultView : 'terminal'
+      return tabFollowsChatView(override, fallback)
     },
     [defaultView, hostId, peekedTerminalTabId, viewOverridesState, worktreeId]
   )
@@ -188,7 +196,7 @@ export function useMobileSessionViewMode(args: {
   }, [])
 
   const toggleTabChatView = useCallback(
-    (tabId: string) => {
+    (tabId: string, _agent?: string | null) => {
       // A peeked tab is still a chat tab underneath; toggling it just ends the peek.
       if (peekedTerminalTabIdRef.current === tabId) {
         setPeekedTerminalTabId(null)
@@ -207,7 +215,7 @@ export function useMobileSessionViewMode(args: {
       // Flip from the tab's effective view (its override, else the default), so
       // a tab following a chat default can still be pinned back to terminal.
       const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
-      const currentlyChat = (overrides.get(tabId) ?? fallbackView) === 'chat'
+      const currentlyChat = tabFollowsChatView(overrides.get(tabId), fallbackView)
       const nextView = currentlyChat ? 'terminal' : 'chat'
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }

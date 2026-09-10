@@ -10,6 +10,7 @@ import {
   activeStructuredAgentSessionTurnId,
   hasUnansweredStructuredAgentSessionDispatch
 } from '../../../src/shared/structured-agent-session-projection'
+import { selectStructuredAgentTurnActivity } from './mobile-native-chat-turn-activity'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -249,6 +250,11 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnActivity = useMemo(
+    () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
+    [state.activity, state.items, turnId]
+  )
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
@@ -272,10 +278,11 @@ export function useMobileStructuredAgentSession(args: {
       loadEarlier
     },
     isWorking:
-      activeStructuredAgentSessionTurnId(state.items) !== null ||
+      turnId !== null ||
       hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
-    canStop: activeStructuredAgentSessionTurnId(state.items) !== null,
-    turnId: activeStructuredAgentSessionTurnId(state.items),
+    canStop: turnId !== null,
+    turnId,
+    turnActivity,
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),

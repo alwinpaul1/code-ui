@@ -11,7 +11,7 @@ type ToggleTab = MobileNativeChatTab & {
 export function getMobileNativeChatToggleActions(args: {
   terminalHandle: string | null
   tabs: readonly ToggleTab[]
-  isTabChatView: (tabId: string) => boolean
+  isTabChatView: (tabId: string, agent?: string | null) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
   onClose: () => void
   onToggle: (tabId: string) => void
@@ -23,7 +23,8 @@ export function getMobileNativeChatToggleActions(args: {
   if (!tab || !resolveMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)) {
     return []
   }
-  const isChat = isTabChatView(tab.id)
+  const agent = tab.launchAgent ?? tab.agentStatus?.agentType ?? null
+  const isChat = isTabChatView(tab.id, agent)
   return [
     {
       label: isChat ? 'Switch to terminal view' : 'Switch to chat view',

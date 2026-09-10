@@ -29,20 +29,27 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
 
   const switchTabView = useCallback(
     async (tabId: string): Promise<void> => {
+      const tab = sessionTabs.find((candidate) => candidate.id === tabId)
+      const agent =
+        tab?.type === 'terminal'
+          ? (tab.launchAgent ?? tab.agentStatus?.agentType ?? null)
+          : tab?.type === 'agent-session'
+            ? tab.agent
+            : null
       const handle = handleForTab(tabId)
-      if (isTabChatView(tabId)) {
+      if (isTabChatView(tabId, agent)) {
         if (handle) {
           await setDisplayMode(handle, 'auto')
         }
-        toggleTabChatView(tabId)
+        toggleTabChatView(tabId, agent)
         return
       }
-      toggleTabChatView(tabId)
+      toggleTabChatView(tabId, agent)
       if (handle) {
         void setDisplayMode(handle, 'desktop')
       }
     },
-    [handleForTab, isTabChatView, setDisplayMode, toggleTabChatView]
+    [handleForTab, isTabChatView, sessionTabs, setDisplayMode, toggleTabChatView]
   )
 
   // Transitions the switch above did not drive (default chat on open, the

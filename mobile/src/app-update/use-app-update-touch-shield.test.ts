@@ -5,6 +5,7 @@ import {
   UPDATE_DIALOG_TOUCH_SHIELD_FILL,
   nextTouchShieldState,
   pointerBlockForUpdateDialog,
+  updateDialogShowsCard,
   updateDialogTouchShieldStyle
 } from './use-app-update-touch-shield'
 
@@ -87,6 +88,18 @@ describe('the leftover press after Done on a Galaxy S23', () => {
     // how the leftover Done press reached alwinpaul1/code-ui on 0.3.0.
     expect(updateDialogTouchShieldStyle().backgroundColor).toBe(UPDATE_DIALOG_TOUCH_SHIELD_FILL)
     expect(UPDATE_DIALOG_TOUCH_SHIELD_FILL).not.toBe('transparent')
+  })
+
+  it('hides the card as soon as Done closes, so it cannot sit on alwinpaul1/code-ui while fading', () => {
+    // Recorded 2026-09-10 on 0.3.2, Galaxy S23. Holding Done for 700 ms left
+    // the rounded card over the github row as it faded. That is the "click"
+    // on alwinpaul1/code-ui. The shield tail may keep eating presses; the
+    // card must already be gone.
+    expect(updateDialogShowsCard(false)).toBe(false)
+    expect(updateDialogShowsCard(true)).toBe(true)
+    const source = readFileSync(new URL('./AppUpdateDialog.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('showCard ?')
+    expect(source).toContain('updateDialogShowsCard')
   })
 
   it('does not fade the window-filling overlay, so Done cannot land on alwinpaul1/code-ui', () => {

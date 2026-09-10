@@ -1,5 +1,6 @@
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
 
 export type TerminalRecord = {
   handle: string
@@ -10,6 +11,8 @@ export type TerminalRecord = {
   connected?: boolean
   /** From `terminal.list`; a live PTY with no leaf, so it never appears as a tab. */
   orphaned?: boolean
+  tabId?: string
+  leafId?: string
 }
 
 export type MobileTerminalSessionTab = {
@@ -204,24 +207,58 @@ export function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
-// Why: tab snapshots are partial and can transiently omit a live terminal, so absence
-// here is only a hint to schedule the `terminal.list` sweep -- never a reason to prune.
-// Restricted to connected, non-orphaned handles: parked leaves and orphaned PTYs are
-// legitimately absent from tabs forever and would pin the caller to the fast cadence.
+export function reconcileSessionTabsWithTerminalList(
+  tabs: readonly MobileSessionTabLike[],
+  terminals: readonly TerminalRecord[]
+): MobileSessionTabLike[] {
+  const hostTabs = tabs.filter((tab) => tab.type !== 'terminal' || !sessionTabClosesByHandle(tab))
+  return appendUnlistedConnectedTerminalTabs(hostTabs, terminals)
+}
+
+export function appendUnlistedConnectedTerminalTabs(
+  tabs: readonly MobileSessionTabLike[],
+  terminals: readonly TerminalRecord[]
+): MobileSessionTabLike[] {
+  const listedHandles = new Set(
+    getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
+  )
+  const extras: MobileTerminalSessionTab[] = []
+  for (const terminal of terminals) {
+    if (terminal.connected !== true || terminal.orphaned === true || listedHandles.has(terminal.handle)) {
+      continue
+    }
+    listedHandles.add(terminal.handle)
+    const parentTabId = terminal.tabId
+    extras.push({
+      type: 'terminal',
+      id:
+        parentTabId && tabs.some((tab) => tab.id === parentTabId)
+          ? `${parentTabId}::${terminal.leafId ?? terminal.handle}`
+          : terminal.handle,
+      title: terminal.title || 'Terminal',
+      parentTabId,
+      leafId: terminal.leafId,
+      terminal: terminal.handle,
+      terminalTheme: terminal.terminalTheme,
+      isActive: false
+    })
+  }
+  return extras.length === 0 ? [...tabs] : [...tabs, ...extras]
+}
+
 export function hasConnectedTerminalAbsentFromSessionTabs(
   currentTerminals: readonly TerminalRecord[],
   tabs: readonly MobileSessionTabLike[]
 ): boolean {
-  const tabbable = currentTerminals.filter(
-    (terminal) => terminal.connected === true && terminal.orphaned !== true
-  )
-  if (tabbable.length === 0) {
-    return false
-  }
   const tabHandles = new Set(
     getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
   )
-  return tabbable.some((terminal) => !tabHandles.has(terminal.handle))
+  return currentTerminals.some(
+    (terminal) =>
+      terminal.connected === true &&
+      terminal.orphaned !== true &&
+      !tabHandles.has(terminal.handle)
+  )
 }
 
 export function getTerminalRecordsFromSessionTabs(

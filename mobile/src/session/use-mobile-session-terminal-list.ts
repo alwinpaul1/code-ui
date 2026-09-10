@@ -1,6 +1,11 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
 import type { RpcSuccess } from '../transport/types'
-import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
+import {
+  mergeTerminalListWithKnownRecords,
+  mobileSessionTabsEqual,
+  reconcileSessionTabsWithTerminalList,
+  terminalRecordsEqual
+} from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,
   pruneTerminalKeyboardMetrics,
@@ -19,6 +24,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     setTerminals,
     terminalsRef,
     sessionTabsRef,
+    setSessionTabs,
     pruneTerminalHandlesFromLiveInput,
     defaultTerminalHandlesToLiveInput,
     clearTerminalLiveInputDefault,
@@ -124,7 +130,14 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             )
             terminalsRef.current = mergedTerminals
 
-            // Session tabs are the UI authority; terminal.list only refreshes per-handle metadata for existing terminal surfaces.
+            const nextTabs = reconcileSessionTabsWithTerminalList(
+              sessionTabsRef.current,
+              mergedTerminals
+            )
+            if (!mobileSessionTabsEqual(sessionTabsRef.current, nextTabs)) {
+              sessionTabsRef.current = nextTabs as typeof sessionTabsRef.current
+              setSessionTabs(nextTabs as typeof sessionTabsRef.current)
+            }
             return true
           } catch {
             // Failed to list terminals
@@ -143,7 +156,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
       bufferedTerminalDraftState.pruneDrafts,
       pruneTerminalHandlesFromLiveInput,
       terminalInventoryRequest,
-      unsubscribeTerminal
+      unsubscribeTerminal,
+      setSessionTabs
     ]
   )
   return {

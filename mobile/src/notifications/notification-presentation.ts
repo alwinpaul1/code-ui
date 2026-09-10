@@ -13,13 +13,49 @@ const BODY_LIMIT = 320
  * a short summary that keeps its emphasis but loses the markup. A worktree
  * named after its repo is said once, not twice.
  */
+const AGENT_HEADLINE_LABELS: Readonly<Record<string, string>> = {
+  claude: 'Claude',
+  openclaude: 'OpenClaude',
+  codex: 'Codex',
+  grok: 'Grok',
+  omp: 'OMP',
+  gemini: 'Gemini',
+  cursor: 'Cursor',
+  aider: 'Aider',
+  pi: 'Pi',
+  droid: 'Droid',
+  hermes: 'Hermes',
+  antigravity: 'Antigravity',
+  opencode: 'OpenCode'
+}
+
+const AGENT_HEADLINE_NAMES = 'Claude|OpenClaude|Codex|Grok|OMP|Gemini|Cursor|Aider|Pi|Droid|Hermes|Antigravity|OpenCode'
+
+/** Desktop titles the event from hook `agentType`. Grok does not write that
+ *  hook; the host then says Claude. When the worktree's only launched agent is
+ *  known, put that name on the headline. */
+export function headlineWithKnownAgent(headline: string, agent: string | null | undefined): string {
+  if (!agent) {
+    return headline
+  }
+  const label = AGENT_HEADLINE_LABELS[agent] ?? null
+  if (!label) {
+    return headline
+  }
+  return headline.replace(new RegExp(`^(${AGENT_HEADLINE_NAMES})\\b`, 'i'), label)
+}
+
 export function presentDesktopNotification(event: {
   source: DesktopNotificationSource
   title: string
   body: string
+  agent?: string | null
 }): PresentedNotification {
   const parsed = parseDesktopTitle(event.title)
-  const headline = parsed?.headline ?? notificationPlainText(event.title)
+  const headline = headlineWithKnownAgent(
+    parsed?.headline ?? notificationPlainText(event.title),
+    event.agent
+  )
   const glyph = statusGlyph(event.source, headline)
   const title = parsed?.location ? `${glyph}${headline} · ${parsed.location}` : `${glyph}${headline}`
   const summary = summarize(event.body, parsed?.headline)

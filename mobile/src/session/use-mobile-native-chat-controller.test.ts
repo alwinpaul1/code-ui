@@ -88,6 +88,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     session: structuredSessionState,
     isWorking: false,
     turnId: null,
+    turnActivity: null,
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
     permission: structuredPermission,

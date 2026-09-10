@@ -26,6 +26,8 @@ import {
 import { deferDialogDismiss } from './app-update-dismiss-defer'
 import {
   pointerBlockForUpdateDialog,
+  UPDATE_DIALOG_TOUCH_SHIELD_FILL,
+  updateDialogShowsCard,
   updateDialogTouchShieldStyle,
   useAppUpdateTouchShield
 } from './use-app-update-touch-shield'
@@ -97,6 +99,7 @@ export function AppUpdateDialog() {
   const visible = presenting && state.kind !== 'hidden'
   const shielded = useAppUpdateTouchShield(visible)
   const pointerBlock = pointerBlockForUpdateDialog({ dialogVisible: visible, shielded })
+  const showCard = updateDialogShowsCard(visible)
   const reveal = useRef(new Animated.Value(0)).current
   const previousKind = useRef(state.kind)
   const dismissible =
@@ -106,13 +109,17 @@ export function AppUpdateDialog() {
     state.kind === 'failed'
 
   useEffect(() => {
+    if (!showCard) {
+      reveal.setValue(0)
+      return
+    }
     Animated.timing(reveal, {
-      toValue: visible ? 1 : 0,
-      duration: visible ? 240 : 160,
-      easing: visible ? Easing.out(Easing.back(1.2)) : Easing.in(Easing.cubic),
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.back(1.2)),
       useNativeDriver: true
     }).start()
-  }, [visible, reveal])
+  }, [showCard, reveal])
 
   // Why: a height change between states (notes → progress bar → ready) eases
   // instead of snapping; that is the "morph".
@@ -145,10 +152,9 @@ export function AppUpdateDialog() {
     return null
   }
 
-  // Why the dimmer is not faded: opacity < 1 on this Modal's window makes
-  // Android skip it in hit-testing, and the leftover Done press then lights
-  // the repository row. The card may fade; the dimmer stays until the tail
-  // ends and this window unmounts. Recorded on a Galaxy S23, 0.3.0.
+  // Why the card unmounts on Done: recorded on a Galaxy S23 running 0.3.2.
+  // The fading rounded sheet sat on alwinpaul1/code-ui and looked like a
+  // press. The tail still eats leftover clicks; the card is already gone.
   const dimmerPress = pointerBlock === 'backdrop' && dismissible ? dismiss : () => {}
   switch (pointerBlock) {
     case 'backdrop':
@@ -170,43 +176,48 @@ export function AppUpdateDialog() {
           accessibilityLabel={pointerBlock === 'backdrop' && dismissible ? 'Dismiss' : undefined}
           onPress={dimmerPress}
           pointerEvents="auto"
-          style={[updateDialogTouchShieldStyle(), { backgroundColor: colors.bgOverlay }]}
+          style={[
+            updateDialogTouchShieldStyle(),
+            { backgroundColor: showCard ? colors.bgOverlay : UPDATE_DIALOG_TOUCH_SHIELD_FILL }
+          ]}
         />
-        <View
-          pointerEvents={pointerBlock === 'full' ? 'none' : 'box-none'}
-          style={{
-            flex: 1,
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: space.xl
-          }}
-        >
-          <Animated.View
-            accessibilityViewIsModal
-            accessibilityLiveRegion="polite"
-            pointerEvents={pointerBlock === 'full' ? 'none' : 'auto'}
+        {showCard ? (
+          <View
+            pointerEvents={pointerBlock === 'full' ? 'none' : 'box-none'}
             style={{
-              width: '100%',
-              maxWidth: 380,
-              backgroundColor: colors.bgRaised,
-              borderColor: colors.border,
-              borderWidth: 1,
-              borderRadius: radius.xl,
-              padding: space.xl,
-              shadowColor: colors.shadow,
-              shadowOpacity: 0.25,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 12 },
-              elevation: 12,
-              opacity: reveal,
-              transform: [
-                { scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }
-              ]
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: space.xl
             }}
           >
-            <DialogBody state={state} onDismiss={dismiss} />
-          </Animated.View>
-        </View>
+            <Animated.View
+              accessibilityViewIsModal
+              accessibilityLiveRegion="polite"
+              pointerEvents={pointerBlock === 'full' ? 'none' : 'auto'}
+              style={{
+                width: '100%',
+                maxWidth: 380,
+                backgroundColor: colors.bgRaised,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: radius.xl,
+                padding: space.xl,
+                shadowColor: colors.shadow,
+                shadowOpacity: 0.25,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 12 },
+                elevation: 12,
+                opacity: reveal,
+                transform: [
+                  { scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }
+                ]
+              }}
+            >
+              <DialogBody state={state} onDismiss={dismiss} />
+            </Animated.View>
+          </View>
+        ) : null}
       </View>
     </Modal>
   )

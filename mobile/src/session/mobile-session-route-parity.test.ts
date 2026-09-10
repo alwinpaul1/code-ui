@@ -66,13 +66,15 @@ const HOST_COMPONENT_NAMES = new Set([
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
 const HEAD_MAIN_HOOK_SHA256 = 'ebfdb1f81c25f2ed54acaf75c503a826eea36ef16d3b271ae5d370ac47fe88a5'
-const HEAD_HOOK_BINDING_SHA256 = '59e832f8814beb98a10d0748f559e64192834cdbb7fdc13f82c5497d6044830f'
+const HEAD_HOOK_BINDING_SHA256 = '4eedc2a0c1cf9dc9bf07e8fb81b113ef1008034c57cb408b0d8752181adb9ee0'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '4eb795ff870f31ccce483e196993f15756c380c7bf223f6af0342131d587054e'
+  '604cca241bb370129f78e7ad45d289d342481f79b64165732e0199044609bd4e'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
-const HEAD_CALLBACK_BODY_SHA256 = '8090b3fd4931104ca5fe59decc6ee11c01d6ad98a4019c18a7752fe724e57c29'
+// 2026-09-10: split-sibling Close repeats terminal.close so the leftover
+// desktop pane collapses after the extra PTY dies.
+const HEAD_CALLBACK_BODY_SHA256 = '1a835ba9300fecb506044489213a93364bea7ad967991897ea0e66cf3cb14a07'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
@@ -86,7 +88,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // with every other file of this port in place, so create-actions is the sole
 // cause of both moved pins.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '137407d7d6f8bb4910e6b1ce2c6c194f5685a34a279a5c217008274abfd5eb49'
+  '574d8a885c0425d0bb0376b881f90ab34870ee446849d1d534edebed1caa5da4'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -95,7 +97,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   '8b2229f4a3c880c0e21f546a1bfabb27b3536b9a2344cf3b39f5b7da82e24dba'
 const HEAD_TIMER_CLEANUP_SHA256 = 'be3117bde057916619602341bef132f1bd8767d1dff4bacdfd547ca690f5640a'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'c317eb43c866e545842dba4d79046482ed1040f0a0eac1cb57669640190169c7'
+  'b20f34a79c55fbb11ba22783d7c8b91c68f7dcd4806c08a5705f99f9e841e02c'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -539,7 +541,8 @@ describe('mobile session route extraction parity', () => {
     // 620 since 2026-09-09: two align="center" props on the empty-state buttons.
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
-    expect(strings).toHaveLength(626)
+    // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
+    expect(strings).toHaveLength(629)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)

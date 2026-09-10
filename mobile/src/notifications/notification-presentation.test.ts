@@ -6,6 +6,26 @@ import { presentDesktopNotification } from './notification-presentation'
 //   title  "Code UI / Code UI - Claude finished"
 //   body   the agent's whole Markdown summary, asterisks and backticks included
 describe('desktop notifications read like a modern app', () => {
+  it('names Grok when the desktop titled a Grok turn as Claude finished', () => {
+    const presented = presentDesktopNotification({
+      source: 'agent-task-complete',
+      title: 'Code UI / Code UI - Claude finished',
+      body: 'That lower pane is not a second Orca session.',
+      agent: 'grok'
+    })
+    expect(presented.title).toBe('✅ Grok finished · Code UI')
+  })
+
+  it('names Codex the same way when the desktop titled a Codex turn as Claude', () => {
+    const presented = presentDesktopNotification({
+      source: 'agent-task-complete',
+      title: 'nexos / main - Claude finished',
+      body: 'Shipped the parser.',
+      agent: 'codex'
+    })
+    expect(presented.title).toBe('✅ Codex finished · nexos / main')
+  })
+
   it('leads with the event, names the place once, and keeps a short styled summary', () => {
     const presented = presentDesktopNotification({
       source: 'agent-task-complete',

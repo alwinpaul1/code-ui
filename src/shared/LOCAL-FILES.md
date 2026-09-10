@@ -60,9 +60,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   2bf298d1d (#19311): `backgroundTasks` in the reducer's state, the roster
   equality that guards it, the journal-unchanged short-circuit that arrived with
   it, and the coalescer's roster merge. Neither file can be re-vendored at
-  2bf298d1d: the same range adds `activity` (f7d521601, #19055) and the
-  `retainedItemLimit` head trim, neither of which is ported here. `activity` and
-  the item trim are the only parts of upstream's reducer still missing.
+  2bf298d1d: the same range adds `activity` (f7d521601, #19055) and
+  `retainedItemLimit` (0b60b0dcb, #19841), both now hand-applied. The reducer
+  is no longer missing an upstream hunk.
   (An earlier note here credited the short-circuit to #19147; it is #18757's,
   and it arrived with the background-task handling for exactly that reason — a
   task edge rides a batch whose journal delta is empty.)

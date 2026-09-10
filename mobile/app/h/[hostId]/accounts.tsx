@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { RefreshCw, User } from 'lucide-react-native'
+import { RefreshCw } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { useTheme } from '../../../src/theme/theme-context'
@@ -281,19 +281,6 @@ export default function AccountsScreen() {
           <>
             {renderProvider('claude')}
             {renderProvider('codex')}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.sm,
-                paddingHorizontal: space.xs
-              }}
-            >
-              <User size={14} color={colors.textMuted} />
-              <Txt variant="caption" tone="muted" style={{ flex: 1 }}>
-                Add or re-authenticate accounts from desktop Settings → Accounts.
-              </Txt>
-            </View>
           </>
         )}
       </ScrollView>

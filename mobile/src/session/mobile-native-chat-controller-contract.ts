@@ -31,8 +31,8 @@ import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-ta
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
-  isTabChatView: (tabId: string) => boolean
-  toggleTabChatView: (tabId: string) => void
+  isTabChatView: (tabId: string, agent?: string | null) => boolean
+  toggleTabChatView: (tabId: string, agent?: string | null) => void
   /** True while the active chat tab is temporarily showing its terminal (after a
    *  slash command was dispatched from chat); `endTerminalPeek` returns to chat. */
   terminalPeekActive: boolean
@@ -55,6 +55,8 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
+  /** Provider-authored copy for the live turn tail. Null off the structured lane. */
+  nativeChatTurnActivity: { kind: 'description'; text: string } | null
   nativeChatAgentWorking: boolean
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */

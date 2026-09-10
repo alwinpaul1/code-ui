@@ -82,9 +82,6 @@ export default function AppearanceSettingsScreen() {
             )
           })}
         </Surface>
-        <Txt variant="caption" tone="muted" style={{ marginTop: space.md, paddingHorizontal: space.xs }}>
-          Terminals keep the colour theme your desktop sends. Change it in the desktop app.
-        </Txt>
       </ScrollView>
     </View>
   )

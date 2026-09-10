@@ -13,6 +13,16 @@ describe('mobile session last-tab close', () => {
     expect(block).toContain('retainMissingSurfaces: result.tabs.length === 0')
   })
 
+  it('repeats handle close for a split sibling so the leftover desktop pane collapses', () => {
+    const start = sessionRouteSource.indexOf('async function handleCloseSessionTab')
+    const end = sessionRouteSource.indexOf('const bulkCloseActions', start)
+    const block = sessionRouteSource.slice(start, end)
+
+    expect(block).toContain('planSessionTabClose')
+    expect(block).toContain('plan.repeats')
+    expect(block).toContain('handleCloseTerminal(target)')
+  })
+
   it('clears stale active identity when closing leaves no tabs', () => {
     const start = sessionRouteSource.indexOf('async function handleCloseSessionTab')
     const end = sessionRouteSource.indexOf('const bulkCloseActions', start)

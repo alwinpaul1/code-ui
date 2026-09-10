@@ -190,6 +190,70 @@ describe('the background tasks a structured session is monitoring', () => {
     expect(merged?.type === 'batch' && merged.backgroundTasks?.tasks?.[0]?.id).toBe('task-1')
     coalescer.dispose()
   })
+
+  it('keeps only the latest ephemeral activity value', () => {
+    const emitted: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => emitted.push(event))
+    coalescer.push({
+      ...taskBatch(1, monitoring([{ id: 'task-1', kind: 'agent' }])),
+      activity: { turnId: 'turn-1', text: 'Thinking' }
+    })
+    coalescer.push({
+      ...taskBatch(1, monitoring([{ id: 'task-1', kind: 'agent' }])),
+      activity: { turnId: 'turn-1', text: 'Checking the result' }
+    })
+    coalescer.push({
+      ...taskBatch(1, monitoring([{ id: 'task-1', kind: 'agent' }])),
+      activity: null
+    })
+    coalescer.flush()
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]).toMatchObject({ activity: null })
+    coalescer.dispose()
+  })
+})
+
+describe('provider activity on a structured session', () => {
+  it('projects ephemeral activity without changing transcript identity and clears it', () => {
+    const initial = seeded()
+    const active = reduceStructuredAgentSession(initial, {
+      type: 'event',
+      event: {
+        ...taskBatch(initial.cursor!.sequence, null),
+        activity: { turnId: 'turn-1', text: 'Checking the renderer' }
+      }
+    })
+    expect(active.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })
+    expect(active.items).toBe(initial.items)
+
+    const cleared = reduceStructuredAgentSession(active, {
+      type: 'event',
+      event: {
+        ...taskBatch(active.cursor!.sequence, null),
+        activity: null
+      }
+    })
+    expect(cleared.activity).toBeNull()
+    expect(cleared.items).toBe(active.items)
+  })
+
+  it('retains same-epoch activity across a newer journal tail refresh', () => {
+    const active = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('first', 1)]),
+        activity: { turnId: 'turn-1', text: 'Checking the renderer' }
+      }
+    })
+    const refreshed = reduceStructuredAgentSession(active, {
+      type: 'tail-page',
+      page: hydrationPage([item('latest', 2)])
+    })
+    expect(refreshed.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })
+  })
 })
 
 describe('task-list equality on the wire', () => {

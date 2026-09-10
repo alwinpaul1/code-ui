@@ -5,6 +5,7 @@ import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
+  reconcileSessionTabsWithTerminalList,
   terminalRecordsEqual
 } from './mobile-terminal-records'
 import {
@@ -16,6 +17,7 @@ import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-healt
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
 import { resolveActiveSessionTab } from './active-session-tab'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
+import { setWorktreeLaunchAgents } from '../notifications/worktree-launch-agents'
 import type { MobileSessionTerminalListModel } from './use-mobile-session-terminal-list'
 
 export function useMobileSessionTabApplication(scope: MobileSessionTerminalListModel) {
@@ -83,10 +85,26 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
+      nextTabs = reconcileSessionTabsWithTerminalList(
+        nextTabs,
+        terminalsRef.current
+      ) as MobileSessionTab[]
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0
       })
       sessionTabsRef.current = nextTabs
+      setWorktreeLaunchAgents(
+        worktreeId,
+        nextTabs.flatMap((tab) => {
+          if (tab.type === 'terminal' && tab.launchAgent) {
+            return [tab.launchAgent]
+          }
+          if (tab.type === 'agent-session' && tab.agent) {
+            return [tab.agent]
+          }
+          return []
+        })
+      )
       writeCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId), nextTabs)
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       // Why: subscribe snapshots often repeat identical payloads; skip re-set to avoid a subscription teardown/replay loop.

@@ -8,6 +8,7 @@ import { projectStructuredBackgroundTasks } from './mobile-structured-background
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import type { NativeChatTurnActivity } from './mobile-native-chat-turn-activity'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
@@ -24,6 +25,7 @@ export function MobileNativeChatListHeader({
   queuedMessages,
   onEditQueue,
   unanchoredTurnStatus,
+  turnActivity,
   onOpenBackgroundTasks
 }: {
   /** The UNFILTERED transcript on purpose: the `<task-notification>` turns that
@@ -42,6 +44,7 @@ export function MobileNativeChatListHeader({
   onEditQueue?: (index: number, tapped: string) => Promise<void>
   /** Set only while the live turn has no user message to hang its status under. */
   unanchoredTurnStatus?: NativeChatTurnStatus | null
+  turnActivity?: NativeChatTurnActivity | null
   onOpenBackgroundTasks: () => void
 }) {
   // `now` is 0 because only the sheet draws an elapsed clock; which tasks are
@@ -62,6 +65,7 @@ export function MobileNativeChatListHeader({
           startedAt={unanchoredTurnStatus.startedAt}
           thinking={unanchoredTurnStatus.thinking}
           workedSeconds={unanchoredTurnStatus.workedSeconds}
+          activityText={turnActivity?.text}
         />
       ) : null}
       <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />

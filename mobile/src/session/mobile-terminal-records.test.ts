@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { sessionTabCloseAddress, sessionTabClosesByHandle } from './mobile-session-tab-close-plan'
 import {
   getTerminalRecordsFromSessionTabs,
+  appendUnlistedConnectedTerminalTabs,
   hasConnectedTerminalAbsentFromSessionTabs,
+  reconcileSessionTabsWithTerminalList,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
@@ -219,6 +222,87 @@ describe('mobile terminal records', () => {
     terminal: handle,
     title: 'Terminal',
     isActive: false
+  })
+
+  it('puts a split pane the tab snapshot omitted onto the strip', () => {
+    const tabs = [terminalTab('pty-1')]
+    const listed = [
+      record({ handle: 'pty-1', connected: true, tabId: 'tab-1', leafId: 'leaf-1' }),
+      record({
+        handle: 'pty-2',
+        connected: true,
+        tabId: 'tab-1',
+        leafId: 'leaf-2',
+        title: 'shell'
+      })
+    ]
+    const next = appendUnlistedConnectedTerminalTabs(tabs, listed)
+    expect(next.map((tab) => (tab.type === 'terminal' ? tab.terminal : null))).toEqual([
+      'pty-1',
+      'pty-2'
+    ])
+    const extra = next[1]
+    expect(extra?.type).toBe('terminal')
+    if (extra?.type === 'terminal') {
+      expect(extra.id).not.toBe(tabs[0]?.id)
+      expect(extra.parentTabId).toBe('tab-1')
+      expect(extra.title).toBe('shell')
+    }
+  })
+
+  it('drops a split sibling once terminal.list no longer has it', () => {
+    const tabs = appendUnlistedConnectedTerminalTabs(
+      [terminalTab('pty-1')],
+      [
+        record({ handle: 'pty-1', connected: true, tabId: 'tab-pty-1' }),
+        record({ handle: 'pty-2', connected: true, tabId: 'tab-pty-1', leafId: 'leaf-2' })
+      ]
+    )
+    expect(tabs).toHaveLength(2)
+    expect(reconcileSessionTabsWithTerminalList(tabs, [record({ handle: 'pty-1', connected: true })])).toHaveLength(
+      1
+    )
+  })
+
+  it('addresses a split sibling as parentTabId::leafId so Close does not take the whole tab', () => {
+    expect(
+      sessionTabCloseAddress({
+        id: 'tab-1:leaf-2',
+        type: 'terminal',
+        parentTabId: 'tab-1',
+        leafId: 'leaf-2'
+      })
+    ).toEqual({ tabId: 'tab-1::leaf-2', leafId: 'leaf-2' })
+    expect(
+      sessionTabCloseAddress({
+        id: 'tab-1',
+        type: 'terminal',
+        parentTabId: undefined,
+        leafId: undefined
+      })
+    ).toEqual({ tabId: 'tab-1' })
+  })
+
+  it('closes a split sibling by its handle, not the parent tab', () => {
+    expect(
+      sessionTabClosesByHandle({
+        id: 'tab-1:leaf-2',
+        type: 'terminal',
+        terminal: 'pty-2',
+        title: 'shell',
+        parentTabId: 'tab-1',
+        isActive: false
+      })
+    ).toBe(true)
+    expect(
+      sessionTabClosesByHandle({
+        id: 'tab-1',
+        type: 'terminal',
+        terminal: 'pty-1',
+        title: 'Grok',
+        isActive: true
+      })
+    ).toBe(false)
   })
 
   it('reports a connected terminal the tab snapshot dropped', () => {

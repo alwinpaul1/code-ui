@@ -36,12 +36,14 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | d0506bf5d #19226 | execution details and tool row identity | the shared half plus a mobile annotations row. Unblocked the `mcpIdentity` field `native-chat-tool-summary.ts` had been dropping, so that file and its test went back to a clean c1e15c400. The `src/main/` Codex translation that fills `exitCode`/`durationMs` is not vendored — the host supplies those |
 | 9f044031f #19228 | a compaction, a plan and a toned line drawn as what they are | landed in 8d80263 as the `presentation`/`tone` hints, which is what LOCAL-FILES.md records; the rest of #19228 is `src/main/` |
 | f2d5711b2 #19845 | an older page that no longer touches the transcript is refused, not merged | landed in 8f7bbaf. The mobile half came over whole; the reducer carries local hunks, so its two changes were hand-applied. Covers the structured lane only — a terminal-driven tab is a different path, so it is not yet an answer to the missing-replies report |
+| 0b60b0dcb #19841 | bound retained items on the structured session path | the live-batch head trim that #19845's older-page retry exists for. Hand-applied onto the local reducer (activity, background tasks, `requestedCursor`). A long session now keeps 1024 items, sets `hasOlder`, and paging raises the cap so a live batch cannot collapse it |
 | d15a6df22 #19230 | task checklists with update diffs, and a composer progress panel | both agents' plans as checklists, in both themes. A later turn diffs against the earlier message's plan, not only the current tool run. The run header names the plan by progress (`1/3 · Writing the test`) instead of the input JSON. A collapsed **Tasks n/m** strip sits above the composer and expands to the checklist. Shared `native-chat-task-list.ts` vendored; mobile surface is `MobileNativeChatTaskList.tsx` plus the row builder, composer strip, and tool-run header rewrite. Live Codex `projectNativeChatTaskListFrames` (notification→update_plan) was not ported |
 | e80fae0c4 #19229 | summarize turn file changes and preserve resolved prompt receipts | **the shared half only, and it changes nothing the phone draws.** Both visible halves — the turn diff rollup and the resolution receipt — are `src/renderer/` components this fork does not vendor, and `summarizeUnifiedPatch` exists only to feed the rollup. What the phone does get is the per-item render cache in `structured-agent-session-projection.ts`: mobile re-projects the WHOLE transcript on every stream frame, and unchanged rows now come back as the same objects. `native-chat-edit-normalize.ts` and `native-chat-unified-patch.ts` re-vendored at e80fae0c4, `native-chat-edit-patch-files.ts` vendored new (`native-chat-edit-normalize.ts` imports it, so mobile typechecks it). The extraction is behaviour-preserving and was proved so: upstream's own 50 pre-extraction `native-chat-edit-normalize.test.ts` cases, vendored here at 172aa1ac3, all pass against the extracted code |
 | 8096cb280 #18743 | render Claude structured chat through the same UI as Codex | already in: `structured-agent-session-composer.ts` is pinned at f1d854502, a later commit that contains it, and the file was verified byte-identical |
 | 1b4159a31 #18638 | skip host-label work on a single-host install | `host-context-labels.ts` re-vendored. Mobile imports it for the worktree list. |
 | fb9d08f5f #19476 | index project table option and iteration order | `project-group-sort.ts` re-vendored. Mobile `groupRows` / `sortRows` call it. |
 | d3501f7ad #18456 | `unavailableReason` on a non-authoritative worktree list | the two-line type only. The scan-failure host and sidebar are `src/main/` / `src/renderer/` |
+| f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
 **This table is behind `main` for work outside the chat-rendering and
@@ -81,15 +83,9 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | d15a6df22 #19230 (`update_plan` icon, in effect) | the one-line `native-chat-tool-icon.ts` map entry is vendored so the pin moves, but it draws nothing here. Mobile imports only `isShellActivityToolCall` from that file and picks between a terminal and a wrench; it never calls `nativeChatToolCategory` or `nativeChatToolRunIconName`, and the new entry does not change `isShellActivityToolCall`. The checklist's own `list-checks` glyph comes from the mobile component, not from the category map |
 | a567e33bf #17795 | GitHub Projects roadmap timeline | desktop renderer plus `project-roadmap-timeline.ts`, which nothing under `mobile/` imports. The `fieldName` wire field on a date cell is unused here |
 | 72befaf36 #18806 | Claude subagent activity on the shared carrier | host-side Claude translation, same residual as #18773. The shared delta is a test fixture for `subagent-group`. Mobile still shows the host's frozen sentence |
-| ef6ad2243 #19364, 0b60b0dcb #19841 | the two shared-path perf commits that are not in the batch above. #19364 is renderer work plus one line in `structured-agent-session-message-projection.ts`; #19841 is `structured-agent-session-reducer.ts` alone. Both files belong to the structured-session batch |
+| ef6ad2243 #19364 | renderer work plus one optional `projectItems` argument in `structured-agent-session-message-projection.ts`. The phone already calls that function with the default projector |
 
 ## Pending
-
-**Blocked on one pass, not deferred** — f7d521601 #19055, provider activity in
-chat turn tails. Every shared file it needs belongs to the structured-session
-batch: the wire shape, the reducer that carries it, the coalescer that merges
-it across a batch. Its producer is host code this repo does not vendor. Port it
-with that batch in one pass, or two agents edit the reducer twice.
 
 **Assess before porting** — f4c282116 #18652 moves the session journal onto
 SQLite. That is host storage; confirm nothing on the phone depends on the old
@@ -104,8 +100,6 @@ shape before touching it. The #19822 verdict lives in
   nothing leaves the tab on the transcript reader.
 - The wire's per-task `totalTokens` is read by the equality check and then
   dropped, because the sheet has nowhere to show it.
-- `structured-agent-session-reducer.ts` still lacks upstream's `activity`
-  (#19055) and its `retainedItemLimit` head trim. Both belong to batches above.
 - The Windows status line and Stop hook run for real under PowerShell 7 in
   tests, and have never run on Windows.
 - Live Codex `projectNativeChatTaskListFrames` (a `plan` notification rewritten

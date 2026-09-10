@@ -55,6 +55,7 @@ export function MobileNativeChatView({
   agentWorking,
   canStop,
   structuredActivityUi = false,
+  turnActivity = null,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
@@ -246,6 +247,7 @@ export function MobileNativeChatView({
             : undefined
         }
         structuredActivityUi={structuredActivityUi}
+        turnActivity={turnActivity}
         onToggleTurn={turns.onToggleTurn}
         // The list is inverted, so `index` counts from the newest row while the
         // disclosure walks the transcript in order. Flip it, or every row reads
@@ -262,6 +264,7 @@ export function MobileNativeChatView({
       agentWorking,
       onCancelQueued,
       structuredActivityUi,
+      turnActivity,
       turns,
       data.length,
       taskListPredecessors
@@ -331,6 +334,7 @@ export function MobileNativeChatView({
                 queuedMessages={queuedMessages}
                 onEditQueue={onEditQueue}
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
+                turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
               />
             }

@@ -56,9 +56,6 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.groupHeading}>LINKS</Text>
-        <Text style={styles.groupDescription}>
-          Choose where HTTP(S) links tapped in terminal output open.
-        </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <Pressable
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -121,12 +118,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.5,
     marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
     paddingHorizontal: spacing.xs
   },
   section: {

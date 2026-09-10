@@ -18,6 +18,24 @@ function status(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
 }
 
 describe('resolveMobileNativeChat', () => {
+  it('keeps a Grok launch when the HUD names Claude Code', () => {
+    // Grok's hook does not write the Claude/Codex status shape. A Claude
+    // agentType on a Grok-launched tab is the HUD guessing, not a relaunch.
+    expect(
+      resolveMobileNativeChat(
+        {
+          type: 'terminal',
+          launchAgent: 'grok',
+          agentStatus: status({
+            agentType: 'claude',
+            providerSession: { id: 'sess-1', transcriptPath: '/tmp/claude.jsonl' }
+          })
+        },
+        true
+      )
+    ).toMatchObject({ agent: 'grok' })
+  })
+
   it('prefers the authoritative supported live agent over a stale launch hint', () => {
     expect(
       resolveMobileNativeChat({
