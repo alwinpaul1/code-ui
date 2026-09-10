@@ -2,7 +2,7 @@
   "expo": {
     "name": "Code UI",
     "slug": "code-ui",
-    "version": "0.2.93",
+    "version": "0.2.94",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -81,7 +81,7 @@
         "REQUEST_INSTALL_PACKAGES"
       ],
       "package": "com.alwinpaul.codeui",
-      "versionCode": 94,
+      "versionCode": 95,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
@@ -91,6 +91,7 @@
       "expo-router",
       "./plugins/android-respect-rotation-lock.js",
       "./plugins/android-gradle-memory.js",
+      "./plugins/android-soft-input-mode.js",
       [
         "expo-notifications",
         {
