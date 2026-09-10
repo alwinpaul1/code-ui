@@ -23,6 +23,7 @@ import {
   claimAppUpdateDialogPresenter,
   releaseAppUpdateDialogPresenter
 } from './app-update-dialog-presenter'
+import { deferDialogDismiss } from './app-update-dismiss-defer'
 
 // One centered dialog for the whole update journey, after the update dialogs
 // of Flighty (app tile + version), Xbox ("What's new" list) and Rivian
@@ -125,6 +126,13 @@ export function AppUpdateDialog() {
     if (!dismissible) {
       return
     }
+    // Why deferred: closing here removes this Modal's own Android window while
+    // the system is still delivering the press, and the release then lands on
+    // the screen behind. See app-update-dismiss-defer.ts.
+    deferDialogDismiss(closeDialog)
+  }
+
+  const closeDialog = () => {
     if (state.kind === 'available') {
       void useAppUpdateStore.getState().dismiss()
     } else if (state.kind === 'failed') {
