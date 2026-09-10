@@ -58,6 +58,11 @@ export function useMobileNativeChatDrafts(args: {
    *  is an empty conversation, not a read that failed or never ran. Only then
    *  does a send's captured tail describe a real boundary. */
   transcriptSettled: boolean
+  /** A send held as unconfirmed has now been seen in the transcript. Why it
+   *  matters: an ack-lost send returns not-accepted, so the view never retires
+   *  a failure notice from an earlier attempt, and the user reads "Message not
+   *  sent" directly above the message that was sent. */
+  onUnconfirmedSendLanded?: () => void
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
@@ -95,7 +100,8 @@ export function useMobileNativeChatDrafts(args: {
     launchDraftCreatedAt,
     chatActive = true,
     transcriptLoading,
-    transcriptSettled
+    transcriptSettled,
+    onUnconfirmedSendLanded
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
@@ -270,7 +276,10 @@ export function useMobileNativeChatDrafts(args: {
     for (const entry of landed) {
       clearTimeout(entry.deadline ?? undefined)
     }
-  }, [messages, draftKey, pendingKey])
+    // The transcript is the evidence the send arrived, so any failure notice
+    // still on screen is describing something that did not happen.
+    onUnconfirmedSendLanded?.()
+  }, [messages, draftKey, pendingKey, onUnconfirmedSendLanded])
 
   useEffect(() => {
     mountedRef.current = true

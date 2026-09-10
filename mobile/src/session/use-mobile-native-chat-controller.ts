@@ -130,12 +130,12 @@ export function useMobileNativeChatController(
     messages: nativeChatSession.messages,
     launchDraft: activeSessionTab?.launchDraft ?? null,
     launchDraftCreatedAt: activeSessionTab?.launchDraftCreatedAt ?? null,
-    // Why: pass the raw draft plus this flag rather than nulling it off-chat —
-    // a null is indistinguishable from a host retraction, and peeking at the
-    // terminal view would permanently decline the prefill.
+    // Why: pass the raw draft plus this flag rather than nulling it off-chat — a
+    // null reads as a host retraction, and a peek would decline the prefill forever.
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
-    transcriptSettled: nativeChatSession.status === 'ready'
+    transcriptSettled: nativeChatSession.status === 'ready',
+    onUnconfirmedSendLanded: onSendResolved
   })
 
   const finishedTaskIds = useActiveTabFinishedTaskIds(activeHandleRef.current)
