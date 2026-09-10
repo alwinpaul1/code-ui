@@ -137,8 +137,13 @@ describe('MobileNativeChatMessage', () => {
         }
       ])
     )
+    // Innermost match, not the first: the run header now prints each member's
+    // name as its own text node (#19372), so it answers to a tool name too. The
+    // header comes first in tree order and the tool line after it.
     const pressableWith = (label: string): ReactTestInstance =>
-      tree.root.findAllByType('Pressable' as never).find((node) => textIn(node).includes(label))!
+      tree.root
+        .findAllByType('Pressable' as never)
+        .findLast((node) => textIn(node).includes(label))!
 
     act(() => pressableWith('1×').props.onPress())
     // The row label is the command, and the detail stays closed until tapped.

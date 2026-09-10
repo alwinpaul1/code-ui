@@ -98,6 +98,24 @@ export function makeChatMessageStyles(theme: Theme) {
       color: colors.textSecondary,
       fontSize: 13
     },
+    // A batch of calls reads as a list only if something marks where one member
+    // ends. The tone step from name to argument is that mark: punctuation
+    // cannot be, because tool names carry it too (`browser.open`, `tools/read`).
+    toolRunMemberName: {
+      color: colors.text,
+      fontFamily: fonts.medium,
+      fontSize: 13
+    },
+    toolRunMemberArg: {
+      color: colors.textMuted,
+      fontFamily: fonts.regular,
+      fontSize: 13
+    },
+    toolRunMore: {
+      color: colors.textMuted,
+      fontFamily: fonts.mono,
+      fontSize: MONO_SIZE
+    },
     toolRunBody: {
       paddingLeft: space.sm + 2,
       borderLeftWidth: 2,

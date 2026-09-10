@@ -7,9 +7,13 @@ import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
   createToolInputDisplay,
-  summarizeToolRun,
+  toolRunSummaryMembers,
   truncateToolDetail
 } from '../../../src/shared/native-chat-tool-summary'
+import {
+  formatToolCallCount,
+  NATIVE_CHAT_TOOL_ACTIVITY_COPY
+} from '../../../src/shared/native-chat-tool-activity'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -163,7 +167,14 @@ export function ToolRun({
     }
   }
   callCount ||= pairs.length
-  const summary = summarizeToolRun(blocks)
+  // Members stay separate all the way to the markup. Joining them into one
+  // string is what made a batch read as a single call: the separator also
+  // occurs inside tool names like `browser.open` and `tools/read`, so nothing
+  // told the reader where one call ended and the next began. Each member now
+  // opens with its name in the foreground tone and trails its argument muted,
+  // and that tone change is the boundary.
+  const summaryMembers = toolRunSummaryMembers(blocks)
+  const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -176,9 +187,38 @@ export function ToolRun({
         >
           <SquareChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
           <Text style={styles.toolRunCount}>{callCount}×</Text>
-          <Text style={styles.toolRunLabel} numberOfLines={1}>
-            {summary || `Ran ${callCount} tool ${callCount === 1 ? 'call' : 'calls'}`}
-          </Text>
+          {summaryMembers.length > 0 ? (
+            <Text style={styles.toolRunLabel} numberOfLines={1}>
+              {summaryMembers.map((member, index) => (
+                <Text key={`${member.name}:${member.arg}:${index}`}>
+                  {/* A real space, not a gap: a gap is invisible to a copied
+                      selection and to the row's accessible name, which would
+                      otherwise run one member's argument into the next name. */}
+                  {index > 0 ? '   ' : null}
+                  <Text testID="tool-run-member-name" style={styles.toolRunMemberName}>
+                    {member.name}
+                  </Text>
+                  {member.arg ? (
+                    <Text style={styles.toolRunMemberArg}>{` ${member.arg}`}</Text>
+                  ) : null}
+                </Text>
+              ))}
+            </Text>
+          ) : (
+            <Text style={styles.toolRunLabel} numberOfLines={1}>
+              {formatToolCallCount(callCount)}
+            </Text>
+          )}
+          {hiddenCallCount > 0 ? (
+            // Outside the truncating label, so the count of what the header did
+            // not name survives a phone too narrow to print the list.
+            <Text style={styles.toolRunMore}>
+              {NATIVE_CHAT_TOOL_ACTIVITY_COPY.moreCalls.replaceAll(
+                '{{value0}}',
+                String(hiddenCallCount)
+              )}
+            </Text>
+          ) : null}
           {open ? (
             <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
           ) : (

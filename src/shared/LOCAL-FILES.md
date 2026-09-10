@@ -48,4 +48,11 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.
+- `native-chat-tool-summary.ts` and `native-chat-tool-summary.test.ts` —
+  `ToolRunMember` drops upstream's `mcpIdentity` field. It is typed
+  `NativeChatMcpIdentity` from `native-chat-tool-identity.ts`, and it is read
+  off `block.mcpIdentity`; neither that module nor that block field exists in
+  this fork, because Orca #19226 is not vendored here. Restore the field, the
+  import and the `carries provider MCP identity through` test the moment
+  #19226 lands. Both hunks are marked `CODE UI LOCAL HUNK` in the source.
 
