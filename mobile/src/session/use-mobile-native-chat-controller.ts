@@ -449,6 +449,9 @@ export function useMobileNativeChatController(
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
+    nativeChatCanStop: activeChatStructured
+      ? structuredNativeChat.canStop
+      : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
     nativeChatFinishedTaskIds: finishedTaskIds,
     nativeChatBackgroundTasks: activeChatStructured

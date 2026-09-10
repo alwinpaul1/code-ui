@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSendResult,
-  AgentSessionSlashCommand
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { dispatchStructuredTurnCancel } from './mobile-structured-agent-cancel'
-import {
-  structuredAgentSessionSendBody,
-  type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-outbox'
+import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../src/shared/structured-agent-session-projection'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -27,40 +23,13 @@ import {
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import type { MobileChatQuestion } from './mobile-native-chat-question'
-import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
-
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
-
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
-  session: MobileNativeChatSession
-  isWorking: boolean
-  turnId: string | null
-  sendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number,
-    attachments?: readonly StructuredMobileAttachment[]
-  ) => Promise<MobileNativeChatSendOutcome>
-  cancel: () => void
-  permission: MobileChatPermission | null
-  question: MobileChatQuestion | null
-  /** The `/` surface the running session reports; undefined until it reports one. */
-  sessionCommands: readonly AgentSessionSlashCommand[] | undefined
-  /** The provider's own background-task roster. `undefined` while this host has
-   *  never reported one, so the transcript reader keeps the tab; `null` once it
-   *  has reported one and cleared it. */
-  backgroundTasks: AgentSessionBackgroundTaskState | null | undefined
-  /** Asks the host to stop one named background task. Only offered where the
-   *  roster says `supportsTaskStop`. */
-  stopBackgroundTask: (taskId: string) => Promise<boolean>
-  respondPermission: (optionId: string) => Promise<boolean>
-  respondQuestion: (answer: string) => Promise<boolean>
-}
+import type {
+  StructuredMobileAttachment,
+  StructuredMobileSession
+} from './mobile-structured-agent-session-contract'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -302,7 +271,10 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
+    isWorking:
+      activeStructuredAgentSessionTurnId(state.items) !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    canStop: activeStructuredAgentSessionTurnId(state.items) !== null,
     turnId: activeStructuredAgentSessionTurnId(state.items),
     sendWithOutcome,
     cancel,

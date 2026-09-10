@@ -10,6 +10,7 @@ import type { ChatViewStyles } from './mobile-native-chat-view-styles'
  *  the send-failure banner beneath. */
 export function MobileNativeChatChromeRow({
   agentWorking,
+  canStop,
   showWorkingIndicator = true,
   onStop,
   toolsExpanded,
@@ -18,6 +19,11 @@ export function MobileNativeChatChromeRow({
   styles
 }: {
   agentWorking?: boolean
+  /** Whether Stop has a turn to act on; defaults to `agentWorking`. On the
+   *  structured lane the row says "working" from the journalled send, and the
+   *  provider may not have opened a turn yet — a Stop offered then would be a
+   *  button that cannot do anything. */
+  canStop?: boolean
   /** False on the structured lane, whose per-turn status row already says the
    *  agent is working — a second static row would report it twice. */
   showWorkingIndicator?: boolean
@@ -50,7 +56,7 @@ export function MobileNativeChatChromeRow({
             </Txt>
           </Pressable>
         </View>
-        {agentWorking ? (
+        {(canStop ?? agentWorking) ? (
           <Pressable
             style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
             onPress={onStop}

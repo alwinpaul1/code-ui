@@ -48,6 +48,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  canStop,
   structuredActivityUi = false,
   agentStatus,
   finishedTaskIds,
@@ -401,6 +402,7 @@ export function MobileNativeChatView({
       />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
+        canStop={canStop ?? agentWorking}
         // The structured lane says "Working for N" per turn; a second, static
         // three-dot row under it would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}

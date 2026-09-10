@@ -55,6 +55,9 @@ export type MobileNativeChatController = {
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
+  /** Whether there is a turn to interrupt. On the structured lane a send reads
+   *  as working before the provider opens one, and Stop cannot act until it does. */
+  nativeChatCanStop: boolean
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire. */
   nativeChatAgentStatus: AgentStatusEntry | null
   /** Task ids the active tab's HUD beacon reports finished; see agent-hud-beacon.ts. */

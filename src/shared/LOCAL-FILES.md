@@ -84,6 +84,19 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.
+- `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
+  `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
+  (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional
+  `submissions`/`currentFence` arguments on
+  `projectStructuredAgentSessionStatus`, and `recovered?: true` on a
+  submission. The optimistic-bubble half is deliberately NOT taken — this fork
+  calls the message projection with an empty outbox and leaves pending bubbles
+  to its own pending-echo system, so upstream's would draw a second one.
+  `scratchpad/19822-assessment.md` records the reasoning. The projection cannot
+  be re-vendored at 2f828e446: its base-to-there delta also brings
+  `projectStructuredAgentSessionStatusSummary` (#18776/#19137), which is the
+  desktop sidebar's feed and has no reader here.
+
 - `native-chat-tool-summary.ts` and `native-chat-tool-summary.test.ts` —
   `ToolRunMember` drops upstream's `mcpIdentity` field. It is typed
   `NativeChatMcpIdentity` from `native-chat-tool-identity.ts`, and it is read

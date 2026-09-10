@@ -36,6 +36,10 @@ export type MobileNativeChatViewProps = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  /** Whether Stop has a turn to act on. Defaults to `agentWorking`, which is
+   *  the bridge lane's answer; the structured lane says "working" from the
+   *  journalled send, seconds before there is a turn to interrupt. */
+  canStop?: boolean
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
    *  replacing the bridge lane's static three-dot working row (desktop parity). */
   structuredActivityUi?: boolean
