@@ -42,22 +42,28 @@ function isInterruptionBoundary(message: NativeChatMessage): boolean {
   )
 }
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19468, 44eb95fc6) — see below and
+// in `pairToolBlocks`. The file cannot be re-vendored whole at that commit: the
+// same range carries #18773's subagent-roster fold, which needs a block type
+// this fork does not vendor. See src/shared/LOCAL-FILES.md.
 /** Drop tool results the renderer cannot pair within their folded message. */
 function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMessage | null {
-  const blocks: NativeChatBlock[] = []
+  let blocks: NativeChatBlock[] | undefined
   let unansweredCalls = 0
-  for (const block of message.blocks) {
+  for (let index = 0; index < message.blocks.length; index++) {
+    const block = message.blocks[index]
     if (isToolCallBlock(block)) {
       unansweredCalls += 1
     } else if (isToolResultBlock(block)) {
       if (unansweredCalls === 0) {
+        blocks ??= message.blocks.slice(0, index)
         continue
       }
       unansweredCalls -= 1
     }
-    blocks.push(block)
+    blocks?.push(block)
   }
-  if (blocks.length === message.blocks.length) {
+  if (!blocks) {
     return message
   }
   return blocks.length > 0 ? { ...message, blocks } : null
@@ -129,16 +135,18 @@ export function pairToolBlocks(
   blocks: readonly NativeChatBlock[],
   limit = Infinity
 ): NativeChatToolPair[] {
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19468, 44eb95fc6).
   const pairs: NativeChatToolPair[] = []
-  const callSlots: (number | null)[] = []
+  const callSlots: number[] = []
   let resultOrdinal = 0
   for (const block of blocks) {
+    if (pairs.length >= limit && resultOrdinal >= callSlots.length) {
+      break
+    }
     if (block.type === 'tool-call') {
       if (pairs.length < limit) {
         callSlots.push(pairs.length)
         pairs.push({ call: block })
-      } else {
-        callSlots.push(null)
       }
       continue
     }
@@ -152,9 +160,7 @@ export function pairToolBlocks(
       }
     } else {
       resultOrdinal += 1
-      if (slot !== null) {
-        pairs[slot]!.result = block
-      }
+      pairs[slot]!.result = block
     }
   }
   return pairs

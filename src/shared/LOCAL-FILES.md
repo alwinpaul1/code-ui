@@ -112,6 +112,15 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   also carry the forward-ported #19228 hints above. Every hunk is marked
   `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
 
+- `native-chat-tool-fold.ts` — the allocation work from Orca #19468
+  (44eb95fc6), in `dropUnattributableToolResults` and `pairToolBlocks`. The file
+  cannot be re-vendored whole at that commit: the same range carries #18773's
+  subagent-roster fold, which reads `isSubagentGroupBlock` from a block type
+  this fork does not vendor. Both hunks are marked
+  `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source, and both are byte-equal to
+  upstream's — the file differs from 44eb95fc6 only by the absent #18773 code
+  and those two markers.
+
 `native-chat-tool-summary.ts` and its test used to sit here for dropping
 upstream's `mcpIdentity` field. #19226 landed, so both were re-vendored whole at
 their c1e15c400 pin and the field is back; the entry is gone.

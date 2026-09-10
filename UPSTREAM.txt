@@ -46,5 +46,15 @@ src/shared/native-chat-unified-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770
 src/shared/native-chat-begin-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-normalize.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-normalize.test.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-ask.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
+src/shared/native-chat-ask-fifo.test.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
+src/shared/native-chat-tool-pair-limit.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
+src/shared/native-chat-tool-attribution-allocation.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
+src/shared/ai-vault-session-depth.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
+src/shared/ai-vault-session-depth.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
+src/shared/ai-vault-session-filters.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
+src/shared/ai-vault-session-filters.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
+src/shared/project-host-setup-projection.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
+src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.
