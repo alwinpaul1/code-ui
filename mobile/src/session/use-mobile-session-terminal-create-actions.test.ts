@@ -354,4 +354,66 @@ describe('mobile + Codex tab creation routing', () => {
     )
     expect(scope.setCreateError).toHaveBeenCalledWith('create outcome ambiguous')
   })
+  it.each(['structured_agent_session_unsupported', 'method_not_found'])(
+    'a Claude create the host definitively refuses with %s still opens a terminal',
+    async (code) => {
+      const client = clientAnswering({
+        'agentSession.createSupport': { ok: true, result: { supported: true } },
+        'agentSession.create': { ok: false, error: { code, message: 'no structured lane' } },
+        'settings.get': { ok: true, result: {} },
+        'status.get': { ok: true, result: { platform: 'darwin' } },
+        'session.tabs.createTerminal': terminalCreateResponse()
+      })
+      const scope = createScope(client)
+      let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+      function Harness() {
+        actions = useMobileSessionTerminalCreateActions(scope as never)
+        return null
+      }
+      await act(async () => {
+        renderer = create(createElement(Harness))
+      })
+      await act(async () => {
+        await actions?.handleCreateTerminal('claude')
+      })
+
+      const createCall = (
+        client.sendRequest as unknown as ReturnType<typeof vi.fn>
+      ).mock.calls.find(([method]) => method === 'session.tabs.createTerminal')
+      const createParams = createCall?.[1] as
+        | { agent?: string; launchConfig?: { agentArgs?: unknown } }
+        | undefined
+      expect(createParams).toMatchObject({ agent: 'claude' })
+      expect(createParams?.launchConfig?.agentArgs).toBeTruthy()
+      expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+    }
+  )
+
+  it('a Codex create the host definitively refuses still opens nothing', async () => {
+    const client = clientAnswering({
+      'agentSession.createSupport': { ok: true, result: { supported: true } },
+      'agentSession.create': {
+        ok: false,
+        error: { code: 'structured_agent_session_unsupported', message: 'no structured lane' }
+      }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal('codex')
+    })
+
+    expect(client.sendRequest).not.toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.anything()
+    )
+    expect(scope.setCreateError).toHaveBeenCalledWith('no structured lane')
+  })
 })
