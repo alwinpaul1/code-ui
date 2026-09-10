@@ -281,7 +281,9 @@ export function useMobileNativeChatSessionOptions(args: {
       models: activeModels(catalog, record),
       record,
       mode: 'live',
-      modelLabel: 'Model'
+      modelLabel: 'Model',
+      // The terminal lane drives the agent's own picker, not agentSession.setOption.
+      liveTransport: 'catalog'
     })
   }, [agent, catalog, scopeKey, version])
 

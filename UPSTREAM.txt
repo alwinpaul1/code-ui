@@ -12,5 +12,16 @@ src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c042
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/structured-agent-session-create.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/runtime-mobile-session-tab-contracts.ts: a65332a8bdaec95a48cc0ade4a7c482586bb9370
+src/shared/native-chat-session-option-defaults.ts: 546fd9b21
+src/shared/native-chat-session-option-defaults.test.ts: 546fd9b21
+src/shared/native-chat-session-options.ts: 546fd9b21
+src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/native-chat-session-option-snapshot.test.ts: 546fd9b21
+src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/structured-agent-session-options.ts: 546fd9b21
+src/shared/structured-agent-session-options.test.ts: 546fd9b21
+src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
+src/shared/agent-session-wire.ts: 546fd9b21
+src/shared/agent-session-record.ts: 546fd9b21
 
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.
