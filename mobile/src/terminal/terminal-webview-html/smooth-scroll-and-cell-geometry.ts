@@ -21,9 +21,12 @@ export const TERMINAL_HTML_SMOOTH_SCROLL_AND_CELL_GEOMETRY = `  var SMOOTH_SCROL
     return pullPx < 0 ? -bent : bent;
   }
 
+  // Why not clientHeight: reading it forces layout, and this runs on every
+  // frame of a pull and of the spring back. rows x cell height is the same
+  // number from geometry this module already tracks, for free.
   function overscrollDimensionPx() {
-    var screenElement = getTerminalScreenElement();
-    var height = screenElement ? screenElement.clientHeight : 0;
+    if (!term || !term.rows) return 1;
+    var height = term.rows * getCellHeight() * getTotalScale();
     return height > 0 ? height : 1;
   }
 

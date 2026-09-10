@@ -4,6 +4,7 @@
 // stream frames use the raw byte bundle.
 import nacl from 'tweetnacl'
 import * as ExpoCrypto from 'expo-crypto'
+import { base64ToUint8, uint8ToBase64 } from './base64-bytes'
 
 // Why: Hermes (React Native's JS engine) lacks crypto.getRandomValues,
 // which tweetnacl requires. expo-crypto provides a native secure RNG
@@ -29,23 +30,6 @@ export function generateKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Arra
 
 export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
   return u8(nacl.box.before(u8(peerPublicKey), u8(ourSecretKey)))
-}
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!)
-  }
-  return btoa(binary)
-}
-
-function base64ToUint8(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {

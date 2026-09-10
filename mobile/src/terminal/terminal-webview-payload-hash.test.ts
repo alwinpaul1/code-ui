@@ -10,8 +10,10 @@ import { XTERM_HTML } from './terminal-webview-html'
 // refusing to move (UIScrollView's f(x,d,c) = x*d*c/(d+c*x), c = 0.55). The
 // bend is visual only — no row is committed and the spring returns the offset
 // to exactly 0, so the at-rest row-boundary invariant is unchanged.
-const EXPECTED_SHA256 = '9eaead84877193bad9a4ba5586cf0ffa9182366103a5fedbd835240ddab4a693'
-const EXPECTED_LENGTH = 753185
+// Then: the overscroll dimension comes from rows x cell height instead of
+// reading clientHeight, which forced layout on every frame of a pull.
+const EXPECTED_SHA256 = 'b86b1e1591fd9655c16db8fcda1419cc7339a80c52a8c53c351d5ef608a759e8'
+const EXPECTED_LENGTH = 753387
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {
