@@ -6,11 +6,10 @@ import { XTERM_HTML } from './terminal-webview-html'
 // uncovered region ships silently. A diff here means the emitted WebView source changed —
 // update these values only when that change is deliberate, and only after checking the
 // document still runs. Refactors that merely move slice boundaries must leave them alone.
-// Last deliberate change: the scroll remainder is rewritten from term.onRender (the frame
-// xterm actually paints), unpainted rows ride on the transform, and a touchmove scrolls the
-// buffer in its own frame instead of one animation frame later.
-const EXPECTED_SHA256 = '4b1fc4fc5aa8a96d6332f86b2586c7da64e7379c011f8db715d7a1b0afb29408'
-const EXPECTED_LENGTH = 749450
+// Last deliberate change: an explicit desktop-published minimumContrastRatio (#10754)
+// now wins over the background-luminance gate, clamped to xterm's 1-21 range.
+const EXPECTED_SHA256 = '6b5cae90a4b0ebda4fa2f1cdb3fd53880ffca5550f1dcaa6e1c0d613a4b3d75c'
+const EXPECTED_LENGTH = 750102
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

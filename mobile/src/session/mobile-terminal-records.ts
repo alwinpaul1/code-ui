@@ -78,7 +78,12 @@ export function mobileTerminalThemesEqual(
   if (left === right) {
     return true
   }
-  if (!left || !right || left.mode !== right.mode) {
+  if (
+    !left ||
+    !right ||
+    left.mode !== right.mode ||
+    left.minimumContrastRatio !== right.minimumContrastRatio
+  ) {
     return false
   }
   const leftColors = left.theme as Readonly<Record<string, unknown>>

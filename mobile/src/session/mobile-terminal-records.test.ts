@@ -56,6 +56,17 @@ describe('mobile terminal records', () => {
     expect(mobileTerminalThemesEqual(withNewField, { ...withNewField })).toBe(true)
   })
 
+  it('treats a changed contrast-ratio override as a different theme (#10754)', () => {
+    // A record that skips this field would never reach the WebView when the desktop
+    // user only changes the published minimumContrastRatio and nothing else.
+    const withOverride = { ...darkTheme, minimumContrastRatio: 1 }
+    const withDifferentOverride = { ...darkTheme, minimumContrastRatio: 21 }
+
+    expect(mobileTerminalThemesEqual(darkTheme, withOverride)).toBe(false)
+    expect(mobileTerminalThemesEqual(withOverride, withDifferentOverride)).toBe(false)
+    expect(mobileTerminalThemesEqual(withOverride, { ...withOverride })).toBe(true)
+  })
+
   it('keeps the known theme when a session-tab snapshot omits it', () => {
     const known: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }
