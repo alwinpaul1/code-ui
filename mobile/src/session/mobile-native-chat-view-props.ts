@@ -8,7 +8,10 @@ import type {
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSlashCommand
+} from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -40,6 +43,12 @@ export type MobileNativeChatViewProps = {
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
   finishedTaskIds?: readonly string[]
+  /** The host's own background-task roster, on the structured lane. When the
+   *  host has reported one it is the whole answer and the two props above go
+   *  unread; `undefined` leaves the tab to the transcript reader. */
+  hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Stops one named background task; omitted when the host accepts no stop. */
+  onStopBackgroundTask?: (taskId: string) => void
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated

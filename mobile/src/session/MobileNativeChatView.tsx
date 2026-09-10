@@ -51,6 +51,8 @@ export function MobileNativeChatView({
   structuredActivityUi = false,
   agentStatus,
   finishedTaskIds,
+  hostBackgroundTasks,
+  onStopBackgroundTask,
   onStop,
   streaming,
   hasMore,
@@ -329,6 +331,7 @@ export function MobileNativeChatView({
                 agent={agent}
                 agentStatus={agentStatus}
                 finishedTaskIds={finishedTaskIds}
+                hostBackgroundTasks={hostBackgroundTasks}
                 queuedMessages={queuedMessages}
                 onEditQueue={onEditQueue}
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
@@ -382,6 +385,8 @@ export function MobileNativeChatView({
         messages={messages}
         agentStatus={agentStatus ?? null}
         finishedTaskIds={finishedTaskIds}
+        hostBackgroundTasks={hostBackgroundTasks}
+        onStopTask={onStopBackgroundTask}
         onClose={() => setBackgroundTasksOpen(false)}
       />
       <MobileNativeChatQueueEditor editor={queueEditor} />

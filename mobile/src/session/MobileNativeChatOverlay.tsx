@@ -1,6 +1,6 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -80,6 +80,10 @@ export function MobileNativeChatOverlay({
   // for them repeatedly changes the list window during a live reply.
   usePendingImageHistory(session, projectedQueue.pending, sendSurfaceId)
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
+  const stopBackgroundTask = useCallback(
+    (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
+    [controller]
+  )
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
     controller.nativeChatStreamingText,
@@ -101,6 +105,12 @@ export function MobileNativeChatOverlay({
         structuredActivityUi={controller.nativeChatStructured}
         agentStatus={controller.nativeChatAgentStatus}
         finishedTaskIds={controller.nativeChatFinishedTaskIds}
+        hostBackgroundTasks={controller.nativeChatBackgroundTasks}
+        onStopBackgroundTask={
+          controller.nativeChatBackgroundTasks?.supportsTaskStop === true
+            ? stopBackgroundTask
+            : undefined
+        }
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

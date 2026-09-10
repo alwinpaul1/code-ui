@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type {
-  AgentSessionCancelResult,
+  AgentSessionBackgroundTaskState,
   AgentSessionSendResult,
   AgentSessionSlashCommand
 } from '../../../src/shared/agent-session-wire'
+import { dispatchStructuredTurnCancel } from './mobile-structured-agent-cancel'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -50,6 +51,13 @@ type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions
   question: MobileChatQuestion | null
   /** The `/` surface the running session reports; undefined until it reports one. */
   sessionCommands: readonly AgentSessionSlashCommand[] | undefined
+  /** The provider's own background-task roster. `undefined` while this host has
+   *  never reported one, so the transcript reader keeps the tab; `null` once it
+   *  has reported one and cleared it. */
+  backgroundTasks: AgentSessionBackgroundTaskState | null | undefined
+  /** Asks the host to stop one named background task. Only offered where the
+   *  roster says `supportsTaskStop`. */
+  stopBackgroundTask: (taskId: string) => Promise<boolean>
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
 }
@@ -243,30 +251,30 @@ export function useMobileStructuredAgentSession(args: {
       onSendError('Stop not sent')
       return
     }
-    const fields = { turnId }
-    const key = `${sessionKey}:agentSession.cancel:${JSON.stringify(fields)}`
-    const clientOperationId = retainOperationId(key, operationIdsRef.current.get(key))
-    void requestStructuredAgentSessionMutation<AgentSessionCancelResult>({
+    dispatchStructuredTurnCancel({
       client,
-      method: 'agentSession.cancel',
-      fingerprintMethod: 'agentSession.cancel',
       sessionId,
-      expectedRuntimeFence: current.fence,
-      fields,
-      clientOperationId
-    }).then((result) => {
-      if (result.status !== 'unknown') {
-        operationIdsRef.current.delete(key)
-      }
-      if (result.status === 'unknown') {
-        onSendError('Stop unconfirmed — check chat before retrying')
-      } else if (result.status === 'refused') {
-        onSendError(result.message)
-      } else if (result.status === 'failed') {
-        onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
-      }
+      fence: current.fence,
+      turnId,
+      sessionKey,
+      operationIds: operationIdsRef.current,
+      onError: onSendError
     })
   }, [client, enabled, onSendError, sessionId, sessionKey])
+
+  const stopBackgroundTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      // The host reads `turnId: 'background-tasks'` as the scope marker, not as
+      // a real turn — a background task outlives the turn that launched it.
+      const result = await mutate('agentSession.cancel', 'agentSession.cancel', {
+        turnId: 'background-tasks',
+        scope: 'background-tasks',
+        taskId
+      })
+      return result.status === 'accepted'
+    },
+    [mutate]
+  )
 
   const messages = useMemo(
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
@@ -306,6 +314,8 @@ export function useMobileStructuredAgentSession(args: {
     // `null` is the provider clearing a catalog it once reported; both that and
     // "never reported" mean the composer keeps its curated catalog.
     sessionCommands: state.commands ?? undefined,
+    backgroundTasks: state.backgroundTasks,
+    stopBackgroundTask,
     respondPermission,
     respondQuestion,
     setStructuredOption,

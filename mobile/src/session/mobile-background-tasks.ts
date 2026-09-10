@@ -56,7 +56,12 @@ export type BackgroundTaskDeriveOptions = {
   runningTaskIds?: readonly string[] | null
 }
 
-export type BackgroundTaskKind = 'shell' | 'agent'
+/** `shell`, `agent` and `monitor` are what the transcript reader can name.
+ *  `workflow` and `unknown` only ever arrive from the host's own roster
+ *  (`mobile-structured-background-tasks.ts`), which speaks the wire's five
+ *  kinds — calling those two "shell" would put a claim on the row that the
+ *  host never made. */
+export type BackgroundTaskKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'unknown'
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed'
 
 export type BackgroundTask = {
@@ -400,7 +405,22 @@ export function formatRunningTaskCount(count: number): string {
 }
 
 export function backgroundTaskKindLabel(kind: BackgroundTaskKind): string {
-  return kind === 'agent' ? 'Agent' : 'Shell'
+  switch (kind) {
+    case 'agent':
+      return 'Agent'
+    case 'shell':
+      return 'Shell'
+    case 'monitor':
+      return 'Monitor'
+    case 'workflow':
+      return 'Workflow'
+    case 'unknown':
+      return 'Task'
+    default: {
+      const exhaustive: never = kind
+      return exhaustive
+    }
+  }
 }
 
 export function backgroundTaskStatusLabel(status: BackgroundTaskStatus): string {

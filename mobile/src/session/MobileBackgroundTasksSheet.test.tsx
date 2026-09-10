@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
@@ -18,10 +19,13 @@ vi.mock('react-native', () => ({
 // Node cannot parse; the body under test never touches it.
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('lucide-react-native', () => ({
+  Activity: 'Activity',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   Diamond: 'Diamond',
+  ListTree: 'ListTree',
   Sparkles: 'Sparkles',
+  Square: 'Square',
   Terminal: 'Terminal'
 }))
 
@@ -290,5 +294,125 @@ describe('the running tasks row', () => {
     act(() => renderer?.unmount())
     renderer = null
     expect((await renderRow(1, 'dark')).colors).toContain(darkColors.accentText)
+  })
+})
+
+// ─── The structured lane, where the host publishes the provider's roster ─────
+
+const HOST_ROSTER: AgentSessionBackgroundTaskState = {
+  state: 'monitoring',
+  supportsTaskStop: true,
+  tasks: [
+    {
+      id: 'task-live',
+      kind: 'agent',
+      description: 'Audit the release notes',
+      state: 'working',
+      startedAt: NOW - (19 * 60_000 + 8_000)
+    },
+    { id: 'task-watch', kind: 'monitor', description: 'Watch the build log', state: 'monitoring' }
+  ],
+  settledTasks: [{ id: 'task-gone', kind: 'command', description: 'pnpm test', state: 'blocked' }]
+}
+
+describe('a structured tab reading its background tasks from the host', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  async function renderHosted(
+    scheme: 'light' | 'dark',
+    props: {
+      hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
+      onStopTask?: (taskId: string) => void
+    } = {}
+  ): Promise<Rendered> {
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: scheme },
+          createElement(MobileBackgroundTasksSheetBody, {
+            messages: messages(),
+            hostBackgroundTasks: HOST_ROSTER,
+            ...props
+          })
+        )
+      )
+    })
+    return readTree(renderer!)
+  }
+
+  it("shows the host's roster instead of what the transcript guessed", async () => {
+    const { texts } = await renderHosted('light')
+    expect(texts).toContain('Audit the release notes')
+    expect(texts).toContain('Watch the build log')
+    expect(texts).toContain('Monitor')
+    expect(texts).toContain('19m 8s')
+    // The transcript's own reading of this same message list must not leak in.
+    expect(texts).not.toContain('Build 0.2.60 locally for the phone')
+  })
+
+  it('reads a settled task the host blocked as a failure', async () => {
+    const { texts, colors } = await renderHosted('light')
+    expect(texts).toContain('Finished 1')
+    expect(texts).toContain('pnpm test')
+    expect(texts).toContain('Failed')
+    expect(colors).toContain(lightColors.danger)
+  })
+
+  it('stops one named task when its stop is pressed', async () => {
+    const stopped: string[] = []
+    await renderHosted('light', { onStopTask: (taskId) => stopped.push(taskId) })
+    await press(renderer!, 'Stop Audit the release notes')
+    expect(stopped).toEqual(['task-live'])
+  })
+
+  it('offers no stop at all when the caller passes no handler', async () => {
+    await renderHosted('light')
+    const stops = renderer!.root
+      .findAllByType('Pressable')
+      .filter((node) => String(node.props.accessibilityLabel ?? '').startsWith('Stop '))
+    expect(stops).toHaveLength(0)
+  })
+
+  it('says nothing is running once the host clears the roster', async () => {
+    // Not the same as a host that never reported: the transcript reader must
+    // not take the tab back and re-list work the host has said is gone.
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileBackgroundTasksSheetBody, {
+            messages: messages(),
+            hostBackgroundTasks: null
+          })
+        )
+      )
+    })
+    const { texts } = readTree(renderer!)
+    expect(texts).toContain('Nothing running.')
+    expect(texts).not.toContain('Build 0.2.60 locally for the phone')
+  })
+
+  it('paints the host roster from the theme in dark mode too', async () => {
+    const light = await renderHosted('light')
+    act(() => renderer?.unmount())
+    renderer = null
+    const dark = await renderHosted('dark')
+    expect(dark.texts).toEqual(light.texts)
+    expect(dark.colors).toContain(darkColors.danger)
+    expect(dark.colors).not.toContain(lightColors.text)
+    expect(light.colors).not.toContain(darkColors.text)
   })
 })

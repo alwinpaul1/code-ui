@@ -10,7 +10,10 @@ import type {
 } from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSlashCommand
+} from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type {
   AskAnswerSelection,
@@ -56,6 +59,11 @@ export type MobileNativeChatController = {
   nativeChatAgentStatus: AgentStatusEntry | null
   /** Task ids the active tab's HUD beacon reports finished; see agent-hud-beacon.ts. */
   nativeChatFinishedTaskIds: readonly string[]
+  /** The host's own background-task roster on the structured lane. `undefined`
+   *  leaves the tab to the transcript reader; see mobile-structured-background-tasks.ts. */
+  nativeChatBackgroundTasks: AgentSessionBackgroundTaskState | null | undefined
+  /** Stops one named background task, where the roster says the host accepts it. */
+  handleNativeChatStopBackgroundTask: (taskId: string) => Promise<boolean>
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

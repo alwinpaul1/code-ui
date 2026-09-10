@@ -1,10 +1,61 @@
 # Background tasks pill and sheet (chat mode)
 
-Shows Claude Code's background shells and subagents under the newest message
-("N running tasks") with a sheet of Running and Finished rows. Code UI cannot
-stop a Claude task, so rows carry no stop control.
+Shows the agent's background shells and subagents under the newest message
+("N running tasks") with a sheet of Running and Finished rows.
 
-## Sources, in order of authority
+**Two readers, one row.** Which one runs is decided by the lane, not by the
+agent:
+
+- A **terminal-driven tab** has only the transcript the phone already holds,
+  reconciled against the host's hook status and the HUD beacon. Everything
+  below the next heading describes that reader, and it is unchanged.
+- A **structured tab** gets the provider's own roster from the host over
+  `agentSession.subscribe`, and that is the whole answer for the tab.
+
+## The structured lane reads the host's roster
+
+Orca #18757, #18807, #19346 and #19311 put provider-owned background work on
+the structured-session wire. The phone keeps it in the shared reducer's state
+and projects it in `mobile-structured-background-tasks.ts`.
+
+Three states, and the first two are not the same thing:
+
+- **`undefined`** — this host has never reported a roster (an older host, or a
+  session that has never had background work). The transcript reader keeps the
+  tab, exactly as before the wire.
+- **`null`** — the host reported one and cleared it. Authoritative: the
+  transcript reader must *not* take the tab back and re-list work the host has
+  just said is gone.
+- **an object** — the live roster. `tasks` are Running; `settledTasks` are
+  Finished, with a `blocked` one shown as a failure.
+
+Why the two readers are not merged: they speak different id spaces (Claude's
+transcript task ids versus the SDK's task frames), so stitching them risks the
+same task appearing in both sections. The cost is that a structured tab's
+Finished list holds only what the host still keeps — the host flushes settled
+tasks once the last live one ends — so it is shorter than the transcript
+reader's history. The Running list, which is what the row counts, is strictly
+better: it is the provider's own answer, so it never strands a task the
+transcript could not retire.
+
+**Stopping one task** is offered only where the roster says
+`supportsTaskStop`. It sends `agentSession.cancel` with
+`{ turnId: 'background-tasks', scope: 'background-tasks', taskId }` — the
+`turnId` there is the host's scope marker, not a real turn, because a
+background task outlives the turn that launched it. Codex reports
+`supportsStopAll: false` (it exposes no honest stop: `turn/interrupt` on a
+child ends its turn and leaves the shell running), so no stop is drawn for it.
+
+**Not ported:** the wire's `totalTokens` per task. Upstream's desktop strip
+renders it as "18.1k · 2m"; the phone sheet has no place for it yet, so it is
+read off the wire by the equality check and then dropped.
+
+**Not verified against a live host.** The shared contract and the projection
+are covered by tests, but no structured session on a real desktop has been
+watched publishing a roster to this phone. The fallback is the safe direction
+— a host that publishes nothing leaves the tab exactly where it was.
+
+## Terminal tabs: sources, in order of authority
 
 1. **The transcript** (`mobile/src/session/mobile-background-tasks.ts`).
    A `Bash` call whose result says `Command running in background with ID: …`
@@ -39,7 +90,12 @@ stop a Claude task, so rows carry no stop control.
 transcript bytes, plus "background tasks reconciled against the host agent
 status" (roster retirement with no notification, absent roster, pane `done`
 retiring shells, roster-only agents, idle teammates, null status).
-`MobileBackgroundTasksSheet.test.tsx`: rendering in both themes.
+`MobileBackgroundTasksSheet.test.tsx`: rendering in both themes, and the
+structured lane's roster taking the sheet over from the transcript reader.
+`mobile-structured-background-tasks.test.ts`: the wire projection, including
+the `undefined` / `null` split above.
+`mobile-structured-session-background-tasks.test.ts`: the shared reducer and
+coalescer keeping the roster, and a task edge not rebuilding the transcript.
 
 ## 2026-09-09 (late): finished shells retire live, via the beacon
 

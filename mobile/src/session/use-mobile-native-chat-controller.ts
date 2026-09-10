@@ -451,6 +451,10 @@ export function useMobileNativeChatController(
     nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
     nativeChatFinishedTaskIds: finishedTaskIds,
+    nativeChatBackgroundTasks: activeChatStructured
+      ? structuredNativeChat.backgroundTasks
+      : undefined,
+    handleNativeChatStopBackgroundTask: structuredNativeChat.stopBackgroundTask,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,

@@ -6,8 +6,9 @@ import { formatRunningTaskCount } from './mobile-background-tasks'
 
 /** "✳ 2 running tasks" under the last message, in the accent, opening the
  *  background-tasks sheet. Renders nothing when the agent has nothing in
- *  flight — which is always the case for agents that record no background
- *  tasks in their transcript (Codex). */
+ *  flight — which on a terminal-driven tab is always the case for agents that
+ *  record no background tasks in their transcript (Codex). A structured tab
+ *  counts the host's own roster instead, and that covers both agents. */
 export function MobileBackgroundTasksRow({
   runningCount,
   onPress
