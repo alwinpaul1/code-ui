@@ -81,11 +81,6 @@ export default function NativeChatSettingsScreen() {
             thumbColor={colors.bgPanel}
           />
         </Surface>
-        <Txt variant="label" tone="secondary" style={{ marginTop: space.md, paddingHorizontal: space.xs }}>
-          Chat-capable agents (Claude, Codex and others) can open as a readable transcript instead of
-          the raw terminal. The terminal is always one long-press away on the session tab, and the
-          agent keeps running on your desktop either way.
-        </Txt>
         <SectionLabel style={{ marginTop: space.lg }}>Model and context on the desktop</SectionLabel>
         <Surface
           rounded="lg"
@@ -113,13 +108,6 @@ export default function NativeChatSettingsScreen() {
             thumbColor={colors.bgPanel}
           />
         </Surface>
-        <Txt variant="label" tone="secondary" style={{ marginTop: space.md, paddingHorizontal: space.xs }}>
-          Agents you start on the desktop send their model, effort, context and usage to the phone
-          the way ones you start here already do. Nothing appears in your terminal and nothing is
-          installed: the figures travel on an escape sequence terminals draw nothing for. A Claude
-          status line of your own keeps working exactly as it does now. Turning this off removes
-          the flags from Orca's launch profile again.
-        </Txt>
       </ScrollView>
     </View>
   )

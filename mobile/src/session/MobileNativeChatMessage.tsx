@@ -26,6 +26,7 @@ import {
 } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { ToolRun } from './MobileNativeChatToolRun'
+import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import {
   isRenderableNativeChatNotice,
@@ -218,7 +219,8 @@ function MobileNativeChatMessageImpl({
   turnKey,
   onToggleTurn,
   activeTurnIsWorking,
-  structuredActivityUi = false
+  structuredActivityUi = false,
+  taskListPredecessors
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -241,6 +243,8 @@ function MobileNativeChatMessageImpl({
   onToggleTurn?: (turnKey: string) => void
   /** Session-level working state for this message's turn; gates the live tool row. */
   activeTurnIsWorking?: boolean
+  /** Last accepted plan of each family from earlier messages. */
+  taskListPredecessors?: MobileTaskListPredecessors
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
 }) {
@@ -355,6 +359,7 @@ function MobileNativeChatMessageImpl({
               defaultExpanded={turnExpanded || toolsExpanded}
               expandChildren={turnExpanded ? false : toolsExpanded}
               activeCall={activeCall}
+              taskListPredecessors={taskListPredecessors}
               trailing={controls}
               onOpenFile={onOpenFile}
               styles={styles}

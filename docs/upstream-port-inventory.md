@@ -36,9 +36,12 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | d0506bf5d #19226 | execution details and tool row identity | the shared half plus a mobile annotations row. Unblocked the `mcpIdentity` field `native-chat-tool-summary.ts` had been dropping, so that file and its test went back to a clean c1e15c400. The `src/main/` Codex translation that fills `exitCode`/`durationMs` is not vendored — the host supplies those |
 | 9f044031f #19228 | a compaction, a plan and a toned line drawn as what they are | landed in 8d80263 as the `presentation`/`tone` hints, which is what LOCAL-FILES.md records; the rest of #19228 is `src/main/` |
 | f2d5711b2 #19845 | an older page that no longer touches the transcript is refused, not merged | landed in 8f7bbaf. The mobile half came over whole; the reducer carries local hunks, so its two changes were hand-applied. Covers the structured lane only — a terminal-driven tab is a different path, so it is not yet an answer to the missing-replies report |
-| d15a6df22 #19230 | task checklists with update diffs, and a composer progress panel | **the checklist, not the composer panel.** Both agents' plans do reach the phone — Claude Code's `TodoWrite`, Codex's `update_plan` — and the phone was drawing them as the raw JSON of the tool input: one truncated line collapsed, pretty-printed open. `native-chat-task-list.ts` vendored (mobile imports it) and `native-chat-tool-icon.ts` re-vendored for the one `update_plan` row word. The mobile surface is `MobileNativeChatTaskList.tsx` plus its styles and a row builder, in both themes. The composer progress panel is NOT ported: see the skip table |
+| d15a6df22 #19230 | task checklists with update diffs, and a composer progress panel | both agents' plans as checklists, in both themes. A later turn diffs against the earlier message's plan, not only the current tool run. The run header names the plan by progress (`1/3 · Writing the test`) instead of the input JSON. A collapsed **Tasks n/m** strip sits above the composer and expands to the checklist. Shared `native-chat-task-list.ts` vendored; mobile surface is `MobileNativeChatTaskList.tsx` plus the row builder, composer strip, and tool-run header rewrite. Live Codex `projectNativeChatTaskListFrames` (notification→update_plan) was not ported |
 | e80fae0c4 #19229 | summarize turn file changes and preserve resolved prompt receipts | **the shared half only, and it changes nothing the phone draws.** Both visible halves — the turn diff rollup and the resolution receipt — are `src/renderer/` components this fork does not vendor, and `summarizeUnifiedPatch` exists only to feed the rollup. What the phone does get is the per-item render cache in `structured-agent-session-projection.ts`: mobile re-projects the WHOLE transcript on every stream frame, and unchanged rows now come back as the same objects. `native-chat-edit-normalize.ts` and `native-chat-unified-patch.ts` re-vendored at e80fae0c4, `native-chat-edit-patch-files.ts` vendored new (`native-chat-edit-normalize.ts` imports it, so mobile typechecks it). The extraction is behaviour-preserving and was proved so: upstream's own 50 pre-extraction `native-chat-edit-normalize.test.ts` cases, vendored here at 172aa1ac3, all pass against the extracted code |
 | 8096cb280 #18743 | render Claude structured chat through the same UI as Codex | already in: `structured-agent-session-composer.ts` is pinned at f1d854502, a later commit that contains it, and the file was verified byte-identical |
+| 1b4159a31 #18638 | skip host-label work on a single-host install | `host-context-labels.ts` re-vendored. Mobile imports it for the worktree list. |
+| fb9d08f5f #19476 | index project table option and iteration order | `project-group-sort.ts` re-vendored. Mobile `groupRows` / `sortRows` call it. |
+| d3501f7ad #18456 | `unavailableReason` on a non-authoritative worktree list | the two-line type only. The scan-failure host and sidebar are `src/main/` / `src/renderer/` |
 
 
 **This table is behind `main` for work outside the chat-rendering and
@@ -75,8 +78,9 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | ce4a3a418 #19235 | the rewind backend, by its own commit title. Entirely host and renderer; vendoring `agent-session-rewind.ts` with no phone surface would be half-building it |
 | 20eea184c #19130 | the link-action popover. Entirely desktop renderer: the popover component, `http-link-destinations.ts` and the chat link owner all live under `src/renderer/`, and the one `src/shared/` line is a doc-comment on `terminalLinkActionPopoverEnabled` — a setting `mobile/` never imports. The phone has no link-routing preference and no popover; giving it one is a Code UI product decision, not a port |
 | 0252fe5c3 #18773 | Codex subagent activity. Upstream designed this so a client without a roster renderer needs nothing: the host freezes a plain-text twin (`Ran 3 subagents (1 failed)`) into the journal beside the block, and `native-chat-subagent-summary.ts` says in its own header that mobile shows exactly that sentence. So the phone already reads a new host correctly. The producer is ~1,400 lines of `src/main/codex/` this fork does not vendor, and `worker-transcript-text.ts` belongs to the orchestration-worker feature already skipped above. **Residual:** without #18773's `native-chat-tool-fold.ts` hunk, a roster row landing mid-turn ends the tool run it sits inside, so one run draws as two. Cosmetic, and the fix is that hunk plus the `subagent-group` block type |
-| d15a6df22 #19230 (composer half) | the desktop composer keeps a collapsible **Tasks 2/5** panel above its input. The phone's composer already carries attachment chips, suggestions, the key strip and the send row on a screen a fraction of the width, and the panel would need the newest plan threaded from the session hook down to the composer — new plumbing, not a port. The inline checklist is where the phone was actually showing raw JSON, and that is what landed. Giving the composer a progress panel is a Code UI product decision |
 | d15a6df22 #19230 (`update_plan` icon, in effect) | the one-line `native-chat-tool-icon.ts` map entry is vendored so the pin moves, but it draws nothing here. Mobile imports only `isShellActivityToolCall` from that file and picks between a terminal and a wrench; it never calls `nativeChatToolCategory` or `nativeChatToolRunIconName`, and the new entry does not change `isShellActivityToolCall`. The checklist's own `list-checks` glyph comes from the mobile component, not from the category map |
+| a567e33bf #17795 | GitHub Projects roadmap timeline | desktop renderer plus `project-roadmap-timeline.ts`, which nothing under `mobile/` imports. The `fieldName` wire field on a date cell is unused here |
+| 72befaf36 #18806 | Claude subagent activity on the shared carrier | host-side Claude translation, same residual as #18773. The shared delta is a test fixture for `subagent-group`. Mobile still shows the host's frozen sentence |
 | ef6ad2243 #19364, 0b60b0dcb #19841 | the two shared-path perf commits that are not in the batch above. #19364 is renderer work plus one line in `structured-agent-session-message-projection.ts`; #19841 is `structured-agent-session-reducer.ts` alone. Both files belong to the structured-session batch |
 
 ## Pending
@@ -104,15 +108,6 @@ shape before touching it. The #19822 verdict lives in
   (#19055) and its `retainedItemLimit` head trim. Both belong to batches above.
 - The Windows status line and Stop hook run for real under PowerShell 7 in
   tests, and have never run on Windows.
-- A tool run's **header** still prints the first 28 characters of a plan call's
-  JSON — `1× TodoWrite {"todos":[{"content":"Read t`. That comes from the
-  vendored `toolRunSummaryMembers` / `briefToolArg`, which desktop reads the
-  same way, and fixing it on the phone alone would mean re-walking the blocks
-  mobile-side to realign members with pairs — vendored logic duplicated, which
-  is exactly what rots. The tool LINE under it, which is what #19230 owns, now
-  says `1/3 · Writing the test`.
-- The checklist's update diff only reaches back to the start of its own tool
-  run. That is where a turn's repeated plan calls land once `foldToolMessages`
-  has run, so it covers the case; a plan revised across two turns shows its
-  full list again rather than what changed. Upstream reaches further with a
-  renderer-side walk of the whole message list.
+- Live Codex `projectNativeChatTaskListFrames` (a `plan` notification rewritten
+  as an `update_plan` tool call so the checklist can draw it) is still desktop
+  only. The phone already draws a real `update_plan` call.

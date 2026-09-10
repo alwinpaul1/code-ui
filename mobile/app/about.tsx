@@ -12,7 +12,10 @@ import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { SectionLabel } from '../src/ui/SectionLabel'
 import { Surface } from '../src/ui/Surface'
 import { Txt } from '../src/ui/Txt'
-import { useAppUpdateTouchShield } from '../src/app-update/use-app-update-touch-shield'
+import {
+  updateDialogTouchShieldStyle,
+  useAppUpdateTouchShield
+} from '../src/app-update/use-app-update-touch-shield'
 import { useAppUpdateDialogVisible } from '../src/app-update/AppUpdateDialog'
 
 // Why: read version + native build identifier from expo-constants at
@@ -200,10 +203,12 @@ export default function AboutScreen() {
           hands the rest of the gesture to this one, and the row under the
           finger flashes pressed. See use-app-update-touch-shield.ts. */}
       {touchShield ? (
-        <View
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        <Pressable
+          accessible={false}
+          onPress={() => {}}
           pointerEvents="auto"
           collapsable={false}
+          style={updateDialogTouchShieldStyle()}
         />
       ) : null}
       <AppUpdateDialog />

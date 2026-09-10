@@ -1,7 +1,7 @@
 // Which pairs in one tool run are an agent revising its plan, and what each
-// one revised. The mobile half of Orca #19230 (d15a6df22); upstream's own
-// version of this walks the whole message list from the renderer, which the
-// phone has no equivalent of.
+// one revised. The mobile half of Orca #19230 (d15a6df22). Desktop walks the
+// whole message list so a later turn diffs against the plan from an earlier
+// one; the first landing of this file stopped at the run's edge.
 
 import {
   nativeChatTaskListTool,
@@ -9,40 +9,96 @@ import {
   type NativeChatTaskList,
   type NativeChatTaskListTool
 } from '../../../src/shared/native-chat-task-list'
-import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import { pairToolBlocks, type NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 export type MobileTaskListRow = {
   list: NativeChatTaskList
-  /** The list this call revised, when an earlier call in the same run set one. */
+  /** The list this call revised, when an earlier call set one. */
   previous?: NativeChatTaskList
 }
 
+export type MobileTaskListPredecessors = Partial<Record<NativeChatTaskListTool, NativeChatTaskList>>
+
+function listFromPair(
+  call: NativeChatToolPair['call'],
+  result: NativeChatToolPair['result']
+): { tool: NativeChatTaskListTool; list: NativeChatTaskList } | null {
+  if (!call || call.state === 'failed' || result?.isError) {
+    return null
+  }
+  const tool = nativeChatTaskListTool(call.name)
+  const list = tool === null ? null : normalizeNativeChatTaskList(call.name, call.input)
+  if (tool === null || list === null) {
+    return null
+  }
+  return { tool, list }
+}
+
+/** For each message id, the last accepted plan of each family *before* that
+ *  message. Seed a later run with this so a revision across turns still diffs. */
+export function mobileTaskListPredecessors(
+  messages: readonly NativeChatMessage[]
+): Map<string, MobileTaskListPredecessors> {
+  const history = new Map<string, MobileTaskListPredecessors>()
+  const previous: MobileTaskListPredecessors = {}
+  for (const message of messages) {
+    history.set(message.id, { ...previous })
+    if (message.role === 'user') {
+      continue
+    }
+    for (const pair of pairToolBlocks(message.blocks)) {
+      const found = listFromPair(pair.call, pair.result)
+      if (found) {
+        previous[found.tool] = found.list
+      }
+    }
+  }
+  return history
+}
+
 /** The checklist each pair is reporting, aligned to `pairs`, `null` where the
- *  pair is not a plan call at all.
- *
- *  History stops at the run's edge on purpose. A turn's repeated plan calls
- *  fold into one run, which is where an agent actually revises a plan, and
- *  reaching further back would mean threading the whole transcript through
- *  every row for a case the fold has already handled. */
+ *  pair is not a plan call at all. `predecessors` is the last accepted plan
+ *  of each family from earlier messages. */
 export function mobileTaskListRows(
-  pairs: readonly NativeChatToolPair[]
+  pairs: readonly NativeChatToolPair[],
+  predecessors?: MobileTaskListPredecessors
 ): (MobileTaskListRow | null)[] {
   const previous = new Map<NativeChatTaskListTool, NativeChatTaskList>()
+  if (predecessors?.todowrite) {
+    previous.set('todowrite', predecessors.todowrite)
+  }
+  if (predecessors?.update_plan) {
+    previous.set('update_plan', predecessors.update_plan)
+  }
   return pairs.map(({ call, result }) => {
-    // A refused call claims nothing: its input is what the agent asked for, not
-    // what its plan became, so the row keeps the generic view and the error.
-    if (!call || call.state === 'failed' || result?.isError) {
+    const found = listFromPair(call, result)
+    if (!found) {
       return null
     }
-    const tool = nativeChatTaskListTool(call.name)
-    const list = tool === null ? null : normalizeNativeChatTaskList(call.name, call.input)
-    if (tool === null || list === null) {
-      return null
-    }
-    const before = previous.get(tool)
-    previous.set(tool, list)
-    return before ? { list, previous: before } : { list }
+    const before = previous.get(found.tool)
+    previous.set(found.tool, found.list)
+    return before ? { list: found.list, previous: before } : { list: found.list }
   })
+}
+
+/** The newest accepted plan in the transcript, for the strip above the composer. */
+export function mobileTaskListState(
+  messages: readonly NativeChatMessage[]
+): { list: NativeChatTaskList | null } {
+  let list: NativeChatTaskList | null = null
+  for (const message of messages) {
+    if (message.role !== 'assistant') {
+      continue
+    }
+    for (const pair of pairToolBlocks(message.blocks)) {
+      const found = listFromPair(pair.call, pair.result)
+      if (found) {
+        list = found.list
+      }
+    }
+  }
+  return { list }
 }
 
 /** The one collapsed line a plan call gets: how far along it is, and the step

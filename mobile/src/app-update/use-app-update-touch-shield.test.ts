@@ -1,7 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   APP_UPDATE_TOUCH_SHIELD_TAIL_MS,
-  nextTouchShieldState
+  UPDATE_DIALOG_TOUCH_SHIELD_FILL,
+  nextTouchShieldState,
+  pointerBlockForUpdateDialog,
+  updateDialogTouchShieldStyle
 } from './use-app-update-touch-shield'
 
 describe('the screen underneath while the update dialog is closing', () => {
@@ -57,5 +61,48 @@ describe('the screen underneath while the update dialog is closing', () => {
     // A person cannot dismiss and hit the row underneath faster than this.
     expect(APP_UPDATE_TOUCH_SHIELD_TAIL_MS).toBeLessThanOrEqual(400)
     expect(APP_UPDATE_TOUCH_SHIELD_TAIL_MS).toBeGreaterThanOrEqual(150)
+  })
+})
+
+describe('the leftover press after Done on a Galaxy S23', () => {
+  it('covers the whole dialog window while the card fades, so the repository row cannot take the press', () => {
+    // Recorded 2026-09-10 on 0.3.0, Galaxy S23, holding Done for 700 ms. As
+    // the dialog faded, alwinpaul1/code-ui lit its pressed state. The card's
+    // opacity animation stops Android hit-testing that window, and an empty
+    // View in the activity behind is not clickable, so the row under the
+    // finger received the rest of the gesture.
+    expect(
+      pointerBlockForUpdateDialog({ dialogVisible: false, shielded: true })
+    ).toBe('full')
+  })
+
+  it('only dims the backdrop while the dialog is up, so Done still works', () => {
+    expect(
+      pointerBlockForUpdateDialog({ dialogVisible: true, shielded: true })
+    ).toBe('backdrop')
+  })
+
+  it('paints a 1% fill so Android treats the shield as a click target', () => {
+    // Fully transparent views are skipped by Android hit-testing, which is
+    // how the leftover Done press reached alwinpaul1/code-ui on 0.3.0.
+    expect(updateDialogTouchShieldStyle().backgroundColor).toBe(UPDATE_DIALOG_TOUCH_SHIELD_FILL)
+    expect(UPDATE_DIALOG_TOUCH_SHIELD_FILL).not.toBe('transparent')
+  })
+
+  it('does not fade the window-filling overlay, so Done cannot land on alwinpaul1/code-ui', () => {
+    // Recorded 2026-09-10 on a Galaxy S23. The dimmer stayed opaque, but the
+    // flex:1 wrapper around the card still bound opacity to the dismiss
+    // animation. Native-driver opacity < 1 on a view that fills the Modal
+    // makes Android skip that window, and the leftover Done press lights the
+    // github row underneath.
+    const source = readFileSync(new URL('./AppUpdateDialog.tsx', import.meta.url), 'utf8')
+    const wrapperStart = source.indexOf(
+      "pointerEvents={pointerBlock === 'full' ? 'none' : 'box-none'}"
+    )
+    expect(wrapperStart).toBeGreaterThan(0)
+    const styleStart = source.indexOf('style={{', wrapperStart)
+    const wrapperStyle = source.slice(styleStart, source.indexOf('}}', styleStart))
+    expect(wrapperStyle).toContain('flex: 1')
+    expect(wrapperStyle).not.toContain('opacity: reveal')
   })
 })

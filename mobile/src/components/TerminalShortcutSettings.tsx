@@ -223,10 +223,6 @@ export function TerminalShortcutSettings({
   return (
     <>
       <Text style={[styles.groupHeading, styles.groupTopGap]}>SHORTCUT BAR</Text>
-      <Text style={styles.groupDescription}>
-        Toggle keys to show or hide them, and hold the grip to drag a key into the order you want on
-        the terminal shortcut bar.
-      </Text>
       <View style={[styles.section, styles.sectionTopGap]}>
         <DragReorderList
           items={orderedAccessoryKeys}
@@ -338,12 +334,6 @@ const styles = StyleSheet.create({
   },
   groupTopGap: {
     marginTop: spacing.xl
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
   },
   section: {
     backgroundColor: colors.bgPanel,

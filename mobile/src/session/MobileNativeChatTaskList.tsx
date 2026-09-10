@@ -8,7 +8,7 @@
 // list stays one tap away.
 
 import { memo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import {
   Circle,
   CircleCheck,
@@ -134,14 +134,42 @@ function FullList({
 
 export const MobileNativeChatTaskList = memo(function MobileNativeChatTaskList({
   list,
-  previous
+  previous,
+  presentation = 'inline'
 }: {
   list: NativeChatTaskList
   previous?: NativeChatTaskList
+  presentation?: 'inline' | 'composer'
 }): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useTaskListStyles()
   const completed = list.tasks.filter((task) => task.status === 'completed').length
+  const [composerOpen, setComposerOpen] = useState(false)
+  if (presentation === 'composer') {
+    const Chevron = composerOpen ? ChevronDown : ChevronRight
+    return (
+      <View style={styles.composer} testID="composer-task-progress">
+        <Pressable
+          style={styles.composerTrigger}
+          onPress={() => setComposerOpen((value) => !value)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: composerOpen }}
+          accessibilityLabel={`${completed} of ${list.tasks.length} tasks completed`}
+        >
+          <ListChecks size={13} color={colors.textMuted} strokeWidth={2} />
+          <Text style={styles.title}>Tasks</Text>
+          <Text style={styles.progress}>{`${completed}/${list.tasks.length}`}</Text>
+          <Chevron size={12} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
+        {composerOpen ? (
+          <ScrollView style={styles.composerBody} nestedScrollEnabled>
+            <Checklist list={list} styles={styles} />
+            {list.explanation ? <Text style={styles.explanation}>{list.explanation}</Text> : null}
+          </ScrollView>
+        ) : null}
+      </View>
+    )
+  }
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
   return (
     <View style={styles.list}>

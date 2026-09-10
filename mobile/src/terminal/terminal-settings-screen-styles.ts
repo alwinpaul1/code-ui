@@ -38,12 +38,6 @@ export const terminalSettingsScreenStyles = StyleSheet.create({
     marginBottom: spacing.xs,
     paddingHorizontal: spacing.xs
   },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
   section: {
     backgroundColor: colors.bgPanel,
     borderRadius: radii.card,

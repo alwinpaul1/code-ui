@@ -60,4 +60,9 @@ src/shared/ai-vault-session-filters.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d
 src/shared/project-host-setup-projection.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 
+src/shared/worktree/host-context-labels.ts: 1b4159a31
+src/shared/worktree/host-context-labels.test.ts: 1b4159a31
+src/shared/github/project-group-sort.ts: fb9d08f5f
+src/shared/worktree/types.ts: d3501f7ad
+
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.

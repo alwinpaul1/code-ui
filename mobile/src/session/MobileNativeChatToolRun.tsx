@@ -18,8 +18,10 @@ import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 import {
   mobileTaskListPreview,
   mobileTaskListRows,
+  type MobileTaskListPredecessors,
   type MobileTaskListRow
 } from './mobile-native-chat-task-list-rows'
+import { nativeChatTaskListTool } from '../../../src/shared/native-chat-task-list'
 import {
   ToolExecutionMeta,
   ToolRowName,
@@ -276,6 +278,7 @@ export function ToolRun({
   defaultExpanded,
   expandChildren,
   activeCall = null,
+  taskListPredecessors,
   trailing,
   onOpenFile,
   styles
@@ -289,6 +292,9 @@ export function ToolRun({
   /** The still-running call, when the turn is live (desktop parity). Null on
    *  the bridge lane, which has no per-call lifecycle to read. */
   activeCall?: NativeChatToolCallBlock | null
+  /** Last accepted plan of each family from earlier messages, so a revision
+   *  in this run diffs against the one before it, not only this run. */
+  taskListPredecessors?: MobileTaskListPredecessors
   trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
@@ -298,7 +304,16 @@ export function ToolRun({
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
   // Cheap enough to run collapsed: it also decides the one-line row preview, so
   // a plan row says how far along it is before anyone opens it.
-  const taskLists = mobileTaskListRows(pairs)
+  const taskLists = mobileTaskListRows(pairs, taskListPredecessors)
+  const latestPlanByTool = new Map<string, string>()
+  for (let index = 0; index < pairs.length; index++) {
+    const row = taskLists[index]
+    const call = pairs[index]?.call
+    const tool = call ? nativeChatTaskListTool(call.name) : null
+    if (row && tool) {
+      latestPlanByTool.set(tool, mobileTaskListPreview(row.list))
+    }
+  }
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
   let callCount = 0
   for (const block of blocks) {
@@ -313,7 +328,11 @@ export function ToolRun({
   // told the reader where one call ended and the next began. Each member now
   // opens with its name in the foreground tone and trails its argument muted,
   // and that tone change is the boundary.
-  const summaryMembers = toolRunSummaryMembers(blocks)
+  const summaryMembers = toolRunSummaryMembers(blocks).map((member) => {
+    const tool = nativeChatTaskListTool(member.name)
+    const preview = tool ? latestPlanByTool.get(tool) : undefined
+    return preview ? { ...member, arg: preview } : member
+  })
   const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
@@ -371,7 +390,9 @@ export function ToolRun({
                     {member.name}
                   </Text>
                   {member.arg ? (
-                    <Text style={styles.toolRunMemberArg}>{` ${member.arg}`}</Text>
+                    <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg}>
+                      {` ${member.arg}`}
+                    </Text>
                   ) : null}
                 </Text>
               ))}

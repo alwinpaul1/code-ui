@@ -6,18 +6,14 @@ import {
   ActivityIndicator,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   type ScrollViewProps,
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useTheme } from '../theme/theme-context'
-import { Txt } from '../ui/Txt'
 import { useChatViewStyles } from './mobile-native-chat-view-styles'
 import {
   buildMobileNativeChatTransientData,
@@ -27,6 +23,10 @@ import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import {
+  MobileNativeChatComposerTasks,
+  useMobileNativeChatTaskProgress
+} from './mobile-native-chat-composer-tasks'
 import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
@@ -35,6 +35,11 @@ import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
+import {
+  MobileNativeChatJumpToLatest,
+  MobileNativeChatListEmpty,
+  MobileNativeChatLoadEarlier
+} from './mobile-native-chat-list-edges'
 
 /** Within this many px of the bottom the list is "at the live edge". */
 const LIVE_EDGE_THRESHOLD_PX = 48
@@ -121,12 +126,8 @@ export function MobileNativeChatView({
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
 
-  // ─── Reader-aware following (#11638) ───
-  // Why a ref and not state: `onContentSizeChange` fires on every streaming
-  // tick, before React has re-rendered with a fresh `atBottom`. A state flag
-  // lagged one frame behind the user's scroll and the list yanked back down
-  // mid-read. The ref is read synchronously by every autoscroll site, and the
-  // moment the user drags we stop following until they return to the edge.
+  // Following is a ref: onContentSizeChange runs before React commits `atBottom`,
+  // and a state flag yanked the list back down mid-read (#11638).
   const { followingRef, scrollingRef, showJumpToLatest, setFollowing, beginScroll, endScroll } =
     useMobileChatFollowing()
 
@@ -154,9 +155,7 @@ export function MobileNativeChatView({
     [setFollowing]
   )
 
-  // `data` is the list source: folded transcript + synthetic streaming bubble +
-  // route-owned accepted echoes. Memoize on the same deps so the
-  // downstream autoscroll effects/`renderItem` keep referential stability.
+  // Folded transcript plus streaming bubble and accepted echoes.
   const { data } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
@@ -168,9 +167,8 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
-  // Measured layouts avoid the transient history-spacer collapse on sends.
-  // Inversion keeps the live edge at offset zero while those rows grow.
   const newestFirst = useMemo(() => data.toReversed(), [data])
+  const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -178,12 +176,7 @@ export function MobileNativeChatView({
       if (!accepted) {
         return false
       }
-      // The route-owned banner outlives this send; a success must retire it too,
-      // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
-      // Sending must not override a reader's position or change native anchoring.
-      // Existing live-edge following handles new rows; history readers keep the
-      // jump-to-latest control until they choose to return.
       return true
     },
     [onSend, onClearSendError]
@@ -258,6 +251,7 @@ export function MobileNativeChatView({
         // disclosure walks the transcript in order. Flip it, or every row reads
         // another turn's status.
         {...turns.resolveRow(data.length - 1 - index, item)}
+        taskListPredecessors={taskListPredecessors.get(item.id)}
       />
     ),
     [
@@ -269,7 +263,8 @@ export function MobileNativeChatView({
       onCancelQueued,
       structuredActivityUi,
       turns,
-      data.length
+      data.length,
+      taskListPredecessors
     ]
   )
 
@@ -340,45 +335,24 @@ export function MobileNativeChatView({
               />
             }
             ListFooterComponent={
-              hasMore ? (
-                <Pressable
-                  style={styles.loadEarlier}
-                  onPress={onLoadEarlier}
-                  disabled={loadingEarlier}
-                >
-                  {loadingEarlier ? (
-                    <ActivityIndicator size="small" color={colors.textMuted} />
-                  ) : (
-                    <Txt variant="caption" weight="semibold" tone="muted">
-                      Load earlier messages
-                    </Txt>
-                  )}
-                </Pressable>
-              ) : null
+              <MobileNativeChatLoadEarlier
+                hasMore={hasMore === true}
+                loadingEarlier={loadingEarlier === true}
+                onLoadEarlier={onLoadEarlier}
+                styles={styles}
+                colors={colors}
+              />
             }
             ListEmptyComponent={
-              emptyState ? (
-                <View style={styles.center}>
-                  {agent ? <MobileAgentIcon agentId={agent} size={40} /> : null}
-                  <Txt variant="heading" weight="semibold" align="center">
-                    {emptyState.title}
-                  </Txt>
-                  <Txt variant="body" tone="muted" align="center">
-                    {emptyState.subtitle}
-                  </Txt>
-                </View>
-              ) : null
+              <MobileNativeChatListEmpty emptyState={emptyState} agent={agent} styles={styles} />
             }
           />
-          {showJumpToLatest ? (
-            <Pressable
-              accessibilityLabel="Scroll to latest"
-              style={styles.fab}
-              onPress={() => jumpToLatest(true)}
-            >
-              <ArrowDown size={18} color={colors.text} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <MobileNativeChatJumpToLatest
+            visible={showJumpToLatest}
+            onPress={() => jumpToLatest(true)}
+            styles={styles}
+            colors={colors}
+          />
         </GestureHandlerRootView>
       )}
       <MobileBackgroundTasksSheet
@@ -413,6 +387,7 @@ export function MobileNativeChatView({
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}
+      <MobileNativeChatComposerTasks list={composerList} />
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}
