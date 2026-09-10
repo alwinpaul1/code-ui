@@ -135,11 +135,20 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$dn" ] && o="$o done=${dn%,}"',
   ...TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
-  // exactly their bar. settings.json is multi-line JSON, so sed is not reliable
-  // for it — node, else python3, else jq. (Claude Code is a Node program, so
-  // `node` is on PATH wherever it runs.) Found nothing: print nothing, and
-  // Claude Code draws no row.
-  'x(){ [ -r "$1" ] || return 1; if command -v node >/dev/null 2>&1; then node -e "const s=JSON.parse(require(\\"fs\\").readFileSync(process.argv[1],\\"utf8\\"));const c=s.statusLine&&s.statusLine.type===\\"command\\"&&s.statusLine.command;if(c)process.stdout.write(c)" "$1"; elif command -v python3 >/dev/null 2>&1; then python3 -c "import json,sys;s=json.load(open(sys.argv[1])).get(\\"statusLine\\") or {};c=s.get(\\"command\\") if s.get(\\"type\\")==\\"command\\" else None;sys.stdout.write(c or \\"\\")" "$1"; elif command -v jq >/dev/null 2>&1; then jq -r ".statusLine.command // empty" "$1"; fi; }',
+  // exactly their bar. settings.json is multi-line JSON. Each reader is tried
+  // in turn and the first non-empty answer wins: node, python3, jq, and last a
+  // pure-sed reader that needs no runtime at all — Claude Code's native
+  // install is a single binary, so a Windows (or minimal Linux) host may have
+  // none of the first three, and the user's bar must not vanish because of it.
+  // The sed reader joins the file into one line, takes the `command` string
+  // inside the `statusLine` object, then undoes the two JSON escapes a shell
+  // command can carry (\" and \\). Found nothing anywhere: print nothing,
+  // and Claude Code draws no row.
+  'xn(){ node -e "const s=JSON.parse(require(\\"fs\\").readFileSync(process.argv[1],\\"utf8\\"));const c=s.statusLine&&s.statusLine.type===\\"command\\"&&s.statusLine.command;if(c)process.stdout.write(c)" "$1" 2>/dev/null; }',
+  'xp(){ python3 -c "import json,sys;s=json.load(open(sys.argv[1])).get(\\"statusLine\\") or {};c=s.get(\\"command\\") if s.get(\\"type\\")==\\"command\\" else None;sys.stdout.write(c or \\"\\")" "$1" 2>/dev/null; }',
+  'xj(){ jq -r ".statusLine.command // empty" "$1" 2>/dev/null; }',
+  'xs(){ tr -d "\\n\\r" < "$1" 2>/dev/null | sed -nE "s/.*\\"statusLine\\"[[:space:]]*:[[:space:]]*\\{[^}]*\\"command\\"[[:space:]]*:[[:space:]]*\\"((\\\\\\\\.|[^\\"\\\\\\\\])*)\\".*/\\1/p" | sed -e "s/\\\\\\\\\\"/\\"/g" -e "s/\\\\\\\\\\\\\\\\/\\\\\\\\/g"; }',
+  'x(){ [ -r "$1" ] || return 1; c=""; if command -v node >/dev/null 2>&1; then c=$(xn "$1"); fi; if [ -z "$c" ] && command -v python3 >/dev/null 2>&1; then c=$(xp "$1"); fi; if [ -z "$c" ] && command -v jq >/dev/null 2>&1; then c=$(xj "$1"); fi; if [ -z "$c" ]; then c=$(xs "$1"); fi; printf %s "$c"; }',
   'y=""',
   'for f in "$wd/.claude/settings.local.json" "$wd/.claude/settings.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.local.json" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; do y=$(x "$f" 2>/dev/null); [ -n "$y" ] && break; done',
   'if [ -n "$y" ] && ! printf %s "$y" | grep -q CUIHUD; then printf %s "$i" | sh -c "$y" 2>/dev/null; fi',
@@ -219,22 +228,33 @@ export const CODEX_HUD_NOTIFY_SCRIPT = [
  * ESC and BEL are built from `[char]27`/`[char]7` rather than `` `e ``, which
  * Windows PowerShell 5.1 does not know.
  *
- * UNTESTED on a real Windows host: there is no PowerShell on the machine this
- * was written on. Only its shape is asserted (see the tests) — treat it as
- * unproven until someone runs it.
+ * Executed for real under PowerShell 7.6.6 on macOS (2026-09-10): the beacon
+ * carries model, effort, used and win from the rollout fixture, and a notify
+ * command from config.toml runs with the JSON as its last argument. That run
+ * found three defects the shape checks had missed (thread id read from the
+ * script's own text, backslash globs, Start-Process splitting arguments).
+ * Still unrun: Windows PowerShell 5.1, and a real Windows console.
  */
 export const CODEX_HUD_NOTIFY_POWERSHELL = [
   '$ErrorActionPreference="SilentlyContinue"',
   '$q=[char]34',
   '$E={param($s) ($s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
   '$a=[Environment]::GetCommandLineArgs()',
+  // Only the LAST argument is Codex's JSON. The argv also carries this very
+  // script as the -Command text, and its own regex literal contains
+  // "thread.id" — matching the whole line picked that up and read the thread
+  // id as "0-9A-Za-z" (found running it under pwsh 7.6.6, 2026-09-10).
+  '$r=""',
+  'if($a.Count -gt 0){$r=[string]$a[$a.Count-1]}',
   '$t=""',
-  'if(($a -join " ") -match "thread.id[^0-9A-Za-z]{1,4}([0-9A-Za-z-]{8,64})"){$t=$Matches[1]}',
+  'if($r -match "thread.id[^0-9A-Za-z]{1,4}([0-9A-Za-z-]{8,64})"){$t=$Matches[1]}',
   '$h=$env:CODEX_HOME',
   'if(-not $h){$h=Join-Path $env:USERPROFILE ".codex"}',
   // With no thread id, the newest rollout is the session that just replied.
-  '$g="sessions\\*\\*\\*\\rollout-*.jsonl"',
-  'if($t){$g="sessions\\*\\*\\*\\rollout-*-"+$t+".jsonl"}',
+  // Forward slashes: Windows accepts them everywhere, and pwsh on macOS and
+  // Linux (where this is tested) does not treat a backslash as a separator.
+  '$g="sessions/*/*/*/rollout-*.jsonl"',
+  'if($t){$g="sessions/*/*/*/rollout-*-"+$t+".jsonl"}',
   '$f=Get-ChildItem -Path (Join-Path $h $g) | Sort-Object LastWriteTime | Select-Object -Last 1',
   '$o="CUIHUD1 agent=codex"',
   'if($f){$L=Get-Content -LiteralPath $f.FullName -Tail 400',
@@ -252,10 +272,18 @@ export const CODEX_HUD_NOTIFY_POWERSHELL = [
   // `notify = ["a","b"]` in config.toml, run with the same JSON argument.
   '$cf=Join-Path $h "config.toml"',
   '$m=Select-String -Path $cf -Pattern "^\\s*notify\\s*=\\s*\\[(.*)\\]" | Select-Object -First 1',
-  'if($m -and $m.Matches[0].Groups[1].Value -notmatch "CUIHUD"){$p=@($m.Matches[0].Groups[1].Value -split "," | ForEach-Object {$_.Trim().Trim($q)})',
-  '$r=$a | Select-Object -Last 1',
-  'if($p.Count -gt 1){Start-Process -FilePath $p[0] -ArgumentList (@($p[1..($p.Count-1)])+@($r)) -NoNewWindow}',
-  'elseif($p.Count -eq 1){Start-Process -FilePath $p[0] -ArgumentList @($r) -NoNewWindow}}',
+  // TOML basic strings: undo \" and \\ . Then the call operator, not
+  // Start-Process: Start-Process re-joins -ArgumentList into one command line
+  // and re-splits it, so an argument with a space or a quote (any `sh -c`
+  // script) arrives in pieces — seen under pwsh 7.6.6. `&` hands each element
+  // over as one argv entry on every platform.
+  // -cnotmatch: PowerShell's -notmatch ignores case, and the sh notify's own
+  // argv0 is "cuihud", so the recursion guard was firing on every real config.
+  'if($m -and $m.Matches[0].Groups[1].Value -cnotmatch "CUIHUD"){$p=@($m.Matches[0].Groups[1].Value -split "," | ForEach-Object {$_.Trim().Trim($q).Replace("\\"+$q,$q).Replace("\\\\","\\")})',
+  '$z=@()',
+  'if($p.Count -gt 1){$z=@($p[1..($p.Count-1)])}',
+  '$z=$z+@($r)',
+  'if($p.Count -ge 1 -and $p[0]){& $p[0] @z}}',
   // Everything PowerShell appends after the command string lands in here.
   '#'
 ].join('; ')

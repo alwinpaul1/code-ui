@@ -149,6 +149,42 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     expect(run.beacon).toContain('CUIHUD1 agent=claude')
   })
 
+  it("keeps a user's own status line without node, python3 or jq on the host", () => {
+    // Claude Code's native install is one binary: a Windows or minimal Linux
+    // host may have none of those runtimes, and the user's bar must not vanish
+    // because of it. Broken runtimes stand in for missing ones (a PATH entry
+    // cannot hide /usr/bin/python3 on this Mac), and the command carries the
+    // two JSON escapes a shell command can contain.
+    const shim = mkdtempSync(join(tmpdir(), 'cuihud-noruntime-'))
+    for (const name of ['node', 'python3', 'jq']) {
+      writeFileSync(join(shim, name), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
+    }
+    const cwd = mkdtempSync(join(tmpdir(), 'cuihud-cwd-'))
+    mkdirSync(join(cwd, '.claude'))
+    writeFileSync(
+      join(cwd, '.claude', 'settings.json'),
+      JSON.stringify(
+        {
+          statusLine: { type: 'command', command: 'printf "%s" "my \\"own\\" bar\\\\path"', padding: 0 },
+          model: 'opus'
+        },
+        null,
+        2
+      )
+    )
+    const json = JSON.parse(statusJson)
+    json.cwd = cwd
+    for (const shell of SHELLS) {
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: JSON.stringify(json),
+        pathShim: shim,
+        shell
+      })
+      expect(run.stdout).toBe('my "own" bar\\path')
+      expect(run.beacon).toContain('CUIHUD1 agent=claude')
+    }
+  })
+
   it('writes nothing anywhere when it cannot find the terminal', () => {
     const home = mkdtempSync(join(tmpdir(), 'cuihud-home-'))
     const stdout = execFileSync('sh', ['-c', CLAUDE_HUD_STATUSLINE_SCRIPT], {
@@ -460,5 +496,94 @@ describe('finished background tasks ride the Claude beacon', () => {
         input: withTranscript(statusJson, join(dir, 'missing.jsonl'))
       }).beacon
     ).not.toContain('done=')
+  })
+})
+
+// ─── The Codex Windows script, executed for real ─────────────────────────────
+// PowerShell 7 runs on macOS and Linux, so the script can be executed the way
+// Codex executes it: `powershell -NoProfile -NonInteractive -Command <script>
+// <json>`. Found through `CUIHUD_PWSH` or `pwsh` on PATH; skipped, loudly, when
+// neither exists (CI runners have no PowerShell). Windows PowerShell 5.1 and a
+// real Windows console remain unrun.
+describe('the Codex notify script under a real PowerShell', () => {
+  const pwsh = (() => {
+    const fromEnv = process.env.CUIHUD_PWSH
+    if (fromEnv && existsSync(fromEnv)) {
+      return fromEnv
+    }
+    for (const dir of (process.env.PATH ?? '').split(':')) {
+      if (dir && existsSync(join(dir, 'pwsh'))) {
+        return join(dir, 'pwsh')
+      }
+    }
+    return null
+  })()
+  const run = pwsh ? it : it.skip
+  const threadId = '01a08736-aaaa-bbbb-cccc-000000000001'
+
+  /** `notify` may reference the marker path as `MARKER`. */
+  function codexHomeWithRollout(notify?: string): { home: string; marker: string } {
+    const home = mkdtempSync(join(tmpdir(), 'cuihud-codex-'))
+    const day = join(home, 'sessions', '2026', '09', '09')
+    mkdirSync(day, { recursive: true })
+    writeFileSync(join(day, `rollout-2026-09-09T10-00-00-${threadId}.jsonl`), rolloutJsonl)
+    const marker = join(home, 'marker.txt')
+    writeFileSync(
+      join(home, 'config.toml'),
+      `model = "gpt-6-astra"\n${(notify ?? '').replace('MARKER', marker)}\n`
+    )
+    return { home, marker }
+  }
+
+  function runPowerShell(home: string, jsonArg: string): string {
+    return execFileSync(
+      pwsh ?? 'pwsh',
+      ['-NoProfile', '-NonInteractive', '-Command', CODEX_HUD_NOTIFY_POWERSHELL, jsonArg],
+      { encoding: 'utf8', env: { ...process.env, CODEX_HOME: home } }
+    )
+  }
+
+  run('beacons model, effort and the context figures for the thread that just replied', () => {
+    const { home } = codexHomeWithRollout()
+    const out = runPowerShell(
+      home,
+      JSON.stringify({ type: 'agent-turn-complete', 'thread-id': threadId, cwd: '/tmp' })
+    )
+    expect(out).toBe(
+      `${ESC}]7777;CUIHUD1 agent=codex model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+    )
+  })
+
+  run('says nothing beyond the agent when the thread has no rollout to read', () => {
+    // Parity with the sh script: a named thread with no rollout gets no
+    // figures rather than another session's.
+    const { home } = codexHomeWithRollout()
+    const out = runPowerShell(home, JSON.stringify({ 'thread-id': 'no-such-thread-0000' }))
+    expect(out).toBe(`${ESC}]7777;CUIHUD1 agent=codex${BEL}`)
+  })
+
+  run('falls back to the newest rollout when the argument names no thread', () => {
+    // The script's own regex literal contains "thread.id"; before the fix the
+    // id was read out of the script text as "0-9A-Za-z" and nothing matched.
+    const { home } = codexHomeWithRollout()
+    const out = runPowerShell(home, JSON.stringify({ type: 'agent-turn-complete' }))
+    expect(out).toContain(' model=gpt-6-astra effort=high used=22147 win=258400')
+  })
+
+  run("runs the user's own notify command with the JSON as its last argument", () => {
+    const { home, marker } = codexHomeWithRollout(
+      'notify = ["sh", "-c", "printf %s \\"$1\\" > MARKER", "cuihud"]'
+    )
+    const out = runPowerShell(home, JSON.stringify({ type: 'agent-turn-complete', 'thread-id': threadId }))
+    expect(out).toContain('CUIHUD1 agent=codex')
+    expect(readFileSync(marker, 'utf8')).toContain('agent-turn-complete')
+  })
+
+  it('does not depend on PowerShell being present to state where it stands', () => {
+    // Why: a skipped suite must never read as a passing one.
+    if (!pwsh) {
+      console.warn('[agent-hud] pwsh not found: the Codex Windows script was NOT executed here')
+    }
+    expect(true).toBe(true)
   })
 })

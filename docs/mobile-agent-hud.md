@@ -367,3 +367,68 @@ cwd discriminator, and its refusal to guess when a session id is unknown.
 `done=id1,id2,…` — background-task ids whose completion Claude has written to
 its transcript, read by the status-line script from `transcript_path`. Only
 Claude emits it. Consumed by `mobile-background-tasks.ts`, not by the HUD.
+
+## Windows, researched and tested as far as a Mac allows (2026-09-10)
+
+The question was whether an escape sequence written by the status-line child
+can reach the phone on a Windows host at all. It can, and every link now has a
+source behind it:
+
+1. **Claude Code runs the status-line command through Git Bash** on Windows.
+   Its own `/statusline` agent text says so, and warns that a backslash path
+   "will not resolve" there — which is why the script converts the JSON-escaped
+   `transcript_path` to forward slashes before opening it.
+2. **Git Bash's console writer passes an unknown OSC through.** Cygwin's
+   `fhandler/console.cc` (MSYS2 is a Cygwin fork): an `ESC ] Ps ;` with an
+   unrecognised `Ps` enters `eattitle`, and on the terminating byte the whole
+   buffered sequence is sent with `wpbuf_send()` whenever
+   `has_con_24bit_colors() && !con_is_legacy` — every Windows 10 1703+ console
+   in ConPTY mode. Two consequences shape the script: the terminator must be
+   **BEL**, because `eattitle` ends on any control byte, so an `ESC \` ST would
+   end the sequence at the ESC and print the backslash; and the writer's
+   buffer is 256 bytes, flushed and continued when full, so a long `done=`
+   list arrives in chunks but as one contiguous byte stream.
+3. **ConPTY forwards unknown OSC sequences verbatim** since OpenConsole 1.22
+   ([microsoft/terminal#17741](https://github.com/microsoft/terminal/pull/17741),
+   "flush unhandled sequences", Aug 2024). Before it they were dropped.
+4. **Orca's terminals run that ConPTY.** Orca ships node-pty 1.1.0, whose
+   package bundles `third_party/conpty/1.23.251008001` (OpenConsole 1.23,
+   Oct 2025), and every desktop terminal pane passes `useConptyDll: true` — the
+   bundled OpenConsole, not the OS's inbox conhost. The relay-hosted PTY path
+   does not pass it and falls back to inbox conhost, whose version depends on
+   the Windows build.
+
+What was tested here, and how:
+
+- **Claude script**: the MSYS branch via a `uname` shim, the backslash path,
+  `/dev/tty` → `/dev/conout` fallback, and the no-runtime delegation, under
+  `sh`, `bash` and `dash`.
+- **Delegation without node/python3/jq**: Claude Code's native install is one
+  binary, so a Windows or minimal Linux host may have none of them. The
+  settings reader now tries node, python3, jq, then a pure-`sed` reader that
+  joins the file to one line, extracts `statusLine.command`, and undoes the
+  `\"` and `\\` escapes. Tested with broken runtimes standing in for missing
+  ones.
+- **Codex PowerShell script, executed for real** under PowerShell 7.6.6
+  (portable tarball on macOS), invoked exactly as Codex invokes it. That run
+  found three defects the shape-only tests had passed:
+  - the thread id was read from `[Environment]::GetCommandLineArgs()` joined,
+    which includes the script's own `-Command` text, so its own regex literal
+    matched first and the id came out as `0-9A-Za-z` — now only the last
+    argument is read;
+  - the rollout glob used backslashes, which pwsh on macOS/Linux does not treat
+    as separators — now forward slashes, which Windows accepts everywhere;
+  - `Start-Process -ArgumentList` re-joins and re-splits arguments, so an
+    `sh -c` script with a space arrived in pieces — now the call operator `&`
+    with a splatted array, one argv entry per element, and TOML `\"`/`\\`
+    unescaped first;
+  - and `-notmatch` is case-insensitive, so the guard against re-running our
+    own command fired on the sh notify's `cuihud` argv0 — now `-cnotmatch`.
+  The tests run whenever `pwsh` is on PATH or `CUIHUD_PWSH` names one, and
+  skip with a warning otherwise (CI has no PowerShell).
+
+Still not run: **Windows PowerShell 5.1** (the script avoids `` `e `` and single
+quotes for it, but that is by construction), and an **end-to-end pass on a
+real Windows console**, which needs a Windows machine. A host with PowerShell
+and **no Git Bash** runs no status line at all and gets no beacon; nothing on
+the phone can change that.
