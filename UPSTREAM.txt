@@ -3,14 +3,15 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/structured-agent-session-mutation.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
+src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/structured-agent-session-create.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
+src/shared/structured-agent-session-create.ts: 1ae7aa8bb
+src/shared/agent-session-provider-handle.test.ts: 1ae7aa8bb
 src/shared/runtime-mobile-session-tab-contracts.ts: 53852c9ca4a34e741d68115caa474ebb622bed4e
 src/shared/native-chat-session-option-defaults.ts: 546fd9b21
 src/shared/native-chat-session-option-defaults.test.ts: 546fd9b21
