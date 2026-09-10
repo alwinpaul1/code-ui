@@ -139,7 +139,17 @@ export class DirectReturnProbe {
       // migrate owns the candidate from here, including closing it when the
       // cutover is fenced off.
       successful = null
-      await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+      try {
+        await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+      } catch (error) {
+        // Why swallow: the fence above makes a superseded cutover throw, and
+        // this probe is started with `void probe()`, so anything that escapes
+        // becomes an unhandled rejection. migrate owns the candidate socket
+        // and has already closed it. A live failure is not silent either — the
+        // supervisor sees the path never changed and probes again.
+        void error
+        return
+      }
       if (this.stopped) {
         return
       }
