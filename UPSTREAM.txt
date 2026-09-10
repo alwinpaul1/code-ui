@@ -27,6 +27,7 @@ src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
 src/shared/structured-agent-session-composer.ts: f1d854502
+src/shared/native-chat-diff.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 src/shared/native-chat-tool-summary.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 src/shared/native-chat-tool-summary.test.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
 
