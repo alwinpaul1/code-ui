@@ -463,6 +463,29 @@ describe('session tabs reconciled against terminal.list', () => {
     expect(mobileSessionTabsEqual(tabs, next)).toBe(true)
   })
 
+  it('keeps the host\'s active tab active, so the route cannot snap back to the first one', () => {
+    // resolveActiveSessionTab falls back to tabs[0] when no tab says it is
+    // active, and the phone's own selection is keyed by tab id — so a strip
+    // rebuilt with isActive:false and fresh ids sends the active terminal, and
+    // with it the live-input target, back to the leftmost tab every sweep.
+    const second: MobileTerminalSessionTab = {
+      ...hostTerminalTab({ isActive: true }),
+      id: 'tab-2::leaf-1',
+      parentTabId: 'tab-2',
+      leafId: 'leaf-1',
+      terminal: 'term-2',
+      title: 'Codex'
+    }
+    const tabs = [hostTerminalTab({ isActive: false }), second]
+
+    const next = reconcileSessionTabsWithTerminalList(tabs, [
+      listed({ handle: 'term-1' }),
+      listed({ handle: 'term-2', tabId: 'tab-2' })
+    ])
+
+    expect(next.find((tab) => tab.isActive)?.id).toBe('tab-2::leaf-1')
+  })
+
   it('never drops a host tab just because a sweep raced the terminal list', () => {
     const tabs = [hostTerminalTab({ launchAgent: 'claude' })]
 
