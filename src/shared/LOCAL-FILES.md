@@ -111,6 +111,17 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   vendor. No file here can be re-vendored whole at d0506bf5d, because all four
   also carry the forward-ported #19228 hints above. Every hunk is marked
   `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
+- `structured-agent-session-projection.ts` also carries the per-item render
+  cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
+  `projectStructuredItemsToNativeChat` delegating to the single-item
+  projection rather than the other way round. It is safe only because the
+  reducer replaces journal items instead of mutating them, and because
+  `native-chat-tool-fold.ts` clones a message before pushing into its blocks —
+  check both before re-vendoring anything in that path. The rest of #19229 is
+  `src/renderer/`. The file still cannot be re-vendored whole at e80fae0c4:
+  the same delta brings `projectStructuredAgentSessionStatusSummary`
+  (#18776/#19137), which has no reader here. The hunk is marked
+  `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
 
 - `native-chat-tool-fold.ts` — the allocation work from Orca #19468
   (44eb95fc6), in `dropUnattributableToolResults` and `pairToolBlocks`. The file

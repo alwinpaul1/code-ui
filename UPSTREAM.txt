@@ -42,9 +42,10 @@ src/shared/native-chat-tool-summary.ts: c1e15c400
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-model.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
-src/shared/native-chat-unified-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-unified-patch.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
 src/shared/native-chat-begin-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
-src/shared/native-chat-edit-normalize.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
+src/shared/native-chat-edit-normalize.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
+src/shared/native-chat-edit-patch-files.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
 src/shared/native-chat-edit-normalize.test.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-ask.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
 src/shared/native-chat-ask-fifo.test.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be

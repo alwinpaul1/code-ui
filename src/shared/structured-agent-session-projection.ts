@@ -118,29 +118,41 @@ function itemBlocks(item: AgentJournalRenderItem): {
   }
 }
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19229, e80fae0c4): the per-item
+// render cache. The file cannot be re-vendored whole at that commit because it
+// also carries the forward-ported `presentation`/`tone` hints from #19228 and
+// the #18765 / #19226 hunks above. See src/shared/LOCAL-FILES.md.
+const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
+
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
   return items.flatMap((item) => {
-    const projected = itemBlocks(item)
-    return projected
-      ? [
-          {
-            id: item.itemId,
-            role: projected.role,
-            blocks: projected.blocks,
-            timestamp: item.observedAt,
-            source: 'transcript'
-          }
-        ]
-      : []
+    const projected = projectStructuredItemToNativeChat(item)
+    return projected ? [projected] : []
   })
 }
 
 export function projectStructuredItemToNativeChat(
   item: AgentJournalRenderItem
 ): NativeChatMessage | null {
-  return projectStructuredItemsToNativeChat([item])[0] ?? null
+  const cached = projectedItems.get(item)
+  if (cached !== undefined) {
+    return cached
+  }
+  // Reducer updates replace journal items, so unchanged rows keep their render caches.
+  const projected = itemBlocks(item)
+  const message: NativeChatMessage | null = projected
+    ? {
+        id: item.itemId,
+        role: projected.role,
+        blocks: projected.blocks,
+        timestamp: item.observedAt,
+        source: 'transcript'
+      }
+    : null
+  projectedItems.set(item, message)
+  return message
 }
 
 export function activeStructuredAgentSessionTurnId(
