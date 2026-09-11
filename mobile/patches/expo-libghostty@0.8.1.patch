@@ -157,13 +157,20 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,9 +45,42 @@
+@@ -45,9 +45,49 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
 +/** Bundled by the host app (see plugins/android-terminal-fonts.js). */
-+/** The system's own monospace face, by file: what a WebView's `monospace` resolves to. */
-+private const val SYSTEM_MONO_FONT_FILE = "/system/fonts/DroidSansMono.ttf"
++/** The system's own monospace faces, by file, in the order Android ships them:
++ *  what a WebView's `monospace` resolves to. Tried in turn; the alias is the
++ *  last resort and its use is logged, because on Samsung One UI it is the
++ *  proportional substitute this list exists to avoid. */
++private val SYSTEM_MONO_FONT_FILES = listOf(
++  "/system/fonts/DroidSansMono.ttf",
++  "/system/fonts/RobotoMono-Regular.ttf",
++  "/system/fonts/CutiveMono.ttf"
++)
 +
 +/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
 +private const val MODE_MOUSE_TRACKING = 0b111
@@ -200,7 +207,7 @@
  
    /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
    var accessoryBar: TerminalAccessoryBar? = null
-@@ -57,11 +90,24 @@
+@@ -57,11 +97,27 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -217,8 +224,11 @@
 +  // ships no font of its own. DroidSansMono has one weight; bold and italic
 +  // are synthesised the way Chromium synthesises them for the WebView.
 +  private val monoTypeface: Typeface =
-+    runCatching { Typeface.createFromFile(SYSTEM_MONO_FONT_FILE) }.getOrNull()
-+      ?: Typeface.MONOSPACE
++    SYSTEM_MONO_FONT_FILES.firstNotNullOfOrNull { path ->
++      if (java.io.File(path).isFile) runCatching { Typeface.createFromFile(path) }.getOrNull() else null
++    } ?: Typeface.MONOSPACE.also {
++      android.util.Log.w("GhosttyTerminalView", "no system monospace file found; falling back to Typeface.MONOSPACE, which an OEM may substitute")
++    }
 +
 +  private val textPaint = newTextPaint(monoTypeface)
 +  private val boldPaint = newTextPaint(monoTypeface).apply { isFakeBoldText = true }
@@ -229,7 +239,7 @@
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -166,14 +212,17 @@
+@@ -166,14 +222,17 @@
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -250,7 +260,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +242,25 @@
+@@ -193,9 +252,25 @@
            clearSelection()
            return true
          }
@@ -279,7 +289,7 @@
          return true
        }
  
-@@ -205,6 +270,7 @@
+@@ -205,6 +280,7 @@
          lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
          selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
@@ -287,7 +297,7 @@
          scheduleFrame()
          if (selectionMode) {
            // Keep dragging without lifting: extend from the pressed cell.
-@@ -225,13 +291,13 @@
+@@ -225,13 +301,13 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -304,7 +314,7 @@
          }
          return true
        }
-@@ -270,7 +336,7 @@
+@@ -270,7 +346,7 @@
          val steps = ((pinchScale - pinchLastScale) / PINCH_SCALE_STEP).toInt()
          if (steps != 0) {
            pinchLastScale += steps * PINCH_SCALE_STEP
@@ -313,7 +323,7 @@
          }
          return true
        }
-@@ -292,10 +358,13 @@
+@@ -292,10 +368,13 @@
     * steps from the current value. Content reflows in place — libghostty-vt
     * owns the grid state, so no output is lost.
     */
@@ -328,13 +338,10 @@
      val px = clamped * resources.displayMetrics.density
      for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
        paint?.textSize = px
-@@ -364,7 +433,58 @@
-     if (handle != 0L) {
-       GhosttyVt.nativeFree(handle)
-       handle = 0
-+    }
-+  }
-+
+@@ -367,6 +446,57 @@
+     }
+   }
+ 
 +  /** Current DEC private modes as nativeTerminalModes' bitmask; 0 once freed. */
 +  fun terminalModes(): Int = if (handle == 0L) 0 else GhosttyVt.nativeTerminalModes(handle)
 +
@@ -380,14 +387,16 @@
 +      if (out.isNotEmpty()) onInputBytes?.invoke(out)
 +      markScrollActivity()
 +      return
-     }
++    }
 +    GhosttyVt.nativeScroll(handle, deltaRows)
 +    markScrollActivity()
 +    scheduleFrame()
-   }
- 
++  }
++
    private fun sendBytes(bytes: ByteArray) {
-@@ -481,6 +601,7 @@
+     if (!finished && bytes.isNotEmpty()) {
+       if (selectionMode) clearSelection()
+@@ -481,6 +611,7 @@
      rowSelStart = IntArray(rows) { -1 }
      rowSelEnd = IntArray(rows) { -1 }
      rowSelEndWide = BooleanArray(rows)
@@ -395,15 +404,15 @@
    }
  
    // ── Rendering ──
-@@ -522,8 +643,25 @@
+@@ -522,10 +653,27 @@
  
      if (dirtyKind == DIRTY_FULL) canvas.drawColor(defaultBg)
      repeat(rowCount) { drawRowRecord(buf, canvas, snapCols) }
 +    publishMetrics()
      syncSelectionUi()
      invalidate()
-+  }
-+
+   }
+ 
 +  private fun publishMetrics() {
 +    val listener = onMetrics ?: return
 +    val alt = terminalModes() and MODE_ALT_SCREEN != 0
@@ -418,10 +427,12 @@
 +    if (next == lastMetrics) return
 +    lastMetrics = next
 +    listener(cursorY, bottom, rows, alt)
-   }
- 
++  }
++
    // ── Selection ──
-@@ -559,16 +697,21 @@
+ 
+   /** Top-left / bottom-right cells of the rendered selection, or null. */
+@@ -559,16 +707,21 @@
  
    private fun clearSelection() {
      if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
@@ -443,7 +454,7 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -577,10 +720,17 @@
+@@ -577,10 +730,17 @@
    private fun copySelection() {
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
@@ -465,7 +476,7 @@
      clearSelection()
    }
  
-@@ -793,6 +943,7 @@
+@@ -793,6 +953,7 @@
      buf.position(textPos)
      if (textUnits > rowChars.size) rowChars = CharArray(textUnits)
      for (i in 0 until textUnits) rowChars[i] = buf.char

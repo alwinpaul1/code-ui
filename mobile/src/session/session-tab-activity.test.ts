@@ -36,6 +36,16 @@ describe('what a tab pill shows about background shells', () => {
     ).toEqual({ kind: 'background', count: 1 })
   })
 
+  it('shows nothing, not a zero, once the agent has written every listed shell as done', () => {
+    expect(
+      sessionTabActivity(
+        { state: 'working', workingMode: 'monitoring' },
+        beacon(['t1', 't2'], ['t1', 't2']),
+        true
+      )
+    ).toBeNull()
+  })
+
   it('clears when the host says the pane is done', () => {
     expect(sessionTabActivity({ state: 'done' }, beacon(['t1']), true)).toBeNull()
     expect(sessionTabActivity(null, beacon(['t1']), true)).toBeNull()

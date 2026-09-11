@@ -237,9 +237,11 @@ describe('the ghostty engine behind the WebView handle', () => {
     const onSelectionMode = vi.fn()
     const onSelectionCopy = vi.fn()
     const onTextScaleChange = vi.fn()
-    const { fire } = mount({ onSelectionMode, onSelectionCopy, onTextScaleChange })
+    const onHaptic = vi.fn()
+    const { fire } = mount({ onSelectionMode, onSelectionCopy, onTextScaleChange, onHaptic })
 
     fire('onSelection', { active: true })
+    expect(onHaptic).toHaveBeenCalledWith('selection')
     fire('onCopy', { text: 'npm test' })
     fire('onSelection', { active: false })
     fire('onFontSize', { fontSize: 13 * 1.5 })

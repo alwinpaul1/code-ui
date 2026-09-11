@@ -60,7 +60,8 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
       onTextScaleChange,
       onFileTap,
       onOpenUrl,
-      onKeyboardAvoidanceMetrics
+      onKeyboardAvoidanceMetrics,
+      onHaptic
     },
     ref
   ) {
@@ -160,8 +161,13 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     // it hears about xterm's, so its selection UI, copy toast and persisted
     // text size behave identically whichever engine draws the pane.
     const handleSelection = useCallback(
-      (event: { nativeEvent: { active: boolean } }) => onSelectionMode?.(event.nativeEvent.active),
-      [onSelectionMode]
+      (event: { nativeEvent: { active: boolean } }) => {
+        if (event.nativeEvent.active) {
+          onHaptic?.('selection')
+        }
+        onSelectionMode?.(event.nativeEvent.active)
+      },
+      [onHaptic, onSelectionMode]
     )
     const handleCopy = useCallback(
       (event: { nativeEvent: { text: string } }) => onSelectionCopy?.(event.nativeEvent.text),

@@ -33,5 +33,8 @@ export function sessionTabActivity(
   }
   const done = new Set(beacon.doneTaskIds)
   const running = beacon.runningTaskIds.filter((id) => !done.has(id)).length
-  return { kind: 'background', count: running }
+  // The agent has written every listed shell as done while the host still
+  // says monitoring: nothing is running as far as anyone can tell — no chip,
+  // and no "0" (council review, 2026-09-11).
+  return running === 0 ? null : { kind: 'background', count: running }
 }
