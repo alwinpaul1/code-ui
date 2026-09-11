@@ -1,5 +1,5 @@
-import { memo, useEffect, useRef, useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Image, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   ArrowUp,
@@ -110,6 +110,29 @@ function Prose({
     )
   }
   return null
+}
+
+/** The message container: a sent prompt is tappable (it discloses its copy
+ *  control); everything else is a plain view so nothing steals its touches. */
+function Bubble({
+  user,
+  onToggle,
+  style,
+  children
+}: {
+  user: boolean
+  onToggle: () => void
+  style: StyleProp<ViewStyle>
+  children: ReactNode
+}) {
+  if (!user) {
+    return <View style={style}>{children}</View>
+  }
+  return (
+    <Pressable style={style} onPress={onToggle} accessibilityRole="button" accessibilityLabel="Sent prompt">
+      {children}
+    </Pressable>
+  )
 }
 
 /** Subtle controls for an agent message: copy its prose, or scroll so this
@@ -251,11 +274,15 @@ function MobileNativeChatMessageImpl({
   turnActivity?: { kind: 'description'; text: string } | null
 }) {
   const styles = useChatMessageStyles()
+  const { colors } = useTheme()
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser
   // Briefly tint the bubble to confirm a copy landed.
   const [copied, setCopied] = useState(false)
+  // A sent prompt shows its copy control only once tapped, so the bubble
+  // stays clean; a queued echo keeps its Queued/Cancel row instead.
+  const [promptControlsShown, setPromptControlsShown] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -326,6 +353,21 @@ function MobileNativeChatMessageImpl({
     copyTimer.current = setTimeout(() => setCopied(false), 700)
   }
 
+  const sentPromptControls =
+    isUser && !onCancelQueued && promptControlsShown ? (
+      <View style={styles.controlsRow}>
+        <Pressable
+          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
+          onPress={handleCopy}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Copy prompt"
+        >
+          <Copy size={14} color={colors.userBubbleText} strokeWidth={2} />
+        </Pressable>
+      </View>
+    ) : null
+
   const controls = isAgent ? (
     <AgentControls
       onCopy={handleCopy}
@@ -341,7 +383,11 @@ function MobileNativeChatMessageImpl({
   return (
     <>
       <View style={[styles.row, isUser && styles.rowUser]}>
-        <View style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}>
+        <Bubble
+          user={isUser && !onCancelQueued}
+          onToggle={() => setPromptControlsShown((shown) => !shown)}
+          style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
+        >
           {prose.map((block, index) => (
             <Prose
               key={index}
@@ -385,8 +431,10 @@ function MobileNativeChatMessageImpl({
             </View>
           ) : controls ? (
             <View style={styles.controlsRow}>{controls}</View>
-          ) : null}
-        </View>
+          ) : (
+            sentPromptControls
+          )}
+        </Bubble>
       </View>
       {turnStatus ? (
         <MobileNativeChatTurnStatus

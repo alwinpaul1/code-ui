@@ -75,6 +75,23 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  it('offers a copy control on a sent prompt when it is tapped, never on a queued one', () => {
+    const sent = render(userMessage([{ type: 'text', text: 'record' }]))
+    expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
+
+    act(() => {
+      sent.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
+    })
+    expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' }).length).toBeGreaterThan(0)
+    act(() => sent.unmount())
+
+    const queued = render(userMessage([{ type: 'text', text: 'record' }]), {
+      onCancelQueued: vi.fn()
+    })
+    expect(queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })).toHaveLength(0)
+    expect(queued.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
+  })
+
   it('renders a loadable preview URI as an image thumbnail', () => {
     const tree = render(userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]))
     const image = tree.root.findByType('Image' as never)
@@ -115,9 +132,13 @@ describe('MobileNativeChatMessage', () => {
       { onOpenFile }
     )
     expect(textIn(tree.root)).toContain('Image on Desktop')
-    expect(tree.root.findAllByType('Pressable').filter((node) => node.props.onPress)).toHaveLength(
-      0
-    )
+    // The bubble itself is tappable (it discloses the copy control); the
+    // image chip must not be.
+    expect(
+      tree.root
+        .findAllByType('Pressable')
+        .filter((node) => node.props.onPress && node.props.accessibilityLabel !== 'Sent prompt')
+    ).toHaveLength(0)
     expect(onOpenFile).not.toHaveBeenCalled()
   })
 
