@@ -132,10 +132,16 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,6 +45,13 @@
+@@ -45,6 +45,19 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
++/** Bundled by the host app (see plugins/android-terminal-fonts.js). */
++private const val MONO_FONT_REGULAR = "fonts/RobotoMono-Regular.ttf"
++private const val MONO_FONT_BOLD = "fonts/RobotoMono-Bold.ttf"
++private const val MONO_FONT_ITALIC = "fonts/RobotoMono-Italic.ttf"
++private const val MONO_FONT_BOLD_ITALIC = "fonts/RobotoMono-BoldItalic.ttf"
++
 +/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
 +private const val MODE_MOUSE_TRACKING = 0b111
 +/** X11 wheel buttons and the press action, as nativeEncodeMouse takes them. */
@@ -146,7 +152,35 @@
  internal class GhosttyTerminalView(context: Context) : View(context) {
    var onInputBytes: ((ByteArray) -> Unit)? = null
    var onGridResize: ((cols: Int, rows: Int) -> Unit)? = null
-@@ -166,14 +173,17 @@
+@@ -57,11 +70,23 @@
+ 
+   // ── Cell metrics ──
+   private var fontSizeDp = FONT_SIZE_DP
+-  private val textPaint = newTextPaint(Typeface.MONOSPACE)
+-  private val boldPaint = newTextPaint(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD))
+-  private val italicPaint = newTextPaint(Typeface.create(Typeface.MONOSPACE, Typeface.ITALIC))
++  // Why: Typeface.MONOSPACE is an OEM alias, and on Samsung One UI the
++  // Monotype FlipFont packages substitute typefaces in-process, so it does not
++  // resolve to the system's DroidSansMono. Measured on a Galaxy S23: cells came
++  // out 0.84 em wide (a proportional advance) instead of 0.6 em, the grid was
++  // 34 columns, and 51-column output wrapped at 34 with every glyph floating in
++  // a cell it did not fill. A monospace grid needs a font we ship ourselves;
++  // the host app places these under assets/fonts and the alias is only a
++  // fallback for a host that does not.
++  private fun monoTypeface(asset: String, style: Int): Typeface =
++    runCatching { Typeface.createFromAsset(context.assets, asset) }.getOrNull()
++      ?: Typeface.create(Typeface.MONOSPACE, style)
++
++  private val textPaint = newTextPaint(monoTypeface(MONO_FONT_REGULAR, Typeface.NORMAL))
++  private val boldPaint = newTextPaint(monoTypeface(MONO_FONT_BOLD, Typeface.BOLD))
++  private val italicPaint = newTextPaint(monoTypeface(MONO_FONT_ITALIC, Typeface.ITALIC))
+   private val boldItalicPaint =
+-    newTextPaint(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD_ITALIC))
++    newTextPaint(monoTypeface(MONO_FONT_BOLD_ITALIC, Typeface.BOLD_ITALIC))
+ 
+   // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
+   // system fallback chain; route those cells to the bundled symbols-only font.
+@@ -166,14 +191,17 @@
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -167,7 +201,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +203,11 @@
+@@ -193,9 +221,11 @@
            clearSelection()
            return true
          }
@@ -182,7 +216,7 @@
          return true
        }
  
-@@ -225,13 +237,13 @@
+@@ -225,13 +255,13 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -199,7 +233,7 @@
          }
          return true
        }
-@@ -367,6 +379,45 @@
+@@ -367,6 +397,45 @@
      }
    }
  

@@ -93,6 +93,7 @@
       "./plugins/android-gradle-memory.js",
       "./plugins/android-soft-input-mode.js",
       "./plugins/android-high-refresh-rate.js",
+      "./plugins/android-terminal-fonts.js",
       [
         "expo-notifications",
         {
