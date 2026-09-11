@@ -152,4 +152,28 @@ describe('the ghostty engine behind the WebView handle', () => {
 
     expect(native.props?.fontSize).toBe(13)
   })
+
+  it('opens the input on a tap but not at the end of a scroll', () => {
+    // Reported on a Galaxy S23: with ghostty on, every scroll popped the
+    // keyboard — the wrapper treated any touch end as a tap.
+    const onTerminalTap = vi.fn()
+    let root!: ReturnType<typeof create>
+    act(() => {
+      root = create(createElement(TerminalGhosttyView, { onTerminalTap }))
+    })
+    const wrapper = root.root.findByType('View' as never)
+    const touch = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y, timestamp: 0 } })
+
+    act(() => {
+      wrapper.props.onTouchStart(touch(100, 800))
+      wrapper.props.onTouchEnd(touch(100, 300))
+    })
+    expect(onTerminalTap).not.toHaveBeenCalled()
+
+    act(() => {
+      wrapper.props.onTouchStart(touch(100, 800))
+      wrapper.props.onTouchEnd(touch(104, 803))
+    })
+    expect(onTerminalTap).toHaveBeenCalledTimes(1)
+  })
 })

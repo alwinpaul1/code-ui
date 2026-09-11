@@ -12,6 +12,9 @@ const GHOSTTY_BASE_FONT_DP = 13
 const MIN_FONT_DP = 4
 const MAX_FONT_DP = 64
 
+/** A touch that travels further than this is a scroll, not a tap. */
+const TAP_SLOP_PX = 12
+
 /** RIS then a scrollback erase: a fresh grid for a fresh snapshot. */
 const RESET_SEQUENCE = 'c[3J'
 
@@ -48,6 +51,27 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     const gridRef = useRef<{ cols: number; rows: number } | null>(null)
     const readyResolversRef = useRef<(() => void)[]>([])
     const announcedReadyRef = useRef(false)
+    // A tap focuses the live input; a scroll must not. The wrapper sees every
+    // touch end, so it has to tell them apart itself — measured: without this
+    // every scroll on the ghostty engine popped the keyboard.
+    const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+    const handleTouchStart = useCallback((event: { nativeEvent: { pageX: number; pageY: number } }) => {
+      touchStartRef.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }
+    }, [])
+    const handleTouchEnd = useCallback(
+      (event: { nativeEvent: { pageX: number; pageY: number } }) => {
+        const start = touchStartRef.current
+        touchStartRef.current = null
+        if (!start || !onTerminalTap) {
+          return
+        }
+        const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y)
+        if (moved <= TAP_SLOP_PX) {
+          onTerminalTap()
+        }
+      },
+      [onTerminalTap]
+    )
     // Measured on a 1080 px view at 13 dp: the layout gives 49 columns. A host
     // that keeps its own width (the `hold`/`exhausted` case) addresses cells the
     // view does not have, rows wrap and every partial repaint lands a row off.
@@ -155,7 +179,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     return (
       // The tap lands on a wrapper: the native view owns no focus, so a tap is
       // the host's to interpret (focus the live input), exactly as for xterm.
-      <View style={style} onTouchEnd={onTerminalTap ? () => onTerminalTap() : undefined}>
+      <View style={style} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         <TerminalView
           ref={nativeRef}
           style={styles.fill}
