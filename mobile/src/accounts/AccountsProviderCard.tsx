@@ -69,6 +69,9 @@ export function AccountsProviderCard({
   const meter = (key: UsageWindowKey, title?: string) => {
     const bar = getUsageBarState(activeLimits, key)
     return (
+      // Why dense: at heading size with 10 px bars and body-size reset lines,
+      // three windows per provider filled a screen and read as oversized
+      // (2026-09-11). Body title, 8 px bar, caption reset line.
       <UsageMeter
         title={title ?? usageWindowTitle(key, true)}
         usedPercent={bar.usedPercent}
@@ -78,6 +81,7 @@ export function AccountsProviderCard({
           getWindowResetLabel(activeLimits, key, now) ??
           (key === 'session' && bar.usedPercent === 0 ? 'Starts when a message is sent' : null)
         }
+        dense
       />
     )
   }
@@ -132,7 +136,7 @@ export function AccountsProviderCard({
       ) : null}
 
       {session ? (
-        <Surface rounded="lg" style={{ padding: space.lg }}>
+        <Surface rounded="lg" style={{ paddingHorizontal: space.md, paddingVertical: space.sm + 2 }}>
           {meter('session')}
         </Surface>
       ) : null}
@@ -140,7 +144,7 @@ export function AccountsProviderCard({
       {weekly.length > 0 ? (
         <>
           {session ? (
-            <Txt variant="body" tone="secondary" style={{ paddingHorizontal: space.xs }}>
+            <Txt variant="caption" weight="semibold" tone="secondary" style={{ paddingHorizontal: space.xs }}>
               Weekly limits
             </Txt>
           ) : null}
@@ -149,7 +153,8 @@ export function AccountsProviderCard({
               <View
                 key={key}
                 style={{
-                  padding: space.lg,
+                  paddingHorizontal: space.md,
+                  paddingVertical: space.sm + 2,
                   borderTopWidth: index === 0 ? 0 : 1,
                   borderTopColor: colors.border
                 }}
