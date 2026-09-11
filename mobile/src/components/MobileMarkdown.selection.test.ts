@@ -18,6 +18,8 @@ vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram'
 const DOCUMENT = [
   '## What changed',
   '',
+  'Two safety details. First, the total cannot go below zero.',
+  '',
   '> The lock file resolves differently in the image.',
   '',
   '```sh',
@@ -57,6 +59,15 @@ describe('agent prose the reader wants to copy', () => {
     }
     return { selectable, fixed }
   }
+
+  it('lets the reader select a paragraph — the answer itself, not only its table', () => {
+    // Why: reported 2026-09-11 from a tablet with a video — a long press on
+    // an answer's prose selected nothing while its table did. Every other
+    // block was selectable; the paragraph was the one left out.
+    const { selectable, fixed } = textsBySelectability()
+    expect(selectable.some((text) => text.includes('Two safety details'))).toBe(true)
+    expect(fixed.some((text) => text.includes('Two safety details'))).toBe(false)
+  })
 
   it('lets the reader select a heading, a quote, a fence, a table cell and a list item', () => {
     const { selectable } = textsBySelectability()

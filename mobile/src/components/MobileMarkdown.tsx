@@ -331,8 +331,11 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         if (block.type === 'rule') {
           return <View key={index} style={styles.rule} />
         }
+        // Why selectable: this is the body prose — the block every other kind
+        // already allowed the reader to select. Reported 2026-09-11 on a tablet:
+        // a long press on an answer selected nothing while its table did.
         return (
-          <Text key={index} style={[styles.paragraph, proseScale]}>
+          <Text key={index} selectable style={[styles.paragraph, proseScale]}>
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
