@@ -1,7 +1,8 @@
 /**
  * A recorded terminal stream: the snapshot the host serialized for a phone
  * viewport, then every chunk with its arrival offset. Written by
- * scripts/capture-terminal-stream.ts, replayed by app/ghostty-spike.tsx.
+ * scripts/capture-terminal-stream.ts; the app/ghostty-spike.tsx replay harness that
+ * used it was removed from the shipping app after Stage 0 (2026-09-11).
  */
 export type TerminalStreamCaptureEvent =
   | { t: number; type: 'data'; chunk: string }
