@@ -97,6 +97,12 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
    *  a reclaim check that looked only at those two fired instantly on the very
    *  case it exists to handle and the release never went out. Measured: HOME
    *  left the desk at COLS=51 with this fix in place. */
+  /** Once the route is gone the reader is definitively not driving anything.
+   *  Without this the reclaim guard answers "still driving" during teardown —
+   *  the refs still hold the handle that is going away — and abandons the very
+   *  release that leaving the route exists to send. */
+  const routeClosedRef = useRef(false)
+
   const releaseHandle = useCallback((handle: string) => {
     const driven = drivenHandlesRef.current
     if (!shouldReleaseFloor({ drivenHandles: driven, handle })) {
@@ -107,6 +113,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       release: () => setDisplayModeRef.current(handle, 'desktop'),
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       isReclaimed: () =>
+        !routeClosedRef.current &&
         AppState.currentState === 'active' &&
         activeHandleStateRef.current === handle &&
         !showNativeChatStateRef.current
@@ -164,15 +171,21 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     }
   }, [activeHandle, releaseHandle, showNativeChat])
 
+  // Measured on a Galaxy S23: the hardware back key in terminal mode left the
+  // desk at COLS=51 with its keyboard paused, and nothing recovered it — the
+  // handle was gone from the driven set, so no later gesture released it
+  // either. This asked once and ignored the answer, while setDisplayMode
+  // returns false for a torn-down client or a refused request.
   useEffect(() => {
     const driven = drivenHandlesRef.current
     return () => {
-      for (const handle of driven) {
-        void setDisplayModeRef.current(handle, 'desktop')
+      routeClosedRef.current = true
+      // Snapshot: releasing removes the handle from the set being iterated.
+      for (const handle of Array.from(driven)) {
+        releaseHandle(handle)
       }
-      driven.clear()
     }
-  }, [])
+  }, [releaseHandle])
 
   return { switchTabView }
 }

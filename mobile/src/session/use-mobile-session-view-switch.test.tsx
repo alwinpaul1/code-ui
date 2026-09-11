@@ -43,8 +43,10 @@ import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-p
  *  Desktop keyboard is paused" on the desktop. Nothing handed it back when the
  *  route went away, so the desk stayed locked until someone clicked
  *  "Take back this terminal". */
-function mountViewSwitch(activeHandle: string | null) {
-  const setDisplayMode = vi.fn(async () => true)
+function mountViewSwitch(
+  activeHandle: string | null,
+  setDisplayMode: ReturnType<typeof vi.fn> = vi.fn(async () => true)
+) {
   const scope = {
     activeHandle,
     sessionTabs: [
@@ -140,5 +142,31 @@ describe('the app going away and coming back', () => {
     probe.unmount()
 
     expect(probe.setDisplayMode).toHaveBeenCalledWith('term-1', 'desktop')
+  })
+})
+
+describe('leaving the route while the relay is unhappy', () => {
+  /** Reported on a Galaxy S23: in terminal mode, the hardware back key leaves
+   *  the session entirely — the app lands on its own Home screen with no
+   *  terminal on screen — and the desk stays at COLS=51 with its keyboard
+   *  paused. Nothing recovers it afterwards, because the handle is gone from
+   *  the driven set, so no later gesture releases it either. */
+  it('keeps asking for the desk floor back when the first request is refused', async () => {
+    vi.useFakeTimers()
+    try {
+      const setDisplayMode = vi.fn(async () => false)
+      const probe = mountViewSwitch('term-1', setDisplayMode)
+      setDisplayMode.mockClear()
+
+      probe.unmount()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500)
+      })
+
+      const desktopCalls = setDisplayMode.mock.calls.filter((call) => call[1] === 'desktop')
+      expect(desktopCalls.length).toBeGreaterThan(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
