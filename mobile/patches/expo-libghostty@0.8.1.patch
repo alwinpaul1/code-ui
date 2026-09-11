@@ -132,7 +132,30 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -174,6 +174,11 @@
+@@ -45,6 +45,13 @@
+  * snapshots from JNI once per Choreographer frame and patches them onto a
+  * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
+  */
++/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
++private const val MODE_MOUSE_TRACKING = 0b111
++/** X11 wheel buttons and the press action, as nativeEncodeMouse takes them. */
++private const val MOUSE_WHEEL_UP = 4
++private const val MOUSE_WHEEL_DOWN = 5
++private const val MOUSE_ACTION_PRESS = 0
++
+ internal class GhosttyTerminalView(context: Context) : View(context) {
+   var onInputBytes: ((ByteArray) -> Unit)? = null
+   var onGridResize: ((cols: Int, rows: Int) -> Unit)? = null
+@@ -166,14 +173,17 @@
+       val deltaRows = (scrollAccum / cellHeight).toInt()
+       if (deltaRows != 0) {
+         scrollAccum -= deltaRows * cellHeight
+-        GhosttyVt.nativeScroll(handle, deltaRows)
+-        markScrollActivity()
+-        scheduleFrame()
++        scrollRows(deltaRows, lastTouchX, lastTouchY)
+       }
+       postOnAnimation(this)
      }
    }
  
@@ -144,7 +167,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +198,11 @@
+@@ -193,9 +203,11 @@
            clearSelection()
            return true
          }
@@ -159,9 +182,83 @@
          return true
        }
  
+@@ -225,13 +237,13 @@
+         distanceY: Float
+       ): Boolean {
+         if (handle == 0L || scaleDetector.isInProgress) return false
++        lastTouchX = e2.x
++        lastTouchY = e2.y
+         scrollAccum += distanceY
+         val deltaRows = (scrollAccum / cellHeight).toInt()
+         if (deltaRows != 0) {
+           scrollAccum -= deltaRows * cellHeight
+-          GhosttyVt.nativeScroll(handle, deltaRows)
+-          markScrollActivity()
+-          scheduleFrame()
++          scrollRows(deltaRows, e2.x, e2.y)
+         }
+         return true
+       }
+@@ -367,6 +379,45 @@
+     }
+   }
+ 
++  /** Current DEC private modes as nativeTerminalModes' bitmask; 0 once freed. */
++  fun terminalModes(): Int = if (handle == 0L) 0 else GhosttyVt.nativeTerminalModes(handle)
++
++  private var lastTouchX = 0f
++  private var lastTouchY = 0f
++
++  /** Move the view by whole rows, or hand the gesture to the program.
++   *
++   *  A TUI that enabled mouse tracking (Claude Code does, in its first chunk,
++   *  and it runs on the alternate screen where there is no scrollback) owns
++   *  the scroll: the finger becomes wheel reports and the program repaints.
++   *  Everything else scrolls our own history. Decided per gesture step, so a
++   *  program toggling modes mid-session is followed without a rebuild. */
++  private fun scrollRows(deltaRows: Int, x: Float, y: Float) {
++    if (handle == 0L || deltaRows == 0) return
++    val modes = GhosttyVt.nativeTerminalModes(handle)
++    val mouseTracking = modes and MODE_MOUSE_TRACKING != 0
++    if (mouseTracking && !finished) {
++      // X11 numbering: 4 is wheel up, 5 is wheel down. deltaRows > 0 means the
++      // finger moved up, which the user reads as scrolling DOWN the content.
++      val button = if (deltaRows > 0) MOUSE_WHEEL_DOWN else MOUSE_WHEEL_UP
++      val steps = kotlin.math.abs(deltaRows)
++      var out: ByteArray? = null
++      for (i in 0 until steps) {
++        val report = GhosttyVt.nativeEncodeMouse(handle, button, MOUSE_ACTION_PRESS, x, y, 0)
++          ?: break
++        out = if (out == null) report else out + report
++      }
++      // Straight to the PTY: sendBytes would clear a selection and jump to the
++      // live view, neither of which a scroll should do.
++      if (out != null) onInputBytes?.invoke(out)
++      markScrollActivity()
++      return
++    }
++    GhosttyVt.nativeScroll(handle, deltaRows)
++    markScrollActivity()
++    scheduleFrame()
++  }
++
+   private fun sendBytes(bytes: ByteArray) {
+     if (!finished && bytes.isNotEmpty()) {
+       if (selectionMode) clearSelection()
 --- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
-@@ -55,9 +55,43 @@
+@@ -19,6 +19,10 @@
+ 
+   private val onInput by EventDispatcher<Map<String, Any>>()
+   private val onResize by EventDispatcher<Map<String, Any>>()
++  // The host gates gesture bytes on the program's mouse and alt-screen modes,
++  // so it has to hear about them; emitted only when the mask changes.
++  private val onModes by EventDispatcher<Map<String, Any>>()
++  private var lastModes = -1
+ 
+   private val terminal = GhosttyTerminalView(context).also { view ->
+     view.onInputBytes = { bytes ->
+@@ -55,9 +59,43 @@
      }
    }
  
@@ -206,8 +303,33 @@
      // Edge-to-edge windows don't resize for the keyboard — it just covers us.
      // Pad our bottom by the covered amount so the bar sits above the IME and
      // the terminal shrinks (regaining the hidden rows). Hosts that already
+@@ -93,7 +131,14 @@
+   )
+ 
+   /** Feed PTY output (terminal.output on the wire) into the grid. */
+-  fun write(data: ByteArray) = terminal.write(data)
++  fun write(data: ByteArray) {
++    terminal.write(data)
++    val modes = terminal.terminalModes()
++    if (modes != lastModes) {
++      lastModes = modes
++      onModes(mapOf("mask" to modes))
++    }
++  }
+ 
+   /** Mark the underlying PTY as exited (terminal.exit on the wire). */
+   fun finish(exitCode: Int) = terminal.finish(exitCode)
 --- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyModule.kt
 +++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyModule.kt
+@@ -12,7 +12,7 @@
+     Name("ExpoLibghostty")
+ 
+     View(ExpoLibghosttyView::class) {
+-      Events("onInput", "onResize")
++      Events("onInput", "onResize", "onModes")
+ 
+       // Base font size in dp (default 14); applied live, the grid reflows.
+       Prop("fontSize") { view: ExpoLibghosttyView, size: Float ->
 @@ -24,6 +24,20 @@
          view.setTheme(theme)
        }
@@ -229,3 +351,60 @@
        // PTY output bytes (base64) → terminal grid.
        AsyncFunction("write") { view: ExpoLibghosttyView, base64: String ->
          val data = try {
+--- a/src/ExpoLibghostty.types.ts
++++ b/src/ExpoLibghostty.types.ts
+@@ -14,6 +14,15 @@
+   rows: number;
+ };
+ 
++export type TerminalModesEvent = {
++  /**
++   * DEC private modes as a bitmask: bit0 1000 (normal mouse), bit1 1002
++   * (button), bit2 1003 (any), bit3 1006 (SGR), bit4 alt screen, bit5 1007
++   * (alt scroll). Emitted when the mask changes after a write.
++   */
++  mask: number;
++};
++
+ export type TerminalViewRef = {
+   /** Feed base64-encoded PTY output into the terminal grid. */
+   write(base64: string): Promise<void>;
+@@ -61,6 +70,14 @@
+   onInput?: (event: { nativeEvent: TerminalInputEvent }) => void;
+   /** Grid resized (layout, rotation, font change); forward to the PTY. */
+   onResize?: (event: { nativeEvent: TerminalResizeEvent }) => void;
++  /** Program changed its mouse/alt-screen modes; see TerminalModesEvent. */
++  onModes?: (event: { nativeEvent: TerminalModesEvent }) => void;
++  /** False hands focus and the IME to the host (default true). */
++  managesFocus?: boolean;
++  /** False hides the library's own accessory bar (default true). */
++  showsAccessoryBar?: boolean;
++  /** False stops the view padding itself for the keyboard (default true). */
++  managesKeyboardInsets?: boolean;
+   ref?: Ref<TerminalViewRef>;
+   style?: StyleProp<ViewStyle>;
+ };
+--- a/build/ExpoLibghostty.types.d.ts
++++ b/build/ExpoLibghostty.types.d.ts
+@@ -11,6 +11,10 @@
+     cols: number;
+     rows: number;
+ };
++export type TerminalModesEvent = {
++    /** DEC private modes bitmask: bit0 1000, bit1 1002, bit2 1003, bit3 1006, bit4 alt screen, bit5 1007. */
++    mask: number;
++};
+ export type TerminalViewRef = {
+     /** Feed base64-encoded PTY output into the terminal grid. */
+     write(base64: string): Promise<void>;
+@@ -60,6 +64,10 @@
+     onResize?: (event: {
+         nativeEvent: TerminalResizeEvent;
+     }) => void;
++    onModes?: (event: { nativeEvent: TerminalModesEvent }) => void;
++    managesFocus?: boolean;
++    showsAccessoryBar?: boolean;
++    managesKeyboardInsets?: boolean;
+     ref?: Ref<TerminalViewRef>;
+     style?: StyleProp<ViewStyle>;
+ };
