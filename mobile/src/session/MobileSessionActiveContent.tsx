@@ -1,3 +1,4 @@
+import { useTerminalEngine } from '../terminal/use-terminal-engine'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -19,6 +20,7 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  const terminalEngine = useTerminalEngine()
   const { colors, space } = useTheme()
   const centered = {
     flex: 1,
@@ -260,6 +262,7 @@ export function MobileSessionActiveContent({
       {terminals.map((terminal) => (
         <TerminalPaneView
           key={terminal.handle}
+          engine={terminalEngine}
           handle={terminal.handle}
           active={terminal.handle === activeHandle}
           keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
