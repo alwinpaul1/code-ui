@@ -24,24 +24,24 @@ beforeEach(() => {
 })
 
 describe('moving the grid under the finger on agent tabs', () => {
-  it('is on for a fresh install', async () => {
-    expect(await loadTerminalFollowFinger()).toBe(true)
-  })
-
-  it('stays off across launches once the user turns it off', async () => {
-    await saveTerminalFollowFinger(false)
-
+  it('is off for a fresh install: the grid shows only what the host painted', async () => {
     expect(await loadTerminalFollowFinger()).toBe(false)
   })
 
-  it('treats a corrupt value as on', () => {
-    expect(parseTerminalFollowFinger('maybe')).toBe(true)
-    expect(parseTerminalFollowFinger(null)).toBe(true)
+  it('stays on across launches once the user opts in', async () => {
+    await saveTerminalFollowFinger(true)
+
+    expect(await loadTerminalFollowFinger()).toBe(true)
+  })
+
+  it('treats a corrupt value as off', () => {
+    expect(parseTerminalFollowFinger('maybe')).toBe(false)
+    expect(parseTerminalFollowFinger(null)).toBe(false)
   })
 
   it('still opens a terminal when storage itself is unreadable', async () => {
     asyncStorage.getItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
-    expect(await loadTerminalFollowFinger()).toBe(true)
+    expect(await loadTerminalFollowFinger()).toBe(false)
   })
 })

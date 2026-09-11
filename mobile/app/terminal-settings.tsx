@@ -168,7 +168,7 @@ export default function TerminalSettingsScreen() {
     void saveTerminalEngine(next)
   }, [])
 
-  const [followFinger, setFollowFinger] = useState(true)
+  const [followFinger, setFollowFinger] = useState(false)
   useEffect(() => {
     void loadTerminalFollowFinger().then(setFollowFinger)
   }, [])
@@ -357,11 +357,11 @@ export default function TerminalSettingsScreen() {
           </View>
           <View style={styles.row}>
             <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Follow the finger on agent scroll</Text>
+              <Text style={styles.rowLabel}>Follow the finger on agent scroll (experimental)</Text>
               <Text style={styles.rowSublabel}>
                 {followFinger
-                  ? 'Claude Code tabs move with your finger; each repaint from the desk lands in place.'
-                  : 'Off — the grid moves only when the desk repaints.'}
+                  ? 'Claude Code tabs move with your finger, up to one row ahead of the desk; the prompt can bob by a row.'
+                  : 'Off — the pane shows exactly what the desk painted.'}
               </Text>
             </View>
             <Switch
