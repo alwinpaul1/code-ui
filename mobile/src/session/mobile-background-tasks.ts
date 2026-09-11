@@ -40,7 +40,7 @@ import {
  * for this pane (an older host, or hooks not attached): trust the transcript.
  */
 export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'> &
-  Partial<Pick<AgentStatusEntry, 'stateStartedAt'>>
+  Partial<Pick<AgentStatusEntry, 'stateStartedAt' | 'workingMode'>>
 
 export type BackgroundTaskDeriveOptions = {
   /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`).
@@ -252,6 +252,27 @@ function splitByStatus(
         elapsedMs: elapsedSince(snapshot.startedAt, now)
       })
     }
+  }
+  // The host has already said shells are running — Orca keeps a pane
+  // `working` in `monitoring` mode exactly while Claude's Stop hook lists
+  // background tasks — but the loaded window shows no launch and the agent has
+  // not yet named them (its `run=` beacon comes with its next Stop hook; a big
+  // transcript's launches sit far above the tail the phone holds). Show one
+  // running shell rather than an empty row until either source arrives.
+  if (
+    running.length === 0 &&
+    agentSaysRunning === null &&
+    hostStatus?.state === 'working' &&
+    hostStatus.workingMode === 'monitoring'
+  ) {
+    running.push({
+      id: 'host-monitoring',
+      kind: 'shell',
+      title: 'Background shell the desk is still tracking',
+      status: 'running',
+      startedAt: runStartedAt,
+      elapsedMs: elapsedSince(runStartedAt, now)
+    })
   }
   // Running stays in launch order (the oldest job is the one people look for);
   // finished is newest-first, by when its notification landed.

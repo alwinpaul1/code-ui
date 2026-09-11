@@ -616,6 +616,52 @@ describe('background tasks retired by the beacon', () => {
 // always identical — the row is fed a `now` of 0 because only the sheet draws a
 // clock — so these pin that the shortcut really is free, and the staleness is
 // the list's, not the maths'.
+describe('a tab opened after its turn ended with shells still running', () => {
+  // Why: the desk on 2026-09-11 read "done 11:35 AM · 2 shells still running"
+  // on a 397k-token session. Opening that tab on the phone loads only the tail
+  // of its transcript, the launches sit far above it, and the agent's own
+  // `run=` answer only comes with its next Stop hook — so the row stayed empty
+  // for minutes. The host has already said what matters: the pane is
+  // `working` in `monitoring` mode, which Orca sets exactly while Claude's
+  // Stop hook still lists background shells.
+  const monitoring = { state: 'working' as const, workingMode: 'monitoring' as const, stateStartedAt: T0 }
+
+  it('lists the desk\'s monitoring state as a running shell until the agent names them', () => {
+    const tasks = deriveBackgroundTasks([], NOW, monitoring)
+    expect(tasks.running.map((task) => [task.kind, task.status])).toEqual([['shell', 'running']])
+    expect(countRunningBackgroundTasks([], monitoring)).toBe(1)
+  })
+
+  it('stands down as soon as the agent answers, even with an empty answer', () => {
+    expect(deriveBackgroundTasks([], NOW, monitoring, { runningTaskIds: [] }).running).toEqual([])
+    expect(
+      deriveBackgroundTasks([], NOW, monitoring, { runningTaskIds: ['t1'] }).running.map((task) => task.id)
+    ).toEqual(['t1'])
+  })
+
+  it('adds nothing when the window already shows a launch, or when the pane is done', () => {
+    const shown = deriveBackgroundTasks(
+      [
+        {
+          id: 'm1',
+          role: 'assistant',
+          timestamp: T0 + 1,
+          source: 'transcript',
+          blocks: [
+            { type: 'tool-call', id: 'call1', name: 'Bash', input: { command: 'sleep 900', run_in_background: true } },
+            { type: 'tool-result', toolCallId: 'call1', output: backgroundStartOutput('t1') }
+          ]
+        } as NativeChatMessage
+      ],
+      NOW,
+      monitoring
+    )
+    expect(shown.running.map((task) => task.id)).toEqual(['t1'])
+    expect(deriveBackgroundTasks([], NOW, { state: 'done' }).running).toEqual([])
+    expect(deriveBackgroundTasks([], NOW, { state: 'working' }).running).toEqual([])
+  })
+})
+
 describe('the running-tasks row agrees with the sheet', () => {
   const options = { finishedTaskIds: [], runningTaskIds: null }
 
