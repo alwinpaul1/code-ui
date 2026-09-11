@@ -24,25 +24,25 @@ beforeEach(() => {
 })
 
 describe('which engine draws the terminal', () => {
-  it('ships the WebView until ghostty has passed Stage 0', async () => {
-    expect(await loadTerminalEngine()).toBe('webview')
-  })
-
-  it('keeps the ghostty choice across launches', async () => {
-    await saveTerminalEngine('ghostty')
-
+  it('ships ghostty by default', async () => {
     expect(await loadTerminalEngine()).toBe('ghostty')
   })
 
-  it('falls back to the WebView on an unknown or corrupt value', () => {
-    expect(parseTerminalEngine('xterm')).toBe('webview')
-    expect(parseTerminalEngine('')).toBe('webview')
-    expect(parseTerminalEngine(null)).toBe('webview')
+  it('keeps the WebView choice across launches when the user opts back into it', async () => {
+    await saveTerminalEngine('webview')
+
+    expect(await loadTerminalEngine()).toBe('webview')
+  })
+
+  it('falls back to ghostty on an unknown or corrupt value', () => {
+    expect(parseTerminalEngine('xterm')).toBe('ghostty')
+    expect(parseTerminalEngine('')).toBe('ghostty')
+    expect(parseTerminalEngine(null)).toBe('ghostty')
   })
 
   it('still opens a terminal when storage itself is unreadable', async () => {
     asyncStorage.getItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
-    expect(await loadTerminalEngine()).toBe('webview')
+    expect(await loadTerminalEngine()).toBe('ghostty')
   })
 })

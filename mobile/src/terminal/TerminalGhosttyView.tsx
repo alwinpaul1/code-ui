@@ -4,6 +4,7 @@ import { TerminalView, type TerminalViewRef } from 'expo-libghostty'
 import { ghosttyThemeFromMobileTheme } from './ghostty-theme-from-mobile-theme'
 import { terminalModesFromGhosttyMask } from './terminal-modes-from-ghostty-mask'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
+import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
 
 /** 13 dp at scale 1, the size the Stage 0 replays were measured at. */
 const GHOSTTY_BASE_FONT_DP = 13
@@ -44,7 +45,16 @@ const RESET_SEQUENCE = 'c[3J'
  */
 export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWebViewProps>(
   function TerminalGhosttyView(
-    { style, terminalTheme, textScale = 1, onWebReady, onModesChanged, onTerminalInput, onTerminalTap },
+    {
+      style,
+      terminalTheme,
+      textScale = 1,
+      onWebReady,
+      onModesChanged,
+      onTerminalInput,
+      onTerminalQueryReply,
+      onTerminalTap
+    },
     ref
   ) {
     const nativeRef = useRef<TerminalViewRef>(null)
@@ -109,14 +119,22 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
 
     const handleInput = useCallback(
       (event: { nativeEvent: { text: string } }) => {
-        // With managesFocus off the only bytes the view emits are the wheel
-        // reports its scroll handler encodes; they ride the session's gesture
-        // gate like the WebView's do.
-        if (event.nativeEvent.text.length > 0) {
-          onTerminalInput?.(event.nativeEvent.text)
+        const text = event.nativeEvent.text
+        if (text.length === 0) {
+          return
         }
+        // Two kinds of bytes come up from the native view, and the WebView
+        // path already splits them the same way: the terminal's own answers to
+        // the program's queries (device attributes, cursor position) go to the
+        // PTY unconditionally, or a program that asked stalls waiting; the
+        // wheel reports the scroll handler encodes ride the gesture gate.
+        if (isTerminalQueryReply(text)) {
+          onTerminalQueryReply?.(text)
+          return
+        }
+        onTerminalInput?.(text)
       },
-      [onTerminalInput]
+      [onTerminalInput, onTerminalQueryReply]
     )
 
     useImperativeHandle(

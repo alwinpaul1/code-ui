@@ -30,6 +30,7 @@ function mount(overrides: Record<string, unknown> = {}) {
   const ref = createRef<TerminalWebViewHandle>()
   const onModesChanged = vi.fn()
   const onTerminalInput = vi.fn()
+  const onTerminalQueryReply = vi.fn()
   const onWebReady = vi.fn()
   native.props = null
   native.writeText.mockClear()
@@ -39,6 +40,7 @@ function mount(overrides: Record<string, unknown> = {}) {
         ref,
         onModesChanged,
         onTerminalInput,
+        onTerminalQueryReply,
         onWebReady,
         ...overrides
       })
@@ -49,7 +51,7 @@ function mount(overrides: Record<string, unknown> = {}) {
       ;(native.props![name] as (e: { nativeEvent: unknown }) => void)({ nativeEvent })
     })
   }
-  return { ref, onModesChanged, onTerminalInput, onWebReady, fire }
+  return { ref, onModesChanged, onTerminalInput, onTerminalQueryReply, onWebReady, fire }
 }
 
 describe('the ghostty engine behind the WebView handle', () => {
@@ -175,5 +177,18 @@ describe('the ghostty engine behind the WebView handle', () => {
       wrapper.props.onTouchEnd(touch(104, 803))
     })
     expect(onTerminalTap).toHaveBeenCalledTimes(1)
+  })
+
+  it("sends the terminal's own query replies straight to the PTY, not through the gesture gate", () => {
+    // Claude Code asks for device attributes on start; the WebView answers
+    // through onTerminalQueryReply, which bypasses the mouse-mode gate. A
+    // reply routed as a gesture would be dropped by the validator and the
+    // program would wait on it.
+    const { fire, onTerminalInput, onTerminalQueryReply } = mount()
+
+    fire('onInput', { text: '\x1b[?1;2c', data: '' })
+
+    expect(onTerminalQueryReply).toHaveBeenCalledWith('\x1b[?1;2c')
+    expect(onTerminalInput).not.toHaveBeenCalled()
   })
 })
