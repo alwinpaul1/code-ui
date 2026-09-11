@@ -113,12 +113,12 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'dba1ad053952a09a30b60f1efe6373c936c6434cf2ad6cd748ef255abd05272e'
+  '7a5e9ca2408e2670be77964057341a821b7958ba79dcf17d5898800debe6972f'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '56d2522d7586c69b90688a75d30de37f209eb7f6758b22a387905b1e246a3190'
+const HEAD_LEAF_JSX_SHA256 = '0f4e5455ee75607045570d2887c6b1edd1b3b4a683db423cf2116fa2bba605ae'
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -558,7 +558,7 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    expect(strings).toHaveLength(641)
+    expect(strings).toHaveLength(640)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)

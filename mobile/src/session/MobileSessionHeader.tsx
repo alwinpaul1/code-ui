@@ -269,6 +269,14 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                   }}
                   delayLongPress={400}
                 >
+                  {/* Why: the desktop's order — state, then the agent's mark, then the title. */}
+                  {t.type === 'terminal' && terminalAgentId ? (
+                    <TabActivityBadge
+                      handle={t.terminal}
+                      status={t.agentStatus ?? null}
+                      active={active}
+                    />
+                  ) : null}
                   {t.type === 'browser' && <Globe size={13} color={iconColor} strokeWidth={2.1} />}
                   {t.type === 'markdown' && (
                     <FileText size={13} color={iconColor} strokeWidth={2.1} />
@@ -288,13 +296,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                   >
                     {getMobileSessionTabTitle(t)}
                   </Txt>
-                  {t.type === 'terminal' && terminalAgentId ? (
-                    <TabActivityBadge
-                      handle={t.terminal}
-                      status={t.agentStatus ?? null}
-                      active={active}
-                    />
-                  ) : null}
                 </Pressable>
               )
             })}
@@ -333,11 +334,13 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   )
 }
 
-/** The agent's state on its pill, with the desktop's own icons (AgentStateDot):
- *  the yellow spinner while its turn runs, the heartbeat once the turn is done
- *  and background shells remain — with the count on the active tab — the
- *  question bubble when it waits for input, red when blocked. Live for every
- *  tab from the host's pushed status; see session-tab-activity.ts. */
+/** The agent's state on its pill, with the desktop's own icons (AgentStateDot),
+ *  placed as the desktop places them — before the agent's mark: the yellow
+ *  spinner while its turn runs, the heartbeat once the turn is done and
+ *  background shells remain — with the count on the active tab — the emerald
+ *  check when done, the question bubble when it waits for input, red when
+ *  blocked. Live for every tab from the host's pushed status; see
+ *  session-tab-activity.ts. */
 function TabActivityBadge({
   handle,
   status,
@@ -354,7 +357,7 @@ function TabActivityBadge({
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)
   const state = status ? agentDotState({ ...status, interrupted: false }, now) : 'idle'
-  if (state === 'idle' || state === 'done') {
+  if (state === 'idle') {
     return null
   }
   const count = activity?.kind === 'background' ? activity.count : null
