@@ -43,7 +43,6 @@ function mount(sendRequest: ReturnType<typeof vi.fn>) {
       toggleTerminalLiveInput: vi.fn(),
       activeHandle: HANDLE,
       ptyModesRef,
-      terminalGestureInputBucketsRef: useRef(new Map()),
       terminalGestureInputQueuesRef: useRef(new Map<string, TerminalGestureInputQueue>()),
       terminalGestureInputInFlightRef: useRef(new Map<string, number>()),
       deviceTokenRef: useRef('device-token'),
@@ -151,6 +150,24 @@ describe('scrolling a mouse-tracking TUI over a slow link', () => {
     // One row left at once; the other 96 waited their turn; the 23 past the cap
     // were the finger's extra travel, not a bucket emptying mid-swipe.
     expect(rows).toBe(TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES + 1)
+    renderer.unmount()
+  })
+
+  it('sends a tap\'s click at once and whole, ahead of any wheel rows still queued', () => {
+    // Why: press and release in one payload, now — behind 96 paced rows the
+    // click landed 1.5 s late, and a full queue could keep the press and drop
+    // the release, a held button (reviewed 2026-09-11).
+    const sendRequest = vi.fn(() => pendingRequest())
+    const { hookRef, renderer } = mount(sendRequest)
+    act(() => {
+      hookRef.current!.handleTerminalInput(HANDLE, WHEEL_UP.repeat(30))
+    })
+    const CLICK = '\x1b[<0;10;20M\x1b[<0;10;20m'
+    act(() => {
+      hookRef.current!.handleTerminalInput(HANDLE, CLICK)
+    })
+    const texts = (sendRequest.mock.calls as unknown[][]).map((call) => (call[1] as { text: string }).text)
+    expect(texts).toContain(CLICK)
     renderer.unmount()
   })
 })

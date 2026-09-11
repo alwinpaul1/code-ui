@@ -28,7 +28,14 @@ vi.mock('./mobile-held-floor-store', async (importOriginal) => ({
   ...heldFloors
 }))
 
+const backHandlers = new Set<() => boolean>()
 vi.mock('react-native', () => ({
+  BackHandler: {
+    addEventListener: (_event: string, listener: () => boolean) => {
+      backHandlers.add(listener)
+      return { remove: () => backHandlers.delete(listener) }
+    }
+  },
   AppState: {
     get currentState() {
       return appState.current
@@ -41,6 +48,7 @@ vi.mock('react-native', () => ({
 }))
 
 beforeEach(() => {
+  backHandlers.clear()
   appState.listeners.clear()
   appState.current = 'active'
   heldFloors.readHeldFloors.mockResolvedValue([])
@@ -58,7 +66,8 @@ import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-p
  *  "Take back this terminal". */
 function mountViewSwitch(
   activeHandle: string | null,
-  setDisplayMode: ReturnType<typeof vi.fn> = vi.fn(async () => true)
+  setDisplayMode: ReturnType<typeof vi.fn> = vi.fn(async () => true),
+  overrides: Record<string, unknown> = {}
 ) {
   const scope = {
     activeHandle,
@@ -79,7 +88,8 @@ function mountViewSwitch(
       toggleTabChatView: vi.fn(),
       // The terminal is on screen, so the PTY runs at phone width.
       showNativeChat: false
-    }
+    },
+    ...overrides
   } as unknown as MobileSessionPanelRouteActionsModel
 
   function Probe() {
@@ -218,5 +228,51 @@ describe('a floor the app died holding', () => {
     mountViewSwitch('term-1')
 
     expect(heldFloors.rememberHeldFloor).toHaveBeenCalledWith('term-1')
+  })
+})
+
+describe('hardware back inside the session', () => {
+  it('shows the chat view for a Claude tab in terminal mode, and leaves from the chat view', () => {
+    // Why: asked for 2026-09-11 — back from terminal mode left the workspace
+    // instead of returning to the chat UI, which is what the header toggle does.
+    const requestLeaveSession = vi.fn()
+    const toggleTabChatView = vi.fn()
+    const { unmount } = mountViewSwitch('term-1', undefined, {
+      activeSessionTabId: 'tab-1::leaf-1',
+      requestLeaveSession,
+      nativeChatController: {
+        isTabChatView: () => false,
+        toggleTabChatView,
+        showNativeChat: false,
+        activeChatEligible: true
+      }
+    })
+    expect(backHandlers.size).toBe(1)
+    const back = [...backHandlers][0]!
+    act(() => {
+      back()
+    })
+    expect(toggleTabChatView).toHaveBeenCalledWith('tab-1::leaf-1', null)
+    expect(requestLeaveSession).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('leaves the session from a plain shell tab', () => {
+    const requestLeaveSession = vi.fn()
+    const { unmount } = mountViewSwitch('term-1', undefined, {
+      activeSessionTabId: 'tab-1::leaf-1',
+      requestLeaveSession,
+      nativeChatController: {
+        isTabChatView: () => false,
+        toggleTabChatView: vi.fn(),
+        showNativeChat: false,
+        activeChatEligible: false
+      }
+    })
+    act(() => {
+      ;[...backHandlers][0]!()
+    })
+    expect(requestLeaveSession).toHaveBeenCalledTimes(1)
+    unmount()
   })
 })

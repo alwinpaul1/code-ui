@@ -116,6 +116,12 @@ export function splitTerminalGestureInputSequences(bytes: string): string[] | nu
   return sequences
 }
 
+/** A left-button press or release in SGR form: the two halves of a tap's click. */
+const SGR_MOUSE_CLICK_SEQUENCE_RE = new RegExp(`^${ESC}\\[<0;([0-9]{1,4});([0-9]{1,4})([Mm])$`)
+export function isMouseClickSequence(sequence: string): boolean {
+  return SGR_MOUSE_CLICK_SEQUENCE_RE.test(sequence)
+}
+
 export function isTerminalGestureInput(bytes: string): boolean {
   return countTerminalGestureInputSequences(bytes) != null
 }

@@ -16,7 +16,6 @@ import { useMobileTerminalInventoryRecoveryBridge } from './use-mobile-terminal-
 import type {
   MobileSessionTab,
   MobileSessionTabType,
-  TerminalGestureInputBucket,
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
@@ -38,7 +37,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   } = scope
   // Why: WebView pushes terminal modes on every change so paste reads a synchronous snapshot — no round-trip.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
-  const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
   // Unanswered terminal.send batches per handle; see TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT.
   const terminalGestureInputInFlightRef = useRef<Map<string, number>>(new Map())
@@ -153,7 +151,6 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   )
   return {
     ptyModesRef,
-    terminalGestureInputBucketsRef,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
     terminalCwdRef,

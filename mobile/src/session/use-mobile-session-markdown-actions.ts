@@ -1,5 +1,5 @@
-import { useEffect, useCallback } from 'react'
-import { BackHandler, Keyboard } from 'react-native'
+import { useCallback } from 'react'
+import { Keyboard } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { triggerSuccess, triggerError } from '../platform/haptics'
@@ -82,14 +82,6 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     Keyboard.dismiss()
     setLeaveDrafts(dirtyDrafts)
   }, [getDirtyMarkdownDrafts, leaveSession])
-
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      requestLeaveSession()
-      return true
-    })
-    return () => subscription.remove()
-  }, [requestLeaveSession])
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {

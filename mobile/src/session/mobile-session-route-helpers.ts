@@ -10,8 +10,6 @@ export const MOBILE_SESSION_STATUS_LABELS: Record<ConnectionState, string> = {
   'auth-failed': 'Pairing invalid'
 }
 
-export const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
-export const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
 export const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
 /**
  * Wheel rows a single flush carries. A TUI repaints once per batch it has
@@ -31,8 +29,8 @@ export const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
  * is a round trip, so pacing batches on the reply makes the repaint cadence
  * the link's RTT: measured 2026-09-11 on a Galaxy S23 over Orca Relay, one
  * batch in flight painted Claude Code in bursts ~410 ms apart. Sixteen 16 ms
- * batches cover a ~250 ms RTT without ever pacing on it; the token bucket
- * above still bounds the rate.
+ * batches cover a ~250 ms RTT without ever pacing on it; the flush cadence
+ * (TERMINAL_GESTURE_INPUT_SEQUENCES_PER_FLUSH) bounds the rate.
  */
 export const TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT = 16
 

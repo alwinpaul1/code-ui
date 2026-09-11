@@ -152,8 +152,9 @@ describe('session route offline-compose wiring', () => {
     const optionUses = [sendActionsSource, terminalInputSource].flatMap(
       (source) => source.match(/TERMINAL_INPUT_SEND_OPTIONS/g) ?? []
     ).length
-    // Two owner imports plus one buffered, one live, and one gesture send.
-    expect(optionUses).toBe(5)
+    // Two owner imports plus one buffered, one live, one paced gesture send,
+    // and (2026-09-11) the immediate click send that bypasses the pacing.
+    expect(optionUses).toBe(6)
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })
   })
 

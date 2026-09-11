@@ -24,6 +24,8 @@ export type TerminalLivePendingFlushState = {
   activeRequests: TerminalLivePendingRequest[]
   generation: number
   pendingBatches: TerminalLivePendingBatch[]
+  /** Wakes a drain that is waiting on in-flight replies when new bytes queue. */
+  wake: (() => void) | null
 }
 
 export function createTerminalLivePendingFlushState(): TerminalLivePendingFlushState {
@@ -31,7 +33,8 @@ export function createTerminalLivePendingFlushState(): TerminalLivePendingFlushS
     current: null,
     activeRequests: [],
     generation: 0,
-    pendingBatches: []
+    pendingBatches: [],
+    wake: null
   }
 }
 
@@ -50,34 +53,88 @@ export function cancelTerminalLivePendingFlush(state: TerminalLivePendingFlushSt
   state.activeRequests = []
   state.pendingBatches = []
   state.current = null
+  state.wake?.()
+  state.wake = null
   requests.forEach(({ resolve }) => resolve(false))
 }
+
+/** Sends a single terminal may have unanswered at once. Measured on a Galaxy
+ *  S23 over Orca Relay, 2026-09-11: one in flight made every keystroke wait
+ *  for the previous reply, so typing landed in clumps a few hundred ms late.
+ *  The socket keeps order; a control frame (Enter, arrows) still waits for
+ *  every earlier frame to be answered before it goes. */
+const LIVE_MIRROR_MAX_IN_FLIGHT = 4
 
 async function drainTerminalLiveMirrorSends(
   state: TerminalLivePendingFlushState,
   generation: number
 ): Promise<boolean> {
   let allSent = true
-  while (state.generation === generation) {
-    const batch = state.pendingBatches.shift()
-    if (!batch) {
-      state.current = null
-      return allSent
-    }
-
-    if (batch.requiresPriorSuccess && !allSent) {
-      batch.requests.forEach(({ resolve }) => resolve(false))
-      continue
-    }
-    state.activeRequests = batch.requests
-    const sent = await batch.sender(batch.handle, batch.payload).catch(() => false)
+  const inFlight: Promise<boolean>[] = []
+  const settle = async (): Promise<boolean> => {
+    const results = await Promise.all(inFlight.splice(0))
     if (state.generation !== generation) {
       return false
     }
+    allSent &&= results.every(Boolean)
+    return true
+  }
+  while (state.generation === generation) {
+    const batch = state.pendingBatches.shift()
+    if (!batch) {
+      if (inFlight.length === 0) {
+        state.current = null
+        return allSent
+      }
+      // Nothing queued but replies outstanding: wait for a reply OR for the
+      // next keystroke, whichever comes first, so typing never waits.
+      const woken = new Promise<void>((resolve) => {
+        state.wake = resolve
+      })
+      const anyReply = Promise.race(inFlight).then(() => undefined)
+      await Promise.race([woken, anyReply])
+      state.wake = null
+      if (state.generation !== generation) {
+        return false
+      }
+      if (state.pendingBatches.length === 0 && !(await settle())) {
+        return false
+      }
+      continue
+    }
 
-    state.activeRequests = []
-    batch.requests.forEach(({ resolve }) => resolve(sent))
-    allSent &&= sent
+    if (batch.requiresPriorSuccess) {
+      if (inFlight.length > 0 && !(await settle())) {
+        return false
+      }
+      if (!allSent) {
+        batch.requests.forEach(({ resolve }) => resolve(false))
+        continue
+      }
+    }
+    state.activeRequests.push(...batch.requests)
+    const send = batch.sender(batch.handle, batch.payload)
+      .catch(() => false)
+      .then((sent) => {
+        if (state.generation === generation) {
+          state.activeRequests = state.activeRequests.filter(
+            (request) => !batch.requests.includes(request)
+          )
+          batch.requests.forEach(({ resolve }) => resolve(sent))
+          if (state.pendingBatches.length === 0 && state.activeRequests.length === 0) {
+            state.current = null
+          }
+        }
+        return sent
+      })
+    inFlight.push(send)
+    if (inFlight.length >= LIVE_MIRROR_MAX_IN_FLIGHT) {
+      const sent = await inFlight.shift()!
+      if (state.generation !== generation) {
+        return false
+      }
+      allSent &&= sent
+    }
   }
   return false
 }
@@ -109,6 +166,7 @@ export function queueTerminalLiveMirrorSend(
     })
   }
 
+  state.wake?.()
   if (!state.current) {
     const generation = state.generation
     // Why a microtask: the drain used to take the first batch synchronously, so

@@ -19,9 +19,25 @@ const DOT_COLORS: Record<Extract<AgentDotState, 'blocked' | 'interrupted' | 'idl
 const WORKING_COLOR = '#eab308'
 const DONE_COLOR = '#10b981'
 const QUESTION_COLOR = '#f97316'
+// On a light surface (the selected tab pill in dark mode is the theme's text
+// colour, #ECE9E2) the desktop tones fall to 1.8–2.6:1; these are the same
+// hues two Tailwind steps darker. Reviewed 2026-09-11.
+const ON_LIGHT = { working: '#a16207', done: '#047857', question: '#c2410c' }
 
-export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size?: number }) {
+export function AgentStateDot({
+  state,
+  size = 10,
+  onLightSurface = false
+}: {
+  state: AgentDotState
+  size?: number
+  /** Drawn on a light background (the selected pill in dark mode): darker tones. */
+  onLightSurface?: boolean
+}) {
   const spinValue = useRef(new Animated.Value(0)).current
+  const working = onLightSurface ? ON_LIGHT.working : WORKING_COLOR
+  const done = onLightSurface ? ON_LIGHT.done : DONE_COLOR
+  const question = onLightSurface ? ON_LIGHT.question : QUESTION_COLOR
   const box = { width: size, height: size }
   const icon = size
   const dot = { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3 }
@@ -47,7 +63,9 @@ export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size
     const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
     return (
       <View style={[styles.wrapper, box]} accessibilityLabel="Working">
-        <Animated.View style={[styles.spinner, dot, { transform: [{ rotate }] }]} />
+        <Animated.View
+          style={[styles.spinner, dot, { borderColor: working, borderTopColor: 'transparent', transform: [{ rotate }] }]}
+        />
       </View>
     )
   }
@@ -55,7 +73,7 @@ export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size
   if (state === 'monitoring') {
     return (
       <View style={[styles.wrapper, box]} accessibilityLabel="Monitoring background tasks">
-        <Activity size={icon} color={WORKING_COLOR} />
+        <Activity size={icon} color={working} />
       </View>
     )
   }
@@ -63,7 +81,7 @@ export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size
   if (state === 'done') {
     return (
       <View style={[styles.wrapper, box]} accessibilityLabel="Done">
-        <CircleCheck size={icon} color={DONE_COLOR} />
+        <CircleCheck size={icon} color={done} />
       </View>
     )
   }
@@ -71,7 +89,7 @@ export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size
   if (state === 'waiting') {
     return (
       <View style={[styles.wrapper, box]} accessibilityLabel="Waiting for input">
-        <MessageCircleQuestionMark size={icon} color={QUESTION_COLOR} />
+        <MessageCircleQuestionMark size={icon} color={question} />
       </View>
     )
   }
@@ -86,8 +104,6 @@ export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size
 const styles = StyleSheet.create({
   wrapper: { alignItems: 'center', justifyContent: 'center' },
   spinner: {
-    borderWidth: 1.5,
-    borderColor: WORKING_COLOR,
-    borderTopColor: 'transparent'
+    borderWidth: 1.5
   }
 })

@@ -65,10 +65,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = '346aefb91778ba6b8e4015cda68cf92e6e0fd4c2b3b2d2f2f28d46488817ad17'
-const HEAD_HOOK_BINDING_SHA256 = '81bdbd564e088fad267bf2df6a9433dda8f4162cb63c04b9970ec39f0f038f80'
+const HEAD_MAIN_HOOK_SHA256 = 'ffc5b21088dd60740f52ac4ebcd2c1e40936c684da15e94c128e5a42de4a9d81'
+const HEAD_HOOK_BINDING_SHA256 = '6e4162af65efb48a225547044ddd80584c7b164e369d4a6c28700607619791d5'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '2ff58242e483fffdcbaa25403ee5f73d7bfadb87479f9c08a4dc7cfe6f542c01'
+  '6a7e436faf5b6661c09b0339114593c4c1068be2dc1700cdfad61689c307b5e1'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -82,8 +82,12 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the host's pushed status — a dot while the turn runs, a shell count after.
 // 2026-09-11 (evening): the pill badge became the desktop's own state icons
 // (AgentStateDot), on a minute clock for the 30-min staleness decay.
-const HEAD_CALLBACK_BODY_SHA256 = 'e814d612141f3f87f956cc7ee78b091640ef7d9430f35adddef338136b41340d'
-const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
+// 2026-09-11 (council fixes): the gesture token bucket is gone, a tap's click
+// is sent at once instead of paced, and the ghostty pane routes taps to file/URL.
+// 2026-09-11: hardware back moved from the markdown actions to the view switch,
+// where it can return a terminal-mode tab to its chat view before leaving.
+const HEAD_CALLBACK_BODY_SHA256 = '0fb0d286df931fe6f822f44656e6afe47931a9e67fbe27000ab2235a237f2b6b'
+const HEAD_EFFECT_SHA256 = 'a123a0fd0b45e180aff593c9876a4227144c4a9f53fac5dbdb2a73c5dbb4bbbd'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
@@ -106,14 +110,14 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 const HEAD_NESTED_FUNCTION_SHA256 =
   '7044f3795d62da3f565d7a4968abfeaba3071e93dbb8c41d7e60424e69b8b968'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
-  '8538d663d9e19168ac00c1b34035d7a54963c226609ea1e3546ecf78eab41b4c'
+  'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
-  '4c994574675a2a0f9c607b3ea89ab7a2ed5a83f7c72fa42342ddcb5f00fc3f4f'
+  'df722f65c9d8a0904786a1d855c80475d85be0d772d9fe6b732e457485e00e9b'
 const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '7a5e9ca2408e2670be77964057341a821b7958ba79dcf17d5898800debe6972f'
+  '4917968cc2d207f8e31b18cee9adcf86207dbb2d7e20db39f55c2b52ded80616'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -122,7 +126,7 @@ const HEAD_LEAF_JSX_SHA256 = '0f4e5455ee75607045570d2887c6b1edd1b3b4a683db423cf2
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
-  '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
+  '56470d1fc5a5cce89bc14d6a5a3cc55a6b70923445ad6288e8f11047a56efad8'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
 const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
 
@@ -509,13 +513,13 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(276)
+    expect(main.hooks).toHaveLength(274)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(78)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
-    expect(main.effects).toHaveLength(24)
+    expect(main.effects).toHaveLength(23)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     expect(contentBindings).toHaveLength(14)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
@@ -527,9 +531,9 @@ describe('mobile session route extraction parity', () => {
   it('preserves native listeners, timers, identity payloads, and compatibility gates', () => {
     const definitions = readDefinitions()
     const native = readNativeAndTimerFacts(definitions)
-    expect(native.registrations).toHaveLength(7)
+    expect(native.registrations).toHaveLength(6)
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
-    expect(native.removals).toHaveLength(9)
+    expect(native.removals).toHaveLength(8)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
     expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
     expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
@@ -544,7 +548,7 @@ describe('mobile session route extraction parity', () => {
     )
     expect(hash(native.cleanups)).toBe(HEAD_TIMER_CLEANUP_SHA256)
     const compatibility = readCompatibilityFacts(definitions)
-    expect(compatibility.identityFields).toHaveLength(14)
+    expect(compatibility.identityFields).toHaveLength(15)
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     expect(compatibility.navigation).toHaveLength(6)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)

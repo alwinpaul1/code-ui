@@ -157,7 +157,7 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,9 +45,28 @@
+@@ -45,9 +45,42 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
@@ -167,6 +167,10 @@
 +
 +/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
 +private const val MODE_MOUSE_TRACKING = 0b111
++/** nativeTerminalModes bit 4: the alternate screen (DEC 47/1047/1049). */
++private const val MODE_ALT_SCREEN = 1 shl 4
++private val ARROW_UP = byteArrayOf(0x1b, '['.code.toByte(), 'A'.code.toByte())
++private val ARROW_DOWN = byteArrayOf(0x1b, '['.code.toByte(), 'B'.code.toByte())
 +/** X11 wheel buttons and the press action, as nativeEncodeMouse takes them. */
 +private const val MOUSE_WHEEL_UP = 4
 +private const val MOUSE_WHEEL_DOWN = 5
@@ -181,12 +185,22 @@
 +  var onSelectionModeChanged: ((Boolean) -> Unit)? = null
 +  /** Text copied from the selection menu, so the host can confirm it. */
 +  var onSelectionCopied: ((String) -> Unit)? = null
-+  /** Font size after a pinch, in dp, so the host can persist the user's size. */
++  /** Font size after a pinch, in dp, so the host can persist the user's size.
++   *  Only a pinch reports; a size the host set through its own prop does not. */
 +  var onFontSizeChanged: ((Float) -> Unit)? = null
++  /** A single tap on a program that does not track the mouse: the row's text
++   *  and the tapped column, so the host can open a path or URL under the
++   *  finger, or focus its keyboard. */
++  var onTapCell: ((line: String, col: Int, row: Int) -> Unit)? = null
++  /** Where the caret and the last drawn row are, for the host's keyboard
++   *  avoidance: (cursorY, contentBottomRow, rows, altScreen). */
++  var onMetrics: ((Int, Int, Int, Boolean) -> Unit)? = null
++  private var rowText = arrayOfNulls<String>(0)
++  private var lastMetrics: List<Any> = emptyList()
  
    /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
    var accessoryBar: TerminalAccessoryBar? = null
-@@ -57,11 +76,24 @@
+@@ -57,11 +90,24 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -215,7 +229,7 @@
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -166,14 +198,17 @@
+@@ -166,14 +212,17 @@
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -236,7 +250,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +228,20 @@
+@@ -193,9 +242,25 @@
            clearSelection()
            return true
          }
@@ -252,6 +266,11 @@
 +          if (click.isNotEmpty()) onInputBytes?.invoke(click)
 +          return true
 +        }
++        if (handle != 0L) {
++          val col = (e.x / cellWidth).toInt().coerceIn(0, cols - 1)
++          val row = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
++          onTapCell?.invoke(rowText.getOrNull(row) ?: "", col, row)
++        }
 +        if (managesFocus) {
 +          requestFocus()
 +          context.getSystemService(InputMethodManager::class.java)
@@ -260,7 +279,7 @@
          return true
        }
  
-@@ -205,6 +251,7 @@
+@@ -205,6 +270,7 @@
          lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
          selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
@@ -268,7 +287,7 @@
          scheduleFrame()
          if (selectionMode) {
            // Keep dragging without lifting: extend from the pressed cell.
-@@ -225,13 +272,13 @@
+@@ -225,13 +291,13 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -285,15 +304,31 @@
          }
          return true
        }
-@@ -296,6 +343,7 @@
+@@ -270,7 +336,7 @@
+         val steps = ((pinchScale - pinchLastScale) / PINCH_SCALE_STEP).toInt()
+         if (steps != 0) {
+           pinchLastScale += steps * PINCH_SCALE_STEP
+-          setFontSize(fontSizeDp + steps)
++          setFontSize(fontSizeDp + steps, fromPinch = true)
+         }
+         return true
+       }
+@@ -292,10 +358,13 @@
+    * steps from the current value. Content reflows in place — libghostty-vt
+    * owns the grid state, so no output is lost.
+    */
+-  fun setFontSize(dp: Float) {
++  fun setFontSize(dp: Float, fromPinch: Boolean = false) {
      val clamped = dp.coerceIn(MIN_FONT_SIZE_DP, MAX_FONT_SIZE_DP)
      if (clamped == fontSizeDp) return
      fontSizeDp = clamped
-+    onFontSizeChanged?.invoke(clamped)
++    // Why: reporting the host's own prop back as a pinch made two host-driven
++    // changes set each other's stale value in turn (reviewed 2026-09-11).
++    if (fromPinch) onFontSizeChanged?.invoke(clamped)
      val px = clamped * resources.displayMetrics.density
      for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
        paint?.textSize = px
-@@ -364,7 +412,46 @@
+@@ -364,7 +433,58 @@
      if (handle != 0L) {
        GhosttyVt.nativeFree(handle)
        handle = 0
@@ -333,6 +368,18 @@
 +      if (out != null) onInputBytes?.invoke(out)
 +      markScrollActivity()
 +      return
++    }
++    // A full-screen program that did not ask for the mouse (less, vim, man)
++    // has no scrollback to move; the WebView engine sent it arrow keys, and so
++    // does this. Reviewed 2026-09-11: without this the swipe did nothing there.
++    if (modes and MODE_ALT_SCREEN != 0 && !finished) {
++      val key = if (deltaRows > 0) ARROW_DOWN else ARROW_UP
++      val steps = kotlin.math.abs(deltaRows).coerceAtMost(32)
++      var out = ByteArray(0)
++      repeat(steps) { out += key }
++      if (out.isNotEmpty()) onInputBytes?.invoke(out)
++      markScrollActivity()
++      return
      }
 +    GhosttyVt.nativeScroll(handle, deltaRows)
 +    markScrollActivity()
@@ -340,7 +387,41 @@
    }
  
    private fun sendBytes(bytes: ByteArray) {
-@@ -559,6 +646,7 @@
+@@ -481,6 +601,7 @@
+     rowSelStart = IntArray(rows) { -1 }
+     rowSelEnd = IntArray(rows) { -1 }
+     rowSelEndWide = BooleanArray(rows)
++    rowText = arrayOfNulls(rows)
+   }
+ 
+   // ── Rendering ──
+@@ -522,8 +643,25 @@
+ 
+     if (dirtyKind == DIRTY_FULL) canvas.drawColor(defaultBg)
+     repeat(rowCount) { drawRowRecord(buf, canvas, snapCols) }
++    publishMetrics()
+     syncSelectionUi()
+     invalidate()
++  }
++
++  private fun publishMetrics() {
++    val listener = onMetrics ?: return
++    val alt = terminalModes() and MODE_ALT_SCREEN != 0
++    var bottom = 0
++    for (y in rows - 1 downTo 0) {
++      if (!alt && (rowText.getOrNull(y)?.isNotBlank() == true)) {
++        bottom = y
++        break
++      }
++    }
++    val next = listOf(cursorY, bottom, rows, alt)
++    if (next == lastMetrics) return
++    lastMetrics = next
++    listener(cursorY, bottom, rows, alt)
+   }
+ 
+   // ── Selection ──
+@@ -559,16 +697,21 @@
  
    private fun clearSelection() {
      if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
@@ -348,7 +429,13 @@
      selectionMode = false
      draggingHandle = HANDLE_NONE
      actionMode?.finish()
-@@ -569,6 +657,7 @@
+     scheduleFrame()
+   }
+ 
++  /** Host command: select every row (the accessory row's Select all). */
++  fun selectAll() = selectAllContent()
++
+   private fun selectAllContent() {
      if (handle == 0L) return
      if (GhosttyVt.nativeSelectAll(handle)) {
        selectionMode = true
@@ -356,7 +443,7 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -577,10 +666,17 @@
+@@ -577,10 +720,17 @@
    private fun copySelection() {
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
@@ -378,9 +465,17 @@
      clearSelection()
    }
  
+@@ -793,6 +943,7 @@
+     buf.position(textPos)
+     if (textUnits > rowChars.size) rowChars = CharArray(textUnits)
+     for (i in 0 until textUnits) rowChars[i] = buf.char
++    if (rowIndex < rowText.size) rowText[rowIndex] = String(rowChars, 0, textUnits)
+     val nextRecord = textPos + textUnits * 2 + if (textUnits % 2 != 0) 2 else 0
+ 
+     buf.position(cellsPos)
 --- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
-@@ -19,6 +19,13 @@
+@@ -19,6 +19,15 @@
  
    private val onInput by EventDispatcher<Map<String, Any>>()
    private val onResize by EventDispatcher<Map<String, Any>>()
@@ -390,21 +485,27 @@
 +  private val onSelection by EventDispatcher<Map<String, Any>>()
 +  private val onCopy by EventDispatcher<Map<String, Any>>()
 +  private val onFontSize by EventDispatcher<Map<String, Any>>()
++  private val onTap by EventDispatcher<Map<String, Any>>()
++  private val onMetrics by EventDispatcher<Map<String, Any>>()
 +  private var lastModes = -1
  
    private val terminal = GhosttyTerminalView(context).also { view ->
      view.onInputBytes = { bytes ->
-@@ -29,6 +36,9 @@
+@@ -29,6 +38,13 @@
          )
        )
      }
 +    view.onSelectionModeChanged = { active -> onSelection(mapOf("active" to active)) }
 +    view.onSelectionCopied = { text -> onCopy(mapOf("text" to text)) }
 +    view.onFontSizeChanged = { dp -> onFontSize(mapOf("fontSize" to dp)) }
++    view.onTapCell = { line, col, row -> onTap(mapOf("line" to line, "col" to col, "row" to row)) }
++    view.onMetrics = { cursorY, bottom, rows, alt ->
++      onMetrics(mapOf("cursorY" to cursorY, "contentBottomRow" to bottom, "rows" to rows, "altScreen" to alt))
++    }
      view.onGridResize = { cols, rows ->
        onResize(mapOf("cols" to cols, "rows" to rows))
      }
-@@ -55,9 +65,43 @@
+@@ -55,9 +71,43 @@
      }
    }
  
@@ -449,7 +550,15 @@
      // Edge-to-edge windows don't resize for the keyboard — it just covers us.
      // Pad our bottom by the covered amount so the bar sits above the IME and
      // the terminal shrinks (regaining the hidden rows). Hosts that already
-@@ -93,7 +137,14 @@
+@@ -81,6 +131,7 @@
+ 
+   /** Base font size in dp; applied live (the grid reflows in place). */
+   fun setFontSize(dp: Float) = terminal.setFontSize(dp)
++  fun selectAll() = terminal.selectAll()
+ 
+   /** Apply theme colors; a null record clears back to the defaults. */
+   internal fun setTheme(theme: TerminalThemeRecord?) = terminal.setTheme(
+@@ -93,7 +144,14 @@
    )
  
    /** Feed PTY output (terminal.output on the wire) into the grid. */
@@ -472,7 +581,7 @@
  
      View(ExpoLibghosttyView::class) {
 -      Events("onInput", "onResize")
-+      Events("onInput", "onResize", "onModes", "onSelection", "onCopy", "onFontSize")
++      Events("onInput", "onResize", "onModes", "onSelection", "onCopy", "onFontSize", "onTap", "onMetrics")
  
        // Base font size in dp (default 14); applied live, the grid reflows.
        Prop("fontSize") { view: ExpoLibghosttyView, size: Float ->
@@ -497,9 +606,19 @@
        // PTY output bytes (base64) → terminal grid.
        AsyncFunction("write") { view: ExpoLibghosttyView, base64: String ->
          val data = try {
+@@ -40,6 +54,9 @@
+       }
+ 
+       // PTY exited.
++      AsyncFunction("selectAll") { view: ExpoLibghosttyView ->
++        view.selectAll()
++      }
+       AsyncFunction("finish") { view: ExpoLibghosttyView, exitCode: Int ->
+         view.finish(exitCode)
+       }
 --- a/src/ExpoLibghostty.types.ts
 +++ b/src/ExpoLibghostty.types.ts
-@@ -14,6 +14,15 @@
+@@ -14,12 +14,23 @@
    rows: number;
  };
  
@@ -515,7 +634,15 @@
  export type TerminalViewRef = {
    /** Feed base64-encoded PTY output into the terminal grid. */
    write(base64: string): Promise<void>;
-@@ -61,6 +70,20 @@
+   /** Feed PTY output as UTF-8 text, for string-based wires. */
+   writeText(text: string): Promise<void>;
+   /** Mark the underlying PTY as exited. */
++  /** Select every row, as the host's Select all. */
++  selectAll(): Promise<void>;
+   finish(exitCode: number): Promise<void>;
+ };
+ 
+@@ -61,6 +72,24 @@
    onInput?: (event: { nativeEvent: TerminalInputEvent }) => void;
    /** Grid resized (layout, rotation, font change); forward to the PTY. */
    onResize?: (event: { nativeEvent: TerminalResizeEvent }) => void;
@@ -527,6 +654,10 @@
 +  onCopy?: (event: { nativeEvent: { text: string } }) => void;
 +  /** Font size in dp after a pinch, so the host can persist it. */
 +  onFontSize?: (event: { nativeEvent: { fontSize: number } }) => void;
++  /** A single tap on a program that does not track the mouse: the row's text and column. */
++  onTap?: (event: { nativeEvent: { line: string; col: number; row: number } }) => void;
++  /** Caret row, last drawn row, row count and alt-screen flag, whenever one changes. */
++  onMetrics?: (event: { nativeEvent: { cursorY: number; contentBottomRow: number; rows: number; altScreen: boolean } }) => void;
 +  /** False hands focus and the IME to the host (default true). */
 +  managesFocus?: boolean;
 +  /** False hides the library's own accessory bar (default true). */
@@ -538,7 +669,7 @@
  };
 --- a/build/ExpoLibghostty.types.d.ts
 +++ b/build/ExpoLibghostty.types.d.ts
-@@ -11,6 +11,10 @@
+@@ -11,12 +11,18 @@
      cols: number;
      rows: number;
  };
@@ -549,7 +680,15 @@
  export type TerminalViewRef = {
      /** Feed base64-encoded PTY output into the terminal grid. */
      write(base64: string): Promise<void>;
-@@ -60,6 +64,16 @@
+     /** Feed PTY output as UTF-8 text, for string-based wires. */
+     writeText(text: string): Promise<void>;
+     /** Mark the underlying PTY as exited. */
++    /** Select every row, as the host's Select all. */
++    selectAll(): Promise<void>;
+     finish(exitCode: number): Promise<void>;
+ };
+ export type TerminalTheme = {
+@@ -60,6 +66,20 @@
      onResize?: (event: {
          nativeEvent: TerminalResizeEvent;
      }) => void;
@@ -560,6 +699,10 @@
 +    onCopy?: (event: { nativeEvent: { text: string } }) => void;
 +    /** Font size in dp after a pinch, so the host can persist it. */
 +    onFontSize?: (event: { nativeEvent: { fontSize: number } }) => void;
++    /** A single tap on a program that does not track the mouse: the row's text and column. */
++    onTap?: (event: { nativeEvent: { line: string; col: number; row: number } }) => void;
++    /** Caret row, last drawn row, row count and alt-screen flag, whenever one changes. */
++    onMetrics?: (event: { nativeEvent: { cursorY: number; contentBottomRow: number; rows: number; altScreen: boolean } }) => void;
 +    managesFocus?: boolean;
 +    showsAccessoryBar?: boolean;
 +    managesKeyboardInsets?: boolean;

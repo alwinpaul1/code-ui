@@ -8,7 +8,10 @@ import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
-import { splitTerminalGestureInputSequences } from '../terminal/terminal-gesture-input'
+import {
+  isMouseClickSequence,
+  splitTerminalGestureInputSequences
+} from '../terminal/terminal-gesture-input'
 import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
@@ -151,7 +154,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
 
   const handleTerminalInput = useCallback(
     async (handle: string, bytes: string) => {
-      if (!client || connState !== 'connected' || bytes.length === 0) {
+      const rpc = client
+      if (!rpc || connState !== 'connected' || bytes.length === 0) {
         return
       }
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
@@ -166,9 +170,26 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       if (sequences == null) {
         return
       }
+      // Why: a click is press + release in one payload and must arrive as one
+      // and now — paced behind up to 96 wheel rows it landed 1.5 s late on
+      // stale coordinates, and a full queue could keep the press and drop the
+      // release, leaving the program with a held button (reviewed 2026-09-11).
+      if (sequences.every(isMouseClickSequence)) {
+        void rpc.sendRequest(
+          'terminal.send',
+          buildTerminalSendParams({
+            terminal: handle,
+            text: bytes,
+            enter: false,
+            deviceToken: deviceTokenRef.current
+          }),
+          TERMINAL_INPUT_SEND_OPTIONS
+        ).catch(() => undefined)
+        return
+      }
       enqueueTerminalGestureInput(handle, sequences)
     },
-    [client, connState, enqueueTerminalGestureInput]
+    [client, connState, deviceTokenRef, enqueueTerminalGestureInput]
   )
 
   const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {

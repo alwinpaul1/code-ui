@@ -3,6 +3,8 @@ import { StyleSheet, View } from 'react-native'
 import { TerminalView, type TerminalViewRef } from 'expo-libghostty'
 import { ghosttyThemeFromMobileTheme } from './ghostty-theme-from-mobile-theme'
 import { terminalModesFromGhosttyMask } from './terminal-modes-from-ghostty-mask'
+import { findFileUrlAtColumn, findUrlAtColumn, resolveTerminalFileUrlTap } from './terminal-webview-url-tap'
+import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
 
@@ -14,7 +16,6 @@ const MIN_FONT_DP = 4
 const MAX_FONT_DP = 64
 
 /** A touch that travels further than this is a scroll, not a tap. */
-const TAP_SLOP_PX = 12
 
 /** RIS then a scrollback erase: a fresh grid for a fresh snapshot. */
 const RESET_SEQUENCE = 'c[3J'
@@ -56,7 +57,10 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
       onTerminalTap,
       onSelectionMode,
       onSelectionCopy,
-      onTextScaleChange
+      onTextScaleChange,
+      onFileTap,
+      onOpenUrl,
+      onKeyboardAvoidanceMetrics
     },
     ref
   ) {
@@ -64,30 +68,38 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     const gridRef = useRef<{ cols: number; rows: number } | null>(null)
     const readyResolversRef = useRef<(() => void)[]>([])
     const announcedReadyRef = useRef(false)
-    // A tap focuses the live input; a scroll must not. The wrapper sees every
-    // touch end, so it has to tell them apart itself — measured: without this
-    // every scroll on the ghostty engine popped the keyboard.
-    const touchStartRef = useRef<{ x: number; y: number } | null>(null)
-    // While a TUI tracks the mouse (Claude Code), a tap is a click the native
-    // view sends to it — its own "Jump to bottom (click)" chip, for one — and
-    // must not open the keyboard; the composer bar still does.
-    const mouseTrackingRef = useRef(false)
-    const handleTouchStart = useCallback((event: { nativeEvent: { pageX: number; pageY: number } }) => {
-      touchStartRef.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }
-    }, [])
-    const handleTouchEnd = useCallback(
-      (event: { nativeEvent: { pageX: number; pageY: number } }) => {
-        const start = touchStartRef.current
-        touchStartRef.current = null
-        if (!start || !onTerminalTap) {
+    // Taps arrive from the native view's own gesture detector (onTap), which
+    // fires for a single tap only — never for a scroll, a fling or the long
+    // press that starts a selection — so the keyboard opens only for a tap.
+    // Reviewed 2026-09-11: the wrapper's touch-end heuristic treated a
+    // stationary long-press release as a tap and popped the keyboard over the
+    // selection. A program that tracks the mouse gets the tap as a click in
+    // the native view instead, and no onTap is emitted.
+    const handleTap = useCallback(
+      (event: { nativeEvent: { line: string; col: number; row: number } }) => {
+        const { line, col } = event.nativeEvent
+        // Same order as the WebView: a file path under the finger opens the
+        // file, a URL opens the browser, anything else focuses the keyboard.
+        const fileUrl = findFileUrlAtColumn(line, col)
+        const tapped = fileUrl ? resolveTerminalFileUrlTap(fileUrl) : null
+        if (tapped && onFileTap) {
+          onFileTap(tapped.pathText, tapped.line, tapped.column)
           return
         }
-        const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y)
-        if (moved <= TAP_SLOP_PX && !mouseTrackingRef.current) {
-          onTerminalTap()
+        const url = findUrlAtColumn(line, col)
+        if (url && onOpenUrl) {
+          onOpenUrl(url)
+          return
         }
+        onTerminalTap?.()
       },
-      [onTerminalTap]
+      [onFileTap, onOpenUrl, onTerminalTap]
+    )
+    const handleMetrics = useCallback(
+      (event: {
+        nativeEvent: { cursorY: number; contentBottomRow: number; rows: number; altScreen: boolean }
+      }) => onKeyboardAvoidanceMetrics?.(event.nativeEvent),
+      [onKeyboardAvoidanceMetrics]
     )
     // Measured on a 1080 px view at 13 dp: the layout gives 49 columns. A host
     // that keeps its own width (the `hold`/`exhausted` case) addresses cells the
@@ -119,9 +131,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
 
     const handleModes = useCallback(
       (event: { nativeEvent: { mask: number } }) => {
-        const modes = terminalModesFromGhosttyMask(event.nativeEvent.mask)
-        mouseTrackingRef.current = modes.mouseTrackingMode !== 'none'
-        onModesChanged?.(modes)
+        onModesChanged?.(terminalModesFromGhosttyMask(event.nativeEvent.mask))
       },
       [onModesChanged]
     )
@@ -159,9 +169,15 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     )
     const handleFontSize = useCallback(
       (event: { nativeEvent: { fontSize: number } }) => {
-        // The pinch is on the fitted size; report the user's scale, not the fit.
+        // The pinch is on the fitted size; report the user's scale, not the fit,
+        // snapped to a preset — the preference store keeps only presets, and an
+        // unsnapped 1.2500000149 was read back as 1 on the next focus.
         const fit = hostFitRef.current || 1
-        onTextScaleChange?.(event.nativeEvent.fontSize / (GHOSTTY_BASE_FONT_DP * fit))
+        const raw = event.nativeEvent.fontSize / (GHOSTTY_BASE_FONT_DP * fit)
+        const snapped = TERMINAL_TEXT_SCALES.reduce((best, preset) =>
+          Math.abs(preset - raw) < Math.abs(best - raw) ? preset : best
+        )
+        onTextScaleChange?.(snapped)
       },
       [onTextScaleChange]
     )
@@ -209,7 +225,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           // Selection is native and clears on the next tap.
         },
         doSelectAll() {
-          // Not exposed by the module yet; a no-op keeps the contract honest.
+          void nativeRef.current?.selectAll()
         },
         awaitReady() {
           if (gridRef.current) {
@@ -226,7 +242,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     return (
       // The tap lands on a wrapper: the native view owns no focus, so a tap is
       // the host's to interpret (focus the live input), exactly as for xterm.
-      <View style={style} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <View style={style}>
         <TerminalView
           ref={nativeRef}
           style={styles.fill}
@@ -241,6 +257,8 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           onSelection={handleSelection}
           onCopy={handleCopy}
           onFontSize={handleFontSize}
+          onTap={handleTap}
+          onMetrics={handleMetrics}
         />
       </View>
     )

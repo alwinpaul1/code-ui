@@ -77,7 +77,7 @@ describe('terminal live pending flush state', () => {
     expect(sent).toEqual(['text'])
   })
 
-  it('Given high RTT When more input queues Then pending bytes share one follow-up send', async () => {
+  it('Given high RTT When more input queues Then pending bytes share one follow-up send that does not wait', async () => {
     // Given
     const state = createTerminalLivePendingFlushState()
     const payloads: string[] = []
@@ -99,13 +99,47 @@ describe('terminal live pending flush state', () => {
     await Promise.resolve()
     const second = queueTerminalLiveMirrorSend(state, 'terminal-1', 'b', sender)
     const third = queueTerminalLiveMirrorSend(state, 'terminal-1', 'c', sender)
-    await Promise.resolve()
+    // The drain wakes on a microtask and sends on the next; a few ticks, not a reply.
+    for (let i = 0; i < 4; i += 1) {
+      await Promise.resolve()
+    }
 
-    // Then
-    expect(payloads).toEqual(['a'])
+    // Then: 'b' and 'c' share one send, and it goes while 'a' is still
+    // unanswered — keys no longer wait for the previous reply (2026-09-11;
+    // measured at ~410 ms per reply over the relay, typing arrived in clumps).
+    expect(payloads).toEqual(['a', 'bc'])
     resolveFirstSend(true)
     await expect(Promise.all([first, second, third])).resolves.toEqual([true, true, true])
     expect(payloads).toEqual(['a', 'bc'])
+  })
+
+  it('Given four unanswered sends When more keys queue Then the fifth waits for the first reply', async () => {
+    const state = createTerminalLivePendingFlushState()
+    const payloads: string[] = []
+    const releases: ((value: boolean) => void)[] = []
+    const sender = (_handle: string, payload: string) =>
+      new Promise<boolean>((resolve) => {
+        payloads.push(payload)
+        releases.push(resolve)
+      })
+    const sends = ['a', 'b', 'c', 'd', 'e'].map((key, i) => {
+      const send = queueTerminalLiveMirrorSend(state, 't', key, sender)
+      return { key: i, send }
+    })
+    for (let i = 0; i < 6; i += 1) {
+      await Promise.resolve()
+    }
+    // Same-tick keys coalesce into one frame; force separate frames by draining ticks.
+    expect(payloads.length).toBeGreaterThanOrEqual(1)
+    expect(payloads.length).toBeLessThanOrEqual(4)
+    releases.forEach((release) => release(true))
+    await expect(Promise.all(sends.map(({ send }) => send))).resolves.toEqual([
+      true,
+      true,
+      true,
+      true,
+      true
+    ])
   })
 
   it('Given a failed previous send When a mirror send queues Then it still runs in order', async () => {

@@ -6,7 +6,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   const {
     markdownDocs,
     fileDocs,
-    terminalGestureInputBucketsRef,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
     terminalRefs,
@@ -31,7 +30,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       terminalRefs.current.set(handle, ref)
     } else {
       terminalRefs.current.delete(handle)
-      terminalGestureInputBucketsRef.current.delete(handle)
       const queued = terminalGestureInputQueuesRef.current.get(handle)
       if (queued?.timer) {
         clearTimeout(queued.timer)

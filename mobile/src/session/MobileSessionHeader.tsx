@@ -350,7 +350,7 @@ function TabActivityBadge({
   status: AgentStatusEntry | null
   active: boolean
 }) {
-  const { colors, radius } = useTheme()
+  const { colors, radius, isDark } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
   const activity = sessionTabActivity(status, beacon, active)
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
@@ -363,7 +363,7 @@ function TabActivityBadge({
   const count = activity?.kind === 'background' ? activity.count : null
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <AgentStateDot state={state} size={12} />
+      <AgentStateDot state={state} size={12} onLightSurface={active && isDark} />
       {count != null ? (
         <View
           accessibilityLabel={`${count} background shells running`}

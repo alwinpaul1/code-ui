@@ -1,3 +1,5 @@
+import { BackHandler } from 'react-native'
+import { hardwareBackAction } from './mobile-session-hardware-back'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 import { mobileVisibleTerminalDisplayMode } from './mobile-session-route-helpers'
@@ -24,7 +26,8 @@ import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-p
  */
 export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActionsModel) {
   const { activeHandle, sessionTabs, setDisplayMode, nativeChatController } = scope
-  const { isTabChatView, toggleTabChatView, showNativeChat } = nativeChatController
+  const { isTabChatView, toggleTabChatView, showNativeChat, activeChatEligible } = nativeChatController
+  const { activeSessionTabId, requestLeaveSession } = scope
 
   const handleForTab = useCallback(
     (tabId: string): string | null => {
@@ -58,6 +61,25 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     },
     [handleForTab, isTabChatView, sessionTabs, setDisplayMode, toggleTabChatView]
   )
+
+  // Hardware back / back gesture: from the terminal view of a tab that has a
+  // chat view, show the chat (what the header toggle does); otherwise leave.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const action = hardwareBackAction({
+        activeTabId: activeSessionTabId,
+        chatEligible: activeChatEligible,
+        chatVisible: showNativeChat
+      })
+      if (action.kind === 'show-chat') {
+        void switchTabView(action.tabId)
+      } else {
+        requestLeaveSession()
+      }
+      return true
+    })
+    return () => subscription.remove()
+  }, [activeChatEligible, activeSessionTabId, requestLeaveSession, showNativeChat, switchTabView])
 
   // Transitions the switch above did not drive (default chat on open, the
   // slash-command terminal peek, the "Back to chat" chip): apply the same

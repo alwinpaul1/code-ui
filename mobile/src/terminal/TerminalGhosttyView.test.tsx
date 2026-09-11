@@ -7,14 +7,20 @@ import type { TerminalWebViewHandle } from './terminal-webview-contract'
 // props and hands back a ref with the two methods the handle drives.
 const native = vi.hoisted(() => ({
   props: null as Record<string, unknown> | null,
-  writeText: vi.fn(async () => undefined)
+  writeText: vi.fn(async () => undefined),
+  selectAll: vi.fn(async () => undefined)
 }))
 vi.mock('expo-libghostty', async () => {
   const React = await import('react')
   return {
     TerminalView: React.forwardRef(function TerminalView(props: Record<string, unknown>, ref) {
       native.props = props
-      React.useImperativeHandle(ref, () => ({ writeText: native.writeText, write: vi.fn(), finish: vi.fn() }))
+      React.useImperativeHandle(ref, () => ({
+        writeText: native.writeText,
+        selectAll: native.selectAll,
+        write: vi.fn(),
+        finish: vi.fn()
+      }))
       return null
     })
   }
@@ -155,28 +161,63 @@ describe('the ghostty engine behind the WebView handle', () => {
     expect(native.props?.fontSize).toBe(13)
   })
 
-  it('opens the input on a tap but not at the end of a scroll', () => {
-    // Reported on a Galaxy S23: with ghostty on, every scroll popped the
-    // keyboard — the wrapper treated any touch end as a tap.
+  it('opens the keyboard for a native tap on plain text, and never for a scroll or a long press', () => {
+    // Why: the native view's gesture detector decides what a tap is — a
+    // scroll never reaches here, and neither does the long press that starts
+    // a selection (reviewed 2026-09-11: the old touch-end heuristic popped the
+    // keyboard over a fresh selection).
     const onTerminalTap = vi.fn()
-    let root!: ReturnType<typeof create>
-    act(() => {
-      root = create(createElement(TerminalGhosttyView, { onTerminalTap }))
-    })
-    const wrapper = root.root.findByType('View' as never)
-    const touch = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y, timestamp: 0 } })
+    const { fire } = mount({ onTerminalTap })
 
-    act(() => {
-      wrapper.props.onTouchStart(touch(100, 800))
-      wrapper.props.onTouchEnd(touch(100, 300))
-    })
-    expect(onTerminalTap).not.toHaveBeenCalled()
+    fire('onTap', { line: '$ ls -la', col: 3, row: 5 })
 
-    act(() => {
-      wrapper.props.onTouchStart(touch(100, 800))
-      wrapper.props.onTouchEnd(touch(104, 803))
-    })
     expect(onTerminalTap).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens a file path or a URL under the finger instead of the keyboard, like the WebView did', () => {
+    const onTerminalTap = vi.fn()
+    const onFileTap = vi.fn()
+    const onOpenUrl = vi.fn()
+    const { fire } = mount({ onTerminalTap, onFileTap, onOpenUrl })
+
+    fire('onTap', { line: 'see file:///Users/me/app/src/index.ts#L12', col: 12, row: 1 })
+    expect(onFileTap).toHaveBeenCalledWith('/Users/me/app/src/index.ts', 12, null)
+
+    fire('onTap', { line: 'docs at https://example.com/guide today', col: 14, row: 2 })
+    expect(onOpenUrl).toHaveBeenCalledWith('https://example.com/guide')
+    expect(onTerminalTap).not.toHaveBeenCalled()
+  })
+
+  it('forwards the caret metrics the keyboard avoidance lift reads', () => {
+    const onKeyboardAvoidanceMetrics = vi.fn()
+    const { fire } = mount({ onKeyboardAvoidanceMetrics })
+
+    fire('onMetrics', { cursorY: 20, contentBottomRow: 22, rows: 38, altScreen: false })
+
+    expect(onKeyboardAvoidanceMetrics).toHaveBeenCalledWith({
+      cursorY: 20,
+      contentBottomRow: 22,
+      rows: 38,
+      altScreen: false
+    })
+  })
+
+  it('snaps a pinch to the nearest text-size preset', () => {
+    // Why: the preference store keeps only presets and read an unsnapped
+    // 1.2500000149 back as 1 on the next focus (reviewed 2026-09-11).
+    const onTextScaleChange = vi.fn()
+    const { fire } = mount({ onTextScaleChange })
+
+    fire('onFontSize', { fontSize: 13 * 1.2500000149 })
+    expect(onTextScaleChange).toHaveBeenLastCalledWith(1.25)
+    fire('onFontSize', { fontSize: 13 * 1.6 })
+    expect(onTextScaleChange).toHaveBeenLastCalledWith(1.5)
+  })
+
+  it('selects every row through the native view for the accessory row\'s Select all', () => {
+    const { ref } = mount()
+    ref.current!.doSelectAll()
+    expect(native.selectAll).toHaveBeenCalledTimes(1)
   })
 
   it("sends the terminal's own query replies straight to the PTY, not through the gesture gate", () => {
@@ -208,35 +249,4 @@ describe('the ghostty engine behind the WebView handle', () => {
     expect(onTextScaleChange).toHaveBeenCalledWith(1.5)
   })
 
-  it('does not open the keyboard for a tap on a TUI that tracks the mouse', () => {
-    // Why: Claude Code's "Jump to bottom (click)" chip is its own clickable
-    // text; the native view sends the click, and the tap must not also open
-    // the keyboard over it. The composer bar still opens it.
-    const onTerminalTap = vi.fn()
-    let root!: ReturnType<typeof create>
-    act(() => {
-      root = create(createElement(TerminalGhosttyView, { onTerminalTap }))
-    })
-    const wrapper = root.root.findByType('View' as never)
-    const fire = (name: string, nativeEvent: unknown) => {
-      act(() => {
-        ;(native.props![name] as (e: { nativeEvent: unknown }) => void)({ nativeEvent })
-      })
-    }
-    const touch = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y, timestamp: 0 } })
-
-    fire('onModes', { mask: 0b1100 }) // 1003 any-motion + 1006 SGR: Claude Code
-    act(() => {
-      wrapper.props.onTouchStart(touch(100, 800))
-      wrapper.props.onTouchEnd(touch(102, 801))
-    })
-    expect(onTerminalTap).not.toHaveBeenCalled()
-
-    fire('onModes', { mask: 0 }) // back at a shell prompt
-    act(() => {
-      wrapper.props.onTouchStart(touch(100, 800))
-      wrapper.props.onTouchEnd(touch(102, 801))
-    })
-    expect(onTerminalTap).toHaveBeenCalledTimes(1)
-  })
 })

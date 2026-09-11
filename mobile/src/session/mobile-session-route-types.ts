@@ -152,11 +152,6 @@ export type RuntimeRepoSummary = {
 
 export type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
 
-export type TerminalGestureInputBucket = {
-  tokens: number
-  lastRefillMs: number
-}
-
 export type TerminalGestureInputQueue = {
   /** Wheel/arrow sequences waiting to go, oldest first; one flush takes a few. */
   sequences: string[]
