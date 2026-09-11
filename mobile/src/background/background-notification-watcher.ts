@@ -27,8 +27,7 @@ type BackgroundNotificationWatcherDependencies = {
   openClient: (host: HostProfile) => RpcClient
   subscribeNotifications: (client: RpcClient, hostId: string) => () => void
   /** The UI's live client for a host, if it holds one. Borrowing it instead of
-   *  dialling beside it is what keeps the relay session — and the bytes in
-   *  flight on it — across a background/foreground hand-back. */
+   *  dialling beside it spares a redundant, billed relay session per background. */
   peekLiveClient?: (hostId: string) => RpcClient | null
   log: (message: string, detail?: string) => void
 }
@@ -91,9 +90,9 @@ export function createBackgroundNotificationWatcher(
       if (links.has(host.id)) {
         continue
       }
-      // Measured: dialling a second session beside the UI's retained relay cost a
-      // fresh 2.3–3.2 s dial on every return and lost whatever the PTY wrote in
-      // the gap. Ride the UI's connection whenever it has one up.
+      // Measured: dialling a second session beside the UI's retained relay was a
+      // billed 2.3–2.8 s relay splice on every background, for a link the UI
+      // already held. Ride the UI's connection whenever it has one up.
       const live = deps.peekLiveClient?.(host.id) ?? null
       if (live && live.getState() === 'connected') {
         wire(host, live, false)

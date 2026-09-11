@@ -133,12 +133,11 @@ describe('background notification watcher', () => {
 })
 
 describe('sharing the connection the UI already holds', () => {
-  /** Measured on a Galaxy S23 behind a relay: every background/foreground
-   *  hand-back cost a fresh 2.3–3.2 s relay dial (11 in 40 minutes) because the
-   *  watcher opened a second client per host and closed it on return — and the
-   *  bytes a PTY emitted during that gap were never shown. The UI retains a
-   *  healthy relay for 30 s across a background; dialling beside it is what
-   *  broke that. */
+  /** Measured on a Galaxy S23 over ten 10 s background cycles: ten watcher
+   *  dials, each a billed 2.3–2.8 s relay splice, while the UI's own session
+   *  stayed retained and connected throughout. The second session was
+   *  redundant, not harmful — nothing was evicted or lost — but it was paid for
+   *  on every background. */
   it('borrows the UI\'s live client instead of dialling a second session', async () => {
     const live = makeClient()
     live.setState('connected')
