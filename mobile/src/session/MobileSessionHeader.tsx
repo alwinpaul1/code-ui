@@ -16,6 +16,8 @@ import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { useAgentHudBeacon } from './agent-hud-beacon'
+import { sessionTabActivity } from './session-tab-activity'
 import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
@@ -282,6 +284,13 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                   >
                     {getMobileSessionTabTitle(t)}
                   </Txt>
+                  {t.type === 'terminal' && terminalAgentId ? (
+                    <TabActivityBadge
+                      handle={t.terminal}
+                      status={t.agentStatus ?? null}
+                      active={active}
+                    />
+                  ) : null}
                 </Pressable>
               )
             })}
@@ -317,5 +326,63 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         </View>
       )}
     </SafeAreaView>
+  )
+}
+
+/** The agent's work on a pill: a dot while its turn runs, a shell count once
+ *  the turn is done and background shells are still going. Live for every
+ *  tab from the host's pushed status; see session-tab-activity.ts. */
+function TabActivityBadge({
+  handle,
+  status,
+  active
+}: {
+  handle: string | null
+  status: Parameters<typeof sessionTabActivity>[0]
+  active: boolean
+}) {
+  const { colors, radius } = useTheme()
+  const beacon = useAgentHudBeacon(active ? handle : null)
+  const activity = sessionTabActivity(status, beacon, active)
+  if (!activity) {
+    return null
+  }
+  if (activity.kind === 'working') {
+    return (
+      <View
+        accessibilityLabel="Agent working"
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: active ? colors.textInverse : colors.accent
+        }}
+      />
+    )
+  }
+  const label = activity.count == null ? 'bg' : `${activity.count} bg`
+  return (
+    <View
+      accessibilityLabel={
+        activity.count == null
+          ? 'Background shells running'
+          : `${activity.count} background shells running`
+      }
+      style={{
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: radius.xs,
+        backgroundColor: active ? colors.bgPanel : colors.successSoft
+      }}
+    >
+      <Txt
+        variant="caption"
+        weight="medium"
+        numberOfLines={1}
+        style={{ color: active ? colors.text : colors.success }}
+      >
+        {label}
+      </Txt>
+    </View>
   )
 }

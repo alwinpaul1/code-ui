@@ -78,6 +78,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // unanswered sends instead of pacing one per relay round trip.
 // 2026-09-11 (later): a burst of wheel rows is paced out one per 16 ms flush
 // instead of sent as one batch, and nothing is dropped past a token bucket.
+// 2026-09-11 (later still): each terminal pill carries an activity badge from
+// the host's pushed status — a dot while the turn runs, a shell count after.
 const HEAD_CALLBACK_BODY_SHA256 = 'e814d612141f3f87f956cc7ee78b091640ef7d9430f35adddef338136b41340d'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
@@ -109,12 +111,12 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '7cfbd94eb9e7c4094f4561cbef2214e53ec751e73fbcb0bd807257b06058f536'
+  'fc3d23e03e73ac2b6a984163d268eb5df6d3f8e4adbb74725c27c59ed017ca4d'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '8d4f8db8758c2ee55c7aad5b08accf38136a7b7ad9f1807ab3f313c9f7eb76a9'
+const HEAD_LEAF_JSX_SHA256 = '56d2522d7586c69b90688a75d30de37f209eb7f6758b22a387905b1e246a3190'
 const HEAD_STYLE_REFERENCE_SHA256 =
   'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -554,12 +556,12 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    expect(strings).toHaveLength(630)
+    expect(strings).toHaveLength(641)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
-    expect(jsx.leaf).toHaveLength(67)
+    expect(jsx.leaf).toHaveLength(68)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     expect(jsx.styleReferences).toHaveLength(88)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
