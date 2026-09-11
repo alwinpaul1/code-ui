@@ -113,11 +113,31 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     })
   }, [])
 
+  /** Ask for phone dims again, and record that we are driving this handle.
+   *
+   *  Coming back to the foreground is not a change of `activeHandle` or of
+   *  `showNativeChat`, so the effect that normally pairs the view with a
+   *  display mode short-circuits on its own "only on a change" guard and the
+   *  request never goes out. */
+  const reclaimHandle = useCallback((handle: string) => {
+    drivenHandlesRef.current.add(handle)
+    void setDisplayModeRef.current(handle, 'auto')
+  }, [])
+
   // Measured: HOME left the desk at 51 columns indefinitely. Backgrounding
   // unmounts nothing, so without this nothing ever hands the floor back.
+  //
+  // Coming back has to retake it, or the release above is a one-way door:
+  // measured on a Galaxy S23, two background/resume cycles in a row left the
+  // terminal on screen at the desk's COLS=120 until the tab pill was tapped
+  // again, so the phone was rendering a 120-column grid on a phone screen.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        const handle = activeHandleStateRef.current
+        if (handle && mobileVisibleTerminalDisplayMode(handle, showNativeChatStateRef.current) === 'auto') {
+          reclaimHandle(handle)
+        }
         return
       }
       // Snapshot first: releasing removes the handle from the same set.
@@ -127,7 +147,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       }
     })
     return () => subscription.remove()
-  }, [releaseHandle])
+  }, [reclaimHandle, releaseHandle])
 
   // Measured: switching to another tab left the desk at 51 columns too. The
   // switch nulls activeHandle before the effect above runs, so the handle the
