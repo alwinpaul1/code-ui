@@ -356,16 +356,25 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -578,9 +667,9 @@
+@@ -577,10 +666,17 @@
+   private fun copySelection() {
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
-     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+-    val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
 -    clipboard.setPrimaryClip(
 -      ClipData.newPlainText("terminal", String(bytes, Charsets.UTF_8))
 -    )
 +    val text = String(bytes, Charsets.UTF_8)
-+    clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
-+    onSelectionCopied?.invoke(text)
++    // The host app owns the clipboard when it listens: writing here as well
++    // put the text on the clipboard twice and Android announced "Copied."
++    // twice for one copy. Without a listener the view copies for itself.
++    val listener = onSelectionCopied
++    if (listener != null) {
++      listener(text)
++    } else {
++      val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
++      clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
++    }
      clearSelection()
    }
  
