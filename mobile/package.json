@@ -18,9 +18,9 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@codeui/expo-background-link": "file:./packages/expo-background-link",
     "@expo-google-fonts/instrument-sans": "0.4.2",
     "@noble/hashes": "1.8.0",
-    "@codeui/expo-background-link": "file:./packages/expo-background-link",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@shopify/flash-list": "2.3.2",
@@ -44,6 +44,7 @@
     "expo-image-picker": "^57.0.16",
     "expo-intent-launcher": "~57.0.1",
     "expo-keep-awake": "~57.0.1",
+    "expo-libghostty": "^0.8.1",
     "expo-linking": "^57.0.9",
     "expo-network": "~57.0.1",
     "expo-notifications": "^57.0.17",

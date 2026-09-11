@@ -99,6 +99,9 @@ importers:
       expo-keep-awake:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.20)(react@19.2.8)
+      expo-libghostty:
+        specifier: ^0.8.1
+        version: 0.8.1(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       expo-linking:
         specifier: ^57.0.9
         version: 57.0.9(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)
@@ -4289,6 +4292,13 @@ packages:
     peerDependencies:
       expo: '*'
       react: '*'
+
+  expo-libghostty@0.8.1:
+    resolution: {integrity: sha512-LcWO2ydkXM0RWy0sFhp7Xc2OpeqAyy5s9IGAd1u6y1luoli7MFHXE4RCafuA6YwkUYWekb22Sd4SsfOBFaLfbw==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-linking@57.0.9:
     resolution: {integrity: sha512-TQJe3NsnpZXApBg1n6DKaZ4TNhYm+iYWq7W9rTp+G44IBMZSUcI8ba+ffYC/LMY1qw+95AuBPIF1zTx1NQoTXw==}
@@ -11812,6 +11822,12 @@ snapshots:
     dependencies:
       expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
       react: 19.2.8
+
+  expo-libghostty@0.8.1(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+    dependencies:
+      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
+      react: 19.2.8
+      react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
 
   expo-linking@57.0.9(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1):
     dependencies:

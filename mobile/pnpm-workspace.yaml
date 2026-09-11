@@ -1,5 +1,7 @@
 allowBuilds:
   esbuild: true
+  # Fetches the checksum-pinned libghostty binaries in postinstall.
+  expo-libghostty: true
 
 minimumReleaseAge: 4320
 

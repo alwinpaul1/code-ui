@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "placeholder": true,
+  "capturedAt": "2026-09-11T00:00:00.000Z",
+  "terminal": "shell",
+  "viewport": {
+    "cols": 51,
+    "rows": 38
+  },
+  "cols": 51,
+  "rows": 38,
+  "serialized": "[placeholder shell capture - regenerate with scripts/capture-terminal-stream.ts]\r\n",
+  "events": [
+    {
+      "t": 0,
+      "type": "data",
+      "chunk": "[placeholder shell capture]\r\n"
+    }
+  ]
+}
