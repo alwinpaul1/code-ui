@@ -31,7 +31,7 @@ const ANSI_ORDER: readonly (keyof Overrides)[] = [
  * anything the host left unset, and libghostty's own defaults are never seen.
  */
 export function ghosttyThemeFromMobileTheme(theme: MobileTerminalTheme | undefined): TerminalTheme {
-  const merged: Overrides = { ...DEFAULT_TERMINAL_THEME, ...(theme?.theme ?? {}) }
+  const merged: Overrides = { ...DEFAULT_TERMINAL_THEME, ...theme?.theme }
   return {
     background: merged.background,
     foreground: merged.foreground,
