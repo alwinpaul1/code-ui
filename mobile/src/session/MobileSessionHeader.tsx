@@ -18,6 +18,10 @@ import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { sessionTabActivity } from './session-tab-activity'
+import { AgentStateDot } from '../components/AgentStateDot'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { agentDotState } from '../worktree/agent-row-display'
+import { useNow } from '../hooks/use-now'
 import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
@@ -329,8 +333,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   )
 }
 
-/** The agent's work on a pill: a dot while its turn runs, a shell count once
- *  the turn is done and background shells are still going. Live for every
+/** The agent's state on its pill, with the desktop's own icons (AgentStateDot):
+ *  the yellow spinner while its turn runs, the heartbeat once the turn is done
+ *  and background shells remain — with the count on the active tab — the
+ *  question bubble when it waits for input, red when blocked. Live for every
  *  tab from the host's pushed status; see session-tab-activity.ts. */
 function TabActivityBadge({
   handle,
@@ -338,51 +344,37 @@ function TabActivityBadge({
   active
 }: {
   handle: string | null
-  status: Parameters<typeof sessionTabActivity>[0]
+  status: AgentStatusEntry | null
   active: boolean
 }) {
   const { colors, radius } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
   const activity = sessionTabActivity(status, beacon, active)
-  if (!activity) {
+  // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
+  // clock is enough for that and keeps the render pure.
+  const now = useNow(60_000)
+  const state = status ? agentDotState({ ...status, interrupted: false }, now) : 'idle'
+  if (state === 'idle' || state === 'done') {
     return null
   }
-  if (activity.kind === 'working') {
-    return (
-      <View
-        accessibilityLabel="Agent working"
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: active ? colors.textInverse : colors.accent
-        }}
-      />
-    )
-  }
-  const label = activity.count == null ? 'bg' : `${activity.count} bg`
+  const count = activity?.kind === 'background' ? activity.count : null
   return (
-    <View
-      accessibilityLabel={
-        activity.count == null
-          ? 'Background shells running'
-          : `${activity.count} background shells running`
-      }
-      style={{
-        paddingHorizontal: 5,
-        paddingVertical: 1,
-        borderRadius: radius.xs,
-        backgroundColor: active ? colors.bgPanel : colors.successSoft
-      }}
-    >
-      <Txt
-        variant="caption"
-        weight="medium"
-        numberOfLines={1}
-        style={{ color: active ? colors.text : colors.success }}
-      >
-        {label}
-      </Txt>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      <AgentStateDot state={state} size={12} />
+      {count != null ? (
+        <View
+          accessibilityLabel={`${count} background shells running`}
+          style={{
+            paddingHorizontal: 4,
+            borderRadius: radius.xs,
+            backgroundColor: active ? colors.bgPanel : colors.bgRaised
+          }}
+        >
+          <Txt variant="caption" weight="medium" style={{ color: active ? colors.text : colors.textSecondary }}>
+            {count}
+          </Txt>
+        </View>
+      ) : null}
     </View>
   )
 }

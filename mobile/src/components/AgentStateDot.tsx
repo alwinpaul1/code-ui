@@ -1,24 +1,30 @@
 import { useEffect, useRef } from 'react'
-import { Activity } from 'lucide-react-native'
+import { Activity, CircleCheck, MessageCircleQuestionMark } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 
-// Per-agent state indicator, 1:1 with desktop AgentStateDot
-// (src/renderer/src/components/AgentStateDot.tsx): yellow spinner for 'working',
-// emerald for 'done', red for blocked/waiting/interrupted (attention), neutral
-// for idle. Distinct from the worktree-level AgentSpinner, which collapses the
-// agent vocabulary into the 5-state rollup the sidebar dot uses.
-const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string> = {
-  done: '#10b981',
+// Per-agent state indicator, 1:1 with desktop AgentStateDot (Orca 1.4.200,
+// out/renderer/assets/AgentStateDot-*.js): yellow spinner for 'working', the
+// yellow Activity heartbeat for 'monitoring', an emerald check for 'done', the
+// orange question bubble for 'waiting' (the desktop's "agent question" icon),
+// red dot for blocked/interrupted, neutral dot for idle. Distinct from the
+// worktree-level AgentSpinner, which collapses the agent vocabulary into the
+// 5-state rollup the sidebar dot uses. Colours are the desktop's Tailwind
+// values, identical in both themes there and here.
+const DOT_COLORS: Record<Extract<AgentDotState, 'blocked' | 'interrupted' | 'idle'>, string> = {
   blocked: '#ef4444',
-  waiting: '#ef4444',
   interrupted: '#ef4444',
   idle: 'rgba(115,115,115,0.4)'
 }
 const WORKING_COLOR = '#eab308'
+const DONE_COLOR = '#10b981'
+const QUESTION_COLOR = '#f97316'
 
-export function AgentStateDot({ state }: { state: AgentDotState }) {
+export function AgentStateDot({ state, size = 10 }: { state: AgentDotState; size?: number }) {
   const spinValue = useRef(new Animated.Value(0)).current
+  const box = { width: size, height: size }
+  const icon = size
+  const dot = { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3 }
 
   useEffect(() => {
     if (state === 'working') {
@@ -40,34 +46,46 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
   if (state === 'working') {
     const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
     return (
-      <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
+      <View style={[styles.wrapper, box]} accessibilityLabel="Working">
+        <Animated.View style={[styles.spinner, dot, { transform: [{ rotate }] }]} />
       </View>
     )
   }
 
   if (state === 'monitoring') {
     return (
-      <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
-        <Activity size={10} color={WORKING_COLOR} />
+      <View style={[styles.wrapper, box]} accessibilityLabel="Monitoring background tasks">
+        <Activity size={icon} color={WORKING_COLOR} />
+      </View>
+    )
+  }
+
+  if (state === 'done') {
+    return (
+      <View style={[styles.wrapper, box]} accessibilityLabel="Done">
+        <CircleCheck size={icon} color={DONE_COLOR} />
+      </View>
+    )
+  }
+
+  if (state === 'waiting') {
+    return (
+      <View style={[styles.wrapper, box]} accessibilityLabel="Waiting for input">
+        <MessageCircleQuestionMark size={icon} color={QUESTION_COLOR} />
       </View>
     )
   }
 
   return (
-    <View style={styles.wrapper}>
-      <View style={[styles.dot, { backgroundColor: DOT_COLORS[state] }]} />
+    <View style={[styles.wrapper, box]}>
+      <View style={[dot, { backgroundColor: DOT_COLORS[state] }]} />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  wrapper: { alignItems: 'center', justifyContent: 'center' },
   spinner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
     borderWidth: 1.5,
     borderColor: WORKING_COLOR,
     borderTopColor: 'transparent'
