@@ -13,7 +13,18 @@ export const MOBILE_SESSION_STATUS_LABELS: Record<ConnectionState, string> = {
 export const TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY = 64
 export const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
 export const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
-export const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
+/**
+ * Wheel rows a single flush carries. A TUI repaints once per batch it has
+ * received since its last frame, so rows sent faster than it repaints land
+ * as multi-row jumps: measured from the user's finger on 2026-09-11 (Galaxy
+ * S23 over Orca Relay, Claude Code repainting ~40/s), 24 of 47 repaints moved
+ * six or more rows. One row per 16 ms flush is ~60 rows/s — a fling still
+ * scrolls a screen in well under a second, but in single-row steps.
+ */
+export const TERMINAL_GESTURE_INPUT_SEQUENCES_PER_FLUSH = 1
+/** Rows a fling may leave waiting; beyond this the finger's extra travel is
+ *  ignored rather than scrolling on for seconds after it lifted. */
+export const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 96
 export const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
 /**
  * Wheel batches a single terminal may have unanswered at once. A TUI's scroll

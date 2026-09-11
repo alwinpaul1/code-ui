@@ -157,7 +157,7 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,9 +45,26 @@
+@@ -45,9 +45,28 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
@@ -170,7 +170,9 @@
 +/** X11 wheel buttons and the press action, as nativeEncodeMouse takes them. */
 +private const val MOUSE_WHEEL_UP = 4
 +private const val MOUSE_WHEEL_DOWN = 5
++private const val MOUSE_BUTTON_LEFT = 1
 +private const val MOUSE_ACTION_PRESS = 0
++private const val MOUSE_ACTION_RELEASE = 1
 +
  internal class GhosttyTerminalView(context: Context) : View(context) {
    var onInputBytes: ((ByteArray) -> Unit)? = null
@@ -184,7 +186,7 @@
  
    /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
    var accessoryBar: TerminalAccessoryBar? = null
-@@ -57,11 +74,24 @@
+@@ -57,11 +76,24 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -213,7 +215,7 @@
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -166,14 +196,17 @@
+@@ -166,14 +198,17 @@
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -234,13 +236,22 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +226,11 @@
+@@ -193,9 +228,20 @@
            clearSelection()
            return true
          }
 -        requestFocus()
 -        context.getSystemService(InputMethodManager::class.java)
 -          ?.showSoftInput(this@GhosttyTerminalView, 0)
++        // A TUI that tracks the mouse gets the tap as a click: Claude Code's
++        // "Jump to bottom (click)" is its own text, answered by its own code.
++        if (handle != 0L && !finished && terminalModes() and MODE_MOUSE_TRACKING != 0) {
++          val press = GhosttyVt.nativeEncodeMouse(handle, MOUSE_BUTTON_LEFT, MOUSE_ACTION_PRESS, e.x, e.y, 0)
++          val release = GhosttyVt.nativeEncodeMouse(handle, MOUSE_BUTTON_LEFT, MOUSE_ACTION_RELEASE, e.x, e.y, 0)
++          val click = (press ?: ByteArray(0)) + (release ?: ByteArray(0))
++          if (click.isNotEmpty()) onInputBytes?.invoke(click)
++          return true
++        }
 +        if (managesFocus) {
 +          requestFocus()
 +          context.getSystemService(InputMethodManager::class.java)
@@ -249,7 +260,7 @@
          return true
        }
  
-@@ -205,6 +240,7 @@
+@@ -205,6 +251,7 @@
          lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
          selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
@@ -257,7 +268,7 @@
          scheduleFrame()
          if (selectionMode) {
            // Keep dragging without lifting: extend from the pressed cell.
-@@ -225,13 +261,13 @@
+@@ -225,13 +272,13 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -274,7 +285,7 @@
          }
          return true
        }
-@@ -296,6 +332,7 @@
+@@ -296,6 +343,7 @@
      val clamped = dp.coerceIn(MIN_FONT_SIZE_DP, MAX_FONT_SIZE_DP)
      if (clamped == fontSizeDp) return
      fontSizeDp = clamped
@@ -282,10 +293,13 @@
      val px = clamped * resources.displayMetrics.density
      for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
        paint?.textSize = px
-@@ -367,6 +404,45 @@
-     }
-   }
- 
+@@ -364,7 +412,46 @@
+     if (handle != 0L) {
+       GhosttyVt.nativeFree(handle)
+       handle = 0
++    }
++  }
++
 +  /** Current DEC private modes as nativeTerminalModes' bitmask; 0 once freed. */
 +  fun terminalModes(): Int = if (handle == 0L) 0 else GhosttyVt.nativeTerminalModes(handle)
 +
@@ -319,16 +333,14 @@
 +      if (out != null) onInputBytes?.invoke(out)
 +      markScrollActivity()
 +      return
-+    }
+     }
 +    GhosttyVt.nativeScroll(handle, deltaRows)
 +    markScrollActivity()
 +    scheduleFrame()
-+  }
-+
+   }
+ 
    private fun sendBytes(bytes: ByteArray) {
-     if (!finished && bytes.isNotEmpty()) {
-       if (selectionMode) clearSelection()
-@@ -559,6 +635,7 @@
+@@ -559,6 +646,7 @@
  
    private fun clearSelection() {
      if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
@@ -336,7 +348,7 @@
      selectionMode = false
      draggingHandle = HANDLE_NONE
      actionMode?.finish()
-@@ -569,6 +646,7 @@
+@@ -569,6 +657,7 @@
      if (handle == 0L) return
      if (GhosttyVt.nativeSelectAll(handle)) {
        selectionMode = true
@@ -344,7 +356,7 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -578,9 +656,9 @@
+@@ -578,9 +667,9 @@
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
      val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return

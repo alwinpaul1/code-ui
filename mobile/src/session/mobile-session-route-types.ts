@@ -158,8 +158,8 @@ export type TerminalGestureInputBucket = {
 }
 
 export type TerminalGestureInputQueue = {
-  bytes: string
-  sequenceCount: number
+  /** Wheel/arrow sequences waiting to go, oldest first; one flush takes a few. */
+  sequences: string[]
   timer: ReturnType<typeof setTimeout> | null
   lastUpdatedMs: number
 }

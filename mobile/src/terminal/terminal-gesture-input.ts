@@ -90,6 +90,32 @@ export function countTerminalGestureInputSequences(bytes: string): number | null
   return sequenceCount
 }
 
+/** The same validation as countTerminalGestureInputSequences, returning the
+ *  sequences themselves so a burst can be paced out one at a time; null when
+ *  any part is not gesture input. */
+export function splitTerminalGestureInputSequences(bytes: string): string[] | null {
+  if (bytes.length === 0 || bytes.length > MAX_TERMINAL_GESTURE_INPUT_LENGTH) {
+    return null
+  }
+  const sequences: string[] = []
+  let offset = 0
+  while (offset < bytes.length) {
+    const next =
+      isArrowScrollSequence(bytes, offset) ??
+      isSgrMouseGestureSequence(bytes, offset) ??
+      isDefaultMouseGestureSequence(bytes, offset)
+    if (next == null) {
+      return null
+    }
+    sequences.push(bytes.slice(offset, next))
+    if (sequences.length > MAX_TERMINAL_GESTURE_INPUT_SEQUENCES) {
+      return null
+    }
+    offset = next
+  }
+  return sequences
+}
+
 export function isTerminalGestureInput(bytes: string): boolean {
   return countTerminalGestureInputSequences(bytes) != null
 }

@@ -65,10 +65,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = 'ebfdb1f81c25f2ed54acaf75c503a826eea36ef16d3b271ae5d370ac47fe88a5'
-const HEAD_HOOK_BINDING_SHA256 = '4eedc2a0c1cf9dc9bf07e8fb81b113ef1008034c57cb408b0d8752181adb9ee0'
+const HEAD_MAIN_HOOK_SHA256 = '346aefb91778ba6b8e4015cda68cf92e6e0fd4c2b3b2d2f2f28d46488817ad17'
+const HEAD_HOOK_BINDING_SHA256 = '81bdbd564e088fad267bf2df6a9433dda8f4162cb63c04b9970ec39f0f038f80'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '604cca241bb370129f78e7ad45d289d342481f79b64165732e0199044609bd4e'
+  '2ff58242e483fffdcbaa25403ee5f73d7bfadb87479f9c08a4dc7cfe6f542c01'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -76,7 +76,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // desktop pane collapses after the extra PTY dies.
 // 2026-09-11: wheel batches pipeline up to TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT
 // unanswered sends instead of pacing one per relay round trip.
-const HEAD_CALLBACK_BODY_SHA256 = '166e6b45b451aeaa7f08872d9c8c97a85b8316b783ba42bf09fba4ee859a0a0e'
+// 2026-09-11 (later): a burst of wheel rows is paced out one per 16 ms flush
+// instead of sent as one batch, and nothing is dropped past a token bucket.
+const HEAD_CALLBACK_BODY_SHA256 = 'e814d612141f3f87f956cc7ee78b091640ef7d9430f35adddef338136b41340d'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
@@ -104,10 +106,10 @@ const HEAD_NATIVE_REGISTRATION_SHA256 =
 const HEAD_NATIVE_REMOVAL_SHA256 =
   '4c994574675a2a0f9c607b3ea89ab7a2ed5a83f7c72fa42342ddcb5f00fc3f4f'
 const HEAD_TIMER_CREATION_SHA256 =
-  '8b2229f4a3c880c0e21f546a1bfabb27b3536b9a2344cf3b39f5b7da82e24dba'
-const HEAD_TIMER_CLEANUP_SHA256 = 'be3117bde057916619602341bef132f1bd8767d1dff4bacdfd547ca690f5640a'
+  'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
+const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'b20f34a79c55fbb11ba22783d7c8b91c68f7dcd4806c08a5705f99f9e841e02c'
+  '7cfbd94eb9e7c4094f4561cbef2214e53ec751e73fbcb0bd807257b06058f536'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -503,10 +505,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(277)
+    expect(main.hooks).toHaveLength(276)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(79)
+    expect(main.callbacks).toHaveLength(78)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)
@@ -525,13 +527,13 @@ describe('mobile session route extraction parity', () => {
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
     expect(native.removals).toHaveLength(9)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
-    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(8)
+    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
     expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
     expect(
       native.creations.filter((fact) => fact.startsWith('requestAnimationFrame'))
     ).toHaveLength(1)
     expect(hash(native.creations)).toBe(HEAD_TIMER_CREATION_SHA256)
-    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(13)
+    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(11)
     expect(native.cleanups.filter((fact) => fact.startsWith('clearInterval'))).toHaveLength(1)
     expect(native.cleanups.filter((fact) => fact.startsWith('cancelAnimationFrame'))).toHaveLength(
       1
@@ -552,7 +554,7 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    expect(strings).toHaveLength(629)
+    expect(strings).toHaveLength(630)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)

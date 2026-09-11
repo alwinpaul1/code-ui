@@ -207,4 +207,36 @@ describe('the ghostty engine behind the WebView handle', () => {
     expect(onSelectionCopy).toHaveBeenCalledWith('npm test')
     expect(onTextScaleChange).toHaveBeenCalledWith(1.5)
   })
+
+  it('does not open the keyboard for a tap on a TUI that tracks the mouse', () => {
+    // Why: Claude Code's "Jump to bottom (click)" chip is its own clickable
+    // text; the native view sends the click, and the tap must not also open
+    // the keyboard over it. The composer bar still opens it.
+    const onTerminalTap = vi.fn()
+    let root!: ReturnType<typeof create>
+    act(() => {
+      root = create(createElement(TerminalGhosttyView, { onTerminalTap }))
+    })
+    const wrapper = root.root.findByType('View' as never)
+    const fire = (name: string, nativeEvent: unknown) => {
+      act(() => {
+        ;(native.props![name] as (e: { nativeEvent: unknown }) => void)({ nativeEvent })
+      })
+    }
+    const touch = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y, timestamp: 0 } })
+
+    fire('onModes', { mask: 0b1100 }) // 1003 any-motion + 1006 SGR: Claude Code
+    act(() => {
+      wrapper.props.onTouchStart(touch(100, 800))
+      wrapper.props.onTouchEnd(touch(102, 801))
+    })
+    expect(onTerminalTap).not.toHaveBeenCalled()
+
+    fire('onModes', { mask: 0 }) // back at a shell prompt
+    act(() => {
+      wrapper.props.onTouchStart(touch(100, 800))
+      wrapper.props.onTouchEnd(touch(102, 801))
+    })
+    expect(onTerminalTap).toHaveBeenCalledTimes(1)
+  })
 })

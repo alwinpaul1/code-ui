@@ -68,6 +68,10 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     // touch end, so it has to tell them apart itself — measured: without this
     // every scroll on the ghostty engine popped the keyboard.
     const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+    // While a TUI tracks the mouse (Claude Code), a tap is a click the native
+    // view sends to it — its own "Jump to bottom (click)" chip, for one — and
+    // must not open the keyboard; the composer bar still does.
+    const mouseTrackingRef = useRef(false)
     const handleTouchStart = useCallback((event: { nativeEvent: { pageX: number; pageY: number } }) => {
       touchStartRef.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }
     }, [])
@@ -79,7 +83,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           return
         }
         const moved = Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y)
-        if (moved <= TAP_SLOP_PX) {
+        if (moved <= TAP_SLOP_PX && !mouseTrackingRef.current) {
           onTerminalTap()
         }
       },
@@ -115,7 +119,9 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
 
     const handleModes = useCallback(
       (event: { nativeEvent: { mask: number } }) => {
-        onModesChanged?.(terminalModesFromGhosttyMask(event.nativeEvent.mask))
+        const modes = terminalModesFromGhosttyMask(event.nativeEvent.mask)
+        mouseTrackingRef.current = modes.mouseTrackingMode !== 'none'
+        onModesChanged?.(modes)
       },
       [onModesChanged]
     )

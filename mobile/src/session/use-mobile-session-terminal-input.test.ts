@@ -2,7 +2,10 @@ import { createElement, createRef, useRef, type MutableRefObject } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
-import { TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS } from './mobile-session-route-helpers'
+import {
+  TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
+  TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+} from './mobile-session-route-helpers'
 import type { TerminalGestureInputQueue } from './mobile-session-route-types'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 
@@ -97,6 +100,57 @@ describe('scrolling a mouse-tracking TUI over a slow link', () => {
     expect(sendRequest.mock.calls.map(([method]) => method)).toEqual(
       Array(4).fill('terminal.send')
     )
+    renderer.unmount()
+  })
+
+  it('paces a fling out one wheel row per flush and drops none of them', async () => {
+    // Why: measured from the user's finger on 2026-09-11 (Galaxy S23, Orca
+    // Relay): rows arrived at Claude faster than it repaints (~40/s), so 24 of
+    // 47 repaints moved six or more rows at once — the "jumps" — and the token
+    // bucket dropped whole batches past 64 rows, so the steps were uneven too.
+    const sendRequest = vi.fn(() => pendingRequest())
+    const { hookRef, renderer } = mount(sendRequest)
+
+    act(() => {
+      hookRef.current!.handleTerminalInput(HANDLE, WHEEL_UP.repeat(10))
+    })
+    // The first row leaves at once, the second one flush later, never a batch.
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS + 1)
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect((sendRequest.mock.calls[0] as unknown[])[1]).toMatchObject({ text: WHEEL_UP })
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS * 12)
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(10)
+    for (const call of sendRequest.mock.calls as unknown[][]) {
+      expect(call[1]).toMatchObject({ text: WHEEL_UP })
+    }
+    renderer.unmount()
+  })
+
+  it('delivers every row of a long fling instead of dropping the batches past a bucket', async () => {
+    const sendRequest = vi.fn(async () => ({}))
+    const { hookRef, renderer } = mount(sendRequest)
+
+    for (let i = 0; i < 12; i += 1) {
+      act(() => {
+        hookRef.current!.handleTerminalInput(HANDLE, WHEEL_UP.repeat(10))
+      })
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS * 130)
+    })
+    const rows = (sendRequest.mock.calls as unknown[][]).reduce(
+      (n, call) => n + ((call[1] as { text: string }).text.split(WHEEL_UP).length - 1),
+      0
+    )
+    // One row left at once; the other 96 waited their turn; the 23 past the cap
+    // were the finger's extra travel, not a bucket emptying mid-swipe.
+    expect(rows).toBe(TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES + 1)
     renderer.unmount()
   })
 })
