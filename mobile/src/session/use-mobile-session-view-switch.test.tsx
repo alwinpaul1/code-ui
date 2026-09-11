@@ -18,6 +18,16 @@ const appState = vi.hoisted(() => {
     }
   }
 })
+const heldFloors = vi.hoisted(() => ({
+  readHeldFloors: vi.fn(async (): Promise<string[]> => []),
+  rememberHeldFloor: vi.fn(async () => undefined),
+  forgetHeldFloor: vi.fn(async () => undefined)
+}))
+vi.mock('./mobile-held-floor-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-held-floor-store')>()),
+  ...heldFloors
+}))
+
 vi.mock('react-native', () => ({
   AppState: {
     get currentState() {
@@ -33,6 +43,9 @@ vi.mock('react-native', () => ({
 beforeEach(() => {
   appState.listeners.clear()
   appState.current = 'active'
+  heldFloors.readHeldFloors.mockResolvedValue([])
+  heldFloors.rememberHeldFloor.mockClear()
+  heldFloors.forgetHeldFloor.mockClear()
 })
 
 import { useMobileSessionViewSwitch } from './use-mobile-session-view-switch'
@@ -168,5 +181,42 @@ describe('leaving the route while the relay is unhappy', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('a floor the app died holding', () => {
+  /** Measured on a Galaxy S23: force-stopping the app while it drove a
+   *  terminal left the desk at COLS=51, and it was still there 60 s after the
+   *  process was confirmed dead. The host never hands it back on its own. */
+  it('is handed back the next time the app runs', async () => {
+    heldFloors.readHeldFloors.mockResolvedValue(['term-dead'])
+    const setDisplayMode = vi.fn(async () => true)
+
+    mountViewSwitch('term-1', setDisplayMode)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(setDisplayMode).toHaveBeenCalledWith('term-dead', 'desktop')
+  })
+
+  it('does not hand back the terminal the phone is driving right now', async () => {
+    heldFloors.readHeldFloors.mockResolvedValue(['term-1'])
+    const setDisplayMode = vi.fn(async () => true)
+
+    mountViewSwitch('term-1', setDisplayMode)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(setDisplayMode).not.toHaveBeenCalledWith('term-1', 'desktop')
+  })
+
+  it('writes down a floor as soon as the phone takes it', () => {
+    mountViewSwitch('term-1')
+
+    expect(heldFloors.rememberHeldFloor).toHaveBeenCalledWith('term-1')
   })
 })

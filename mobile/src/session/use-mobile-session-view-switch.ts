@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 import { mobileVisibleTerminalDisplayMode } from './mobile-session-route-helpers'
+import {
+  forgetHeldFloor,
+  heldFloorsToRelease,
+  readHeldFloors,
+  rememberHeldFloor
+} from './mobile-held-floor-store'
 import { releaseFloorUntilAccepted, shouldReleaseFloor } from './mobile-terminal-floor-release'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 
@@ -81,6 +87,9 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     const want = mobileVisibleTerminalDisplayMode(activeHandle, showNativeChat)
     if (activeHandle && want === 'auto') {
       drivenHandlesRef.current.add(activeHandle)
+      // A killed process cannot send a release, so write down what we hold
+      // while we still can; the next run hands it back.
+      void rememberHeldFloor(activeHandle)
     }
   }, [activeHandle, showNativeChat])
   const setDisplayModeRef = useRef(setDisplayMode)
@@ -117,7 +126,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
         AppState.currentState === 'active' &&
         activeHandleStateRef.current === handle &&
         !showNativeChatStateRef.current
-    })
+    }).then((accepted) => (accepted ? forgetHeldFloor(handle) : undefined))
   }, [])
 
   /** Ask for phone dims again, and record that we are driving this handle.
@@ -170,6 +179,35 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       releaseHandle(previous)
     }
   }, [activeHandle, releaseHandle, showNativeChat])
+
+  // A floor the app died holding: nothing could be sent at the time, the host
+  // never hands one back on its own (measured: still COLS=51 sixty seconds
+  // after the process was confirmed dead), and it exposes no way to ask which
+  // floors this device holds. So the record written on the way in is the only
+  // thing left to act on.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const remembered = await readHeldFloors()
+      if (cancelled) {
+        return
+      }
+      const driving = activeHandleStateRef.current
+      for (const handle of heldFloorsToRelease({
+        remembered,
+        drivingNow: driving ? [driving] : []
+      })) {
+        void releaseFloorUntilAccepted({
+          release: () => setDisplayModeRef.current(handle, 'desktop'),
+          wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+          isReclaimed: () => activeHandleStateRef.current === handle
+        }).then((accepted) => (accepted ? forgetHeldFloor(handle) : undefined))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Measured on a Galaxy S23: the hardware back key in terminal mode left the
   // desk at COLS=51 with its keyboard paused, and nothing recovered it — the
