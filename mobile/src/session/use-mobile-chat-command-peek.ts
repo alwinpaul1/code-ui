@@ -1,7 +1,14 @@
 import { useCallback, type MutableRefObject } from 'react'
-import { slashCommandOpensOverlay } from '../../../src/shared/native-chat-slash-commands'
+import { chatCommandOpensOverlay } from './mobile-chat-command-overlay'
 
-/** Show terminal-only command overlays without changing the saved chat preference. */
+/**
+ * Show the terminal for a slash command only when the command draws a TUI
+ * overlay the chat view cannot show; never change the saved chat preference.
+ *
+ * Every agent goes through a catalog. Until 2026-09-11 only Codex did, and a
+ * Claude tab left chat for the terminal on every command — /btw, /clear,
+ * /help — with nothing there to watch.
+ */
 export function useMobileChatCommandPeek(
   agentRef: MutableRefObject<string | null>,
   tabId: string | null,
@@ -9,7 +16,8 @@ export function useMobileChatCommandPeek(
 ): (command: string) => void {
   return useCallback(
     (command: string) => {
-      if (agentRef.current === 'codex' && !slashCommandOpensOverlay('codex', command)) {
+      const agent = agentRef.current
+      if (agent && !chatCommandOpensOverlay(agent, command)) {
         return
       }
       if (tabId) {
