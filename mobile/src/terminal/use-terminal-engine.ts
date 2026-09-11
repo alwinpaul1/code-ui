@@ -1,20 +1,9 @@
-import { useEffect, useState } from 'react'
-import { loadTerminalEngine, type TerminalEngine } from './terminal-engine-preference'
+import type { TerminalEngine } from './terminal-engine-preference'
 
-/** The engine flag, read once per mount; the default until storage answers,
- *  so a pane never flips engines mid-life. */
+/** Which engine draws terminal panes: libghostty-vt in a native view. The
+ *  xterm.js WebView stays in the tree as the engine every release before
+ *  0.4 shipped, selectable by tests through TerminalPaneView's `engine`
+ *  prop, but no longer by the user — one engine, one set of behaviours. */
 export function useTerminalEngine(): TerminalEngine {
-  const [engine, setEngine] = useState<TerminalEngine>('ghostty')
-  useEffect(() => {
-    let cancelled = false
-    void loadTerminalEngine().then((loaded) => {
-      if (!cancelled) {
-        setEngine(loaded)
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  return engine
+  return 'ghostty'
 }

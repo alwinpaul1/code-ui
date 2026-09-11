@@ -17,8 +17,6 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
-import { loadTerminalEngine, saveTerminalEngine, type TerminalEngine } from '../src/terminal/terminal-engine-preference'
-import { loadTerminalFollowFinger, saveTerminalFollowFinger } from '../src/terminal/terminal-follow-finger-preference'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import {
   loadTerminalAutocompleteEnabled,
@@ -156,25 +154,6 @@ export default function TerminalSettingsScreen() {
     }
     setTextScale(opt.scale)
     void saveTerminalTextScale(opt.scale)
-  }, [])
-
-  const [engine, setEngine] = useState<TerminalEngine>('webview')
-  useEffect(() => {
-    void loadTerminalEngine().then(setEngine)
-  }, [])
-  const toggleEngine = useCallback((on: boolean) => {
-    const next: TerminalEngine = on ? 'ghostty' : 'webview'
-    setEngine(next)
-    void saveTerminalEngine(next)
-  }, [])
-
-  const [followFinger, setFollowFinger] = useState(false)
-  useEffect(() => {
-    void loadTerminalFollowFinger().then(setFollowFinger)
-  }, [])
-  const toggleFollowFinger = useCallback((on: boolean) => {
-    setFollowFinger(on)
-    void saveTerminalFollowFinger(on)
   }, [])
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
@@ -334,44 +313,6 @@ export default function TerminalSettingsScreen() {
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
-        </View>
-
-        <Text style={[styles.groupHeading, styles.inputGroupGap]}>RENDERING</Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Ghostty engine (beta)</Text>
-              <Text style={styles.rowSublabel}>
-                {engine === 'ghostty'
-                  ? 'Native renderer. Panes pick it up when a session is next opened.'
-                  : 'Off — terminals draw with the WebView renderer.'}
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Ghostty engine"
-              value={engine === 'ghostty'}
-              onValueChange={toggleEngine}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
-            />
-          </View>
-          <View style={styles.row}>
-            <View style={styles.rowContent}>
-              <Text style={styles.rowLabel}>Follow the finger on agent scroll (experimental)</Text>
-              <Text style={styles.rowSublabel}>
-                {followFinger
-                  ? 'Claude Code tabs move with your finger, up to one row ahead of the desk; the prompt can bob by a row.'
-                  : 'Off — the pane shows exactly what the desk painted.'}
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Follow the finger on agent scroll"
-              value={followFinger}
-              onValueChange={toggleFollowFinger}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
-            />
-          </View>
         </View>
 
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>

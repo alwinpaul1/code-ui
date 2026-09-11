@@ -3,7 +3,6 @@ import { StyleSheet, View } from 'react-native'
 import { TerminalView, type TerminalViewRef } from 'expo-libghostty'
 import { ghosttyThemeFromMobileTheme } from './ghostty-theme-from-mobile-theme'
 import { terminalModesFromGhosttyMask } from './terminal-modes-from-ghostty-mask'
-import { useTerminalFollowFinger } from './terminal-follow-finger-preference'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
 
@@ -93,7 +92,6 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     // the host expects is the grid it gets.
     const [hostFit, setHostFit] = useState(1)
     const hostFitRef = useRef(1)
-    const followFinger = useTerminalFollowFinger()
 
     const theme = useMemo(() => ghosttyThemeFromMobileTheme(terminalTheme), [terminalTheme])
 
@@ -228,7 +226,6 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           style={styles.fill}
           fontSize={GHOSTTY_BASE_FONT_DP * textScale * hostFit}
           theme={theme}
-          followFinger={followFinger}
           managesFocus={false}
           showsAccessoryBar={false}
           managesKeyboardInsets={false}
