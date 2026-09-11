@@ -9,7 +9,7 @@ import {
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
 import { saveHost } from './host-store'
-import { readMobileNetworkType } from './mobile-network-type'
+import { readMobileNetworkIdentity, readMobileNetworkType } from './mobile-network-type'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -120,6 +120,7 @@ function createSupervisor(
     setTimer: setTimeout,
     clearTimer: clearTimeout,
     networkType: readMobileNetworkType,
+    networkIdentity: readMobileNetworkIdentity,
     ...(options.directReturnProbe === undefined ? {} : { directReturnProbe: options.directReturnProbe })
   })
 }

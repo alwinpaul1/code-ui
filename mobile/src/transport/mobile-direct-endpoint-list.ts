@@ -104,6 +104,6 @@ export function withPreferredDirectEndpoint(host: HostProfile, winner: string): 
     return null
   }
   const endpoints = withDirectEndpoint(host.endpoints, host.endpoint, winner)
-  const { directUnreachableSince: _stale, ...rest } = host
+  const { directUnreachableSince: _stale, directUnreachableNetwork: _where, ...rest } = host
   return { ...rest, endpoint: winner, endpoints }
 }

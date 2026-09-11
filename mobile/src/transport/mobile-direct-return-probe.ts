@@ -1,3 +1,4 @@
+import { directDeadOnNetwork } from './mobile-direct-verdict'
 import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import {
   directEndpointUrls,
@@ -31,6 +32,8 @@ export class DirectReturnProbe {
       openDirect: (endpoint: string) => RpcClient
       /** expo-network's `NetworkStateType` name, or null when unknown. */
       networkType?: () => Promise<string | null>
+      /** See readMobileNetworkIdentity; gates re-dialling a path proven dead here. */
+      networkIdentity?: () => Promise<string | null>
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
@@ -79,6 +82,14 @@ export class DirectReturnProbe {
     this.inFlight?.abort()
   }
 
+  private async deadOnThisNetwork(): Promise<boolean> {
+    if (!this.deps.networkIdentity) {
+      return false
+    }
+    const identity = await this.deps.networkIdentity().catch(() => null)
+    return directDeadOnNetwork(this.hooks.host(), identity)
+  }
+
   private async plausibleEndpoints(): Promise<string[]> {
     const all = directEndpointUrls(this.hooks.host())
     if (!this.deps.networkType) {
@@ -94,6 +105,15 @@ export class DirectReturnProbe {
     }
     if (!this.hooks.canAttempt() || !this.hooks.hysteresis.canProbe(this.deps.now())) {
       this.schedule()
+      return
+    }
+    // Measured on a Galaxy S23 behind a full-tunnel VPN: both direct endpoints
+    // re-dialled every cooldown and every foreground return, two sockets held
+    // for the OS's 10 s connect timeout, every minute, all night, on a network
+    // that had not changed. A verdict reached HERE stands until the network
+    // changes; the nudge router forgets it on 'network-change'.
+    if (await this.deadOnThisNetwork()) {
+      this.schedule(NO_PLAUSIBLE_ENDPOINT_RECHECK_MS)
       return
     }
     const endpoints = await this.plausibleEndpoints()

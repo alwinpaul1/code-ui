@@ -88,3 +88,75 @@ describe('direct-return probe on cellular', () => {
     probe.clear()
   })
 })
+
+describe('a direct path already proven dead on this network', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** Measured on a Galaxy S23 behind a full-tunnel VPN: both direct endpoints
+   *  (LAN and Tailscale) were re-dialled on every cooldown and on every
+   *  foreground return, two sockets held for the OS's 10 s connect timeout,
+   *  every minute, all night — while nothing about the network had changed.
+   *  The verdict was remembered; what was missing was WHERE it was reached. */
+  const deadHere: HostProfile = {
+    id: 'host-1',
+    name: 'Studio',
+    endpoint: 'ws://192.168.1.154:6768',
+    deviceToken: 'device-token',
+    publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    directUnreachableSince: 1,
+    directUnreachableNetwork: 'WIFI|192.168.1.143'
+  } as HostProfile
+
+  function probeOn(identity: string, host: HostProfile) {
+    const openDirect = vi.fn()
+    const hysteresis = new MobileEndpointHysteresis(Date.now(), {
+      directSuccessesRequired: 3,
+      directObservationMs: 30_000,
+      failureCooldownMs: 60_000,
+      minimumDwellMs: 60_000,
+      maxFailureCooldownMs: 600_000
+    })
+    const probe = new DirectReturnProbe(
+      {
+        now: Date.now,
+        setTimer: setTimeout,
+        clearTimer: clearTimeout,
+        openDirect,
+        networkType: async () => 'WIFI',
+        networkIdentity: async () => identity
+      },
+      {
+        hysteresis,
+        host: () => host,
+        canSchedule: () => true,
+        canAttempt: () => true,
+        beginOperation: () => {},
+        migrate: async () => {},
+        onDirectMigrated: async () => {},
+        onDirectUnreachable: () => {},
+        afterProbe: () => {}
+      }
+    )
+    return { probe, openDirect }
+  }
+
+  it('is not dialled again while the network is the one it died on', async () => {
+    const { probe, openDirect } = probeOn('WIFI|192.168.1.143', deadHere)
+    probe.schedule(0)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(openDirect).not.toHaveBeenCalled()
+    probe.clear()
+  })
+
+  it('is dialled again the moment the phone is on a different network', async () => {
+    const { probe, openDirect } = probeOn('CELLULAR|10.20.30.40', deadHere)
+    probe.schedule(0)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(openDirect).toHaveBeenCalled()
+    probe.abort()
+    probe.clear()
+  })
+})

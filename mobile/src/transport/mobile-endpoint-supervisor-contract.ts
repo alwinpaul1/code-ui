@@ -26,6 +26,8 @@ export type MobileEndpointSupervisorDependencies = {
   /** Current network type (expo-network name) so direct probes skip addresses
    *  that cannot answer on it. Absent: probe everything. */
   networkType?: () => Promise<string | null>
+  /** See readMobileNetworkIdentity; scopes a direct verdict to the network it was reached on. */
+  networkIdentity?: () => Promise<string | null>
   /** A background listener keeps its relay and never probes for a direct return. */
   directReturnProbe?: boolean
 }

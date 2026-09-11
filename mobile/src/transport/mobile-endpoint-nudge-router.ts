@@ -14,6 +14,7 @@ export class MobileEndpointNudgeRouter {
       setForeground: (foreground: boolean) => void
       replaceRelay: () => void
       scheduleDirectProbe: () => void
+      forgetDirectVerdict?: () => void
     }
   ) {}
 
@@ -29,6 +30,10 @@ export class MobileEndpointNudgeRouter {
         return
       }
       args.setForeground(true)
+    }
+    if (reason === 'network-change') {
+      // A direct verdict is only ever about the network it was reached on.
+      args.forgetDirectVerdict?.()
     }
     const verdict = args.controller.handleActiveNudge(args.logical, reason)
     if (verdict === 'replace') {

@@ -21,7 +21,7 @@ import {
   MobileRelayDirectGraceTimer
 } from './mobile-relay-direct-grace-timer'
 import { formatRelayDialTimings } from './relay-dial-stage'
-import { withDirectVerdict } from './mobile-direct-verdict'
+import { DirectVerdictMemory } from './mobile-direct-verdict-memory'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -63,6 +63,7 @@ export class MobileEndpointSupervisor {
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
   private readonly directProbe: DirectReturnProbe
+  private readonly directVerdict: DirectVerdictMemory
   private launchRace: AbortController | null = null
   private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
@@ -102,7 +103,8 @@ export class MobileEndpointSupervisor {
       isForeground: () => this.backgroundGrace.isForeground(),
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
-      scheduleDirectProbe: () => this.directProbe.schedule(0)
+      scheduleDirectProbe: () => this.directProbe.schedule(0),
+      forgetDirectVerdict: () => this.directVerdict.forget()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true
@@ -140,7 +142,7 @@ export class MobileEndpointSupervisor {
       recordMigration: (session) => {
         if (this.directRaceLost) {
           this.directRaceLost = false
-          this.rememberDirectVerdict(false)
+          this.directVerdict.remember(false)
         }
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
@@ -163,6 +165,7 @@ export class MobileEndpointSupervisor {
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
       onDialFailure: (error) => logRelayDialFailure(this.logRelay, error)
     })
+    this.directVerdict = new DirectVerdictMemory(dependencies, () => this.host, (h) => (this.host = h))
     this.directProbe = new DirectReturnProbe(dependencies, {
       hysteresis: this.hysteresis,
       host: () => this.host,
@@ -173,9 +176,9 @@ export class MobileEndpointSupervisor {
       canAttempt: () => this.isActive() && !this.operationInFlight,
       beginOperation: () => (this.operationInFlight = true),
       migrate: (client, path, abort) => this.logical.migrateTo(client, path, undefined, abort),
-      onDirectUnreachable: () => this.rememberDirectVerdict(false),
+      onDirectUnreachable: () => this.directVerdict.remember(false),
       onDirectMigrated: async () => {
-        this.rememberDirectVerdict(true)
+        this.directVerdict.remember(true)
         this.leaseRotation.clear()
         this.relayRotationPending = false
         await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
@@ -218,7 +221,7 @@ export class MobileEndpointSupervisor {
         // which is where a lost race is written down; only a direct win clears it.
         if (this.logical.getActivePath() !== 'relay') {
           this.directRaceLost = false
-          this.rememberDirectVerdict(true)
+          this.directVerdict.remember(true)
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
@@ -229,7 +232,7 @@ export class MobileEndpointSupervisor {
         // dial and may never publish disconnected while its retry loop lives.
         if (this.logical.getActivePath() !== 'relay') {
           this.hysteresis.noteDirectDialFailure()
-          this.rememberDirectVerdict(false)
+          this.directVerdict.remember(false)
         }
         recoveryPresentation.onActiveFailure(this.logical, this.relayReconnect, state, this.bundle)
         const relayFailure = this.relayReconnect.handleStateFailure(this.logical, state)
@@ -261,6 +264,13 @@ export class MobileEndpointSupervisor {
     if (this.launchRace || directEndpointUrls(this.host).length < 2) {
       return
     }
+    void this.directVerdict.deadHere().then((dead) => dead || this.startDirectRace())
+  }
+
+  private startDirectRace(): void {
+    if (this.launchRace) {
+      return
+    }
     const controller = new AbortController()
     this.launchRace = controller
     void openAuthenticatedDirectEndpoint(
@@ -284,7 +294,7 @@ export class MobileEndpointSupervisor {
         this.hysteresis.recordDirectSuccess(this.dependencies.now())
         this.hysteresis.recordMigration(this.dependencies.now())
         this.directRaceLost = false
-        this.rememberDirectVerdict(true)
+        this.directVerdict.remember(true)
         const preferred = withPreferredDirectEndpoint(this.host, won.endpoint)
         if (preferred) {
           this.host = preferred
@@ -434,14 +444,6 @@ export class MobileEndpointSupervisor {
 
   private directLooksDead(): boolean {
     return this.hysteresis.directLooksUnreachable() || this.host.directUnreachableSince != null
-  }
-
-  private rememberDirectVerdict(reachable: boolean): void {
-    const next = withDirectVerdict(this.host, reachable, this.dependencies.now())
-    if (next) {
-      this.host = next
-      void this.dependencies.saveHost(next).catch(() => undefined)
-    }
   }
 
   private async rotateCredentialIfNeeded(force = false): Promise<void> {
