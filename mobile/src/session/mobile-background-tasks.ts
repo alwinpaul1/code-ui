@@ -91,8 +91,11 @@ export type BackgroundTasks = {
 
 // Exact sentences from the tool results. The id stops at the first `.` or `)`
 // because none of the id alphabets include one.
-const SHELL_STARTED = /Command running in background with ID:\s*([A-Za-z0-9_-]+)/
-const SHELL_MOVED = /moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
+// Anchored to the start of the result: a command whose OUTPUT merely quotes
+// these strings (a grep for them, a printed fixture) is not a launch.
+// Reviewed 2026-09-11 — this session's own greps had counted as shells.
+const SHELL_STARTED = /^\s*Command running in background with ID:\s*([A-Za-z0-9_-]+)/
+const SHELL_MOVED = /^\s*Command did not complete[^\n]{0,120}?moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
 // `Monitor started (task biifjm40h, timeout 3000000ms). You will be notified…`
 const MONITOR_STARTED = /Monitor started \(task\s+([A-Za-z0-9_-]+)/
 const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/

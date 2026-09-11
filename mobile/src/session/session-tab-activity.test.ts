@@ -18,39 +18,37 @@ describe('what a tab pill shows about background shells', () => {
   it('shows an inactive tab as running background work from the host status alone', () => {
     expect(
       sessionTabActivity({ state: 'working', workingMode: 'monitoring' }, null, false)
-    ).toEqual({ kind: 'background', count: null })
+    ).toBe('background')
   })
 
-  it('never uses an inactive tab’s stale beacon for a count', () => {
+  it('never consults an inactive tab’s stale beacon', () => {
     expect(
       sessionTabActivity(
         { state: 'working', workingMode: 'monitoring' },
-        beacon(['t1', 't2']),
+        beacon(['t1', 't2'], ['t1', 't2']),
         false
       )
-    ).toEqual({ kind: 'background', count: null })
+    ).toBe('background')
   })
 
-  it('counts the active tab’s shells the agent still lists, minus those it wrote as done', () => {
+  it('keeps showing background work while the active tab’s agent still lists a live shell', () => {
     expect(
       sessionTabActivity(
         { state: 'working', workingMode: 'monitoring' },
         beacon(['t1', 't2'], ['t1']),
         true
       )
-    ).toEqual({ kind: 'background', count: 1 })
+    ).toBe('background')
   })
 
-  it('counts shells the transcript tail shows launched even before the Stop hook lists them', () => {
-    // Why: desk "3 shells", phone "1" (2026-09-11) — two launches were newer
-    // than the last Stop hook and older than the loaded window.
+  it('stays up while a shell the transcript tail shows launched is still unfinished', () => {
     expect(
       sessionTabActivity(
         { state: 'working', workingMode: 'monitoring' },
-        beacon(['t1'], [], ['t1', 't2', 't3']),
+        beacon([], ['t1'], ['t1', 't2']),
         true
       )
-    ).toEqual({ kind: 'background', count: 3 })
+    ).toBe('background')
   })
 
   it('shows nothing, not a zero, once the agent has written every listed shell as done', () => {
@@ -69,6 +67,6 @@ describe('what a tab pill shows about background shells', () => {
   })
 
   it('shows plain working while the turn itself is still running', () => {
-    expect(sessionTabActivity({ state: 'working' }, null, false)).toEqual({ kind: 'working' })
+    expect(sessionTabActivity({ state: 'working' }, null, false)).toBe('working')
   })
 })

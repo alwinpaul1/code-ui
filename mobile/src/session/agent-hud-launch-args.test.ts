@@ -488,6 +488,12 @@ describe('finished background tasks ride the Claude beacon', () => {
     '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01A","type":"tool_result","content":"Command running in background with ID: bajgl5wmo. Output is being written to: /private/tmp/claude-501/x/tasks/bajgl5wmo.output. You will be notified when it completes. To check interim output, use Read on that file path.","is_error":false}]},"uuid":"75a95481-2c35-4b80-81ff-dd558a4522fb","timestamp":"2026-09-11T10:17:50.846Z"}',
     '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01B","type":"tool_result","content":"Command did not complete within its 120s timeout and was moved to the background (ID: b7woddzjt). Output is being written to: /private/tmp/claude-501/x/tasks/b7woddzjt.output.","is_error":false}]},"uuid":"8f0c2b8f-2b1f-4b2e-9c1e-7a9d1f0e2c11","timestamp":"2026-09-11T10:20:01.000Z"}',
     '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<task-notification>\\n<task-id>bajgl5wmo</task-id>\\n<status>completed</status>\\n</task-notification>"}]},"uuid":"c1d2e3f4-0000-4000-8000-000000000001","timestamp":"2026-09-11T10:25:00.000Z"}',
+    // Pollution the transcript really carries: the assistant's own command that
+    // greps for the launch text, a tool_result that merely PRINTS one (id
+    // bfakefake), and prose quoting a notification. None of these are shells.
+    '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01C","name":"Bash","input":{"command":"grep -m1 \\"Command running in background with ID: b\\" transcript.jsonl"}}]},"uuid":"d1","timestamp":"2026-09-11T10:26:00.000Z"}',
+    '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01C","type":"tool_result","content":"{\\"type\\":\\"user\\",\\"content\\":\\"Command running in background with ID: bfakefake. Output is being written to","is_error":false}]},"uuid":"d2","timestamp":"2026-09-11T10:26:01.000Z"}',
+    '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The record looks like <task-notification><task-id>bquotedone</task-id><status>completed</status></task-notification> in the file."}]},"uuid":"d3","timestamp":"2026-09-11T10:26:02.000Z"}',
     ''
   ].join('\n')
 
@@ -505,6 +511,10 @@ describe('finished background tasks ride the Claude beacon', () => {
       })
       expect(run.beacon).toContain(' bg=bajgl5wmo,b7woddzjt')
       expect(run.beacon).toContain(' done=bajgl5wmo')
+      expect(run.beacon).not.toContain('bfakefake')
+      expect(run.beacon).not.toContain('bquotedone')
+      const bg = (run.beacon ?? '').split(' ').find((field) => field.startsWith('bg='))
+      expect(bg?.replace(/[^A-Za-z0-9_,=-]/g, '')).toBe('bg=bajgl5wmo,b7woddzjt')
     })
   }
 

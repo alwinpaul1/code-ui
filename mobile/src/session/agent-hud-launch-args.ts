@@ -123,17 +123,25 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
   'dn=""',
   // Only records that carry a <status>: a Monitor emits a <task-id> with no
-  // status for every EVENT while it is still running.
-  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 1048576 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]*</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
-  // Every shell Claude has started, from its own tool results: "Command running
-  // in background with ID: <id>" and "moved to the background (ID: <id>)".
-  // Same tail, same tools. Launched minus done is what is still running, and
+  // status for every EVENT while it is still running. Assistant records are
+  // skipped — prose or a command that quotes a notification is not one.
+  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 4194304 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  // Every shell Claude has started, from its own tool results: a tool_result
+  // whose content STARTS with "Command running in background with ID: <id>"
+  // or "Command did not complete … moved to the background (ID: <id>)".
+  // Anchored to the start of the content and skipping assistant records,
+  // because the transcript also holds every command and every line of prose
+  // that merely QUOTES those strings — a grep for them, a test fixture — and
+  // on 2026-09-11 those read as launches (an empty id, one called "b").
+  // The tail is 4 MiB, not 1: a busy session writes several MB an hour, and a
+  // completion that scrolled out while its launch was still in the phone's
+  // window stayed "running". Same tail, same tools. Launched minus done is what is still running, and
   // it is right mid-turn — the Stop hook's `run=` list is only as fresh as the
   // last turn end, and a 858k-token session's launches sit far above the
   // window the phone loads. Measured 2026-09-11: the desk read "3 shells",
   // the phone "1".
   'bg=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(tail -c 1048576 "$tp" 2>/dev/null | grep -o -e "background with ID: [A-Za-z0-9_-]*" -e "background (ID: [A-Za-z0-9_-]*" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(tail -c 4194304 "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -392,10 +400,13 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   'if($f -and $f.used_percentage -ne $null){$ra=0; if($f.resets_at){$ra=[int64]$f.resets_at}; $o=$o+" h5="+[int][math]::Floor([double]$f.used_percentage)+":"+$ra}',
   '$w=$j.rate_limits.seven_day',
   'if($w -and $w.used_percentage -ne $null){$rb=0; if($w.resets_at){$rb=[int64]$w.resets_at}; $o=$o+" d7="+[int][math]::Floor([double]$w.used_percentage)+":"+$rb}',
-  // Finished background tasks, as in the sh script: every <task-id> in the
-  // transcript tail is a task-notification, mid-turn ones included.
+  // Finished and launched background tasks, as in the sh script: every
+  // <task-id> with a <status> in the transcript tail is a task-notification,
+  // mid-turn ones included, and every tool_result whose content starts with
+  // Claude's launch text is a shell. Assistant records are skipped.
   '$tp=[string]$j.transcript_path',
-  'if($tp -and (Test-Path -LiteralPath $tp)){$ids=@(Get-Content -LiteralPath $tp -Tail 2000 | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]+)</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}}',
+  '$q=[char]34; $pa=$q+"type"+$q+":"+$q+"assistant"+$q',
+  'if($tp -and (Test-Path -LiteralPath $tp)){$tl=@(Get-Content -LiteralPath $tp -Tail 8000 | Where-Object {$_ -notmatch $pa}); $ids=@($tl | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]{3,})</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}; $bg=@($tl | Select-String -Pattern ($q+"content"+$q+":"+$q+"Command (?:running in background with ID: |did not complete[^"+$q+"]*moved to the background \\(ID: )([A-Za-z0-9_-]{3,})") -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($bg.Count -gt 0){$o=$o+" bg="+($bg -join ",")}}',
   // Delegation: the user keeps their own bar. Their command runs under Git
   // Bash when it exists (what Claude Code itself would have used), else under
   // this same PowerShell. Its stdout is ours, which Claude Code draws.

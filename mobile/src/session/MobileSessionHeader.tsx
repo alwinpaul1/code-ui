@@ -337,10 +337,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
 /** The agent's state on its pill, with the desktop's own icons (AgentStateDot),
  *  placed as the desktop places them — before the agent's mark: the yellow
  *  spinner while its turn runs, the heartbeat once the turn is done and
- *  background shells remain — with the count on the active tab — the emerald
- *  check when done, the question bubble when it waits for input, red when
- *  blocked. Live for every tab from the host's pushed status; see
- *  session-tab-activity.ts. */
+ *  background shells remain, the emerald check when done, the question
+ *  bubble when it waits for input, red when blocked. No number: the chat
+ *  view's row carries the count. Live for every tab from the host's pushed
+ *  status; see session-tab-activity.ts. */
 function TabActivityBadge({
   handle,
   status,
@@ -350,34 +350,15 @@ function TabActivityBadge({
   status: AgentStatusEntry | null
   active: boolean
 }) {
-  const { colors, radius, isDark } = useTheme()
+  const { isDark } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
   const activity = sessionTabActivity(status, beacon, active)
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)
   const state = status ? agentDotState({ ...status, interrupted: false }, now) : 'idle'
-  if (state === 'idle') {
+  if (state === 'idle' || (state === 'monitoring' && activity === null)) {
     return null
   }
-  const count = activity?.kind === 'background' ? activity.count : null
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <AgentStateDot state={state} size={12} onLightSurface={active && isDark} />
-      {count != null ? (
-        <View
-          accessibilityLabel={`${count} background shells running`}
-          style={{
-            paddingHorizontal: 4,
-            borderRadius: radius.xs,
-            backgroundColor: active ? colors.bgPanel : colors.bgRaised
-          }}
-        >
-          <Txt variant="caption" weight="medium" style={{ color: active ? colors.text : colors.textSecondary }}>
-            {count}
-          </Txt>
-        </View>
-      ) : null}
-    </View>
-  )
+  return <AgentStateDot state={state} size={12} onLightSurface={active && isDark} />
 }

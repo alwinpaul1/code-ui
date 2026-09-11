@@ -662,6 +662,30 @@ describe('a tab opened after its turn ended with shells still running', () => {
   })
 })
 
+describe('a command whose output merely quotes the launch text', () => {
+  it('is not a launch — only a result that starts with Claude\'s own launch text is', () => {
+    // Why: on 2026-09-11 this session grepped its own transcript for the
+    // string and the printed line was counted as a running shell.
+    const transcript: NativeChatMessage[] = [
+      {
+        id: 'm1',
+        role: 'assistant',
+        timestamp: T0,
+        source: 'transcript',
+        blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'grep -m1 "Command running in background with ID: b" t.jsonl' } }]
+      } as NativeChatMessage,
+      {
+        id: 'm2',
+        role: 'user',
+        timestamp: T0 + 1,
+        source: 'transcript',
+        blocks: [{ type: 'tool-result', output: '{"type":"user","content":"Command running in background with ID: bajgl5wmo. Output is being written to' }]
+      } as NativeChatMessage
+    ]
+    expect(deriveBackgroundTasks(transcript, NOW, { state: 'working' }).running).toEqual([])
+  })
+})
+
 describe('shells the beacon saw launched above the loaded window', () => {
   it('lists them running until a notification or the done list names them', () => {
     const tasks = deriveBackgroundTasks([], NOW, { state: 'working' }, {
