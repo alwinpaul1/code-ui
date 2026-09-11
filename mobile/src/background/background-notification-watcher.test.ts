@@ -36,7 +36,7 @@ const hosts = [
   { id: 'h2', name: 'Laptop' } as HostProfile
 ]
 
-function harness() {
+function harness(liveClients = new Map<string, FakeClient>()) {
   const clients = new Map<string, FakeClient>()
   const unsubscribes = new Map<string, ReturnType<typeof vi.fn>>()
   const subscribe = vi.fn((_client: unknown, hostId: string) => {
@@ -53,6 +53,7 @@ function harness() {
     loadHosts: async () => hosts,
     openClient: openClient as never,
     subscribeNotifications: subscribe as never,
+    peekLiveClient: ((hostId: string) => liveClients.get(hostId) ?? null) as never,
     log: () => {}
   })
   return { watcher, clients, openClient, subscribe, unsubscribes }
@@ -128,5 +129,52 @@ describe('background notification watcher', () => {
     release(hosts)
     await settle()
     expect(openClient).not.toHaveBeenCalled()
+  })
+})
+
+describe('sharing the connection the UI already holds', () => {
+  /** Measured on a Galaxy S23 behind a relay: every background/foreground
+   *  hand-back cost a fresh 2.3–3.2 s relay dial (11 in 40 minutes) because the
+   *  watcher opened a second client per host and closed it on return — and the
+   *  bytes a PTY emitted during that gap were never shown. The UI retains a
+   *  healthy relay for 30 s across a background; dialling beside it is what
+   *  broke that. */
+  it('borrows the UI\'s live client instead of dialling a second session', async () => {
+    const live = makeClient()
+    live.setState('connected')
+    const { watcher, openClient, subscribe } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+
+    // h1 rides the UI's connection; only h2, with no live client, is dialled.
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2'])
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    expect(subscribe.mock.calls[0]![0]).toBe(live)
+  })
+
+  it('hands a borrowed client back without closing it', async () => {
+    const live = makeClient()
+    live.setState('connected')
+    const { watcher, unsubscribes } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+
+    watcher.setUiVisible(true)
+    await settle()
+
+    expect(unsubscribes.get('h1')).toHaveBeenCalledTimes(1)
+    expect(live.close).not.toHaveBeenCalled()
+  })
+
+  it('still dials its own when the UI\'s client is not connected', async () => {
+    const live = makeClient() // 'connecting': nothing to borrow yet
+    const { watcher, openClient } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h1', 'h2'])
   })
 })

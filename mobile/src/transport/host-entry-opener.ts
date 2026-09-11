@@ -1,3 +1,4 @@
+import { publishLiveHostClient } from './live-host-clients'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
@@ -139,6 +140,7 @@ export async function openHostClientEntry(
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)
+    publishLiveHostClient(hostId, client)
     settle()
     const priorFailureCount = state.retryScheduler.recordSuccess(hostId)
     if (priorFailureCount > 0) {

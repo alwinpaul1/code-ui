@@ -26,11 +26,17 @@ type BackgroundNotificationWatcherDependencies = {
   loadHosts: () => Promise<HostProfile[]>
   openClient: (host: HostProfile) => RpcClient
   subscribeNotifications: (client: RpcClient, hostId: string) => () => void
+  /** The UI's live client for a host, if it holds one. Borrowing it instead of
+   *  dialling beside it is what keeps the relay session — and the bytes in
+   *  flight on it — across a background/foreground hand-back. */
+  peekLiveClient?: (hostId: string) => RpcClient | null
   log: (message: string, detail?: string) => void
 }
 
 type HostLink = {
   client: RpcClient
+  /** False for a client borrowed from the UI: unsubscribe on hand-back, never close. */
+  owned: boolean
   unsubscribeState: () => void
   unsubscribeNotifications: (() => void) | null
 }
@@ -46,8 +52,13 @@ export function createBackgroundNotificationWatcher(
 
   const shouldListen = (): boolean => enabled && !uiVisible
 
-  function wire(host: HostProfile, client: RpcClient): void {
-    const link: HostLink = { client, unsubscribeState: () => {}, unsubscribeNotifications: null }
+  function wire(host: HostProfile, client: RpcClient, owned: boolean): void {
+    const link: HostLink = {
+      client,
+      owned,
+      unsubscribeState: () => {},
+      unsubscribeNotifications: null
+    }
     const onState = (state: ConnectionState): void => {
       if (state === 'connected') {
         link.unsubscribeNotifications ??= deps.subscribeNotifications(client, host.id)
@@ -80,8 +91,16 @@ export function createBackgroundNotificationWatcher(
       if (links.has(host.id)) {
         continue
       }
+      // Measured: dialling a second session beside the UI's retained relay cost a
+      // fresh 2.3–3.2 s dial on every return and lost whatever the PTY wrote in
+      // the gap. Ride the UI's connection whenever it has one up.
+      const live = deps.peekLiveClient?.(host.id) ?? null
+      if (live && live.getState() === 'connected') {
+        wire(host, live, false)
+        continue
+      }
       try {
-        wire(host, deps.openClient(host))
+        wire(host, deps.openClient(host), true)
       } catch (error) {
         deps.log(`background link: could not open ${host.name}`, error instanceof Error ? error.message : '')
       }
@@ -97,7 +116,9 @@ export function createBackgroundNotificationWatcher(
     for (const link of links.values()) {
       link.unsubscribeNotifications?.()
       link.unsubscribeState()
-      link.client.close()
+      if (link.owned) {
+        link.client.close()
+      }
     }
     links.clear()
     deps.log('background link: handed back to the app')

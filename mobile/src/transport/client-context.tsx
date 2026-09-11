@@ -1,5 +1,6 @@
 // Single shared RpcClient per host, collapsing the old per-screen WebSocket connections.
 // Design: docs/mobile-shared-client-per-host.md.
+import { retireLiveHostClient } from './live-host-clients'
 import {
   createContext,
   useCallback,
@@ -86,6 +87,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     }
     entry?.unsubState()
     entry?.unsubConnectionPath()
+    retireLiveHostClient(hostId, storeRef.current.get(hostId)?.client)
     storeRef.current.delete(hostId)
     entry?.client.close()
     notifyHostState(hostId, 'disconnected')
@@ -261,6 +263,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         entry.unsubState()
         entry.unsubConnectionPath()
         entry.client.close()
+        retireLiveHostClient(hostId, storeRef.current.get(hostId)?.client)
         storeRef.current.delete(hostId)
       }
       pendingOpensRef.current.cancel(hostId)
