@@ -148,7 +148,7 @@ describe('scrolling a mouse-tracking TUI over a slow link', () => {
       0
     )
     // One row left at once; the other 96 waited their turn; the 23 past the cap
-    // were the finger's extra travel, not a bucket emptying mid-swipe.
+    // were the oldest of the finger's travel, not a bucket emptying mid-swipe.
     expect(rows).toBe(TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES + 1)
     renderer.unmount()
   })
@@ -168,6 +168,51 @@ describe('scrolling a mouse-tracking TUI over a slow link', () => {
     })
     const texts = (sendRequest.mock.calls as unknown[][]).map((call) => (call[1] as { text: string }).text)
     expect(texts).toContain(CLICK)
+    renderer.unmount()
+  })
+
+  it('keeps the newest rows when a fling overflows the queue, so the scroll reaches its end', async () => {
+    // Why: Claude Code's sticky header stayed up after a fling back down —
+    // the queue had kept the fling's first rows and dropped its tail, so the
+    // agent stopped a few rows short of its bottom (2026-09-11).
+    const sendRequest = vi.fn(async () => ({}))
+    const { hookRef, renderer } = mount(sendRequest)
+    const TAGGED = (n: number) => `\x1b[<65;${n};20M`
+    // The native view hands over at most 32 rows per event; a fling is several.
+    for (let batch = 0; batch < 5; batch += 1) {
+      act(() => {
+        hookRef.current!.handleTerminalInput(
+          HANDLE,
+          Array.from({ length: 26 }, (_, i) => TAGGED(batch * 26 + i + 1)).join('')
+        )
+      })
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS * 140)
+    })
+    const texts = (sendRequest.mock.calls as unknown[][]).map((call) => (call[1] as { text: string }).text)
+    expect(texts).toContain(TAGGED(130))
+    expect(texts).not.toContain(TAGGED(2))
+    renderer.unmount()
+  })
+
+  it('drops the queued rows of the old direction when the finger reverses', async () => {
+    const sendRequest = vi.fn(async () => ({}))
+    const { hookRef, renderer } = mount(sendRequest)
+    act(() => {
+      hookRef.current!.handleTerminalInput(HANDLE, WHEEL_UP.repeat(20))
+    })
+    act(() => {
+      hookRef.current!.handleTerminalInput(HANDLE, WHEEL_DOWN.repeat(3))
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS * 30)
+    })
+    const texts = (sendRequest.mock.calls as unknown[][]).map((call) => (call[1] as { text: string }).text)
+    const ups = texts.filter((text) => text === WHEEL_UP).length
+    const downs = texts.filter((text) => text === WHEEL_DOWN).length
+    expect(downs).toBe(3)
+    expect(ups).toBeLessThanOrEqual(1)
     renderer.unmount()
   })
 })

@@ -10,7 +10,8 @@ import {
 } from '../terminal/terminal-send-request'
 import {
   isMouseClickSequence,
-  splitTerminalGestureInputSequences
+  splitTerminalGestureInputSequences,
+  wheelSequenceDirection
 } from '../terminal/terminal-gesture-input'
 import {
   isGestureMouseTrackingMode,
@@ -133,15 +134,26 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       const now = Date.now()
       const current = terminalGestureInputQueuesRef.current.get(handle)
       if (current) {
-        const room = TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES - current.sequences.length
-        if (room > 0) {
-          current.sequences.push(...sequences.slice(0, room))
+        // Why: a reversal is a change of mind — the rows still queued the
+        // other way would scroll on against the finger before these begin.
+        const incoming = wheelSequenceDirection(sequences[0] ?? '')
+        const queuedDirection = wheelSequenceDirection(current.sequences[0] ?? '')
+        if (incoming && queuedDirection && incoming !== queuedDirection) {
+          current.sequences.length = 0
+        }
+        current.sequences.push(...sequences)
+        // Why the NEWEST rows are kept: a fling's tail is what reaches the end
+        // of the transcript. Keeping the oldest left Claude Code a few rows
+        // short of its bottom, with its sticky header row still up (2026-09-11).
+        const overflow = current.sequences.length - TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES
+        if (overflow > 0) {
+          current.sequences.splice(0, overflow)
         }
         current.lastUpdatedMs = now
         return
       }
       const queued: TerminalGestureInputQueue = {
-        sequences: sequences.slice(0, TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES),
+        sequences: sequences.slice(-TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES),
         timer: null,
         lastUpdatedMs: now
       }

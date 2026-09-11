@@ -116,6 +116,22 @@ export function splitTerminalGestureInputSequences(bytes: string): string[] | nu
   return sequences
 }
 
+/** Which way a wheel sequence scrolls, or null for anything that is not a wheel. */
+export function wheelSequenceDirection(sequence: string): 'up' | 'down' | null {
+  const sgr = SGR_WHEEL_DIRECTION_RE.exec(sequence)
+  if (sgr) {
+    return sgr[1] === '64' ? 'up' : 'down'
+  }
+  if (sequence === `${ESC}[A` || sequence === `${ESC}OA`) {
+    return 'up'
+  }
+  if (sequence === `${ESC}[B` || sequence === `${ESC}OB`) {
+    return 'down'
+  }
+  return null
+}
+const SGR_WHEEL_DIRECTION_RE = new RegExp(`^${ESC}\\[<(64|65);`)
+
 /** A left-button press or release in SGR form: the two halves of a tap's click. */
 const SGR_MOUSE_CLICK_SEQUENCE_RE = new RegExp(`^${ESC}\\[<0;([0-9]{1,4});([0-9]{1,4})([Mm])$`)
 export function isMouseClickSequence(sequence: string): boolean {

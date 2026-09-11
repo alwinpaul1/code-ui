@@ -89,6 +89,20 @@ describe('the ghostty engine behind the WebView handle', () => {
     ])
   })
 
+  it('keeps the grid when the host sends an empty snapshot instead of blanking it', () => {
+    // Why: a host mid-reflow sends serialized: "" on resize; a reset here left
+    // the pane blank until a tab switch, since Claude Code repaints only the
+    // rows that changed (2026-09-11).
+    const { ref } = mount()
+    ref.current!.init(51, 38, 'alwinpaul@198 % ')
+    native.writeText.mockClear()
+
+    ref.current!.init(51, 38, '')
+    ref.current!.init(51, 38, undefined)
+
+    expect(native.writeText).not.toHaveBeenCalled()
+  })
+
   it('reports the grid the layout produced, not one it was asked for', async () => {
     const { ref, fire, onWebReady } = mount()
     expect(await ref.current!.measureFitDimensions()).toBeNull()

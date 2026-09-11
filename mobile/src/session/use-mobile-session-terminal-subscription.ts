@@ -5,7 +5,8 @@ import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import {
   readTerminalViewportDims,
-  runTerminalViewportFitPass
+  runTerminalViewportFitPass,
+  emptySnapshotNeedsResubscribe
 } from './mobile-terminal-viewport-resubscribe'
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
 import type { MobileDisplayMode } from './mobile-session-route-types'
@@ -242,7 +243,34 @@ export function useMobileSessionTerminalSubscription(
               data,
               viewport
             )
-            const serialized = typeof data.serialized === 'string' ? data.serialized : null
+            // Why: an empty string is what a host mid-reflow sends; treating it as
+            // a snapshot reset the grid to nothing, and an agent that repaints
+            // only changed rows never filled it back in (2026-09-11, ghostty).
+            const serialized =
+              typeof data.serialized === 'string' && data.serialized.length > 0
+                ? data.serialized
+                : null
+            if (
+              emptySnapshotNeedsResubscribe({
+                serialized: data.serialized,
+                attempts: viewportResubscribeBudgetRef.current.attempts(handle)
+              })
+            ) {
+              diagnostics.streamResubscribing(
+                handle,
+                seq,
+                viewportRef.current ?? { cols, rows },
+                viewportResubscribeBudgetRef.current.attempts(handle),
+                0
+              )
+              unsubscribeTerminal(handle)
+              initializedHandlesRef.current.delete(handle)
+              subscribeToTerminal(handle)
+              if (terminalUnsubsRef.current.has(handle)) {
+                viewportResubscribeBudgetRef.current.chargeAttempt(handle)
+              }
+              return
+            }
             diagnostics.streamResized(handle, seq, eventSeq, data, getTerminalRef(handle) != null)
             const oscLinks = isTerminalOscLinkRanges(data.oscLinks) ? data.oscLinks : undefined
             if (serialized != null) {

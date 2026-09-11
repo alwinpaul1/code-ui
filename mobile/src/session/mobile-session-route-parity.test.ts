@@ -86,7 +86,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // is sent at once instead of paced, and the ghostty pane routes taps to file/URL.
 // 2026-09-11: hardware back moved from the markdown actions to the view switch,
 // where it can return a terminal-mode tab to its chat view before leaving.
-const HEAD_CALLBACK_BODY_SHA256 = '0fb0d286df931fe6f822f44656e6afe47931a9e67fbe27000ab2235a237f2b6b'
+const HEAD_CALLBACK_BODY_SHA256 = '7068dab7c5ca1dd696909590a93391636e6cc7b9e581eb52a1ae382daa5dabf7'
 const HEAD_EFFECT_SHA256 = 'a123a0fd0b45e180aff593c9876a4227144c4a9f53fac5dbdb2a73c5dbb4bbbd'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
@@ -117,7 +117,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1d286021f2454776cc957b392bb9577abea372a9839011ac8c784e52295f6dfe'
+  '1931ee4ebdcf42dcac854ff366d329ce4f902d666f7a03febfc8fa8d801c1402'
 const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -562,7 +562,7 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    expect(strings).toHaveLength(634)
+    expect(strings).toHaveLength(636)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(95)

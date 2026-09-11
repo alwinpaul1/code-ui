@@ -202,6 +202,25 @@ export type TerminalViewportFitPassArgs = {
 
 /** One bounded fit pass per scrollback frame: converge, hold, degrade visibly,
  *  or measure and resubscribe (backing off) so the server can phone-fit. */
+/**
+ * A `resized` frame whose snapshot is an empty string is a host mid-reflow:
+ * nothing to draw, and an agent that repaints only changed rows will never
+ * fill a grid that no longer matches its own. The fix is a fresh full
+ * snapshot — one re-subscribe, within the same bounded budget the fit pass
+ * spends, never a loop. Measured 2026-09-11 on the S23: the pane went blank,
+ * then filled with rows from two frames ago, until a tab switch.
+ */
+export function emptySnapshotNeedsResubscribe(args: {
+  serialized: unknown
+  attempts: number
+}): boolean {
+  return (
+    typeof args.serialized === 'string' &&
+    args.serialized.length === 0 &&
+    args.attempts < MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS
+  )
+}
+
 export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): void {
   const { handle, seq, hostCols, hostRows, budget, diagnostics } = args
   const retryGeneration = budget.retryGeneration(handle)

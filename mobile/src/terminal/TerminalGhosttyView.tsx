@@ -198,8 +198,13 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           void nativeRef.current?.writeText(data)
         },
         init(_cols, _rows, initialData) {
-          // The host's snapshot supersedes whatever the grid held.
-          void nativeRef.current?.writeText(RESET_SEQUENCE + (initialData ?? ''))
+          // The host's snapshot supersedes whatever the grid held — when there
+          // is one. An empty snapshot would only blank a grid an agent that
+          // repaints changed rows never fills again; keep what is there.
+          if (!initialData) {
+            return
+          }
+          void nativeRef.current?.writeText(RESET_SEQUENCE + initialData)
         },
         resize(cols) {
           // Layout owns the grid — unless the host keeps a width of its own, in

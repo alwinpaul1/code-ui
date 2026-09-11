@@ -6,7 +6,8 @@ import {
   resolveTerminalViewportResubscribe,
   runTerminalViewportFitPass,
   shouldResubscribeAfterViewportMeasure,
-  type TerminalViewportFitPassArgs
+  type TerminalViewportFitPassArgs,
+  emptySnapshotNeedsResubscribe
 } from './mobile-terminal-viewport-resubscribe'
 
 const PHONE = { cols: 40, rows: 50 }
@@ -468,5 +469,23 @@ describe('STA-3337 stream shapes', () => {
     ])
     expect(budget.shouldAnnounceExhaustion('t1')).toBe(true)
     expect(budget.shouldAnnounceExhaustion('t1')).toBe(false)
+  })
+})
+
+describe('a resized frame with an empty snapshot', () => {
+  it('asks for a fresh snapshot instead of drawing nothing, within the bounded budget', () => {
+    // Why: a host mid-reflow sends serialized: "". Drawing it blanked the
+    // pane, and Claude Code's partial repaints then filled it with rows from
+    // two frames ago until a tab switch (2026-09-11).
+    expect(emptySnapshotNeedsResubscribe({ serialized: '', attempts: 0 })).toBe(true)
+    expect(emptySnapshotNeedsResubscribe({ serialized: '', attempts: 2 })).toBe(true)
+    expect(
+      emptySnapshotNeedsResubscribe({
+        serialized: '',
+        attempts: MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS
+      })
+    ).toBe(false)
+    expect(emptySnapshotNeedsResubscribe({ serialized: 'x', attempts: 0 })).toBe(false)
+    expect(emptySnapshotNeedsResubscribe({ serialized: undefined, attempts: 0 })).toBe(false)
   })
 })
