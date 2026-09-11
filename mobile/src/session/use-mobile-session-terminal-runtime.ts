@@ -40,7 +40,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
   const terminalGestureInputBucketsRef = useRef<Map<string, TerminalGestureInputBucket>>(new Map())
   const terminalGestureInputQueuesRef = useRef<Map<string, TerminalGestureInputQueue>>(new Map())
-  const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
+  // Unanswered terminal.send batches per handle; see TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT.
+  const terminalGestureInputInFlightRef = useRef<Map<string, number>>(new Map())
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(clientId)

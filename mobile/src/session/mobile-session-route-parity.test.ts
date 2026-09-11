@@ -74,7 +74,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // asks for the launch flags that make the agents send one.
 // 2026-09-10: split-sibling Close repeats terminal.close so the leftover
 // desktop pane collapses after the extra PTY dies.
-const HEAD_CALLBACK_BODY_SHA256 = '1a835ba9300fecb506044489213a93364bea7ad967991897ea0e66cf3cb14a07'
+// 2026-09-11: wheel batches pipeline up to TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT
+// unanswered sends instead of pacing one per relay round trip.
+const HEAD_CALLBACK_BODY_SHA256 = '166e6b45b451aeaa7f08872d9c8c97a85b8316b783ba42bf09fba4ee859a0a0e'
 const HEAD_EFFECT_SHA256 = '1e323d7da17774bb1802be9171a84ec3263d1a9dbdd7df5ec5c854fb95a320c1'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of

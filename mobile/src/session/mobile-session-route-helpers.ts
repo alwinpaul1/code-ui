@@ -15,6 +15,15 @@ export const TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND = 120
 export const TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS = 16
 export const TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES = 32
 export const TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS = 250
+/**
+ * Wheel batches a single terminal may have unanswered at once. A TUI's scroll
+ * is a round trip, so pacing batches on the reply makes the repaint cadence
+ * the link's RTT: measured 2026-09-11 on a Galaxy S23 over Orca Relay, one
+ * batch in flight painted Claude Code in bursts ~410 ms apart. Sixteen 16 ms
+ * batches cover a ~250 ms RTT without ever pacing on it; the token bucket
+ * above still bounds the rate.
+ */
+export const TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT = 16
 
 export function isFileExistsErrorMessage(message: string): boolean {
   const normalized = message.toLowerCase()

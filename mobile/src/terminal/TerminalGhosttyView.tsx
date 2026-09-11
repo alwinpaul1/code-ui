@@ -53,7 +53,10 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
       onModesChanged,
       onTerminalInput,
       onTerminalQueryReply,
-      onTerminalTap
+      onTerminalTap,
+      onSelectionMode,
+      onSelectionCopy,
+      onTextScaleChange
     },
     ref
   ) {
@@ -137,6 +140,26 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
       [onTerminalInput, onTerminalQueryReply]
     )
 
+    // Selection, copy and pinch stay native; the host hears about them the way
+    // it hears about xterm's, so its selection UI, copy toast and persisted
+    // text size behave identically whichever engine draws the pane.
+    const handleSelection = useCallback(
+      (event: { nativeEvent: { active: boolean } }) => onSelectionMode?.(event.nativeEvent.active),
+      [onSelectionMode]
+    )
+    const handleCopy = useCallback(
+      (event: { nativeEvent: { text: string } }) => onSelectionCopy?.(event.nativeEvent.text),
+      [onSelectionCopy]
+    )
+    const handleFontSize = useCallback(
+      (event: { nativeEvent: { fontSize: number } }) => {
+        // The pinch is on the fitted size; report the user's scale, not the fit.
+        const fit = hostFitRef.current || 1
+        onTextScaleChange?.(event.nativeEvent.fontSize / (GHOSTTY_BASE_FONT_DP * fit))
+      },
+      [onTextScaleChange]
+    )
+
     useImperativeHandle(
       ref,
       () => ({
@@ -209,6 +232,9 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           onResize={handleResize}
           onModes={handleModes}
           onInput={handleInput}
+          onSelection={handleSelection}
+          onCopy={handleCopy}
+          onFontSize={handleFontSize}
         />
       </View>
     )

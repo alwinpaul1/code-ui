@@ -29,10 +29,36 @@
      __android_log_print(ANDROID_LOG_ERROR, kLogTag, "failed to create terminal session");
      destroySession(session);
      return 0;
-@@ -826,4 +832,75 @@
-   return outArray;
- }
- 
+@@ -303,6 +309,16 @@
+   ghostty_terminal_resize(session->term, static_cast<uint16_t>(cols),
+                           static_cast<uint16_t>(rows), static_cast<uint32_t>(cellWidthPx),
+                           static_cast<uint32_t>(cellHeightPx));
++  // The mouse encoder turns a touch's pixel position into a cell with this
++  // size; without it (cell_width/cell_height must be non-zero) every encode
++  // fails and a swipe on a mouse-tracking TUI produces no wheel report at all.
++  GhosttyMouseEncoderSize size{};
++  size.size = sizeof(size);
++  size.screen_width = static_cast<uint32_t>(cols) * static_cast<uint32_t>(cellWidthPx);
++  size.screen_height = static_cast<uint32_t>(rows) * static_cast<uint32_t>(cellHeightPx);
++  size.cell_width = static_cast<uint32_t>(cellWidthPx);
++  size.cell_height = static_cast<uint32_t>(cellHeightPx);
++  ghostty_mouse_encoder_setopt(session->mouseEncoder, GHOSTTY_MOUSE_ENCODER_OPT_SIZE, &size);
+   // The renderer discards its bitmap on every resize; a same-grid resize
+   // (font-size change landing on identical cols/rows) would otherwise leave
+   // no dirty rows to repaint it with.
+@@ -817,7 +833,83 @@
+   // The event borrows the utf8 pointer; clear it before releasing the array.
+   ghostty_key_event_set_utf8(session->keyEvent, nullptr, 0);
+   if (utf8Bytes != nullptr) env->ReleaseByteArrayElements(utf8, utf8Bytes, JNI_ABORT);
++
++  if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
++  jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
++  if (outArray == nullptr) return nullptr;
++  env->SetByteArrayRegion(outArray, 0, static_cast<jsize>(written),
++                          reinterpret_cast<const jbyte*>(out));
++  return outArray;
++}
++
 +// A TUI that asked for mouse tracking owns the scroll gesture: the finger must
 +// become a wheel report, not a scrollback move. Reported as a bitmask so one
 +// JNI call answers a whole gesture rather than one per touch sample.
@@ -50,13 +76,18 @@
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 2;
 +  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_SGR_MOUSE, &value) ==
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 3;
++  // Three DEC modes open the alternate screen; Claude Code uses 1049.
 +  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCREEN, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 4;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCREEN_SAVE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 4;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCREEN_LEGACY, &value) ==
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 4;
 +  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCROLL, &value) ==
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 5;
 +  return flags;
 +}
-+
+ 
 +// Position is surface-space PIXELS; the encoder converts to cells using the
 +// cell size handed to nativeResize. Buttons follow X11 numbering, so wheel up
 +// and down are FOUR and FIVE.
@@ -96,15 +127,9 @@
 +    out = heapBuf.data();
 +  }
 +
-+  if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
-+  jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
-+  if (outArray == nullptr) return nullptr;
-+  env->SetByteArrayRegion(outArray, 0, static_cast<jsize>(written),
-+                          reinterpret_cast<const jbyte*>(out));
-+  return outArray;
-+}
-+
- }  // extern "C"
+   if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
+   jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
+   if (outArray == nullptr) return nullptr;
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
 @@ -96,4 +96,22 @@
@@ -132,15 +157,13 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,6 +45,19 @@
+@@ -45,9 +45,26 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
 +/** Bundled by the host app (see plugins/android-terminal-fonts.js). */
-+private const val MONO_FONT_REGULAR = "fonts/RobotoMono-Regular.ttf"
-+private const val MONO_FONT_BOLD = "fonts/RobotoMono-Bold.ttf"
-+private const val MONO_FONT_ITALIC = "fonts/RobotoMono-Italic.ttf"
-+private const val MONO_FONT_BOLD_ITALIC = "fonts/RobotoMono-BoldItalic.ttf"
++/** The system's own monospace face, by file: what a WebView's `monospace` resolves to. */
++private const val SYSTEM_MONO_FONT_FILE = "/system/fonts/DroidSansMono.ttf"
 +
 +/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
 +private const val MODE_MOUSE_TRACKING = 0b111
@@ -152,7 +175,16 @@
  internal class GhosttyTerminalView(context: Context) : View(context) {
    var onInputBytes: ((ByteArray) -> Unit)? = null
    var onGridResize: ((cols: Int, rows: Int) -> Unit)? = null
-@@ -57,11 +70,23 @@
++  /** Selection began or ended; the host mirrors its own selection UI on it. */
++  var onSelectionModeChanged: ((Boolean) -> Unit)? = null
++  /** Text copied from the selection menu, so the host can confirm it. */
++  var onSelectionCopied: ((String) -> Unit)? = null
++  /** Font size after a pinch, in dp, so the host can persist the user's size. */
++  var onFontSizeChanged: ((Float) -> Unit)? = null
+ 
+   /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
+   var accessoryBar: TerminalAccessoryBar? = null
+@@ -57,11 +74,24 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -164,23 +196,24 @@
 +  // resolve to the system's DroidSansMono. Measured on a Galaxy S23: cells came
 +  // out 0.84 em wide (a proportional advance) instead of 0.6 em, the grid was
 +  // 34 columns, and 51-column output wrapped at 34 with every glyph floating in
-+  // a cell it did not fill. A monospace grid needs a font we ship ourselves;
-+  // the host app places these under assets/fonts and the alias is only a
-+  // fallback for a host that does not.
-+  private fun monoTypeface(asset: String, style: Int): Typeface =
-+    runCatching { Typeface.createFromAsset(context.assets, asset) }.getOrNull()
-+      ?: Typeface.create(Typeface.MONOSPACE, style)
++  // a cell it did not fill. Opening the system file by path bypasses the alias
++  // and lands on the same face a WebView draws `monospace` with, so the app
++  // ships no font of its own. DroidSansMono has one weight; bold and italic
++  // are synthesised the way Chromium synthesises them for the WebView.
++  private val monoTypeface: Typeface =
++    runCatching { Typeface.createFromFile(SYSTEM_MONO_FONT_FILE) }.getOrNull()
++      ?: Typeface.MONOSPACE
 +
-+  private val textPaint = newTextPaint(monoTypeface(MONO_FONT_REGULAR, Typeface.NORMAL))
-+  private val boldPaint = newTextPaint(monoTypeface(MONO_FONT_BOLD, Typeface.BOLD))
-+  private val italicPaint = newTextPaint(monoTypeface(MONO_FONT_ITALIC, Typeface.ITALIC))
++  private val textPaint = newTextPaint(monoTypeface)
++  private val boldPaint = newTextPaint(monoTypeface).apply { isFakeBoldText = true }
++  private val italicPaint = newTextPaint(monoTypeface).apply { textSkewX = -0.25f }
    private val boldItalicPaint =
 -    newTextPaint(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD_ITALIC))
-+    newTextPaint(monoTypeface(MONO_FONT_BOLD_ITALIC, Typeface.BOLD_ITALIC))
++    newTextPaint(monoTypeface).apply { isFakeBoldText = true; textSkewX = -0.25f }
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -166,14 +191,17 @@
+@@ -166,14 +196,17 @@
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -201,7 +234,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +221,11 @@
+@@ -193,9 +226,11 @@
            clearSelection()
            return true
          }
@@ -216,7 +249,15 @@
          return true
        }
  
-@@ -225,13 +255,13 @@
+@@ -205,6 +240,7 @@
+         lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
+         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+         selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
++        if (selectionMode) onSelectionModeChanged?.invoke(true)
+         scheduleFrame()
+         if (selectionMode) {
+           // Keep dragging without lifting: extend from the pressed cell.
+@@ -225,13 +261,13 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -233,7 +274,15 @@
          }
          return true
        }
-@@ -367,6 +397,45 @@
+@@ -296,6 +332,7 @@
+     val clamped = dp.coerceIn(MIN_FONT_SIZE_DP, MAX_FONT_SIZE_DP)
+     if (clamped == fontSizeDp) return
+     fontSizeDp = clamped
++    onFontSizeChanged?.invoke(clamped)
+     val px = clamped * resources.displayMetrics.density
+     for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
+       paint?.textSize = px
+@@ -367,6 +404,45 @@
      }
    }
  
@@ -279,20 +328,62 @@
    private fun sendBytes(bytes: ByteArray) {
      if (!finished && bytes.isNotEmpty()) {
        if (selectionMode) clearSelection()
+@@ -559,6 +635,7 @@
+ 
+   private fun clearSelection() {
+     if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
++    if (selectionMode) onSelectionModeChanged?.invoke(false)
+     selectionMode = false
+     draggingHandle = HANDLE_NONE
+     actionMode?.finish()
+@@ -569,6 +646,7 @@
+     if (handle == 0L) return
+     if (GhosttyVt.nativeSelectAll(handle)) {
+       selectionMode = true
++      onSelectionModeChanged?.invoke(true)
+       scheduleFrame()
+       actionMode?.invalidate()
+     }
+@@ -578,9 +656,9 @@
+     if (handle == 0L) return
+     val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
+     val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
+-    clipboard.setPrimaryClip(
+-      ClipData.newPlainText("terminal", String(bytes, Charsets.UTF_8))
+-    )
++    val text = String(bytes, Charsets.UTF_8)
++    clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
++    onSelectionCopied?.invoke(text)
+     clearSelection()
+   }
+ 
 --- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
-@@ -19,6 +19,10 @@
+@@ -19,6 +19,13 @@
  
    private val onInput by EventDispatcher<Map<String, Any>>()
    private val onResize by EventDispatcher<Map<String, Any>>()
 +  // The host gates gesture bytes on the program's mouse and alt-screen modes,
 +  // so it has to hear about them; emitted only when the mask changes.
 +  private val onModes by EventDispatcher<Map<String, Any>>()
++  private val onSelection by EventDispatcher<Map<String, Any>>()
++  private val onCopy by EventDispatcher<Map<String, Any>>()
++  private val onFontSize by EventDispatcher<Map<String, Any>>()
 +  private var lastModes = -1
  
    private val terminal = GhosttyTerminalView(context).also { view ->
      view.onInputBytes = { bytes ->
-@@ -55,9 +59,43 @@
+@@ -29,6 +36,9 @@
+         )
+       )
+     }
++    view.onSelectionModeChanged = { active -> onSelection(mapOf("active" to active)) }
++    view.onSelectionCopied = { text -> onCopy(mapOf("text" to text)) }
++    view.onFontSizeChanged = { dp -> onFontSize(mapOf("fontSize" to dp)) }
+     view.onGridResize = { cols, rows ->
+       onResize(mapOf("cols" to cols, "rows" to rows))
+     }
+@@ -55,9 +65,43 @@
      }
    }
  
@@ -337,7 +428,7 @@
      // Edge-to-edge windows don't resize for the keyboard — it just covers us.
      // Pad our bottom by the covered amount so the bar sits above the IME and
      // the terminal shrinks (regaining the hidden rows). Hosts that already
-@@ -93,7 +131,14 @@
+@@ -93,7 +137,14 @@
    )
  
    /** Feed PTY output (terminal.output on the wire) into the grid. */
@@ -360,7 +451,7 @@
  
      View(ExpoLibghosttyView::class) {
 -      Events("onInput", "onResize")
-+      Events("onInput", "onResize", "onModes")
++      Events("onInput", "onResize", "onModes", "onSelection", "onCopy", "onFontSize")
  
        // Base font size in dp (default 14); applied live, the grid reflows.
        Prop("fontSize") { view: ExpoLibghosttyView, size: Float ->
@@ -403,12 +494,18 @@
  export type TerminalViewRef = {
    /** Feed base64-encoded PTY output into the terminal grid. */
    write(base64: string): Promise<void>;
-@@ -61,6 +70,14 @@
+@@ -61,6 +70,20 @@
    onInput?: (event: { nativeEvent: TerminalInputEvent }) => void;
    /** Grid resized (layout, rotation, font change); forward to the PTY. */
    onResize?: (event: { nativeEvent: TerminalResizeEvent }) => void;
 +  /** Program changed its mouse/alt-screen modes; see TerminalModesEvent. */
 +  onModes?: (event: { nativeEvent: TerminalModesEvent }) => void;
++  /** Selection began (true) or ended (false) in the native view. */
++  onSelection?: (event: { nativeEvent: { active: boolean } }) => void;
++  /** Text the selection menu copied to the clipboard. */
++  onCopy?: (event: { nativeEvent: { text: string } }) => void;
++  /** Font size in dp after a pinch, so the host can persist it. */
++  onFontSize?: (event: { nativeEvent: { fontSize: number } }) => void;
 +  /** False hands focus and the IME to the host (default true). */
 +  managesFocus?: boolean;
 +  /** False hides the library's own accessory bar (default true). */
@@ -431,11 +528,17 @@
  export type TerminalViewRef = {
      /** Feed base64-encoded PTY output into the terminal grid. */
      write(base64: string): Promise<void>;
-@@ -60,6 +64,10 @@
+@@ -60,6 +64,16 @@
      onResize?: (event: {
          nativeEvent: TerminalResizeEvent;
      }) => void;
 +    onModes?: (event: { nativeEvent: TerminalModesEvent }) => void;
++    /** Selection began (true) or ended (false) in the native view. */
++    onSelection?: (event: { nativeEvent: { active: boolean } }) => void;
++    /** Text the selection menu copied to the clipboard. */
++    onCopy?: (event: { nativeEvent: { text: string } }) => void;
++    /** Font size in dp after a pinch, so the host can persist it. */
++    onFontSize?: (event: { nativeEvent: { fontSize: number } }) => void;
 +    managesFocus?: boolean;
 +    showsAccessoryBar?: boolean;
 +    managesKeyboardInsets?: boolean;

@@ -13,6 +13,7 @@ import {
   isGestureMouseTrackingMode,
   TERMINAL_GESTURE_INPUT_BUCKET_CAPACITY,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
+  TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT,
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
@@ -95,7 +96,12 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       clearTimeout(queued.timer)
       queued.timer = null
     }
-    if (terminalGestureInputInFlightRef.current.has(handle)) {
+    // Why: wheel reports are fire-and-forget and the socket keeps their order,
+    // so a batch does not wait for the previous reply; only a full pipeline
+    // (a link that stopped answering) parks the queue until a reply drains it.
+    const inFlight = terminalGestureInputInFlightRef.current.get(handle) ?? 0
+    if (inFlight >= TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT) {
+      terminalGestureInputQueuesRef.current.set(handle, queued)
       return
     }
 
@@ -108,7 +114,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       return
     }
 
-    terminalGestureInputInFlightRef.current.add(handle)
+    terminalGestureInputInFlightRef.current.set(handle, inFlight + 1)
     try {
       // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
       await rpc.sendRequest(
@@ -124,7 +130,12 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     } catch {
       // Transient failure
     } finally {
-      terminalGestureInputInFlightRef.current.delete(handle)
+      const remaining = (terminalGestureInputInFlightRef.current.get(handle) ?? 1) - 1
+      if (remaining <= 0) {
+        terminalGestureInputInFlightRef.current.delete(handle)
+      } else {
+        terminalGestureInputInFlightRef.current.set(handle, remaining)
+      }
       const next = terminalGestureInputQueuesRef.current.get(handle)
       if (next) {
         if (Date.now() - next.lastUpdatedMs > TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS) {
@@ -157,10 +168,13 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
         if (current.timer) {
           clearTimeout(current.timer)
         }
-        if (!terminalGestureInputInFlightRef.current.has(handle)) {
+        if (
+          (terminalGestureInputInFlightRef.current.get(handle) ?? 0) <
+          TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT
+        ) {
           void flushTerminalGestureInput(handle)
         } else {
-          // Why: cap is a soft guideline — append instead of dropping queued bytes; the in-flight flush picks up the merged queue.
+          // Why: cap is a soft guideline — append instead of dropping queued bytes; the next reply drains the merged queue.
           current.bytes += bytes
           current.sequenceCount += sequenceCount
           current.lastUpdatedMs = now

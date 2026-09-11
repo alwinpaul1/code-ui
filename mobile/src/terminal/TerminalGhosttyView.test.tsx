@@ -191,4 +191,20 @@ describe('the ghostty engine behind the WebView handle', () => {
     expect(onTerminalQueryReply).toHaveBeenCalledWith('\x1b[?1;2c')
     expect(onTerminalInput).not.toHaveBeenCalled()
   })
+
+  it('reports selection, copy and pinch to the host exactly as xterm does', () => {
+    const onSelectionMode = vi.fn()
+    const onSelectionCopy = vi.fn()
+    const onTextScaleChange = vi.fn()
+    const { fire } = mount({ onSelectionMode, onSelectionCopy, onTextScaleChange })
+
+    fire('onSelection', { active: true })
+    fire('onCopy', { text: 'npm test' })
+    fire('onSelection', { active: false })
+    fire('onFontSize', { fontSize: 13 * 1.5 })
+
+    expect(onSelectionMode.mock.calls.map(([a]) => a)).toEqual([true, false])
+    expect(onSelectionCopy).toHaveBeenCalledWith('npm test')
+    expect(onTextScaleChange).toHaveBeenCalledWith(1.5)
+  })
 })
