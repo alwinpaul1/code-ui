@@ -18,6 +18,7 @@ export type HostClientStoreEntry = {
   refCount: number
   unsubState: () => void
   unsubConnectionPath: () => void
+  unsubLivenessProbing: () => void
 }
 
 type HostEntryOpenerState = {
@@ -130,13 +131,22 @@ export async function openHostClientEntry(
           state.notifyHostState(hostId, current.state)
         }
       }) ?? (() => {})
+    // A probe going out or coming back changes the label, not the state.
+    const unsubLivenessProbing =
+      logical.onLivenessProbingChange?.(() => {
+        const current = state.store.get(hostId)
+        if (current) {
+          state.notifyHostState(hostId, current.state)
+        }
+      }) ?? (() => {})
     const entry: HostClientStoreEntry = {
       client,
       clientId: host.deviceToken,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
       unsubState,
-      unsubConnectionPath
+      unsubConnectionPath,
+      unsubLivenessProbing
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)

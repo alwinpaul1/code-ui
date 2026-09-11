@@ -51,3 +51,20 @@ export function forwardMigrationDialState(args: {
     }
   }
 }
+
+/** Ends a migration dial: stop forwarding, and on failure walk back only the
+ *  phases we published ourselves — a 'connected' here came from the still-live
+ *  previous session and outranks the dead dial. */
+export function endMigrationDialForwarding(
+  forwarder: MigrationDialStateForwarder,
+  failed: boolean,
+  deps: { clearMigration(): void; isConnected(): boolean; publishDisconnected(): void }
+): void {
+  forwarder.stop()
+  if (failed) {
+    deps.clearMigration()
+  }
+  if (failed && forwarder.forwarded() && !deps.isConnected()) {
+    deps.publishDisconnected()
+  }
+}

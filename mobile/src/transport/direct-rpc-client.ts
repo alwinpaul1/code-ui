@@ -1,3 +1,4 @@
+import { DIRECT_LIVENESS_PROFILES, livenessProfileFor } from './liveness-foreground-profile'
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
@@ -158,15 +159,14 @@ export class DirectRpcClient implements RpcClient {
     return this.connectionState.get()
   }
 
-  getReconnectAttempt(): number {
-    return this.reconnect.getAttempt()
-  }
+  getReconnectAttempt = (): number => this.reconnect.getAttempt()
 
-  getLastConnectedAt(): number | null {
-    return this.connectionState.getLastConnectedAt()
-  }
+  getLastConnectedAt = (): number | null => this.connectionState.getLastConnectedAt()
 
   getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
+  isLivenessProbing = (): boolean => this.liveness.isProbing()
+  onLivenessProbingChange = (l: (probing: boolean) => void) => this.liveness.onProbingChange(l)
+  setLivenessForeground = (fg: boolean) => this.liveness.setProfile(livenessProfileFor(fg, DIRECT_LIVENESS_PROFILES))
 
   onStateChange(listener: (state: ConnectionState) => void): () => void {
     return this.connectionState.addListener(listener)

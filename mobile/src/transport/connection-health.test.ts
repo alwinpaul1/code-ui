@@ -200,3 +200,26 @@ describe('verdictDisplayLabel', () => {
     expect(verdictDisplayLabel({ kind: 'normal', label: 'Connected' })).toBe('Connected')
   })
 })
+
+describe('classifyConnection while a liveness probe is unanswered', () => {
+  /** Measured: the header read "Connected · Orca Relay" for up to 38 s on a
+   *  relay socket that was already dead — the relay idle probe waits 30 s,
+   *  then 4 s per miss, two misses. The state only flips when the watchdog
+   *  fires. While a probe is out and unanswered, the truthful label is that
+   *  we are checking, not that we are connected. */
+  it('says it is checking instead of claiming connected', () => {
+    const verdict = classifyConnection({
+      state: 'connected',
+      reconnectAttempts: 0,
+      lastConnectedAt: 1,
+      livenessProbing: true
+    })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Checking…' })
+  })
+
+  it('reads connected again the moment the probe is answered', () => {
+    expect(
+      classifyConnection({ state: 'connected', reconnectAttempts: 0, lastConnectedAt: 1, livenessProbing: false })
+    ).toEqual({ kind: 'normal', label: 'Connected' })
+  })
+})

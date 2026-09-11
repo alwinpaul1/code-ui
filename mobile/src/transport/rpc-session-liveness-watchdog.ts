@@ -33,8 +33,9 @@ export class RpcSessionLivenessWatchdog {
   private missedProbes = 0
   private lastInboundAt = 0
   private lastVoluntaryProbeAt: number | null = null
-  private readonly idleProbeMs: number | null
-  private readonly probeTimeoutMs: number
+  private idleProbeMs: number | null
+  private probeTimeoutMs: number
+  private readonly probingListeners = new Set<(probing: boolean) => void>()
   private readonly missedProbeLimit: number
   private readonly voluntaryProbeMinIntervalMs: number
   private readonly now: () => number
@@ -54,11 +55,49 @@ export class RpcSessionLivenessWatchdog {
   start(identity: RpcSessionIdentity): void {
     this.clearActiveTimer()
     this.identity = identity
-    this.probing = false
+    this.setProbing(false)
     this.missedProbes = 0
     this.lastInboundAt = this.now()
     this.lastVoluntaryProbeAt = null
     this.armIdle(identity)
+  }
+
+  /** True from the moment a probe is sent until an answer arrives or the
+   *  session is declared dead. Measured on a Galaxy S23: the header read
+   *  "Connected · Orca Relay" for up to 38 s on a dead relay socket because
+   *  nothing between the probe going out and the watchdog firing was visible
+   *  to the UI. This is that window, made visible. */
+  isProbing(): boolean {
+    return this.probing
+  }
+
+  onProbingChange(listener: (probing: boolean) => void): () => void {
+    this.probingListeners.add(listener)
+    return () => {
+      this.probingListeners.delete(listener)
+    }
+  }
+
+  /** Swap the idle interval and per-probe timeout without restarting. Takes
+   *  effect from the next arm, so a session already mid-probe finishes on the
+   *  old clock. Foregrounded, a shorter leash turns 38 s of a stale header
+   *  into a few; backgrounded, the longer one keeps relay probes (billed) rare. */
+  setProfile(profile: { idleProbeMs: number | null; probeTimeoutMs: number }): void {
+    this.idleProbeMs = profile.idleProbeMs
+    this.probeTimeoutMs = profile.probeTimeoutMs
+    if (this.identity !== null && !this.probing) {
+      this.armIdle(this.identity)
+    }
+  }
+
+  private setProbing(next: boolean): void {
+    if (this.probing === next) {
+      return
+    }
+    this.probing = next
+    for (const listener of this.probingListeners) {
+      listener(next)
+    }
   }
 
   // Wall-clock stamp of the last frame that actually arrived; 0 before the first
@@ -83,7 +122,7 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.missedProbes = 0
-    this.probing = false
+    this.setProbing(false)
     this.armIdle(identity)
   }
 
@@ -108,7 +147,7 @@ export class RpcSessionLivenessWatchdog {
     }
     this.clearActiveTimer()
     this.identity = null
-    this.probing = false
+    this.setProbing(false)
     this.missedProbes = 0
     this.lastInboundAt = 0
     this.lastVoluntaryProbeAt = null
@@ -138,7 +177,7 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.clearActiveTimer()
-    this.probing = true
+    this.setProbing(true)
     const sentAt = this.now()
     let sent = false
     try {
@@ -190,7 +229,7 @@ export class RpcSessionLivenessWatchdog {
     }
     this.clearActiveTimer()
     this.identity = null
-    this.probing = false
+    this.setProbing(false)
     console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
       transport: this.options.transport,
       missedProbes: this.missedProbes,

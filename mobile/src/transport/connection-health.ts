@@ -62,6 +62,9 @@ export function classifyConnection(args: {
   // sign-out. Retrying is still correct and still happens on the same cadence,
   // but only the desktop's owner can end it, so the label has to say so.
   hostSignedOut?: boolean
+  /** A liveness probe is out and unanswered. The socket may already be dead;
+   *  until it answers, "Connected" is a claim we cannot back. */
+  livenessProbing?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -75,7 +78,9 @@ export function classifyConnection(args: {
   }
 
   if (state === 'connected') {
-    return { kind: 'normal', label: 'Connected' }
+    return args.livenessProbing
+      ? { kind: 'normal', label: 'Checking…' }
+      : { kind: 'normal', label: 'Connected' }
   }
 
   // Ahead of the attempt thresholds: this is evidence, not an inference from a

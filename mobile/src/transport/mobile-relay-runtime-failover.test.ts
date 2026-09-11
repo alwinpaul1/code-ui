@@ -156,6 +156,9 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   isHostSignedOut = () => this.hostSignedOut
+  isLivenessProbing = () => false
+  onLivenessProbingChange = () => () => {}
+  setLivenessForeground = vi.fn()
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {

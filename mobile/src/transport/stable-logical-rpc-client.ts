@@ -1,9 +1,7 @@
+import { createLivenessProbingRelay, type LivenessProbingSurface } from './liveness-foreground-profile'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
-import {
-  forwardMigrationDialState,
-  type MigrationDialStateForwarder
-} from './migration-dial-state-forwarder'
+import { forwardMigrationDialState, endMigrationDialForwarding } from './migration-dial-state-forwarder'
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
@@ -61,13 +59,14 @@ export type StableLogicalRpcClient = RpcClient & {
   // Recovery attempts share this signal so status-only changes rerender.
   onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
-}
+} & LivenessProbingSurface
 
 export function createStableLogicalRpcClient(
   initialSession: RpcClient,
   initialPath: MobileConnectionPath
 ): StableLogicalRpcClient {
   let activeSession = initialSession
+  const probing = createLivenessProbingRelay(initialSession)
   let activePath = initialPath
   let generation = 1
   let closed = false
@@ -79,6 +78,11 @@ export function createStableLogicalRpcClient(
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
+  const dialEnd = {
+    clearMigration: () => connectionPath.setMigration(null),
+    isConnected: () => state === 'connected',
+    publishDisconnected: () => publishState('disconnected')
+  }
 
   bindActiveState(initialSession, generation)
 
@@ -164,6 +168,7 @@ export function createStableLogicalRpcClient(
     getReconnectAttempt: () => connectionPath.reconnectAttempt(activeSession.getReconnectAttempt()),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
     getLastInboundAt: () => activeSession.getLastInboundAt?.() ?? null,
+    ...probing.surface,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
@@ -242,12 +247,12 @@ export function createStableLogicalRpcClient(
           throw new Error('migration superseded')
         }
       } catch (error) {
-        endDialForwarding(forwarder, true)
+        endMigrationDialForwarding(forwarder, true, dialEnd)
         nextSession.close()
         throw error
       }
       // Why: unbind before bindActiveState so the replacement has exactly one publisher.
-      endDialForwarding(forwarder, false)
+      endMigrationDialForwarding(forwarder, false, dialEnd)
       const previous = activeSession
       const previousStateUnsubscribe = activeStateUnsubscribe
       const nextGeneration = generation + 1
@@ -261,6 +266,7 @@ export function createStableLogicalRpcClient(
       }
       generation = nextGeneration
       activeSession = nextSession
+      probing.attach(nextSession)
       activePath = path
       suspended = false
       previousStateUnsubscribe?.()
@@ -292,18 +298,6 @@ export function createStableLogicalRpcClient(
   }
 
   return logical
-
-  function endDialForwarding(forwarder: MigrationDialStateForwarder, failed: boolean): void {
-    forwarder.stop()
-    if (failed) {
-      connectionPath.setMigration(null)
-    }
-    // Why: only walk back phases we published ourselves — a 'connected' here came from
-    // the still-live previous session and outranks the dead dial.
-    if (failed && forwarder.forwarded() && state !== 'connected') {
-      publishState('disconnected')
-    }
-  }
 
   function attachSubscription(
     record: SubscriptionRecord,

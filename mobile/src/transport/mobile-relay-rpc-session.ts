@@ -1,3 +1,4 @@
+import { livenessProfileFor } from './liveness-foreground-profile'
 import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
@@ -29,6 +30,13 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 // 2026-09-09 the relay had no idle probe at all.
 const RELAY_IDLE_PROBE_MS = 30_000
 const RELAY_PROBE_TIMEOUT_MS = 4_000
+// Measured on a Galaxy S23: 30 s + 2 × 4 s = 38 s of "Connected · Orca Relay" on
+// a relay socket that was already dead. Foregrounded, the user is looking at
+// that header; a relay probe is billed, so the leash only shortens while they are.
+const RELAY_LIVENESS_PROFILES = {
+  foreground: { idleProbeMs: 10_000, probeTimeoutMs: 2_000 },
+  background: { idleProbeMs: RELAY_IDLE_PROBE_MS, probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS }
+}
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
@@ -142,6 +150,10 @@ export function connectMobileRelayRpcSession(args: {
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => lastConnectedAt,
     getLastInboundAt: () => livenessWatchdog.getLastInboundAt() || null,
+    isLivenessProbing: () => livenessWatchdog.isProbing(),
+    onLivenessProbingChange: (listener) => livenessWatchdog.onProbingChange(listener),
+    setLivenessForeground: (foreground) =>
+      livenessWatchdog.setProfile(livenessProfileFor(foreground, RELAY_LIVENESS_PROFILES)),
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)

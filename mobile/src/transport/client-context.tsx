@@ -87,6 +87,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     }
     entry?.unsubState()
     entry?.unsubConnectionPath()
+    entry?.unsubLivenessProbing()
     retireLiveHostClient(hostId, storeRef.current.get(hostId)?.client)
     storeRef.current.delete(hostId)
     entry?.client.close()
@@ -262,6 +263,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       if (entry) {
         entry.unsubState()
         entry.unsubConnectionPath()
+        entry.unsubLivenessProbing()
         entry.client.close()
         retireLiveHostClient(hostId, storeRef.current.get(hostId)?.client)
         storeRef.current.delete(hostId)

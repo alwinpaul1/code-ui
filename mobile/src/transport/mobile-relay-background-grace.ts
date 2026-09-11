@@ -77,6 +77,7 @@ export class MobileRelayBackgroundGrace {
   setForeground(foreground: boolean): void {
     const wasForeground = this.foregroundState
     this.foregroundState = foreground
+    this.logical.setLivenessForeground(foreground)
     if (foreground) {
       this.foreground()
       this.relayReconnect.handleForeground(this.logical, wasForeground)

@@ -90,7 +90,9 @@ export function createHostClientSelectors(
       clientPendingPath(entries.get(hostId)?.client),
     isPairingRejected: (hostId: string): boolean =>
       clientPairingRejected(entries.get(hostId)?.client),
-    isHostSignedOut: (hostId: string): boolean => clientHostSignedOut(entries.get(hostId)?.client)
+    isHostSignedOut: (hostId: string): boolean => clientHostSignedOut(entries.get(hostId)?.client),
+    isLivenessProbing: (hostId: string): boolean =>
+      entries.get(hostId)?.client.isLivenessProbing?.() ?? false
   }
 }
 

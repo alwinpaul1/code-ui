@@ -6,6 +6,7 @@ export type HomeHostConnectionProjectionEntry = {
   pendingPath: MobileConnectionPath | null
   pairingRejected: boolean
   hostSignedOut: boolean
+  livenessProbing: boolean
 }
 
 export type HomeHostConnectionProjection = {
@@ -13,6 +14,7 @@ export type HomeHostConnectionProjection = {
   hostPendingPaths: Record<string, MobileConnectionPath | null>
   hostPairingRejected: Record<string, boolean>
   hostSignedOut: Record<string, boolean>
+  hostLivenessProbing: Record<string, boolean>
 }
 
 /** Build all host lookup maps while reading each connection entry once. */
@@ -25,18 +27,28 @@ export function projectHomeHostConnections(
   const hostPendingPaths = Object.create(null) as Record<string, MobileConnectionPath | null>
   const hostPairingRejected = Object.create(null) as Record<string, boolean>
   const hostSignedOut = Object.create(null) as Record<string, boolean>
+  const hostLivenessProbing = Object.create(null) as Record<string, boolean>
 
-  for (const { hostId, path, pendingPath, pairingRejected, hostSignedOut: signedOut } of entries) {
+  for (const {
+    hostId,
+    path,
+    pendingPath,
+    pairingRejected,
+    hostSignedOut: signedOut,
+    livenessProbing
+  } of entries) {
     hostPaths[hostId] = path
     hostPendingPaths[hostId] = pendingPath
     hostPairingRejected[hostId] = pairingRejected
     hostSignedOut[hostId] = signedOut
+    hostLivenessProbing[hostId] = livenessProbing
   }
 
   Object.setPrototypeOf(hostPaths, Object.prototype)
   Object.setPrototypeOf(hostPendingPaths, Object.prototype)
   Object.setPrototypeOf(hostPairingRejected, Object.prototype)
   Object.setPrototypeOf(hostSignedOut, Object.prototype)
+  Object.setPrototypeOf(hostLivenessProbing, Object.prototype)
 
-  return { hostPaths, hostPendingPaths, hostPairingRejected, hostSignedOut }
+  return { hostPaths, hostPendingPaths, hostPairingRejected, hostSignedOut, hostLivenessProbing }
 }

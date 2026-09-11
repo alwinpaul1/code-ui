@@ -148,6 +148,7 @@ export function MobileHomeScreen() {
           refreshingAccounts={data.refreshingAccounts}
           hostPairingRejected={data.hostPairingRejected}
           hostSignedOut={data.hostSignedOut}
+          hostLivenessProbing={data.hostLivenessProbing}
           hostPaths={data.hostPaths}
           hostPendingPaths={data.hostPendingPaths}
           hosts={data.sortedHostCatalog}

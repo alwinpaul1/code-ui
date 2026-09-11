@@ -19,6 +19,7 @@ type MobileHomeHostListProps = {
   hostLastConnected: Record<string, number | null>
   hostPairingRejected: Record<string, boolean>
   hostSignedOut: Record<string, boolean>
+  hostLivenessProbing: Record<string, boolean>
   hostPaths: Record<string, MobileConnectionPath>
   hostPendingPaths: Record<string, MobileConnectionPath | null>
   hosts: HostCatalogEntry[]
@@ -44,6 +45,7 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
         hostLastConnected={props.hostLastConnected}
         hostPairingRejected={props.hostPairingRejected}
         hostSignedOut={props.hostSignedOut}
+        hostLivenessProbing={props.hostLivenessProbing}
         hostPaths={props.hostPaths}
         hostPendingPaths={props.hostPendingPaths}
         hostStates={props.hostStates}
@@ -59,6 +61,7 @@ export function MobileHomeHostList(props: MobileHomeHostListProps) {
       props.hostLastConnected,
       props.hostPairingRejected,
       props.hostSignedOut,
+      props.hostLivenessProbing,
       props.hostPaths,
       props.hostPendingPaths,
       props.hostStates,
@@ -106,6 +109,7 @@ type MobileHomeHostRowProps = Pick<
   | 'hostLastConnected'
   | 'hostPairingRejected'
   | 'hostSignedOut'
+  | 'hostLivenessProbing'
   | 'hostPaths'
   | 'hostPendingPaths'
   | 'hostStates'
@@ -129,7 +133,8 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
     endpoint: item.endpoint,
     pendingPath: props.hostPendingPaths[item.id] ?? null,
     pairingRejected: props.hostPairingRejected[item.id] ?? false,
-    hostSignedOut: props.hostSignedOut[item.id] ?? false
+    hostSignedOut: props.hostSignedOut[item.id] ?? false,
+    livenessProbing: props.hostLivenessProbing[item.id] ?? false
   })
   const open = useCallback(() => onOpen(item), [item, onOpen])
   const longPress = useCallback(() => onLongPress(item), [item, onLongPress])

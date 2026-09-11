@@ -146,6 +146,13 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     }
   })
   isHostSignedOut = () => this.hostSignedOut
+  isLivenessProbing(): boolean {
+    return false
+  }
+  onLivenessProbingChange(): () => void {
+    return () => {}
+  }
+  setLivenessForeground(): void {}
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {

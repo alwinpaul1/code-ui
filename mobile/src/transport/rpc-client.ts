@@ -41,6 +41,12 @@ export type RpcClient = {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   getLastInboundAt?: () => number | null
+  /** A liveness probe is out and unanswered; the header must not claim connected. */
+  isLivenessProbing?: () => boolean
+  onLivenessProbingChange?: (listener: (probing: boolean) => void) => () => void
+  /** Foregrounded, the liveness leash is shorter: a dead socket is noticed in
+   *  seconds, not the 38 s the background economy tolerates. */
+  setLivenessForeground?: (foreground: boolean) => void
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   close: () => void
