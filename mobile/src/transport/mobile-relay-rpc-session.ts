@@ -32,9 +32,12 @@ const RELAY_IDLE_PROBE_MS = 30_000
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 // Measured on a Galaxy S23: 30 s + 2 × 4 s = 38 s of "Connected · Orca Relay" on
 // a relay socket that was already dead. Foregrounded, the user is looking at
-// that header; a relay probe is billed, so the leash only shortens while they are.
+// that header; a relay probe is billed, so the leash only shortens while they
+// are. Only the idle interval shortens: a 2 s timeout gave 4 s of tolerance,
+// which a cellular handover or a congested relay exceeds, and every false
+// termination costs a 2.3–2.8 s billed splice (reviewed 2026-09-11).
 const RELAY_LIVENESS_PROFILES = {
-  foreground: { idleProbeMs: 10_000, probeTimeoutMs: 2_000 },
+  foreground: { idleProbeMs: 10_000, probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS },
   background: { idleProbeMs: RELAY_IDLE_PROBE_MS, probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS }
 }
 const RELAY_MISSED_PROBE_LIMIT = 2

@@ -47,4 +47,12 @@ describe('what the program asked the terminal for, read from libghostty', () => 
     expect(modes.mouseTrackingMode).toBe('none')
     expect(modes.altScreen).toBe(true)
   })
+
+  it('reports bracketed paste so a multi-line paste arrives as one block', () => {
+    // Why: use-mobile-terminal-paste.ts wraps in ESC[200~ only on this flag;
+    // reviewed 2026-09-11, the mask hardcoded it false and a pasted script ran
+    // line by line.
+    expect(terminalModesFromGhosttyMask(GHOSTTY_MODE_BIT.bracketedPaste).bracketedPasteMode).toBe(true)
+    expect(terminalModesFromGhosttyMask(0).bracketedPasteMode).toBe(false)
+  })
 })

@@ -31,11 +31,22 @@ export function withDirectVerdict(
   return next
 }
 
-/** True when direct was proven dead on the network the phone is on right now. */
-export function directDeadOnNetwork(host: HostProfile, network: string | null): boolean {
+/** How long a direct-dead verdict stands before one dial re-tests it. Reviewed
+ *  2026-09-11: without an expiry, a desktop that restarted Orca on the home
+ *  Wi-Fi left the phone on the billed relay for the rest of the process. */
+export const DIRECT_VERDICT_TTL_MS = 10 * 60_000
+
+/** True when direct was proven dead on the network the phone is on right now,
+ *  recently enough that re-dialling would only repeat the proof. */
+export function directDeadOnNetwork(
+  host: HostProfile,
+  network: string | null,
+  now: number = Date.now()
+): boolean {
   return (
     host.directUnreachableSince != null &&
     network !== null &&
-    host.directUnreachableNetwork === network
+    host.directUnreachableNetwork === network &&
+    now - host.directUnreachableSince < DIRECT_VERDICT_TTL_MS
   )
 }

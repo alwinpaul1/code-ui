@@ -54,6 +54,6 @@ export class DirectVerdictMemory {
       return false
     }
     const identity = await this.deps.networkIdentity().catch(() => null)
-    return directDeadOnNetwork(this.host(), identity)
+    return directDeadOnNetwork(this.host(), identity, this.deps.now?.() ?? Date.now())
   }
 }

@@ -65,6 +65,17 @@ export function createBackgroundNotificationWatcher(
       }
       link.unsubscribeNotifications?.()
       link.unsubscribeNotifications = null
+      // Why: a borrowed client is the UI's, and the UI suspends its relay 30 s
+      // into the background. Reviewed 2026-09-11: the host stayed in `links`,
+      // so nothing dialled and notifications stopped after those 30 s. Once
+      // the UI's client is gone, this host needs a link of its own.
+      if (!owned && links.get(host.id) === link) {
+        link.unsubscribeState()
+        links.delete(host.id)
+        if (shouldListen()) {
+          void open()
+        }
+      }
     }
     link.unsubscribeState = client.onStateChange(onState)
     links.set(host.id, link)
@@ -72,9 +83,6 @@ export function createBackgroundNotificationWatcher(
   }
 
   async function open(): Promise<void> {
-    if (links.size > 0) {
-      return
-    }
     const opened = ++generation
     let hosts: HostProfile[]
     try {

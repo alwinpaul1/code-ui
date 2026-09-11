@@ -87,7 +87,7 @@ export class DirectReturnProbe {
       return false
     }
     const identity = await this.deps.networkIdentity().catch(() => null)
-    return directDeadOnNetwork(this.hooks.host(), identity)
+    return directDeadOnNetwork(this.hooks.host(), identity, this.deps.now())
   }
 
   private async plausibleEndpoints(): Promise<string[]> {
@@ -111,7 +111,8 @@ export class DirectReturnProbe {
     // re-dialled every cooldown and every foreground return, two sockets held
     // for the OS's 10 s connect timeout, every minute, all night, on a network
     // that had not changed. A verdict reached HERE stands until the network
-    // changes; the nudge router forgets it on 'network-change'.
+    // changes or DIRECT_VERDICT_TTL_MS passes; the nudge router forgets it on
+    // 'network-change'.
     if (await this.deadOnThisNetwork()) {
       this.schedule(NO_PLAUSIBLE_ENDPOINT_RECHECK_MS)
       return

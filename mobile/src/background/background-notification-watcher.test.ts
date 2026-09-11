@@ -167,6 +167,25 @@ describe('sharing the connection the UI already holds', () => {
     expect(live.close).not.toHaveBeenCalled()
   })
 
+  it('dials its own link when the borrowed UI client is suspended in the background', async () => {
+    // Why: the UI suspends its relay 30 s after backgrounding; reviewed
+    // 2026-09-11, the borrowed host stayed listed and notifications stopped.
+    const live = makeClient()
+    live.setState('connected')
+    const { watcher, openClient, unsubscribes } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2'])
+
+    live.setState('disconnected')
+    await settle()
+
+    expect(unsubscribes.get('h1')).toHaveBeenCalledTimes(1)
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2', 'h1'])
+    expect(live.close).not.toHaveBeenCalled()
+  })
+
   it('still dials its own when the UI\'s client is not connected', async () => {
     const live = makeClient() // 'connecting': nothing to borrow yet
     const { watcher, openClient } = harness(new Map([['h1', live]]))

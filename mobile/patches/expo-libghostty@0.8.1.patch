@@ -46,19 +46,10 @@
    // The renderer discards its bitmap on every resize; a same-grid resize
    // (font-size change landing on identical cols/rows) would otherwise leave
    // no dirty rows to repaint it with.
-@@ -817,7 +833,83 @@
-   // The event borrows the utf8 pointer; clear it before releasing the array.
-   ghostty_key_event_set_utf8(session->keyEvent, nullptr, 0);
-   if (utf8Bytes != nullptr) env->ReleaseByteArrayElements(utf8, utf8Bytes, JNI_ABORT);
-+
-+  if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
-+  jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
-+  if (outArray == nullptr) return nullptr;
-+  env->SetByteArrayRegion(outArray, 0, static_cast<jsize>(written),
-+                          reinterpret_cast<const jbyte*>(out));
-+  return outArray;
-+}
-+
+@@ -826,4 +842,83 @@
+   return outArray;
+ }
+ 
 +// A TUI that asked for mouse tracking owns the scroll gesture: the finger must
 +// become a wheel report, not a scrollback move. Reported as a bitmask so one
 +// JNI call answers a whole gesture rather than one per touch sample.
@@ -85,9 +76,12 @@
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 4;
 +  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCROLL, &value) ==
 +          GHOSTTY_SUCCESS && value) flags |= 1 << 5;
++  // The phone wraps a paste in ESC[200~/ESC[201~ only when the program asked.
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_BRACKETED_PASTE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 6;
 +  return flags;
 +}
- 
++
 +// Position is surface-space PIXELS; the encoder converts to cells using the
 +// cell size handed to nativeResize. Buttons follow X11 numbering, so wheel up
 +// and down are FOUR and FIVE.
@@ -127,9 +121,15 @@
 +    out = heapBuf.data();
 +  }
 +
-   if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
-   jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
-   if (outArray == nullptr) return nullptr;
++  if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
++  jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
++  if (outArray == nullptr) return nullptr;
++  env->SetByteArrayRegion(outArray, 0, static_cast<jsize>(written),
++                          reinterpret_cast<const jbyte*>(out));
++  return outArray;
++}
++
+ }  // extern "C"
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
 @@ -96,4 +96,22 @@

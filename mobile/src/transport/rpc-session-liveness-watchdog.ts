@@ -68,7 +68,7 @@ export class RpcSessionLivenessWatchdog {
    *  nothing between the probe going out and the watchdog firing was visible
    *  to the UI. This is that window, made visible. */
   isProbing(): boolean {
-    return this.probing
+    return this.probing && this.missedProbes > 0
   }
 
   onProbingChange(listener: (probing: boolean) => void): () => void {
@@ -95,6 +95,20 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.probing = next
+    this.publishSuspicion()
+  }
+
+  // What listeners hear is suspicion — a probe that went unanswered — not the
+  // routine idle probe itself. Reviewed 2026-09-11: on a quiet foreground relay
+  // the header read "Checking…" for two seconds of every ten while nothing
+  // was wrong, and every host row re-rendered twice per cycle.
+  private published = false
+  private publishSuspicion(): void {
+    const next = this.probing && this.missedProbes > 0
+    if (this.published === next) {
+      return
+    }
+    this.published = next
     for (const listener of this.probingListeners) {
       listener(next)
     }
@@ -208,6 +222,7 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.missedProbes += 1
+    this.publishSuspicion()
     if (this.missedProbes >= this.missedProbeLimit) {
       this.terminateCurrent(identity, 'probe-timeout')
       return

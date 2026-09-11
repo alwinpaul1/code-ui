@@ -13,7 +13,8 @@ export const GHOSTTY_MODE_BIT = {
   anyMouse: 1 << 2, // DEC 1003
   sgrMouse: 1 << 3, // DEC 1006
   altScreen: 1 << 4,
-  altScroll: 1 << 5 // DEC 1007
+  altScroll: 1 << 5, // DEC 1007
+  bracketedPaste: 1 << 6 // DEC 2004
 } as const
 
 /**
@@ -32,9 +33,9 @@ export function terminalModesFromGhosttyMask(mask: number): TerminalModes {
           ? 'vt200'
           : 'none'
   return {
-    // Not surfaced by the mask; the WebView reports it from the byte stream
-    // and nothing on the phone acts on it yet.
-    bracketedPasteMode: false,
+    // use-mobile-terminal-paste.ts wraps a paste in ESC[200~/ESC[201~ only when
+    // this is set; without the bit every multi-line paste ran line by line.
+    bracketedPasteMode: (mask & GHOSTTY_MODE_BIT.bracketedPaste) !== 0,
     altScreen: (mask & GHOSTTY_MODE_BIT.altScreen) !== 0,
     mouseTrackingMode,
     sgrMouseMode: (mask & GHOSTTY_MODE_BIT.sgrMouse) !== 0,

@@ -35,6 +35,28 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(sendProbe).toHaveBeenCalledOnce()
   })
 
+  it('tells listeners about a missed probe, never about a routine one', async () => {
+    // Why: the header shows "Checking…" on what listeners hear. Reviewed
+    // 2026-09-11: on a quiet foreground relay it flickered for two seconds of
+    // every ten while every probe was answered.
+    const { identity, watchdog } = fixture()
+    const heard: boolean[] = []
+    watchdog.onProbingChange((probing) => heard.push(probing))
+
+    watchdog.probeNow(identity)
+    expect(heard).toEqual([])
+    expect(watchdog.isProbing()).toBe(false)
+    watchdog.noteAuthenticatedInbound(identity)
+    expect(heard).toEqual([])
+
+    watchdog.probeNow(identity)
+    await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS + 1)
+    expect(heard).toEqual([true])
+    expect(watchdog.isProbing()).toBe(true)
+    watchdog.noteAuthenticatedInbound(identity)
+    expect(heard).toEqual([true, false])
+  })
+
   it('requires three fair consecutive misses', async () => {
     const { identity, terminate, watchdog } = fixture()
     watchdog.probeNow(identity)
@@ -175,24 +197,30 @@ describe('RpcSessionLivenessWatchdog', () => {
   })
 
   describe('what the header can know about the probe', () => {
-    it('reports probing from the moment a probe is sent until an answer arrives', async () => {
+    it('reports suspicion from the first missed probe until an answer arrives, not from the send', async () => {
+      // Why: a routine idle probe that is answered is not news; "Checking…"
+      // on every one of them flickered the header on a quiet relay (2026-09-11).
       const { identity, sendProbe, watchdog } = fixture()
       expect(watchdog.isProbing()).toBe(false)
       watchdog.noteAuthenticatedInbound(identity)
       await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS)
       expect(sendProbe).toHaveBeenCalledOnce()
-      expect(watchdog.isProbing()).toBe(true)
+      expect(watchdog.isProbing()).toBe(false)
 
+      await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS + 1)
+      expect(watchdog.isProbing()).toBe(true)
       watchdog.noteAuthenticatedInbound(identity)
       expect(watchdog.isProbing()).toBe(false)
     })
 
-    it('tells a listener when probing starts and stops', async () => {
+    it('tells a listener when suspicion starts and stops', async () => {
       const { identity, watchdog } = fixture()
       const seen: boolean[] = []
       watchdog.onProbingChange((probing) => seen.push(probing))
       watchdog.noteAuthenticatedInbound(identity)
       await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS)
+      expect(seen).toEqual([])
+      await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS + 1)
       watchdog.noteAuthenticatedInbound(identity)
       expect(seen).toEqual([true, false])
     })

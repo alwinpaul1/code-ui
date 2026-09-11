@@ -104,7 +104,9 @@ describe('a direct path already proven dead on this network', () => {
     endpoint: 'ws://192.168.1.154:6768',
     deviceToken: 'device-token',
     publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-    directUnreachableSince: 1,
+    // A verdict reached just now: fresh enough to stand (it expires after
+    // DIRECT_VERDICT_TTL_MS).
+    directUnreachableSince: Date.now(),
     directUnreachableNetwork: 'WIFI|192.168.1.143'
   } as HostProfile
 
@@ -155,6 +157,21 @@ describe('a direct path already proven dead on this network', () => {
     await vi.advanceTimersByTimeAsync(1)
 
     expect(openDirect).not.toHaveBeenCalled()
+    probe.clear()
+  })
+
+  it('is dialled again once the verdict is ten minutes old on the same network', async () => {
+    // Why: reviewed 2026-09-11 — a desktop that restarted Orca on the home
+    // Wi-Fi left the phone on the billed relay for the rest of the process.
+    const { probe, openDirect } = probeOn('WIFI|192.168.1.143', deadHere)
+    probe.schedule(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openDirect).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(10 * 60_000 + 61_000)
+
+    expect(openDirect).toHaveBeenCalled()
+    probe.abort()
     probe.clear()
   })
 

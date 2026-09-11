@@ -32,6 +32,11 @@ export function openHostLogicalClient(
       directReturnProbe: false
     })
     endpointLifecycle.setForeground(true)
+    // Why: the lifecycle is pinned foreground so the relay is never suspended,
+    // but nobody is reading a header on this link — its probes stay on the
+    // background leash. Reviewed 2026-09-11: the foreground leash here meant a
+    // dozing phone paid three times the relay probes all night.
+    logical.setLivenessForeground?.(false)
     const closeLogical = logical.close
     logical.close = () => {
       endpointLifecycle.stop()
