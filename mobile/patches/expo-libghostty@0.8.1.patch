@@ -157,7 +157,7 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,9 +45,26 @@
+@@ -45,9 +45,33 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
@@ -168,6 +168,13 @@
 +/** nativeTerminalModes bits 0..2: DEC 1000, 1002, 1003. */
 +private const val MODE_MOUSE_TRACKING = 0b111
 +/** X11 wheel buttons and the press action, as nativeEncodeMouse takes them. */
++/** A repaint with no wheel echo for this long settles the pan; ~2 relay RTTs. */
++private const val PAN_SETTLE_AFTER_MS = 600L
++private const val PAN_SETTLE_POLL_MS = 100L
++private const val PAN_SETTLE_DECAY = 0.6f
++/** Rows of text that must line up for a repaint to count as a scroll. */
++private const val PAN_MIN_MATCHED_ROWS = 4
++private const val BLANK_ROW_HASH = 0L
 +private const val MOUSE_WHEEL_UP = 4
 +private const val MOUSE_WHEEL_DOWN = 5
 +private const val MOUSE_ACTION_PRESS = 0
@@ -184,7 +191,7 @@
  
    /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
    var accessoryBar: TerminalAccessoryBar? = null
-@@ -57,11 +74,24 @@
+@@ -57,11 +81,24 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -213,7 +220,115 @@
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -166,14 +196,17 @@
+@@ -154,6 +191,99 @@
+   private var scrollbarOffset = 0L
+   private var scrollbarLen = 0L
+   private var lastScrollActivityAt = 0L
++
++  // ── Finger-follow pan (mouse-tracking TUIs) ──
++  //
++  // A TUI that owns the scroll repaints only after a wheel report makes the
++  // round trip to the host; that cadence is the network's, not the display's.
++  // So the grid follows the finger by exact pixels the moment it moves
++  // (panPx, applied in onDraw), and each host repaint is measured: the rows
++  // it shifted the text by come straight out of the pan, so the picture never
++  // jumps — the host's content lands where the finger already put it. Rows
++  // sent but not yet seen back are pendingRows; a host that stops answering
++  // (top of its buffer, or a stalled link) settles the pan back to zero.
++  /** Grid translation in px; negative moves content up. Zero when idle. */
++  private var panPx = 0f
++  /** Wheel rows sent and not yet reflected by a host repaint; + is content up. */
++  private var pendingRows = 0
++  private var rowHash = LongArray(0)
++  private var prevRowHash = LongArray(0)
++  private var lastWheelSentAt = 0L
++  private var fingerDown = false
++  private var lastTouchAt = 0L
++  /** Host wiring: false pins the grid to the host's frames, no prediction. */
++  var followFinger: Boolean = true
++  // Runs until the pan is back at zero: a host that answers late, a finger
++  // the system stopped reporting, or a fling that outlives the touch all
++  // end here, never in a grid parked half-way down the pane.
++  private val panSettleRunnable = object : Runnable {
++    override fun run() {
++      val now = android.os.SystemClock.uptimeMillis()
++      if (fingerDown && now - lastTouchAt >= PAN_SETTLE_AFTER_MS) fingerDown = false
++      if (pendingRows != 0 && now - lastWheelSentAt >= PAN_SETTLE_AFTER_MS) pendingRows = 0
++      if (fingerDown || pendingRows != 0 || !scroller.isFinished) {
++        postDelayed(this, PAN_SETTLE_POLL_MS)
++        return
++      }
++      if (kotlin.math.abs(panPx) < 0.5f) {
++        panPx = 0f
++        invalidate()
++        return
++      }
++      panPx *= PAN_SETTLE_DECAY
++      invalidate()
++      postOnAnimation(this)
++    }
++  }
++
++  private fun scheduleSettle() {
++    removeCallbacks(panSettleRunnable)
++    postDelayed(panSettleRunnable, PAN_SETTLE_AFTER_MS)
++  }
++
++  /** Move the grid under the finger by [dy] px while wheel rows are in flight. */
++  private fun panBy(dy: Float) {
++    if (!followFinger) return
++    val limit = height / 2f
++    panPx = (panPx + dy).coerceIn(-limit, limit)
++    invalidate()
++    if (!fingerDown) scheduleSettle()
++  }
++
++  /**
++   * After a repaint, how many rows the host moved the text by, or 0. Rows that
++   * read the same text as a row [shift] further down before the repaint count
++   * as matches; blank rows do not, and a TUI's fixed chrome never matches, so
++   * a real scroll wins by a wide margin and a redraw in place scores zero.
++   */
++  private fun detectRowShift(): Int {
++    val n = minOf(rowHash.size, prevRowHash.size)
++    if (n == 0 || pendingRows == 0) return 0
++    val maxShift = minOf(n - 1, kotlin.math.abs(pendingRows))
++    fun matches(shift: Int): Int {
++      var m = 0
++      for (y in 0 until n) {
++        val from = y + shift
++        if (from < 0 || from >= n) continue
++        val h = rowHash[y]
++        if (h != BLANK_ROW_HASH && h == prevRowHash[from]) m++
++      }
++      return m
++    }
++    val inPlace = matches(0)
++    var best = 0
++    var bestScore = inPlace
++    val direction = if (pendingRows > 0) 1 else -1
++    for (k in 1..maxShift) {
++      val shift = k * direction
++      val score = matches(shift)
++      if (score > bestScore) {
++        bestScore = score
++        best = shift
++      }
++    }
++    return if (best != 0 && bestScore >= PAN_MIN_MATCHED_ROWS) best else 0
++  }
+   private val scrollbarPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+   private val jumpChipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+   private val jumpChipArrow = Path()
+@@ -161,19 +291,24 @@
+     override fun run() {
+       if (handle == 0L || !scroller.computeScrollOffset()) return
+       val y = scroller.currY
+-      scrollAccum += (y - flingLastY).toFloat()
++      val dy = (y - flingLastY).toFloat()
++      scrollAccum += dy
+       flingLastY = y
++      if (terminalModes() and MODE_MOUSE_TRACKING != 0) panBy(-dy)
        val deltaRows = (scrollAccum / cellHeight).toInt()
        if (deltaRows != 0) {
          scrollAccum -= deltaRows * cellHeight
@@ -234,7 +349,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +226,11 @@
+@@ -193,9 +328,11 @@
            clearSelection()
            return true
          }
@@ -249,7 +364,7 @@
          return true
        }
  
-@@ -205,6 +240,7 @@
+@@ -205,6 +342,7 @@
          lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
          selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
@@ -257,13 +372,14 @@
          scheduleFrame()
          if (selectionMode) {
            // Keep dragging without lifting: extend from the pressed cell.
-@@ -225,13 +261,13 @@
+@@ -225,13 +363,14 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
 +        lastTouchX = e2.x
 +        lastTouchY = e2.y
          scrollAccum += distanceY
++        if (terminalModes() and MODE_MOUSE_TRACKING != 0) panBy(-distanceY)
          val deltaRows = (scrollAccum / cellHeight).toInt()
          if (deltaRows != 0) {
            scrollAccum -= deltaRows * cellHeight
@@ -274,7 +390,7 @@
          }
          return true
        }
-@@ -296,6 +332,7 @@
+@@ -296,6 +435,7 @@
      val clamped = dp.coerceIn(MIN_FONT_SIZE_DP, MAX_FONT_SIZE_DP)
      if (clamped == fontSizeDp) return
      fontSizeDp = clamped
@@ -282,7 +398,7 @@
      val px = clamped * resources.displayMetrics.density
      for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
        paint?.textSize = px
-@@ -367,6 +404,45 @@
+@@ -367,6 +507,52 @@
      }
    }
  
@@ -316,7 +432,14 @@
 +      }
 +      // Straight to the PTY: sendBytes would clear a selection and jump to the
 +      // live view, neither of which a scroll should do.
-+      if (out != null) onInputBytes?.invoke(out)
++      if (out != null) {
++        onInputBytes?.invoke(out)
++        if (followFinger) {
++          pendingRows += deltaRows
++          lastWheelSentAt = android.os.SystemClock.uptimeMillis()
++          scheduleSettle()
++        }
++      }
 +      markScrollActivity()
 +      return
 +    }
@@ -328,7 +451,36 @@
    private fun sendBytes(bytes: ByteArray) {
      if (!finished && bytes.isNotEmpty()) {
        if (selectionMode) clearSelection()
-@@ -559,6 +635,7 @@
+@@ -481,6 +667,10 @@
+     rowSelStart = IntArray(rows) { -1 }
+     rowSelEnd = IntArray(rows) { -1 }
+     rowSelEndWide = BooleanArray(rows)
++    rowHash = LongArray(rows)
++    prevRowHash = LongArray(rows)
++    panPx = 0f
++    pendingRows = 0
+   }
+ 
+   // ── Rendering ──
+@@ -521,7 +711,17 @@
+     syncBlinkTimer()
+ 
+     if (dirtyKind == DIRTY_FULL) canvas.drawColor(defaultBg)
++    val measuring = followFinger && pendingRows != 0 && rowCount > 0
++    if (measuring) System.arraycopy(rowHash, 0, prevRowHash, 0, minOf(rowHash.size, prevRowHash.size))
+     repeat(rowCount) { drawRowRecord(buf, canvas, snapCols) }
++    if (measuring) {
++      val shift = detectRowShift()
++      if (shift != 0) {
++        pendingRows -= shift
++        panPx += shift * cellHeight
++        if (pendingRows == 0 && !fingerDown) scheduleSettle()
++      }
++    }
+     syncSelectionUi()
+     invalidate()
+   }
+@@ -559,6 +759,7 @@
  
    private fun clearSelection() {
      if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
@@ -336,7 +488,7 @@
      selectionMode = false
      draggingHandle = HANDLE_NONE
      actionMode?.finish()
-@@ -569,6 +646,7 @@
+@@ -569,6 +770,7 @@
      if (handle == 0L) return
      if (GhosttyVt.nativeSelectAll(handle)) {
        selectionMode = true
@@ -344,7 +496,7 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -578,9 +656,9 @@
+@@ -578,9 +780,9 @@
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
      val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
@@ -357,6 +509,54 @@
      clearSelection()
    }
  
+@@ -794,6 +996,16 @@
+     if (textUnits > rowChars.size) rowChars = CharArray(textUnits)
+     for (i in 0 until textUnits) rowChars[i] = buf.char
+     val nextRecord = textPos + textUnits * 2 + if (textUnits % 2 != 0) 2 else 0
++    if (rowIndex < rowHash.size) {
++      var h = 1469598103934665603L
++      var blank = true
++      for (i in 0 until textUnits) {
++        val c = rowChars[i]
++        if (c != ' ') blank = false
++        h = (h xor c.code.toLong()) * 1099511628211L
++      }
++      rowHash[rowIndex] = if (blank) BLANK_ROW_HASH else h
++    }
+ 
+     buf.position(cellsPos)
+     val colCount = minOf(snapCols, cellFg.size)
+@@ -884,8 +1096,11 @@
+ 
+   override fun onDraw(canvas: Canvas) {
+     canvas.drawColor(defaultBg)
++    canvas.save()
++    canvas.translate(0f, panPx)
+     bitmap?.let { canvas.drawBitmap(it, 0f, 0f, null) }
+     drawCursor(canvas)
++    canvas.restore()
+     drawSelectionHandles(canvas)
+     drawScrollIndicator(canvas)
+     drawJumpToBottomChip(canvas)
+@@ -973,7 +1188,17 @@
+   // ── Input ──
+ 
+   override fun onTouchEvent(event: MotionEvent): Boolean {
+-    if (event.actionMasked == MotionEvent.ACTION_DOWN) scroller.abortAnimation()
++    lastTouchAt = android.os.SystemClock.uptimeMillis()
++    when (event.actionMasked) {
++      MotionEvent.ACTION_DOWN -> {
++        scroller.abortAnimation()
++        fingerDown = true
++      }
++      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
++        fingerDown = false
++        scheduleSettle()
++      }
++    }
+     scaleDetector.onTouchEvent(event)
+     if (scaleDetector.isInProgress) {
+       if (draggingHandle != HANDLE_NONE) {
 --- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
 @@ -19,6 +19,13 @@
@@ -428,7 +628,17 @@
      // Edge-to-edge windows don't resize for the keyboard — it just covers us.
      // Pad our bottom by the covered amount so the bar sits above the IME and
      // the terminal shrinks (regaining the hidden rows). Hosts that already
-@@ -93,7 +137,14 @@
+@@ -81,6 +125,9 @@
+ 
+   /** Base font size in dp; applied live (the grid reflows in place). */
+   fun setFontSize(dp: Float) = terminal.setFontSize(dp)
++  fun setFollowFinger(value: Boolean) {
++    terminal.followFinger = value
++  }
+ 
+   /** Apply theme colors; a null record clears back to the defaults. */
+   internal fun setTheme(theme: TerminalThemeRecord?) = terminal.setTheme(
+@@ -93,7 +140,14 @@
    )
  
    /** Feed PTY output (terminal.output on the wire) into the grid. */
@@ -455,7 +665,7 @@
  
        // Base font size in dp (default 14); applied live, the grid reflows.
        Prop("fontSize") { view: ExpoLibghosttyView, size: Float ->
-@@ -24,6 +24,20 @@
+@@ -24,6 +24,23 @@
          view.setTheme(theme)
        }
  
@@ -465,6 +675,9 @@
 +        view.setManagesFocus(value)
 +      }
 +
++      Prop("followFinger") { view: ExpoLibghosttyView, value: Boolean ->
++        view.setFollowFinger(value)
++      }
 +      Prop("showsAccessoryBar") { view: ExpoLibghosttyView, value: Boolean ->
 +        view.showsAccessoryBar = value
 +      }
@@ -494,7 +707,7 @@
  export type TerminalViewRef = {
    /** Feed base64-encoded PTY output into the terminal grid. */
    write(base64: string): Promise<void>;
-@@ -61,6 +70,20 @@
+@@ -61,6 +70,26 @@
    onInput?: (event: { nativeEvent: TerminalInputEvent }) => void;
    /** Grid resized (layout, rotation, font change); forward to the PTY. */
    onResize?: (event: { nativeEvent: TerminalResizeEvent }) => void;
@@ -509,6 +722,12 @@
 +  /** False hands focus and the IME to the host (default true). */
 +  managesFocus?: boolean;
 +  /** False hides the library's own accessory bar (default true). */
++  /**
++   * While a mouse-tracking TUI owns the scroll, move the grid under the
++   * finger immediately and reconcile each host repaint into that motion
++   * (default true). False pins the grid to the host's frames.
++   */
++  followFinger?: boolean;
 +  showsAccessoryBar?: boolean;
 +  /** False stops the view padding itself for the keyboard (default true). */
 +  managesKeyboardInsets?: boolean;
@@ -528,7 +747,7 @@
  export type TerminalViewRef = {
      /** Feed base64-encoded PTY output into the terminal grid. */
      write(base64: string): Promise<void>;
-@@ -60,6 +64,16 @@
+@@ -60,6 +64,22 @@
      onResize?: (event: {
          nativeEvent: TerminalResizeEvent;
      }) => void;
@@ -540,6 +759,12 @@
 +    /** Font size in dp after a pinch, so the host can persist it. */
 +    onFontSize?: (event: { nativeEvent: { fontSize: number } }) => void;
 +    managesFocus?: boolean;
++    /**
++     * While a mouse-tracking TUI owns the scroll, move the grid under the
++     * finger immediately and reconcile each host repaint into that motion
++     * (default true). False pins the grid to the host's frames.
++     */
++    followFinger?: boolean;
 +    showsAccessoryBar?: boolean;
 +    managesKeyboardInsets?: boolean;
      ref?: Ref<TerminalViewRef>;
