@@ -17,6 +17,7 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import { loadTerminalEngine, saveTerminalEngine, type TerminalEngine } from '../src/terminal/terminal-engine-preference'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import {
   loadTerminalAutocompleteEnabled,
@@ -154,6 +155,16 @@ export default function TerminalSettingsScreen() {
     }
     setTextScale(opt.scale)
     void saveTerminalTextScale(opt.scale)
+  }, [])
+
+  const [engine, setEngine] = useState<TerminalEngine>('webview')
+  useEffect(() => {
+    void loadTerminalEngine().then(setEngine)
+  }, [])
+  const toggleEngine = useCallback((on: boolean) => {
+    const next: TerminalEngine = on ? 'ghostty' : 'webview'
+    setEngine(next)
+    void saveTerminalEngine(next)
   }, [])
 
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
@@ -313,6 +324,27 @@ export default function TerminalSettingsScreen() {
             </View>
             <ChevronRight size={16} color={colors.textMuted} />
           </Pressable>
+        </View>
+
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>RENDERING</Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Ghostty engine (beta)</Text>
+              <Text style={styles.rowSublabel}>
+                {engine === 'ghostty'
+                  ? 'Native renderer. Panes pick it up when a session is next opened.'
+                  : 'Off — terminals draw with the WebView renderer.'}
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Ghostty engine"
+              value={engine === 'ghostty'}
+              onValueChange={toggleEngine}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
+            />
+          </View>
         </View>
 
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
