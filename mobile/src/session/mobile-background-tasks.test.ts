@@ -662,6 +662,32 @@ describe('a tab opened after its turn ended with shells still running', () => {
   })
 })
 
+describe('shells the beacon saw launched above the loaded window', () => {
+  it('lists them running until a notification or the done list names them', () => {
+    const tasks = deriveBackgroundTasks([], NOW, { state: 'working' }, {
+      launchedTaskIds: ['bajgl5wmo', 'b7woddzjt', 'bqo82xkjk'],
+      finishedTaskIds: ['bqo82xkjk']
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo', 'b7woddzjt'])
+    expect(countRunningBackgroundTasks([], { state: 'working' }, {
+      launchedTaskIds: ['bajgl5wmo', 'b7woddzjt', 'bqo82xkjk'],
+      finishedTaskIds: ['bqo82xkjk']
+    })).toBe(2)
+  })
+
+  it('does not double-list one the Stop hook also names, and drops them all once the pane is done', () => {
+    expect(
+      deriveBackgroundTasks([], NOW, { state: 'working' }, {
+        launchedTaskIds: ['b1'],
+        runningTaskIds: ['b1']
+      }).running.map((task) => task.id)
+    ).toEqual(['b1'])
+    expect(
+      deriveBackgroundTasks([], NOW, { state: 'done' }, { launchedTaskIds: ['b1'] }).running
+    ).toEqual([])
+  })
+})
+
 describe('the running-tasks row agrees with the sheet', () => {
   const options = { finishedTaskIds: [], runningTaskIds: null }
 

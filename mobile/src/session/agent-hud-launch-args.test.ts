@@ -482,6 +482,32 @@ describe('finished background tasks ride the Claude beacon', () => {
     })
   }
 
+  // Verbatim tool_result records Claude Code 2.1.267 wrote on 2026-09-11 for a
+  // `run_in_background` Bash and a command moved to the background; paths redacted.
+  const transcriptWithLaunches = [
+    '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01A","type":"tool_result","content":"Command running in background with ID: bajgl5wmo. Output is being written to: /private/tmp/claude-501/x/tasks/bajgl5wmo.output. You will be notified when it completes. To check interim output, use Read on that file path.","is_error":false}]},"uuid":"75a95481-2c35-4b80-81ff-dd558a4522fb","timestamp":"2026-09-11T10:17:50.846Z"}',
+    '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01B","type":"tool_result","content":"Command did not complete within its 120s timeout and was moved to the background (ID: b7woddzjt). Output is being written to: /private/tmp/claude-501/x/tasks/b7woddzjt.output.","is_error":false}]},"uuid":"8f0c2b8f-2b1f-4b2e-9c1e-7a9d1f0e2c11","timestamp":"2026-09-11T10:20:01.000Z"}',
+    '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<task-notification>\\n<task-id>bajgl5wmo</task-id>\\n<status>completed</status>\\n</task-notification>"}]},"uuid":"c1d2e3f4-0000-4000-8000-000000000001","timestamp":"2026-09-11T10:25:00.000Z"}',
+    ''
+  ].join('\n')
+
+  for (const shell of SHELLS) {
+    it(`beacons every shell the transcript shows launched, so the count is right mid-turn (${shell})`, () => {
+      // Why: the desk read "3 shells" on a 858k-token session while the phone
+      // read "1": the launches sat above the window the phone loads, and the
+      // Stop hook's run= list was a turn old (2026-09-11).
+      const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
+      const transcript = join(dir, 'session.jsonl')
+      writeFileSync(transcript, transcriptWithLaunches)
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: withTranscript(statusJson, transcript),
+        shell
+      })
+      expect(run.beacon).toContain(' bg=bajgl5wmo,b7woddzjt')
+      expect(run.beacon).toContain(' done=bajgl5wmo')
+    })
+  }
+
   for (const shell of SHELLS) {
     it(`opens a Windows transcript path, which arrives JSON-escaped with backslashes (${shell})`, () => {
       // Claude Code runs the status-line command through Git Bash on Windows

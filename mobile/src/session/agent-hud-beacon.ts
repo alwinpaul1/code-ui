@@ -50,6 +50,9 @@ export type AgentHudBeacon = {
    *  when this beacon did not carry the field, which is not the same as an
    *  empty list: empty means "nothing is running", null means "no answer". */
   runningTaskIds: string[] | null
+  /** Every shell the transcript tail shows launched, from the status-line
+   *  beacon on every refresh — fresh mid-turn, where `run=` is not. */
+  launchedTaskIds: string[]
   receivedAt: number
 }
 
@@ -132,6 +135,9 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: values.has('run')
       ? (values.get('run') ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
       : null,
+    launchedTaskIds: (values.get('bg') ?? '')
+      .split(',')
+      .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
     receivedAt
   }
 }
@@ -182,6 +188,8 @@ function publish(handle: string, payload: string): void {
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
         doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
+        launchedTaskIds:
+          beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
         receivedAt: beacon.receivedAt
       }
     : beacon

@@ -19,7 +19,7 @@ export type SessionTabActivity =
 
 export function sessionTabActivity(
   status: Pick<AgentStatusEntry, 'state' | 'workingMode'> | null | undefined,
-  beacon: Pick<AgentHudBeacon, 'runningTaskIds' | 'doneTaskIds'> | null,
+  beacon: Pick<AgentHudBeacon, 'runningTaskIds' | 'doneTaskIds' | 'launchedTaskIds'> | null,
   active: boolean
 ): SessionTabActivity | null {
   if (!status || status.state !== 'working') {
@@ -28,11 +28,14 @@ export function sessionTabActivity(
   if (status.workingMode !== 'monitoring') {
     return { kind: 'working' }
   }
-  if (!active || !beacon?.runningTaskIds) {
+  const launched = beacon?.launchedTaskIds ?? []
+  if (!active || !beacon || (!beacon.runningTaskIds && launched.length === 0)) {
     return { kind: 'background', count: null }
   }
   const done = new Set(beacon.doneTaskIds)
-  const running = beacon.runningTaskIds.filter((id) => !done.has(id)).length
+  const running = new Set(
+    [...(beacon.runningTaskIds ?? []), ...launched].filter((id) => !done.has(id))
+  ).size
   // The agent has written every listed shell as done while the host still
   // says monitoring: nothing is running as far as anyone can tell — no chip,
   // and no "0" (council review, 2026-09-11).

@@ -126,4 +126,13 @@ describe('finished task ids on the beacon', () => {
   it('reports no finished tasks when the beacon carries none', () => {
     expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude')?.doneTaskIds).toEqual([])
   })
+
+  it('reads the launched shell ids and keeps the last non-empty list across a beacon without one', () => {
+    resetAgentHudBeacons()
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude bg=b1,b2 done=b1\x07')
+    expect(getAgentHudBeacon('h')?.launchedTaskIds).toEqual(['b1', 'b2'])
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude run=b2\x07')
+    expect(getAgentHudBeacon('h')?.launchedTaskIds).toEqual(['b1', 'b2'])
+    expect(getAgentHudBeacon('h')?.runningTaskIds).toEqual(['b2'])
+  })
 })

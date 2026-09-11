@@ -39,16 +39,20 @@ export type ActiveTabBackgroundTaskReport = {
    *  has answered. Null and empty differ: empty means nothing is running,
    *  which is what clears the row on the last task. */
   runningTaskIds: readonly string[] | null
+  /** Every shell the beacon saw launched in the transcript tail. */
+  launchedTaskIds: readonly string[]
 }
 
-/** Both halves of what the agent has said about its background work. */
+/** What the agent has said about its background work, all three halves. */
 export function useActiveTabBackgroundTaskReport(
   handle: string | null
 ): ActiveTabBackgroundTaskReport {
   const finishedTaskIds = useActiveTabFinishedTaskIds(handle)
-  const runningTaskIds = useAgentHudBeacon(handle)?.runningTaskIds ?? null
+  const beacon = useAgentHudBeacon(handle)
+  const runningTaskIds = beacon?.runningTaskIds ?? null
+  const launchedTaskIds = beacon?.launchedTaskIds ?? NONE
   return useMemo(
-    () => ({ finishedTaskIds, runningTaskIds }),
-    [finishedTaskIds, runningTaskIds]
+    () => ({ finishedTaskIds, runningTaskIds, launchedTaskIds }),
+    [finishedTaskIds, runningTaskIds, launchedTaskIds]
   )
 }

@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { sessionTabActivity } from './session-tab-activity'
 
-const beacon = (runningTaskIds: string[] | null, doneTaskIds: string[] = []) => ({
+const beacon = (
+  runningTaskIds: string[] | null,
+  doneTaskIds: string[] = [],
+  launchedTaskIds: string[] = []
+) => ({
   runningTaskIds,
-  doneTaskIds
+  doneTaskIds,
+  launchedTaskIds
 })
 
 describe('what a tab pill shows about background shells', () => {
@@ -34,6 +39,18 @@ describe('what a tab pill shows about background shells', () => {
         true
       )
     ).toEqual({ kind: 'background', count: 1 })
+  })
+
+  it('counts shells the transcript tail shows launched even before the Stop hook lists them', () => {
+    // Why: desk "3 shells", phone "1" (2026-09-11) — two launches were newer
+    // than the last Stop hook and older than the loaded window.
+    expect(
+      sessionTabActivity(
+        { state: 'working', workingMode: 'monitoring' },
+        beacon(['t1'], [], ['t1', 't2', 't3']),
+        true
+      )
+    ).toEqual({ kind: 'background', count: 3 })
   })
 
   it('shows nothing, not a zero, once the agent has written every listed shell as done', () => {

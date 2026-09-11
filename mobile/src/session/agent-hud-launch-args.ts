@@ -125,6 +125,15 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // Only records that carry a <status>: a Monitor emits a <task-id> with no
   // status for every EVENT while it is still running.
   '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 1048576 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]*</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  // Every shell Claude has started, from its own tool results: "Command running
+  // in background with ID: <id>" and "moved to the background (ID: <id>)".
+  // Same tail, same tools. Launched minus done is what is still running, and
+  // it is right mid-turn — the Stop hook's `run=` list is only as fresh as the
+  // last turn end, and a 858k-token session's launches sit far above the
+  // window the phone loads. Measured 2026-09-11: the desk read "3 shells",
+  // the phone "1".
+  'bg=""',
+  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(tail -c 1048576 "$tp" 2>/dev/null | grep -o -e "background with ID: [A-Za-z0-9_-]*" -e "background (ID: [A-Za-z0-9_-]*" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -135,6 +144,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$ha" ] && o="$o h5=${ha%.*}:${hb:-0}"',
   '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
   '[ -n "$dn" ] && o="$o done=${dn%,}"',
+  '[ -n "$bg" ] && o="$o bg=${bg%,}"',
   ...TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
   // exactly their bar. settings.json is multi-line JSON. Each reader is tried

@@ -93,7 +93,8 @@ export function MobileBackgroundTasksSheetBody({
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
       deriveBackgroundTasks(messages, now, agentStatus ?? null, {
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
-        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null
+        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
+        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? []
       }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
   )

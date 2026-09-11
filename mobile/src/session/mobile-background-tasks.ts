@@ -54,6 +54,11 @@ export type BackgroundTaskDeriveOptions = {
    *  means the agent has not answered yet — mid-turn, the Stop hook has not
    *  fired — and the transcript remains the only source. */
   runningTaskIds?: readonly string[] | null
+  /** Shells the beacon saw launched in the transcript tail (`bg=`). One the
+   *  loaded window never showed, with no notification and not in `done=`, is
+   *  running — this is the transcript itself, read further back than the
+   *  window, and fresher than the Stop hook's `run=` mid-turn. */
+  launchedTaskIds?: readonly string[]
 }
 
 /** `shell`, `agent` and `monitor` are what the transcript reader can name.
@@ -167,7 +172,8 @@ export function deriveBackgroundTasks(
     now,
     hostStatus,
     position + 1,
-    options.runningTaskIds ?? null
+    options.runningTaskIds ?? null,
+    options.launchedTaskIds ?? []
   )
 }
 
@@ -177,7 +183,8 @@ function splitByStatus(
   now: number,
   hostStatus: BackgroundTaskHostStatus | null,
   afterTranscript: number,
-  reportedRunning: readonly string[] | null
+  reportedRunning: readonly string[] | null,
+  reportedLaunched: readonly string[] = []
 ): BackgroundTasks {
   const agentSaysRunning = reportedRunning === null ? null : new Set(reportedRunning)
   const running: BackgroundTask[] = []
@@ -235,6 +242,15 @@ function splitByStatus(
       }
       running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })
     }
+  }
+  // A shell the beacon saw launched in the transcript tail, above the loaded
+  // window, with no notification in that tail: running until one lands.
+  const listed = new Set(running.map((task) => task.id))
+  for (const id of reportedLaunched) {
+    if (launches.has(id) || notifications.has(id) || listed.has(id) || paneDone) {
+      continue
+    }
+    running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })
   }
   // A subagent the host is tracking but the loaded transcript window never
   // showed (launched before the page, or its launch record paginated out).
