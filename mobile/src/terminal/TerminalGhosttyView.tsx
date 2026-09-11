@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { TerminalView, type TerminalViewRef } from 'expo-libghostty'
 import { ghosttyThemeFromMobileTheme } from './ghostty-theme-from-mobile-theme'
@@ -7,6 +7,10 @@ import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-web
 
 /** 13 dp at scale 1, the size the Stage 0 replays were measured at. */
 const GHOSTTY_BASE_FONT_DP = 13
+
+/** The module clamps fontSize to this range; keep the fit inside it. */
+const MIN_FONT_DP = 4
+const MAX_FONT_DP = 64
 
 /** RIS then a scrollback erase: a fresh grid for a fresh snapshot. */
 const RESET_SEQUENCE = 'c[3J'
@@ -44,6 +48,13 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
     const gridRef = useRef<{ cols: number; rows: number } | null>(null)
     const readyResolversRef = useRef<(() => void)[]>([])
     const announcedReadyRef = useRef(false)
+    // Measured on a 1080 px view at 13 dp: the layout gives 49 columns. A host
+    // that keeps its own width (the `hold`/`exhausted` case) addresses cells the
+    // view does not have, rows wrap and every partial repaint lands a row off.
+    // xterm escaped by CSS-scaling its canvas; here the font scales so the grid
+    // the host expects is the grid it gets.
+    const [hostFit, setHostFit] = useState(1)
+    const hostFitRef = useRef(1)
 
     const theme = useMemo(() => ghosttyThemeFromMobileTheme(terminalTheme), [terminalTheme])
 
@@ -97,8 +108,18 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           // The host's snapshot supersedes whatever the grid held.
           void nativeRef.current?.writeText(RESET_SEQUENCE + (initialData ?? ''))
         },
-        resize() {
-          // Layout owns the grid; the host learns the size from onResize.
+        resize(cols) {
+          // Layout owns the grid — unless the host keeps a width of its own, in
+          // which case the font scales until the grid matches what it addresses.
+          const grid = gridRef.current
+          if (!grid || cols <= 0 || grid.cols === cols) {
+            return
+          }
+          const base = GHOSTTY_BASE_FONT_DP * textScale
+          const wanted = hostFitRef.current * (grid.cols / cols)
+          const clamped = Math.min(MAX_FONT_DP / base, Math.max(MIN_FONT_DP / base, wanted))
+          hostFitRef.current = clamped
+          setHostFit(clamped)
         },
         reflow() {
           // libghostty reflows its own history on a width change.
@@ -128,7 +149,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           })
         }
       }),
-      []
+      [textScale]
     )
 
     return (
@@ -138,7 +159,7 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
         <TerminalView
           ref={nativeRef}
           style={styles.fill}
-          fontSize={GHOSTTY_BASE_FONT_DP * textScale}
+          fontSize={GHOSTTY_BASE_FONT_DP * textScale * hostFit}
           theme={theme}
           managesFocus={false}
           showsAccessoryBar={false}

@@ -126,4 +126,30 @@ describe('the ghostty engine behind the WebView handle', () => {
     expect(onTerminalInput).toHaveBeenCalledTimes(1)
     expect(onTerminalInput).toHaveBeenCalledWith('[<65;10;20M')
   })
+
+  it("scales its font so the grid matches a host that keeps its own width", () => {
+    // Measured: on a 1080 px view at 13 dp the grid is 49 columns; a host that
+    // holds 51 (the `hold`/`exhausted` case) addresses cells the view does not
+    // have, rows wrap and every partial repaint lands a row off. xterm escaped
+    // by CSS-scaling its canvas; the native view scales its font instead.
+    const { ref, fire } = mount()
+    fire('onResize', { cols: 49, rows: 38 })
+
+    act(() => {
+      ref.current!.resize(51, 38)
+    })
+
+    expect(native.props?.fontSize).toBeCloseTo((13 * 49) / 51, 5)
+  })
+
+  it('leaves the font alone when the host follows the view', () => {
+    const { ref, fire } = mount()
+    fire('onResize', { cols: 49, rows: 38 })
+
+    act(() => {
+      ref.current!.resize(49, 38)
+    })
+
+    expect(native.props?.fontSize).toBe(13)
+  })
 })
