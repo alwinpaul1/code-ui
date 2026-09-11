@@ -131,7 +131,12 @@ export async function openAuthenticatedDirectEndpoint(
         continue
       }
       clients.add(client)
-      void waitForAuthenticatedSession(client, timeoutMs).then(
+      // Why: a candidate whose client throws before it can wait (a stub, a
+      // torn-down transport) is a failed dial like any other, not an unhandled
+      // rejection escaping the probe — CI caught exactly that on 2026-09-11.
+      void Promise.resolve()
+        .then(() => waitForAuthenticatedSession(client, timeoutMs))
+        .then(
         () => {
           if (settled) {
             client.close()

@@ -109,7 +109,15 @@ describe('a direct path already proven dead on this network', () => {
   } as HostProfile
 
   function probeOn(identity: string, host: HostProfile) {
-    const openDirect = vi.fn()
+    // A client that never authenticates: the probe must wait on it, not throw.
+    const openDirect = vi.fn(
+      () =>
+        ({
+          getState: () => 'connecting',
+          onStateChange: () => () => {},
+          close: () => {}
+        }) as unknown as ReturnType<typeof openDirect>
+    )
     const hysteresis = new MobileEndpointHysteresis(Date.now(), {
       directSuccessesRequired: 3,
       directObservationMs: 30_000,
