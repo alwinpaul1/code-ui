@@ -1,0 +1,231 @@
+--- a/android/src/main/cpp/ghostty_jni.cpp
++++ b/android/src/main/cpp/ghostty_jni.cpp
+@@ -66,6 +66,8 @@
+   GhosttyRenderStateRowCells cells = nullptr;
+   GhosttyKeyEncoder encoder = nullptr;
+   GhosttyKeyEvent keyEvent = nullptr;
++  GhosttyMouseEncoder mouseEncoder = nullptr;
++  GhosttyMouseEvent mouseEvent = nullptr;
+   // Query responses emitted by the terminal during vt_write; forwarded to the
+   // PTY by the caller after each write.
+   std::vector<uint8_t> ptyOut;
+@@ -125,6 +127,8 @@
+ 
+ void destroySession(Session* session) {
+   if (session == nullptr) return;
++  ghostty_mouse_event_free(session->mouseEvent);
++  ghostty_mouse_encoder_free(session->mouseEncoder);
+   ghostty_key_event_free(session->keyEvent);
+   ghostty_key_encoder_free(session->encoder);
+   ghostty_render_state_row_cells_free(session->cells);
+@@ -243,7 +247,9 @@
+       ghostty_render_state_row_iterator_new(nullptr, &session->rowIter) != GHOSTTY_SUCCESS ||
+       ghostty_render_state_row_cells_new(nullptr, &session->cells) != GHOSTTY_SUCCESS ||
+       ghostty_key_encoder_new(nullptr, &session->encoder) != GHOSTTY_SUCCESS ||
+-      ghostty_key_event_new(nullptr, &session->keyEvent) != GHOSTTY_SUCCESS) {
++      ghostty_key_event_new(nullptr, &session->keyEvent) != GHOSTTY_SUCCESS ||
++      ghostty_mouse_encoder_new(nullptr, &session->mouseEncoder) != GHOSTTY_SUCCESS ||
++      ghostty_mouse_event_new(nullptr, &session->mouseEvent) != GHOSTTY_SUCCESS) {
+     __android_log_print(ANDROID_LOG_ERROR, kLogTag, "failed to create terminal session");
+     destroySession(session);
+     return 0;
+@@ -826,4 +832,75 @@
+   return outArray;
+ }
+ 
++// A TUI that asked for mouse tracking owns the scroll gesture: the finger must
++// become a wheel report, not a scrollback move. Reported as a bitmask so one
++// JNI call answers a whole gesture rather than one per touch sample.
++JNIEXPORT jint JNICALL
++Java_expo_modules_libghostty_GhosttyVt_nativeTerminalModes(JNIEnv*, jobject, jlong handle) {
++  auto* session = fromHandle(handle);
++  if (session == nullptr) return 0;
++  jint flags = 0;
++  bool value = false;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_NORMAL_MOUSE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 0;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_BUTTON_MOUSE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 1;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ANY_MOUSE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 2;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_SGR_MOUSE, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 3;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCREEN, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 4;
++  if (ghostty_terminal_mode_get(session->term, GHOSTTY_MODE_ALT_SCROLL, &value) ==
++          GHOSTTY_SUCCESS && value) flags |= 1 << 5;
++  return flags;
++}
++
++// Position is surface-space PIXELS; the encoder converts to cells using the
++// cell size handed to nativeResize. Buttons follow X11 numbering, so wheel up
++// and down are FOUR and FIVE.
++JNIEXPORT jbyteArray JNICALL
++Java_expo_modules_libghostty_GhosttyVt_nativeEncodeMouse(
++    JNIEnv* env, jobject, jlong handle, jint button, jint action, jfloat x, jfloat y,
++    jint metaState) {
++  auto* session = fromHandle(handle);
++  if (session == nullptr) return nullptr;
++
++  // Mouse modes change as programs run (Claude Code enables 1000/1002/1003/1006
++  // in its first chunk); sync before every encode so the format follows.
++  ghostty_mouse_encoder_setopt_from_terminal(session->mouseEncoder, session->term);
++
++  GhosttyMouseAction mouseAction = GHOSTTY_MOUSE_ACTION_PRESS;
++  if (action == 1) mouseAction = GHOSTTY_MOUSE_ACTION_RELEASE;
++  if (action == 2) mouseAction = GHOSTTY_MOUSE_ACTION_MOTION;
++
++  ghostty_mouse_event_set_action(session->mouseEvent, mouseAction);
++  ghostty_mouse_event_set_button(session->mouseEvent,
++                                 static_cast<GhosttyMouseButton>(button));
++  ghostty_mouse_event_set_mods(session->mouseEvent, mapMods(metaState));
++  GhosttyMousePosition position{x, y};
++  ghostty_mouse_event_set_position(session->mouseEvent, position);
++
++  char stackBuf[64];
++  size_t written = 0;
++  GhosttyResult result = ghostty_mouse_encoder_encode(session->mouseEncoder,
++                                                      session->mouseEvent, stackBuf,
++                                                      sizeof(stackBuf), &written);
++  std::vector<char> heapBuf;
++  const char* out = stackBuf;
++  if (result == GHOSTTY_OUT_OF_SPACE) {
++    heapBuf.resize(written);
++    result = ghostty_mouse_encoder_encode(session->mouseEncoder, session->mouseEvent,
++                                          heapBuf.data(), heapBuf.size(), &written);
++    out = heapBuf.data();
++  }
++
++  if (result != GHOSTTY_SUCCESS || written == 0) return nullptr;
++  jbyteArray outArray = env->NewByteArray(static_cast<jsize>(written));
++  if (outArray == nullptr) return nullptr;
++  env->SetByteArrayRegion(outArray, 0, static_cast<jsize>(written),
++                          reinterpret_cast<const jbyte*>(out));
++  return outArray;
++}
++
+ }  // extern "C"
+--- a/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
++++ b/android/src/main/java/expo/modules/libghostty/GhosttyVt.kt
+@@ -96,4 +96,22 @@
+ 
+   /** Encode clipboard bytes for the PTY (control-byte strip + mode-2004 wrap). */
+   external fun nativeEncodePaste(handle: Long, data: ByteArray): ByteArray?
++
++  /** Active DEC private modes as a bitmask: 1000, 1002, 1003, 1006, alt screen,
++   *  alt scroll. A TUI with mouse tracking on owns the scroll gesture. */
++  @JvmStatic
++  external fun nativeTerminalModes(handle: Long): Int
++
++  /** Encodes one mouse event for the PTY. Position is in surface-space pixels;
++   *  buttons are X11-numbered, so 4 is wheel up and 5 is wheel down. Actions:
++   *  0 press, 1 release, 2 motion. */
++  @JvmStatic
++  external fun nativeEncodeMouse(
++    handle: Long,
++    button: Int,
++    action: Int,
++    x: Float,
++    y: Float,
++    metaState: Int
++  ): ByteArray?
+ }
+--- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
++++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
+@@ -174,6 +174,11 @@
+     }
+   }
+ 
++  /** When false the host owns focus and the IME: a tap neither grabs focus nor
++   *  opens this view's keyboard. A React Native host drives input through its
++   *  own TextInput, and two keyboards fight over the same surface. */
++  var managesFocus: Boolean = true
++
+   private val gestureDetector = GestureDetector(
+     context,
+     object : GestureDetector.SimpleOnGestureListener() {
+@@ -193,9 +198,11 @@
+           clearSelection()
+           return true
+         }
+-        requestFocus()
+-        context.getSystemService(InputMethodManager::class.java)
+-          ?.showSoftInput(this@GhosttyTerminalView, 0)
++        if (managesFocus) {
++          requestFocus()
++          context.getSystemService(InputMethodManager::class.java)
++            ?.showSoftInput(this@GhosttyTerminalView, 0)
++        }
+         return true
+       }
+ 
+--- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
++++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyView.kt
+@@ -55,9 +55,43 @@
+     }
+   }
+ 
++  /** The library's accessory bar and keyboard padding exist for hosts that do
++   *  not handle the IME themselves. A React Native host that draws its own
++   *  accessory row and does its own keyboard avoidance gets two bars and a
++   *  doubled inset, so both are opt-out and both default to the old behaviour. */
++  var showsAccessoryBar: Boolean = true
++    set(value) {
++      field = value
++      if (!value) accessoryBar.visibility = GONE
++    }
++
++  var managesKeyboardInsets: Boolean = true
++    set(value) {
++      field = value
++      if (!value && paddingBottom != 0) {
++        setPadding(0, 0, 0, 0)
++        requestLayout()
++      }
++    }
++
++  fun setManagesFocus(value: Boolean) {
++    terminal.managesFocus = value
++  }
++
+   private fun syncAccessoryBar(insets: WindowInsetsCompat) {
+     val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+-    accessoryBar.visibility = if (imeVisible) VISIBLE else GONE
++    if (showsAccessoryBar) {
++      accessoryBar.visibility = if (imeVisible) VISIBLE else GONE
++    } else if (accessoryBar.visibility != GONE) {
++      accessoryBar.visibility = GONE
++    }
++    if (!managesKeyboardInsets) {
++      if (paddingBottom != 0) {
++        setPadding(0, 0, 0, 0)
++        requestLayout()
++      }
++      return
++    }
+     // Edge-to-edge windows don't resize for the keyboard — it just covers us.
+     // Pad our bottom by the covered amount so the bar sits above the IME and
+     // the terminal shrinks (regaining the hidden rows). Hosts that already
+--- a/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyModule.kt
++++ b/android/src/main/java/expo/modules/libghostty/ExpoLibghosttyModule.kt
+@@ -24,6 +24,20 @@
+         view.setTheme(theme)
+       }
+ 
++      // Hand focus, the IME and the accessory row back to the host. Every
++      // default keeps the library's own behaviour, so these are inert unset.
++      Prop("managesFocus") { view: ExpoLibghosttyView, value: Boolean ->
++        view.setManagesFocus(value)
++      }
++
++      Prop("showsAccessoryBar") { view: ExpoLibghosttyView, value: Boolean ->
++        view.showsAccessoryBar = value
++      }
++
++      Prop("managesKeyboardInsets") { view: ExpoLibghosttyView, value: Boolean ->
++        view.managesKeyboardInsets = value
++      }
++
+       // PTY output bytes (base64) → terminal grid.
+       AsyncFunction("write") { view: ExpoLibghosttyView, base64: String ->
+         val data = try {
