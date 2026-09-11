@@ -157,7 +157,7 @@
  }
 --- a/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
 +++ b/android/src/main/java/expo/modules/libghostty/GhosttyTerminalView.kt
-@@ -45,9 +45,33 @@
+@@ -45,9 +45,37 @@
   * snapshots from JNI once per Choreographer frame and patches them onto a
   * grid-sized bitmap; [onDraw] blits the bitmap and overlays the cursor.
   */
@@ -171,6 +171,10 @@
 +/** A repaint with no wheel echo for this long settles the pan; ~2 relay RTTs. */
 +private const val PAN_SETTLE_AFTER_MS = 600L
 +private const val PAN_SETTLE_POLL_MS = 100L
++/** How far the grid may run ahead of the host, in rows. A fling sends more
++ *  rows than a screen holds; past this the blank strip the prediction opens
++ *  is worse than waiting for the repaint. */
++private const val PAN_LIMIT_ROWS = 4
 +private const val PAN_SETTLE_DECAY = 0.6f
 +/** Rows of text that must line up for a repaint to count as a scroll. */
 +private const val PAN_MIN_MATCHED_ROWS = 4
@@ -191,7 +195,7 @@
  
    /** Sticky-modifier source for accessory-bar keys and IME text (optional). */
    var accessoryBar: TerminalAccessoryBar? = null
-@@ -57,11 +81,24 @@
+@@ -57,11 +85,24 @@
  
    // ── Cell metrics ──
    private var fontSizeDp = FONT_SIZE_DP
@@ -220,7 +224,7 @@
  
    // Nerd Font private-use glyphs (powerline, devicons, …) are absent from the
    // system fallback chain; route those cells to the bundled symbols-only font.
-@@ -154,6 +191,99 @@
+@@ -154,6 +195,99 @@
    private var scrollbarOffset = 0L
    private var scrollbarLen = 0L
    private var lastScrollActivityAt = 0L
@@ -277,7 +281,7 @@
 +  /** Move the grid under the finger by [dy] px while wheel rows are in flight. */
 +  private fun panBy(dy: Float) {
 +    if (!followFinger) return
-+    val limit = height / 2f
++    val limit = (PAN_LIMIT_ROWS * cellHeight).toFloat()
 +    panPx = (panPx + dy).coerceIn(-limit, limit)
 +    invalidate()
 +    if (!fingerDown) scheduleSettle()
@@ -320,7 +324,7 @@
    private val scrollbarPaint = Paint(Paint.ANTI_ALIAS_FLAG)
    private val jumpChipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
    private val jumpChipArrow = Path()
-@@ -161,19 +291,24 @@
+@@ -161,19 +295,24 @@
      override fun run() {
        if (handle == 0L || !scroller.computeScrollOffset()) return
        val y = scroller.currY
@@ -349,7 +353,7 @@
    private val gestureDetector = GestureDetector(
      context,
      object : GestureDetector.SimpleOnGestureListener() {
-@@ -193,9 +328,11 @@
+@@ -193,9 +332,11 @@
            clearSelection()
            return true
          }
@@ -364,7 +368,7 @@
          return true
        }
  
-@@ -205,6 +342,7 @@
+@@ -205,6 +346,7 @@
          lastPressRow = (e.y / cellHeight).toInt().coerceIn(0, rows - 1)
          performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
          selectionMode = GhosttyVt.nativeSelectWord(handle, lastPressCol, lastPressRow)
@@ -372,7 +376,7 @@
          scheduleFrame()
          if (selectionMode) {
            // Keep dragging without lifting: extend from the pressed cell.
-@@ -225,13 +363,14 @@
+@@ -225,13 +367,14 @@
          distanceY: Float
        ): Boolean {
          if (handle == 0L || scaleDetector.isInProgress) return false
@@ -390,7 +394,7 @@
          }
          return true
        }
-@@ -296,6 +435,7 @@
+@@ -296,6 +439,7 @@
      val clamped = dp.coerceIn(MIN_FONT_SIZE_DP, MAX_FONT_SIZE_DP)
      if (clamped == fontSizeDp) return
      fontSizeDp = clamped
@@ -398,10 +402,13 @@
      val px = clamped * resources.displayMetrics.density
      for (paint in arrayOf(textPaint, boldPaint, italicPaint, boldItalicPaint, symbolsPaint)) {
        paint?.textSize = px
-@@ -367,6 +507,52 @@
-     }
-   }
- 
+@@ -364,7 +508,53 @@
+     if (handle != 0L) {
+       GhosttyVt.nativeFree(handle)
+       handle = 0
++    }
++  }
++
 +  /** Current DEC private modes as nativeTerminalModes' bitmask; 0 once freed. */
 +  fun terminalModes(): Int = if (handle == 0L) 0 else GhosttyVt.nativeTerminalModes(handle)
 +
@@ -442,16 +449,14 @@
 +      }
 +      markScrollActivity()
 +      return
-+    }
+     }
 +    GhosttyVt.nativeScroll(handle, deltaRows)
 +    markScrollActivity()
 +    scheduleFrame()
-+  }
-+
+   }
+ 
    private fun sendBytes(bytes: ByteArray) {
-     if (!finished && bytes.isNotEmpty()) {
-       if (selectionMode) clearSelection()
-@@ -481,6 +667,10 @@
+@@ -481,6 +671,10 @@
      rowSelStart = IntArray(rows) { -1 }
      rowSelEnd = IntArray(rows) { -1 }
      rowSelEndWide = BooleanArray(rows)
@@ -462,7 +467,7 @@
    }
  
    // ── Rendering ──
-@@ -521,7 +711,17 @@
+@@ -521,7 +715,24 @@
      syncBlinkTimer()
  
      if (dirtyKind == DIRTY_FULL) canvas.drawColor(defaultBg)
@@ -475,12 +480,19 @@
 +        pendingRows -= shift
 +        panPx += shift * cellHeight
 +        if (pendingRows == 0 && !fingerDown) scheduleSettle()
++      } else if (dirtyKind == DIRTY_FULL || rowCount >= rows / 2) {
++        // A repaint of most of the screen that lines up with nothing moved
++        // further than a screen (a fling): the host has caught up with every
++        // row we sent, so the pan has nothing left to wait for.
++        pendingRows = 0
++        removeCallbacks(panSettleRunnable)
++        postOnAnimation(panSettleRunnable)
 +      }
 +    }
      syncSelectionUi()
      invalidate()
    }
-@@ -559,6 +759,7 @@
+@@ -559,6 +770,7 @@
  
    private fun clearSelection() {
      if (handle != 0L) GhosttyVt.nativeClearSelection(handle)
@@ -488,7 +500,7 @@
      selectionMode = false
      draggingHandle = HANDLE_NONE
      actionMode?.finish()
-@@ -569,6 +770,7 @@
+@@ -569,6 +781,7 @@
      if (handle == 0L) return
      if (GhosttyVt.nativeSelectAll(handle)) {
        selectionMode = true
@@ -496,7 +508,7 @@
        scheduleFrame()
        actionMode?.invalidate()
      }
-@@ -578,9 +780,9 @@
+@@ -578,9 +791,9 @@
      if (handle == 0L) return
      val bytes = GhosttyVt.nativeSelectionText(handle) ?: return
      val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return
@@ -509,7 +521,7 @@
      clearSelection()
    }
  
-@@ -794,6 +996,16 @@
+@@ -794,6 +1007,16 @@
      if (textUnits > rowChars.size) rowChars = CharArray(textUnits)
      for (i in 0 until textUnits) rowChars[i] = buf.char
      val nextRecord = textPos + textUnits * 2 + if (textUnits % 2 != 0) 2 else 0
@@ -526,7 +538,7 @@
  
      buf.position(cellsPos)
      val colCount = minOf(snapCols, cellFg.size)
-@@ -884,8 +1096,11 @@
+@@ -884,8 +1107,11 @@
  
    override fun onDraw(canvas: Canvas) {
      canvas.drawColor(defaultBg)
@@ -538,7 +550,7 @@
      drawSelectionHandles(canvas)
      drawScrollIndicator(canvas)
      drawJumpToBottomChip(canvas)
-@@ -973,7 +1188,17 @@
+@@ -973,7 +1199,17 @@
    // ── Input ──
  
    override fun onTouchEvent(event: MotionEvent): Boolean {
