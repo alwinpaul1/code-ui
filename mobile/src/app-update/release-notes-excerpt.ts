@@ -27,7 +27,10 @@ export function releaseNotesExcerpt(body: string | null | undefined): string[] {
       .replace(/[*_`]+/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim()
-    if (line) {
+    // Why: the version-bump commit ("Release 0.5.12") lands in every set of
+    // notes and says nothing the card's own version badge does not; a person
+    // reading "What's new" wants the changes (2026-09-12).
+    if (line && !/^release\s+v?\d+(\.\d+)*$/i.test(line)) {
       lines.push(line)
     }
     if (lines.length >= MAX_LINES) {

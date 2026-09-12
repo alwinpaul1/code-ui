@@ -27,3 +27,20 @@ describe('releaseNotesExcerpt', () => {
     expect(releaseNotesExcerpt('')).toEqual([])
   })
 })
+
+// 2026-09-12: the 0.5.12 banner read "• Release 0.5.12 • Delete a leftover
+// update APK on an idle launch". The first line is the version-bump commit,
+// which says nothing a person can act on; the card already shows the version.
+describe('release notes excerpt hides the version-bump line', () => {
+  it('drops "Release x.y.z" and keeps the real changes', () => {
+    expect(
+      releaseNotesExcerpt(
+        "## What's changed\n\n- Release 0.5.12\n- Delete a leftover update APK on an idle launch\n\n**Full Changelog**: https://x/compare/a...b"
+      )
+    ).toEqual(['Delete a leftover update APK on an idle launch'])
+  })
+
+  it('shows nothing rather than the bump line when a release carries no other change', () => {
+    expect(releaseNotesExcerpt('- Release 0.5.9')).toEqual([])
+  })
+})
