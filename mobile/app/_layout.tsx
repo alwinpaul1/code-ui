@@ -7,7 +7,11 @@ import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
-import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import { isAppUpdateNotification } from '../src/app-update/update-notification'
+import {
+  useOpenAppUpdateNotification,
+  useOpenNotificationRoute
+} from '../src/notifications/use-open-notification-route'
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
@@ -50,6 +54,7 @@ function ThemedRoot() {
   const router = useRouter()
   const { colors, fonts, isDark } = useTheme()
   const openNotificationRoute = useOpenNotificationRoute()
+  const openAppUpdateNotification = useOpenAppUpdateNotification()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
   // Why: Instrument Sans is the only UI face. Rendering before it loads would
   // flash the system font, so the splash stays up until the faces are ready or
@@ -152,7 +157,17 @@ function ThemedRoot() {
         }
       }
 
-      const target = await getNavigationTarget(response.notification.request.content.data)
+      const data = response.notification.request.content.data
+      // Why: an update notification has no host to route to. Home already
+      // mounts the update dialog, which shows the release on arrival.
+      if (isAppUpdateNotification(data)) {
+        clearLastNotificationResponse()
+        if (!disposed) {
+          openAppUpdateNotification()
+        }
+        return
+      }
+      const target = await getNavigationTarget(data)
       clearLastNotificationResponse()
       if (disposed) {
         return
@@ -174,7 +189,7 @@ function ThemedRoot() {
       disposed = true
       sub.remove()
     }
-  }, [openNotificationRoute])
+  }, [openAppUpdateNotification, openNotificationRoute])
   // ─── End notification tap routing ───
 
   // Why: hide the native splash only once the navigation Stack has been laid

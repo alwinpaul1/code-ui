@@ -3,6 +3,8 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 
 import { useAppUpdateStore, hydrateAppUpdateState } from './app-update-store'
+import { hydrateApkInstallState } from './apk-install-store'
+import { syncBackgroundUpdateCheck } from './background-update-check'
 
 // Home owns update polling: restore the last known update on mount (so a cold
 // start shows the dialog at once), then run the throttled check on every Home
@@ -11,7 +13,11 @@ import { useAppUpdateStore, hydrateAppUpdateState } from './app-update-store'
 
 export function useHomeUpdateCheck(): void {
   useEffect(() => {
+    // Why first: a download that finished (or now waits for a tap) while the
+    // app was closed must show before the network check can overwrite it.
+    hydrateApkInstallState()
     void hydrateAppUpdateState().then(() => useAppUpdateStore.getState().checkForUpdate())
+    void syncBackgroundUpdateCheck()
   }, [])
 
   useFocusEffect(

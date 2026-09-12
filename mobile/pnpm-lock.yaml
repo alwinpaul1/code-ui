@@ -22,6 +22,9 @@ importers:
 
   .:
     dependencies:
+      '@codeui/expo-apk-updater':
+        specifier: file:./packages/expo-apk-updater
+        version: file:packages/expo-apk-updater(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
       '@codeui/expo-background-link':
         specifier: file:./packages/expo-background-link
         version: file:packages/expo-background-link(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
@@ -58,6 +61,9 @@ importers:
       expo-application:
         specifier: ~57.0.2
         version: 57.0.2(expo@57.0.20)
+      expo-background-task:
+        specifier: 57.0.16
+        version: 57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
       expo-build-properties:
         specifier: ^57.0.17
         version: 57.0.17(expo@57.0.20)
@@ -127,6 +133,9 @@ importers:
       expo-status-bar:
         specifier: ^57.0.1
         version: 57.0.1(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+      expo-task-manager:
+        specifier: 57.0.16
+        version: 57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -1173,6 +1182,12 @@ packages:
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
+
+  '@codeui/expo-apk-updater@file:packages/expo-apk-updater':
+    resolution: {directory: packages/expo-apk-updater, type: directory}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
 
   '@codeui/expo-background-link@file:packages/expo-background-link':
     resolution: {directory: packages/expo-background-link, type: directory}
@@ -4179,6 +4194,11 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-background-task@57.0.16:
+    resolution: {integrity: sha512-RWn9BrGHvEKh9YVgOWkjFEVlcam2vLeDdSagOJxOcukR1x1Xya3xD4KSBvcQDxpnfBVMIUruymLN6F0woYNarw==}
+    peerDependencies:
+      expo: '*'
+
   expo-build-properties@57.0.17:
     resolution: {integrity: sha512-+qA5we2h1Gpnd24RGCR1amfSx7Mtf8glZ0jA5bbe1Nfdw9NdAIl+HPUqU7xyOUDKD0JWsHh9ap6yJG/jTs0tvA==}
     peerDependencies:
@@ -4414,6 +4434,12 @@ packages:
       expo: '*'
       expo-font: '*'
       react: '*'
+      react-native: '*'
+
+  expo-task-manager@57.0.16:
+    resolution: {integrity: sha512-/GaGM1t+rA4PXtoMavL4HJwl9cUjbh3/u7LHGT2R0yzBiBGJ/nU0EQMx52qngrmZXebOwg4v39xcdBDC6190dQ==}
+    peerDependencies:
+      expo: '*'
       react-native: '*'
 
   expo-updates-interface@57.0.1:
@@ -6676,6 +6702,9 @@ packages:
     resolution: {integrity: sha512-hpbDzxUY9BFwX+UeBnxv3Sh1q7HFxj48DTmXchNgRa46lO8uj3/1iEn3MiNUYTg1g9ctIqXCCERn8gYZhHC5lQ==}
     engines: {node: '>=4'}
 
+  unimodules-app-loader@57.0.1:
+    resolution: {integrity: sha512-wey5ChoJkCTq0j0JWdIMu2QB81vVrdhmrNAP14ZZ6WDslnZ7ff7Ezv8rMdEnVHaCKz3xK4mIVXbVU51xHgdyCA==}
+
   universalify@0.2.0:
     resolution: {integrity: sha512-CJ1QgKmNg3CwvAv/kOFmtnEN05f0D/cn9QntgNOQlQF9dgvVTHj3t+8JPdjqawCHk7V/KA+fbUqzZ9XWhcqPUg==}
     engines: {node: '>= 4.0.0'}
@@ -8212,6 +8241,11 @@ snapshots:
   '@braintree/sanitize-url@7.1.2': {}
 
   '@chevrotain/types@11.1.2': {}
+
+  '@codeui/expo-apk-updater@file:packages/expo-apk-updater(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))':
+    dependencies:
+      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
+      react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
 
   '@codeui/expo-background-link@file:packages/expo-background-link(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))':
     dependencies:
@@ -11708,6 +11742,13 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-background-task@57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)):
+    dependencies:
+      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
+      expo-task-manager: 57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
+    transitivePeerDependencies:
+      - react-native
+
   expo-build-properties@57.0.17(expo@57.0.20):
     dependencies:
       '@expo/schema-utils': 57.0.2
@@ -12019,6 +12060,12 @@ snapshots:
       react: 19.2.8
       react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
       sf-symbols-typescript: 2.2.0
+
+  expo-task-manager@57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)):
+    dependencies:
+      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
+      react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
+      unimodules-app-loader: 57.0.1
 
   expo-updates-interface@57.0.1(expo@57.0.20):
     dependencies:
@@ -14719,6 +14766,8 @@ snapshots:
   unicode-match-property-value-ecmascript@2.2.1: {}
 
   unicode-property-aliases-ecmascript@2.2.0: {}
+
+  unimodules-app-loader@57.0.1: {}
 
   universalify@0.2.0: {}
 

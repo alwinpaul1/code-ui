@@ -27,3 +27,13 @@ export function useOpenNotificationRoute(): (target: NotificationNavigationTarge
     [openHostStackRoute, router]
   )
 }
+
+/** Where a Code UI update notification lands: Home, which mounts the update
+ *  dialog. `navigate` rather than `push` so a tap from deep in a host stack
+ *  returns to the existing Home instead of stacking a second one. */
+export function useOpenAppUpdateNotification(): () => void {
+  const router = useRouter()
+  return useCallback(() => {
+    router.navigate('/')
+  }, [router])
+}

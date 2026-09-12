@@ -1,4 +1,5 @@
-import { View, Linking, Platform, Pressable, ScrollView } from 'react-native'
+import { useEffect, useState } from 'react'
+import { View, Linking, Platform, Pressable, ScrollView, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronRight, Globe, RefreshCw, type LucideIcon } from 'lucide-react-native'
@@ -7,6 +8,11 @@ import Constants from 'expo-constants'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { AppUpdateDialog } from '../src/app-update/AppUpdateDialog'
 import { useAppUpdateStore } from '../src/app-update/app-update-store'
+import {
+  loadBackgroundUpdateCheckEnabled,
+  saveBackgroundUpdateCheckEnabled
+} from '../src/app-update/auto-update-preference'
+import { syncBackgroundUpdateCheck } from '../src/app-update/background-update-check'
 import { useTheme } from '../src/theme/theme-context'
 import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { SectionLabel } from '../src/ui/SectionLabel'
@@ -123,6 +129,52 @@ function CheckForUpdatesRow() {
   )
 }
 
+function BackgroundUpdatesRow() {
+  const { colors, space } = useTheme()
+  const [enabled, setEnabled] = useState(true)
+  useEffect(() => {
+    void loadBackgroundUpdateCheckEnabled().then(setEnabled)
+  }, [])
+  const toggle = async (value: boolean) => {
+    setEnabled(value)
+    await saveBackgroundUpdateCheckEnabled(value)
+    await syncBackgroundUpdateCheck()
+  }
+  if (Platform.OS !== 'android') {
+    return null
+  }
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.lg,
+        borderTopWidth: 1,
+        borderTopColor: colors.border
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Txt variant="body" weight="medium">
+          Check for updates in the background
+        </Txt>
+        <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+          Get a notification when a new version is out. Updates download and install even if you
+          close the app.
+        </Txt>
+      </View>
+      <Switch
+        accessibilityLabel="Check for updates in the background"
+        value={enabled}
+        onValueChange={(value) => void toggle(value)}
+        trackColor={{ false: colors.borderStrong, true: colors.accent }}
+        thumbColor={colors.bgPanel}
+      />
+    </View>
+  )
+}
+
 export default function AboutScreen() {
   const touchShield = useAppUpdateTouchShield(useAppUpdateDialogVisible())
   const router = useRouter()
@@ -155,6 +207,7 @@ export default function AboutScreen() {
         <SectionLabel style={{ marginTop: 0 }}>Code UI</SectionLabel>
         <Surface rounded="lg" style={{ overflow: 'hidden' }}>
           <CheckForUpdatesRow />
+          <BackgroundUpdatesRow />
           <LinkRow
             icon="github"
             label="alwinpaul1/code-ui"

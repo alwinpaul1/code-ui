@@ -17,6 +17,7 @@ import { Txt } from '../ui/Txt'
 import { Button } from '../ui/Button'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
+import { useDialogState, type DialogState } from './app-update-dialog-state'
 import { getInstalledVersion } from './installed-version'
 import { releaseNotesExcerpt } from './release-notes-excerpt'
 import {
@@ -39,48 +40,6 @@ import {
 // ready → error instead of stacking banners, the shape Orca desktop's
 // UpdateCard has. Transient states (checking, up to date) only show for a
 // user-initiated "Check for updates".
-
-type DialogState =
-  | { kind: 'hidden' }
-  | { kind: 'checking' }
-  | { kind: 'up-to-date' }
-  | { kind: 'check-failed' }
-  | { kind: 'available' }
-  | { kind: 'downloading'; progress: number }
-  | { kind: 'ready' }
-  | { kind: 'failed'; error: string }
-
-function useDialogState(): DialogState {
-  const status = useAppUpdateStore((s) => s.status)
-  const latestVersion = useAppUpdateStore((s) => s.latestVersion)
-  const userInitiated = useAppUpdateStore((s) => s.userInitiated)
-  const phase = useApkInstallStore((s) => s.phase)
-  const progress = useApkInstallStore((s) => s.progress)
-  const error = useApkInstallStore((s) => s.error)
-
-  if (phase === 'downloading') {
-    return { kind: 'downloading', progress }
-  }
-  if (phase === 'ready') {
-    return { kind: 'ready' }
-  }
-  if (phase === 'failed') {
-    return { kind: 'failed', error: error ?? 'Something went wrong.' }
-  }
-  if (status === 'available' && latestVersion) {
-    return { kind: 'available' }
-  }
-  if (userInitiated && status === 'checking') {
-    return { kind: 'checking' }
-  }
-  if (userInitiated && status === 'up-to-date') {
-    return { kind: 'up-to-date' }
-  }
-  if (userInitiated && status === 'error') {
-    return { kind: 'check-failed' }
-  }
-  return { kind: 'hidden' }
-}
 
 export function AppUpdateDialog() {
   const { colors, space, radius } = useTheme()
@@ -343,7 +302,7 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
         <View style={{ gap: space.lg }}>
           <DialogHeader version={version} />
           <Txt variant="title" weight="semibold" align="center">
-            Downloading update
+            {state.background ? 'Downloading in the background' : 'Downloading update'}
           </Txt>
           <View style={{ gap: space.sm }}>
             <View
@@ -362,7 +321,7 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Txt variant="caption" tone="muted">
-                Keep Code UI open
+                {state.background ? 'You can close Code UI. It installs on its own.' : 'Keep Code UI open'}
               </Txt>
               <Txt variant="caption" tone="muted">
                 {percent}%
@@ -372,6 +331,19 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
         </View>
       )
     }
+    case 'installing':
+      return (
+        <View style={{ gap: space.lg, alignItems: 'center' }}>
+          <DialogHeader version={version} tone="success" />
+          <Txt variant="title" weight="semibold" align="center">
+            Installing
+          </Txt>
+          <Txt variant="body" tone="secondary" align="center">
+            Code UI restarts on the new version in a moment.
+          </Txt>
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        </View>
+      )
     case 'ready':
       return (
         <View style={{ gap: space.lg }}>
@@ -422,8 +394,5 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
   }
 }
 
-/** Whether a dialog is on screen right now, for a host screen that must stop
- *  taking touches while it closes. */
-export function useAppUpdateDialogVisible(): boolean {
-  return useDialogState().kind !== 'hidden'
-}
+
+export { useAppUpdateDialogVisible } from './app-update-dialog-state'

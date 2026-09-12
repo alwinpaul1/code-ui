@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Why: with this held and the session marked USER_ACTION_NOT_REQUIRED,
+       Android 12+ lets an app that is updating ITSELF commit the install with
+       no confirmation sheet — provided the new APK is signed with the same key
+       and targets a recent API level. Android's own javadoc on
+       PackageInstaller.SessionParams.setRequireUserAction lists "Updating
+       itself" as a qualifying installer. REQUEST_INSTALL_PACKAGES (the other
+       half) is declared in app.json. -->
+  <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+
+  <application>
+    <!-- Why a manifest receiver, not a runtime one: DownloadManager broadcasts
+         completion after the app may have been swiped away. A manifest receiver
+         is delivered even to a dead process (cold-started to handle it), which
+         is what lets the install run without the app being open. -->
+    <receiver
+      android:name="expo.modules.apkupdater.ApkDownloadReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+      </intent-filter>
+    </receiver>
+    <!-- The PackageInstaller session result target. Not exported: only the
+         system's installer sends to it, via the PendingIntent we created. -->
+    <receiver
+      android:name="expo.modules.apkupdater.ApkInstallReceiver"
+      android:exported="false" />
+  </application>
+</manifest>
