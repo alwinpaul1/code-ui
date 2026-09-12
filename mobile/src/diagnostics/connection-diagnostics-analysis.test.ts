@@ -68,7 +68,12 @@ describe('diagnoseConnection', () => {
     expect(diagnosis.likelyCause).toContain('Relay service itself')
     expect(diagnosis.likelyCause).not.toContain('1006')
     expect(diagnosis.likelyCause).not.toContain('cannot reach')
-    expect(diagnosis.nextStep).toContain('LAN or Tailscale')
+    // The draining case no longer steers to a LAN or Tailscale endpoint:
+    // behind a full-tunnel VPN with Tailscale signed out, neither is
+    // reachable, so the advice sent the user hunting a path that was not
+    // there. Recovery is the only true next step for 4503 (2026-09-12).
+    expect(diagnosis.nextStep).toContain('recovery keeps retrying')
+    expect(diagnosis.nextStep).not.toContain('LAN or Tailscale')
   })
 
   it('names the desktop, not the phone, when the Relay has no session for it', () => {

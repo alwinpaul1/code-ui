@@ -143,7 +143,7 @@ function diagnoseRelayDial(
         draining ? ', draining' : ''
       }). That is the Relay service itself, not this phone or the desktop.`,
       nextStep:
-        'Nothing to do here: recovery keeps retrying and reconnects when the Relay is back. A LAN or Tailscale endpoint bypasses it in the meantime.',
+        'Nothing to do here: recovery keeps retrying and reconnects when the Relay is back.',
       reportability
     }
   }
