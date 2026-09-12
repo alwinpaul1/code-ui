@@ -130,6 +130,39 @@ function diagnoseRelayDial(
 ): ConnectionDiagnosis {
   const reportability: ConnectionDiagnosis['reportability'] =
     failure?.code === 'relay-dial-failed' && failure.path === 'relay' ? 'orca-relay' : 'none'
+  // The relay states why it closed in its own close code. Read it before any
+  // loose text match: `\b503\b` cannot match `relay_outer_4503` (there is no
+  // word boundary inside 4503), so every one of these codes used to fall
+  // through to the 1006 text and blame the phone's reachability for an outage
+  // the relay had announced (reported 2026-09-12 with 17 minutes of 4503s).
+  const closeCode = Number(/relay_outer_(\d+)/i.exec(evidence)?.[1] ?? Number.NaN)
+  if (closeCode === 4503) {
+    const draining = /draining/i.test(evidence)
+    return {
+      likelyCause: `The Relay refused the connection (4503${
+        draining ? ', draining' : ''
+      }). That is the Relay service itself, not this phone or the desktop.`,
+      nextStep:
+        'Nothing to do here: recovery keeps retrying and reconnects when the Relay is back. A LAN or Tailscale endpoint bypasses it in the meantime.',
+      reportability
+    }
+  }
+  if (closeCode === 4401 || closeCode === 4403) {
+    return {
+      likelyCause: `The Relay rejected this device before the handshake (${closeCode}).`,
+      nextStep: 'Pair this device again; if it repeats, the desktop may have revoked it.',
+      reportability: 'none'
+    }
+  }
+  if (closeCode === 4404) {
+    return {
+      likelyCause:
+        'The Relay has no session for this desktop (4404) — the desktop is not connected to the Relay right now.',
+      nextStep:
+        'Check that Orca is running on the desktop and its Relay shows connected; a LAN or Tailscale endpoint bypasses the Relay.',
+      reportability
+    }
+  }
   if (/\b503\b|overload|service unavailable/i.test(evidence)) {
     return {
       likelyCause:

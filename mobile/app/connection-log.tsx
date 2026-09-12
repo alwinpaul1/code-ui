@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import Constants from 'expo-constants'
-import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
+import { ChevronLeft, Copy, Check } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
@@ -15,18 +15,11 @@ import {
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
-import {
-  diagnoseConnection,
-  getReportableConnectionIncidentId
-} from '../src/diagnostics/connection-diagnostics-analysis'
-import { submitConnectionDiagnostics } from '../src/diagnostics/connection-diagnostics-submission'
+import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
 import {
   readHydratedConnectionLog,
   readConnectionDiagnosticsSnapshot,
-  resolveDiagnosticsHostId,
-  getDiagnosticsSubmissionState,
-  updateDiagnosticsSubmissionState,
-  type DiagnosticsSubmissionStates
+  resolveDiagnosticsHostId
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
@@ -52,7 +45,6 @@ export default function ConnectionLogScreen() {
     routeKey: object
   } | null>(null)
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
-  const [submissionStates, setSubmissionStates] = useState<DiagnosticsSubmissionStates>({})
 
   useEffect(() => {
     let stale = false
@@ -97,17 +89,6 @@ export default function ConnectionLogScreen() {
   const diagnosis = selected
     ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries })
     : null
-  const incidentId = selected
-    ? getReportableConnectionIncidentId({
-        endpoint: selected.endpoint,
-        state,
-        activePath,
-        pendingPath,
-        entries
-      })
-    : null
-  const submissionKey = selected && incidentId ? `${selected.id}:${incidentId}` : null
-  const submissionState = getDiagnosticsSubmissionState(submissionStates, submissionKey)
   const copied = copiedHostId === selectedId
 
   const copyDiagnostics = useCallback(async () => {
@@ -137,50 +118,6 @@ export default function ConnectionLogScreen() {
     setCopiedHostId(selected.id)
     setTimeout(() => setCopiedHostId((hostId) => (hostId === selected.id ? null : hostId)), 2000)
   }, [selected, liveDesktopAppVersion, clientContext])
-
-  const sendDiagnostics = useCallback(async () => {
-    if (!selected || !submissionKey || submissionState === 'sending') {
-      return
-    }
-    const startedKey = submissionKey
-    setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, 'sending'))
-    const appVersion = Constants.expoConfig?.version ?? 'unknown'
-    const platform = `${Platform.OS} ${Platform.Version ?? ''}`.trim()
-    const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
-    const snapshot = await readConnectionDiagnosticsSnapshot(
-      clientContext,
-      connectionLogStore,
-      selected.id
-    )
-    const currentIncidentId = getReportableConnectionIncidentId({
-      endpoint: selected.endpoint,
-      state: snapshot.state,
-      activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath,
-      entries: snapshot.entries
-    })
-    if (`${selected.id}:${currentIncidentId ?? ''}` !== startedKey) {
-      setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, null))
-      return
-    }
-    const report = buildConnectionDiagnosticsReport({
-      hostName: selected.name,
-      endpoint: selected.endpoint,
-      state: snapshot.state,
-      reconnectAttempts: snapshot.reconnectAttempts,
-      lastConnectedAt: snapshot.lastConnectedAt,
-      platform,
-      appVersion,
-      desktopAppVersion,
-      entries: snapshot.entries,
-      activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath
-    })
-    const result = await submitConnectionDiagnostics({ report, appVersion, platform })
-    setSubmissionStates((states) =>
-      updateDiagnosticsSubmissionState(states, startedKey, result.ok ? 'sent' : 'failed')
-    )
-  }, [selected, submissionKey, submissionState, liveDesktopAppVersion, clientContext])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -233,34 +170,6 @@ export default function ConnectionLogScreen() {
               <Text style={styles.diagnosisHeading}>What this suggests</Text>
               <Text style={styles.diagnosisText}>{diagnosis.likelyCause}</Text>
               <Text style={styles.diagnosisNext}>{diagnosis.nextStep}</Text>
-              {diagnosis.reportability === 'orca-relay' && (
-                <>
-                  <Text style={styles.privacyHint}>
-                    Sends a size-limited redacted report including host name, endpoint, versions,
-                    connection state, and events—never terminal contents or credentials.
-                  </Text>
-                  <Pressable
-                    style={styles.sendButton}
-                    onPress={() => void sendDiagnostics()}
-                    disabled={submissionState === 'sending'}
-                  >
-                    {submissionState === 'sent' ? (
-                      <Check size={14} color={colors.statusGreen} />
-                    ) : (
-                      <Send size={14} color={colors.textPrimary} />
-                    )}
-                    <Text style={styles.sendButtonText}>
-                      {submissionState === 'sending'
-                        ? 'Sending…'
-                        : submissionState === 'sent'
-                          ? 'Diagnostics sent'
-                          : submissionState === 'failed'
-                            ? 'Retry sending'
-                            : 'Send diagnostics to Orca'}
-                    </Text>
-                  </Pressable>
-                </>
-              )}
             </View>
           )}
           {entries.length > 0 ? (
@@ -362,28 +271,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 18,
     marginTop: spacing.xs
-  },
-  privacyHint: {
-    marginTop: spacing.sm,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textMuted
-  },
-  sendButton: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  sendButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
   },
   copyButton: {
     flexDirection: 'row',

@@ -40,6 +40,58 @@ describe('diagnoseConnection', () => {
     })
   })
 
+  it("reads the Relay's own close code instead of blaming the phone's reach", () => {
+    // Verbatim from a report on 2026-09-12: the Relay drained, every dial for
+    // 17 minutes closed with 4503, and the diagnosis said "relay_outer_1006 …
+    // either this phone cannot reach the Relay" — `\\b503\\b` never matches
+    // inside `relay_outer_4503`.
+    const entry: ConnectionLogEntry = {
+      id: 'dial',
+      ts: 2,
+      level: 'error',
+      message: 'Relay: relay dial failed',
+      detail: 'Error: relay_outer_4503',
+      code: 'relay-dial-failed',
+      path: 'relay'
+    }
+    const diagnosis = diagnoseConnection({
+      endpoint: '192.168.1.154:6768',
+      state: 'connecting' as const,
+      activePath: 'relay' as const,
+      pendingPath: 'relay' as const,
+      entries: [
+        event('Relay: active relay session failed', 'Error: relay_outer_4503 (relay draining)'),
+        entry
+      ]
+    })
+    expect(diagnosis.likelyCause).toContain('4503')
+    expect(diagnosis.likelyCause).toContain('Relay service itself')
+    expect(diagnosis.likelyCause).not.toContain('1006')
+    expect(diagnosis.likelyCause).not.toContain('cannot reach')
+    expect(diagnosis.nextStep).toContain('LAN or Tailscale')
+  })
+
+  it('names the desktop, not the phone, when the Relay has no session for it', () => {
+    const diagnosis = diagnoseConnection({
+      endpoint: '192.168.1.154:6768',
+      state: 'connecting' as const,
+      pendingPath: 'relay' as const,
+      entries: [
+        {
+          id: 'dial',
+          ts: 3,
+          level: 'error',
+          message: 'Relay: relay dial failed',
+          detail: 'Error: relay_outer_4404',
+          code: 'relay-dial-failed',
+          path: 'relay'
+        }
+      ]
+    })
+    expect(diagnosis.likelyCause).toContain('4404')
+    expect(diagnosis.nextStep).toContain('desktop')
+  })
+
   it('names an overloaded Relay cell from the socket error text', () => {
     const entry: ConnectionLogEntry = {
       id: 'dial',
