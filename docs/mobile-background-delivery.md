@@ -22,8 +22,11 @@ the phone has to keep its own link open.
 
 ## What ships
 
-Behind **Settings → Notifications → "Deliver while the app is closed"**
-(off by default, Android only):
+On whenever **Settings → Notifications → Agent notifications** is on
+(Android only). Until 0.5.14 it sat behind its own switch, off by default;
+the user's call on 2026-09-12 was that a notification reaching a closed app
+is what the feature is, so the switch is gone and delivery rides on agent
+notifications alone.
 
 1. **`@codeui/expo-background-link`** (`mobile/packages/expo-background-link`),
    a local Kotlin Expo module. `BackgroundLinkService` is a
@@ -74,9 +77,9 @@ Behind **Settings → Notifications → "Deliver while the app is closed"**
 
 - Samsung "sleeping apps" / battery optimisation can still stop a foreground
   service; the user can exempt Code UI in Android settings.
-- iOS has no equivalent. The toggle is hidden there.
+- iOS has no equivalent; nothing runs there.
 - The persistent row is the price: Android shows it whenever the service
-  runs. Turning the toggle off removes it.
+  runs. Turning agent notifications off removes it.
 
 ## 2026-09-09: "notifications arrive when I open the app", and delays
 

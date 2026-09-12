@@ -17,10 +17,6 @@ import {
   type NotificationPermissionState
 } from '../src/notifications/mobile-notifications'
 import {
-  loadBackgroundDeliveryEnabled,
-  saveBackgroundDeliveryEnabled
-} from '../src/background/background-link-preference'
-import {
   applyBackgroundDelivery,
   isBackgroundDeliveryAvailable,
   isBackgroundDeliveryUnrestricted,
@@ -40,19 +36,16 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets()
   const { colors, space } = useTheme()
   const [pushEnabled, setPushEnabled] = useState(false)
-  const [backgroundEnabled, setBackgroundEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
   const [unrestricted, setUnrestricted] = useState(true)
   const backgroundAvailable = isBackgroundDeliveryAvailable()
 
   const refreshSettings = useCallback(async () => {
-    const [enabled, background, permission] = await Promise.all([
+    const [enabled, permission] = await Promise.all([
       loadPushNotificationsEnabled(),
-      loadBackgroundDeliveryEnabled(),
       getNotificationPermissionState()
     ])
     setPushEnabled(enabled)
-    setBackgroundEnabled(background)
     setPermissionState(permission)
     setUnrestricted(isBackgroundDeliveryUnrestricted())
   }, [])
@@ -85,18 +78,14 @@ export default function NotificationsScreen() {
     }
     setPushEnabled(value)
     await savePushNotificationsEnabled(value)
-    // Background delivery rides on agent notifications; off means off for both.
-    applyBackgroundDelivery(value && backgroundEnabled)
-  }
-
-  const toggleBackground = async (value: boolean) => {
-    setBackgroundEnabled(value)
-    await saveBackgroundDeliveryEnabled(value)
-    const on = value && pushEnabled && permissionState.granted
+    // Background delivery rides on agent notifications and is always on with
+    // them: off means off for both, on means the link runs while the app is
+    // closed.
+    const on = value && backgroundAvailable
     applyBackgroundDelivery(on)
     // Why: without the battery exemption Doze silences the link while the phone
     // idles, and the notifications only show up when the app is opened. Ask the
-    // moment the feature is switched on, while we are still in the foreground.
+    // moment notifications are switched on, while we are still in the foreground.
     if (on && adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted }).promptOnEnable) {
       requestBackgroundDeliveryUnrestricted()
     }
@@ -104,7 +93,7 @@ export default function NotificationsScreen() {
 
   const switchEnabled = pushEnabled && permissionState.granted
   const power = adviseBackgroundDeliveryPower({
-    deliveryOn: backgroundAvailable && backgroundEnabled && switchEnabled,
+    deliveryOn: backgroundAvailable && switchEnabled,
     unrestricted
   })
   const notificationsBlocked = permissionState.status === 'denied'
@@ -150,38 +139,6 @@ export default function NotificationsScreen() {
               thumbColor={colors.bgPanel}
             />
           </View>
-          {backgroundAvailable ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: space.md,
-                paddingVertical: space.md,
-                paddingHorizontal: space.lg,
-                borderTopWidth: 1,
-                borderTopColor: colors.border
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Txt variant="body" weight="medium">
-                  Deliver while the app is closed
-                </Txt>
-                <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
-                  {switchEnabled
-                    ? 'Keeps a link to your desktop open in the background.'
-                    : 'Turn on agent notifications first.'}
-                </Txt>
-              </View>
-              <Switch
-                accessibilityLabel="Deliver while the app is closed"
-                value={backgroundEnabled && switchEnabled}
-                disabled={!switchEnabled}
-                onValueChange={(v) => void toggleBackground(v)}
-                trackColor={{ false: colors.borderStrong, true: colors.accent }}
-                thumbColor={colors.bgPanel}
-              />
-            </View>
-          ) : null}
           {power.showRow ? (
             <View
               style={{

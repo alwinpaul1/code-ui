@@ -1,21 +1,9 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
-
-const KEY = 'backgroundDeliveryEnabled'
-
-/** Default off: it puts a persistent row in the notification shade, which is
- *  the user's call to make. */
+/** Default ON, and no longer a switch in Settings (2026-09-12): the user's
+ *  call was that notifications reaching a closed app is what the feature is,
+ *  not an option. Agent notifications remain the one switch; background
+ *  delivery rides on them. A stored 'false' from an older build is honoured
+ *  no further — the row that wrote it is gone. */
 export async function loadBackgroundDeliveryEnabled(): Promise<boolean> {
-  try {
-    return (await AsyncStorage.getItem(KEY)) === 'true'
-  } catch {
-    return false
-  }
+  return true
 }
 
-export async function saveBackgroundDeliveryEnabled(enabled: boolean): Promise<void> {
-  try {
-    await AsyncStorage.setItem(KEY, enabled ? 'true' : 'false')
-  } catch {
-    // Why: a failed write must not block the toggle; the next launch re-reads.
-  }
-}
