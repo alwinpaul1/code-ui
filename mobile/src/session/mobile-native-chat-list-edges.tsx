@@ -45,15 +45,17 @@ export function MobileNativeChatLoadEarlier({
   if (!hasMore) {
     return null
   }
+  // The Claude app shows only a spinner at the top while older messages load
+  // (2026-09-13); the list asks for them itself as the reader nears the top,
+  // so the row is a tappable spinner, never a "Load earlier" label.
   return (
-    <Pressable style={styles.loadEarlier} onPress={onLoadEarlier} disabled={loadingEarlier}>
-      {loadingEarlier ? (
-        <ActivityIndicator size="small" color={colors.textMuted} />
-      ) : (
-        <Txt variant="caption" weight="semibold" tone="muted">
-          Load earlier messages
-        </Txt>
-      )}
+    <Pressable
+      style={styles.loadEarlier}
+      onPress={onLoadEarlier}
+      disabled={loadingEarlier}
+      accessibilityLabel={loadingEarlier ? 'Loading earlier messages' : 'Load earlier messages'}
+    >
+      <ActivityIndicator size="small" color={colors.textMuted} animating={loadingEarlier} />
     </Pressable>
   )
 }
