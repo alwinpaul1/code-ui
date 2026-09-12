@@ -45,12 +45,17 @@ export function makeMarkdownStyles(theme: Theme) {
     inlineCode: {
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 2,
-      color: colors.text,
+      // After the Claude app's inline code (2026-09-12): blue text in a
+      // rounded chip with a faint fill and hairline border.
+      color: colors.codeSpanText,
       // Translucent, so a selection's highlight shows through the chip; an
       // opaque one made every `code` span read as unselected (2026-09-12).
       backgroundColor: colors.codeSpanBg,
-      borderRadius: radius.xs,
-      paddingHorizontal: 4
+      borderWidth: 1,
+      borderColor: colors.codeSpanBorder,
+      borderRadius: 6,
+      paddingHorizontal: 5,
+      paddingVertical: 1
     },
     inlineCodeLink: {
       color: colors.accentText,

@@ -2,7 +2,7 @@ import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { forwardRef, useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, ScrollView, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps, useWindowDimensions, View } from 'react-native'
+import { ActivityIndicator, ScrollView, type ScrollViewProps, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -27,6 +27,8 @@ import {
 import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { useMobileChatScrollHandlers } from './use-mobile-chat-scroll-handlers'
+import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
@@ -38,8 +40,6 @@ import {
   MobileNativeChatLoadEarlier
 } from './mobile-native-chat-list-edges'
 
-/** Within this many px of the bottom the list is "at the live edge". */
-const LIVE_EDGE_THRESHOLD_PX = 48
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
 
@@ -127,8 +127,16 @@ export function MobileNativeChatView({
 
   // Following is a ref: onContentSizeChange runs before React commits `atBottom`,
   // and a state flag yanked the list back down mid-read (#11638).
-  const { followingRef, scrollingRef, showJumpToLatest, setFollowing, beginScroll, endScroll } =
-    useMobileChatFollowing()
+  const {
+    followingRef,
+    scrollingRef,
+    followGate,
+    textSelectable,
+    showJumpToLatest,
+    setFollowing,
+    beginScroll,
+    endScroll
+  } = useMobileChatFollowing()
 
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   // FlashList has an outer measurement view. Native scroll recognition must
@@ -167,6 +175,7 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
+  followGate.noteData(newestFirst)
   const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
 
   const handleSend = useCallback(
@@ -181,36 +190,17 @@ export function MobileNativeChatView({
     [onSend, onClearSendError]
   )
 
-  const evaluateEdge = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
-      const distanceFromHistoryStart =
-        contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      if (!scrollingRef.current && contentOffset.y < LIVE_EDGE_THRESHOLD_PX) {
-        setFollowing(true)
-      }
-      // Near the top — page in older history.
-      if (!followingRef.current && distanceFromHistoryStart < 60 && hasMore && !loadingEarlier) {
-        onLoadEarlier?.()
-      }
-    },
-    [hasMore, loadingEarlier, onLoadEarlier, setFollowing]
-  )
-
-  // The reader took control: stop following immediately, on the same frame as
-  // the drag, not after the next scroll sample lands.
-  const onScrollBeginDrag = useCallback(() => {
-    jumpingRef.current = false
-    beginScroll()
-  }, [beginScroll])
-
-  const onScrollEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      endScroll()
-      evaluateEdge(event)
-    },
-    [evaluateEdge, endScroll]
-  )
+  const { evaluateEdge, onScrollBeginDrag, onScrollEnd } = useMobileChatScrollHandlers({
+    followingRef,
+    scrollingRef,
+    jumpingRef,
+    hasMore,
+    loadingEarlier,
+    onLoadEarlier,
+    setFollowing,
+    beginScroll,
+    endScroll
+  })
 
   // Align a single message's top to the top of the viewport.
   const onScrollToMessage = useCallback(
@@ -292,6 +282,7 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
+          <ChatTextSelectableContext.Provider value={textSelectable}>
           <FlashList
             ref={listRef}
             renderScrollComponent={ChatScrollView}
@@ -328,7 +319,7 @@ export function MobileNativeChatView({
             // native anchoring fights scrollToEnd and briefly shows old rows.
             maintainVisibleContentPosition={contentPosition}
             onContentSizeChange={() => {
-              if (data.length > 0 && followingRef.current) {
+              if (data.length > 0 && followGate.shouldFollow(followingRef.current)) {
                 listRef.current?.scrollToOffset({ offset: 0, animated: false })
               }
             }}
@@ -372,6 +363,7 @@ export function MobileNativeChatView({
               <MobileNativeChatListEmpty emptyState={emptyState} agent={agent} styles={styles} />
             }
           />
+          </ChatTextSelectableContext.Provider>
           <MobileNativeChatJumpToLatest
             visible={showJumpToLatest}
             onPress={() => jumpToLatest(true)}

@@ -16,6 +16,7 @@ import {
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { useChatTextSelectable } from './chat-text-selectable-context'
 
 type Props = {
   content?: string
@@ -178,6 +179,7 @@ function renderInline(
 }
 
 function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile }: Props) {
+  const selectable = useChatTextSelectable()
   const styles = useMarkdownStyles()
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
@@ -222,7 +224,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         const block = run.blocks[0]!
         if (run.prose) {
           return (
-            <Text key={index} selectable style={[styles.paragraph, proseScale]}>
+            <Text key={index} selectable={selectable} style={[styles.paragraph, proseScale]}>
               {run.prose.map((member, memberIndex) => (
                 <Fragment key={memberIndex}>
                   {memberIndex > 0 ? '\n\n' : null}
@@ -246,7 +248,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text selectable style={[styles.quoteText, proseScale]}>
+              <Text selectable={selectable} style={[styles.quoteText, proseScale]}>
                 {renderInline(styles, block.text, onOpenFile)}
               </Text>
             </View>
@@ -270,7 +272,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text selectable style={styles.codeText}>
+              <Text selectable={selectable} style={styles.codeText}>
                 {block.text}
               </Text>
             </View>
@@ -313,7 +315,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                   {columns.map((cellIndex) => (
                     <Text
                       key={cellIndex}
-                      selectable
+                      selectable={selectable}
                       style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
                     >
                       {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile)}
@@ -325,7 +327,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                     {columns.map((cellIndex) => (
                       <Text
                         key={cellIndex}
-                        selectable
+                        selectable={selectable}
                         style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
                       >
                         {renderInline(styles, row[cellIndex] ?? '', onOpenFile)}
@@ -358,7 +360,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                         ? '☑'
                         : '☐'}
                   </Text>
-                  <Text selectable style={[styles.listText, proseScale]}>
+                  <Text selectable={selectable} style={[styles.listText, proseScale]}>
                     {renderInline(styles, item.text, onOpenFile)}
                   </Text>
                 </View>

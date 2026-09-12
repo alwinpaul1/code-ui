@@ -25,6 +25,16 @@ import {
   isToolResultBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
+import {
+  INTERRUPTED,
+  readLaunch,
+  readNotifications,
+  readString,
+  truncate,
+  type Launch,
+  type Notification,
+  type PendingCall
+} from './mobile-background-task-transcript'
 
 /**
  * What Orca's hooks know about the pane, to reconcile against the transcript.
@@ -97,34 +107,13 @@ export type BackgroundTasks = {
   finished: BackgroundTask[]
 }
 
-// Exact sentences from the tool results. The id stops at the first `.` or `)`
-// because none of the id alphabets include one.
-// Anchored to the start of the result: a command whose OUTPUT merely quotes
-// these strings (a grep for them, a printed fixture) is not a launch.
-// Reviewed 2026-09-11 — this session's own greps had counted as shells.
-const SHELL_STARTED = /^\s*Command running in background with ID:\s*([A-Za-z0-9_-]+)/
-const SHELL_MOVED = /^\s*Command did not complete[^\n]{0,120}?moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
-// `Monitor started (task biifjm40h, timeout 3000000ms). You will be notified…`
-const MONITOR_STARTED = /Monitor started \(task\s+([A-Za-z0-9_-]+)/
-const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
-// Tolerant of both observed layouts — one tag per line, and the whole record on
-// a single line — plus the attributed opening tag and a record the transcript
-// truncated before its closing tag.
-const NOTIFICATION = /<task-notification\b[^>]*>([\S\s]*?)(?:<\/task-notification>|$)/g
-const NOTIFICATION_ID = /<task-id>\s*([^<]+?)\s*<\/task-id>/
-const NOTIFICATION_STATUS = /<status>\s*([^<]+?)\s*<\/status>/
-const NOTIFICATION_SUMMARY = /<summary>\s*([\S\s]*?)\s*<\/summary>/
-const INTERRUPTED = /^\s*\[request interrupted/i
+/** How long the desk's bare `monitoring` state may stand in for a shell the
+ *  agent has not named; its beacons arrive within seconds of a live pane. */
+const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
 
-/** Long enough to read a real description, short enough for one phone row. */
-const TITLE_MAX = 60
 /** Beyond this a summary is a paragraph, not a caption; drop it rather than
  *  truncate a sentence into something that reads as a different claim. */
 const SUMMARY_MAX = 160
-
-type PendingCall = { name: string; input: unknown; startedAt: number | null }
-type Launch = { id: string; kind: BackgroundTaskKind; title: string; startedAt: number | null }
-type Notification = { status: string; summary: string | null; at: number }
 
 /** Split the transcript's background work into what is still running and what
  *  has reported back. Pure: `now` is the only clock, so tests set it. */
@@ -304,11 +293,17 @@ function splitByStatus(
   // not yet named them (its `run=` beacon comes with its next Stop hook; a big
   // transcript's launches sit far above the tail the phone holds). Show one
   // running shell rather than an empty row until either source arrives.
+  // Age-capped: a `monitoring` state hours old with no beacon is a pane whose
+  // Stop hook never finished (2026-09-11: a turn died on an expired OAuth
+  // token and the phone read "1 running task" for a day), not a shell.
+  const monitoringAgeMs = runStartedAt === null ? null : now - runStartedAt
   if (
     running.length === 0 &&
     agentSaysRunning === null &&
     hostStatus?.state === 'working' &&
-    hostStatus.workingMode === 'monitoring'
+    hostStatus.workingMode === 'monitoring' &&
+    monitoringAgeMs !== null &&
+    monitoringAgeMs < MONITORING_PLACEHOLDER_MAX_AGE_MS
   ) {
     running.push({
       id: 'host-monitoring',
@@ -362,89 +357,15 @@ function captionOf(summary: string | null): string | undefined {
   return single.length > 0 && single.length <= SUMMARY_MAX ? single : undefined
 }
 
-/** What this call+result pair launched, or null when it launched nothing that
- *  keeps running after the tool returned. */
-function readLaunch(call: PendingCall, output: string): Launch | null {
-  if (call.name === 'Bash') {
-    const id = SHELL_STARTED.exec(output)?.[1] ?? SHELL_MOVED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
-  }
-  if (call.name === 'Agent') {
-    const id = AGENT_LAUNCHED.exec(output)?.[1]
-    return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt } : null
-  }
-  if (call.name === 'Monitor') {
-    // A monitor is a long-running shell; its event notifications carry no
-    // status and never retire it — only the "stream ended" one does.
-    const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
-  }
-  return null
-}
-
-function shellTitle(input: unknown): string {
-  const description = readString(input, 'description')
-  if (description) {
-    return truncate(description)
-  }
-  const command = readString(input, 'command')
-  const firstLine = command?.split('\n', 1)[0]?.trim()
-  return firstLine ? truncate(firstLine) : 'Background command'
-}
-
-function agentTitle(input: unknown): string {
-  const named =
-    readString(input, 'description') ?? readString(input, 'name') ?? readString(input, 'subagent_type')
-  return named ? truncate(named) : 'Agent'
-}
-
-function truncate(value: string): string {
-  return value.length <= TITLE_MAX ? value : `${value.slice(0, TITLE_MAX - 1).trimEnd()}…`
-}
-
-function readString(input: unknown, key: string): string | null {
-  if (typeof input !== 'object' || input === null) {
-    return null
-  }
-  const value = Reflect.get(input, key)
-  if (typeof value !== 'string') {
-    return null
-  }
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-function readNotifications(
-  text: string,
-  position: number
-): { id: string; value: Notification }[] {
-  if (!text.includes('<task-notification')) {
-    return []
-  }
-  const found: { id: string; value: Notification }[] = []
-  for (const match of text.matchAll(NOTIFICATION)) {
-    const body = match[1] ?? ''
-    const id = NOTIFICATION_ID.exec(body)?.[1]
-    const status = NOTIFICATION_STATUS.exec(body)?.[1]
-    if (!id || !status) {
-      continue
-    }
-    found.push({
-      id,
-      value: { status, summary: NOTIFICATION_SUMMARY.exec(body)?.[1] ?? null, at: position }
-    })
-  }
-  return found
-}
-
-/** How many background tasks are still in flight. Which tasks are running does
- *  not depend on the clock, so the chat view can read the count for its row
- *  without holding one — only `elapsedMs` needs `now`, and only the sheet
- *  shows that. */
+/** How many background tasks are still in flight. The chat view reads this
+ *  for its row without a ticking clock: the only clock-dependent decision is
+ *  whether the desk's bare `monitoring` state is fresh enough to stand in for
+ *  a shell, and that needs one reading of `now`, not a re-render per second. */
 export function countRunningBackgroundTasks(
   messages: readonly NativeChatMessage[],
   hostStatus: BackgroundTaskHostStatus | null = null,
-  options: BackgroundTaskDeriveOptions = {}
+  options: BackgroundTaskDeriveOptions = {},
+  now: number = Date.now()
 ): number {
-  return deriveBackgroundTasks(messages, 0, hostStatus, options).running.length
+  return deriveBackgroundTasks(messages, now, hostStatus, options).running.length
 }

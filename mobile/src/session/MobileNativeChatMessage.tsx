@@ -1,26 +1,22 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Image, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
   Copy,
-  Image as ImageIcon,
   Sparkles
 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
-import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
-import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isTextBlock } from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { Prose } from './MobileNativeChatProse'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { openImagePreview } from './image-preview-store'
-import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
-  TEXT_SIZE,
   useChatMessageStyles,
   type ChatMessageStyles
 } from './mobile-native-chat-message-styles'
@@ -36,86 +32,6 @@ import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
 /** Collapsed reasoning shows this many characters of its first line. */
 const REASONING_PREVIEW_CHARS = 96
-
-function Prose({
-  block,
-  invert,
-  fontScale,
-  onOpenFile,
-  styles
-}: {
-  block: NativeChatBlock
-  invert?: boolean
-  fontScale: number
-  onOpenFile?: (relativePath: string) => void
-  styles: ChatMessageStyles
-}) {
-  if (isTextBlock(block)) {
-    if (invert) {
-      // Why selectable: a prompt the user sent is the text they most often
-      // want back — reported 2026-09-12, a long press on their own bubble
-      // did nothing while an agent's answer selected. The bubble's tap still
-      // reveals the copy control; the press-and-hold selects.
-      return (
-        <Text
-          selectable
-          style={[
-            styles.userText,
-            { fontSize: TEXT_SIZE * fontScale, lineHeight: (TEXT_SIZE + 7) * fontScale }
-          ]}
-        >
-          {block.text}
-        </Text>
-      )
-    }
-    return <MobileMarkdown content={block.text} textScale={fontScale} onOpenFile={onOpenFile} />
-  }
-  if (isImageRefBlock(block)) {
-    // A local preview (composer echo) or real URL renders as a thumbnail; a bare
-    // host path (not loadable on the device) falls back to a text placeholder.
-    const uri = block.url ?? block.path
-    if (isRenderableImageUri(uri)) {
-      // Why: the picture is already on the phone (a local upload, or a host
-      // thumbnail fetched earlier), so tapping opens it full-screen at once —
-      // no host round trip, nothing to fail.
-      return (
-        <Pressable
-          onPress={() => openImagePreview(uri, block.alt ?? 'Image')}
-          accessibilityRole="imagebutton"
-        >
-          <Image
-            source={{ uri }}
-            style={styles.imageThumb}
-            resizeMode="contain"
-            accessibilityLabel={block.alt ?? 'Attached image'}
-          />
-        </Pressable>
-      )
-    }
-    // Desktop clipboard files have no mobile preview grant. A transcript path
-    // alone cannot make those bytes available on the phone; don't expose an
-    // action that only produces a path error. A real URI above still wins.
-    const desktopPaste = splitOrcaPastedImagePaths(uri ?? '').paths.length > 0
-    const hostPath = block.path
-    return (
-      <Pressable
-        onPress={!desktopPaste && hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
-        disabled={desktopPaste}
-        accessibilityRole={desktopPaste ? 'image' : 'button'}
-        accessibilityLabel={
-          desktopPaste ? 'Image on Desktop. Preview unavailable.' : (block.alt ?? 'Attached image')
-        }
-        style={styles.imageChip}
-      >
-        <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
-        <Text style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]}>
-          {desktopPaste ? 'Image on Desktop' : 'Image'}
-        </Text>
-      </Pressable>
-    )
-  }
-  return null
-}
 
 /** The message container: a sent prompt is tappable (it discloses its copy
  *  control); everything else is a plain view so nothing steals its touches. */

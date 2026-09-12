@@ -288,17 +288,31 @@ describe('MobileNativeChatView', () => {
     })
     const list = () => renderer!.root.findByType('FlashList')
     expect(list().props.inverted).toBe(true)
+    // First layout of the data: pin to the live edge.
     act(() => list().props.onContentSizeChange(400, 2400))
-    act(() => list().props.onContentSizeChange(400, 2200))
-    act(() => list().props.onContentSizeChange(400, 2600))
-    expect(scrollToOffset.mock.calls).toEqual([
-      [{ offset: 0, animated: false }],
-      [{ offset: 0, animated: false }],
-      [{ offset: 0, animated: false }]
-    ])
+    expect(scrollToOffset.mock.calls).toEqual([[{ offset: 0, animated: false }]])
     expect(estimatedEnd).not.toHaveBeenCalled()
     scrollToOffset.mockClear()
+    // 2026-09-12: press and hold a sentence, and the transcript jumped to the
+    // newest message before the copy toolbar could show. Selection handles
+    // re-measure the text — a content-size change with no new data. Neither
+    // that nor a fold collapsing (2200) nor a pinch (2600) may move the list.
+    act(() => list().props.onContentSizeChange(400, 2200))
+    act(() => list().props.onContentSizeChange(400, 2600))
+    expect(scrollToOffset).not.toHaveBeenCalled()
+    // New content — the reply grew — pins again, once.
+    await act(async () => {
+      renderer!.update(chatViewElement({ folded: [assistantTurn('a1', 'Growing reply, now longer')] }))
+    })
+    act(() => list().props.onContentSizeChange(400, 2700))
+    act(() => list().props.onContentSizeChange(400, 2700))
+    expect(scrollToOffset.mock.calls).toEqual([[{ offset: 0, animated: false }]])
+    scrollToOffset.mockClear()
+    // A history reader is never moved, and their arrival does not bank a jump.
     act(() => list().props.onScrollBeginDrag())
+    await act(async () => {
+      renderer!.update(chatViewElement({ folded: [assistantTurn('a1', 'Growing reply, longer still')] }))
+    })
     act(() => list().props.onContentSizeChange(400, 2800))
     expect(scrollToOffset).not.toHaveBeenCalled()
   })

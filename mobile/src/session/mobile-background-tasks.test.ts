@@ -629,7 +629,21 @@ describe('a tab opened after its turn ended with shells still running', () => {
   it('lists the desk\'s monitoring state as a running shell until the agent names them', () => {
     const tasks = deriveBackgroundTasks([], NOW, monitoring)
     expect(tasks.running.map((task) => [task.kind, task.status])).toEqual([['shell', 'running']])
-    expect(countRunningBackgroundTasks([], monitoring)).toBe(1)
+    expect(countRunningBackgroundTasks([], monitoring, {}, NOW)).toBe(1)
+  })
+
+  // 2026-09-11, NexDash pane: a turn died on an expired OAuth token, the Stop
+  // hook failed, and Orca left the pane `working / monitoring`. Nothing was
+  // running — the Claude process had only its MCP servers as children — yet
+  // the phone read "1 running task" for a whole day.
+  it('drops the placeholder once the desk\'s monitoring state is stale', () => {
+    const stale = { state: 'working' as const, workingMode: 'monitoring' as const, stateStartedAt: NOW - 24 * 60 * 60_000 }
+    expect(deriveBackgroundTasks([], NOW, stale).running).toEqual([])
+    expect(countRunningBackgroundTasks([], stale, {}, NOW)).toBe(0)
+  })
+
+  it('shows no placeholder when the desk gave no start time to age it by', () => {
+    expect(deriveBackgroundTasks([], NOW, { state: 'working', workingMode: 'monitoring' }).running).toEqual([])
   })
 
   it('stands down as soon as the agent answers, even with an empty answer', () => {

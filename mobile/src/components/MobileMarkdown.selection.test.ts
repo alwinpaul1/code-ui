@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
+import { ChatTextSelectableContext } from './chat-text-selectable-context'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -105,5 +106,41 @@ describe('agent prose the reader wants to copy', () => {
     expect(selectable).toContain('Stage')
     expect(selectable).toContain('base')
     expect(selectable).toContain('run the suite inside the image')
+  })
+})
+
+// 2026-09-12: random buzzes while scrolling. Android arms a text-selection
+// long-press under any selectable Text; a finger put down to stop a fling and
+// held tripped it. The chat view turns selection off while a scroll is in
+// flight, through this context, and back on when it settles.
+describe('while the list is scrolling', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function selectableTexts(value: boolean): { all: number; selectable: number } {
+    act(() => {
+      renderer = create(
+        createElement(
+          ChatTextSelectableContext.Provider,
+          { value },
+          createElement(MobileMarkdown, { content: DOCUMENT })
+        )
+      )
+    })
+    const texts = renderer!.root.findAllByType('Text' as never)
+    return { all: texts.length, selectable: texts.filter((node) => node.props.selectable === true).length }
+  }
+
+  it('renders no selectable text, so a finger stopping a fling arms no long-press', () => {
+    const { all, selectable } = selectableTexts(false)
+    expect(all).toBeGreaterThan(5)
+    expect(selectable).toBe(0)
+  })
+
+  it('is selectable again once the scroll settles', () => {
+    expect(selectableTexts(true).selectable).toBeGreaterThan(0)
   })
 })
