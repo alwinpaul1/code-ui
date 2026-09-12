@@ -14,6 +14,7 @@ import {
 } from 'lucide-react-native'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { loadHosts } from '../src/transport/host-store'
+import { readMobileLocalAddress } from '../src/transport/mobile-network-type'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
@@ -131,7 +132,7 @@ export default function TroubleshootScreen() {
     setChecks([...results])
 
     try {
-      const hosts = await loadHosts()
+      const [hosts, localAddress] = await Promise.all([loadHosts(), readMobileLocalAddress()])
       for (const host of hosts) {
         if (!isCurrentRun()) {
           return
@@ -145,7 +146,7 @@ export default function TroubleshootScreen() {
           status: reachable ? 'pass' : 'fail',
           detail: reachable
             ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : unreachableHostDetail(host.endpoint)
+            : unreachableHostDetail(host.endpoint, localAddress)
         })
         setChecks([...results])
       }

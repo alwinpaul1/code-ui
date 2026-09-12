@@ -31,3 +31,18 @@ export async function readMobileNetworkIdentity(): Promise<string | null> {
     return null
   }
 }
+
+/**
+ * The phone's own IPv4 address on the active interface, or null when the OS
+ * will not say. Troubleshooting uses it to tell "the desktop is not answering"
+ * apart from "the phone is on a different network" — see
+ * `unreachableHostDetail`.
+ */
+export async function readMobileLocalAddress(): Promise<string | null> {
+  try {
+    const ip = await getIpAddressAsync()
+    return ip == null || ip === '' || ip === '0.0.0.0' ? null : ip
+  } catch {
+    return null
+  }
+}

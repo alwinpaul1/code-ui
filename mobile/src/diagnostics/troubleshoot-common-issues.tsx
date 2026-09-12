@@ -66,8 +66,10 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
     icon: <Shield size={16} color={colors.textSecondary} />,
     title: 'Other VPN Interference',
     steps: [
-      'Non-Tailscale VPNs can route local traffic through a remote server.',
-      'Disable that VPN or enable split tunneling / "Allow LAN".'
+      'Check the DESKTOP first: a work or university VPN in full-tunnel mode routes even the local subnet into its tunnel, so the desktop stops answering its own LAN address.',
+      'Symptom: the phone reaches the internet and the router, but the desktop answers nothing and cannot ping its own gateway.',
+      'Turn on "Allow local (LAN) access" in the VPN client. Many managed profiles lock that setting off, and then disconnecting the VPN is the only fix.',
+      'Tailscale keeps working through a full-tunnel VPN, so it is the way to stay connected without disconnecting.'
     ]
   }
 ]
