@@ -37,3 +37,16 @@ describe('following the live edge on a content-size change', () => {
     expect(gate.shouldFollow(true)).toBe(false)
   })
 })
+
+// The screen recording of 2026-09-12 22:49: the copy toolbar appeared and the
+// list kept moving under it, because the agent was still streaming and each
+// streamed frame is new data. A finger on the screen holds the list still.
+describe('while a finger is down', () => {
+  it('follows nothing, and lets a tap\'s pending change through on release', () => {
+    const gate = createChatFollowGate()
+    gate.noteData(['m1'])
+    expect(gate.shouldFollow(true, true)).toBe(false)
+    expect(gate.shouldFollow(true, true)).toBe(false)
+    expect(gate.shouldFollow(true, false)).toBe(true)
+  })
+})

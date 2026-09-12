@@ -42,20 +42,33 @@ export function makeMarkdownStyles(theme: Theme) {
       color: colors.accentText,
       textDecorationLine: 'underline'
     },
+    // Inline `code`, after the Claude app: blue text in a rounded, bordered
+    // chip. Android's text engine cannot round a nested Text's background
+    // (it is a plain BackgroundColorSpan), so a SHORT span is a real inline
+    // View — rounded and bordered — while a long one stays a nested Text so
+    // it can still wrap. Chosen by the user on 2026-09-12 over square chips.
     inlineCode: {
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 2,
-      // After the Claude app's inline code (2026-09-12): blue text in a
-      // rounded chip with a faint fill and hairline border.
       color: colors.codeSpanText,
       // Translucent, so a selection's highlight shows through the chip; an
       // opaque one made every `code` span read as unselected (2026-09-12).
+      backgroundColor: colors.codeSpanBg
+    },
+    inlineCodeChip: {
       backgroundColor: colors.codeSpanBg,
       borderWidth: 1,
       borderColor: colors.codeSpanBorder,
-      borderRadius: 6,
+      borderRadius: 7,
       paddingHorizontal: 5,
-      paddingVertical: 1
+      paddingVertical: 1,
+      marginHorizontal: 1
+    },
+    inlineCodeChipText: {
+      fontFamily: fonts.mono,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 3,
+      color: colors.codeSpanText
     },
     inlineCodeLink: {
       color: colors.accentText,

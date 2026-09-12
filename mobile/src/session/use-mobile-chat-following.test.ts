@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 
 type Api = ReturnType<typeof useMobileChatFollowing>
@@ -39,5 +39,42 @@ describe('chat text selection around a scroll', () => {
     act(() => latest!.beginScroll())
     expect(latest!.followingRef.current).toBe(false)
     expect(latest!.showJumpToLatest).toBe(true)
+  })
+})
+
+describe('a finger on the list', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    latest = null
+    vi.useRealTimers()
+  })
+
+  // 2026-09-12 22:49 recording: the copy toolbar was up and the streaming
+  // reply kept pulling the list down under the selection.
+  it('takes control after a long-press, so streaming cannot move the selection', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => latest!.touchStart())
+    expect(latest!.holdingRef.current).toBe(true)
+    vi.advanceTimersByTime(450)
+    act(() => latest!.touchEnd())
+    expect(latest!.holdingRef.current).toBe(false)
+    expect(latest!.followingRef.current).toBe(false)
+    expect(latest!.showJumpToLatest).toBe(true)
+  })
+
+  it('leaves following alone after a tap', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => latest!.touchStart())
+    vi.advanceTimersByTime(80)
+    act(() => latest!.touchEnd())
+    expect(latest!.followingRef.current).toBe(true)
   })
 })

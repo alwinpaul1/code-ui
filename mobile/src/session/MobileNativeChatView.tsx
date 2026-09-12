@@ -130,6 +130,9 @@ export function MobileNativeChatView({
   const {
     followingRef,
     scrollingRef,
+    holdingRef,
+    touchStart,
+    touchEnd,
     followGate,
     textSelectable,
     showJumpToLatest,
@@ -300,6 +303,9 @@ export function MobileNativeChatView({
             // instead of being swallowed by the dismiss gesture.
             keyboardShouldPersistTaps="handled"
             onScroll={evaluateEdge}
+            onTouchStart={touchStart}
+            onTouchEnd={touchEnd}
+            onTouchCancel={touchEnd}
             onScrollBeginDrag={onScrollBeginDrag}
             onScrollEndDrag={onScrollEnd}
             onMomentumScrollBegin={() => {
@@ -319,7 +325,7 @@ export function MobileNativeChatView({
             // native anchoring fights scrollToEnd and briefly shows old rows.
             maintainVisibleContentPosition={contentPosition}
             onContentSizeChange={() => {
-              if (data.length > 0 && followGate.shouldFollow(followingRef.current)) {
+              if (data.length > 0 && followGate.shouldFollow(followingRef.current, holdingRef.current)) {
                 listRef.current?.scrollToOffset({ offset: 0, animated: false })
               }
             }}
