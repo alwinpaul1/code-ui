@@ -51,14 +51,22 @@ to the in-process download and `ACTION_VIEW` installer it used before.
 
 ## Verified
 
-- `phaseFromUpdaterState` and `planBackgroundUpdateCheck` are unit-tested.
-- 0.5.7 → 0.5.8 on a Galaxy S23 (Android 16), 2026-09-12: "Update now",
-  DownloadManager job 4846 finished in 16 s, the receiver committed the
-  session, `PackageInstallerSession: Session installed` with no
-  confirmation sheet, `installerPackageName=com.alwinpaul.codeui`, app
-  back on 0.5.8. That build installed on completion; 0.5.10 changed it to
-  ask first. The ask-on-open flow with the app killed mid-download: see
-  the git log after this line for the 0.5.10 → 0.5.11 run.
+- `phaseFromUpdaterState` and `planBackgroundUpdateCheck` are unit-tested;
+  the store test pins that a Check for updates tap overrides Later.
+- Galaxy S23 (Android 16), 2026-09-12, 0.5.11 → 0.5.12 with "Deliver
+  while the app is closed" switched off so the process could actually die:
+  Update now, HOME, `am kill` (pid gone), DownloadManager job 4850 finished
+  6 s later, `ActivityManager: Start proc … for broadcast
+  ApkDownloadReceiver` — Android cold-started the app just to deliver the
+  completion — notification "Code UI 0.5.12 downloaded — Tap to install"
+  posted, version still 0.5.11. Tapping the notification opened the app on
+  "Update downloaded — Install"; Install: `PackageInstallerSession: Session
+  installed`, no confirmation sheet, app back on 0.5.12, notification and
+  file gone.
+- Earlier the same day, 0.5.7 → 0.5.8 proved the silent self-update
+  itself (that build still installed on completion).
+- With the background-delivery foreground service ON, the process never
+  dies on a swipe, so the receiver runs in the live process; same outcome.
 
 ## Not done
 
@@ -66,3 +74,7 @@ to the in-process download and `ACTION_VIEW` installer it used before.
   mobile data. Add `setAllowedOverMetered(false)` if that becomes a cost.
 - The confirmation Intent for the non-silent path does not survive a
   process death; the dialog re-commits the session instead.
+- `am force-stop` (not a swipe) puts the app in the stopped state, where
+  the completion broadcast is not delivered; the download still finishes,
+  and the next open would need the poller to notice `STATUS_SUCCESSFUL`
+  itself. Not handled; no normal user gesture does this.

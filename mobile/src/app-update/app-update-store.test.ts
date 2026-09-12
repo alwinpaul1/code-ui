@@ -69,6 +69,28 @@ describe('useAppUpdateStore', () => {
     expect(useAppUpdateStore.getState().status).toBe('up-to-date')
   })
 
+  it('shows the update on a Check for updates tap even after Later hid it', async () => {
+    // 2026-09-12 on the phone: Later on 0.5.12, then About → Check for
+    // updates read "You're up to date — 0.5.11 is the latest version". A
+    // person who asks again wants the answer, not their earlier brush-off.
+    const available = {
+      status: 'available' as const,
+      latestVersion: '1.1.0',
+      latestBuildNumber: '2',
+      updateUrl: 'https://example.com/code-ui-1.1.0.apk'
+    }
+    vi.mocked(performUpdateCheck).mockResolvedValue(available)
+    await useAppUpdateStore.getState().checkForUpdate({ force: true })
+    expect(useAppUpdateStore.getState().status).toBe('available')
+    await useAppUpdateStore.getState().dismiss()
+    expect(useAppUpdateStore.getState().status).toBe('up-to-date')
+
+    await useAppUpdateStore.getState().checkForUpdate({ force: true })
+
+    expect(useAppUpdateStore.getState().status).toBe('available')
+    expect(useAppUpdateStore.getState().latestVersion).toBe('1.1.0')
+  })
+
   it('shows a remembered update again on the next open, and forgets it once installed', async () => {
     const stored = {
       status: 'available',

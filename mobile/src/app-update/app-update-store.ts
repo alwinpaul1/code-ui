@@ -159,7 +159,10 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
           buildNumber: result.latestBuildNumber,
           updateUrl: result.updateUrl
         }
-        const suppress = isUpdateDismissed(state.dismissedUpdateId, resultUpdate)
+        // Why not on a forced check: "Later" hides the dialog until the
+        // next open, but a Check for updates tap is the person asking again.
+        // Answering "up to date" to that was a lie (2026-09-12).
+        const suppress = !opts?.force && isUpdateDismissed(state.dismissedUpdateId, resultUpdate)
         // Why persisted: a cold start shows the dialog from this before the
         // network answers, which is what makes "every open until installed" hold.
         void AsyncStorage.setItem(LAST_AVAILABLE_KEY, JSON.stringify(result)).catch(() => {})
@@ -179,7 +182,8 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
           latestBuildNumber: result.latestBuildNumber ?? null,
           releaseNotes: result.releaseNotes ?? null,
           updateUrl: result.updateUrl ?? null,
-          releaseUrl: result.releaseUrl ?? null
+          releaseUrl: result.releaseUrl ?? null,
+          ...(opts?.force ? { dismissedUpdateId: null } : {})
         }
       })
     } finally {

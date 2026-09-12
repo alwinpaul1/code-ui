@@ -173,7 +173,13 @@ class ApkUpdaterModule : Module() {
 
     Function("clear") {
       val context = context()
-      UpdaterStore.file(context)?.let { File(it).delete() }
+      // Why sweep the folder: a successful install clears the stored path
+      // before the JS side ever runs, so the file it named is unknown by the
+      // next launch — and an older build's leftover has a different name
+      // anyway (code-ui-0.5.8.apk found beside a fresh 0.5.12).
+      context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+        ?.listFiles { file -> file.name.startsWith("code-ui-") && file.name.endsWith(".apk") }
+        ?.forEach { it.delete() }
       UpdateNotifier.clear(context)
       UpdaterStore.clear(context)
     }
