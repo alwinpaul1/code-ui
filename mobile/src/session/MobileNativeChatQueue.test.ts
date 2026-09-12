@@ -4,7 +4,10 @@ import { expect, it, vi } from 'vitest'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
 import { openImagePreview } from './image-preview-store'
+// iOS here: the Android build reverses row order for its rotated scroller,
+// which `MobileNativeChatQueue.android.test.ts` covers on its own.
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   Image: 'Image',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

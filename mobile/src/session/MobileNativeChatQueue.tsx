@@ -1,10 +1,23 @@
-import { Image, Pressable, ScrollView, View } from 'react-native'
+import { useRef } from 'react'
+import { Image, Platform, Pressable, ScrollView, View } from 'react-native'
 import { Pencil } from 'lucide-react-native'
 import { Txt } from '../ui/Txt'
 import { useTheme } from '../theme/theme-context'
 import { openImagePreview } from './image-preview-store'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+
+/** The queue sits in the chat list's header, and FlashList inverts that list on
+ *  Android with a 180° rotation of the list and of every cell. A plain
+ *  ScrollView inside reads upright, but Android's nested-scroll hand-off
+ *  passes the finger's unconsumed travel to the rotated parent in the child's
+ *  own frame, so at the queue's edge the whole list lurched the wrong way and
+ *  a swipe on a long queued message scrolled the chat, not the message
+ *  (2026-09-13). Rotating the queue's scroller the same way, and its rows back,
+ *  puts child and parent in one frame. Rows are drawn in reverse to read
+ *  top-down. iOS inverts with a scale and is left as it was. */
+const QUEUE_FLIP =
+  Platform.OS === 'android' ? ({ transform: [{ rotate: '180deg' }] } as const) : null
 
 export function MobileNativeChatQueue({
   messages,
@@ -16,6 +29,8 @@ export function MobileNativeChatQueue({
   onEdit?: (index: number, tapped: string) => Promise<void>
 }) {
   const { colors, space, radius } = useTheme()
+  const scrollRef = useRef<ScrollView>(null)
+  const startedAtTopRef = useRef(false)
   // Claude can select any entry natively; Codex only recalls its latest one.
   // Claude builds without the selector report that through the editor's own
   // error, which names the flag that turns it on — silence would just repeat
@@ -75,12 +90,21 @@ export function MobileNativeChatQueue({
         </View>
       </View>
       <ScrollView
-        style={{ maxHeight: 220 }}
+        ref={scrollRef}
+        style={[{ maxHeight: 220 }, QUEUE_FLIP]}
         contentContainerStyle={{ paddingHorizontal: space.md }}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          // Flipped: offset 0 is the visual bottom, so start at the top once.
+          if (QUEUE_FLIP && !startedAtTopRef.current) {
+            startedAtTopRef.current = true
+            scrollRef.current?.scrollToEnd({ animated: false })
+          }
+        }}
       >
-        {messages.map((entry, index) => {
+        {(QUEUE_FLIP ? messages.toReversed() : messages).map((entry, listIndex) => {
+          const index = QUEUE_FLIP ? messages.length - 1 - listIndex : listIndex
           const text = typeof entry === 'string' ? entry : entry.text
           const images = typeof entry === 'string' ? [] : entry.images
           // What the recall matches against is the row on screen, never the
@@ -90,14 +114,17 @@ export function MobileNativeChatQueue({
           return (
             <View
               key={`${index}:${text}`}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: space.sm,
-                paddingVertical: space.md,
-                borderTopWidth: index > 0 ? 1 : 0,
-                borderTopColor: colors.border
-              }}
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: space.sm,
+                  paddingVertical: space.md,
+                  borderTopWidth: index > 0 ? 1 : 0,
+                  borderTopColor: colors.border
+                },
+                QUEUE_FLIP
+              ]}
             >
               <Txt
                 variant="caption"
