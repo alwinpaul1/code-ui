@@ -159,7 +159,13 @@ export function hydrateApkInstallState(): void {
   const state = getApkUpdateState()
   if (phaseFromUpdaterState(state, { coldStart: true }) !== 'idle') {
     applyUpdaterState(state, { coldStart: true })
+    return
   }
+  // Why: the install-success broadcast lands while the OS is replacing this
+  // very process, so the receiver may never run and the ~170 MB APK stays
+  // behind. Idle at launch means nothing is in flight; the native clear
+  // deletes the file (2026-09-12: code-ui-0.5.8.apk found after the update).
+  clearApkUpdateState()
 }
 
 function describeError(error: unknown): string {
