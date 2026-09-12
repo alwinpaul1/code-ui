@@ -40,3 +40,13 @@ function renderableImageUri(block: NativeChatBlock): string | undefined {
   const uri = block.url ?? block.path
   return uri && isRenderableImageUri(uri) ? uri : undefined
 }
+
+/** Whether the group at `index` is a picture with text right after it. */
+export function imageLeadsText(groups: readonly ProseGroup[], index: number): boolean {
+  const group = groups[index]
+  const next = groups[index + 1]
+  if (!group || !next || next.type !== 'block' || isImageRefBlock(next.block)) {
+    return false
+  }
+  return group.type === 'image-strip' || renderableImageUri(group.block) !== undefined
+}

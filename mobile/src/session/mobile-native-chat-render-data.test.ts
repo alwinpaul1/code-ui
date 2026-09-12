@@ -81,16 +81,16 @@ describe('buildMobileNativeChatTransientData', () => {
     expect(last.blocks).toEqual([{ type: 'text', text: 'queued' }])
   })
 
-  it('renders a pending send with images as text followed by image-ref thumbnails', () => {
+  it('renders a pending send with images as thumbnails followed by the text', () => {
     const data = build([], null, [
       { id: 'p1', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }
     ])
     const last = data[data.length - 1]
     expect(last.role).toBe('user')
     expect(last.blocks).toEqual([
-      { type: 'text', text: 'look' },
       { type: 'image-ref', url: 'file:///a.jpg' },
-      { type: 'image-ref', url: 'file:///b.jpg' }
+      { type: 'image-ref', url: 'file:///b.jpg' },
+      { type: 'text', text: 'look' }
     ])
   })
 

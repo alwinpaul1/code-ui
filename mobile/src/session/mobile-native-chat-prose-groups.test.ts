@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupProseBlocks } from './mobile-native-chat-prose-groups'
+import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 
 const text = (t: string): NativeChatBlock => ({ type: 'text', text: t })
@@ -29,5 +29,14 @@ describe('groupProseBlocks', () => {
       img('file:///b.png')
     ])
     expect(groups.map((g) => g.type)).toEqual(['block', 'block', 'block'])
+  })
+
+  it('spaces a picture from the caption under it, but not from another picture', () => {
+    const groups = groupProseBlocks([img('file:///a.png'), text('caption')])
+    expect(imageLeadsText(groups, 0)).toBe(true)
+    expect(imageLeadsText(groups, 1)).toBe(false)
+    const strip = groupProseBlocks([img('file:///a.png'), img('file:///b.png'), text('caption')])
+    expect(imageLeadsText(strip, 0)).toBe(true)
+    expect(imageLeadsText(groupProseBlocks([text('a'), img('file:///a.png')]), 0)).toBe(false)
   })
 })

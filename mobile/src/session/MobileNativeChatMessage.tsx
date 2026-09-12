@@ -15,7 +15,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { Prose } from './MobileNativeChatProse'
 import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
-import { groupProseBlocks } from './mobile-native-chat-prose-groups'
+import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -316,25 +316,22 @@ function MobileNativeChatMessageImpl({
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           <View style={interim && isAgent ? styles.interimNote : null}>
-            {groupProseBlocks(prose).map((group, index) =>
-              group.type === 'image-strip' ? (
-                <MobileNativeChatImageStrip
-                  key={index}
-                  uris={group.uris}
-                  label={group.alt}
-                  styles={styles}
-                />
-              ) : (
-                <Prose
-                  key={index}
-                  block={group.block}
-                  invert={isUser}
-                  fontScale={fontScale}
-                  onOpenFile={onOpenFile}
-                  styles={styles}
-                />
-              )
-            )}
+            {groupProseBlocks(prose).map((group, index, groups) => (
+              // Air between a picture and the caption under it.
+              <View key={index} style={imageLeadsText(groups, index) ? styles.imageLead : null}>
+                {group.type === 'image-strip' ? (
+                  <MobileNativeChatImageStrip uris={group.uris} label={group.alt} styles={styles} />
+                ) : (
+                  <Prose
+                    block={group.block}
+                    invert={isUser}
+                    fontScale={fontScale}
+                    onOpenFile={onOpenFile}
+                    styles={styles}
+                  />
+                )}
+              </View>
+            ))}
           </View>
           {showToolRun ? (
             <ToolRun

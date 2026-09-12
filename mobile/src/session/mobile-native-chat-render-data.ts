@@ -5,7 +5,11 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
-import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  isImageRefBlock,
+  type NativeChatBlock,
+  type NativeChatMessage
+} from '../../../src/shared/native-chat-types'
 import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
@@ -103,11 +107,13 @@ export function buildMobileNativeChatTransientData({
       previewIndex += 1
       return url ? { ...block, url } : block
     })
+    // A preview with no marker to sit on goes ahead of the text, like the echo.
+    const unplaced: NativeChatBlock[] = []
     while (previewIndex < previews.length) {
-      blocks.push({ type: 'image-ref', url: previews[previewIndex] })
+      unplaced.push({ type: 'image-ref', url: previews[previewIndex] })
       previewIndex += 1
     }
-    return { ...message, blocks }
+    return { ...message, blocks: [...unplaced, ...blocks] }
   })
   // Why anchored rather than appended: an echo whose transcript row never
   // arrives — Claude consumes a mid-turn send without writing a user record —
@@ -155,11 +161,12 @@ export function buildMobileNativeChatTransientData({
     const bubble: NativeChatMessage = {
       id: item.id,
       role: 'user',
-      // Text first (when present), then a thumbnail per ridden-along image so the
-      // sent photo shows immediately, before the transcript echo lands.
+      // Images first, then the text, as the Claude app lays out a sent photo
+      // with a caption (2026-09-13); the thumbnail shows immediately, before
+      // the transcript echo lands.
       blocks: [
-        ...(item.text ? [{ type: 'text' as const, text: item.text }] : []),
-        ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
+        ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri })),
+        ...(item.text ? [{ type: 'text' as const, text: item.text }] : [])
       ],
       timestamp: null,
       source: 'transcript'
