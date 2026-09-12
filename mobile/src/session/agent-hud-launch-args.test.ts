@@ -15,7 +15,8 @@ import {
   CLAUDE_HUD_WINDOWS_COMMAND,
   CODEX_HUD_NOTIFY_POWERSHELL,
   CODEX_HUD_NOTIFY_SCRIPT,
-  encodePowerShellCommand
+  encodePowerShellCommand,
+  CLAUDE_HUD_STOP_HOOK_POWERSHELL
 } from './agent-hud-launch-args'
 
 // Captured 2026-09-09 from Claude Code 2.1.266 on macOS: the JSON it pipes to a
@@ -758,5 +759,63 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
     // builds on this PowerShell is what can be proven here.
     const ps = runClaudePowerShell({ json: statusJson, selftest: true })
     expect(ps.stdout).toBe('AttachConsole,CloseHandle,CreateFileW,FreeConsole,WriteConsoleW')
+  })
+})
+
+// The Windows Stop hook, under a real PowerShell when one is on PATH (CI
+// runners ship pwsh; this Mac does not, so it skips loudly here).
+describe('the Claude Stop hook for Windows under a real PowerShell', () => {
+  const pwsh = (() => {
+    const fromEnv = process.env.CUIHUD_PWSH
+    if (fromEnv && existsSync(fromEnv)) {
+      return fromEnv
+    }
+    for (const dir of (process.env.PATH ?? '').split(':')) {
+      if (dir && existsSync(join(dir, 'pwsh'))) {
+        return join(dir, 'pwsh')
+      }
+    }
+    return null
+  })()
+  const run = (name: string, fn: () => void) => (pwsh ? it(name, fn, 60_000) : it.skip(name, fn))
+
+  function runStopPowerShell(json: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-ps-stop-'))
+    const conout = join(dir, 'conout.txt')
+    execFileSync(pwsh ?? 'pwsh', ['-NoProfile', '-NonInteractive', '-Command', CLAUDE_HUD_STOP_HOOK_POWERSHELL], {
+      input: json,
+      encoding: 'utf8',
+      env: { PATH: process.env.PATH ?? '', HOME: dir, CUIHUD_WIN_CONOUT: conout }
+    })
+    try {
+      return readFileSync(conout, 'utf8')
+    } catch {
+      return ''
+    }
+  }
+
+  run('leaves idle teammates off the list, like the sh hook', () => {
+    // Same 2026-09-12 case as agent-hud-stop-hook.test.ts: four council
+    // reviewers idle for a day, reported `running` by the Stop payload, shown
+    // as "4 running tasks" on the phone while the desk showed none.
+    const beacon = runStopPowerShell(
+      JSON.stringify({
+        background_tasks: [
+          { id: 'tma4w24hz', type: 'in_process_teammate', status: 'running', description: 'fable-advisor' },
+          { id: 'b0q56d8gf', type: 'shell', status: 'running', description: 'Sleep for 120 seconds' },
+          { id: 'tcwll1evo', type: 'in_process_teammate', status: 'running', description: 'council-sonnet' }
+        ]
+      })
+    )
+    expect(beacon).toContain('run=b0q56d8gf')
+    expect(beacon).not.toContain('tma4w24hz')
+    expect(beacon).not.toContain('tcwll1evo')
+  })
+
+  it('does not depend on PowerShell being present to state where it stands', () => {
+    if (!pwsh) {
+      console.warn('[agent-hud] no pwsh on PATH — the Windows Stop hook teammate test was skipped')
+    }
+    expect(true).toBe(true)
   })
 })

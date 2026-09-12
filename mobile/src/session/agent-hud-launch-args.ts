@@ -453,10 +453,16 @@ export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive
  * `run=` is always emitted, empty included: an absent field means "no answer",
  * an empty one means "nothing is running", and the phone needs the difference
  * to clear the row on the last task.
+ *
+ * Teammates (`type: in_process_teammate`) are left off. The payload calls one
+ * `running` for as long as it exists, idle included — on 2026-09-12 four
+ * council reviewers a day idle put "4 running tasks" on the phone while the
+ * desk's /tasks showed none. A teammate is a peer to message, not work that
+ * reports back; when one IS working, Orca's SubagentStart/Stop hooks carry it.
  */
 export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   'i=$(cat 2>/dev/null || true)',
-  'rn=$(printf %s "$i" | tr "{" "\\n" | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
+  'rn=$(printf %s "$i" | tr "{" "\\n" | grep -v "\\"type\\"[[:space:]]*:[[:space:]]*\\"in_process_teammate\\"" 2>/dev/null | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude run=${rn%,}"',
   ...TTY_WRITE
 ].join('; ')
@@ -476,7 +482,7 @@ export const CLAUDE_HUD_STOP_HOOK_POWERSHELL = [
   '$j=$null',
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$ids=@()',
-  'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
+  'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" -and $_.type -ne "in_process_teammate" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
   '$o="CUIHUD1 agent=claude run=" + ($ids -join ",")',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   'W $o'
