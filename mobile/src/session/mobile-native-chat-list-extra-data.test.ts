@@ -68,7 +68,9 @@ describe('the chat list declares what its header depends on', () => {
   const source = readFileSync(join(import.meta.dirname, 'MobileNativeChatView.tsx'), 'utf8')
 
   it('hands FlashList the marker', () => {
-    expect(source).toContain('extraData={headerExtraData}')
+    // The dock's height rides along: the spacer at the list's end lives in the header.
+    expect(source).toContain('extraData={listExtraData}')
+    expect(source).toContain('[headerExtraData, dockHeight]')
     expect(source).toContain('useChatListRenderStability({')
   })
 

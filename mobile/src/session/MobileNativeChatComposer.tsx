@@ -279,13 +279,10 @@ export function MobileNativeChatComposer({
             borderWidth: 1,
             borderColor: focused ? colors.borderStrong : colors.border,
             borderRadius: radius.xl,
-            backgroundColor: colors.bgPanel,
-            overflow: 'hidden',
-            shadowColor: colors.shadow,
-            shadowOpacity: 0.6,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 3
+            // See-through like the dock it sits on; a shadow under glass
+            // reads as a smudge, so none.
+            backgroundColor: colors.bgPanelGlass,
+            overflow: 'hidden'
           }}
           testID="native-chat-composer"
         >

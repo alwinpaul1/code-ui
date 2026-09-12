@@ -1,4 +1,5 @@
 import { stripMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
+import { clearDraftAtSendStartWith } from './mobile-native-chat-draft-send-start'
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
@@ -82,6 +83,8 @@ export function useMobileNativeChatDrafts(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, unless newer edits exist. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Clear the composer when an image send starts; returns the undo, or null when there is no draft scope. */
+  clearDraftAtSendStart: (text: string) => (() => void) | null
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
@@ -194,15 +197,16 @@ export function useMobileNativeChatDrafts(args: {
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    const draftText = stripMobileNativeChatFileNotes(text)
     // Why: never clobber text the user typed while the rejection was in flight.
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
       (previous[origin.draftKey] ?? '') === ''
-        ? { ...previous, [origin.draftKey]: draftText }
+        ? { ...previous, [origin.draftKey]: stripMobileNativeChatFileNotes(text) }
         : previous
     )
   }, [])
+
+  const clearDraftAtSendStart = useCallback((text: string) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft }, text), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft])
 
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
@@ -377,6 +381,7 @@ export function useMobileNativeChatDrafts(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,
+    clearDraftAtSendStart,
     holdUnconfirmedSend,
     removePending
   }

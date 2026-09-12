@@ -50,6 +50,16 @@ export function makeChatViewStyles(theme: Theme) {
       flex: 1,
       position: 'relative'
     },
+    // The composer and its chrome float over the list on a see-through
+    // ground, so the conversation runs on beneath them (Claude app,
+    // 2026-09-13). The list keeps a spacer the dock's height at its end.
+    dock: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: colors.bgDock
+    },
     listContent: {
       paddingVertical: space.sm,
       flexGrow: 1

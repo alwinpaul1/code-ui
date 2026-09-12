@@ -27,6 +27,7 @@ type Args = {
    *  paste can mark the terminal input for healing (#10228). Takes the image
    *  send's budget so the paste and this text body share one `sending` window. */
   readonly beforeNativeChatImagePaste?: () => Promise<void>
+  readonly beginNativeChatImageSend?: (text: string) => (() => void) | null
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
@@ -66,6 +67,7 @@ export function useMobileSessionImageAttachments({
   beforeTerminalSend,
   nativeChatBaseSend,
   beforeNativeChatImagePaste,
+  beginNativeChatImageSend,
   structuredNativeChat,
   readSeededLaunchDraft,
   showToast,
@@ -103,6 +105,7 @@ export function useMobileSessionImageAttachments({
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
     beforeImagePaste: beforeNativeChatImagePaste,
+    beginImageSend: beginNativeChatImageSend,
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError

@@ -38,7 +38,7 @@ import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
-import { useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
+import { composerPlaceholder, useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
 import {
   MobileNativeChatJumpToLatest,
   MobileNativeChatListEmpty,
@@ -119,7 +119,7 @@ export function MobileNativeChatView({
   keyboardInset = 0,
   keyStrip
 }: MobileNativeChatViewProps): React.JSX.Element {
-  const { colors } = useTheme()
+  const { colors, space } = useTheme()
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
   const drawDistance = chatListDrawDistanceDp(useWindowDimensions().height)
@@ -127,6 +127,7 @@ export function MobileNativeChatView({
   const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
+  const [dockHeight, setDockHeight] = useState(0)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -220,6 +221,10 @@ export function MobileNativeChatView({
     unanchoredTurnStatus: turns.activeTurnIsUnanchored ? turns.active : null
   })
 
+  // The dock spacer lives in the header; the header only re-renders when
+  // this changes, so the dock's height has to be part of it.
+  const listExtraData = useMemo(() => [headerExtraData, dockHeight], [headerExtraData, dockHeight])
+
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <>
@@ -273,7 +278,7 @@ export function MobileNativeChatView({
   const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
   return (
-    <View style={[styles.root, { paddingBottom: bottomPad }]}>
+    <View style={styles.root}>
       {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
@@ -289,7 +294,7 @@ export function MobileNativeChatView({
             // it last rendered unless `data` or this marker changes. The
             // running-tasks row, the queue and the turn status all live outside
             // `data`, and the row went stale while the sheet stayed correct.
-            extraData={headerExtraData}
+            extraData={listExtraData}
             inverted
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
@@ -338,6 +343,7 @@ export function MobileNativeChatView({
             // Inverted list: the header paints below the newest message, so
             // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={
+              <>
               <MobileNativeChatListHeader
                 messages={messages}
                 agent={agent}
@@ -350,6 +356,10 @@ export function MobileNativeChatView({
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
               />
+              {/* Inverted list: the header is the visual bottom, so this
+                  spacer keeps the newest row clear of the floating dock. */}
+              <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
+              </>
             }
             ListFooterComponent={
               <MobileNativeChatLoadEarlier
@@ -368,7 +378,7 @@ export function MobileNativeChatView({
           <MobileNativeChatJumpToLatest
             visible={showJumpToLatest}
             onPress={() => jumpToLatest(true)}
-            styles={styles}
+            styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }}
             colors={colors}
           />
         </GestureHandlerRootView>
@@ -392,6 +402,11 @@ export function MobileNativeChatView({
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission }}
       />
+      <View
+        style={[styles.dock, { paddingBottom: bottomPad }]}
+        onLayout={(event) => setDockHeight(Math.round(event.nativeEvent.layout.height))}
+        testID="native-chat-dock"
+      >
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}
@@ -432,15 +447,7 @@ export function MobileNativeChatView({
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
         disabled={lockReason !== null}
-        placeholder={
-          lockReason === 'disconnected'
-            ? 'Reconnecting…'
-            : lockReason === 'waiting'
-              ? 'Waiting for terminal…'
-              : agentWorking
-                ? 'Queue a message…'
-                : 'Reply, @files, /commands'
-        }
+        placeholder={composerPlaceholder(lockReason, agentWorking)}
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
         skills={skills}
@@ -448,6 +455,7 @@ export function MobileNativeChatView({
         conversationCommands={conversationCommands}
         onNeedSkills={onNeedSkills}
       />
+      </View>
       <ImagePreviewModal />
     </View>
   )

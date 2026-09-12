@@ -125,6 +125,12 @@ describe('useMobileNativeChatImageAttachments', () => {
         beforeImagePaste: async () => {
           order.push('drain-mirror')
         },
+        // 2026-09-13: the box empties as the send starts, before the paste and
+        // the settle, so image and text leave together as in the Claude app.
+        beginImageSend: (t: string) => {
+          order.push(`box-cleared:${t}`)
+          return null
+        },
         sleep
       })
     )
@@ -154,7 +160,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(combined).toContain('.png\x1b[201~ look')
     expect(combined).not.toContain('.png\x1b[201~look')
     // Clear, then paste, then settle, then the text send — in that order.
-    expect(order).toEqual(['drain-mirror', 'clear', 'paste', 'settle', 'text:look at this'])
+    expect(order).toEqual(['drain-mirror', 'box-cleared:look at this', 'clear', 'paste', 'settle', 'text:look at this'])
     // The local preview URI rides along so the sent bubble shows the photo.
     expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number))
     // Chips clear once the send is accepted.

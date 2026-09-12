@@ -1,6 +1,6 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -97,10 +97,23 @@ export function MobileNativeChatOverlay({
     controller.nativeChatStreamScopeKey,
     controller.nativeChatStreamLive
   )
-  if (!controller.showNativeChat) {
-    return null
+  // A reconnect can blank the chat for a frame or two: the tab list
+  // re-hydrates, or the transcript re-reads, and the overlay would drop to
+  // the terminal beneath and back (2026-09-13, "the whole screen flashes").
+  // Hold the last drawn chat for a moment instead; a real switch away
+  // outlasts the hold and clears normally.
+  // A deliberate switch to the terminal keeps the tab eligible for chat; a
+  // blink loses the tab or its identity. Only the blink is held.
+  const emptyReload = session.transcriptLoading && session.messages.length === 0
+  const blank = !controller.showNativeChat || emptyReload
+  const blink = controller.showNativeChat
+    ? emptyReload
+    : !controller.activeChatEligible && !controller.terminalPeekActive
+  const held = useHeldChatFrame(blank && blink, sendSurfaceId)
+  if (blank) {
+    return held.element
   }
-  return (
+  const drawn = (
     <View style={styles.overlay}>
       <MobileNativeChatView
         messages={session.messages}
@@ -178,6 +191,39 @@ export function MobileNativeChatOverlay({
       />
     </View>
   )
+  held.remember(drawn)
+  return drawn
+}
+
+const CHAT_FRAME_HOLD_MS = 1500
+
+/** The last chat the overlay drew for this surface, replayed while the source
+ *  blanks briefly. Timing lives in an effect so render stays pure. */
+function useHeldChatFrame(
+  blank: boolean,
+  surfaceId: string
+): { element: React.JSX.Element | null; remember: (element: React.JSX.Element) => void } {
+  const lastRef = useRef<{ surfaceId: string; element: React.JSX.Element } | null>(null)
+  const [holding, setHolding] = useState(false)
+  useEffect(() => {
+    if (!blank) {
+      setHolding(false)
+      return
+    }
+    if (lastRef.current?.surfaceId !== surfaceId) {
+      return
+    }
+    setHolding(true)
+    const timer = setTimeout(() => setHolding(false), CHAT_FRAME_HOLD_MS)
+    return () => clearTimeout(timer)
+  }, [blank, surfaceId])
+  const last = lastRef.current
+  return {
+    element: blank && holding && last?.surfaceId === surfaceId ? last.element : null,
+    remember: (drawn) => {
+      lastRef.current = { surfaceId, element: drawn }
+    }
+  }
 }
 
 const styles = StyleSheet.create({

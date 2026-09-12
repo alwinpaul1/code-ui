@@ -62,6 +62,8 @@ type Args = {
    *  Accepts this action's budget so the text body draws from what the paste left
    *  rather than opening a second one. */
   readonly beforeImagePaste?: () => Promise<void>
+  /** Empties the composer as the send starts (the chips go with it) and returns the undo. */
+  readonly beginImageSend?: (text: string) => (() => void) | null
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -108,6 +110,7 @@ export function useMobileNativeChatImageAttachments({
   onSendError,
   baseSend,
   beforeImagePaste,
+  beginImageSend,
   structuredNativeChat,
   readSeededLaunchDraft,
   onAttachSuccess,
@@ -253,6 +256,8 @@ export function useMobileNativeChatImageAttachments({
           onSendError('Message not sent (disconnected)')
           return false
         }
+        // Set once the box has been emptied for this send; a no-op before that.
+        let restoreOptimistic = (): void => {}
         try {
           // Drain caption mirroring before clearing/pasting. A delayed mirror
           // write after the image would overwrite or split this submission.
@@ -260,6 +265,19 @@ export function useMobileNativeChatImageAttachments({
           if (activeHandleRef.current !== handle) {
             onSendError('Message not sent (session changed)')
             return false
+          }
+          // The box empties now, chips and all, not after the paste and the
+          // settle (2026-09-13: the Claude app sends both at once). A paste
+          // that fails before the text goes puts both back.
+          const undoDraftClear = beginImageSend?.(text) ?? null
+          clearSent()
+          restoreOptimistic = (): void => {
+            undoDraftClear?.()
+            if (scope) {
+              setAttachmentsByScope((prev) =>
+                withScopeAttachments(prev, scope, [...pendingAll, ...(prev[scope] ?? [])])
+              )
+            }
           }
           const seededLaunchDraft = readSeededLaunchDraft()
           // A queue edit can leave the whole recalled queue on the agent, and the
@@ -277,7 +295,8 @@ export function useMobileNativeChatImageAttachments({
             clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft, residue, text)
           })
           if (!pasted) {
-            // Keep the chips so the user can retry; the failed paste never submitted.
+            // Put the chips and text back so the user can retry; the failed paste never submitted.
+            restoreOptimistic()
             markMobileNativeChatInputStale(handle)
             onError?.()
             onSendError('Message not sent')
@@ -297,6 +316,7 @@ export function useMobileNativeChatImageAttachments({
           // route the text + Enter to a different terminal than the images. Abort —
           // the chips keep their scope and a retry's Ctrl+U clears the stale paste.
           if (activeHandleRef.current !== handle) {
+            restoreOptimistic()
             markMobileNativeChatInputStale(handle)
             onError?.()
             onSendError('Message not sent')
@@ -313,17 +333,16 @@ export function useMobileNativeChatImageAttachments({
             // image onto whatever is sent next (#10228) — both must heal first.
             markMobileNativeChatInputStale(handle)
           }
-          if (outcome !== 'rejected') {
-            // Drop only what rode along — a chip attached while this send was in
-            // flight keeps waiting for its own send. 'unknown' clears too: the
-            // send usually DID land, and a kept chip would double-send the image.
-            clearSent()
+          if (outcome === 'rejected') {
+            // The chips come back; baseSend already put the text back.
+            restoreOptimistic()
           }
           return outcome !== 'rejected'
         } catch {
-          // A thrown paste/send (network/RPC) keeps the chips and honors the
+          // A thrown paste/send (network/RPC) puts the chips back and honors the
           // Promise<boolean> contract instead of rejecting. Retry-safe: the next
           // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
+          restoreOptimistic()
           markMobileNativeChatInputStale(handle)
           onError?.()
           onSendError('Message not sent')
@@ -340,6 +359,7 @@ export function useMobileNativeChatImageAttachments({
       attachmentsByScope,
       baseSend,
       beforeImagePaste,
+      beginImageSend,
       client,
       connState,
       deviceTokenRef,

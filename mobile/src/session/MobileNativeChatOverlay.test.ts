@@ -24,11 +24,15 @@ type Tick = {
   streamingText?: string
   streamLive?: boolean
   identity?: string
+  /** Tab still resolves to a chat (a deliberate terminal toggle keeps this true). */
+  eligible?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   const controller = {
     showNativeChat: tick.show ?? true,
+    activeChatEligible: tick.eligible ?? true,
+    terminalPeekActive: false,
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
     nativeChatAgentWorking: tick.streamLive ?? false,
@@ -239,5 +243,56 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     })
 
     expect(streaming()).toBeNull()
+  })
+})
+
+// 2026-09-13: reopening the app and reconnecting flashed the whole screen —
+// the chat dropped to the terminal beneath for a frame while the tab list
+// re-hydrated, then came back.
+describe('MobileNativeChatOverlay across a reconnect blink', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('keeps the last chat on screen while chat blinks off, then lets it go', async () => {
+    vi.useFakeTimers()
+    const prior = [assistantTurn('a1', 'Hello')]
+    await act(async () => {
+      renderer = create(overlayElement({ messages: prior }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(1)
+
+    // The tab list re-hydrates: no active tab resolves, so chat is neither
+    // shown nor eligible for a moment.
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior, show: false, eligible: false }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1600)
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
+  })
+
+  it('shows nothing when chat was never on for this surface', async () => {
+    await act(async () => {
+      renderer = create(overlayElement({ show: false, eligible: false }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
+  })
+
+  it('does not hold a deliberate switch to the terminal', async () => {
+    const prior = [assistantTurn('a1', 'Hello')]
+    await act(async () => {
+      renderer = create(overlayElement({ messages: prior }))
+    })
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior, show: false }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
   })
 })

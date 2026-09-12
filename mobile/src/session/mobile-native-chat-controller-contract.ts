@@ -115,6 +115,8 @@ export type MobileNativeChatController = {
    *  (image sends) must see 'unknown' to heal a possibly-orphaned paste. Such a
    *  caller passes its own `deadline` so the paste it already spent and this text
    *  body share one budget instead of holding the composer for two. */
+  /** Clears the composer as an image send starts; returns the undo for a failed paste. */
+  beginNativeChatImageSend: (text: string) => (() => void) | null
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],

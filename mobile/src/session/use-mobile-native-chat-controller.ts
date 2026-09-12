@@ -112,6 +112,7 @@ export function useMobileNativeChatController(
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
+    clearDraftAtSendStart,
     acceptSend,
     holdUnconfirmedSend,
     removePending
@@ -472,6 +473,7 @@ export function useMobileNativeChatController(
     openNativeChatQueueEditor: queueEditor.open,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
+    beginNativeChatImageSend: clearDraftAtSendStart,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
     nativeChatFilePaths,
     loadNativeChatFiles,
@@ -480,9 +482,7 @@ export function useMobileNativeChatController(
     // the curated catalog plus the disk scan.
     nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined,
     loadNativeChatSkills,
-    handleNativeChatQuestionAnswer: activeChatStructured
-      ? structuredNativeChat.respondQuestion
-      : legacyHandleNativeChatQuestionAnswer,
+    handleNativeChatQuestionAnswer: activeChatStructured ? structuredNativeChat.respondQuestion : legacyHandleNativeChatQuestionAnswer,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
       : handleNativeChatSend,

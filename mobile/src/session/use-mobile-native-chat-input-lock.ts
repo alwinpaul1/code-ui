@@ -20,3 +20,17 @@ export function useMobileNativeChatInputLock(inputLockReason: string | null | un
   }, [lockHeld, rawLockHeld])
   return lockHeld ? (rawLockReason ?? 'waiting') : null
 }
+
+/** The composer's hint for its state: what blocks input, else what a send does. */
+export function composerPlaceholder(
+  lockReason: ReturnType<typeof useMobileNativeChatInputLock>,
+  agentWorking: boolean | undefined
+): string {
+  if (lockReason === 'disconnected') {
+    return 'Reconnecting…'
+  }
+  if (lockReason === 'waiting') {
+    return 'Waiting for terminal…'
+  }
+  return agentWorking ? 'Queue a message…' : 'Reply, @files, /commands'
+}
