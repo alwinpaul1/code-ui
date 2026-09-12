@@ -135,8 +135,6 @@ export type MobileNativeChatController = {
   nativeChatContextWindow: TerminalHudContextWindow | null
   /** Permission mode from the terminal footer, or null when no status line is observed. */
   nativeChatPermissionMode: TerminalPermissionMode | null
-  /** The agent's spinner verb off its screen ("Cooking"), or null. */
-  nativeChatActivityVerb: string | null
   /** Codex collaboration mode (Default / Plan) from its footer, or null. */
   nativeChatAgentMode: TerminalAgentMode | null
   /** Re-read the terminal screen now (after a Shift+Tab, so the mode pill follows). */

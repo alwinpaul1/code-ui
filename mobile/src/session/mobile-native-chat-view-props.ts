@@ -37,8 +37,6 @@ export type MobileNativeChatViewProps = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
-  /** The agent's own spinner verb ("Cooking") for the status line. */
-  activityVerb?: string | null
   /** Whether Stop has a turn to act on. Defaults to `agentWorking`, which is
    *  the bridge lane's answer; the structured lane says "working" from the
    *  journalled send, seconds before there is a turn to interrupt. */

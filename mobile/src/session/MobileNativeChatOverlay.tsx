@@ -102,7 +102,6 @@ export function MobileNativeChatOverlay({
         error={session.error}
         agent={controller.nativeChatAgent}
         agentWorking={controller.nativeChatAgentWorking}
-        activityVerb={controller.nativeChatActivityVerb}
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
         turnActivity={controller.nativeChatTurnActivity}

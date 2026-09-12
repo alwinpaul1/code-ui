@@ -62,7 +62,11 @@ export function makeMarkdownStyles(theme: Theme) {
       borderRadius: 7,
       paddingHorizontal: 5,
       paddingVertical: 1,
-      marginHorizontal: 1
+      marginHorizontal: 1,
+      // Android hangs an inline View from the baseline, so a chip taller than
+      // the text's ascent floats above the line (2026-09-12, "peak" sat above
+      // its sentence). Half the extra height brings it level.
+      transform: [{ translateY: 4 }]
     },
     inlineCodeChipText: {
       fontFamily: fonts.mono,

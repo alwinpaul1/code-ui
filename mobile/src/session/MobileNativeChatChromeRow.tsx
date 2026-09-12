@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native'
 import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { MobileNativeChatActivityLine } from './MobileNativeChatActivityLine'
+import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { ChatViewStyles } from './mobile-native-chat-view-styles'
 
 /** Chrome row above the composer: the working indicator and the global
@@ -12,9 +12,6 @@ export function MobileNativeChatChromeRow({
   agentWorking,
   canStop,
   showWorkingIndicator = true,
-  activityVerb = null,
-  runningTaskCount = 0,
-  onOpenBackgroundTasks,
   onStop,
   toolsExpanded,
   onToggleTools,
@@ -30,10 +27,6 @@ export function MobileNativeChatChromeRow({
   /** False on the structured lane, whose per-turn status row already says the
    *  agent is working — a second static row would report it twice. */
   showWorkingIndicator?: boolean
-  /** The agent's spinner verb ("Cooking"), for the status line. */
-  activityVerb?: string | null
-  runningTaskCount?: number
-  onOpenBackgroundTasks?: () => void
   onStop?: () => void
   toolsExpanded: boolean
   onToggleTools: () => void
@@ -45,13 +38,7 @@ export function MobileNativeChatChromeRow({
     <>
       <View style={styles.chromeRow}>
         <View style={styles.chromeLeft}>
-          {agentWorking && showWorkingIndicator ? (
-            <MobileNativeChatActivityLine
-              verb={activityVerb}
-              runningTaskCount={runningTaskCount}
-              onOpenBackgroundTasks={onOpenBackgroundTasks}
-            />
-          ) : null}
+          {agentWorking && showWorkingIndicator ? <MobileAgentWorkingIndicator /> : null}
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
             onPress={onToggleTools}

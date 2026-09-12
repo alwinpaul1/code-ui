@@ -492,7 +492,6 @@ export function useMobileNativeChatController(
     readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatContextWindow: hudObservation?.context ?? null,
     nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
-    nativeChatActivityVerb: hudObservation?.activity ?? null,
     nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
   }

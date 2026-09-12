@@ -32,7 +32,6 @@ import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { interimAssistantMessageIds } from './mobile-native-chat-interim'
-import { useMobileRunningTaskCount } from './use-mobile-running-task-count'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -53,7 +52,6 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
-  activityVerb = null,
   canStop,
   structuredActivityUi = false,
   turnActivity = null,
@@ -162,12 +160,6 @@ export function MobileNativeChatView({
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
   const interimIds = useMemo(() => interimAssistantMessageIds(data), [data])
-  const runningTaskCount = useMobileRunningTaskCount({
-    messages,
-    agentStatus,
-    backgroundTaskReport,
-    hostBackgroundTasks
-  })
   followGate.noteData(newestFirst)
   const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
 
@@ -339,7 +331,6 @@ export function MobileNativeChatView({
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
-                hideRunningRow={agentWorking === true && !structuredActivityUi}
               />
             }
             ListFooterComponent={
@@ -389,9 +380,6 @@ export function MobileNativeChatView({
         // The structured lane says "Working for N" per turn; a second, static
         // three-dot row under it would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
-        activityVerb={activityVerb}
-        runningTaskCount={runningTaskCount}
-        onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
         onStop={onStop}
         toolsExpanded={toolsExpanded}
         onToggleTools={() => setToolsExpanded((v) => !v)}

@@ -24,7 +24,6 @@ export function MobileNativeChatListHeader({
   onEditQueue,
   unanchoredTurnStatus,
   turnActivity,
-  hideRunningRow = false,
   onOpenBackgroundTasks
 }: {
   /** The UNFILTERED transcript on purpose: the `<task-notification>` turns that
@@ -45,9 +44,6 @@ export function MobileNativeChatListHeader({
   unanchoredTurnStatus?: NativeChatTurnStatus | null
   turnActivity?: NativeChatTurnActivity | null
   onOpenBackgroundTasks: () => void
-  /** While the agent works the status line above the composer carries the
-   *  count, so the row under the last message would say it twice. */
-  hideRunningRow?: boolean
 }) {
   const runningTaskCount = useMobileRunningTaskCount({
     messages,
@@ -65,9 +61,7 @@ export function MobileNativeChatListHeader({
           activityText={turnActivity?.text}
         />
       ) : null}
-      {hideRunningRow ? null : (
-        <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
-      )}
+      <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
       <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
     </>
   )

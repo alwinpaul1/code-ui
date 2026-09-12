@@ -36,6 +36,32 @@ describe('interim assistant notes', () => {
     expect([...interimAssistantMessageIds([user('u1'), prose('a1'), tools('t1')])]).toEqual(['a1'])
   })
 
+  // Claude app, 2026-09-12: "You were right twice, and I was wrong on both
+  // counts." was plain there and a quote block here, because Claude Code wrote
+  // "Please run /login · API Error: 401 OAuth access token has expired." as
+  // an assistant record after it.
+  it('leaves the answer plain when only an API error line follows it', () => {
+    const ids = interimAssistantMessageIds([
+      user('u1'),
+      prose('a1'),
+      tools('t1'),
+      prose('a2', 'You were right twice, and I was wrong on both counts.'),
+      prose('e1', 'Please run /login · API Error: 401 OAuth access token has expired. Re-authenticate to continue.')
+    ])
+    expect([...ids]).toEqual(['a1'])
+  })
+
+  it('ignores a toned host notice the same way', () => {
+    const notice: NativeChatMessage = {
+      id: 'n1',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Context compacted', tone: 'notice' }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+    expect([...interimAssistantMessageIds([user('u1'), prose('a1'), notice])]).toEqual([])
+  })
+
   it('resets at the next user message', () => {
     const ids = interimAssistantMessageIds([user('u1'), prose('a1'), user('u2'), prose('a2')])
     expect([...ids]).toEqual([])
