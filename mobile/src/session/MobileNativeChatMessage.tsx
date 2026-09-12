@@ -14,6 +14,8 @@ import { isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { Prose } from './MobileNativeChatProse'
+import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
+import { groupProseBlocks } from './mobile-native-chat-prose-groups'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -314,16 +316,25 @@ function MobileNativeChatMessageImpl({
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           <View style={interim && isAgent ? styles.interimNote : null}>
-            {prose.map((block, index) => (
-              <Prose
-                key={index}
-                block={block}
-                invert={isUser}
-                fontScale={fontScale}
-                onOpenFile={onOpenFile}
-                styles={styles}
-              />
-            ))}
+            {groupProseBlocks(prose).map((group, index) =>
+              group.type === 'image-strip' ? (
+                <MobileNativeChatImageStrip
+                  key={index}
+                  uris={group.uris}
+                  label={group.alt}
+                  styles={styles}
+                />
+              ) : (
+                <Prose
+                  key={index}
+                  block={group.block}
+                  invert={isUser}
+                  fontScale={fontScale}
+                  onOpenFile={onOpenFile}
+                  styles={styles}
+                />
+              )
+            )}
           </View>
           {showToolRun ? (
             <ToolRun

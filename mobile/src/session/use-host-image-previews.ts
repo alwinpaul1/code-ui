@@ -8,7 +8,33 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { normalizeMobileFilePreviewResponse } from '../files/mobile-file-preview-response'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
-import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  isImageRefBlock,
+  isToolCallBlock,
+  type NativeChatMessage
+} from '../../../src/shared/native-chat-types'
+import { toolCallKind } from './mobile-native-chat-tool-sentence'
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|bmp)$/i
+
+/** The image files an assistant message read with its Read tool, in order.
+ *  The Claude app shows those under the fold row as thumbnails (2026-09-12);
+ *  the bytes sit in the transcript's tool result, which the desktop reader
+ *  does not forward, so the phone fetches a host thumbnail of the path. */
+export function readImagePaths(message: NativeChatMessage): string[] {
+  const paths: string[] = []
+  for (const block of message.blocks) {
+    if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
+      continue
+    }
+    const input = block.input as { file_path?: unknown; path?: unknown } | null
+    const path = typeof input?.file_path === 'string' ? input.file_path : typeof input?.path === 'string' ? input.path : null
+    if (path && IMAGE_FILE.test(path)) {
+      paths.push(path)
+    }
+  }
+  return paths
+}
 
 /** Image-ref paths per message, in block order, for messages the phone has no
  *  local preview for (a message with local previews is a phone-side send). */
@@ -18,6 +44,13 @@ export function collectHostImagePaths(
 ): Record<string, string[]> {
   const paths: Record<string, string[]> = {}
   for (const message of normalizeImageTranscriptMessages([...messages])) {
+    if (message.role === 'assistant') {
+      const read = readImagePaths(message)
+      if (read.length > 0) {
+        paths[message.id] = read
+      }
+      continue
+    }
     if (message.role !== 'user' || localPreviews?.[message.id]?.length) {
       continue
     }

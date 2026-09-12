@@ -202,13 +202,23 @@ export function makeChatMessageStyles(theme: Theme) {
       borderWidth: 1,
       borderColor: colors.border
     },
+    // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
+    // next one showing so the row reads as scrollable.
+    imageStrip: {
+      flexDirection: 'row',
+      gap: space.sm,
+      paddingVertical: space.xs
+    },
+    // Bare pictures with rounded corners, no frame or fill: a border around a
+    // letterboxed screenshot read as "a box with a small image in it".
+    imageTile: {
+      width: 132,
+      height: 176,
+      borderRadius: radius.lg
+    },
     imageThumb: {
-      width: 200,
-      height: 150,
-      borderRadius: radius.md,
-      backgroundColor: colors.bgRaised,
-      borderWidth: 1,
-      borderColor: colors.border
+      width: 220,
+      borderRadius: radius.lg
     },
     // Orca #19226: what the row's own execution details look like — an MCP
     // call's server and tool, its exit code, and how long it took.

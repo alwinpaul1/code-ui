@@ -76,7 +76,22 @@ export function buildMobileNativeChatTransientData({
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
   const renderedFolded = folded.map((message) => {
     const previews = imagePreviewsByMessageId?.[message.id]
-    if (message.role !== 'user' || !previews?.length) {
+    if (!previews?.length) {
+      return message
+    }
+    if (message.role === 'assistant') {
+      // Images the agent read, as host thumbnails: shown under its fold row
+      // the way the Claude app shows them. Appended, since the transcript
+      // carries no image block for a Read.
+      return {
+        ...message,
+        blocks: [
+          ...message.blocks,
+          ...previews.map((url) => ({ type: 'image-ref' as const, url, alt: 'Image the agent read' }))
+        ]
+      }
+    }
+    if (message.role !== 'user') {
       return message
     }
     let previewIndex = 0

@@ -1,11 +1,11 @@
-import { Image, Pressable, Text } from 'react-native'
+import { Pressable, Text } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useChatTextSelectable } from '../components/chat-text-selectable-context'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { openImagePreview } from './image-preview-store'
+import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
 import { TEXT_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 /** One text or image block of a message: a sent prompt as a plain bubble
@@ -51,19 +51,7 @@ export function Prose({
       // Why: the picture is already on the phone (a local upload, or a host
       // thumbnail fetched earlier), so tapping opens it full-screen at once —
       // no host round trip, nothing to fail.
-      return (
-        <Pressable
-          onPress={() => openImagePreview(uri, block.alt ?? 'Image')}
-          accessibilityRole="imagebutton"
-        >
-          <Image
-            source={{ uri }}
-            style={styles.imageThumb}
-            resizeMode="contain"
-            accessibilityLabel={block.alt ?? 'Attached image'}
-          />
-        </Pressable>
-      )
+      return <MobileNativeChatImageThumb uri={uri} label={block.alt ?? 'Image'} styles={styles} />
     }
     // Desktop clipboard files have no mobile preview grant. A transcript path
     // alone cannot make those bytes available on the phone; don't expose an

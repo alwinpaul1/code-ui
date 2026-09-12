@@ -3,7 +3,9 @@
 // subscribes here. Kept out of props so no list re-renders on open/close.
 import { useSyncExternalStore } from 'react'
 
-type ImagePreviewState = { uri: string; label: string } | null
+/** `uri` is the one on screen; `uris`/`index` page through the message's
+ *  images, "5 of 6" like the Claude app's viewer (2026-09-12). */
+type ImagePreviewState = { uri: string; uris: string[]; index: number; label: string } | null
 
 let state: ImagePreviewState = null
 const listeners = new Set<() => void>()
@@ -14,8 +16,23 @@ function emit(): void {
   }
 }
 
-export function openImagePreview(uri: string, label = 'Image'): void {
-  state = { uri, label }
+export function openImagePreview(uri: string | string[], label = 'Image', index = 0): void {
+  const uris = Array.isArray(uri) ? uri : [uri]
+  const at = Math.min(Math.max(index, 0), Math.max(uris.length - 1, 0))
+  state = { uri: uris[at] ?? '', uris, index: at, label }
+  emit()
+}
+
+/** Page to another image of the open set (swipe or arrow). */
+export function setImagePreviewIndex(index: number): void {
+  if (state === null) {
+    return
+  }
+  const at = Math.min(Math.max(index, 0), state.uris.length - 1)
+  if (at === state.index) {
+    return
+  }
+  state = { ...state, uri: state.uris[at] ?? '', index: at }
   emit()
 }
 

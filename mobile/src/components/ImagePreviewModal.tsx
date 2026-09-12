@@ -1,6 +1,6 @@
-import { Image, Modal, Pressable, StatusBar, useWindowDimensions, View } from 'react-native'
+import { Image, Modal, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from 'react-native'
 import { X } from 'lucide-react-native'
-import { closeImagePreview, useImagePreview } from '../session/image-preview-store'
+import { closeImagePreview, setImagePreviewIndex, useImagePreview } from '../session/image-preview-store'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 
@@ -57,19 +57,35 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             <X size={20} color="#fff" strokeWidth={2.2} />
           </Pressable>
         </View>
-        <Image
-          source={{ uri: preview.uri }}
-          style={{ flex: 1, width, alignSelf: 'center' }}
-          resizeMode="contain"
-          accessibilityLabel={preview.label}
-        />
+        {/* Why a paged ScrollView: the Claude app's viewer swipes through the
+            message's images and counts them ("5 of 6", 2026-09-12). */}
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={{ flex: 1 }}
+          contentOffset={{ x: preview.index * width, y: 0 }}
+          onMomentumScrollEnd={(event) =>
+            setImagePreviewIndex(Math.round(event.nativeEvent.contentOffset.x / width))
+          }
+        >
+          {preview.uris.map((uri, index) => (
+            <Image
+              key={`${index}:${uri.slice(0, 40)}`}
+              source={{ uri }}
+              style={{ width, height: '100%' }}
+              resizeMode="contain"
+              accessibilityLabel={`${preview.label} ${index + 1} of ${preview.uris.length}`}
+            />
+          ))}
+        </ScrollView>
         <View style={{ paddingVertical: space.lg + space.md }}>
           <Txt
             variant="caption"
             align="center"
             style={{ color: colors.textInverse === '#fff' ? '#fff' : 'rgba(255,255,255,0.8)' }}
           >
-            {preview.label}
+            {preview.uris.length > 1 ? `${preview.index + 1} of ${preview.uris.length}` : preview.label}
           </Txt>
         </View>
       </Pressable>

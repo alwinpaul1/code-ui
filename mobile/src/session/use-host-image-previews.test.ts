@@ -12,6 +12,23 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('collectHostImagePaths', () => {
+  // Claude app, 2026-09-12: the screenshots an agent Read show as thumbnails
+  // under its fold row. The transcript has no image block for a Read, so the
+  // path from the tool call is what the phone can fetch a thumbnail of.
+  it('lists the image files an agent message read, and only those', () => {
+    const agent: NativeChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool-call', id: 'c1', name: 'Read', input: { file_path: '/tmp/shot.png' } },
+        { type: 'tool-call', id: 'c2', name: 'Read', input: { file_path: '/tmp/notes.md' } },
+        { type: 'tool-call', id: 'c3', name: 'Bash', input: { command: 'cat /tmp/other.png' } },
+        { type: 'tool-call', id: 'c4', name: 'Read', input: { file_path: '/tmp/second.JPG' } }
+      ]
+    } as NativeChatMessage
+    expect(collectHostImagePaths([agent], undefined)).toEqual({ a1: ['/tmp/shot.png', '/tmp/second.JPG'] })
+  })
+
   it('lists desktop-pasted image paths per user message, skipping phone sends', () => {
     const messages = [
       user('m1', 'look at this'),

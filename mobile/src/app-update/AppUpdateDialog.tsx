@@ -338,9 +338,6 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
           <Txt variant="title" weight="semibold" align="center">
             Installing
           </Txt>
-          <Txt variant="body" tone="secondary" align="center">
-            Code UI restarts on the new version in a moment.
-          </Txt>
           <ActivityIndicator size="small" color={colors.textSecondary} />
         </View>
       )
@@ -352,8 +349,7 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
             Update downloaded
           </Txt>
           <Txt variant="body" tone="secondary" align="center">
-            Code UI {version} is ready. Installing restarts the app; your paired desktops and
-            settings stay as they are.
+            Code UI {version} is ready. Your paired desktops and settings stay as they are.
           </Txt>
           <View style={{ gap: space.sm }}>
             <Button label="Install" variant="accent" block onPress={() => void reopenInstaller()} />
