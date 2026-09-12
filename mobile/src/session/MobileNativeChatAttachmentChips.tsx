@@ -1,5 +1,5 @@
 import { FileText, X } from 'lucide-react-native'
-import { Image, Pressable, ScrollView, View } from 'react-native'
+import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -75,7 +75,30 @@ export function MobileNativeChatAttachmentChips({
                 />
               </Pressable>
             )}
-            {onRemoveAttachment ? (
+            {attachment.uploading ? (
+              // Still on its way to the host: the chip is there at once, with a
+              // ring over it, the way the Claude app shows a heavy upload
+              // (2026-09-13). The rest of the composer stays usable.
+              <View
+                pointerEvents="none"
+                accessibilityLabel="Uploading"
+                testID="attachment-uploading"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.bgOverlay
+                }}
+              >
+                <ActivityIndicator size="small" color={colors.text} />
+              </View>
+            ) : null}
+            {onRemoveAttachment && !attachment.uploading ? (
               <Pressable
                 accessibilityLabel={isFile ? 'Remove file' : 'Remove image'}
                 // Inset inside the chip: Android drops touches outside the parent's

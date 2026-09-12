@@ -84,6 +84,7 @@ export function MobileNativeChatView({
   onRemoveAttachment,
   isAttaching,
   onMicPress,
+  onBeforeSend,
   micActive,
   micLevel,
   contextWindow,
@@ -419,6 +420,7 @@ export function MobileNativeChatView({
         onRemoveAttachment={onRemoveAttachment}
         isAttaching={isAttaching}
         onMicPress={onMicPress}
+        onBeforeSend={onBeforeSend}
         micActive={micActive}
         micLevel={micLevel}
         contextWindow={contextWindow}

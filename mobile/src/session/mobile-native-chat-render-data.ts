@@ -56,10 +56,44 @@ export type MobileNativeChatPendingItem = {
   restored?: boolean
 }
 
-export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
+export function foldMobileNativeChatMessages(
+  messages: NativeChatMessage[],
+  splitAfterIds?: ReadonlySet<string>
+): NativeChatMessage[] {
   // Normalize first (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  return stripNoiseMessages(foldToolMessages(normalizeImageTranscriptMessages(messages)))
+  const normalized = normalizeImageTranscriptMessages(messages)
+  if (!splitAfterIds?.size) {
+    return stripNoiseMessages(foldToolMessages(normalized))
+  }
+  // A send the phone made mid-turn is anchored after the row it was sent
+  // against; the tool calls that came after it must not fold backward past
+  // it, or two sends read back to back with the work between them gone
+  // (2026-09-13: the Claude app shows "Ran 12 commands" between them).
+  const folded: NativeChatMessage[] = []
+  let segment: NativeChatMessage[] = []
+  for (const message of normalized) {
+    segment.push(message)
+    if (splitAfterIds.has(message.id)) {
+      folded.push(...foldToolMessages(segment))
+      segment = []
+    }
+  }
+  folded.push(...foldToolMessages(segment))
+  return stripNoiseMessages(folded)
+}
+
+/** The raw rows pending echoes were sent against: fold boundaries. */
+export function pendingFoldBoundaries(
+  pending: readonly { baselineTailMessageId: string | null; baselineResolved?: boolean }[]
+): Set<string> {
+  const ids = new Set<string>()
+  for (const item of pending) {
+    if (item.baselineTailMessageId && item.baselineResolved !== false) {
+      ids.add(item.baselineTailMessageId)
+    }
+  }
+  return ids
 }
 
 /** Assemble the folded transcript, streaming text, and optimistic user echoes. */

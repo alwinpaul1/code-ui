@@ -89,6 +89,8 @@ export type MobileNativeChatViewProps = {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
+  /** Runs before a composer send goes out (ends live dictation). */
+  onBeforeSend?: () => void
   micActive?: boolean
   micLevel?: number
   contextWindow?: TerminalHudContextWindow | null

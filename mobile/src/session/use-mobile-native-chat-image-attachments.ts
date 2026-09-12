@@ -1,13 +1,11 @@
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
+import { useNativeChatAttachmentScopeWriters } from './use-native-chat-attachment-scope-writers'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
-import {
-  appendPendingNativeChatImages,
-  type PendingNativeChatImage
-} from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
   NO_NATIVE_CHAT_IMAGE_ATTACHMENTS,
   withScopeAttachments
@@ -117,20 +115,10 @@ export function useMobileNativeChatImageAttachments({
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
   const attachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.byScope)
-  const setAttachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.update)
-  const idCounter = useRef(0)
+  const { setAttachmentsByScope, addUploadedImages, addUploadingImage, settleUploads } =
+    useNativeChatAttachmentScopeWriters()
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
-
-  const addUploadedImages = useCallback(
-    (scope: string, uploadedImages: Omit<PendingNativeChatImage, 'id'>[]) => {
-      setAttachmentsByScope((prev) => ({
-        ...prev,
-        [scope]: appendPendingNativeChatImages(prev[scope] ?? [], uploadedImages, idCounter)
-      }))
-    },
-    []
-  )
 
   const { attachImage, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
     client,
@@ -141,6 +129,8 @@ export function useMobileNativeChatImageAttachments({
     structuredNativeChat,
     showToast,
     onImagesUploaded: addUploadedImages,
+    onImageUploading: addUploadingImage,
+    onUploadSettled: settleUploads,
     onAttachSuccess,
     onError
   })
@@ -179,8 +169,10 @@ export function useMobileNativeChatImageAttachments({
       const deadline = openMobileNativeChatSendBudget()
       try {
         const scope = scopeKey
-        const pendingAll =
+        // A chip still uploading has no host path yet; it stays for the next send.
+        const pendingAll = (
           (scope ? attachmentsByScope[scope] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
+        ).filter((attachment) => !attachment.uploading)
         // Documents never paste as images: their note joins the text body, and
         // the chip clears with the images once the send is accepted.
         const pendingFiles = pendingAll.filter(isPendingNativeChatFile)

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import { Pressable, TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { AgentModePill } from '../components/AgentModePill'
@@ -63,6 +63,8 @@ type Props = {
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
+  /** Runs before `onSend`: ends live dictation so the sent words do not come back. */
+  onBeforeSend?: () => void
   micActive?: boolean
   /** Microphone level 0..1 while `micActive`; shows the voice bars. */
   micLevel?: number
@@ -111,8 +113,8 @@ export function MobileNativeChatComposer({
   onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
-  isAttaching = false,
   onMicPress,
+  onBeforeSend,
   micActive = false,
   micLevel = 0,
   contextWindow = null,
@@ -159,11 +161,14 @@ export function MobileNativeChatComposer({
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
   // along even when the user sends no accompanying text.
+  // A chip still uploading holds the send, but nothing else in the box
+  // waits on it: the text stays editable and the + keeps working.
+  const uploading = attachments.some((attachment) => attachment.uploading)
   const canSend =
     (trimmed.length > 0 || attachments.length > 0) &&
     !disabled &&
     !sending &&
-    !isAttaching &&
+    !uploading &&
     !sessionOptionDispatching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
@@ -230,6 +235,7 @@ export function MobileNativeChatComposer({
     const sendCompletionGeneration = getSendCompletionGeneration()
     const composerEditGeneration = getComposerEditGeneration()
     try {
+      onBeforeSend?.()
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
       const accepted = await onSend(value)
@@ -343,19 +349,15 @@ export function MobileNativeChatComposer({
                 // Why: with a file option the "+" opens a small chooser (Claude's
                 // "Add to Chat" sheet); without one it keeps opening Photos directly.
                 onPress={onAttachFile ? () => setShowAttachSheet(true) : onAttachImage}
-                disabled={isAttaching || disabled}
+                disabled={disabled}
               >
-                {isAttaching ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : (
-                  <Plus size={20} color={colors.textSecondary} strokeWidth={2} />
-                )}
+                <Plus size={20} color={colors.textSecondary} strokeWidth={2} />
               </Pressable>
             ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
-                sendInFlight={sending || isAttaching}
+                sendInFlight={sending}
               />
             ) : null}
             {agentMode ? (

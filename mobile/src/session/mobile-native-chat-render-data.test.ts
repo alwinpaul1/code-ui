@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
+  pendingFoldBoundaries,
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages,
   mobileNativeChatEmptyState
@@ -281,6 +282,40 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
   function row(id: string, role: 'user' | 'assistant', text: string): NativeChatMessage {
     return { id, role, blocks: [{ type: 'text', text }], timestamp: 1, source: 'transcript' }
   }
+
+  // Claude app, 2026-09-13: two prompts sent one after another mid-turn show
+  // "Ran 12 shell commands" between them. Without a boundary the tool rows
+  // after the first send folded back into the note above it, and the two
+  // sends read back to back with nothing between.
+  it('keeps the work between two mid-turn sends between them', () => {
+    const tool = (id: string): NativeChatMessage => ({
+      id,
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', id: `${id}-c`, name: 'Bash', input: {} }],
+      timestamp: 0,
+      source: 'transcript'
+    })
+    const raw = [
+      row('u1', 'user', 'go'),
+      row('a1', 'assistant', 'on it'),
+      tool('t1'),
+      tool('t2'),
+      tool('t3')
+    ]
+    const pending = [
+      { id: 'p1', text: 'first mid-turn', baselineTailMessageId: 't1', baselineResolved: true },
+      { id: 'p2', text: 'second mid-turn', baselineTailMessageId: 't2', baselineResolved: true }
+    ]
+    const folded = foldMobileNativeChatMessages(raw, pendingFoldBoundaries(pending))
+    const { data } = buildMobileNativeChatTransientData({
+      messages: raw,
+      folded,
+      streaming: null,
+      pending
+    })
+    expect(data.map((m) => m.id)).toEqual(['u1', 'a1', 'p1', 't2', 'p2', 't3'])
+    expect(data[1]?.blocks.filter((b) => b.type === 'tool-call')).toHaveLength(1)
+  })
 
   it('keeps an unmatched echo where it was sent instead of below later turns', () => {
     const folded = [row('m1', 'user', 'earlier'), row('m2', 'assistant', 'on it')]

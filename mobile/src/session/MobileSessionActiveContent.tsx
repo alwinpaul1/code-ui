@@ -59,6 +59,7 @@ export function MobileSessionActiveContent({
     handleAccessoryKey,
     dictation,
     handleDictationToggle,
+    finishDictationForSend,
     handleDictationPressIn,
     handleDictationPressOut,
     readMarkdownTab,
@@ -293,6 +294,7 @@ export function MobileSessionActiveContent({
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
+        onBeforeSend={finishDictationForSend}
         micActive={dictation.isRecording}
         micLevel={(dictation as { level?: number }).level ?? 0}
         dictationMode={dictationMode}

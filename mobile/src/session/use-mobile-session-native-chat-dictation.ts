@@ -223,16 +223,21 @@ export function useMobileSessionNativeChatDictation(
     useLiveTranscription
   ])
 
-  const cancelDictation = useCallback(() => {
+  const cancelDictation = useCallback((forSend = false) => {
+    if (forSend && !(useLiveTranscription && liveTargetRef.current.kind === 'chat' && (dictation.isStarting || dictation.isRecording || dictation.isProcessing))) {
+      return
+    }
     dictationRouteContextRef.current = null
     if (useLiveTranscription) {
       const base = liveBaseTextRef.current
       const target = liveTargetRef.current
-      if (target.kind === 'chat') {
+      // For a send the spoken words leave with the message: nothing is put back.
+      liveBaseTextRef.current = forSend ? '' : base
+      if (!forSend && target.kind === 'chat') {
         nativeChatController.setChatComposerText(() => base)
       } else if (target.kind === 'buffered') {
         setInput(() => base)
-      } else if (target.typed) {
+      } else if (target.kind === 'pty' && target.typed) {
         void sendLiveTerminalInput(target.handle, liveDictationDelta(target.typed, ''))
         target.typed = ''
       }
@@ -240,6 +245,10 @@ export function useMobileSessionNativeChatDictation(
     void dictation.cancel()
   }, [dictation, nativeChatController, sendLiveTerminalInput, setInput, useLiveTranscription])
 
+  // Send while the mic is on: the words spoken so far go with the message, so
+  // the recogniser is dropped without putting the base text back — a stop
+  // would deliver one more transcript and write the sent words into the empty
+  // composer (2026-09-13). Speaking again is a fresh tap on the mic.
   // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
   const handleDictationToggle = useCallback(() => {
     if (dictation.isProcessing) {
@@ -311,6 +320,7 @@ export function useMobileSessionNativeChatDictation(
     startDictation,
     cancelDictation,
     handleDictationToggle,
+    finishDictationForSend: () => cancelDictation(true),
     handleDictationPressIn,
     handleDictationPressOut,
     refreshDictationMode

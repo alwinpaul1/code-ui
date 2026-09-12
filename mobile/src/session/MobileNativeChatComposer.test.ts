@@ -287,10 +287,27 @@ describe('MobileNativeChatComposer', () => {
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
-  it('disables send while an attachment path is still being injected', async () => {
+  // 2026-09-13: only the chip still uploading holds the send; the picker
+  // being open (isAttaching) no longer locks the whole box.
+  it('disables send while an attachment is still uploading, not while merely attaching', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     await render(onSend, vi.fn(), true)
+    expect(sendButton().props).toMatchObject({ disabled: false })
+    act(() => renderer!.unmount())
 
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: ' hello ',
+          onChangeText: vi.fn(),
+          onSend,
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: () => 0,
+          getComposerEditGeneration: () => 0,
+          attachments: [{ id: 'img-1', path: '', previewUri: 'file:///big.jpg', uploading: true }]
+        })
+      )
+    })
     expect(sendButton().props).toMatchObject({ disabled: true })
     await act(async () => sendButton().props.onPress())
     expect(onSend).not.toHaveBeenCalled()

@@ -1,3 +1,4 @@
+import type { UploadingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
@@ -26,6 +27,10 @@ export function useMobileNativeChatImageUpload(args: {
   structuredNativeChat: boolean
   showToast: ShowToast
   onImagesUploaded: (scope: string, images: UploadedNativeChatImage[]) => void
+  /** A picked file is on its way: show its chip now, with a spinner. */
+  onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
+  /** The selection is done, successful or not: chips still marked uploading are stale. */
+  onUploadSettled?: (scope: string) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
@@ -41,6 +46,8 @@ export function useMobileNativeChatImageUpload(args: {
     onAttachSuccess,
     onError,
     onImagesUploaded,
+    onImageUploading,
+    onUploadSettled,
     scopeKey,
     showToast,
     structuredNativeChat
@@ -75,6 +82,7 @@ export function useMobileNativeChatImageUpload(args: {
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages,
           onImageUploaded: (image) => uploadedImages.push(image),
+          onImageStart: (image) => onImageUploading?.(scope, image),
           onUploadStart: () => {
             started = true
             attachingCount.current += 1
@@ -95,6 +103,7 @@ export function useMobileNativeChatImageUpload(args: {
         onImagesUploaded(scope, uploadedImages)
         onAttachSuccess?.()
       }
+      onUploadSettled?.(scope)
       if (uploadError !== null) {
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
@@ -121,6 +130,8 @@ export function useMobileNativeChatImageUpload(args: {
       onAttachSuccess,
       onError,
       onImagesUploaded,
+      onImageUploading,
+      onUploadSettled,
       scopeKey,
       showToast,
       structuredNativeChat

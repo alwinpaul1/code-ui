@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
-import { uploadMobileNativeChatImages } from './mobile-native-chat-image-attachment'
+import {
+  addUploadingNativeChatImage,
+  appendPendingNativeChatImages,
+  dropUploadingNativeChatImages,
+  uploadMobileNativeChatImages
+} from './mobile-native-chat-image-attachment'
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -171,5 +176,36 @@ describe('uploadMobileNativeChatImages', () => {
       onUploadStart
     })
     expect(onUploadStart).toHaveBeenCalledTimes(1)
+  })
+
+  // Claude app, 2026-09-13: a heavy file shows its chip with a ring at once,
+  // and the composer keeps working. The chip must exist before the bytes go
+  // up, and the finished upload must take that chip's place, not add one.
+  it('announces each picked file before its upload, and the upload fills that chip', async () => {
+    const onImageStart = vi.fn()
+    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/y.png')])
+    await uploadMobileNativeChatImages('files', {
+      client,
+      getConnectionId: async () => null,
+      pickImages: vi.fn().mockResolvedValue([{ base64: 'CCCC', uri: 'file:///clip.mp4', name: 'clip.mp4' }]),
+      onImageStart
+    })
+    expect(onImageStart).toHaveBeenCalledWith({ previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' })
+
+    const counter = { current: 0 }
+    const placeholder = addUploadingNativeChatImage([], onImageStart.mock.calls[0]![0], counter)
+    expect(placeholder).toEqual([
+      { id: 'img-1', path: '', uploading: true, previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' }
+    ])
+    const filled = appendPendingNativeChatImages(
+      placeholder,
+      [{ path: '/tmp/y.png', previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' }],
+      counter
+    )
+    expect(filled).toEqual([
+      { id: 'img-1', path: '/tmp/y.png', previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' }
+    ])
+    expect(dropUploadingNativeChatImages(placeholder)).toEqual([])
+    expect(dropUploadingNativeChatImages(filled)).toEqual(filled)
   })
 })

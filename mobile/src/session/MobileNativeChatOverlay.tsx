@@ -5,7 +5,7 @@ import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
@@ -19,6 +19,8 @@ type Props = {
    *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
   onMicPress: () => void
+  /** Runs before a composer send goes out: ends live dictation so the sent words do not come back. */
+  onBeforeSend?: () => void
   micActive: boolean
   micLevel?: number
   /** Steps the terminal to a permission mode (the mode sheet's pick). */
@@ -51,6 +53,7 @@ export function MobileNativeChatOverlay({
   onOpenFile,
   images,
   onMicPress,
+  onBeforeSend,
   micActive,
   micLevel,
   onSelectPermissionMode,
@@ -79,7 +82,11 @@ export function MobileNativeChatOverlay({
   // Confirmed queued photos cannot exist in history yet. Searching older pages
   // for them repeatedly changes the list window during a live reply.
   usePendingImageHistory(session, projectedQueue.pending, sendSurfaceId)
-  const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
+  const folded = useMemo(
+    () =>
+      foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(projectedQueue.pending)),
+    [projectedQueue.pending, session.messages]
+  )
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]
@@ -145,6 +152,7 @@ export function MobileNativeChatOverlay({
         onRemoveAttachment={images.removeAttachment}
         isAttaching={images.isAttaching}
         onMicPress={onMicPress}
+        onBeforeSend={onBeforeSend}
         micActive={micActive}
         micLevel={micLevel}
         contextWindow={controller.nativeChatContextWindow}
