@@ -55,6 +55,7 @@ export function MobileNativeChatListHeader({
       countRunningBackgroundTasks(messages, agentStatus ?? null, {
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
         runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
+        runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
         launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? []
       }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages]

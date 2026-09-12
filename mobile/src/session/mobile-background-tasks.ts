@@ -57,6 +57,11 @@ export type BackgroundTaskDeriveOptions = {
    *  agent has not answered yet — mid-turn, the Stop hook has not fired — and
    *  the transcript remains the only source. */
   runningTaskIds?: readonly string[] | null
+  /** When `runningTaskIds` arrived (phone clock, epoch ms). The Stop hook
+   *  speaks only when a turn ends, so that list cannot name a shell launched
+   *  after it: a launch newer than this time is not judged by it. Null or
+   *  absent means the time is unknown and the list judges every launch. */
+  runningTaskIdsAt?: number | null
   /** Shells the beacon saw launched in the transcript tail (`bg=`). One the
    *  loaded window never showed, with no notification and not in `done=`, is
    *  running — this is the transcript itself, read further back than the
@@ -179,7 +184,8 @@ export function deriveBackgroundTasks(
     hostStatus,
     position + 1,
     options.runningTaskIds ?? null,
-    options.launchedTaskIds ?? []
+    options.launchedTaskIds ?? [],
+    options.runningTaskIdsAt ?? null
   )
 }
 
@@ -190,7 +196,8 @@ function splitByStatus(
   hostStatus: BackgroundTaskHostStatus | null,
   afterTranscript: number,
   reportedRunning: readonly string[] | null,
-  reportedLaunched: readonly string[] = []
+  reportedLaunched: readonly string[] = [],
+  reportedRunningAt: number | null = null
 ): BackgroundTasks {
   const agentSaysRunning = reportedRunning === null ? null : new Set(reportedRunning)
   const running: BackgroundTask[] = []
@@ -212,11 +219,18 @@ function splitByStatus(
       // Why: an idle teammate is alive but not working, so it is not "running".
       const launchedBeforeRun =
         runStartedAt !== null && launch.startedAt !== null && launch.startedAt < runStartedAt
+      // Why the time check: on 2026-09-12 two shells launched mid-turn never
+      // reached the row. The `run=` the phone held was the previous turn's
+      // answer, which could not list shells that did not exist yet, and "not
+      // on the list" was read as "finished". An answer given before a launch
+      // says nothing about it.
+      const answeredBeforeLaunch =
+        reportedRunningAt !== null && launch.startedAt !== null && launch.startedAt > reportedRunningAt
       const hostSaysFinished =
         paneDone ||
         launchedBeforeRun ||
-        // The agent's own answer, when it has given one.
-        (agentSaysRunning !== null && !agentSaysRunning.has(launch.id)) ||
+        // The agent's own answer, when it has given one that postdates the launch.
+        (agentSaysRunning !== null && !answeredBeforeLaunch && !agentSaysRunning.has(launch.id)) ||
         (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
       if (hostSaysFinished) {
         finished.push({

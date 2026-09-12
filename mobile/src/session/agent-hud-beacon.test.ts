@@ -127,6 +127,23 @@ describe('finished task ids on the beacon', () => {
     expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude')?.doneTaskIds).toEqual([])
   })
 
+  it('remembers when the run= answer was given, and keeps it across status-line beacons', () => {
+    // The reader needs to know whether a launch came before or after the
+    // Stop hook spoke; a status-line beacon carries no run= and must not
+    // move that time.
+    resetAgentHudBeacons()
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude model=m bg=b1\x07')
+    expect(getAgentHudBeacon('h')?.runningTaskIdsAt).toBeNull()
+    const before = Date.now()
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude run=b1\x07')
+    const answeredAt = getAgentHudBeacon('h')?.runningTaskIdsAt ?? null
+    expect(answeredAt).not.toBeNull()
+    expect(answeredAt as number).toBeGreaterThanOrEqual(before)
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude model=m bg=b1,b2\x07')
+    expect(getAgentHudBeacon('h')?.runningTaskIds).toEqual(['b1'])
+    expect(getAgentHudBeacon('h')?.runningTaskIdsAt).toBe(answeredAt)
+  })
+
   it('reads the launched shell ids and keeps the last non-empty list across a beacon without one', () => {
     resetAgentHudBeacons()
     consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude bg=b1,b2 done=b1\x07')

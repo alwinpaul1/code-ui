@@ -660,6 +660,42 @@ describe('a tab opened after its turn ended with shells still running', () => {
     expect(countRunningBackgroundTasks([], monitoring, { runningTaskIds: idleTeammates })).toBe(0)
   })
 
+  // 2026-09-12, 13:52, this tab: two shells launched with run_in_background
+  // during a turn and the row stayed empty while both ran. The Stop hook only
+  // speaks when a turn ENDS, so the `run=` the phone held was the previous
+  // turn's answer — and it could not list a shell that did not exist yet. The
+  // reader read "not on the list" as "finished". An answer given before a
+  // launch says nothing about it.
+  it('does not let a run= answer from before the launch retire a shell launched this turn', () => {
+    const answeredAt = T0
+    const transcript = [
+      call('Bash', { command: 'sleep 150', description: 'Long background task', run_in_background: true }, T0 + 5_000),
+      result(backgroundStartOutput('bc875f3zo'), T0 + 5_500)
+    ]
+    const working = { state: 'working' as const, stateStartedAt: T0 + 1_000 }
+    const tasks = deriveBackgroundTasks(transcript, NOW, working, {
+      runningTaskIds: ['tma4w24hz'],
+      runningTaskIdsAt: answeredAt
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bc875f3zo'])
+    expect(
+      countRunningBackgroundTasks(transcript, working, { runningTaskIds: [], runningTaskIdsAt: answeredAt })
+    ).toBe(1)
+  })
+
+  it('still lets a run= answer given after the launch retire it', () => {
+    const transcript = [
+      call('Bash', { command: 'sleep 150', description: 'Long background task', run_in_background: true }, T0 + 5_000),
+      result(backgroundStartOutput('bc875f3zo'), T0 + 5_500)
+    ]
+    const tasks = deriveBackgroundTasks(transcript, NOW, { state: 'working', stateStartedAt: T0 + 1_000 }, {
+      runningTaskIds: [],
+      runningTaskIdsAt: T0 + 60_000
+    })
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => task.id)).toEqual(['bc875f3zo'])
+  })
+
   it('still lists a run= id the status line saw launched above the loaded window', () => {
     const tasks = deriveBackgroundTasks([], NOW, monitoring, {
       runningTaskIds: ['tma4w24hz', 'bajgl5wmo'],

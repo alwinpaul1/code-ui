@@ -50,6 +50,11 @@ export type AgentHudBeacon = {
    *  when this beacon did not carry the field, which is not the same as an
    *  empty list: empty means "nothing is running", null means "no answer". */
   runningTaskIds: string[] | null
+  /** When `runningTaskIds` was received (phone clock, epoch ms); null until a
+   *  beacon has carried `run=`. The Stop hook speaks only when a turn ends,
+   *  so its list cannot name a shell launched after it — the reader uses this
+   *  to keep an old answer from retiring a new launch. */
+  runningTaskIdsAt: number | null
   /** Every shell the transcript tail shows launched, from the status-line
    *  beacon on every refresh — fresh mid-turn, where `run=` is not. */
   launchedTaskIds: string[]
@@ -135,6 +140,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: values.has('run')
       ? (values.get('run') ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
       : null,
+    runningTaskIdsAt: values.has('run') ? receivedAt : null,
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
       .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
@@ -187,6 +193,8 @@ function publish(handle: string, payload: string): void {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
+        runningTaskIdsAt:
+          beacon.runningTaskIds !== null ? beacon.runningTaskIdsAt : (previous.runningTaskIdsAt ?? null),
         doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
         launchedTaskIds:
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,

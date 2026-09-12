@@ -31,6 +31,7 @@ function beacon(modelId: string): AgentHudBeacon {
     usedPercent: null,
     limits: [],
     doneTaskIds: [],
+    runningTaskIdsAt: null,
     receivedAt: 1
   }
 }
