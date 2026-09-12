@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
+import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -9,8 +10,7 @@ import {
 } from './mobile-native-chat-image-attachment'
 import {
   NO_NATIVE_CHAT_IMAGE_ATTACHMENTS,
-  withScopeAttachments,
-  type MobileNativeChatImagesByScope
+  withScopeAttachments
 } from './mobile-native-chat-image-scope-state'
 import {
   MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
@@ -116,7 +116,8 @@ export function useMobileNativeChatImageAttachments({
   onError,
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
-  const [attachmentsByScope, setAttachmentsByScope] = useState<MobileNativeChatImagesByScope>({})
+  const attachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.byScope)
+  const setAttachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.update)
   const idCounter = useRef(0)
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS

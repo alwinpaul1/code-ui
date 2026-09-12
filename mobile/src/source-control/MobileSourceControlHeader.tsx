@@ -1,14 +1,12 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ExternalLink, RefreshCw, X } from 'lucide-react-native'
+import { ChevronLeft, ExternalLink, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-source-control-styles'
 
 type Props = {
   embedded: boolean
   worktreeLabel: string
-  ioBusy: boolean
   onBack: () => void
-  onRefresh: () => void
   // When set (PR segment ready with a host URL), show open-on-web flush-right of
   // the title so the control stays visible while the PR body scrolls.
   onOpenPrWeb?: () => void
@@ -18,9 +16,7 @@ type Props = {
 export function MobileSourceControlHeader({
   embedded,
   worktreeLabel,
-  ioBusy,
   onBack,
-  onRefresh,
   onOpenPrWeb,
   prNumber = null
 }: Props) {
@@ -61,19 +57,6 @@ export function MobileSourceControlHeader({
           <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.1} />
         </Pressable>
       ) : null}
-      <Pressable
-        style={({ pressed }) => [
-          styles.refreshButton,
-          ioBusy && styles.refreshButtonDisabled,
-          pressed && styles.refreshButtonPressed
-        ]}
-        onPress={onRefresh}
-        disabled={ioBusy}
-        hitSlop={8}
-        accessibilityLabel="Refresh source control"
-      >
-        <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-      </Pressable>
     </View>
   )
 }

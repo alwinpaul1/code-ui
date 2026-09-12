@@ -49,7 +49,14 @@ export function MobileNativeChatImageStrip({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      // Why a fixed height and no clipping: the strip sits inside an inverted
+      // FlashList row, and a nested scroller whose height Android re-derives
+      // mid-scroll made the row grow and the next row draw over it
+      // (2026-09-13). The tiles are fixed-size, so the strip's height is known.
+      style={styles.imageStripFrame}
       contentContainerStyle={styles.imageStrip}
+      removeClippedSubviews={false}
+      nestedScrollEnabled
       testID="chat-image-strip"
     >
       {uris.map((uri, index) => (

@@ -94,38 +94,35 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  diffLineBlock: {
-    marginBottom: spacing.xs
-  },
+  // Rows run edge to edge with no gap or rail between them, the way the
+  // desktop draws a diff (2026-09-13: a margin plus a coloured left rail read
+  // as "each line in its own block" on the phone).
+  diffLineBlock: {},
   diffLine: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderLeftWidth: 2,
-    borderLeftColor: colors.editorSurface,
     paddingRight: spacing.sm
   },
   diffLineAdded: {
-    backgroundColor: colors.diffAddedBg,
-    borderLeftColor: colors.gitDecorationAdded
+    backgroundColor: colors.diffAddedBg
   },
   diffLineDeleted: {
-    backgroundColor: colors.diffDeletedBg,
-    borderLeftColor: colors.gitDecorationDeleted
+    backgroundColor: colors.diffDeletedBg
   },
   diffGutter: {
-    width: 42,
-    paddingRight: spacing.sm,
+    width: 40,
+    paddingRight: spacing.xs,
     textAlign: 'right',
     color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 22,
+    fontSize: 11,
+    lineHeight: 19,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
   },
   diffText: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 19,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
   },
   diffPrefix: {

@@ -3,6 +3,8 @@ import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
+const IMAGE_TILE_HEIGHT = 176
+
 export const TEXT_SIZE = 15
 export const MONO_SIZE = 12
 
@@ -204,6 +206,11 @@ export function makeChatMessageStyles(theme: Theme) {
     },
     // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
     // next one showing so the row reads as scrollable.
+    imageStripFrame: {
+      height: IMAGE_TILE_HEIGHT + space.xs * 2,
+      flexGrow: 0,
+      alignSelf: 'stretch'
+    },
     imageStrip: {
       flexDirection: 'row',
       gap: space.sm,
@@ -213,7 +220,7 @@ export function makeChatMessageStyles(theme: Theme) {
     // letterboxed screenshot read as "a box with a small image in it".
     imageTile: {
       width: 132,
-      height: 176,
+      height: IMAGE_TILE_HEIGHT,
       borderRadius: radius.lg
     },
     imageThumb: {

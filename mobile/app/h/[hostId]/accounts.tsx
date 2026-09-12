@@ -2,13 +2,11 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { RefreshCw } from 'lucide-react-native'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
 import { ScreenHeader } from '../../../src/ui/ScreenHeader'
-import { IconButton } from '../../../src/ui/IconButton'
 import { Txt } from '../../../src/ui/Txt'
 import {
   type AccountsSnapshot,
@@ -247,14 +245,6 @@ export default function AccountsScreen() {
         title="Accounts"
         subtitle={hostName || undefined}
         onBack={() => router.back()}
-        trailing={
-          <IconButton
-            icon={RefreshCw}
-            accessibilityLabel="Refresh accounts"
-            onPress={() => void refresh()}
-            disabled={!client || refreshing || connState !== 'connected'}
-          />
-        }
       />
       <ScrollView
         contentContainerStyle={{

@@ -1,3 +1,4 @@
+import type { MobilePullToRefresh } from '../../source-control/mobile-pull-to-refresh'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/mobile-theme'
@@ -17,6 +18,7 @@ type Props = {
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
   controller: MobilePrSidebarController
+  pullToRefresh?: MobilePullToRefresh
 }
 
 // Chromeless PR sidebar body for the source-control hub's Pull Request segment.
@@ -31,7 +33,8 @@ export function MobilePrViewPanelBody({
   gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
-  controller
+  controller,
+  pullToRefresh
 }: Props) {
   const insets = useSafeAreaInsets()
 
@@ -64,6 +67,7 @@ export function MobilePrViewPanelBody({
         bottomInset={insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
+        pullToRefresh={pullToRefresh}
       />
     </View>
   )

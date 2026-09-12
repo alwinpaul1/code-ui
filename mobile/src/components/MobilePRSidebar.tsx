@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
+import type { MobilePullToRefresh } from '../source-control/mobile-pull-to-refresh'
 import { RotateCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
@@ -42,6 +43,7 @@ type Props = {
   bottomInset?: number
   // Hub chrome already shows open-on-web; hide the in-body icon there.
   showOpenOnWeb?: boolean
+  pullToRefresh?: MobilePullToRefresh
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
@@ -56,7 +58,8 @@ export function MobilePRSidebar({
   gitStatus,
   headSha,
   bottomInset = 0,
-  showOpenOnWeb = true
+  showOpenOnWeb = true,
+  pullToRefresh
 }: Props) {
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
@@ -107,6 +110,16 @@ export function MobilePRSidebar({
       // area; without keyboard insets the focused field stays under the keyboard.
       automaticallyAdjustKeyboardInsets
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        pullToRefresh ? (
+          <RefreshControl
+            refreshing={pullToRefresh.refreshing}
+            onRefresh={pullToRefresh.onRefresh}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+          />
+        ) : undefined
+      }
     >
       <PrSidebarContent
         branch={branch}

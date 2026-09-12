@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
+import type { MobilePullToRefresh } from './mobile-pull-to-refresh'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
@@ -22,6 +23,7 @@ type Props = {
   bottomInset: number
   // Bumped by the hub header refresh so History reloads without remounting.
   refreshNonce?: number
+  pullToRefresh?: MobilePullToRefresh
 }
 
 // Headerless commit-history list. Extracted from the /history route so the hub's
@@ -34,7 +36,8 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   worktreeId,
   hostId,
   bottomInset,
-  refreshNonce = 0
+  refreshNonce = 0,
+  pullToRefresh
 }: Props) {
   const forceReconnect = useForceReconnect()
   const [rows, setRows] = useState<MobileCommitRow[] | null>(null)
@@ -220,6 +223,16 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       renderItem={renderCommit}
       keyExtractor={(row) => row.id}
       contentContainerStyle={{ paddingBottom: spacing.lg + bottomInset }}
+      refreshControl={
+        pullToRefresh ? (
+          <RefreshControl
+            refreshing={pullToRefresh.refreshing}
+            onRefresh={pullToRefresh.onRefresh}
+            tintColor={colors.textSecondary}
+            colors={[colors.textSecondary]}
+          />
+        ) : undefined
+      }
     />
   )
 })

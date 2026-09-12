@@ -101,8 +101,6 @@ export function MobileSourceControlPanel({
     worktreeLabel,
     screenState,
     busyAction,
-    openingPath,
-    openingBranchPath,
     loadStatus,
     status,
     branchCompareResult,
@@ -113,7 +111,6 @@ export function MobileSourceControlPanel({
     branchEntries,
     abortConflictOperation
   } = state
-  const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
   const ready = screenState.kind === 'ready'
 
   // Keep last-known branch/head across a transient status unload so the PR controller isn't wiped ready → hidden → cold start.
@@ -197,8 +194,12 @@ export function MobileSourceControlPanel({
   }, [isHostedRepo, prBranch, prController.prSidebarState])
 
   // Refresh the active segment plus git.status (branch card stays honest on History); preserve ready on failure so the PR chip isn't wiped.
+  // Pull-to-refresh on every segment (2026-09-13); the header button it
+  // replaces is gone. The spinner stays until git.status has answered.
+  const [refreshing, setRefreshing] = useState(false)
   const onRefresh = useCallback(() => {
-    void loadStatus({ preserveReadyOnFailure: true })
+    setRefreshing(true)
+    void loadStatus({ preserveReadyOnFailure: true }).finally(() => setRefreshing(false))
     if (activeTab === 'history') {
       setHistoryRefreshNonce((n) => n + 1)
       return
@@ -213,6 +214,7 @@ export function MobileSourceControlPanel({
     // Changes: light chip refresh so the branch card stays current without comments.
     void refetchPr({ includeDetails: false })
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
+  const pullToRefresh = useMemo(() => ({ refreshing, onRefresh }), [refreshing, onRefresh])
 
   // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip safe-area chrome (the dock column owns it).
   const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
@@ -229,9 +231,7 @@ export function MobileSourceControlPanel({
     <MobileSourceControlHeader
       embedded={embedded}
       worktreeLabel={worktreeLabel}
-      ioBusy={ioBusy}
       onBack={onBack}
-      onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
     />
@@ -307,7 +307,7 @@ export function MobileSourceControlPanel({
 
       {showChanges ? (
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
-          <MobileSourceControlContent state={state} />
+          <MobileSourceControlContent state={state} pullToRefresh={pullToRefresh} />
         </View>
       ) : activeTab === 'changes' ? (
         statusGate
@@ -326,6 +326,7 @@ export function MobileSourceControlPanel({
             // Gate on the probe too: isGithubRepo=false mid-probe must render loading, not flash "unavailable".
             branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
             controller={prController}
+            pullToRefresh={pullToRefresh}
           />
         </View>
       ) : activeTab === 'pr' ? (
@@ -341,6 +342,7 @@ export function MobileSourceControlPanel({
             hostId={hostId}
             bottomInset={insets.bottom}
             refreshNonce={historyRefreshNonce}
+            pullToRefresh={pullToRefresh}
           />
         </View>
       ) : null}

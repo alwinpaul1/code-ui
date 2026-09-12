@@ -1,6 +1,7 @@
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   SectionList,
   Text,
@@ -14,16 +15,18 @@ import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
+import type { MobilePullToRefresh } from './mobile-pull-to-refresh'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
   state: MobileSourceControlState
+  pullToRefresh?: MobilePullToRefresh
 }
 
 // Changes tab: local file changes only — uncommitted (staged/unstaged) plus
 // committed-on-branch vs base. PR conflicts and push status live elsewhere.
-export function MobileSourceControlContent({ state }: Props) {
+export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
   const {
     insets,
     connState,
@@ -55,6 +58,14 @@ export function MobileSourceControlContent({ state }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  const refreshControl = pullToRefresh ? (
+    <RefreshControl
+      refreshing={pullToRefresh.refreshing}
+      onRefresh={pullToRefresh.onRefresh}
+      tintColor={colors.textSecondary}
+      colors={[colors.textSecondary]}
+    />
+  ) : undefined
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
@@ -156,12 +167,17 @@ export function MobileSourceControlContent({ state }: Props) {
       ) : sections.length === 0 ? (
         // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
         // which hid "Committed on Branch" when only branch files remain.
-        <ScrollView style={hubStyles.tabBody} contentContainerStyle={styles.listContent}>
+        <ScrollView
+          style={hubStyles.tabBody}
+          contentContainerStyle={styles.listContent}
+          refreshControl={refreshControl}
+        >
           {branchCompareFooter}
         </ScrollView>
       ) : (
         <SectionList
           style={hubStyles.tabBody}
+          refreshControl={refreshControl}
           sections={sections}
           renderItem={makeRenderFileRow({
             busyAction,

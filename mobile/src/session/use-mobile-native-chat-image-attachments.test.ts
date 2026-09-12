@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -49,6 +50,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     // screen), so they also outlive a test.
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
+    useNativeChatImageAttachmentsStore.getState().reset()
   })
   afterEach(() => {
     act(() => renderer?.unmount())
