@@ -49,10 +49,13 @@ export type BackgroundTaskDeriveOptions = {
    *  reads that transcript on every refresh and beacons the ids within seconds. */
   finishedTaskIds?: readonly string[]
   /** What the agent itself says is still running, from its Stop hook beacon.
-   *  When present this OUTRANKS the transcript: a launch missing from it has
-   *  ended, whatever the transcript does or does not record. Null or absent
-   *  means the agent has not answered yet — mid-turn, the Stop hook has not
-   *  fired — and the transcript remains the only source. */
+   *  When present this OUTRANKS the transcript for retiring: a launch missing
+   *  from it has ended, whatever the transcript does or does not record. It
+   *  does not ADD on its own — an id here that no launch record (the loaded
+   *  window or `launchedTaskIds`) ever showed is not listed, because the Stop
+   *  payload also calls an idle teammate `running`. Null or absent means the
+   *  agent has not answered yet — mid-turn, the Stop hook has not fired — and
+   *  the transcript remains the only source. */
   runningTaskIds?: readonly string[] | null
   /** Shells the beacon saw launched in the transcript tail (`bg=`). One the
    *  loaded window never showed, with no notification and not in `done=`, is
@@ -237,10 +240,19 @@ function splitByStatus(
     })
   }
   // A task the agent reports but the loaded transcript never showed: launched
-  // before the page the phone holds, or paginated out of it.
+  // before the page the phone holds, or paginated out of it — provided the
+  // status line's `bg=` DID see it launched, further up the same transcript.
+  // Why the second condition: Claude Code's Stop payload calls a teammate
+  // `running` for as long as it exists, idle included, and nothing ever
+  // launches a teammate as a task. On 2026-09-12 four council reviewers a day
+  // idle became "4 running tasks" on the phone while the desk showed none.
+  // The hook now skips teammates, but a tab keeps the hook it was launched
+  // with, so the reader holds the line too: an id nobody saw launched is not
+  // shown. Prefer refusing over guessing — a bare id was never a useful row.
+  const seenLaunched = new Set(reportedLaunched)
   if (agentSaysRunning) {
     for (const id of agentSaysRunning) {
-      if (launches.has(id) || notifications.has(id)) {
+      if (launches.has(id) || notifications.has(id) || !seenLaunched.has(id)) {
         continue
       }
       running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })

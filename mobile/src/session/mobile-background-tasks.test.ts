@@ -635,8 +635,37 @@ describe('a tab opened after its turn ended with shells still running', () => {
   it('stands down as soon as the agent answers, even with an empty answer', () => {
     expect(deriveBackgroundTasks([], NOW, monitoring, { runningTaskIds: [] }).running).toEqual([])
     expect(
-      deriveBackgroundTasks([], NOW, monitoring, { runningTaskIds: ['t1'] }).running.map((task) => task.id)
-    ).toEqual(['t1'])
+      deriveBackgroundTasks([], NOW, monitoring, { runningTaskIds: ['b1'], launchedTaskIds: ['b1'] })
+        .running.map((task) => task.id)
+    ).toEqual(['b1'])
+  })
+
+  // 2026-09-12, Claude Code 2.1.268: four council reviewers spawned as
+  // teammates a day earlier and idle since. The Stop payload calls a teammate
+  // `running` for as long as it exists, so a tab launched with the older hook
+  // beacons `run=tma4w24hz,tkjnlai2k,t1fe406gg,tcwll1evo` at every Stop. No
+  // transcript record ever launched them and the status line's `bg=` never
+  // saw them — nothing did, because a teammate is not launched as a task. The
+  // phone drew "4 running tasks", each a Shell titled by its bare id, while
+  // the desk showed none. The hook now skips teammates, but a tab that is
+  // already running keeps the hook it was launched with, so the reader must
+  // hold the line too: an id nobody saw launched is not a task.
+  it('shows nothing for a run= id that neither the transcript nor bg= saw launched', () => {
+    const idleTeammates = ['tma4w24hz', 'tkjnlai2k', 't1fe406gg', 'tcwll1evo']
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      runningTaskIds: idleTeammates,
+      launchedTaskIds: []
+    })
+    expect(tasks.running).toEqual([])
+    expect(countRunningBackgroundTasks([], monitoring, { runningTaskIds: idleTeammates })).toBe(0)
+  })
+
+  it('still lists a run= id the status line saw launched above the loaded window', () => {
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      runningTaskIds: ['tma4w24hz', 'bajgl5wmo'],
+      launchedTaskIds: ['bajgl5wmo']
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
   })
 
   it('adds nothing when the window already shows a launch, or when the pane is done', () => {

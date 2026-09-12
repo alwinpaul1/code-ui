@@ -67,11 +67,25 @@ describe('who decides which background tasks are running', () => {
     expect(derived.running.map((task) => task.id)).toEqual(['bAAA'])
   })
 
-  it('shows a task the agent reports that the loaded transcript never showed', () => {
-    // Launched before the page the phone holds, or paginated out of it.
-    const derived = deriveBackgroundTasks([], T0 + 60_000, null, { runningTaskIds: ['bZZZ'] })
+  it('shows a task the agent reports that the loaded transcript never showed, once bg= vouches for it', () => {
+    // Launched before the page the phone holds, or paginated out of it: the
+    // status line's `bg=` reads the same transcript 4 MiB further back and is
+    // the launch record the window lacks.
+    const derived = deriveBackgroundTasks([], T0 + 60_000, null, {
+      runningTaskIds: ['bZZZ'],
+      launchedTaskIds: ['bZZZ']
+    })
 
     expect(derived.running.map((task) => task.id)).toEqual(['bZZZ'])
+  })
+
+  it('does not show a run= id that nothing ever launched', () => {
+    // 2026-09-12: the Stop payload calls an idle teammate `running`, and no
+    // record anywhere launches a teammate as a task. Four of them read as
+    // "4 running tasks" on the phone while the desk showed none.
+    const derived = deriveBackgroundTasks([], T0 + 60_000, null, { runningTaskIds: ['tma4w24hz'] })
+
+    expect(derived.running).toEqual([])
   })
 
   it('still retires a task the beacon already reported finished', () => {
