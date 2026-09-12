@@ -162,7 +162,11 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
-  const interimIds = useMemo(() => interimAssistantMessageIds(data), [data])
+  // Over the transcript, not `data`: a message the phone sent mid-turn sits
+  // in `data` as an echo the agent absorbed without a user record, and it
+  // must not end the turn — the Claude app keeps the note before it in a
+  // quote block (2026-09-13).
+  const interimIds = useMemo(() => interimAssistantMessageIds(folded), [folded])
   // Labels say "today" or a weekday relative to now; five minutes keeps a
   // divider honest across midnight without churning the rows.
   const dividerNow = useNow(5 * 60_000)

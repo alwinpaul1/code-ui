@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildMobileNativeChatFileNotes,
   isPendingNativeChatFile,
+  stripMobileNativeChatFileNotes,
   withMobileNativeChatFileNotes
 } from './mobile-native-chat-file-attachment'
 
@@ -33,5 +34,17 @@ describe('mobile native chat file attachments', () => {
     )
     expect(withMobileNativeChatFileNotes('   ', [pdf])).toBe(buildMobileNativeChatFileNotes([pdf]))
     expect(withMobileNativeChatFileNotes('hi', [image])).toBe('hi')
+  })
+
+  // 2026-09-13: a screen recording sent with a sentence left the sentence in
+  // the composer, because the draft clear compared the note-led body to it.
+  it('gives back the typed text out of a sent body led by file notes', () => {
+    const body = withMobileNativeChatFileNotes('When a keyboard is open\nthe scroll is odd', [pdf])
+    expect(stripMobileNativeChatFileNotes(body)).toBe('When a keyboard is open\nthe scroll is odd')
+    expect(stripMobileNativeChatFileNotes(withMobileNativeChatFileNotes('', [pdf]))).toBe('')
+    expect(stripMobileNativeChatFileNotes('plain text')).toBe('plain text')
+    expect(stripMobileNativeChatFileNotes('Attached file "x" I mention in passing\n\nok')).toBe(
+      'Attached file "x" I mention in passing\n\nok'
+    )
   })
 })

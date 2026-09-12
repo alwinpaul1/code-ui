@@ -45,3 +45,26 @@ export function withMobileNativeChatFileNotes(
   const body = text.trim()
   return body ? `${notes}\n\n${body}` : notes
 }
+
+const FILE_NOTE_LINE = /^Attached file ".*" is on this machine at .* before reading it\.$/
+
+/** The user's own text out of a sent body that `withMobileNativeChatFileNotes`
+ *  built, so the composer can match and clear its draft (2026-09-13: with a
+ *  video attached the sent body was note + text, the draft was just the text,
+ *  and the text stayed in the box after sending). Unchanged when no note leads. */
+export function stripMobileNativeChatFileNotes(text: string): string {
+  const lines = text.split('\n')
+  let count = 0
+  while (count < lines.length && FILE_NOTE_LINE.test(lines[count] as string)) {
+    count += 1
+  }
+  if (count === 0) {
+    return text
+  }
+  const rest = lines.slice(count)
+  if (rest.length === 0) {
+    return ''
+  }
+  // `withMobileNativeChatFileNotes` joins with one blank line.
+  return rest[0] === '' ? rest.slice(1).join('\n') : rest.join('\n')
+}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import {
   collectHostImagePaths,
   mergeImagePreviews,
@@ -12,6 +13,20 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('collectHostImagePaths', () => {
+  // 2026-09-13: the Read call lives in its own transcript record; only the
+  // folded message carries the id the view keys previews by.
+  it('keys an agent read image by the folded message it lands in', () => {
+    const raw: NativeChatMessage[] = [
+      { id: 'a1', role: 'assistant', blocks: [{ type: 'text', text: 'Looking.' }] } as NativeChatMessage,
+      {
+        id: 'a2',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', id: 'c1', name: 'Read', input: { file_path: '/repo/shot.png' } }]
+      } as NativeChatMessage
+    ]
+    expect(collectHostImagePaths(foldMobileNativeChatMessages(raw))).toEqual({ a1: ['/repo/shot.png'] })
+  })
+
   // Claude app, 2026-09-12: the screenshots an agent Read show as thumbnails
   // under its fold row. The transcript has no image block for a Read, so the
   // path from the tool call is what the phone can fetch a thumbnail of.

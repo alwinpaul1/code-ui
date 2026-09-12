@@ -1,3 +1,4 @@
+import { stripMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
@@ -180,21 +181,25 @@ export function useMobileNativeChatDrafts(args: {
   // Why: over relay the send RPC can take seconds (or lose only its ack), and a
   // composer that waits for settlement to empty reads as "my prompt didn't
   // send". Clear at send time; a definite rejection restores the text below.
+  // A document rides along as a note ahead of the text; the draft is only the
+  // text, so match and restore that part.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    const draftText = stripMobileNativeChatFileNotes(text)
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
-      (previous[origin.draftKey] ?? '') === text
+      (previous[origin.draftKey] ?? '') === draftText
         ? { ...previous, [origin.draftKey]: '' }
         : previous
     )
   }, [])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    const draftText = stripMobileNativeChatFileNotes(text)
     // Why: never clobber text the user typed while the rejection was in flight.
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
       (previous[origin.draftKey] ?? '') === ''
-        ? { ...previous, [origin.draftKey]: text }
+        ? { ...previous, [origin.draftKey]: draftText }
         : previous
     )
   }, [])

@@ -108,22 +108,9 @@ export function MobileNativeChatQueue({
                 {index + 1}
               </Txt>
               {images.length ? (
-                <View style={{ width: 48, gap: space.xs }}>
-                  {images.map((uri, imageIndex) => (
-                    <Pressable
-                      key={`${imageIndex}:${uri}`}
-                      accessibilityRole="imagebutton"
-                      accessibilityLabel={`Preview image ${imageIndex + 1} in queued message ${index + 1}`}
-                      onPress={() => openImagePreview(uri, 'Queued image')}
-                    >
-                      <Image
-                        source={{ uri }}
-                        resizeMode="contain"
-                        style={{ width: 48, height: 48, borderRadius: radius.sm }}
-                      />
-                    </Pressable>
-                  ))}
-                </View>
+                // Several photos scroll sideways, as they do in the sent bubble
+                // (2026-09-13); one stays a single thumbnail.
+                <QueuedImages images={images} index={index} />
               ) : null}
               <View style={{ flex: 1, gap: space.xs }}>
                 {parsed.text ? (
@@ -160,5 +147,41 @@ export function MobileNativeChatQueue({
         })}
       </ScrollView>
     </View>
+  )
+}
+
+function QueuedImages({ images, index }: { images: string[]; index: number }) {
+  const { space, radius } = useTheme()
+  const tiles = images.map((uri, imageIndex) => (
+    <Pressable
+      key={`${imageIndex}:${uri}`}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={`Preview image ${imageIndex + 1} in queued message ${index + 1}`}
+      onPress={() =>
+        images.length > 1
+          ? openImagePreview(images, 'Queued image', imageIndex)
+          : openImagePreview(uri, 'Queued image')
+      }
+    >
+      <Image
+        source={{ uri }}
+        resizeMode="cover"
+        style={{ width: 48, height: 64, borderRadius: radius.sm }}
+      />
+    </Pressable>
+  ))
+  if (images.length === 1) {
+    return <View style={{ width: 48 }}>{tiles}</View>
+  }
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={{ maxWidth: 156, flexGrow: 0 }}
+      contentContainerStyle={{ gap: space.xs }}
+      testID="queued-image-strip"
+    >
+      {tiles}
+    </ScrollView>
   )
 }

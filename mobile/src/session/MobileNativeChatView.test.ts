@@ -424,6 +424,25 @@ describe('MobileNativeChatView', () => {
       return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
     }
 
+    // Claude app, 2026-09-13: "Found the bug: …" kept its quote bar even though
+    // the phone sent a message mid-turn — that message is an echo, not a turn.
+    it('keeps a note in its quote block when only a mid-turn echo follows it', async () => {
+      const tools: NativeChatMessage = {
+        id: 't1',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', id: 'c1', name: 'Bash', input: {} }],
+        timestamp: 0,
+        source: 'hook'
+      }
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'Found the bug'), tools]
+      await render({
+        messages: folded,
+        folded,
+        pending: [{ id: 'pending-1', text: 'When I close the app' }]
+      })
+      expect(rowProps('a1').interim).toBe(true)
+    })
+
     it('gives the live user turn a status row and drops the three-dot indicator', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })

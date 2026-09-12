@@ -150,3 +150,29 @@ it('sends the pasted path row as drawn when a photo was queued from the desktop'
   expect(onEdit).toHaveBeenCalledExactlyOnceWith(0, `${path} See this`)
   await act(async () => renderer!.unmount())
 })
+
+// 2026-09-13: a queued message with several photos lays them out sideways,
+// like the sent bubble does, and a tap opens the viewer on that photo.
+it('scrolls a queued message with several images sideways and pages the viewer', async () => {
+  const messages = [
+    {
+      text: 'three shots',
+      images: ['file:///a.png', 'file:///b.png', 'file:///c.png'],
+      caption: 'three shots'
+    }
+  ]
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(MobileNativeChatQueue, { messages }))
+  })
+  const strip = renderer!.root.findByProps({ testID: 'queued-image-strip' })
+  expect(strip.props.horizontal).toBe(true)
+  expect(renderer!.root.findAllByType('Image')).toHaveLength(3)
+  act(() => renderer!.root.findByProps({ accessibilityLabel: 'Preview image 2 in queued message 1' }).props.onPress())
+  expect(openImagePreview).toHaveBeenCalledWith(
+    ['file:///a.png', 'file:///b.png', 'file:///c.png'],
+    'Queued image',
+    1
+  )
+  act(() => renderer!.unmount())
+})

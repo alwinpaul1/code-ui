@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { normalizeMobileFilePreviewResponse } from '../files/mobile-file-preview-response'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import {
   isImageRefBlock,
@@ -195,8 +196,19 @@ export function useHostImagePreviews(args: {
   const { terminalHandleRef } = args
   const tabId = nativeChatContext?.tabId
   const sessionId = nativeChatContext?.sessionId
+  // Folded, not raw: a Read call sits in its own transcript record and the
+  // fold merges it into the preceding assistant message, whose id is the one
+  // the view keys previews by (2026-09-13: no agent-read thumbnail ever
+  // showed). The filter keeps a half-built message from a stubbed session
+  // out of the fold.
   const wanted = useMemo(
-    () => (enabled ? collectHostImagePaths(messages, localPreviews) : {}),
+    () =>
+      enabled
+        ? collectHostImagePaths(
+            foldMobileNativeChatMessages(messages.filter((m) => Array.isArray(m.blocks))),
+            localPreviews
+          )
+        : {},
     [enabled, localPreviews, messages]
   )
   const [loaded, setLoaded] = useState<Record<string, string>>({})
