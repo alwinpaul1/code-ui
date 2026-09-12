@@ -165,6 +165,45 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(effort?.kind).not.toMatchObject({ currentValue: 'low' })
   })
 
+  // 2026-09-12 on the phone: Opus at extra high, switch to Fable from the
+  // pill, pick Medium in the drawer that follows — and the pill kept reading
+  // the old level. Two flows, both must land on the pick.
+  it('shows the effort picked right after a model switch', async () => {
+    mount({ reportedModel: 'claude-opus-5', reportedEffort: 'xhigh' })
+    await act(async () => {
+      await api!.setOption('model', 'fable')
+    })
+    await act(async () => {
+      await api!.setOption('effort', 'medium')
+    })
+    expect(dispatchCommand).toHaveBeenLastCalledWith('/effort medium')
+    const effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort!.kind).toMatchObject({ currentValue: 'medium' })
+  })
+
+  it('does not let the status line\'s pre-pick effort, arriving late, revert the pick', async () => {
+    mount({ reportedModel: 'claude-opus-5', reportedEffort: 'xhigh' })
+    await act(async () => {
+      await api!.setOption('model', 'fable')
+    })
+    await act(async () => {
+      await api!.setOption('effort', 'medium')
+    })
+    // The status line repaints for the model switch a beat later, still
+    // carrying the effort from before `/effort medium` was sent.
+    update({ reportedModel: 'claude-fable-5-1', reportedEffort: 'xhigh' })
+    let effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort!.kind).toMatchObject({ currentValue: 'medium' })
+    // Once it repaints with the pick, the report and the pick agree.
+    update({ reportedModel: 'claude-fable-5-1', reportedEffort: 'medium' })
+    effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort!.kind).toMatchObject({ currentValue: 'medium' })
+    // And a genuinely new effort from the agent later still wins.
+    update({ reportedModel: 'claude-fable-5-1', reportedEffort: 'high' })
+    effort = api!.snapshot.find((descriptor) => descriptor.id === 'effort')
+    expect(effort!.kind).toMatchObject({ currentValue: 'high' })
+  })
+
   it('does not revive a stale session-start report over a newer local pick', async () => {
     mount({ reportedModel: 'claude-sonnet-5' })
     await act(async () => {

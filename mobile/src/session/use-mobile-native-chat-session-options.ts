@@ -1,5 +1,6 @@
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { resetEffortReportGateForTests, shouldApplyReportedEffort } from './native-chat-effort-report-gate'
 import {
   mergeStoredSessionOptionRecord,
   readSessionOptionRecord,
@@ -66,8 +67,7 @@ const hydratedScopes = new Set<string>()
 
 /** Test-only: the module caches outlive a single test's hooks. */
 export function resetMobileNativeChatSessionOptionRecordsForTests(): void {
-  recordsByScope.clear()
-  appliedReportByScope.clear()
+  clearMobileSessionOptionRecordsForTests()
   hydratedScopes.clear()
 }
 
@@ -97,6 +97,7 @@ function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOpti
 export function clearMobileSessionOptionRecordsForTests(): void {
   recordsByScope.clear()
   appliedReportByScope.clear()
+  resetEffortReportGateForTests()
 }
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
@@ -260,10 +261,15 @@ export function useMobileNativeChatSessionOptions(args: {
     }
     appliedReportByScope.set(scopeKey, reportKey)
     const record = getScopedRecord(scopeKey, agent)
+    const applyEffort = shouldApplyReportedEffort({
+      scopeKey,
+      reportedEffort,
+      pickedSource: getTrackedSessionOption(record, matched, 'effort')?.source ?? null
+    })
     if (
       applyNativeChatReportedSessionOptions(record, {
         model: matched,
-        ...(reportedEffort ? { effort: reportedEffort } : {})
+        ...(applyEffort && reportedEffort ? { effort: reportedEffort } : {})
       })
     ) {
       bump()
