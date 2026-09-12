@@ -46,7 +46,9 @@ export function makeMarkdownStyles(theme: Theme) {
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 2,
       color: colors.text,
-      backgroundColor: colors.codeBg,
+      // Translucent, so a selection's highlight shows through the chip; an
+      // opaque one made every `code` span read as unselected (2026-09-12).
+      backgroundColor: colors.codeSpanBg,
       borderRadius: radius.xs,
       paddingHorizontal: 4
     },

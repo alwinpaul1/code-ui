@@ -40,6 +40,11 @@ export type ThemeColors = {
   userBubble: string
   userBubbleText: string
   codeBg: string
+  /** Inline `code` chips inside prose. Translucent on purpose: Android draws a
+   *  text selection BEHIND the text, so an opaque span background hides the
+   *  highlight and the code reads as the one thing that did not select
+   *  (reported 2026-09-12). */
+  codeSpanBg: string
   diffAddBg: string
   diffAddText: string
   diffDelBg: string
@@ -75,6 +80,7 @@ export const lightColors: ThemeColors = {
   userBubble: '#E6E2D7',
   userBubbleText: '#1E1C19',
   codeBg: '#ECE9E0',
+  codeSpanBg: 'rgba(30, 28, 25, 0.08)',
   diffAddBg: 'rgba(59, 138, 90, 0.14)',
   diffAddText: '#2F7A4D',
   diffDelBg: 'rgba(192, 57, 43, 0.12)',
@@ -109,6 +115,7 @@ export const darkColors: ThemeColors = {
   userBubble: '#2E2B26',
   userBubbleText: '#ECE9E2',
   codeBg: '#26231F',
+  codeSpanBg: 'rgba(236, 233, 226, 0.12)',
   diffAddBg: 'rgba(95, 181, 127, 0.14)',
   diffAddText: '#7FCB9B',
   diffDelBg: 'rgba(224, 108, 91, 0.14)',
