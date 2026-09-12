@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 
@@ -47,6 +47,9 @@ describe('agent prose the reader wants to copy', () => {
     })
     const selectable: string[] = []
     const fixed: string[] = []
+    // A span nested in a selectable Text is selectable with it.
+    const inSelectable = (node: ReactTestInstance | null): boolean =>
+      node != null && (node.props.selectable === true || inSelectable(node.parent))
     for (const node of renderer!.root.findAllByType('Text' as never)) {
       const text = node.children
         .map((child) => (typeof child === 'string' ? child : ''))
@@ -55,7 +58,7 @@ describe('agent prose the reader wants to copy', () => {
       if (!text) {
         continue
       }
-      ;(node.props.selectable === true ? selectable : fixed).push(text)
+      ;(inSelectable(node) ? selectable : fixed).push(text)
     }
     return { selectable, fixed }
   }
@@ -67,6 +70,31 @@ describe('agent prose the reader wants to copy', () => {
     const { selectable, fixed } = textsBySelectability()
     expect(selectable.some((text) => text.includes('Two safety details'))).toBe(true)
     expect(fixed.some((text) => text.includes('Two safety details'))).toBe(false)
+  })
+
+  it('lets one selection span neighbouring paragraphs and their heading', () => {
+    // Why: Android confines a selection to one Text; with a Text per
+    // paragraph the reader could select a paragraph but never the next one
+    // (2026-09-12, screenshot). Consecutive prose is one selectable Text.
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: ['## Cause', '', 'First paragraph here.', '', 'Second paragraph here.'].join('\n')
+        })
+      )
+    })
+    const selectableTexts = renderer!.root
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.selectable === true)
+    expect(selectableTexts).toHaveLength(1)
+    const flat = selectableTexts[0]!
+      .findAll(() => true)
+      .flatMap((node) => node.children)
+      .filter((child): child is string => typeof child === 'string')
+      .join('')
+    expect(flat).toContain('Cause')
+    expect(flat).toContain('First paragraph here.')
+    expect(flat).toContain('Second paragraph here.')
   })
 
   it('lets the reader select a heading, a quote, a fence, a table cell and a list item', () => {

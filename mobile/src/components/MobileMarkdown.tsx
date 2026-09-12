@@ -191,17 +191,55 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   }
   const mermaidSourceOccurrences = new Map<string, number>()
 
+  // Why one Text per run: Android confines a selection to a single Text node,
+  // so a reader could select one paragraph but never the next (2026-09-12,
+  // screenshot). Consecutive paragraphs and headings become one selectable
+  // Text, headings as nested styled spans and a blank line between blocks;
+  // quotes, lists, fences, tables and images still start a new run.
+  type Block = (typeof blocks)[number]
+  type ProseBlock = Extract<Block, { type: 'paragraph' | 'heading' }>
+  type Run = { start: number; blocks: Block[]; prose: ProseBlock[] | null }
+  const runs: Run[] = []
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!
+    const last = runs.at(-1)
+    if (block.type === 'paragraph' || block.type === 'heading') {
+      if (last?.prose && last.start + last.blocks.length === index) {
+        last.blocks.push(block)
+        last.prose.push(block)
+      } else {
+        runs.push({ start: index, blocks: [block], prose: [block] })
+      }
+    } else {
+      runs.push({ start: index, blocks: [block], prose: null })
+    }
+  }
+
   return (
     <View style={styles.root}>
-      {blocks.map((block, index) => {
-        if (block.type === 'heading') {
+      {runs.map((run) => {
+        const index = run.start
+        const block = run.blocks[0]!
+        if (run.prose) {
           return (
-            <Text
-              key={index}
-              selectable
-              style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
-            >
-              {renderInline(styles, block.text, onOpenFile)}
+            <Text key={index} selectable style={[styles.paragraph, proseScale]}>
+              {run.prose.map((member, memberIndex) => (
+                <Fragment key={memberIndex}>
+                  {memberIndex > 0 ? '\n\n' : null}
+                  {member.type === 'heading' ? (
+                    <Text style={[styles.heading, member.level <= 2 ? styles.headingLarge : null]}>
+                      {renderInline(styles, member.text, onOpenFile)}
+                    </Text>
+                  ) : (
+                    member.text.split('\n').map((line, lineIndex) => (
+                      <Fragment key={lineIndex}>
+                        {lineIndex > 0 ? '\n' : null}
+                        {renderInline(styles, line, onOpenFile)}
+                      </Fragment>
+                    ))
+                  )}
+                </Fragment>
+              ))}
             </Text>
           )
         }
@@ -331,19 +369,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         if (block.type === 'rule') {
           return <View key={index} style={styles.rule} />
         }
-        // Why selectable: this is the body prose — the block every other kind
-        // already allowed the reader to select. Reported 2026-09-11 on a tablet:
-        // a long press on an answer selected nothing while its table did.
-        return (
-          <Text key={index} selectable style={[styles.paragraph, proseScale]}>
-            {block.text.split('\n').map((line, lineIndex) => (
-              <Fragment key={lineIndex}>
-                {lineIndex > 0 ? '\n' : null}
-                {renderInline(styles, line, onOpenFile)}
-              </Fragment>
-            ))}
-          </Text>
-        )
+        return null
       })}
     </View>
   )
