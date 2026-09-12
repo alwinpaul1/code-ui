@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { INLINE_CODE_CHIP_MAX_CHARS, MobileMarkdown, isInlineCodeChip } from './MobileMarkdown'
+import { MobileMarkdown, isInlineCodeChip } from './MobileMarkdown'
+import { INLINE_CODE_CHIP_MAX_CHARS } from './mobile-markdown-code-chip-split'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -14,9 +15,9 @@ vi.mock('react-native', () => ({
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 
 // 2026-09-12: the user wants inline code as in the Claude app — a rounded,
-// bordered "squircle" chip. Android cannot round a nested Text's background,
-// so a short span is a real inline View; a long one must still wrap, so it
-// stays a nested Text.
+// bordered "squircle" chip, every time. Android cannot round a nested Text's
+// background, so a span is a real inline View; a long one becomes several
+// pills that wrap, cut after a slash or space like the Claude app does.
 describe('inline code chips', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -39,16 +40,17 @@ describe('inline code chips', () => {
     expect(text.children.join('')).toBe('pnpm install')
   })
 
-  it('keeps a long span as wrapping text, not a chip', () => {
-    const long = 'x'.repeat(INLINE_CODE_CHIP_MAX_CHARS + 1)
-    const root = render(`See \`${long}\` here.`)
-    expect(root.findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)).toHaveLength(0)
-    expect(root.findAll((node) => node.type === 'Text' && node.children.join('') === long)).toHaveLength(1)
+  it('splits a long path into pills that wrap, cut after the slash like the Claude app', () => {
+    const root = render('APK at `~/Desktop/code-ui-android-v0.5.17-139.apk` for you.')
+    const chips = root.findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
+    expect(chips.map((chip) => chip.findByType('Text' as never).children.join(''))).toEqual([
+      '~/Desktop/',
+      'code-ui-android-v0.5.17-139.apk'
+    ])
   })
 
-  it('draws the line between chip and text at the cap, and never chips a multi-line span', () => {
-    expect(isInlineCodeChip('a'.repeat(INLINE_CODE_CHIP_MAX_CHARS))).toBe(true)
-    expect(isInlineCodeChip('a'.repeat(INLINE_CODE_CHIP_MAX_CHARS + 1))).toBe(false)
+  it('chips a span longer than the cap too, and never chips a multi-line span', () => {
+    expect(isInlineCodeChip('a'.repeat(INLINE_CODE_CHIP_MAX_CHARS + 1))).toBe(true)
     expect(isInlineCodeChip('a\nb')).toBe(false)
     expect(isInlineCodeChip('')).toBe(false)
   })

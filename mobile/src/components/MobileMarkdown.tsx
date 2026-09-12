@@ -17,15 +17,12 @@ import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { useChatTextSelectable } from './chat-text-selectable-context'
+import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
 
-/** A span up to this long renders as a rounded, bordered inline View; an
- *  inline View cannot break across lines, so anything longer stays a nested
- *  Text that wraps. 28 fits a path segment or a flag on one line at the
- *  chip's font size on a phone. */
-export const INLINE_CODE_CHIP_MAX_CHARS = 28
-
+/** Every inline span is a rounded, bordered View chip, as in the Claude app.
+ *  Only a span with a newline in it stays a nested Text. */
 export function isInlineCodeChip(code: string): boolean {
-  return code.length > 0 && code.length <= INLINE_CODE_CHIP_MAX_CHARS && !code.includes('\n')
+  return code.length > 0 && !code.includes('\n')
 }
 
 type Props = {
@@ -150,18 +147,21 @@ function renderInline(
           : undefined
       if (isInlineCodeChip(code)) {
         // A real inline View: the only way Android rounds and borders a chip.
-        // Its text is outside a press-and-hold selection of the prose; the
-        // message copy button still carries it.
-        parts.push(
-          <View key={key} style={styles.inlineCodeChip}>
-            <Text
-              style={[styles.inlineCodeChipText, openFile ? styles.inlineCodeLink : null]}
-              onPress={openFile}
-            >
-              {code}
-            </Text>
-          </View>
-        )
+        // It cannot break across lines, so a long span is several pills that
+        // wrap. Its text is outside a press-and-hold selection of the prose;
+        // the message copy button still carries it.
+        splitInlineCodeChips(code).forEach((piece, pieceIndex) => {
+          parts.push(
+            <View key={`${key}c${pieceIndex}`} style={styles.inlineCodeChip}>
+              <Text
+                style={[styles.inlineCodeChipText, openFile ? styles.inlineCodeLink : null]}
+                onPress={openFile}
+              >
+                {piece}
+              </Text>
+            </View>
+          )
+        })
       } else {
         parts.push(
           <Text
