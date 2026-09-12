@@ -9,11 +9,10 @@ import java.io.File
 
 /**
  * Fires when DownloadManager finishes a download — even if the app was swiped
- * away, because it is declared in the manifest. If the finished job is the one
- * we enqueued, it hands the file straight to the installer. That chain is what
- * makes "download in the background, install like a system update" hold with
- * the app closed: DownloadManager owns the transfer, this receiver owns the
- * handoff, and neither needs the JS runtime or an Activity.
+ * away, because it is declared in the manifest. If the finished job is ours it
+ * records "downloaded" and posts the ready-to-install notification. Neither
+ * needs the JS runtime or an Activity, which is what lets the download outlive
+ * the app.
  */
 class ApkDownloadReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -46,8 +45,14 @@ class ApkDownloadReceiver : BroadcastReceiver() {
         UpdaterStore.setPhase(context, UpdaterStore.PHASE_FAILED, "Downloaded file is missing")
         return
       }
+      // Why not install here: the person asked to be ASKED. Installing the
+      // moment the bytes land would restart the app under their thumb when
+      // it is open, and would silently replace it when it is not. So the
+      // file waits, a notification says it is ready, and the update dialog
+      // offers Install on the next open (silent on Android 12+ from there).
       UpdaterStore.setPhase(context, UpdaterStore.PHASE_DOWNLOADED)
-      ApkInstallSession.install(context, file)
+      UpdateNotifier.downloaded(context, UpdaterStore.version(context) ?: "")
+      ApkUpdaterModule.emitStatus(context)
     }
   }
 

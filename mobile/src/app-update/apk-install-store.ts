@@ -49,8 +49,8 @@ export type ApkInstallState = {
 let downloadInFlight = false
 let listening = false
 
-function applyUpdaterState(state: ApkUpdateState | null): void {
-  const phase = phaseFromUpdaterState(state)
+function applyUpdaterState(state: ApkUpdateState | null, options: { coldStart?: boolean } = {}): void {
+  const phase = phaseFromUpdaterState(state, options)
   useApkInstallStore.setState({
     phase,
     version: state?.version ?? null,
@@ -62,7 +62,7 @@ function applyUpdaterState(state: ApkUpdateState | null): void {
   // Why: the confirmation Android asked for can only be shown by a foreground
   // Activity. If the app is in front when it arrives, show it at once; if not,
   // the dialog's Install button shows it on the next open.
-  if (phase === 'ready' && AppState.currentState === 'active') {
+  if (state?.phase === 'pending-user-action' && AppState.currentState === 'active') {
     launchPendingInstallUserAction()
   }
 }
@@ -157,8 +157,8 @@ export function hydrateApkInstallState(): void {
   }
   listenToUpdater()
   const state = getApkUpdateState()
-  if (phaseFromUpdaterState(state) !== 'idle') {
-    applyUpdaterState(state)
+  if (phaseFromUpdaterState(state, { coldStart: true }) !== 'idle') {
+    applyUpdaterState(state, { coldStart: true })
   }
 }
 

@@ -4,20 +4,27 @@ import type { ApkUpdateState } from '@codeui/expo-apk-updater'
 export type ApkInstallPhase = 'idle' | 'downloading' | 'installing' | 'ready' | 'failed'
 
 /**
- * The native updater's phase, as the dialog understands it. `downloaded` and
- * `installing` both read as installing: the download-complete receiver commits
- * the install the moment the file lands, so there is no user step between
- * them. `pending-user-action` is the one state that needs the person.
+ * The native updater's phase, as the dialog understands it. A finished
+ * download is `ready`: the person asked to be ASKED before an install
+ * restarts the app, so the file waits for the Install button (2026-09-12).
+ * `pending-user-action` is ready too — Install shows Android's sheet.
+ * `installing` from a cold start is also ready: the process that was
+ * committing died without the OS replacing the app, so the commit never
+ * finished; a live install keeps its spinner because the store sets that
+ * phase itself.
  */
-export function phaseFromUpdaterState(state: ApkUpdateState | null): ApkInstallPhase {
+export function phaseFromUpdaterState(
+  state: ApkUpdateState | null,
+  options: { coldStart?: boolean } = {}
+): ApkInstallPhase {
   switch (state?.phase) {
     case 'downloading':
       return 'downloading'
     case 'downloaded':
-    case 'installing':
-      return 'installing'
     case 'pending-user-action':
       return 'ready'
+    case 'installing':
+      return options.coldStart ? 'ready' : 'installing'
     case 'failed':
       return 'failed'
     default:

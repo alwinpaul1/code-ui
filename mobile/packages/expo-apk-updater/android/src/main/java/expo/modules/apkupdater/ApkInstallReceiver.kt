@@ -24,7 +24,9 @@ class ApkInstallReceiver : BroadcastReceiver() {
         ApkUpdaterModule.emitStatus(context)
       }
       PackageInstaller.STATUS_SUCCESS -> {
-        UpdaterStore.setPhase(context, UpdaterStore.PHASE_IDLE)
+        UpdaterStore.file(context)?.let { java.io.File(it).delete() }
+        UpdateNotifier.clear(context)
+        UpdaterStore.clear(context)
         ApkUpdaterModule.emitStatus(context)
       }
       else -> {

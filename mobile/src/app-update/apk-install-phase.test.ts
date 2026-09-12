@@ -11,12 +11,20 @@ describe('phaseFromUpdaterState', () => {
     ).toBe('downloading')
   })
 
-  it('reads a finished download as installing, since the receiver commits it at once', () => {
-    for (const phase of ['downloaded', 'installing'] as const) {
-      expect(phaseFromUpdaterState({ phase, version: '0.5.7', message: null, pendingUserAction: false })).toBe(
-        'installing'
-      )
-    }
+  // The user's words, 2026-09-12: "when I click update, the download should
+  // happen in the background, and even if I close the app, when I open the
+  // app it should ask to install that downloaded update." So a finished
+  // download waits for the Install button instead of restarting the app.
+  it('offers Install for a finished download instead of installing on its own', () => {
+    expect(
+      phaseFromUpdaterState({ phase: 'downloaded', version: '0.5.9', message: null, pendingUserAction: false })
+    ).toBe('ready')
+  })
+
+  it('keeps the spinner for a live install, but offers Install again after a cold start', () => {
+    const installing = { phase: 'installing' as const, version: '0.5.9', message: null, pendingUserAction: false }
+    expect(phaseFromUpdaterState(installing)).toBe('installing')
+    expect(phaseFromUpdaterState(installing, { coldStart: true })).toBe('ready')
   })
 
   it('asks for the person only when Android still wants a tap', () => {

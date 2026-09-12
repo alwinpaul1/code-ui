@@ -51,7 +51,10 @@ class ApkUpdaterModule : Module() {
     val request = DownloadManager.Request(Uri.parse(url))
       .setTitle("Code UI $version")
       .setDescription("Downloading update")
-      .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+      // Why not NOTIFY_COMPLETED: that leaves a "download complete" row whose
+      // tap opens Android's manual installer. Progress only; our own
+      // "downloaded, tap to install" notification takes over at the end.
+      .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
       .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
       .setMimeType(APK_MIME)
     val id = downloadManager(context).enqueue(request)
@@ -148,6 +151,7 @@ class ApkUpdaterModule : Module() {
     Function("install") {
       val context = context()
       val path = UpdaterStore.file(context) ?: return@Function false
+      UpdateNotifier.clear(context)
       ApkInstallSession.install(context, File(path))
     }
 
@@ -168,7 +172,10 @@ class ApkUpdaterModule : Module() {
     }
 
     Function("clear") {
-      UpdaterStore.clear(context())
+      val context = context()
+      UpdaterStore.file(context)?.let { File(it).delete() }
+      UpdateNotifier.clear(context)
+      UpdaterStore.clear(context)
     }
   }
 

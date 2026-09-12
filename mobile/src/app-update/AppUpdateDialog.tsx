@@ -349,11 +349,11 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
         <View style={{ gap: space.lg }}>
           <DialogHeader version={version} tone="success" />
           <Txt variant="title" weight="semibold" align="center">
-            Ready to install
+            Update downloaded
           </Txt>
           <Txt variant="body" tone="secondary" align="center">
-            Android asks you to confirm the install. Your paired desktops and settings stay as they
-            are.
+            Code UI {version} is ready. Installing restarts the app; your paired desktops and
+            settings stay as they are.
           </Txt>
           <View style={{ gap: space.sm }}>
             <Button label="Install" variant="accent" block onPress={() => void reopenInstaller()} />
