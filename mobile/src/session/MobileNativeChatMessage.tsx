@@ -152,6 +152,7 @@ function ReasoningDisclosure({
 
 function MobileNativeChatMessageImpl({
   message,
+  interim = false,
   toolsExpanded = false,
   fontScale = 1,
   messageIndex,
@@ -168,6 +169,9 @@ function MobileNativeChatMessageImpl({
   taskListPredecessors
 }: {
   message: NativeChatMessage
+  /** An assistant note the agent kept working past, drawn as a quote block
+   *  with a bar on the left, the way the Claude app draws it (2026-09-12). */
+  interim?: boolean
   toolsExpanded?: boolean
   /** Present while this optimistic echo is still queued behind a running turn. */
   onCancelQueued?: () => void
@@ -309,16 +313,18 @@ function MobileNativeChatMessageImpl({
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
-          {prose.map((block, index) => (
-            <Prose
-              key={index}
-              block={block}
-              invert={isUser}
-              fontScale={fontScale}
-              onOpenFile={onOpenFile}
-              styles={styles}
-            />
-          ))}
+          <View style={interim && isAgent ? styles.interimNote : null}>
+            {prose.map((block, index) => (
+              <Prose
+                key={index}
+                block={block}
+                invert={isUser}
+                fontScale={fontScale}
+                onOpenFile={onOpenFile}
+                styles={styles}
+              />
+            ))}
+          </View>
           {showToolRun ? (
             <ToolRun
               // Why: a global toggle intentionally resets all per-run/per-line

@@ -3,7 +3,6 @@ import { Animated, Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
   ChevronRight,
-  SquareChevronRight,
   SquareTerminal,
   Wrench
 } from 'lucide-react-native'
@@ -21,25 +20,18 @@ import {
   type MobileTaskListPredecessors,
   type MobileTaskListRow
 } from './mobile-native-chat-task-list-rows'
-import { nativeChatTaskListTool } from '../../../src/shared/native-chat-task-list'
 import {
   ToolExecutionMeta,
   ToolRowName,
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
+import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
   createToolInputDisplay,
-  toolRunSummaryMembers,
   truncateToolDetail
 } from '../../../src/shared/native-chat-tool-summary'
-import {
-  describeActiveToolCall,
-  formatActiveToolLabel,
-  formatToolCallCount,
-  NATIVE_CHAT_TOOL_ACTIVITY_COPY
-} from '../../../src/shared/native-chat-tool-activity'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type {
   NativeChatBlock,
@@ -302,16 +294,14 @@ export function ToolRun({
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
-  // Cheap enough to run collapsed: it also decides the one-line row preview, so
-  // a plan row says how far along it is before anyone opens it.
+  // Cheap enough to run collapsed: a plan row says how far along it is
+  // before anyone opens it ("1/3 · Writing the test", beside the sentence).
   const taskLists = mobileTaskListRows(pairs, taskListPredecessors)
-  const latestPlanByTool = new Map<string, string>()
+  let planPreview: string | null = null
   for (let index = 0; index < pairs.length; index++) {
     const row = taskLists[index]
-    const call = pairs[index]?.call
-    const tool = call ? nativeChatTaskListTool(call.name) : null
-    if (row && tool) {
-      latestPlanByTool.set(tool, mobileTaskListPreview(row.list))
+    if (row) {
+      planPreview = mobileTaskListPreview(row.list)
     }
   }
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
@@ -322,18 +312,6 @@ export function ToolRun({
     }
   }
   callCount ||= pairs.length
-  // Members stay separate all the way to the markup. Joining them into one
-  // string is what made a batch read as a single call: the separator also
-  // occurs inside tool names like `browser.open` and `tools/read`, so nothing
-  // told the reader where one call ended and the next began. Each member now
-  // opens with its name in the foreground tone and trails its argument muted,
-  // and that tone change is the boundary.
-  const summaryMembers = toolRunSummaryMembers(blocks).map((member) => {
-    const tool = nativeChatTaskListTool(member.name)
-    const preview = tool ? latestPlanByTool.get(tool) : undefined
-    return preview ? { ...member, arg: preview } : member
-  })
-  const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -356,8 +334,9 @@ export function ToolRun({
               numberOfLines={1}
               testID="tool-run-active-label"
             >
-              {formatActiveToolLabel(describeActiveToolCall(activeCall))}
+              Running
             </PulsingText>
+            <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
             {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
           </Pressable>
           {trailing}
@@ -376,40 +355,12 @@ export function ToolRun({
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
         >
-          <SquareChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-          <Text style={styles.toolRunCount}>{callCount}×</Text>
-          {summaryMembers.length > 0 ? (
-            <Text style={styles.toolRunLabel} numberOfLines={1}>
-              {summaryMembers.map((member, index) => (
-                <Text key={`${member.name}:${member.arg}:${index}`}>
-                  {/* A real space, not a gap: a gap is invisible to a copied
-                      selection and to the row's accessible name, which would
-                      otherwise run one member's argument into the next name. */}
-                  {index > 0 ? '   ' : null}
-                  <Text testID="tool-run-member-name" style={styles.toolRunMemberName}>
-                    {member.name}
-                  </Text>
-                  {member.arg ? (
-                    <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg}>
-                      {` ${member.arg}`}
-                    </Text>
-                  ) : null}
-                </Text>
-              ))}
-            </Text>
-          ) : (
-            <Text style={styles.toolRunLabel} numberOfLines={1}>
-              {formatToolCallCount(callCount)}
-            </Text>
-          )}
-          {hiddenCallCount > 0 ? (
-            // Outside the truncating label, so the count of what the header did
-            // not name survives a phone too narrow to print the list.
-            <Text style={styles.toolRunMore}>
-              {NATIVE_CHAT_TOOL_ACTIVITY_COPY.moreCalls.replaceAll(
-                '{{value0}}',
-                String(hiddenCallCount)
-              )}
+          <Text style={styles.toolRunLabel} numberOfLines={1} testID="tool-run-sentence">
+            {toolRunSentence(blocks) || `${callCount} tool call${callCount === 1 ? '' : 's'}`}
+          </Text>
+          {planPreview ? (
+            <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
+              {planPreview}
             </Text>
           ) : null}
           {open ? (

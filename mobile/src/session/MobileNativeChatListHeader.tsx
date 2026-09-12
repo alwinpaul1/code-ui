@@ -1,10 +1,8 @@
-import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
-import { countRunningBackgroundTasks } from './mobile-background-tasks'
-import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
+import { useMobileRunningTaskCount } from './use-mobile-running-task-count'
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -26,6 +24,7 @@ export function MobileNativeChatListHeader({
   onEditQueue,
   unanchoredTurnStatus,
   turnActivity,
+  hideRunningRow = false,
   onOpenBackgroundTasks
 }: {
   /** The UNFILTERED transcript on purpose: the `<task-notification>` turns that
@@ -46,20 +45,16 @@ export function MobileNativeChatListHeader({
   unanchoredTurnStatus?: NativeChatTurnStatus | null
   turnActivity?: NativeChatTurnActivity | null
   onOpenBackgroundTasks: () => void
+  /** While the agent works the status line above the composer carries the
+   *  count, so the row under the last message would say it twice. */
+  hideRunningRow?: boolean
 }) {
-  // `now` is 0 because only the sheet draws an elapsed clock; which tasks are
-  // running does not depend on it.
-  const runningTaskCount = useMemo(
-    () =>
-      projectStructuredBackgroundTasks(hostBackgroundTasks, 0)?.running.length ??
-      countRunningBackgroundTasks(messages, agentStatus ?? null, {
-        finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
-        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
-        runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
-        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? []
-      }),
-    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages]
-  )
+  const runningTaskCount = useMobileRunningTaskCount({
+    messages,
+    agentStatus,
+    backgroundTaskReport,
+    hostBackgroundTasks
+  })
   return (
     <>
       {unanchoredTurnStatus ? (
@@ -70,7 +65,9 @@ export function MobileNativeChatListHeader({
           activityText={turnActivity?.text}
         />
       ) : null}
-      <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
+      {hideRunningRow ? null : (
+        <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
+      )}
       <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
     </>
   )

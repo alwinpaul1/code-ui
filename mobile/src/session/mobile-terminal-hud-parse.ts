@@ -11,6 +11,11 @@ export type TerminalHudObservation = {
   /** Context window usage when the status line prints it (claude-hud's
    *  "78% (776k/1.0M)" or Code UI's "ctx 54% 537.2k/1M"); null otherwise. */
   context: TerminalHudContextWindow | null
+  /** The verb on the agent's own spinner line while it works — Claude Code's
+   *  "✳ Cooking… (2m 14s · ↓ 1.2k tokens · esc to interrupt)" — so the phone
+   *  can say what the desk says (Claude app parity, 2026-09-12). Null when no
+   *  spinner is on screen. */
+  activity?: string | null
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
    *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
   permissionMode: TerminalPermissionMode
@@ -85,6 +90,27 @@ const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
 ]
 
 /** The mode footer sits under the input box; the last match on screen wins. */
+// Claude Code's spinner glyphs rotate through these; the verb follows, then an
+// ellipsis. Read from the bottom, where the live line sits.
+const ACTIVITY_LINE = /^\s*[✳✻✽✶✢·*⏺]\s+([A-Z][a-zA-Z]+)…/
+
+export function parseTerminalActivity(lines: readonly string[]): string | null {
+  for (let index = lines.length - 1; index >= Math.max(0, lines.length - 12); index -= 1) {
+    const match = ACTIVITY_LINE.exec(lines[index] ?? '')
+    if (match) {
+      return match[1]!
+    }
+  }
+  return null
+}
+
+/** The field only when a spinner is on screen, so an idle observation keeps
+ *  the shape every other reader expects. */
+function activityField(lines: readonly string[]): { activity?: string } {
+  const activity = parseTerminalActivity(lines)
+  return activity ? { activity } : {}
+}
+
 export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index] ?? ''
@@ -307,6 +333,7 @@ export function parseTerminalHudObservation(
       modelId,
       effort,
       context,
+      ...activityField(lines),
       permissionMode: parseTerminalPermissionMode(lines)
     }
   }
@@ -322,6 +349,7 @@ export function parseTerminalHudObservation(
           modelId: null,
           effort: null,
           context,
+          ...activityField(lines),
           permissionMode: parseTerminalPermissionMode(lines)
         }
       }

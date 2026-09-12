@@ -129,36 +129,23 @@ describe('a batch of tool calls in one run header', () => {
     return readTree(renderer!)
   }
 
-  it('reads as two calls, not as one run of "browser.open · tools/read"', () => {
-    const { members } = render(PUNCTUATED_RUN)
-    expect(members.map((member) => member.name)).toEqual(['browser.open', 'tools/read'])
+  // 2026-09-12: the fold reads as the Claude app writes it — one sentence
+  // about what the tools did, not the agent's tool names and arguments.
+  it('reads as one sentence about what the tools did', () => {
+    expect(render(LONG_RUN).texts).toContain('Ran a command, read 2 files, edited 2 files')
   })
 
-  it('says how many calls the header could not name', () => {
-    // Five calls; the header names three, so two are unaccounted for.
-    expect(render(LONG_RUN).texts).toContain('+2 more')
-  })
-
-  it('leaves the count off a run the header names in full', () => {
-    expect(render(PUNCTUATED_RUN).texts.join(' ')).not.toContain('more')
-  })
-
-  it('marks each member off from the next in light and in dark', () => {
-    const light = render(PUNCTUATED_RUN, 'light')
-    expect(light.members.map((member) => member.color)).toEqual([
-      lightColors.text,
-      lightColors.text
-    ])
-    act(() => renderer?.unmount())
-    renderer = null
-    const dark = render(PUNCTUATED_RUN, 'dark')
-    expect(dark.members.map((member) => member.color)).toEqual([darkColors.text, darkColors.text])
-    expect(darkColors.text).not.toBe(lightColors.text)
+  it('does not name a tool or its argument in the collapsed row', () => {
+    const { texts } = render(PUNCTUATED_RUN)
+    expect(texts.join(' ')).not.toContain('browser.open')
+    expect(texts.join(' ')).not.toContain('README.md')
+    // `tools/read` reads; `browser.open` is a tool with no plain-English verb.
+    expect(texts).toContain('Read a file, used a tool')
   })
 
   it('falls back to a plain call count when no call has a name', () => {
-    const nameless: NativeChatBlock[] = [{ type: 'tool-call', name: '  ', input: {} }]
-    expect(render(nameless).texts).toContain('1 tool call')
+    const nameless: NativeChatBlock[] = [{ type: 'tool-call', name: '', input: {} }]
+    expect(render(nameless).texts).toContain('Used a tool')
   })
 })
 
@@ -220,14 +207,14 @@ describe('a tool run while the turn is still working', () => {
 
   it('names the call that is still running instead of counting the settled ones', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
-    expect(texts(tree)).toContain('Running pnpm test')
-    // The `2×  Read a.ts …` batch summary is what the live row replaces.
-    expect(texts(tree)).not.toContain('2×')
+    expect(texts(tree)).toContain('Running')
+    // The batch sentence is what the live row replaces.
+    expect(texts(tree).some((text) => text.startsWith('Ran '))).toBe(false)
   })
 
   it('goes back to the batch summary the moment the turn settles', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: false })
-    expect(texts(tree)).toContain('2×')
+    expect(texts(tree).some((text) => text.startsWith('Ran '))).toBe(true)
     expect(texts(tree).some((text) => text.startsWith('Running'))).toBe(false)
   })
 

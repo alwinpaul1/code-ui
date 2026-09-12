@@ -1,5 +1,7 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, type MutableRefObject, type RefObject } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
+import type { FlashListRef } from '@shopify/flash-list'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 /** Inside this many px of the live edge the list follows new content again. */
 const LIVE_EDGE_THRESHOLD_PX = 40
@@ -8,6 +10,7 @@ const LIVE_EDGE_THRESHOLD_PX = 40
  *  hand it back, and when to page in older history. Split from the view so
  *  the view stays under the line ceiling. */
 export function useMobileChatScrollHandlers(input: {
+  listRef: RefObject<FlashListRef<NativeChatMessage> | null>
   followingRef: MutableRefObject<boolean>
   scrollingRef: MutableRefObject<boolean>
   jumpingRef: MutableRefObject<boolean>
@@ -18,8 +21,8 @@ export function useMobileChatScrollHandlers(input: {
   beginScroll: () => void
   endScroll: () => void
 }) {
-  const { followingRef, scrollingRef, jumpingRef, hasMore, loadingEarlier, onLoadEarlier } = input
-  const { setFollowing, beginScroll, endScroll } = input
+  const { listRef, followingRef, scrollingRef, jumpingRef, hasMore, loadingEarlier } = input
+  const { onLoadEarlier, setFollowing, beginScroll, endScroll } = input
   const evaluateEdge = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
@@ -52,5 +55,23 @@ export function useMobileChatScrollHandlers(input: {
   )
 
 
-  return { evaluateEdge, onScrollBeginDrag, onScrollEnd }
+  const jumpToLatest = useCallback(
+    (animated: boolean) => {
+      jumpingRef.current = true
+      setFollowing(true)
+      listRef.current?.scrollToOffset({ offset: 0, animated })
+    },
+    [jumpingRef, listRef, setFollowing]
+  )
+
+  // Align a single message's top to the top of the viewport.
+  const onScrollToMessage = useCallback(
+    (index: number) => {
+      setFollowing(false)
+      listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true })
+    },
+    [listRef, setFollowing]
+  )
+
+  return { evaluateEdge, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage }
 }

@@ -20,6 +20,14 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '100%',
       gap: space.sm
     },
+    // A note the agent wrote and then worked past: a quote block, after the
+    // Claude app, so the closing answer stands apart from the running notes.
+    interimNote: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.borderStrong,
+      paddingLeft: space.md,
+      gap: space.sm
+    },
     userBubble: {
       maxWidth: '86%',
       backgroundColor: colors.userBubble,

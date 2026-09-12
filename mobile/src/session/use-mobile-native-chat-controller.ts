@@ -135,8 +135,7 @@ export function useMobileNativeChatController(
   const nativeChatAgentWorking = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeChatResolution != null && activeTabAgentWorking
-  // Deliberately not gated on the chat view being visible: the streaming gate
-  // has to tell "hidden mid-turn" from "the turn ended".
+  // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
@@ -198,8 +197,7 @@ export function useMobileNativeChatController(
     observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
   })
 
-  // Every chat write gates on both: the lease proves the input floor is ours, and
-  // `connState` collapses a render before the lease does on disconnect.
+  // Chat writes gate on both: the lease proves the floor is ours; connState drops first.
   const inputSendable = activeChatStructured
     ? client != null && activeChatSessionId != null && connState === 'connected'
     : nativeChatInputLeaseReady && connState === 'connected'
@@ -275,9 +273,8 @@ export function useMobileNativeChatController(
   const { nativeChatFilePaths, loadNativeChatFiles, nativeChatSkills, loadNativeChatSkills } =
     useMobileNativeChatComposerCatalogs({ client, worktreeId })
 
-  // Why: the send seam reports outgoing catalog commands to session-option
-  // tracking, but the options hook needs the seam's dispatcher — a ref breaks
-  // the cycle without re-creating the send callbacks per snapshot.
+  // Why a ref: the send seam reports catalog commands to option tracking, and
+  // the options hook needs the seam's dispatcher; a ref breaks the cycle.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
   const {
@@ -313,8 +310,7 @@ export function useMobileNativeChatController(
     onSendError
   })
 
-  // Desktop-pasted images are host paths; fetch thumbnails through the host so
-  // the bubble shows the picture, not "🖼 /var/folders/…".
+  // Desktop-pasted images are host paths: fetch thumbnails through the host.
   const hostImagePreviews = useHostImagePreviews({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
@@ -493,10 +489,10 @@ export function useMobileNativeChatController(
     handleNativeChatSendWithOutcome: activeChatStructured
       ? structuredNativeChatSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
-    readSeededLaunchDraft,
-    nativeChatSessionOptions,
+    readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatContextWindow: hudObservation?.context ?? null,
     nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
+    nativeChatActivityVerb: hudObservation?.activity ?? null,
     nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
   }

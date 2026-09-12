@@ -1,3 +1,4 @@
+import { parseTerminalActivity } from './mobile-terminal-hud-parse'
 import { describe, expect, it } from 'vitest'
 import {
   parseTerminalHudObservation,
@@ -212,5 +213,21 @@ describe('Codex mode and context from the screen', () => {
 
   it('stays silent on a bare Claude footer with no figure rather than guessing', () => {
     expect(parseTerminalHudObservation(['⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'])).toBeNull()
+  })
+})
+
+// Claude Code 2.1.268's spinner line while a turn runs, as painted on the S23
+// on 2026-09-12. The Claude app shows the same verb above its composer.
+describe('parseTerminalActivity', () => {
+  it('reads the verb off the spinner line', () => {
+    expect(
+      parseTerminalActivity(['some output', '✳ Cooking… (2m 14s · ↓ 1.2k tokens · esc to interrupt)', '', '> '])
+    ).toBe('Cooking')
+    expect(parseTerminalActivity(['✻ Thinking… (esc to interrupt)'])).toBe('Thinking')
+  })
+
+  it('is null when nothing is spinning', () => {
+    expect(parseTerminalActivity(['⏺ Done.', '> '])).toBeNull()
+    expect(parseTerminalActivity([])).toBeNull()
   })
 })

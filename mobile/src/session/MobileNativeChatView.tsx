@@ -1,10 +1,10 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
-import { forwardRef, useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, ScrollView, type ScrollViewProps, useWindowDimensions, View } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { ActivityIndicator, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import { useChatViewStyles } from './mobile-native-chat-view-styles'
@@ -28,8 +28,11 @@ import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { useMobileChatScrollHandlers } from './use-mobile-chat-scroll-handlers'
+import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { interimAssistantMessageIds } from './mobile-native-chat-interim'
+import { useMobileRunningTaskCount } from './use-mobile-running-task-count'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -50,6 +53,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  activityVerb = null,
   canStop,
   structuredActivityUi = false,
   turnActivity = null,
@@ -142,28 +146,7 @@ export function MobileNativeChatView({
   } = useMobileChatFollowing()
 
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  // FlashList has an outer measurement view. Native scroll recognition must
-  // attach to its actual ScrollView, not that wrapper, or dragging is blocked.
-  const ChatScrollView = useMemo(
-    () =>
-      forwardRef<ScrollView, ScrollViewProps>(function ChatScrollView(props, ref) {
-        return (
-          <GestureDetector gesture={pinchGesture}>
-            <ScrollView {...props} ref={ref} />
-          </GestureDetector>
-        )
-      }),
-    [pinchGesture]
-  )
-
-  const jumpToLatest = useCallback(
-    (animated: boolean) => {
-      jumpingRef.current = true
-      setFollowing(true)
-      listRef.current?.scrollToOffset({ offset: 0, animated })
-    },
-    [setFollowing]
-  )
+  const ChatScrollView = useChatScrollView(pinchGesture)
 
   // Folded transcript plus streaming bubble and accepted echoes.
   const { data } = useMemo(
@@ -178,6 +161,13 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
+  const interimIds = useMemo(() => interimAssistantMessageIds(data), [data])
+  const runningTaskCount = useMobileRunningTaskCount({
+    messages,
+    agentStatus,
+    backgroundTaskReport,
+    hostBackgroundTasks
+  })
   followGate.noteData(newestFirst)
   const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
 
@@ -193,7 +183,9 @@ export function MobileNativeChatView({
     [onSend, onClearSendError]
   )
 
-  const { evaluateEdge, onScrollBeginDrag, onScrollEnd } = useMobileChatScrollHandlers({
+  const { evaluateEdge, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage } =
+    useMobileChatScrollHandlers({
+    listRef,
     followingRef,
     scrollingRef,
     jumpingRef,
@@ -204,15 +196,6 @@ export function MobileNativeChatView({
     beginScroll,
     endScroll
   })
-
-  // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback(
-    (index: number) => {
-      setFollowing(false)
-      listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true })
-    },
-    [setFollowing]
-  )
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
@@ -237,6 +220,7 @@ export function MobileNativeChatView({
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
         message={item}
+        interim={interimIds.has(item.id)}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
         messageIndex={index}
@@ -258,6 +242,7 @@ export function MobileNativeChatView({
       />
     ),
     [
+      interimIds,
       toolsExpanded,
       fontScale,
       onScrollToMessage,
@@ -354,6 +339,7 @@ export function MobileNativeChatView({
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
+                hideRunningRow={agentWorking === true && !structuredActivityUi}
               />
             }
             ListFooterComponent={
@@ -403,6 +389,9 @@ export function MobileNativeChatView({
         // The structured lane says "Working for N" per turn; a second, static
         // three-dot row under it would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
+        activityVerb={activityVerb}
+        runningTaskCount={runningTaskCount}
+        onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
         onStop={onStop}
         toolsExpanded={toolsExpanded}
         onToggleTools={() => setToolsExpanded((v) => !v)}
@@ -441,7 +430,9 @@ export function MobileNativeChatView({
             ? 'Reconnecting…'
             : lockReason === 'waiting'
               ? 'Waiting for terminal…'
-              : 'Reply, @files, /commands'
+              : agentWorking
+                ? 'Queue a message…'
+                : 'Reply, @files, /commands'
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}

@@ -195,7 +195,7 @@ describe('MobileNativeChatMessage', () => {
         .findAllByType('Pressable' as never)
         .findLast((node) => textIn(node).includes(label))!
 
-    act(() => pressableWith('1×').props.onPress())
+    act(() => pressableWith('Used a tool').props.onPress())
     // The row label is the command, and the detail stays closed until tapped.
     expect(textIn(tree.root)).toContain('git status')
     expect(textIn(tree.root).some((text) => text.startsWith('{\n'))).toBe(false)
@@ -218,7 +218,7 @@ describe('MobileNativeChatMessage', () => {
     // nothing and the tap that would close it is guarded off. Only the run header
     // is open here; the row itself stays collapsed.
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
-    expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+    expect(tree.root.findAllByType('ChevronRight' as never)).toHaveLength(1)
   })
 
   it('does not expand a plain input that already fits in the row label', () => {
@@ -228,7 +228,7 @@ describe('MobileNativeChatMessage', () => {
     })
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
-    expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+    expect(tree.root.findAllByType('ChevronRight' as never)).toHaveLength(1)
   })
 
   describe('the structured lane', () => {
@@ -282,12 +282,12 @@ describe('MobileNativeChatMessage', () => {
         structuredActivityUi: true,
         activeTurnIsWorking: true
       })
-      expect(textIn(tree.root)).toContain('Running pnpm test')
+      expect(textIn(tree.root)).toContain('Running')
     })
 
     it('leaves the bridge lane exactly as it was', () => {
       const tree = render(toolMessage(settledRun), { activeTurnIsWorking: false })
-      expect(textIn(tree.root)).toContain('1×')
+      expect(textIn(tree.root).some((text) => text.startsWith('Ran '))).toBe(true)
       expect(textIn(tree.root).some((text) => text.startsWith('Running'))).toBe(false)
     })
   })
