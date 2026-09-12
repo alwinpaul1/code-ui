@@ -32,6 +32,9 @@ import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { interimAssistantMessageIds } from './mobile-native-chat-interim'
+import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
+import { useNow } from '../hooks/use-now'
+import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -160,6 +163,10 @@ export function MobileNativeChatView({
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
   const interimIds = useMemo(() => interimAssistantMessageIds(data), [data])
+  // Labels say "today" or a weekday relative to now; five minutes keeps a
+  // divider honest across midnight without churning the rows.
+  const dividerNow = useNow(5 * 60_000)
+  const dividerLabels = useMemo(() => chatTimeDividerLabels(data, dividerNow), [data, dividerNow])
   followGate.noteData(newestFirst)
   const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
 
@@ -210,7 +217,11 @@ export function MobileNativeChatView({
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <MobileNativeChatMessage
+      <>
+        {dividerLabels.has(item.id) ? (
+          <MobileNativeChatTimeDivider label={dividerLabels.get(item.id) as string} />
+        ) : null}
+        <MobileNativeChatMessage
         message={item}
         interim={interimIds.has(item.id)}
         toolsExpanded={toolsExpanded}
@@ -231,10 +242,12 @@ export function MobileNativeChatView({
         // another turn's status.
         {...turns.resolveRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
-      />
+        />
+      </>
     ),
     [
       interimIds,
+      dividerLabels,
       toolsExpanded,
       fontScale,
       onScrollToMessage,

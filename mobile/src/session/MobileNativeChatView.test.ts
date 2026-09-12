@@ -5,6 +5,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
@@ -143,7 +145,11 @@ describe('MobileNativeChatView', () => {
     const list = renderer!.root.find((node) => node.type === 'FlashList')
     const data = list.props.data as NativeChatMessage[]
     const index = data.findIndex((row) => row.id === id)
-    return list.props.renderItem({ item: data[index], index })
+    // A row is a fragment: an optional time divider, then the message.
+    const row = list.props.renderItem({ item: data[index], index }) as {
+      props: { children: [unknown, ReturnType<typeof createElement>] }
+    }
+    return row.props.children[1]
   }
 
   function banners(): ReactTestInstance[] {
