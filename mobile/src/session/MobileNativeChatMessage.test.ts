@@ -75,6 +75,19 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  it('lets the reader select the text of their own sent prompt', () => {
+    // Why: reported 2026-09-12 — press-and-hold on a sent prompt selected
+    // nothing, while an agent's answer selected. Only the agent side was
+    // ever marked selectable.
+    const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
+    const selectable = tree.root
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.selectable === true)
+      .flatMap((node) => node.children)
+      .filter((child): child is string => typeof child === 'string')
+    expect(selectable).toContain('run the full gate')
+  })
+
   it('offers a copy control on a sent prompt when it is tapped, never on a queued one', () => {
     const sent = render(userMessage([{ type: 'text', text: 'record' }]))
     expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)

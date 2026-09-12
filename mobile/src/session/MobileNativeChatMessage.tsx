@@ -52,8 +52,13 @@ function Prose({
 }) {
   if (isTextBlock(block)) {
     if (invert) {
+      // Why selectable: a prompt the user sent is the text they most often
+      // want back — reported 2026-09-12, a long press on their own bubble
+      // did nothing while an agent's answer selected. The bubble's tap still
+      // reveals the copy control; the press-and-hold selects.
       return (
         <Text
+          selectable
           style={[
             styles.userText,
             { fontSize: TEXT_SIZE * fontScale, lineHeight: (TEXT_SIZE + 7) * fontScale }
