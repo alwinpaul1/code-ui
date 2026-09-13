@@ -35,6 +35,7 @@ import { interimAssistantMessageIds } from './mobile-native-chat-interim'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
+import { DockFade, useChatDock } from './MobileNativeChatDockFade'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -127,7 +128,7 @@ export function MobileNativeChatView({
   const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
-  const [dockHeight, setDockHeight] = useState(0)
+  const { dockHeight, onDockLayout } = useChatDock(listRef, () => followingRef.current)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -356,8 +357,7 @@ export function MobileNativeChatView({
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
               />
-              {/* Inverted list: the header is the visual bottom, so this
-                  spacer keeps the newest row clear of the floating dock. */}
+              {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
               <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
               </>
             }
@@ -375,12 +375,7 @@ export function MobileNativeChatView({
             }
           />
           </ChatTextSelectableContext.Provider>
-          <MobileNativeChatJumpToLatest
-            visible={showJumpToLatest}
-            onPress={() => jumpToLatest(true)}
-            styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }}
-            colors={colors}
-          />
+          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToLatest(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}
       <MobileBackgroundTasksSheet
@@ -404,9 +399,10 @@ export function MobileNativeChatView({
       />
       <View
         style={[styles.dock, { paddingBottom: bottomPad }]}
-        onLayout={(event) => setDockHeight(Math.round(event.nativeEvent.layout.height))}
+        onLayout={onDockLayout}
         testID="native-chat-dock"
       >
+        <DockFade />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}

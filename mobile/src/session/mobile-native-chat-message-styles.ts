@@ -206,8 +206,9 @@ export function makeChatMessageStyles(theme: Theme) {
     },
     // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
     // next one showing so the row reads as scrollable.
+    // Tight, like the Claude app: the picture and its caption read as one.
     imageLead: {
-      marginBottom: space.sm
+      marginBottom: space.xs
     },
     imageStripFrame: {
       height: IMAGE_TILE_HEIGHT + space.xs * 2,
