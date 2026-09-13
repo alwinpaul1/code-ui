@@ -488,6 +488,51 @@ export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
 ].join('; ')
 
 /**
+ * What the user typed on the DESKTOP, beaconed the moment they submit it.
+ *
+ * Why this exists: Claude Code records a prompt sent while a turn is running
+ * as an `attachment`/`queued_command`, and Orca's transcript reader drops
+ * those, so the phone never learns the message exists — the desk and the
+ * phone show different conversations (2026-09-13). The agent's own hook is
+ * the one place the text is available without touching the user's machine.
+ *
+ * `$$` is the hook process id: it makes two identical prompts distinct, so
+ * the phone can tell a repeat from a re-beacon of the same one.
+ *
+ * The hook must print NOTHING on stdout: for UserPromptSubmit, Claude Code
+ * feeds a hook's stdout back into the model as context.
+ */
+export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
+  'i=$(cat 2>/dev/null || true)',
+  'g(){ printf %s "$i" | sed -nE "s/.*$1.*/\\1/p"; }',
+  ENCODE_FN,
+  // JSON-escaped, so the value is one line and any quote inside it is \".
+  'pr=$(g "\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\"")',
+  'pr=$(printf %s "$pr" | awk "{print substr(\\$0,1,2000)}")',
+  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")"',
+  '[ -z "$pr" ] && exit 0',
+  ...TTY_WRITE
+].join('; ')
+
+/**
+ * The same prompt beacon on a Windows host with no Git Bash. Runs for real
+ * under PowerShell 7 in tests; it has NOT run on Windows.
+ */
+export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
+  '$ErrorActionPreference="SilentlyContinue"',
+  '$i=[Console]::In.ReadToEnd()',
+  '$j=$null',
+  'try{$j=$i | ConvertFrom-Json}catch{}',
+  '$pr=""',
+  'if($j -and $j.prompt){ $pr=[string]$j.prompt }',
+  'if($pr.Length -gt 2000){ $pr=$pr.Substring(0,2000) }',
+  '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B" -replace "`r","%0D" -replace "`n","%0A"',
+  '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr',
+  ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
+  'if($pr){ Write-Beacon $o }'
+].join('\n')
+
+/**
  * The Stop hook on a Windows host with no Git Bash, which runs hooks under
  * PowerShell. Same contract as the sh script: beacon the ids the agent says
  * are still running, always emitting `run=` even when empty. Written to the
@@ -510,6 +555,8 @@ export const CLAUDE_HUD_STOP_HOOK_POWERSHELL = [
 
 export const CLAUDE_HUD_STOP_HOOK_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(CLAUDE_HUD_STOP_HOOK_POWERSHELL)}`
 
+export const CLAUDE_HUD_PROMPT_HOOK_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(CLAUDE_HUD_PROMPT_HOOK_POWERSHELL)}`
+
 export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null = null): string {
   return JSON.stringify({
     statusLine: {
@@ -529,6 +576,21 @@ export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null 
                 hostPlatform === 'win32'
                   ? CLAUDE_HUD_STOP_HOOK_WINDOWS_COMMAND
                   : CLAUDE_HUD_STOP_HOOK_SCRIPT
+            }
+          ]
+        }
+      ],
+      // A prompt typed on the desktop mid-turn never reaches the phone
+      // through Orca; this hook puts its text on the same beacon.
+      UserPromptSubmit: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command:
+                hostPlatform === 'win32'
+                  ? CLAUDE_HUD_PROMPT_HOOK_WINDOWS_COMMAND
+                  : CLAUDE_HUD_PROMPT_HOOK_SCRIPT
             }
           ]
         }

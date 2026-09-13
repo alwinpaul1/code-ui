@@ -133,6 +133,8 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** Prompts submitted on the desktop, from the agent's own hook. */
+  nativeChatDesktopPrompts: { nonce: string; text: string }[]
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
   /** Permission mode from the terminal footer, or null when no status line is observed. */

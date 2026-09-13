@@ -6,9 +6,15 @@ import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
+import {
+  useDesktopPromptEchoes,
+  withoutLandedDesktopPrompts
+} from './use-desktop-prompt-echoes'
+
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
+const NO_PROMPTS: { nonce: string; text: string }[] = []
 
 type Props = {
   controller: MobileNativeChatController
@@ -87,6 +93,18 @@ export function MobileNativeChatOverlay({
       foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(projectedQueue.pending)),
     [projectedQueue.pending, session.messages]
   )
+  // Prompts typed on the desktop never reach the phone through Orca; they
+  // ride the HUD beacon instead (2026-09-13).
+  const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  const unlandedPrompts = useMemo(
+    () => withoutLandedDesktopPrompts(desktopPrompts, folded),
+    [desktopPrompts, folded]
+  )
+  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, folded)
+  const pendingWithDesktopPrompts = useMemo(
+    () => (desktopEchoes.length > 0 ? [...projectedQueue.pending, ...desktopEchoes] : projectedQueue.pending),
+    [desktopEchoes, projectedQueue.pending]
+  )
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]
@@ -155,7 +173,7 @@ export function MobileNativeChatOverlay({
         queuedMessages={projectedQueue.queue}
         onEditQueue={controller.openNativeChatQueueEditor}
         queueEditor={controller.nativeChatQueueEditor}
-        pending={projectedQueue.pending}
+        pending={pendingWithDesktopPrompts}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

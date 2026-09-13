@@ -50,6 +50,12 @@ export type AgentHudBeacon = {
    *  when this beacon did not carry the field, which is not the same as an
    *  empty list: empty means "nothing is running", null means "no answer". */
   runningTaskIds: string[] | null
+  /** A prompt the user submitted on the DESKTOP, with the hook process id that
+   *  sent it, so two identical prompts stay distinct. Null on every beacon
+   *  that is not a prompt submission. */
+  desktopPrompt: { nonce: string; text: string } | null
+  /** Every desktop prompt seen on this terminal, oldest first, newest last. */
+  desktopPrompts: { nonce: string; text: string }[]
   /** When `runningTaskIds` was received (phone clock, epoch ms); null until a
    *  beacon has carried `run=`. The Stop hook speaks only when a turn ends,
    *  so its list cannot name a shell launched after it — the reader uses this
@@ -142,6 +148,8 @@ export function parseAgentHudBeaconPayload(
     // could not know about a shell started later in a long turn.
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
+    desktopPrompt: readDesktopPrompt(values.get('up')),
+    desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
       .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
@@ -199,9 +207,13 @@ function publish(handle: string, payload: string): void {
         doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
         launchedTaskIds:
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
+        // Prompts accumulate: each submission is its own beacon and the phone
+        // must keep the ones that came before it.
+        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt),
+        desktopPrompt: beacon.desktopPrompt ?? previous.desktopPrompt,
         receivedAt: beacon.receivedAt
       }
-    : beacon
+    : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
   beacons.set(handle, merged)
   storeForWarmStart(handle, merged)
   for (const listener of listeners) {
@@ -306,4 +318,72 @@ function liveOrRun(values: Map<string, string>): string[] | null {
     return null
   }
   return (values.get(key) ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
+}
+
+/** `up=<hook pid>:<percent-encoded JSON string body>`. The body is the raw
+ *  JSON text of the prompt, so `\n` and `\"` are still escaped there. */
+function readDesktopPrompt(raw: string | undefined): { nonce: string; text: string } | null {
+  if (!raw) {
+    return null
+  }
+  const cut = raw.indexOf(':')
+  if (cut <= 0) {
+    return null
+  }
+  const nonce = raw.slice(0, cut)
+  const body = raw.slice(cut + 1)
+  if (!/^[0-9]+$/.test(nonce) || body.length === 0) {
+    return null
+  }
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(body)
+  } catch {
+    decoded = body
+  }
+  return { nonce, text: unescapeJsonStringBody(decoded) }
+}
+
+/** Undo the escaping a JSON string body carries, without a JSON parse: the
+ *  text may hold a lone trailing backslash after the 2000-character cut. */
+export function unescapeJsonStringBody(body: string): string {
+  let out = ''
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] !== '\\' || i === body.length - 1) {
+      out += body[i]
+      continue
+    }
+    const next = body[++i]
+    if (next === 'n') {
+      out += '\n'
+    } else if (next === 't') {
+      out += '\t'
+    } else if (next === 'r') {
+      out += ''
+    } else if (next === 'u') {
+      const hex = body.slice(i + 1, i + 5)
+      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+        out += String.fromCharCode(Number.parseInt(hex, 16))
+        i += 4
+      } else {
+        out += next
+      }
+    } else {
+      out += next
+    }
+  }
+  return out
+}
+
+const MAX_DESKTOP_PROMPTS = 40
+
+/** Keeps each submission once, by the hook's own process id. */
+export function appendDesktopPrompt(
+  previous: readonly { nonce: string; text: string }[],
+  next: { nonce: string; text: string } | null
+): { nonce: string; text: string }[] {
+  if (!next || previous.some((prompt) => prompt.nonce === next.nonce)) {
+    return [...previous]
+  }
+  return [...previous, next].slice(-MAX_DESKTOP_PROMPTS)
 }

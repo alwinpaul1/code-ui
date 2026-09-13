@@ -33,6 +33,9 @@ import {
   resolveObservedPermission
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import { useAgentHudBeacon } from './agent-hud-beacon'
+const NO_DESKTOP_PROMPTS: { nonce: string; text: string }[] = []
+
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -311,6 +314,7 @@ export function useMobileNativeChatController(
     onSendError
   })
 
+  const hudBeacon = useAgentHudBeacon(activeHandle)
   // Desktop-pasted images are host paths: fetch thumbnails through the host.
   const hostImagePreviews = useHostImagePreviews({
     client,
@@ -483,13 +487,10 @@ export function useMobileNativeChatController(
     nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined,
     loadNativeChatSkills,
     handleNativeChatQuestionAnswer: activeChatStructured ? structuredNativeChat.respondQuestion : legacyHandleNativeChatQuestionAnswer,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
-    handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
-      : handleNativeChatSendWithOutcome,
+    handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
+    handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
+    nativeChatDesktopPrompts: hudBeacon?.desktopPrompts ?? NO_DESKTOP_PROMPTS,
     nativeChatContextWindow: hudObservation?.context ?? null,
     nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
     nativeChatAgentMode: hudObservation?.agentMode ?? null,
