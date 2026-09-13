@@ -11,6 +11,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   Animated: {
     View: 'AnimatedView',
+    createAnimatedComponent: (c: unknown) => c,
     Value: class {
       interpolate() {
         return 0

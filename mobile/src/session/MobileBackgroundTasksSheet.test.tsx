@@ -8,9 +8,11 @@ import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
   Animated: {
     View: 'AnimatedView',
+    createAnimatedComponent: (c: unknown) => c,
     Value: class {
       interpolate() {
         return 0
