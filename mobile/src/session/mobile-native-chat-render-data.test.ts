@@ -629,3 +629,35 @@ describe('foldMobileNativeChatMessages with a reasoning row', () => {
     expect(folded[1].blocks).toEqual([{ type: 'text', text: 'Here is the plan' }])
   })
 })
+
+// 2026-09-13: a message absorbed mid-turn has no transcript row; remembered
+// with the phone's sends it must be drawn at its anchor when that row is
+// loaded, and stay out of sight (not dumped at the top) while it is not.
+describe('remembered echoes and the loaded window', () => {
+  const echo = {
+    id: 'absorbed-1',
+    text: 'see these messages which are stacked',
+    baselineTailMessageId: 'a5',
+    restored: true
+  }
+  it('hides a remembered echo while its anchor row is outside the loaded window', () => {
+    const messages = [assistant('a9', 'much later')]
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded: messages,
+      streaming: null,
+      pending: [echo]
+    })
+    expect(data.map((m) => m.id)).toEqual(['a9'])
+  })
+  it('draws it right after its anchor row once that row is loaded', () => {
+    const messages = [assistant('a5', 'earlier'), assistant('a9', 'much later')]
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded: messages,
+      streaming: null,
+      pending: [echo]
+    })
+    expect(data.map((m) => m.id)).toEqual(['a5', 'absorbed-1', 'a9'])
+  })
+})

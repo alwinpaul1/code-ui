@@ -180,25 +180,7 @@ export function retireLandedMobileNativeChatPending(
     }
   }
   const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)
-  // An echo restored from disk whose anchor row has already left the loaded
-  // window is history the desktop holds, not a send still waiting: a message
-  // absorbed mid-turn never gets a transcript row, so after every restart
-  // those echoes came back, lost their place, and were dumped as a block at
-  // the top of the window above rows hours older (2026-09-13, "messages
-  // stacked all over"). Only judged against a transcript that has rows.
-  const orphanedRestored = new Set<string>()
-  if (messages.length > 0) {
-    const rowIds = new Set(messages.map((message) => message.id))
-    for (const item of current) {
-      if (item.restored && item.baselineTailMessageId && !rowIds.has(item.baselineTailMessageId)) {
-        orphanedRestored.add(item.id)
-      }
-    }
-  }
-  return landedPendingIds.size === 0 && glued.size === 0 && orphanedRestored.size === 0
+  return landedPendingIds.size === 0 && glued.size === 0
     ? current
-    : current.filter(
-        (item) =>
-          !landedPendingIds.has(item.id) && !glued.has(item.id) && !orphanedRestored.has(item.id)
-      )
+    : current.filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
 }

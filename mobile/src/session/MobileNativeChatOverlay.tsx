@@ -6,6 +6,7 @@ import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
+import { echoMemoryId } from './mobile-native-chat-remember-echo'
 import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
@@ -141,6 +142,17 @@ export function MobileNativeChatOverlay({
         : baseFolded,
     [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages]
   )
+  // Witnessed messages are remembered with the phone's own sends, so they
+  // survive a reconnect, a tab switch and a relaunch (2026-09-13).
+  const rememberEcho = controller.rememberEcho
+  useEffect(() => {
+    for (const echo of [...absorbedEchoes, ...desktopEchoes]) {
+      if (echo.baselineTailMessageId) {
+        const id = echo.id.startsWith('desk-') ? echo.id : echoMemoryId(echo.text)
+        rememberEcho?.(id, echo.text, echo.baselineTailMessageId)
+      }
+    }
+  }, [absorbedEchoes, desktopEchoes, rememberEcho])
   const pendingWithDesktopPrompts = useMemo(
     () =>
       desktopEchoes.length > 0 || absorbedEchoes.length > 0

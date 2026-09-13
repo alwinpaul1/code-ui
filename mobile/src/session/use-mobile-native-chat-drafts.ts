@@ -92,7 +92,7 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
-  removePending: (id: string) => void
+  removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void
 } {
   const {
     hostId,
@@ -144,7 +144,7 @@ export function useMobileNativeChatDrafts(args: {
     imagePreviewsBySession,
     setImagePreviewsBySession
   )
-  useMobileNativeChatPendingPersistence(pendingKey, pendingBySession, setPendingBySession)
+  const { rememberEcho } = useMobileNativeChatPendingPersistence(pendingKey, pendingBySession, setPendingBySession, { messagesRef, draftKey })
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
       if (!draftKey) {
@@ -375,8 +375,7 @@ export function useMobileNativeChatDrafts(args: {
       ? (imagePreviewsBySession[pendingKey] ?? NO_IMAGE_PREVIEWS)
       : NO_IMAGE_PREVIEWS,
     captureSendOrigin,
-    readSeededLaunchDraft,
-    readSeededLaunchDraftSeed,
+    readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho,
     clearDraftForSend,
     restoreRejectedDraft,
     acceptSend,

@@ -259,6 +259,12 @@ export function buildMobileNativeChatTransientData({
         ? baselineId
         : foldedAnchorByRawId.get(baselineId)
       : undefined
+    if (item.restored && baselineId && !anchor) {
+      // A remembered echo whose anchor row is not in the loaded window is
+      // older than the window: drawn when paging brings its row in, never
+      // dumped at the top as a block (2026-09-13, "messages stacked all over").
+      continue
+    }
     if ((baselineId || item.restored) && !anchor && renderedFolded.length > 0) {
       // The captured history boundary has left the loaded window. Retain this
       // older echo before the window, never present it as a new follow-up.

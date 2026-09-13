@@ -1,4 +1,6 @@
-import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { rememberEchoInPending } from './mobile-native-chat-remember-echo'
 import {
   readNativeChatPendingEchoes,
   writeNativeChatPendingEchoes
@@ -19,8 +21,28 @@ type PendingBySession = Record<string, MobileNativeChatPendingMessage[]>
 export function useMobileNativeChatPendingPersistence(
   sessionKey: string | null,
   pendingBySession: PendingBySession,
-  setPendingBySession: Dispatch<SetStateAction<PendingBySession>>
-): void {
+  setPendingBySession: Dispatch<SetStateAction<PendingBySession>>,
+  /** What a witnessed message is remembered against; see `rememberEchoInPending`. */
+  memory?: { messagesRef: { current: readonly NativeChatMessage[] }; draftKey: string | null }
+): { rememberEcho: (id: string, text: string, anchorId: string | null) => void } {
+  const sessionKeyRef = useRef(sessionKey)
+  sessionKeyRef.current = sessionKey
+  const memoryRef = useRef(memory)
+  memoryRef.current = memory
+  const rememberEcho = useCallback(
+    (id: string, text: string, anchorId: string | null) => {
+      const key = sessionKeyRef.current
+      const draftKey = memoryRef.current?.draftKey
+      const messages = memoryRef.current?.messagesRef.current
+      if (!key || !draftKey || !anchorId || !messages) {
+        return
+      }
+      setPendingBySession((previous) =>
+        rememberEchoInPending(previous, key, id, text, anchorId, messages, draftKey)
+      )
+    },
+    [setPendingBySession]
+  )
   // Why not skip when the session already has entries: a send made in the
   // moment before the stored list loads must not cancel the load; the two
   // lists merge by id, stored first.
@@ -70,4 +92,5 @@ export function useMobileNativeChatPendingPersistence(
     }, PENDING_WRITE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [current, sessionKey])
+  return { rememberEcho }
 }

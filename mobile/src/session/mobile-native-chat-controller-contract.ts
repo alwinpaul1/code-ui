@@ -50,6 +50,8 @@ export type MobileNativeChatController = {
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
+  /** Keep a witnessed desktop message with the phone's own sends; see mobile-native-chat-remember-echo.ts. */
+  rememberEcho: (id: string, text: string, anchorId: string | null) => void
   nativeChatQueuedMessages?: string[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>

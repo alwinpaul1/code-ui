@@ -110,7 +110,7 @@ export function useMobileNativeChatController(
     getComposerEditGeneration: getChatComposerEditGeneration,
     pending: chatPending,
     imagePreviewsByMessageId: chatImagePreviewsByMessageIdLocal,
-    captureSendOrigin,
+    captureSendOrigin, rememberEcho,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
@@ -442,7 +442,7 @@ export function useMobileNativeChatController(
     chatComposerText,
     setChatComposerText,
     getChatComposerEditGeneration,
-    chatPending,
+    chatPending, rememberEcho,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
