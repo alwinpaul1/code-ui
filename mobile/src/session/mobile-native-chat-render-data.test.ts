@@ -21,6 +21,36 @@ function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
 }
 
+// 2026-09-13: 0.5.51 collapsed every assistant row Orca did not stamp
+// `source: 'transcript'` into a Thinking row, on the belief that Orca's reader
+// drops `thinking` blocks and the hook stream carries that prose instead.
+// Neither half holds for Orca 1.4.200: its Claude JSONL decoder maps
+// `case 'thinking'` to a `{type:'text'}` block (out/main/index.js), and the
+// bundle stamps `source: 'transcript'` on every chat message it builds —
+// `source: 'hook'` appears nowhere in it. A reply must stay a reply.
+describe('an assistant turn Orca assembled from thinking blocks', () => {
+  it('stays a reply in the chat instead of collapsing into a thought', () => {
+    // The real shape: Orca turns Claude's `thinking` + `tool_use` record into
+    // one assistant row carrying text and a tool call.
+    const turn: NativeChatMessage = {
+      id: 'msg_011Cf1Vttb86E1FqWAQDE3MJ',
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'text',
+          text: 'Building it. Starting with the hook that puts the prompt on the beacon.'
+        },
+        { type: 'tool-call', name: 'Bash', input: { command: 'npx vitest run' } }
+      ],
+      timestamp: 1757720429000,
+      source: 'transcript'
+    }
+    const folded = foldMobileNativeChatMessages([user('u1', 'go'), turn])
+    expect(folded.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(folded[1]?.blocks[0]).toMatchObject({ type: 'text' })
+  })
+})
+
 describe('mobileNativeChatEmptyState', () => {
   it('invites a first message naming the agent, matching desktop copy', () => {
     // waiting-session (live agent, no transcript) and ready (loaded, empty) both

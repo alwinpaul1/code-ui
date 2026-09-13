@@ -46,12 +46,17 @@ export function useAbsorbedQueueEchoes(
 ): MobileNativeChatPendingMessage[] {
   const held = useRef(new Map<string, HeldEcho>())
   const previous = useRef<readonly string[]>([])
+  const previousSent = useRef<readonly string[] | null>(null)
+  /** Screen prompts that appeared while the phone was watching, by key. */
+  const appeared = useRef(new Map<string, string>())
   const scope = useRef(scopeKey)
   const counter = useRef(0)
   if (scope.current !== scopeKey) {
     scope.current = scopeKey
     held.current = new Map()
     previous.current = []
+    previousSent.current = null
+    appeared.current = new Map()
   }
   // Keyed on collapsed whitespace: the queue box and the scrollback wrap the
   // same message differently, and keying on the raw text showed it twice
@@ -59,7 +64,7 @@ export function useAbsorbedQueueEchoes(
   const live = queued.map(promptKey).filter((text) => text.length > 0)
   const own = ownPrompts.map(promptKey)
   const anchorId = rawMessages.at(-1)?.id ?? null
-  const hold = (text: string, skipOwn: boolean): void => {
+  const hold = (text: string, skipOwn: boolean, mayCreate = true): void => {
     const key = promptKey(text)
     // No transcript yet means no row to anchor on, and a null anchor pins
     // the echo to the bottom for good; it is picked up on a later render.
@@ -79,11 +84,54 @@ export function useAbsorbedQueueEchoes(
       }
       return
     }
+    if (!mayCreate) {
+      return
+    }
     counter.current += 1
     held.current.set(key, { text, anchorId, seq: counter.current })
   }
-  for (const text of sentPrompts) {
+  // The scrollback is a BACKLOG, not an event: every prompt of the session
+  // still painted on screen is in it, including ones whose transcript rows
+  // landed long before the page the phone loaded — those can never retire,
+  // and adopting the lot on the first reading drew them as one run of user
+  // bubbles with no reply between them (2026-09-13, "why is all my messages
+  // stacked like these where are my older responses"). So the first reading
+  // of a scope is only a baseline; a prompt is held when it APPEARS while the
+  // phone is already watching, which is exactly the mid-turn absorb this
+  // witness exists for. An entry already held still grows from a fuller
+  // reading, so a truncated queue entry is not stuck short.
+  const seenSent = previousSent.current
+  if (seenSent !== null) {
+    for (const text of sentPrompts) {
+      const key = promptKey(text)
+      if (!seenSent.some((other) => sameMessage(promptKey(other), key))) {
+        appeared.current.set(key, text)
+      }
+    }
+  }
+  previousSent.current = sentPrompts
+  // Retried every reading: a prompt that appeared before the transcript had a
+  // row to anchor on is held as soon as one arrives, rather than pinned to
+  // the bottom (2026-09-13).
+  const handedOver: string[] = []
+  for (const [key, text] of appeared.current) {
     hold(text, true)
+    // Handed over to `held`, which owns it from here — including retiring it
+    // when the transcript catches up. Left in place it would be re-created on
+    // the very next render and never retire at all.
+    for (const other of held.current.keys()) {
+      if (sameMessage(other, key)) {
+        handedOver.push(key)
+        break
+      }
+    }
+  }
+  for (const key of handedOver) {
+    appeared.current.delete(key)
+  }
+  // A reading that no longer shows it still grows an entry already held.
+  for (const text of sentPrompts) {
+    hold(text, true, false)
   }
   for (const text of previous.current) {
     hold(text, false)

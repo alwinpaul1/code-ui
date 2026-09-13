@@ -130,7 +130,10 @@ it('holds a prompt the agent already printed, without it ever being queued', () 
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(createElement(ProbeSent, { sent: ['bump the version'], folded }))
+    renderer = create(createElement(ProbeSent, { sent: [], folded }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeSent, { sent: ['bump the version'], folded }))
   })
   expect(latest).toMatchObject([{ text: 'bump the version' }])
 
@@ -207,7 +210,10 @@ it('skips a prompt the phone itself sent or the hook already delivered', () => {
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(
       createElement(ProbeOwn, {
         sent: ['[Image #85] See this', 'a desktop prompt', 'a real absorbed one'],
         own: ['See this', 'a desktop\nprompt'],
@@ -238,7 +244,10 @@ it('draws a desktop message without the image markers the phone cannot show', ()
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(
       createElement(ProbeOwn, { sent: ['[Image #96] [Image #97] See this tooo'], own: [], folded })
     )
   })
@@ -286,7 +295,10 @@ it('retires a reading that stopped short of the row that landed', () => {
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(
       createElement(ProbeOwn, { sent: ['please look at the failure in the build'], own: [], folded })
     )
   })
@@ -326,7 +338,10 @@ it('returns the same array while nothing changed', () => {
 it('waits for a transcript row before holding anything, so nothing pins to the bottom', () => {
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [] }))
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded: [] }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [] }))
   })
   expect(latest).toEqual([])
   act(() => {
@@ -338,6 +353,61 @@ it('waits for a transcript row before holding anything, so nothing pins to the b
   act(() => renderer!.unmount())
 })
 
+// 2026-09-13, "Why is all my messages stacked like these where are my older
+// responses": Claude's scrollback still paints prompts from earlier in the
+// session, and the first reading adopted ALL of them at once. They anchor to
+// whatever the transcript tail was at that moment, so they render as one run
+// of user bubbles with no reply between them, and they can never retire — the
+// rows that carry them landed long before the page of transcript the phone
+// loaded. Only a prompt that APPEARS while the phone is already watching is
+// one the transcript is missing.
+it('does not stack the scrollback backlog as bubbles when the chat opens', () => {
+  const backlog = ['bump the version and tag it', 'now check the release notes']
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeSent, { sent: backlog, folded }))
+  })
+  expect(latest).toEqual([])
+
+  // Still the same screen a second later: still nothing new to draw.
+  act(() => {
+    renderer!.update(createElement(ProbeSent, { sent: backlog, folded }))
+  })
+  expect(latest).toEqual([])
+
+  // A prompt absorbed mid-turn appears underneath them — that one is drawn.
+  act(() => {
+    renderer!.update(
+      createElement(ProbeSent, { sent: [...backlog, 'and does it work on windows'], folded })
+    )
+  })
+  expect(latest).toMatchObject([{ text: 'and does it work on windows' }])
+
+  // And once its row lands it goes for good, even though the agent still
+  // paints it on screen.
+  const landed = [...backlog, 'and does it work on windows']
+  act(() => {
+    renderer!.update(
+      createElement(ProbeSent, {
+        sent: landed,
+        folded: [...folded, row('u2', 'user', 'and does it work on windows')]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => {
+    renderer!.update(
+      createElement(ProbeSent, {
+        sent: landed,
+        folded: [...folded, row('u2', 'user', 'and does it work on windows')]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
 // 2026-09-13: retiring on a plain prefix dropped a message that had no
 // transcript row of its own, because a LATER prompt happened to start with
 // the same words. A cut reading ends on a paragraph break; nothing else counts.
@@ -345,7 +415,10 @@ it('keeps a held message when a later prompt merely starts with the same words',
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(
       createElement(ProbeOwn, { sent: ['check the build failure'], own: [], folded })
     )
   })
