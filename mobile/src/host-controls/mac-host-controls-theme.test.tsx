@@ -12,6 +12,16 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
   useColorScheme: () => 'light'
 }))
+// Why: lucide's entry pulls React Native internals that the host-tag mock above removed.
+vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
+  Edit3: 'Edit3',
+  Lock: 'Lock',
+  LockOpen: 'LockOpen',
+  MonitorOff: 'MonitorOff',
+  Sunrise: 'Sunrise',
+  Trash2: 'Trash2'
+}))
 // Why: the drawer is a native modal stack; the sheet's own colours are what is under test.
 vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: unknown }) => children
@@ -23,9 +33,11 @@ vi.mock('./mac-unlock-password-store', () => ({
   clearMacUnlockPassword: vi.fn()
 }))
 
+import { ActionSheetContent } from '../components/ActionSheetModal'
 import { ThemeProvider } from '../theme/theme-context'
 import { MacHostToast } from './MacHostToast'
 import { MacUnlockPasswordSheet } from './MacUnlockPasswordSheet'
+import { getMacHostSheetActions } from './mac-host-sheet-actions'
 
 function renderInScheme(scheme: 'light' | 'dark', element: ReturnType<typeof createElement>) {
   let renderer: ReactTestRenderer | null = null
@@ -63,6 +75,23 @@ describe('the Mac controls in both themes', () => {
     const dark = backgroundsOf(renderInScheme('dark', createElement(MacUnlockPasswordSheet, props)))
     expect(light.length).toBeGreaterThan(0)
     expect(dark).not.toEqual(light)
+  })
+
+  it('paints the "checking the Mac" row from the live theme in both schemes', () => {
+    const checkingRow = () =>
+      createElement(ActionSheetContent, {
+        actions: getMacHostSheetActions({
+          hostPlatform: 'darwin',
+          worktreeId: 'wt-1',
+          state: 'checking',
+          onAction: vi.fn()
+        })
+      })
+    const light = renderInScheme('light', checkingRow())
+    const dark = renderInScheme('dark', checkingRow())
+    expect(JSON.stringify(light.toJSON())).toContain('Checking the Mac…')
+    expect(JSON.stringify(dark.toJSON())).toContain('Checking the Mac…')
+    expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
   it('warns that the password lives on the phone and travels to the Mac', () => {
