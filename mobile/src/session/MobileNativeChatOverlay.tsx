@@ -16,6 +16,7 @@ import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 const NO_PROMPTS: { nonce: string; text: string }[] = []
+const NO_SCREEN_PROMPTS: string[] = []
 
 type Props = {
   controller: MobileNativeChatController
@@ -110,6 +111,7 @@ export function MobileNativeChatOverlay({
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],
+    controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
     baseFolded,
     sendSurfaceId,
     session.messages

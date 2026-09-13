@@ -19,7 +19,7 @@ function Probe({
   folded: NativeChatMessage[]
   scopeKey?: string
 }): null {
-  latest = useAbsorbedQueueEchoes(queued, folded, scopeKey)
+  latest = useAbsorbedQueueEchoes(queued, [], folded, scopeKey)
   return null
 }
 
@@ -119,6 +119,35 @@ function ProbeRaw({
   folded: NativeChatMessage[]
   raw: NativeChatMessage[]
 }): null {
-  latest = useAbsorbedQueueEchoes(queued, folded, 'tab-a', raw)
+  latest = useAbsorbedQueueEchoes(queued, [], folded, 'tab-a', raw)
+  return null
+}
+
+// 2026-09-13: a prompt taken between two tool calls never renders as queued,
+// so the queue witness misses it entirely. The agent prints it into its
+// scrollback instead, and that row is the only thing left to read.
+it('holds a prompt the agent already printed, without it ever being queued', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeSent, { sent: ['bump the version'], folded }))
+  })
+  expect(latest).toMatchObject([{ text: 'bump the version' }])
+
+  // And it goes when the transcript finally carries it.
+  act(() => {
+    renderer!.update(
+      createElement(ProbeSent, {
+        sent: ['bump the version'],
+        folded: [...folded, row('u2', 'user', 'bump the version')]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
+function ProbeSent({ sent, folded }: { sent: string[]; folded: NativeChatMessage[] }): null {
+  latest = useAbsorbedQueueEchoes([], sent, folded, 'tab-a', folded)
   return null
 }

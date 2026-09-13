@@ -155,7 +155,8 @@ export function useMobileNativeChatController(
     dialogOptions: terminalDialogOptions,
     terminalPermission,
     permissionDismissed,
-    queuedMessages: visibleQueuedMessages
+    queuedMessages: visibleQueuedMessages,
+    sentPrompts: screenSentPrompts
   } = useMobileNativeChatHud({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
@@ -442,8 +443,7 @@ export function useMobileNativeChatController(
     setChatComposerText,
     getChatComposerEditGeneration,
     chatPending,
-    nativeChatQueuedMessages:
-      activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews
@@ -491,10 +491,9 @@ export function useMobileNativeChatController(
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatDesktopPrompts: hudBeacon?.desktopPrompts ?? NO_DESKTOP_PROMPTS,
+    nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: hudObservation?.context ?? null,
-    nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
-    nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: hudObservation?.context ?? null, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
   }
 }

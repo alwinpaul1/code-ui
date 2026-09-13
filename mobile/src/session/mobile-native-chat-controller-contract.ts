@@ -135,6 +135,8 @@ export type MobileNativeChatController = {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   /** Prompts submitted on the desktop, from the agent's own hook. */
   nativeChatDesktopPrompts: { nonce: string; text: string }[]
+  /** Prompts the agent has already accepted, read off its own screen. */
+  nativeChatScreenPrompts: string[]
   /** Whether this tab was launched with the prompt hook; null until a beacon lands. */
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */

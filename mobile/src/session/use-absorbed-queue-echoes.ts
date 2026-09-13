@@ -21,6 +21,12 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  */
 export function useAbsorbedQueueEchoes(
   queued: readonly string[],
+  // Prompts the agent has already printed into its scrollback. A queued entry
+  // is held when it LEAVES the queue; one of these is held as soon as it is
+  // seen, because by then the agent has taken it — that is the only witness
+  // for a prompt absorbed between two tool calls, which never renders as
+  // queued at all (2026-09-13).
+  sentPrompts: readonly string[],
   folded: readonly NativeChatMessage[],
   scopeKey: string,
   // Anchored on the RAW record, not the folded row: a folded run is one row
@@ -39,6 +45,13 @@ export function useAbsorbedQueueEchoes(
     previous.current = []
   }
   const live = new Set(queued.map((text) => text.trim()).filter((text) => text.length > 0))
+  for (const text of sentPrompts) {
+    const key = text.trim()
+    if (key.length > 0 && !live.has(key) && !held.current.has(key)) {
+      counter.current += 1
+      held.current.set(key, { text, anchorId: rawMessages.at(-1)?.id ?? null, seq: counter.current })
+    }
+  }
   for (const text of previous.current) {
     const key = text.trim()
     if (key.length > 0 && !live.has(key) && !held.current.has(key)) {

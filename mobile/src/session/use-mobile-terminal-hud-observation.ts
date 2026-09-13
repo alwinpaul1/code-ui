@@ -10,6 +10,7 @@ import { claudePermissionFromScreen } from './claude-terminal-permission'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -38,6 +39,8 @@ export function useMobileTerminalHudObservation(args: {
 }): {
   permissionDismissed: boolean
   queuedMessages: string[]
+  /** Prompts the agent has already accepted, read off its scrollback. */
+  sentPrompts: string[]
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -49,6 +52,7 @@ export function useMobileTerminalHudObservation(args: {
   const queueScopeRef = useRef<string | null>(null)
   const [permissionDismissed, setPermissionDismissed] = useState(false)
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
+  const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
@@ -117,6 +121,12 @@ export function useMobileTerminalHudObservation(args: {
         queueScopeRef.current = handleKey
         setQueuedMessages((current) =>
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued
+        )
+        // Only Claude paints its accepted prompts this way; Codex does not.
+        const sent =
+          agent === 'claude' || agent === 'openclaude' ? sentPromptsFromScreen(lines) : []
+        setSentPrompts((current) =>
+          JSON.stringify(current) === JSON.stringify(sent) ? current : sent
         )
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         // The screen parser names only Claude's Bash dialog, so tracking
@@ -188,6 +198,7 @@ export function useMobileTerminalHudObservation(args: {
     dialogOptions,
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
+    sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     permissionDismissed
   }
 }
