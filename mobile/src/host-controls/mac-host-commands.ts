@@ -25,11 +25,14 @@ export const MAC_HOST_ACTION_PROGRESS: Record<MacHostAction, string> = {
 // fallback for a host that keeps the pane alive.
 const SELF_CLOSE = '; exit'
 
-// Why the CGSession fallback: `keystroke` needs Accessibility permission for the Orca
-// process. When macOS refuses, osascript exits non-zero and the suspend path still locks.
+// Why the sleep fallback: `keystroke` needs Accessibility permission for the Orca
+// process, and when macOS refuses, osascript exits non-zero. The old CGSession
+// binary is gone from macOS 26 (checked 2026-09-13), so the fallback puts the
+// display to sleep instead, which locks the Mac wherever "require password after
+// sleep" is on — the default, and "immediate" on the machine this was built for.
 const LOCK_COMMAND =
   `osascript -e 'tell application "System Events" to keystroke "q" using {control down, command down}'` +
-  ' || /System/Library/CoreServices/Menu\\ Extras/User.menu/Contents/Resources/CGSession -suspend'
+  ' || pmset displaysleepnow'
 
 const PASSWORDLESS_COMMANDS: Record<MacHostPasswordlessAction, string> = {
   lock: LOCK_COMMAND,

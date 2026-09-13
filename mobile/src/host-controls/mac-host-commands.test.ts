@@ -14,13 +14,13 @@ describe('mac host commands', () => {
     expect(buildMacUnlockCommand('pw')).toMatch(/; exit$/)
   })
 
-  it('locks with the Lock Screen shortcut and falls back to CGSession', () => {
+  it('locks with the Lock Screen shortcut and falls back to display sleep', () => {
     const command = buildMacHostCommand('lock')
     expect(command).toContain(
       `osascript -e 'tell application "System Events" to keystroke "q" using {control down, command down}'`
     )
     expect(command).toContain(
-      '|| /System/Library/CoreServices/Menu\\ Extras/User.menu/Contents/Resources/CGSession -suspend'
+      '|| pmset displaysleepnow'
     )
   })
 
