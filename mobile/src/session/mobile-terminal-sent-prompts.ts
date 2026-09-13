@@ -102,6 +102,13 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       if (!more || isFoldSummary(more[1] ?? '', screen, cursor) || isToolRow(more[1] ?? '', screen, cursor)) {
         break
       }
+      // Anything typed while the agent is busy stacks here as a plain two-space
+      // row — same shape as a wrap (captured at 100 columns, 2026-09-14). A
+      // slash command is never part of the prompt above it, and once one has
+      // appeared every row after it is its own entry, not this prompt's tail.
+      if (LOCAL_COMMAND.test(more[1] ?? '')) {
+        break
+      }
       parts.push(more[1] ?? '')
       cursor += 1
     }

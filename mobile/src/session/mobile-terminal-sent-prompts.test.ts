@@ -245,4 +245,38 @@ describe('sentPromptsFromScreen', () => {
   it('returns nothing for a screen with no prompt rows', () => {
     expect(sentPromptsFromScreen(['  Ran 3 shell commands', '', '✻ Cooking…', '❯'])).toEqual([])
   })
+
+  it('does not glue a message typed while the agent was busy onto the running prompt', () => {
+    // Captured with `tmux capture-pane` against Claude Code 2.1.270 at 100
+    // columns (2026-09-14). Type while it is working and each entry stacks as a
+    // plain two-space row directly under the accepted prompt — no marker, no
+    // blank row — the same shape as a wrapped continuation. On the phone the
+    // user's prompt came back with an /effort switch glued onto the end of it.
+    const screen = [
+      '\u276f run exactly this and say done: python3 -c "import time; time.sleep(40)"',
+      '  this is a long message the user typed while the agent was busy working on the sleep',
+      '  /effort high',
+      '\u2736 Herding\u2026 (2s \u00b7 thinking)',
+      '',
+      '\u276f\u00a0'
+    ]
+    expect(sentPromptsFromScreen(screen).join(' ')).not.toContain('/effort')
+    // The plain message above it is NOT split off: at a two-space indent it is
+    // byte-identical to a wrapped continuation of the prompt, and this parser
+    // refuses to guess between them rather than risk cutting a real prompt in
+    // half. It retires normally once the agent takes it.
+    expect(sentPromptsFromScreen(screen)).toHaveLength(1)
+  })
+
+  it('leaves a model or effort switch out of the prompt above it', () => {
+    expect(
+      sentPromptsFromScreen([
+        '\u276f Did you do all the changes i told in this session',
+        '  /model opus',
+        '  /effort xhigh',
+        '',
+        '\u276f '
+      ])
+    ).toEqual(['Did you do all the changes i told in this session'])
+  })
 })
