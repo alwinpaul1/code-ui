@@ -84,34 +84,30 @@ function MobileNativeChatPermissionImpl({
           {permission.title}
         </Txt>
       </View>
-      {description || command ? (
+      {command || description ? (
+        // The Claude app's shape: one sunken monospace block, nothing wrapped.
+        // A one-line command scrolls sideways so a long path stays a path; a
+        // multi-line one scrolls down within the cap, each line still whole.
         <ScrollView
-          style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
+          style={{
+            maxHeight: readingMaxHeight,
+            flexShrink: 1,
+            borderRadius: radius.md,
+            backgroundColor: colors.bgSunken
+          }}
           nestedScrollEnabled
-          contentContainerStyle={{ gap: space.md }}
+          contentContainerStyle={{ flexGrow: 1 }}
         >
-          {description ? (
-            <Txt variant="body" tone="secondary" selectable>
-              {description}
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator
+            contentContainerStyle={{ padding: space.md }}
+          >
+            <Txt variant="mono" selectable>
+              {command ?? description}
             </Txt>
-          ) : null}
-          {command ? (
-            <View
-              style={{
-                padding: space.md,
-                gap: space.sm,
-                borderRadius: radius.md,
-                backgroundColor: colors.bgSunken
-              }}
-            >
-              <Txt variant="caption" tone="muted">
-                Command
-              </Txt>
-              <Txt variant="mono" selectable>
-                {command}
-              </Txt>
-            </View>
-          ) : null}
+          </ScrollView>
         </ScrollView>
       ) : null}
       <ScrollView
@@ -120,7 +116,12 @@ function MobileNativeChatPermissionImpl({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ gap: space.sm }}
       >
-        {permission.options.map((option, index) => {
+        {/* The Claude app offers exactly three: allow once, always for this
+            session, deny. The TUI's "switch to auto mode" is a mode change, not
+            an answer to this prompt, and is left out on the user's instruction. */}
+        {permission.options
+          .filter((option) => !/^Yes, and switch to auto mode\b/i.test(option.label))
+          .map((option, index) => {
           const rememberedPrefix = option.label.match(
             /^Yes, and don't ask again for commands that start with\s+(.+)$/is
           )?.[1]
@@ -130,7 +131,7 @@ function MobileNativeChatPermissionImpl({
           const autoMode = /^Yes, and switch to auto mode\b/i.test(option.label)
           const shortLabel =
             rememberedPrefix || rememberedScope
-              ? 'Allow and remember'
+              ? 'Always allow for this session'
               : autoMode
                 ? 'Allow and switch to auto mode'
                 : /^Yes$/i.test(option.label)
@@ -140,25 +141,6 @@ function MobileNativeChatPermissionImpl({
                     : option.label
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
-              {rememberedPrefix || rememberedScope ? (
-                <ScrollView
-                  style={{
-                    maxHeight: readingMaxHeight,
-                    flexShrink: 1,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.bgSunken
-                  }}
-                  contentContainerStyle={{ gap: space.sm, padding: space.md }}
-                  nestedScrollEnabled
-                >
-                  <Txt variant="body" tone="secondary" selectable>
-                    {rememberedPrefix ? 'For commands starting with:' : 'Remember permission for:'}
-                  </Txt>
-                  <Txt variant="body" tone="secondary" selectable>
-                    {rememberedPrefix ?? rememberedScope}
-                  </Txt>
-                </ScrollView>
-              ) : null}
               {autoMode ? (
                 <Txt variant="body" tone="secondary" selectable style={{ paddingTop: space.sm }}>
                   {option.label.replace(/^Yes, and switch to auto mode\s*[·:]?\s*/i, '') ||
@@ -185,10 +167,10 @@ function MobileNativeChatPermissionImpl({
                   paddingVertical: space.sm + 4,
                   gap: space.sm,
                   justifyContent: 'center',
-                  borderRadius: radius.md,
+                  borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: index === 0 ? colors.accent : colors.border,
-                  backgroundColor: index === 0 ? colors.accent : colors.bgRaised,
+                  borderColor: index === 0 ? colors.text : colors.border,
+                  backgroundColor: index === 0 ? colors.text : 'transparent',
                   opacity: submitting ? 0.55 : 1
                 }}
               >
@@ -196,7 +178,7 @@ function MobileNativeChatPermissionImpl({
                   variant="label"
                   weight="semibold"
                   align="center"
-                  tone={index === 0 ? 'onAccent' : 'primary'}
+                  tone={index === 0 ? 'inverse' : 'primary'}
                 >
                   {shortLabel}
                 </Txt>

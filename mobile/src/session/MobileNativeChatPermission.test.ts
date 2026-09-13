@@ -46,7 +46,8 @@ describe('MobileNativeChatPermission', () => {
       )
     })
     const texts = renderer.root.findAllByType('Text')
-    expect(texts.some((text) => text.props.children === prefix)).toBe(true)
+    // The Claude app shows the scope only through the button itself; the full
+    // option label stays on the button as its accessibility label.
     expect(texts.some((text) => text.props.children === command && text.props.selectable)).toBe(
       true
     )
@@ -165,7 +166,7 @@ describe('MobileNativeChatPermission', () => {
     ).toBe(false)
   })
 
-  it('renders all four Claude choices with full scope and keeps auto mode explicit', async () => {
+  it('offers the three Claude choices and leaves the auto-mode switch out', async () => {
     const scope = 'pdftoppm -r 110 -f 2 -l 2 -png main.pdf /private/tmp/fig1'
     const auto = 'Yes, and switch to auto mode · auto mode handles these prompts for you'
     const onRespond = vi.fn(async () => true)
@@ -187,15 +188,20 @@ describe('MobileNativeChatPermission', () => {
       )
     })
     const buttons = renderer.root.findAllByType('Pressable')
-    expect(buttons).toHaveLength(4)
+    // Claude mobile always shows exactly these three (user's instruction, 2026-09-14).
+    expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual([
+      'Yes',
+      `Yes, and don’t ask again for: ${scope}`,
+      'No'
+    ])
+    expect(buttons.some((button) => button.props.accessibilityLabel === auto)).toBe(false)
     const texts = renderer.root.findAllByType('Text')
-    expect(texts.some((text) => text.props.children === 'Allow and remember')).toBe(true)
+    expect(texts.some((text) => text.props.children === 'Always allow for this session')).toBe(true)
     expect(texts.some((text) => text.props.children === scope && text.props.selectable)).toBe(true)
     expect(onRespond).not.toHaveBeenCalled()
-    await act(async () =>
-      buttons.find((button) => button.props.accessibilityLabel === auto)?.props.onPress()
-    )
-    expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')
+    // Deny still sends the TUI's own digit for "No", which is 4 here, not 3.
+    await act(async () => buttons[2].props.onPress())
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith('4')
   })
 
   it('keeps the choices reachable when the agent offers many long ones', () => {
@@ -224,7 +230,7 @@ describe('MobileNativeChatPermission', () => {
     // Reading area, remembered-scope blocks, and the choices themselves.
     expect(bounded.length).toBeGreaterThanOrEqual(2)
     const choices = scrollers.find((node) =>
-      node.findAllByType('Text').some((text) => String(text.props.children).includes('Allow and remember'))
+      node.findAllByType('Text').some((text) => String(text.props.children).includes('Always allow for this session'))
     )
     expect(choices).toBeDefined()
     const choiceStyle = choices!.props.style as { maxHeight?: number; flexShrink?: number }

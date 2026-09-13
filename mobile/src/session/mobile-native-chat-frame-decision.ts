@@ -14,6 +14,8 @@ export function mobileNativeChatFrameToShow(args: {
   showNativeChat: boolean
   /** A frame was drawn for this surface earlier and can be replayed. */
   hasHeldFrame: boolean
+  /** A terminal pane is mounted for the active tab, so yielding shows something. */
+  hasTerminalUnderneath: boolean
 }): MobileNativeChatFrame {
   if (!args.blank) {
     return 'draw'
@@ -25,7 +27,14 @@ export function mobileNativeChatFrameToShow(args: {
   // earlier frame there is nothing to protect and blanking is pure loss: a
   // freshly created agent tab has no transcript yet, so it reloads empty
   // forever and the whole body stayed black, composer and all (reported from
-  // the phone on 0.5.68). A chat tab draws its empty state instead; only a tab
-  // that is not chat at all yields the screen to the terminal.
-  return args.showNativeChat ? 'draw' : 'terminal'
+  // the phone on 0.5.68, and still on 0.5.69).
+  //
+  // Yielding is only an answer when there is something to yield TO. An
+  // agent-session tab has no terminal pane at all, so returning nothing left
+  // the frame empty; that is the half 0.5.69 missed. Draw unless a terminal is
+  // actually mounted under us and this is not a chat tab.
+  if (args.showNativeChat) {
+    return 'draw'
+  }
+  return args.hasTerminalUnderneath ? 'terminal' : 'draw'
 }

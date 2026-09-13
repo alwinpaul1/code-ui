@@ -291,6 +291,7 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatOverlay
         controller={nativeChatController}
+        hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}

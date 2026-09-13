@@ -22,6 +22,9 @@ const NO_SCREEN_PROMPTS: string[] = []
 
 type Props = {
   controller: MobileNativeChatController
+  /** A terminal pane is mounted for the active tab. When none is, this overlay
+   *  is the only thing on screen, so it must never render nothing. */
+  hasTerminalUnderneath: boolean
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
@@ -60,6 +63,7 @@ type Props = {
  *  the chat list below it does not. */
 export function MobileNativeChatOverlay({
   controller,
+  hasTerminalUnderneath,
   onOpenFile,
   images,
   onMicPress,
@@ -192,7 +196,8 @@ export function MobileNativeChatOverlay({
   const frame = mobileNativeChatFrameToShow({
     blank,
     showNativeChat: controller.showNativeChat,
-    hasHeldFrame: held.element != null
+    hasHeldFrame: held.element != null,
+    hasTerminalUnderneath
   })
   if (frame === 'hold') {
     return held.element

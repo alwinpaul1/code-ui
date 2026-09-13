@@ -60,6 +60,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
+    // These cases model a terminal tab, which always has a pane underneath.
+    hasTerminalUnderneath: true,
     images: {} as never,
     onMicPress: vi.fn(),
     micActive: false,
