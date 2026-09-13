@@ -117,14 +117,41 @@ export function queuedMessagesFromScreen(screen: readonly string[], draft?: unkn
   return claudeQueueViewFromScreen(screen, draft).entries
 }
 
+/** Enough of a row to be sure it is the same message and not a shorter one
+ *  that merely starts the same way. "ok" is a prefix of half the language. */
+const QUEUE_ROW_MATCH_FLOOR = 24
+
+/** Whether the row Claude drew in its queue box is this pending send.
+ *
+ *  Not equality: the box only ever holds what fits, so a long message is drawn
+ *  shortened, sometimes with an ellipsis. Comparing exactly left the send
+ *  standing as a bubble AND as a queue row at the same time (reported twice
+ *  from the phone with screenshots, 2026-09-14). Compare the printing
+ *  characters only — the drawn row's line breaks are Claude's wrapping, not the
+ *  author's — and accept the drawn row as a prefix of what was sent once it is
+ *  long enough to be unambiguous. */
+export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
+  const dense = (text: string) => text.replace(/\s+/g, '')
+  const want = dense(sent)
+  const row = dense(drawn).replace(/(?:\u2026|\.{3})$/, '')
+  if (row.length === 0 || want.length === 0) {
+    return false
+  }
+  if (row === want) {
+    return true
+  }
+  const shorter = row.length < want.length ? row : want
+  const longer = row.length < want.length ? want : row
+  return shorter.length >= QUEUE_ROW_MATCH_FLOOR && longer.startsWith(shorter)
+}
+
 export function pendingOutsideVisibleQueue<T extends { text: string }>(
   pending: readonly T[],
   queue: readonly string[]
 ): T[] {
-  const normalize = (text: string) => text.replace(/\s+/g, ' ').trim()
-  const remaining = queue.map(normalize)
+  const remaining = [...queue]
   return pending.filter((item) => {
-    const index = remaining.indexOf(normalize(item.text))
+    const index = remaining.findIndex((row) => queueRowIsPendingSend(item.text, row))
     if (index === -1) {
       return true
     }

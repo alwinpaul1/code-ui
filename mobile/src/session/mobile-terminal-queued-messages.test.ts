@@ -225,4 +225,36 @@ describe('Claude transcript echoes', () => {
       )
     ).toEqual(['still queued'])
   })
+
+  it('shows a long queued message once, even though Claude draws it shortened', () => {
+    // Reported twice from the phone with screenshots (2026-09-14): a long
+    // prompt stood as a sent bubble AND as queue entry 1 at the same time. The
+    // queue box only ever holds what fits, so the row Claude drew is a shortened
+    // form of what was sent, and an exact compare never matched it.
+    const sent =
+      'Did you do all the changes i told in this session reead thr session transcript deeply\n\n' +
+      '1. Check all the messages or user prompts i asked to you where done and confirm it, if not ' +
+      'work on it and finish the work and confirm\n\n' +
+      ' 2. send opus and Sonnet agents to see if you caused any regression and if yes check if its ' +
+      'a real regression or bug and fix'
+    const drawn =
+      'Did you do all the changes i told in this session reead thr session transcript deeply\n' +
+      '1. Check all the messages or user prompts i asked to you where done and confirm it, if not ' +
+      'work on it and finish the work and\u2026'
+    expect(pendingOutsideVisibleQueue([{ text: sent }], [drawn])).toEqual([])
+  })
+
+  it('still keeps a pending send the queue does not hold', () => {
+    expect(
+      pendingOutsideVisibleQueue([{ text: 'a message that was never queued' }], ['something else'])
+    ).toEqual([{ text: 'a message that was never queued' }])
+  })
+
+  it('does not let a short send be swallowed by an unrelated longer row', () => {
+    // "ok" is a prefix of almost anything; matching on prefix alone would drop
+    // a real pending bubble whenever the queue held a longer message.
+    expect(pendingOutsideVisibleQueue([{ text: 'ok' }], ['okay, run the deploy now'])).toEqual([
+      { text: 'ok' }
+    ])
+  })
 })
