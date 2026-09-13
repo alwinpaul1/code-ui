@@ -83,6 +83,48 @@ export function foldMobileNativeChatMessages(
   return stripNoiseMessages(folded)
 }
 
+/** Previews arrive keyed by RAW record id, because the hook that fetches them
+ *  cannot see the send boundaries this fold was cut at. Here both sides are
+ *  known, so each raw id is moved to the folded row that absorbed it: a row
+ *  that survived the fold keeps its own id, and every raw record that did not
+ *  was appended to the nearest surviving row before it (that is the only
+ *  way `foldToolMessages` merges). Before this, a Read record that folded
+ *  into its turn normally but stood alone after a mid-turn split was keyed by
+ *  the wrong id and its thumbnail never showed (2026-09-13). */
+export function remapPreviewsToFold(
+  messages: readonly NativeChatMessage[],
+  folded: readonly NativeChatMessage[],
+  previews: Record<string, string[]> | undefined
+): Record<string, string[]> | undefined {
+  if (!previews || Object.keys(previews).length === 0) {
+    return previews
+  }
+  const survivors = new Set(folded.map((message) => message.id))
+  const out: Record<string, string[]> = {}
+  const placed = new Set<string>()
+  let last: string | null = null
+  for (const message of messages) {
+    if (survivors.has(message.id)) {
+      last = message.id
+    }
+    const uris = previews[message.id]
+    if (!uris?.length) {
+      continue
+    }
+    const target = last ?? message.id
+    out[target] = [...(out[target] ?? []), ...uris]
+    placed.add(message.id)
+  }
+  // Keys the transcript does not carry (a phone send still in flight) stay as
+  // they are.
+  for (const [id, uris] of Object.entries(previews)) {
+    if (!placed.has(id) && uris.length > 0) {
+      out[id] = [...(out[id] ?? []), ...uris]
+    }
+  }
+  return out
+}
+
 /** The raw rows pending echoes were sent against: fold boundaries. */
 export function pendingFoldBoundaries(
   pending: readonly { baselineTailMessageId: string | null; baselineResolved?: boolean }[]
@@ -112,8 +154,9 @@ export function buildMobileNativeChatTransientData({
   pending: MobileNativeChatPendingItem[]
   imagePreviewsByMessageId?: Record<string, string[]>
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
+  const previewsByFoldedId = remapPreviewsToFold(messages, folded, imagePreviewsByMessageId)
   const renderedFolded = folded.map((message) => {
-    const previews = imagePreviewsByMessageId?.[message.id]
+    const previews = previewsByFoldedId?.[message.id]
     if (!previews?.length) {
       return message
     }

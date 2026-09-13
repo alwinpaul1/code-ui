@@ -502,3 +502,48 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
     expect(data.map((message) => message.id)).toEqual(['a1', 'prompt', 'p1', 'a2'])
   })
 })
+
+// 2026-09-13: a Read record folds into its assistant turn normally, but after
+// a mid-turn send it stands as its own row. The thumbnail must land on the
+// row the view draws either way; keyed by the pre-split fold it never did.
+describe('agent-read thumbnails across a mid-turn split', () => {
+  const raw: NativeChatMessage[] = [
+    assistant('a1', 'Looking at the screenshot.'),
+    {
+      id: 'a2',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', id: 'c1', name: 'Read', input: { file_path: '/repo/shot.png' } }],
+      timestamp: 0,
+      source: 'transcript'
+    } as NativeChatMessage
+  ]
+  const previews = { a2: ['data:image/png;base64,AAAA'] }
+  const thumbnail = { type: 'image-ref', url: 'data:image/png;base64,AAAA', alt: 'Image the agent read' }
+
+  it('lands under the assistant turn when the Read folded into it', () => {
+    const folded = foldMobileNativeChatMessages(raw)
+    const { data } = buildMobileNativeChatTransientData({
+      messages: raw,
+      folded,
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: previews
+    })
+    expect(data.map((m) => m.id)).toEqual(['a1'])
+    expect(data[0]?.blocks.at(-1)).toEqual(thumbnail)
+  })
+
+  it('lands under the Read row itself when a mid-turn send split it off', () => {
+    const folded = foldMobileNativeChatMessages(raw, new Set(['a1']))
+    const { data } = buildMobileNativeChatTransientData({
+      messages: raw,
+      folded,
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: previews
+    })
+    expect(data.map((m) => m.id)).toEqual(['a1', 'a2'])
+    expect(data[0]?.blocks.at(-1)).not.toEqual(thumbnail)
+    expect(data[1]?.blocks.at(-1)).toEqual(thumbnail)
+  })
+})

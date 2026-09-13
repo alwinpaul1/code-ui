@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import {
   collectHostImagePaths,
   mergeImagePreviews,
@@ -13,9 +12,11 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('collectHostImagePaths', () => {
-  // 2026-09-13: the Read call lives in its own transcript record; only the
-  // folded message carries the id the view keys previews by.
-  it('keys an agent read image by the folded message it lands in', () => {
+  // 2026-09-13: the Read call lives in its own transcript record. Keyed by
+  // that record, not a fold of this hook's own: the view folds with mid-turn
+  // send boundaries this hook cannot see, and keying by the wrong fold left
+  // the thumbnail off the row the view actually drew.
+  it('keys an agent read image by its own record, for the view to remap', () => {
     const raw: NativeChatMessage[] = [
       { id: 'a1', role: 'assistant', blocks: [{ type: 'text', text: 'Looking.' }] } as NativeChatMessage,
       {
@@ -24,7 +25,7 @@ describe('collectHostImagePaths', () => {
         blocks: [{ type: 'tool-call', id: 'c1', name: 'Read', input: { file_path: '/repo/shot.png' } }]
       } as NativeChatMessage
     ]
-    expect(collectHostImagePaths(foldMobileNativeChatMessages(raw))).toEqual({ a1: ['/repo/shot.png'] })
+    expect(collectHostImagePaths(raw, undefined)).toEqual({ a2: ['/repo/shot.png'] })
   })
 
   // Claude app, 2026-09-12: the screenshots an agent Read show as thumbnails

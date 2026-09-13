@@ -7,7 +7,6 @@ import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { normalizeMobileFilePreviewResponse } from '../files/mobile-file-preview-response'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import {
   isImageRefBlock,
@@ -37,19 +36,24 @@ export function readImagePaths(message: NativeChatMessage): string[] {
   return paths
 }
 
-/** Image-ref paths per message, in block order, for messages the phone has no
- *  local preview for (a message with local previews is a phone-side send). */
+/** Image-ref paths per RAW record, in block order, for messages the phone has
+ *  no local preview for (a message with local previews is a phone-side send).
+ *
+ *  Keyed by the raw record on purpose. An earlier version folded first and
+ *  keyed by the folded message, but the view folds with the mid-turn send
+ *  boundaries and this hook could not see them: a Read record that folds
+ *  into its assistant turn normally stays its own row after a split, the two
+ *  folds named different ids, and no thumbnail ever showed (2026-09-13). The
+ *  view remaps raw ids through whichever fold it actually renders. */
 export function collectHostImagePaths(
   messages: readonly NativeChatMessage[],
   localPreviews: Record<string, string[]> | undefined
 ): Record<string, string[]> {
   const paths: Record<string, string[]> = {}
   for (const message of normalizeImageTranscriptMessages([...messages])) {
-    if (message.role === 'assistant') {
-      const read = readImagePaths(message)
-      if (read.length > 0) {
-        paths[message.id] = read
-      }
+    const read = readImagePaths(message)
+    if (read.length > 0) {
+      paths[message.id] = read
       continue
     }
     if (message.role !== 'user' || localPreviews?.[message.id]?.length) {
@@ -196,16 +200,14 @@ export function useHostImagePreviews(args: {
   const { terminalHandleRef } = args
   const tabId = nativeChatContext?.tabId
   const sessionId = nativeChatContext?.sessionId
-  // Folded, not raw: a Read call sits in its own transcript record and the
-  // fold merges it into the preceding assistant message, whose id is the one
-  // the view keys previews by (2026-09-13: no agent-read thumbnail ever
-  // showed). The filter keeps a half-built message from a stubbed session
-  // out of the fold.
+  // Raw records, keyed by their own ids; the view remaps them through the
+  // fold it renders (see `collectHostImagePaths`). The filter keeps a
+  // half-built message from a stubbed session out.
   const wanted = useMemo(
     () =>
       enabled
         ? collectHostImagePaths(
-            foldMobileNativeChatMessages(messages.filter((m) => Array.isArray(m.blocks))),
+            messages.filter((m) => Array.isArray(m.blocks)),
             localPreviews
           )
         : {},
