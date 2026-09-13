@@ -28,20 +28,35 @@ describe('useMobileNativeChatDraftMirror', () => {
   afterEach(() => {
     renderer?.unmount()
     renderer = null
+    edits = 0
   })
+
+  /** Stands in for the composer's own edit counter, which only a keystroke bumps. */
+  let edits = 0
 
   function mount(client: RpcClient, initial: { enabled: boolean; text: string }) {
     const handleRef = { current: 'term-1' }
     const deviceTokenRef = { current: 'dev' }
     let latest: ReturnType<typeof useMobileNativeChatDraftMirror> | null = null
     function Harness(props: { enabled: boolean; text: string }): null {
-      latest = useMobileNativeChatDraftMirror({ client, handleRef, deviceTokenRef, ...props })
+      latest = useMobileNativeChatDraftMirror({
+        client,
+        handleRef,
+        deviceTokenRef,
+        getComposerEditGeneration: () => edits,
+        ...props
+      })
       return null
     }
     act(() => {
       renderer = create(createElement(Harness, initial))
     })
     return {
+      /** A keystroke: the composer's counter moves, then the text arrives. */
+      type: (props: { enabled: boolean; text: string }) => {
+        edits += 1
+        act(() => renderer!.update(createElement(Harness, props)))
+      },
       update: (props: { enabled: boolean; text: string }) =>
         act(() => renderer!.update(createElement(Harness, props))),
       api: () => latest!
@@ -57,10 +72,10 @@ describe('useMobileNativeChatDraftMirror', () => {
 
   it('clears the TUI line once, then streams typed deltas', async () => {
     const { client, sendRequest } = makeClient()
-    const { update } = mount(client, { enabled: true, text: '' })
-    update({ enabled: true, text: 'fi' })
+    const { type } = mount(client, { enabled: true, text: '' })
+    type({ enabled: true, text: 'fi' })
     await flush()
-    update({ enabled: true, text: 'fix' })
+    type({ enabled: true, text: 'fix' })
     await flush()
     const texts = sendRequest.mock.calls.map(([method, params]) => {
       expect(method).toBe('terminal.send')
@@ -74,27 +89,53 @@ describe('useMobileNativeChatDraftMirror', () => {
 
   it('forgets the line on settleBeforeSend so the emptied composer sends nothing', async () => {
     const { client, sendRequest } = makeClient()
-    const { update, api } = mount(client, { enabled: true, text: '' })
-    update({ enabled: true, text: 'go' })
+    const { type, api } = mount(client, { enabled: true, text: '' })
+    type({ enabled: true, text: 'go' })
     await flush()
     await act(async () => {
       await api().settleBeforeSend()
     })
     sendRequest.mockClear()
-    update({ enabled: true, text: '' })
+    type({ enabled: true, text: '' })
     await flush()
     expect(sendRequest).not.toHaveBeenCalled()
     // The next edit after a send starts a fresh line.
-    update({ enabled: true, text: 'a' })
+    type({ enabled: true, text: 'a' })
     await flush()
     expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U + 'a'])
   })
 
   it('sends nothing while disabled', async () => {
     const { client, sendRequest } = makeClient()
-    const { update } = mount(client, { enabled: false, text: '' })
-    update({ enabled: false, text: 'typing' })
+    const { type } = mount(client, { enabled: false, text: '' })
+    type({ enabled: false, text: 'typing' })
     await flush()
     expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not type a stored draft into the desktop when it hydrates a render late', async () => {
+    // 2026-09-13, reported from the phone: opening the chat typed leftover text
+    // into the desktop Claude Code composer ("t toggle and terminal mode toggle
+    // regressions"). The baseline was captured on the first render, but the
+    // stored draft is read from disk and arrives after it, so the mirror read
+    // the hydrate as something the user had just typed.
+    const { client, sendRequest } = makeClient()
+    const { update } = mount(client, { enabled: true, text: '' })
+    await flush()
+    update({ enabled: true, text: 'Chat toggle and terminal mode toggle regressions' })
+    await flush()
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('still echoes what the user types after a draft hydrated late', async () => {
+    const { client, sendRequest } = makeClient()
+    const { update, type } = mount(client, { enabled: true, text: '' })
+    await flush()
+    update({ enabled: true, text: 'restored' })
+    await flush()
+    expect(sendRequest).not.toHaveBeenCalled()
+    type({ enabled: true, text: 'restored!' })
+    await flush()
+    expect(sendRequest).toHaveBeenCalled()
   })
 })

@@ -35,13 +35,20 @@ export function useMobileNativeChatDraftMirror(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   text: string
+  /** The composer's own edit counter; only a keystroke moves it. */
+  getComposerEditGeneration: () => number
 }): MobileNativeChatDraftMirror {
-  const { client, enabled, handleRef, deviceTokenRef, text } = args
+  const { client, enabled, handleRef, deviceTokenRef, text, getComposerEditGeneration } = args
   const flushStateRef = useRef(createTerminalLivePendingFlushState())
   const sentTextRef = useRef('')
   const mirroredHandleRef = useRef<string | null>(null)
-  /** The draft as of the last enable; only a change from it starts echoing. */
-  const baselineTextRef = useRef<string | null>(null)
+  /** The composer's edit count as of the last enable. Echoing starts only once
+   *  the user has actually typed, never merely because `text` changed: a draft
+   *  read back from storage (and the host's launch-draft prefill) lands a render
+   *  or more AFTER the mirror enables, and comparing text alone read that as a
+   *  keystroke and typed the whole restored draft onto the desktop input line
+   *  (reported from the phone, 2026-09-13). */
+  const baselineEditsRef = useRef<number | null>(null)
   const armedRef = useRef(false)
 
   const forget = useCallback(() => {
@@ -75,17 +82,17 @@ export function useMobileNativeChatDraftMirror(args: {
   useEffect(() => {
     if (!enabled) {
       forget()
-      baselineTextRef.current = null
+      baselineEditsRef.current = null
       armedRef.current = false
       return
     }
-    if (baselineTextRef.current === null) {
-      baselineTextRef.current = text
+    if (baselineEditsRef.current === null) {
+      baselineEditsRef.current = getComposerEditGeneration()
       armedRef.current = false
       return
     }
     if (!armedRef.current) {
-      if (text === baselineTextRef.current) {
+      if (getComposerEditGeneration() === baselineEditsRef.current) {
         return
       }
       armedRef.current = true
@@ -110,15 +117,16 @@ export function useMobileNativeChatDraftMirror(args: {
     for (const payload of plan.writes) {
       void queueTerminalLiveMirrorSend(flushStateRef.current, handle, payload, sendPayload)
     }
-  }, [enabled, forget, handleRef, sendPayload, text])
+  }, [enabled, forget, getComposerEditGeneration, handleRef, sendPayload, text])
 
   useEffect(() => forget, [forget])
 
   const settleBeforeSend = useCallback(async () => {
     await waitForTerminalLivePendingFlush(flushStateRef.current)
     forget()
-    // The send empties the composer; that empty draft is the new baseline, not an edit to echo.
-    baselineTextRef.current = ''
+    // The send empties the composer; that clear is an edit, and re-baselining on
+    // the count here keeps it from being echoed as one.
+    baselineEditsRef.current = null
     armedRef.current = false
   }, [forget])
 

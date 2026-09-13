@@ -7,6 +7,7 @@ import { findFileUrlAtColumn, findUrlAtColumn, resolveTerminalFileUrlTap } from 
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { createTerminalReplayGuard } from './terminal-replay-guard'
 
 /** 13 dp at scale 1, the size the Stage 0 replays were measured at. */
 const GHOSTTY_BASE_FONT_DP = 13
@@ -137,10 +138,17 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
       [onModesChanged]
     )
 
+    // Why a guard at all: the native view hands back whatever libghostty emitted
+    // while parsing a write, and a host snapshot is a write like any other. Its
+    // replayed queries were answered as if the agent had just asked, and the
+    // frame's own trailing cursor restore rode the same door, landing in the
+    // desktop TUI's input line as literal text (2026-09-13).
+    const replayGuardRef = useRef(createTerminalReplayGuard())
+
     const handleInput = useCallback(
       (event: { nativeEvent: { text: string } }) => {
         const text = event.nativeEvent.text
-        if (text.length === 0) {
+        if (text.length === 0 || replayGuardRef.current.suppressed()) {
           return
         }
         // Two kinds of bytes come up from the native view, and the WebView
@@ -204,7 +212,11 @@ export const TerminalGhosttyView = forwardRef<TerminalWebViewHandle, TerminalWeb
           if (!initialData) {
             return
           }
-          void nativeRef.current?.writeText(RESET_SEQUENCE + initialData)
+          // Behind the replay guard: this frame is history, so nothing it makes
+          // the emulator emit may reach the PTY.
+          void replayGuardRef.current.replay(() =>
+            nativeRef.current?.writeText(RESET_SEQUENCE + initialData)
+          )
         },
         resize(cols) {
           // Layout owns the grid — unless the host keeps a width of its own, in

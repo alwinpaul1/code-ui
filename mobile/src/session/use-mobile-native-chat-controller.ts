@@ -211,7 +211,7 @@ export function useMobileNativeChatController(
   // is up: a permission or question card means the TUI is reading keys as
   // answers, and mirrored prose could pick one.
   const { settleBeforeSend: settleDraftMirrorBeforeSend } = useMobileNativeChatDraftMirror({
-    client,
+    client, getComposerEditGeneration: getChatComposerEditGeneration,
     // Why not `inputSendable`: the lease is about who owns the input floor and
     // collapses a render late; a mirror write without it is simply refused by
     // the host, so gating on the socket alone keeps echo from stalling.

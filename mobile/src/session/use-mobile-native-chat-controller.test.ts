@@ -111,6 +111,7 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
       pending: [],
       imagePreviewsByMessageId: {},
       captureSendOrigin,
+      getComposerEditGeneration: () => 0,
       readSeededLaunchDraft: () => null,
       readSeededLaunchDraftSeed: () => null,
       clearDraftForSend,
