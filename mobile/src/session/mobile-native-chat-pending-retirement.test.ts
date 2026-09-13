@@ -377,3 +377,29 @@ describe('retireLandedMobileNativeChatPending on a PTY-typed send', () => {
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual(pending)
   })
 })
+
+// 2026-09-13: a send absorbed mid-turn never gets a transcript row, so after
+// every restart its echo came back from disk, its anchor row long gone from
+// the loaded window, and was dumped at the TOP of the window in a block
+// with the others, above rows hours older ("messages stacked all over").
+describe('restored echoes whose anchor left the window', () => {
+  it('retires a restored echo whose anchor row is no longer loaded', () => {
+    const messages = [userTurn('u9', 'much later', 9), assistantTurn('a9', 'reply', 10)]
+    const stale = { ...pendingSend('p1', 'see this', 'a1'), restored: true }
+    expect(retireLandedMobileNativeChatPending(messages, [stale], new Set())).toEqual([])
+  })
+
+  it('keeps a live echo whose anchor left the window, and any echo against an empty transcript', () => {
+    const messages = [userTurn('u9', 'much later', 9)]
+    const live = pendingSend('p1', 'see this', 'a1')
+    const stale = { ...pendingSend('p2', 'see that', 'a1'), restored: true }
+    expect(retireLandedMobileNativeChatPending(messages, [live], new Set())).toEqual([live])
+    expect(retireLandedMobileNativeChatPending([], [stale], new Set())).toEqual([stale])
+  })
+
+  it('keeps a restored echo whose anchor row is still loaded', () => {
+    const messages = [assistantTurn('a1', 'working', 1)]
+    const fresh = { ...pendingSend('p1', 'queued behind a busy agent', 'a1'), restored: true }
+    expect(retireLandedMobileNativeChatPending(messages, [fresh], new Set())).toEqual([fresh])
+  })
+})
