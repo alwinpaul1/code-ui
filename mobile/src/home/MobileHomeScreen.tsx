@@ -6,6 +6,9 @@ import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { HomeUpdateSurface } from '../app-update/HomeUpdateSurface'
+import { MacHostToast } from '../host-controls/MacHostToast'
+import { MacUnlockPasswordSheet } from '../host-controls/MacUnlockPasswordSheet'
+import { useMacHostControls } from '../host-controls/use-mac-host-controls'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
@@ -48,6 +51,7 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  const mac = useMacHostControls({ clients: data.allClients, worktreeInfo: data.worktreeInfo })
 
   const openResume = useCallback(
     (card: HomeResumeCard) => {
@@ -186,10 +190,20 @@ export function MobileHomeScreen() {
           onDiagnostics: (hostId) =>
             data.router.push({ pathname: '/connection-log', params: { hostId } }),
           onEdit: openMobileHostEdit,
-          onRemove: (host) => setConfirmRemove(host)
+          onRemove: (host) => setConfirmRemove(host),
+          mac: mac.macOptionsForHost(actionTarget?.id ?? null)
         })}
         onClose={() => setActionTarget(null)}
       />
+      <MacUnlockPasswordSheet
+        hostId={mac.passwordHostId}
+        hostName={
+          data.hostCatalog.find((entry) => entry.id === mac.passwordHostId)?.name ?? null
+        }
+        onClose={mac.closePasswordSheet}
+        onSaved={mac.onPasswordSaved}
+      />
+      <MacHostToast message={mac.toast} />
       <ConfirmModal
         visible={confirmRemove != null}
         title="Remove Host"

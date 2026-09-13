@@ -13,6 +13,8 @@ export type ActionSheetAction = {
   destructive?: boolean
   disabled?: boolean
   hint?: string
+  /** Starts a named run of rows (e.g. "Mac"); the name is drawn above this entry. */
+  group?: string
   /** Marks the current choice with a trailing check (mode / option pickers). */
   selected?: boolean
   loading?: boolean
@@ -91,13 +93,32 @@ export function ActionSheetContent({
         {actions.map((action, i) => {
           const Icon = iconForAction(action.label, action.destructive, action.icon)
           const customIcon = action.renderIcon?.()
+          const groupTitle =
+            action.group && action.group !== actions[i - 1]?.group ? action.group : null
           return (
             <View key={action.label}>
               {i > 0 && (
                 <View
-                  style={{ height: 1, backgroundColor: colors.border, marginHorizontal: space.md }}
+                  style={{
+                    height: 1,
+                    backgroundColor: colors.border,
+                    marginHorizontal: groupTitle ? 0 : space.md
+                  }}
                 />
               )}
+              {groupTitle ? (
+                <View
+                  style={{
+                    backgroundColor: colors.bgRaised,
+                    paddingHorizontal: space.md + 2,
+                    paddingVertical: space.xs
+                  }}
+                >
+                  <Txt variant="caption" weight="semibold" tone="muted">
+                    {groupTitle}
+                  </Txt>
+                </View>
+              ) : null}
               <Pressable
                 style={({ pressed }) => ({
                   flexDirection: 'row',

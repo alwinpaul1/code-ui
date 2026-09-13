@@ -1,5 +1,9 @@
 import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
 import type { ActionSheetAction } from './components/ActionSheetModal'
+import {
+  getMacHostSheetActions,
+  type MacHostSheetOptions
+} from './host-controls/mac-host-sheet-actions'
 import type { ConnectionState, HostProfile } from './transport/types'
 
 /** Builds the home-screen host long-press menu. Navigation and second drawers
@@ -16,11 +20,14 @@ export function getHostListActionSheetActions(args: {
   onDiagnostics: (hostId: string) => void
   onEdit: (hostId: string) => void
   onRemove: (host: HostProfile) => void
+  /** Absent on every host that is not a Mac, which is how a Windows user never sees the group. */
+  mac?: MacHostSheetOptions
 }): ActionSheetAction[] {
   const { host } = args
   if (!host) {
     return []
   }
+  const macActions = getMacHostSheetActions(args.mac)
   const isLive =
     args.state === 'connected' ||
     args.state === 'connecting' ||
@@ -48,9 +55,13 @@ export function getHostListActionSheetActions(args: {
           }
         ]
       : []),
+    ...macActions,
     {
       label: 'Network diagnostics',
       icon: Activity,
+      // Why only alongside the Mac group: without it there is nothing to separate,
+      // and a lone header over an unchanged sheet would be noise.
+      ...(macActions.length > 0 ? { group: 'Host' } : {}),
       closeBeforePress: true,
       onPress: () => {
         args.onDiagnostics(host.id)
