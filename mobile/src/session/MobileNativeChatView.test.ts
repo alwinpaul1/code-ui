@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
@@ -132,11 +132,34 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
 
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
+  // The list settles a released drag one frame later, so momentum can cancel
+  // it. Node has no rAF; run it as a macrotask the tests can flush.
+  let frames: (() => void)[] = []
+
+  beforeEach(() => {
+    frames = []
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => frames.push(callback))
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => {
+      frames[handle - 1] = () => {}
+    })
+  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.unstubAllGlobals()
   })
+
+  /** Run whatever the list queued for the next frame. */
+  function flushFrames(): void {
+    const queued = frames
+    frames = []
+    act(() => {
+      for (const frame of queued) {
+        frame()
+      }
+    })
+  }
 
   async function render(overrides: Overrides = {}): Promise<void> {
     await act(async () => {
@@ -229,7 +252,72 @@ describe('MobileNativeChatView', () => {
     expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
       1
     )
+    // The release is not the settle: following comes back a frame later, once
+    // no momentum has claimed the fling.
     act(() => list().props.onScrollEndDrag(nearBottom))
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      1
+    )
+    flushFrames()
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      0
+    )
+  })
+
+  // Ported from Orca 2fc84cb49 (#20493). A flick that starts at the live edge
+  // lets go while still within 40px of it; the momentum that follows carries
+  // the reader up into history. Deciding at the release point handed the list
+  // back to tail-follow for the length of the fling, so a token landing in
+  // that window yanked the reader down again.
+  it('keeps the reader in control of a fling that releases at the live edge', async () => {
+    const scrollToOffset = vi.fn()
+    await act(async () => {
+      renderer = create(chatViewElement({ folded: [assistantTurn('a1', 'Streaming reply')] }), {
+        createNodeMock: (node) =>
+          node.type === 'FlashList' ? { scrollToEnd: vi.fn(), scrollToOffset } : null
+      })
+    })
+    const list = () => renderer!.root.findByType('FlashList')
+    const at = (y: number) => ({
+      nativeEvent: {
+        contentOffset: { y },
+        contentSize: { height: 2400 },
+        layoutMeasurement: { height: 400 }
+      }
+    })
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScrollEndDrag(at(20)))
+    // The finger is off but the list is still flying, and the agent is still
+    // writing. This growth must not pin the list to the newest row.
+    await act(async () => {
+      renderer!.update(
+        chatViewElement({ folded: [assistantTurn('a1', 'Streaming reply, now longer')] })
+      )
+    })
+    act(() => list().props.onContentSizeChange(400, 2600))
+    expect(scrollToOffset).not.toHaveBeenCalled()
+    act(() => list().props.onMomentumScrollBegin())
+    flushFrames()
+    // Where the fling landed decides, and it landed in history.
+    act(() => list().props.onMomentumScrollEnd(at(900)))
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
+      1
+    )
+  })
+
+  it('follows again when a slow drag is let go at the live edge with no fling', async () => {
+    await render({ folded: [assistantTurn('a1', 'Streaming reply')] })
+    const list = () => renderer!.root.findByType('FlashList')
+    const at = (y: number) => ({
+      nativeEvent: {
+        contentOffset: { y },
+        contentSize: { height: 2400 },
+        layoutMeasurement: { height: 400 }
+      }
+    })
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScrollEndDrag(at(10)))
+    flushFrames()
     expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
       0
     )

@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { FlashListRef } from '@shopify/flash-list'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -23,6 +23,15 @@ export function useMobileChatScrollHandlers(input: {
 }) {
   const { listRef, followingRef, scrollingRef, jumpingRef, hasMore, loadingEarlier } = input
   const { onLoadEarlier, setFollowing, beginScroll, endScroll } = input
+  const settleFrameRef = useRef<number | null>(null)
+  const cancelSettle = useCallback(() => {
+    if (settleFrameRef.current !== null) {
+      cancelAnimationFrame(settleFrameRef.current)
+      settleFrameRef.current = null
+    }
+  }, [])
+  useEffect(() => cancelSettle, [cancelSettle])
+
   const evaluateEdge = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
@@ -52,26 +61,64 @@ export function useMobileChatScrollHandlers(input: {
   // The reader took control: stop following immediately, on the same frame as
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
+    cancelSettle()
     jumpingRef.current = false
     beginScroll()
-  }, [beginScroll])
+  }, [beginScroll, cancelSettle])
 
-  const onScrollEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const settle = useCallback(
+    (metrics: NativeScrollEvent) => {
       endScroll()
-      evaluateEdge(event)
+      evaluateEdge({ nativeEvent: metrics } as NativeSyntheticEvent<NativeScrollEvent>)
     },
     [evaluateEdge, endScroll]
   )
 
+  // Ported from Orca 2fc84cb49 (#20493): a released finger is not a settled
+  // list. A flick that starts at the live edge lets go still inside the 40px
+  // threshold, and the momentum that follows carries the reader up into
+  // history — so settling at the release point handed the list back to
+  // tail-follow for the length of the fling, and a token arriving in that
+  // window yanked the reader down. Wait a frame instead; momentum, when it
+  // comes, cancels the wait and where it lands decides.
+  const onScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      cancelSettle()
+      const metrics = event.nativeEvent
+      settleFrameRef.current = requestAnimationFrame(() => {
+        settleFrameRef.current = null
+        settle(metrics)
+      })
+    },
+    [cancelSettle, settle]
+  )
+
+  // A requested jump also emits momentum events. Enabling history anchoring
+  // during that animation interrupts it before the end.
+  const onMomentumScrollBegin = useCallback(() => {
+    cancelSettle()
+    if (!jumpingRef.current) {
+      beginScroll()
+    }
+  }, [beginScroll, cancelSettle, jumpingRef])
+
+  const onMomentumScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      cancelSettle()
+      jumpingRef.current = false
+      settle(event.nativeEvent)
+    },
+    [cancelSettle, jumpingRef, settle]
+  )
 
   const jumpToLatest = useCallback(
     (animated: boolean) => {
+      cancelSettle()
       jumpingRef.current = true
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
-    [jumpingRef, listRef, setFollowing]
+    [cancelSettle, jumpingRef, listRef, setFollowing]
   )
 
   // Align a single message's top to the top of the viewport.
@@ -83,5 +130,14 @@ export function useMobileChatScrollHandlers(input: {
     [listRef, setFollowing]
   )
 
-  return { evaluateEdge, onEndReached, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage }
+  return {
+    evaluateEdge,
+    onEndReached,
+    onScrollBeginDrag,
+    onScrollEndDrag,
+    onMomentumScrollBegin,
+    onMomentumScrollEnd,
+    jumpToLatest,
+    onScrollToMessage
+  }
 }

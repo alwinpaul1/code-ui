@@ -190,8 +190,16 @@ export function MobileNativeChatView({
     [onSend, onClearSendError]
   )
 
-  const { evaluateEdge, onEndReached, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage } =
-    useMobileChatScrollHandlers({
+  const {
+    evaluateEdge,
+    onEndReached,
+    onScrollBeginDrag,
+    onScrollEndDrag,
+    onMomentumScrollBegin,
+    onMomentumScrollEnd,
+    jumpToLatest,
+    onScrollToMessage
+  } = useMobileChatScrollHandlers({
     listRef,
     followingRef,
     scrollingRef,
@@ -312,18 +320,9 @@ export function MobileNativeChatView({
             onTouchEnd={touchEnd}
             onTouchCancel={touchEnd}
             onScrollBeginDrag={onScrollBeginDrag}
-            onScrollEndDrag={onScrollEnd}
-            onMomentumScrollBegin={() => {
-              // A requested jump also emits momentum events. Enabling history
-              // anchoring during that animation interrupts it before the end.
-              if (!jumpingRef.current) {
-                beginScroll()
-              }
-            }}
-            onMomentumScrollEnd={(event) => {
-              jumpingRef.current = false
-              onScrollEnd(event)
-            }}
+            onScrollEndDrag={onScrollEndDrag}
+            onMomentumScrollBegin={onMomentumScrollBegin}
+            onMomentumScrollEnd={onMomentumScrollEnd}
             scrollEventThrottle={16}
             // Why: while the reader is up in history, content growing above the
             // fold must not shift what they are reading. At the live edge,
