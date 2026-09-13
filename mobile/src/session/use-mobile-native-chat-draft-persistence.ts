@@ -1,4 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useDebouncedPersist } from './use-debounced-persist'
 import { readNativeChatDraft, writeNativeChatDraft } from '../storage/native-chat-drafts'
 
 const DRAFT_WRITE_DEBOUNCE_MS = 250
@@ -33,14 +34,5 @@ export function useMobileNativeChatDraftPersistence(
     }
   }, [draftKey, known, setDrafts])
 
-  const currentDraft = draftKey ? drafts[draftKey] : undefined
-  useEffect(() => {
-    if (!draftKey || currentDraft === undefined) {
-      return
-    }
-    const timer = setTimeout(() => {
-      void writeNativeChatDraft(draftKey, currentDraft)
-    }, DRAFT_WRITE_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [draftKey, currentDraft])
+  useDebouncedPersist(draftKey, draftKey ? drafts[draftKey] : undefined, DRAFT_WRITE_DEBOUNCE_MS, writeNativeChatDraft)
 }

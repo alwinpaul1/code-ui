@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useDebouncedPersist } from './use-debounced-persist'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { rememberEchoInPending, sweepWitnessedEchoes } from './mobile-native-chat-remember-echo'
 import {
@@ -79,18 +80,13 @@ export function useMobileNativeChatPendingPersistence(
   }, [sessionKey, setPendingBySession])
 
   const current = sessionKey ? pendingBySession[sessionKey] : undefined
-  useEffect(() => {
-    if (!sessionKey || current === undefined) {
-      return
-    }
-    if (current.length === 0) {
-      void writeNativeChatPendingEchoes(sessionKey, current)
-      return
-    }
-    const timer = setTimeout(() => {
-      void writeNativeChatPendingEchoes(sessionKey, current)
-    }, PENDING_WRITE_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [current, sessionKey])
+  // An emptied list is written at once: it retires bubbles the transcript has
+  // taken over, and a delay there redraws them for a beat on the next visit.
+  useDebouncedPersist(
+    sessionKey,
+    current,
+    current?.length === 0 ? 0 : PENDING_WRITE_DEBOUNCE_MS,
+    writeNativeChatPendingEchoes
+  )
   return { rememberEcho }
 }

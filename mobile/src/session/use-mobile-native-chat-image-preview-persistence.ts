@@ -1,3 +1,4 @@
+import { useDebouncedPersist } from './use-debounced-persist'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 import {
   readNativeChatImagePreviews,
@@ -41,14 +42,10 @@ export function useMobileNativeChatImagePreviewPersistence(
     }
   }, [known, sessionKey, setPreviewsBySession])
 
-  const current = sessionKey ? previewsBySession[sessionKey] : undefined
-  useEffect(() => {
-    if (!sessionKey || current === undefined) {
-      return
-    }
-    const timer = setTimeout(() => {
-      void writeNativeChatImagePreviews(sessionKey, current)
-    }, PREVIEW_WRITE_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [current, sessionKey])
+  useDebouncedPersist(
+    sessionKey,
+    sessionKey ? previewsBySession[sessionKey] : undefined,
+    PREVIEW_WRITE_DEBOUNCE_MS,
+    writeNativeChatImagePreviews
+  )
 }

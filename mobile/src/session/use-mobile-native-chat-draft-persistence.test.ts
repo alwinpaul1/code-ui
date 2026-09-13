@@ -75,4 +75,57 @@ describe('native chat draft persistence', () => {
     }
   })
 
+
+  it('does not bring a sent message back when the screen closes right after sending', async () => {
+    // 2026-09-13, reported from the phone: a message the user had already sent
+    // reappeared in the composer later and went out again glued to the next one
+    // ("…is it because phone is on same folder in code ui app did you fix this
+    // issues too"). Clearing the box only schedules the erase 250 ms later, and
+    // unmounting inside that window cancelled it, so the stored copy outlived
+    // the send and was hydrated back on the next visit.
+    vi.useFakeTimers()
+    try {
+      await mount('tab-a')
+      act(() => state!.setComposerText('a message the user already sent'))
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        await Promise.resolve()
+      })
+      expect([...draftStore.values()]).toEqual(['a message the user already sent'])
+      // Sending empties the box; the screen closes before the debounce fires.
+      act(() => state!.setComposerText(''))
+      act(() => renderer?.unmount())
+      renderer = null
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        await Promise.resolve()
+      })
+      expect(draftStore.size).toBe(0)
+      await mount('tab-a')
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(state!.composerText).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the last thing typed when the screen closes before the debounce', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount('tab-a')
+      act(() => state!.setComposerText('half typed'))
+      act(() => renderer?.unmount())
+      renderer = null
+      await act(async () => {
+        vi.advanceTimersByTime(300)
+        await Promise.resolve()
+      })
+      expect([...draftStore.values()]).toEqual(['half typed'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
 })

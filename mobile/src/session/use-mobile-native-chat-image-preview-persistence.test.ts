@@ -90,4 +90,16 @@ describe('useMobileNativeChatImagePreviewPersistence', () => {
     })
     expect(await AsyncStorage.getAllKeys()).toEqual([])
   })
+
+  it('keeps a preview attached just before the screen closed', async () => {
+    await mount('s1')
+    act(() => setPreviews({ s1: { m1: ['file:///a.jpg'] } }))
+    act(() => renderer?.unmount())
+    renderer = null
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+      await Promise.resolve()
+    })
+    expect(await AsyncStorage.getAllKeys()).toHaveLength(1)
+  })
 })

@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -23,10 +24,11 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
 
-  afterEach(() => {
+  afterEach(async () => {
     act(() => renderer?.unmount())
     renderer = null
     state = null
+    await clearNativeChatDraftStores()
   })
 
   function Harness({

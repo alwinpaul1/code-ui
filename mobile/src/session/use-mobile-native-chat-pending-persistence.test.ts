@@ -95,4 +95,16 @@ describe('useMobileNativeChatPendingPersistence', () => {
     await flush()
     expect(await AsyncStorage.getAllKeys()).toEqual([])
   })
+
+  it('keeps an optimistic bubble that was made just before the screen closed', async () => {
+    // Same shape as the composer draft (2026-09-13): the write waited out its
+    // debounce and unmounting inside that window cancelled it, so a message sent
+    // right before leaving the chat had no stored bubble to come back to.
+    await mount('s1')
+    act(() => setPending({ s1: [echo('p1', 'sent as the screen closed')] }))
+    act(() => renderer?.unmount())
+    renderer = null
+    await flush()
+    expect(await readNativeChatPendingEchoes('s1')).toHaveLength(1)
+  })
 })
