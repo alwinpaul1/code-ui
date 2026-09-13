@@ -100,13 +100,17 @@ export function useAbsorbedQueueEchoes(
   // phone is already watching, which is exactly the mid-turn absorb this
   // witness exists for. An entry already held still grows from a fuller
   // reading, so a truncated queue entry is not stuck short.
+  // One exception to the baseline: the NEWEST prompts on the first reading.
+  // A message the desktop absorbed just before the phone opened has no row
+  // to land and would otherwise never show (2026-09-13 review). Bounded to
+  // the last two so a stale transcript window can leave at most two bubbles
+  // that retire as it catches up, never a wall.
   const seenSent = previousSent.current
-  if (seenSent !== null) {
-    for (const text of sentPrompts) {
-      const key = promptKey(text)
-      if (!seenSent.some((other) => sameMessage(promptKey(other), key))) {
-        appeared.current.set(key, text)
-      }
+  const candidates = seenSent === null ? sentPrompts.slice(-FIRST_READING_HOLD) : sentPrompts
+  for (const text of candidates) {
+    const key = promptKey(text)
+    if (!(seenSent ?? []).some((other) => sameMessage(promptKey(other), key))) {
+      appeared.current.set(key, text)
     }
   }
   previousSent.current = sentPrompts
@@ -190,6 +194,9 @@ function cutKey(text: string): string {
 }
 
 type HeldEcho = { text: string; anchorId: string | null; seq: number }
+
+/** How many of the newest on-screen prompts the first reading may hold. */
+const FIRST_READING_HOLD = 2
 
 /** One key for the same message however it reached here: the queue box, the
  *  scrollback and the transcript each wrap it differently, and only the

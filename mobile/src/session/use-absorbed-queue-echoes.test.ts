@@ -362,12 +362,18 @@ it('waits for a transcript row before holding anything, so nothing pins to the b
 // loaded. Only a prompt that APPEARS while the phone is already watching is
 // one the transcript is missing.
 it('does not stack the scrollback backlog as bubbles when the chat opens', () => {
-  const backlog = ['bump the version and tag it', 'now check the release notes']
-  const folded = [row('a1', 'assistant', 'working')]
+  const backlog = ['first old prompt', 'second old prompt', 'bump the version and tag it', 'now check the release notes']
+  const folded = [
+    row('a1', 'assistant', 'working'),
+    row('u1', 'user', 'bump the version and tag it'),
+    row('u2', 'user', 'now check the release notes')
+  ]
   let renderer: ReactTestRenderer | null = null
   act(() => {
     renderer = create(createElement(ProbeSent, { sent: backlog, folded }))
   })
+  // The two oldest are backlog and never held; the two newest have rows and
+  // retire at once.
   expect(latest).toEqual([])
 
   // Still the same screen a second later: still nothing new to draw.
@@ -433,5 +439,26 @@ it('keeps a held message when a later prompt merely starts with the same words',
     )
   })
   expect(latest).toMatchObject([{ text: 'check the build failure' }])
+  act(() => renderer!.unmount())
+})
+
+// 2026-09-13 review: a message the desktop absorbed just before the phone
+// opened has no transcript row and was never watched appearing, so the
+// baseline rule dropped it. The newest prompts on the first reading are the
+// one exception, bounded so a stale window cannot rebuild the wall.
+it('holds the newest unlanded prompt from the first reading, but never the backlog behind it', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeSent, {
+        sent: ['old one', 'old two', 'old three', 'absorbed just before opening'],
+        folded
+      })
+    )
+  })
+  expect(latest!.map((e) => e.text)).toEqual(['old three', 'absorbed just before opening'].slice(-2))
+  expect(latest).toHaveLength(2)
+  expect(latest!.map((e) => e.text)).not.toContain('old one')
   act(() => renderer!.unmount())
 })
