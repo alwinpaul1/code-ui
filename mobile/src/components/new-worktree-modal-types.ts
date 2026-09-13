@@ -23,7 +23,7 @@ export type NewWorktreeModalProps = {
   hostId?: string
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
-  onCreated: (worktreeId: string, name: string) => void
+  onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
 }
 

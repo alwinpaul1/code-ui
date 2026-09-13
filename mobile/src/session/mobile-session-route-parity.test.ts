@@ -108,7 +108,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // handleCloseSessionTab became a single await, because a second terminal.close
 // on the dead handle made the host close the whole tab. Same one function.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '7044f3795d62da3f565d7a4968abfeaba3071e93dbb8c41d7e60424e69b8b968'
+  'f3cb400980a0946ad191313cbc78ca9a6826e8f95bdde149b0d3933f01f3bf4c'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -117,7 +117,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd4680243df9e8330f7e2cbcf64350d3d5001dbbcdbf69cdc255222b6a4e600dc'
+  'fd2d6417e301e14839b5d559151b9fc755837b33d82cb9d8f4cc6c671c1ba309'
 const HEAD_HOST_JSX_SHA256 = '2152aab3bb439dcf7d0649e3e939114cde1159666f48d42e05ca39021c366764'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name

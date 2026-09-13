@@ -57,6 +57,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | a045af361 #20249 | precompute Linear issue sort keys | applied verbatim; this fork has the Linear task screens and the files matched upstream |
 | 7e9ade7c7 #20431 | reuse Linear grouping between list and board | applied verbatim, before df375cdd8 (it creates the projection test the later commit edits) |
 | df375cdd8 #20314 | reuse Linear issue ordering when grouping list and board | applied verbatim on top of 7e9ade7c7 |
+| 9a5679748 #20125 | surface host create warnings and terminal-create errors | mostly verbatim. `use-mobile-session-terminal-create-actions.ts` was hand-merged — this fork's structured-provider fallback and HUD launch config sit above the two failure branches, which themselves matched upstream, so only those were replaced. `onCreated`'s two signatures were hand-widened (upstream's context differed). The session screen here already reads a `warning` search param through `use-mobile-session-foundation.ts`, so the chain completes. Both route-parity hashes re-pinned, the same two upstream refreshed |
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
