@@ -10,7 +10,10 @@ describe('the Mac state probe command', () => {
     expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('CGSSessionScreenIsLocked')
     expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('pmset -g log')
     expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('output muted of (get volume settings)')
-    expect(MAC_HOST_STATE_PROBE_COMMAND).toMatch(/; exit$/)
+    // 2026-09-13: with `; exit` the tab was gone before the first screen read, the
+    // probe answered unknown, and the sheet offered every row on a Mac that had said
+    // nothing of the sort. The probe closes the tab itself after reading.
+    expect(MAC_HOST_STATE_PROBE_COMMAND).not.toMatch(/exit\s*$/)
   })
 
   it('cannot be mistaken for its own echo on the screen', () => {

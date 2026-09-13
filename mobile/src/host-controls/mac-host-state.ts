@@ -24,8 +24,11 @@ export const MAC_HOST_STATE_PROBE_COMMAND =
   `"$(ioreg -n Root -d1 -a | plutil -p - | grep -c '"CGSSessionScreenIsLocked" => true')" ` +
   `"$(pmset -g log | grep -iE 'Display is turned (off|on)' | tail -1 | grep -qi 'turned off' && echo off || echo on)" ` +
   // `output muted` is the speaker mute flag; verified round-trip on macOS 26, 2026-09-13.
-  `"$(osascript -e 'output muted of (get volume settings)')"` +
-  '; exit'
+  // Why no `; exit` here, unlike the action commands: the phone has to read this
+  // tab's screen after the shell prints, and a shell that exits at once takes the
+  // terminal with it before the first poll (every row showed on 0.5.61 because of
+  // this). The probe closes the tab itself once it has read the marker.
+  `"$(osascript -e 'output muted of (get volume settings)')"`
 
 const MARKER_PATTERN = new RegExp(`${MARKER} lock=([01]) display=(on|off) mute=(true|false)\\b`)
 

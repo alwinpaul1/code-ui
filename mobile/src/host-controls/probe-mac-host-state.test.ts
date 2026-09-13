@@ -63,7 +63,7 @@ describe('asking the Mac what state it is in', () => {
   })
 
   it('closes the throwaway tab once it has its answer', async () => {
-    const { calls } = await runProbe([['CUIMAC lock=0 display=on']])
+    const { calls } = await runProbe([['CUIMAC lock=0 display=on mute=false']])
     expect(calls.at(-1)).toEqual({
       method: 'session.tabs.close',
       params: { worktree: 'id:wt-1', tabId: 'tab-9', reason: 'user' }
