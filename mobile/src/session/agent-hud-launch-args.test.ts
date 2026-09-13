@@ -488,6 +488,8 @@ describe('finished background tasks ride the Claude beacon', () => {
   const transcriptWithLaunches = [
     '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01A","type":"tool_result","content":"Command running in background with ID: bajgl5wmo. Output is being written to: /private/tmp/claude-501/x/tasks/bajgl5wmo.output. You will be notified when it completes. To check interim output, use Read on that file path.","is_error":false}]},"uuid":"75a95481-2c35-4b80-81ff-dd558a4522fb","timestamp":"2026-09-11T10:17:50.846Z"}',
     '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01B","type":"tool_result","content":"Command did not complete within its 120s timeout and was moved to the background (ID: b7woddzjt). Output is being written to: /private/tmp/claude-501/x/tasks/b7woddzjt.output.","is_error":false}]},"uuid":"8f0c2b8f-2b1f-4b2e-9c1e-7a9d1f0e2c11","timestamp":"2026-09-11T10:20:01.000Z"}',
+    // ctrl+b on a running command, verbatim from Claude Code 2.1.270 on 2026-09-13.
+    '{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01D","type":"tool_result","content":"Command was manually backgrounded by user with ID: bywd6lvod. Output is being written to: /private/tmp/claude-501/x/tasks/bywd6lvod.output.","is_error":false}]},"uuid":"8f0c2b8f-2b1f-4b2e-9c1e-7a9d1f0e2c12","timestamp":"2026-09-11T10:20:02.000Z"}',
     '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<task-notification>\\n<task-id>bajgl5wmo</task-id>\\n<status>completed</status>\\n</task-notification>"}]},"uuid":"c1d2e3f4-0000-4000-8000-000000000001","timestamp":"2026-09-11T10:25:00.000Z"}',
     // Pollution the transcript really carries: the assistant's own command that
     // greps for the launch text, a tool_result that merely PRINTS one (id
@@ -510,12 +512,12 @@ describe('finished background tasks ride the Claude beacon', () => {
         input: withTranscript(statusJson, transcript),
         shell
       })
-      expect(run.beacon).toContain(' bg=bajgl5wmo,b7woddzjt')
+      expect(run.beacon).toContain(' bg=bajgl5wmo,b7woddzjt,bywd6lvod')
       expect(run.beacon).toContain(' done=bajgl5wmo')
       expect(run.beacon).not.toContain('bfakefake')
       expect(run.beacon).not.toContain('bquotedone')
       const bg = (run.beacon ?? '').split(' ').find((field) => field.startsWith('bg='))
-      expect(bg?.replace(/[^A-Za-z0-9_,=-]/g, '')).toBe('bg=bajgl5wmo,b7woddzjt')
+      expect(bg?.replace(/[^A-Za-z0-9_,=-]/g, '')).toBe('bg=bajgl5wmo,b7woddzjt,bywd6lvod')
     })
   }
 

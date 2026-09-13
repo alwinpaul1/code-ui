@@ -13,6 +13,9 @@ import type { BackgroundTaskKind } from './mobile-background-tasks'
 // Reviewed 2026-09-11 — this session's own greps had counted as shells.
 const SHELL_STARTED = /^\s*Command running in background with ID:\s*([A-Za-z0-9_-]+)/
 const SHELL_MOVED = /^\s*Command did not complete[^\n]{0,120}?moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
+// ctrl+b on a running command (Claude Code 2.1.270, 2026-09-13): a third
+// shape, which left the desk at 4 shells and the phone at 2.
+const SHELL_BACKGROUNDED = /^\s*Command was manually backgrounded by user with ID:\s*([A-Za-z0-9_-]+)/
 // `Monitor started (task biifjm40h, timeout 3000000ms). You will be notified…`
 const MONITOR_STARTED = /Monitor started \(task\s+([A-Za-z0-9_-]+)/
 const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
@@ -37,7 +40,10 @@ const TITLE_MAX = 60
  *  keeps running after the tool returned. */
 export function readLaunch(call: PendingCall, output: string): Launch | null {
   if (call.name === 'Bash') {
-    const id = SHELL_STARTED.exec(output)?.[1] ?? SHELL_MOVED.exec(output)?.[1]
+    const id =
+      SHELL_STARTED.exec(output)?.[1] ??
+      SHELL_MOVED.exec(output)?.[1] ??
+      SHELL_BACKGROUNDED.exec(output)?.[1]
     return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
   }
   if (call.name === 'Agent') {

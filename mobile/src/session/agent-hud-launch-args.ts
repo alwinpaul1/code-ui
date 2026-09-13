@@ -133,7 +133,8 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(grep -F "<status>" "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   // Every shell Claude has started, from its own tool results: a tool_result
   // whose content STARTS with "Command running in background with ID: <id>"
-  // or "Command did not complete … moved to the background (ID: <id>)".
+  // or "Command did not complete … moved to the background (ID: <id>)", or
+  // "Command was manually backgrounded by user with ID: <id>" (ctrl+b).
   // Anchored to the start of the content and skipping assistant records,
   // because the transcript also holds every command and every line of prose
   // that merely QUOTES those strings — a grep for them, a test fixture — and
@@ -146,7 +147,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // window the phone loads. Measured 2026-09-11: the desk read "3 shells",
   // the phone "1".
   'bg=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -411,7 +412,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   // Claude's launch text is a shell. Assistant records are skipped.
   '$tp=[string]$j.transcript_path',
   '$q=[char]34; $pa=$q+"type"+$q+":"+$q+"assistant"+$q',
-  'if($tp -and (Test-Path -LiteralPath $tp)){$tl=@(Get-Content -LiteralPath $tp -Tail 8000 | Where-Object {$_ -notmatch $pa}); $ids=@($tl | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]{3,})</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}; $bg=@($tl | Select-String -Pattern ($q+"content"+$q+":"+$q+"Command (?:running in background with ID: |did not complete[^"+$q+"]*moved to the background \\(ID: )([A-Za-z0-9_-]{3,})") -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($bg.Count -gt 0){$o=$o+" bg="+($bg -join ",")}}',
+  'if($tp -and (Test-Path -LiteralPath $tp)){$tl=@(Get-Content -LiteralPath $tp -Tail 8000 | Where-Object {$_ -notmatch $pa}); $ids=@($tl | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]{3,})</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}; $bg=@($tl | Select-String -Pattern ($q+"content"+$q+":"+$q+"Command (?:running in background with ID: |did not complete[^"+$q+"]*moved to the background \\(ID: |was manually backgrounded by user with ID: )([A-Za-z0-9_-]{3,})") -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($bg.Count -gt 0){$o=$o+" bg="+($bg -join ",")}}',
   // Delegation: the user keeps their own bar. Their command runs under Git
   // Bash when it exists (what Claude Code itself would have used), else under
   // this same PowerShell. Its stdout is ours, which Claude Code draws.

@@ -19,6 +19,10 @@ Session cwd remains /Users/alwinpaul/Desktop/Project/Walletify; directory change
 const movedToBackgroundOutput = (id: string) =>
   `Command did not complete within its 300s timeout and was moved to the background (ID: ${id}). Output is being written to: /private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Walletify/95d59b2b-5d7a-406c-a5f8-36a952ff76b5/tasks/${id}.output. You will be notified when it completes. To check interim output, use Read on that file path.`
 
+// ctrl+b on a running command, verbatim from Claude Code 2.1.270 on 2026-09-13.
+const manuallyBackgroundedOutput = (id: string) =>
+  `Command was manually backgrounded by user with ID: ${id}. Output is being written to: /private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Code-UI/69c622ea-9120-4353-b0dc-6a198bcf5ceb/tasks/${id}.output.`
+
 const agentLaunchOutput = (id: string) =>
   `Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)
 agentId: ${id} (internal ID - do not mention to user. Use SendMessage with to: '${id}', summary: '<5-10 word recap>' to continue this agent.)
@@ -212,6 +216,17 @@ describe('background tasks derived from the chat transcript', () => {
     // The one that did notify moved across.
     expect(running.map((task) => task.id)).not.toContain('bzktm6jyv')
     expect(finished.map((task) => task.id)).toContain('bzktm6jyv')
+  })
+
+  // 2026-09-13: the desk showed 4 shells and the phone 2 — the two the user
+  // had backgrounded with ctrl+b were not counted.
+  it('counts a shell the user backgrounded with ctrl+b as running', () => {
+    const messages = [
+      call('Bash', { command: 'sleep 600', description: 'Wait for the build' }, T0),
+      result(manuallyBackgroundedOutput('bywd6lvod'), T0 + 90_000)
+    ]
+    const { running } = deriveBackgroundTasks(messages, NOW)
+    expect(running.map((task) => [task.id, task.title])).toEqual([['bywd6lvod', 'Wait for the build']])
   })
 
   it('marks a task failed when the notification says failed', () => {
