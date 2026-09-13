@@ -44,6 +44,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | fb9d08f5f #19476 | index project table option and iteration order | `project-group-sort.ts` re-vendored. Mobile `groupRows` / `sortRows` call it. |
 | d3501f7ad #18456 | `unavailableReason` on a non-authoritative worktree list | the two-line type only. The scan-failure host and sidebar are `src/main/` / `src/renderer/` |
 | cd8e98fdf #20313 | stop the mobile Markdown parser stalling on an unsupported block | hand-applied; our parser carries the escaped-pipe table hunks but the defect was identical. The paragraph loop guarded with `startsWith('```')` and `/^(#{1,6})\s+/` while the dispatchers used stricter patterns, so a ```c++ fence or a bare `# ` stopped the paragraph at a line nothing would consume and the index never advanced. Upstream's `mobile-markdown-parser-progress.test.ts` came over verbatim and hangs 12 of its 13 cases on the old parser |
+| 3bc631dad #20317 | validate review table delimiters by cell | taken verbatim; `markdown-blocks.ts` matched upstream here. The one `TABLE_DELIM` regex backtracked exponentially on a long whitespace run, so `splitTableRow` now does the split and each cell is tested on its own. Upstream's test pins the new check against the old regex over 2,197 generated rows |
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
