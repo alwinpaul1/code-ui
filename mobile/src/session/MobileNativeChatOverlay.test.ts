@@ -26,12 +26,15 @@ type Tick = {
   identity?: string
   /** Tab still resolves to a chat (a deliberate terminal toggle keeps this true). */
   eligible?: boolean
+  /** The view-mode store has been read for this scope. */
+  viewResolved?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   const controller = {
     showNativeChat: tick.show ?? true,
     activeChatEligible: tick.eligible ?? true,
+    viewResolved: tick.viewResolved ?? true,
     terminalPeekActive: false,
     nativeChatSession: { messages: tick.messages ?? [], status: 'ready' },
     nativeChatAgent: 'claude',
@@ -283,6 +286,25 @@ describe('MobileNativeChatOverlay across a reconnect blink', () => {
       renderer = create(overlayElement({ show: false, eligible: false }))
     })
     expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
+  })
+
+  // 2026-09-13: returning to the app re-reads the view-mode store, which
+  // answers "terminal" until it has loaded, and the chat dropped to the
+  // terminal for a frame and came back.
+  it('holds the chat while the view mode is still being read', async () => {
+    vi.useFakeTimers()
+    const prior = [assistantTurn('a1', 'Hello')]
+    await act(async () => {
+      renderer = create(overlayElement({ messages: prior }))
+    })
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior, show: false, viewResolved: false }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(1)
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(1)
   })
 
   it('does not hold a deliberate switch to the terminal', async () => {

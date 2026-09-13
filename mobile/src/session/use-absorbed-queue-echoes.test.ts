@@ -199,3 +199,49 @@ function ProbeBoth({
   latest = useAbsorbedQueueEchoes(queued, sent, folded, 'tab-a', folded)
   return null
 }
+
+// 2026-09-13: a prompt sent from the phone is painted into the scrollback like
+// any other, and came back as a second bubble under the phone's own echo. The
+// same for a desktop prompt the hook had already delivered.
+it('skips a prompt the phone itself sent or the hook already delivered', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeOwn, {
+        sent: ['[Image #85] See this', 'a desktop prompt', 'a real absorbed one'],
+        own: ['See this', 'a desktop\nprompt'],
+        folded
+      })
+    )
+  })
+  expect(latest).toMatchObject([{ text: 'a real absorbed one' }])
+  act(() => renderer!.unmount())
+})
+
+function ProbeOwn({
+  sent,
+  own,
+  folded
+}: {
+  sent: string[]
+  own: string[]
+  folded: NativeChatMessage[]
+}): null {
+  latest = useAbsorbedQueueEchoes([], sent, folded, 'tab-a', folded, own)
+  return null
+}
+
+// 2026-09-13: a desktop message with pasted screenshots was drawn as
+// "[Image #96] [Image #97] See this tooo"; the phone has no bytes for those.
+it('draws a desktop message without the image markers the phone cannot show', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeOwn, { sent: ['[Image #96] [Image #97] See this tooo'], own: [], folded })
+    )
+  })
+  expect(latest).toMatchObject([{ text: 'See this tooo' }])
+  act(() => renderer!.unmount())
+})

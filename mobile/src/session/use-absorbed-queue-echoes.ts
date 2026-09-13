@@ -1,7 +1,10 @@
 import { useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import {
+  normalizeNativeChatUserText,
+  stripImagePromptMarker
+} from '../../../src/shared/native-chat-image-transcript-markers'
 
 /**
  * Messages the user queued on the DESKTOP, kept on screen after the agent
@@ -34,7 +37,11 @@ export function useAbsorbedQueueEchoes(
   // for the whole turn, so every echo would land on the same boundary and
   // stack (2026-09-13). The raw tail moves with each tool result, which is
   // what puts a "Ran N commands" fold between one prompt and the next.
-  rawMessages: readonly NativeChatMessage[] = folded
+  rawMessages: readonly NativeChatMessage[] = folded,
+  // Prompts already drawn by another path — the phone's own pending echoes
+  // and the hook's desktop prompts. The scrollback shows those too, and read
+  // blind it drew each of them a second time (2026-09-13).
+  ownPrompts: readonly string[] = []
 ): MobileNativeChatPendingMessage[] {
   const held = useRef(new Map<string, { text: string; anchorId: string | null; seq: number }>())
   const previous = useRef<readonly string[]>([])
@@ -49,9 +56,10 @@ export function useAbsorbedQueueEchoes(
   // same message differently, and keying on the raw text showed it twice
   // (2026-09-13).
   const live = new Set(queued.map(promptKey).filter((text) => text.length > 0))
+  const own = new Set(ownPrompts.map(promptKey))
   for (const text of sentPrompts) {
     const key = promptKey(text)
-    if (key.length > 0 && !live.has(key) && !held.current.has(key)) {
+    if (key.length > 0 && !live.has(key) && !own.has(key) && !held.current.has(key)) {
       counter.current += 1
       held.current.set(key, { text, anchorId: rawMessages.at(-1)?.id ?? null, seq: counter.current })
     }
@@ -80,7 +88,7 @@ export function useAbsorbedQueueEchoes(
       .map(promptKey)
   )
   for (const key of Array.from(held.current.keys())) {
-    if (landed.has(key) || live.has(key)) {
+    if (landed.has(key) || live.has(key) || own.has(key)) {
       held.current.delete(key)
     }
   }
@@ -88,7 +96,8 @@ export function useAbsorbedQueueEchoes(
     .sort((a, b) => a.seq - b.seq)
     .map((entry) => ({
       id: `queued-${entry.seq}`,
-      text: entry.text,
+      // No bytes on the phone for a desktop-pasted image: drop its marker.
+      text: stripImagePromptMarker(entry.text),
       expectedOccurrence: 0,
       baselineTailMessageId: entry.anchorId,
       baselineResolved: true

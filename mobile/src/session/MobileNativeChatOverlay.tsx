@@ -109,12 +109,17 @@ export function MobileNativeChatOverlay({
   const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded, session.messages)
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
+  const ownPrompts = useMemo(
+    () => [...projectedQueue.pending.map((p) => p.text), ...desktopPrompts.map((p) => p.text)],
+    [desktopPrompts, projectedQueue.pending]
+  )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],
     controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
     baseFolded,
     sendSurfaceId,
-    session.messages
+    session.messages,
+    ownPrompts
   )
   const folded = useMemo(
     () =>
@@ -152,9 +157,14 @@ export function MobileNativeChatOverlay({
   // blink loses the tab or its identity. Only the blink is held.
   const emptyReload = session.transcriptLoading && session.messages.length === 0
   const blank = !controller.showNativeChat || emptyReload
+  // The view mode is a placeholder answer of "terminal" until its store is
+  // read, and that read re-runs on focus: coming back to the app showed the
+  // terminal for a frame while the tab was still a chat tab (2026-09-13,
+  // "sometimes chat ui flashes to terminal"). Unresolved is a blink too.
   const blink = controller.showNativeChat
     ? emptyReload
-    : !controller.activeChatEligible && !controller.terminalPeekActive
+    : !controller.viewResolved ||
+      (!controller.activeChatEligible && !controller.terminalPeekActive)
   const held = useHeldChatFrame(blank && blink, sendSurfaceId)
   if (blank) {
     return held.element

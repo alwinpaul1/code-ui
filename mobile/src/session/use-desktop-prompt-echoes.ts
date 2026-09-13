@@ -1,6 +1,10 @@
 import { useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import {
+  normalizeNativeChatUserText,
+  stripImagePromptMarker
+} from '../../../src/shared/native-chat-image-transcript-markers'
 
 type DesktopPrompt = { nonce: string; text: string }
 
@@ -34,7 +38,9 @@ export function useDesktopPromptEchoes(
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,
-      text: prompt.text,
+      // The phone has no bytes for a desktop-pasted image, so its marker is
+      // dropped rather than drawn as `[Image #1]` (2026-09-13).
+      text: stripImagePromptMarker(prompt.text),
       expectedOccurrence: 0,
       baselineTailMessageId: anchors.current.get(prompt.nonce) ?? null,
       baselineResolved: true
@@ -45,7 +51,8 @@ export function useDesktopPromptEchoes(
 
 /** Drop prompts the transcript already shows: a prompt submitted while the
  *  agent was idle IS written as a user turn, and would otherwise appear
- *  twice. Compared on trimmed text against the tail of the conversation. */
+ *  twice. Compared on the same key every other witness uses, so a transcript
+ *  row carrying `[Image #1]` markers or different wrapping still counts. */
 export function withoutLandedDesktopPrompts(
   prompts: readonly DesktopPrompt[],
   folded: readonly NativeChatMessage[]
@@ -57,9 +64,9 @@ export function withoutLandedDesktopPrompts(
         message.blocks
           .map((block) => (block.type === 'text' ? block.text : ''))
           .join('')
-          .trim()
       )
+      .map(normalizeNativeChatUserText)
       .filter((text) => text.length > 0)
   )
-  return prompts.filter((prompt) => !seen.has(prompt.text.trim()))
+  return prompts.filter((prompt) => !seen.has(normalizeNativeChatUserText(prompt.text)))
 }
