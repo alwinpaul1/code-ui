@@ -151,14 +151,16 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'bg=""',
   'ba=""',
   'lv=""',
-  // The last 16 MiB, both scans, so a launch and its completion are weighed
-  // against each other over the same window. The whole file was tried on
-  // 2026-09-13 and cost 1.9 s of CPU per status-line repaint on a 213 MB
-  // transcript — Claude repaints while streaming, so that pegged a core.
-  // 16 MiB is hours of a busy session and reads in about 0.1 s.
-  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
+  // The last 4 MiB, both scans. This runs on every status-line repaint, on
+  // the machine the user types on, so it must be cheap: the whole file cost
+  // 1.9 s per repaint on a 213 MB transcript and 16 MiB still cost 1.4 s,
+  // both felt as keystroke lag (2026-09-13). 4 MiB reads in about 0.3 s and
+  // covers what changed this turn; the Stop hook's whole-file `run=` is the
+  // authoritative list at turn end, so a shell launched far back is corrected
+  // there rather than carried on every keystroke.
+  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 4194304 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
   '[ -n "$ba" ] && bg=$(printf "%s\\n" "$ba" | tail -n 64 | tr "\\n" ",")',
-  '[ -n "$tp" ] && [ -r "$tp" ] && da=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && da=$(tail -c 4194304 "$tp" 2>/dev/null | grep -F "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
   'dc=","',
   '[ -n "$da" ] && dc=",$(printf "%s\\n" "$da" | tr "\\n" ",")"',
   // `live` is the answer the phone actually needs: launched and not yet

@@ -594,7 +594,7 @@ describe('finished background tasks ride the Claude beacon', () => {
     const scans = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ').filter((part) => part.includes('grep -F'))
     expect(scans).toHaveLength(2)
     for (const scan of scans) {
-      expect(scan).toContain('tail -c 16777216 "$tp"')
+      expect(scan).toContain('tail -c 4194304 "$tp"')
     }
   })
 
