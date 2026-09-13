@@ -50,9 +50,9 @@ describe('asking the Mac what state it is in', () => {
     const { state, calls, methods } = await runProbe([
       [],
       ['still starting up'],
-      ['CUIMAC lock=1 display=off']
+      ['CUIMAC lock=1 display=off mute=true']
     ])
-    expect(state).toEqual({ lock: 'locked', display: 'off' })
+    expect(state).toEqual({ lock: 'locked', display: 'off', mute: 'muted' })
     expect(calls[0]?.method).toBe('session.tabs.createTerminal')
     expect(calls[1]).toEqual({
       method: 'terminal.read',

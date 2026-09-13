@@ -8,7 +8,7 @@ import {
 
 describe('mac host commands', () => {
   it('closes its own throwaway tab whatever the action', () => {
-    for (const action of ['lock', 'sleep-display', 'wake-display'] as const) {
+    for (const action of ['lock', 'sleep-display', 'wake-display', 'mute', 'unmute'] as const) {
       expect(buildMacHostCommand(action)).toMatch(/; exit$/)
     }
     expect(buildMacUnlockCommand('pw')).toMatch(/; exit$/)
@@ -27,6 +27,12 @@ describe('mac host commands', () => {
   it('sleeps and wakes the display with pmset and caffeinate', () => {
     expect(buildMacHostCommand('sleep-display')).toBe('pmset displaysleepnow; exit')
     expect(buildMacHostCommand('wake-display')).toBe('caffeinate -u -t 2; exit')
+  })
+
+  it('mutes and unmutes the speakers only, never the microphone', () => {
+    expect(buildMacHostCommand('mute')).toBe(`osascript -e 'set volume output muted true'; exit`)
+    expect(buildMacHostCommand('unmute')).toBe(`osascript -e 'set volume output muted false'; exit`)
+    expect(buildMacHostCommand('mute')).not.toContain('input')
   })
 
   it('wakes the display, waits, then types the password and Return', () => {
@@ -60,12 +66,14 @@ describe('mac host commands', () => {
       lock: 'Lock Mac',
       unlock: 'Unlock Mac',
       'sleep-display': 'Sleep display',
-      'wake-display': 'Wake display'
+      'wake-display': 'Wake display',
+      mute: 'Mute Mac',
+      unmute: 'Unmute Mac'
     })
   })
 
   it('tells the user what is happening without quoting the command', () => {
-    for (const action of ['lock', 'unlock', 'sleep-display', 'wake-display'] as const) {
+    for (const action of ['lock', 'unlock', 'sleep-display', 'wake-display', 'mute', 'unmute'] as const) {
       const progress = MAC_HOST_ACTION_PROGRESS[action]
       expect(progress).toBeTruthy()
       expect(progress).not.toContain('osascript')

@@ -1,5 +1,5 @@
-/** The four one-tap Mac controls the host card offers on a darwin host. */
-export type MacHostAction = 'lock' | 'unlock' | 'sleep-display' | 'wake-display'
+/** The one-tap Mac controls the host card offers on a darwin host. */
+export type MacHostAction = 'lock' | 'unlock' | 'sleep-display' | 'wake-display' | 'mute' | 'unmute'
 
 /** Actions whose command needs no secret; Unlock is built by buildMacUnlockCommand. */
 export type MacHostPasswordlessAction = Exclude<MacHostAction, 'unlock'>
@@ -8,7 +8,9 @@ export const MAC_HOST_ACTION_LABELS: Record<MacHostAction, string> = {
   lock: 'Lock Mac',
   unlock: 'Unlock Mac',
   'sleep-display': 'Sleep display',
-  'wake-display': 'Wake display'
+  'wake-display': 'Wake display',
+  mute: 'Mute Mac',
+  unmute: 'Unmute Mac'
 }
 
 /** What the toast says while the Mac is being asked. Deliberately says nothing about
@@ -17,7 +19,9 @@ export const MAC_HOST_ACTION_PROGRESS: Record<MacHostAction, string> = {
   lock: 'Locking the Mac…',
   unlock: 'Unlocking the Mac…',
   'sleep-display': 'Putting the display to sleep…',
-  'wake-display': 'Waking the display…'
+  'wake-display': 'Waking the display…',
+  mute: 'Muting the Mac…',
+  unmute: 'Unmuting the Mac…'
 }
 
 // Why `; exit`: the command runs as a throwaway terminal tab's startup command, so the
@@ -37,7 +41,10 @@ const LOCK_COMMAND =
 const PASSWORDLESS_COMMANDS: Record<MacHostPasswordlessAction, string> = {
   lock: LOCK_COMMAND,
   'sleep-display': 'pmset displaysleepnow',
-  'wake-display': 'caffeinate -u -t 2'
+  'wake-display': 'caffeinate -u -t 2',
+  // Output mute only: the input (microphone) is left alone on purpose.
+  mute: `osascript -e 'set volume output muted true'`,
+  unmute: `osascript -e 'set volume output muted false'`
 }
 
 /** Escapes for an AppleScript double-quoted string literal. */

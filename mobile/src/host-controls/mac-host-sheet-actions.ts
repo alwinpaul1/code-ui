@@ -1,4 +1,4 @@
-import { Lock, LockOpen, MonitorOff, Sunrise, type LucideIcon } from 'lucide-react-native'
+import { Lock, LockOpen, MonitorOff, Sunrise, Volume2, VolumeX, type LucideIcon } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MAC_HOST_ACTION_LABELS, type MacHostAction } from './mac-host-commands'
 import type { MacHostState } from './mac-host-state'
@@ -17,14 +17,16 @@ const MAC_ACTION_ICONS: Record<MacHostAction, LucideIcon> = {
   lock: Lock,
   unlock: LockOpen,
   'sleep-display': MonitorOff,
-  'wake-display': Sunrise
+  'wake-display': Sunrise,
+  mute: VolumeX,
+  unmute: Volume2
 }
 
 const NO_WORKTREE_HINT = 'Open a workspace on this Mac first'
 const CHECKING_LABEL = 'Checking the Mac…'
 
 /** Only the rows that can do anything from where the Mac actually is: you cannot lock a
- *  locked Mac or wake a display that is already on. An unknown half offers both of its
+ *  locked Mac, wake a display that is already on, or mute a muted Mac. An unknown half offers both of its
  *  rows — a wrong row is better than a missing one when the Mac would not say. */
 function actionsForState(state: MacHostState): MacHostAction[] {
   const lock: MacHostAction[] =
@@ -35,7 +37,9 @@ function actionsForState(state: MacHostState): MacHostAction[] {
       : state.display === 'on'
         ? ['sleep-display']
         : ['sleep-display', 'wake-display']
-  return [...lock, ...display]
+  const mute: MacHostAction[] =
+    state.mute === 'muted' ? ['unmute'] : state.mute === 'unmuted' ? ['mute'] : ['mute', 'unmute']
+  return [...lock, ...display, ...mute]
 }
 
 /** The Mac group, or an empty list on every other host — a Windows or Linux user

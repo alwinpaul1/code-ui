@@ -20,6 +20,8 @@ vi.mock('lucide-react-native', () => ({
   LockOpen: 'LockOpen',
   MonitorOff: 'MonitorOff',
   Sunrise: 'Sunrise',
+  Volume2: 'Volume2',
+  VolumeX: 'VolumeX',
   Trash2: 'Trash2'
 }))
 // Why: the drawer is a native modal stack; the sheet's own colours are what is under test.

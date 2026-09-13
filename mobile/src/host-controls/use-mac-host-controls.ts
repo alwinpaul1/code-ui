@@ -11,7 +11,7 @@ import {
 } from './mac-host-commands'
 import { readMacHostPlatformResult, selectMacHostWorktreeId } from './mac-host-platform'
 import type { MacHostSheetOptions } from './mac-host-sheet-actions'
-import type { MacHostState } from './mac-host-state'
+import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
 import { runMacHostCommand } from './run-mac-host-command'
@@ -117,7 +117,7 @@ export function useMacHostControls(args: {
     setMacState('checking')
     void probe(openHostId).then((state) => {
       if (!stale) {
-        setMacState(state ?? { lock: 'unknown', display: 'unknown' })
+        setMacState(state ?? UNKNOWN_MAC_HOST_STATE)
       }
     })
     return () => {

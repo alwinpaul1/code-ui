@@ -9,6 +9,7 @@ describe('the Mac state probe command', () => {
   it('asks the two questions this Mac can actually answer', () => {
     expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('CGSSessionScreenIsLocked')
     expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('pmset -g log')
+    expect(MAC_HOST_STATE_PROBE_COMMAND).toContain('output muted of (get volume settings)')
     expect(MAC_HOST_STATE_PROBE_COMMAND).toMatch(/; exit$/)
   })
 
@@ -21,39 +22,45 @@ describe('the Mac state probe command', () => {
 
 describe('reading the Mac state off the screen', () => {
   it('reads a locked Mac with its display off', () => {
-    expect(parseMacHostState(['$ probe', 'CUIMAC lock=1 display=off', '$ '])).toEqual({
+    expect(parseMacHostState(['$ probe', 'CUIMAC lock=1 display=off mute=true', '$ '])).toEqual({
       lock: 'locked',
-      display: 'off'
+      display: 'off',
+      mute: 'muted'
     })
   })
 
   it('reads an awake, unlocked Mac', () => {
-    expect(parseMacHostState(['CUIMAC lock=0 display=on'])).toEqual({
+    expect(parseMacHostState(['CUIMAC lock=0 display=on mute=false'])).toEqual({
       lock: 'unlocked',
-      display: 'on'
+      display: 'on',
+      mute: 'unmuted'
     })
   })
 
   it('reads the other two combinations too', () => {
-    expect(parseMacHostState(['CUIMAC lock=1 display=on'])).toEqual({
+    expect(parseMacHostState(['CUIMAC lock=1 display=on mute=false'])).toEqual({
       lock: 'locked',
-      display: 'on'
+      display: 'on',
+      mute: 'unmuted'
     })
-    expect(parseMacHostState(['CUIMAC lock=0 display=off'])).toEqual({
+    expect(parseMacHostState(['CUIMAC lock=0 display=off mute=true'])).toEqual({
       lock: 'unlocked',
-      display: 'off'
+      display: 'off',
+      mute: 'muted'
     })
   })
 
   it('takes the last marker when the screen still holds an older one', () => {
     expect(
-      parseMacHostState(['CUIMAC lock=1 display=off', 'CUIMAC lock=0 display=on'])
-    ).toEqual({ lock: 'unlocked', display: 'on' })
+      parseMacHostState(['CUIMAC lock=1 display=off mute=true', 'CUIMAC lock=0 display=on mute=false'])
+    ).toEqual({ lock: 'unlocked', display: 'on', mute: 'unmuted' })
   })
 
   it('stays unknown rather than guessing when no marker was painted', () => {
     expect(parseMacHostState([])).toEqual(UNKNOWN_MAC_HOST_STATE)
     expect(parseMacHostState(['zsh: command not found: ioreg'])).toEqual(UNKNOWN_MAC_HOST_STATE)
-    expect(parseMacHostState(['CUIMAC lock=2 display=maybe'])).toEqual(UNKNOWN_MAC_HOST_STATE)
+    expect(parseMacHostState(['CUIMAC lock=2 display=maybe mute=true'])).toEqual(UNKNOWN_MAC_HOST_STATE)
+    // An older probe that never asked about mute must not be read as an answer.
+    expect(parseMacHostState(['CUIMAC lock=0 display=on'])).toEqual(UNKNOWN_MAC_HOST_STATE)
   })
 })
