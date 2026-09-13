@@ -89,7 +89,11 @@ export function MobileNativeChatOverlay({
   // Confirmed queued photos cannot exist in history yet. Searching older pages
   // for them repeatedly changes the list window during a live reply.
   usePendingImageHistory(session, projectedQueue.pending, sendSurfaceId)
-  const folded = useMemo(
+  // Folded twice on purpose. The first pass is what the echoes anchor
+  // themselves against; the second breaks the tool fold at those anchors too,
+  // so two prompts sent one after another keep the work between them instead
+  // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
+  const baseFolded = useMemo(
     () =>
       foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(projectedQueue.pending)),
     [projectedQueue.pending, session.messages]
@@ -98,13 +102,23 @@ export function MobileNativeChatOverlay({
   // ride the HUD beacon instead (2026-09-13).
   const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
   const unlandedPrompts = useMemo(
-    () => withoutLandedDesktopPrompts(desktopPrompts, folded),
-    [desktopPrompts, folded]
+    () => withoutLandedDesktopPrompts(desktopPrompts, baseFolded),
+    [desktopPrompts, baseFolded]
   )
-  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, folded)
+  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded)
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
-  const absorbedEchoes = useAbsorbedQueueEchoes(queuedMessages ?? [], folded, sendSurfaceId)
+  const absorbedEchoes = useAbsorbedQueueEchoes(queuedMessages ?? [], baseFolded, sendSurfaceId)
+  const folded = useMemo(
+    () =>
+      desktopEchoes.length > 0 || absorbedEchoes.length > 0
+        ? foldMobileNativeChatMessages(
+            session.messages,
+            pendingFoldBoundaries([...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes])
+          )
+        : baseFolded,
+    [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages]
+  )
   const pendingWithDesktopPrompts = useMemo(
     () =>
       desktopEchoes.length > 0 || absorbedEchoes.length > 0

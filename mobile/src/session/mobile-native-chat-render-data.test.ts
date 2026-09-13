@@ -317,6 +317,32 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
     expect(data[1]?.blocks.filter((b) => b.type === 'tool-call')).toHaveLength(1)
   })
 
+  // 2026-09-13: three prompts sent one after another stacked bare on the
+  // phone while the Claude app kept a "Ran 2 commands" fold between each.
+  it('keeps the work between three prompts sent one after another', () => {
+    const tool = (id: string): NativeChatMessage => ({
+      id,
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', id: `${id}-c`, name: 'Bash', input: {} }],
+      timestamp: 0,
+      source: 'transcript'
+    })
+    const raw = [row('u1', 'user', 'go'), tool('t1'), tool('t2'), tool('t3'), tool('t4')]
+    const pending = [
+      { id: 'p1', text: 'first', baselineTailMessageId: 't1', baselineResolved: true },
+      { id: 'p2', text: 'second', baselineTailMessageId: 't2', baselineResolved: true },
+      { id: 'p3', text: 'third', baselineTailMessageId: 't3', baselineResolved: true }
+    ]
+    const folded = foldMobileNativeChatMessages(raw, pendingFoldBoundaries(pending))
+    const { data } = buildMobileNativeChatTransientData({
+      messages: raw,
+      folded,
+      streaming: null,
+      pending
+    })
+    expect(data.map((m) => m.id)).toEqual(['u1', 't1', 'p1', 't2', 'p2', 't3', 'p3', 't4'])
+  })
+
   it('keeps an unmatched echo where it was sent instead of below later turns', () => {
     const folded = [row('m1', 'user', 'earlier'), row('m2', 'assistant', 'on it')]
     const { data } = buildMobileNativeChatTransientData({
