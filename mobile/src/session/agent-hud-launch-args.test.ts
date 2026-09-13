@@ -541,10 +541,19 @@ describe('finished background tasks ride the Claude beacon', () => {
   it('reads the transcript with only the tools Git for Windows, BusyBox and coreutils all ship', () => {
     // Why: this line runs on every status-line refresh on Windows, macOS and
     // Linux. Anything outside this set breaks one of them silently.
-    const line = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ').find((part) => part.includes('dn=$(grep -F'))
-    expect(line).toBeDefined()
-    const commands = (line ?? '').match(/\b(tail|grep|sed|awk|tr|printf|cat|head|cut|sort|uniq|perl|python3?|node|jq|xargs|rev|tac|mapfile|readarray)\b/g)
-    expect([...new Set(commands ?? [])].sort()).toEqual(['awk', 'grep', 'sed', 'tail', 'tr'])
+    const parts = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ')
+    const scan = parts.find((part) => part.includes('da=$(grep -F'))
+    const pick = parts.find((part) => part.includes('dn=$(printf'))
+    expect(scan).toBeDefined()
+    expect(pick).toBeDefined()
+    const tools = (text: string) =>
+      [
+        ...new Set(
+          text.match(/\b(tail|grep|sed|awk|tr|printf|cat|head|cut|sort|uniq|perl|python3?|node|jq|xargs|rev|tac|mapfile|readarray)\b/g) ?? []
+        )
+      ].sort()
+    expect(tools(scan ?? '')).toEqual(['awk', 'grep', 'sed'])
+    expect(tools(pick ?? '')).toEqual(['awk', 'printf', 'tr'])
   })
 
   it('leaves the done field off when the transcript has no notifications, or is unreadable', () => {

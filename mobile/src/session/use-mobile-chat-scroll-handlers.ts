@@ -39,6 +39,16 @@ export function useMobileChatScrollHandlers(input: {
     [hasMore, loadingEarlier, onLoadEarlier, setFollowing]
   )
 
+  // FlashList's own end-of-content signal, which in an inverted list is the
+  // start of history. The scroll-sample check above missed a fast fling that
+  // came to rest on the last loaded row (2026-09-13, on the device: the list
+  // stopped dead until the invisible row was tapped).
+  const onEndReached = useCallback(() => {
+    if (!followingRef.current && hasMore && !loadingEarlier) {
+      onLoadEarlier?.()
+    }
+  }, [followingRef, hasMore, loadingEarlier, onLoadEarlier])
+
   // The reader took control: stop following immediately, on the same frame as
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
@@ -73,5 +83,5 @@ export function useMobileChatScrollHandlers(input: {
     [listRef, setFollowing]
   )
 
-  return { evaluateEdge, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage }
+  return { evaluateEdge, onEndReached, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage }
 }

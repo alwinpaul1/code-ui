@@ -51,37 +51,26 @@ export function MobileBackgroundTasksRow({
   )
 }
 
-/** The star turns slowly and breathes while tasks run (2026-09-13): a quiet
- *  sign of work in flight, not a spinner. Native-driven, so it costs the JS
- *  thread nothing while the agent streams. */
+/** The star breathes while tasks run (2026-09-13): it scales and brightens,
+ *  no rotation — a quiet sign of work in flight, not a spinner. Native-driven,
+ *  so it costs the JS thread nothing while the agent streams. */
 function SpinningSparkle({ color }: { color: string }) {
-  const turn = useRef(new Animated.Value(0)).current
   const breath = useRef(new Animated.Value(0)).current
   useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(turn, { toValue: 1, duration: 6000, easing: Easing.linear, useNativeDriver: true })
-    )
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true })
+        Animated.timing(breath, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true })
       ])
     )
-    spin.start()
     pulse.start()
-    return () => {
-      spin.stop()
-      pulse.stop()
-    }
-  }, [breath, turn])
+    return () => pulse.stop()
+  }, [breath])
   return (
     <Animated.View
       style={{
-        transform: [
-          { rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
-          { scale: breath.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.15] }) }
-        ],
-        opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] })
+        transform: [{ scale: breath.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.16] }) }],
+        opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] })
       }}
     >
       <Sparkles size={14} color={color} />

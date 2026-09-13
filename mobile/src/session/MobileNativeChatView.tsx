@@ -35,7 +35,7 @@ import { interimAssistantMessageIds } from './mobile-native-chat-interim'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
-import { DockFade, useChatDock } from './MobileNativeChatDockFade'
+import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -189,7 +189,7 @@ export function MobileNativeChatView({
     [onSend, onClearSendError]
   )
 
-  const { evaluateEdge, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage } =
+  const { evaluateEdge, onEndReached, onScrollBeginDrag, onScrollEnd, jumpToLatest, onScrollToMessage } =
     useMobileChatScrollHandlers({
     listRef,
     followingRef,
@@ -304,6 +304,8 @@ export function MobileNativeChatView({
             // instead of being swallowed by the dismiss gesture.
             keyboardShouldPersistTaps="handled"
             onScroll={evaluateEdge}
+            onEndReached={onEndReached}
+            onEndReachedThreshold={0.5}
             onTouchStart={touchStart}
             onTouchEnd={touchEnd}
             onTouchCancel={touchEnd}
@@ -402,7 +404,6 @@ export function MobileNativeChatView({
         onLayout={onDockLayout}
         testID="native-chat-dock"
       >
-        <DockFade />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}
