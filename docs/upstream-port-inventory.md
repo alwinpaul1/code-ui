@@ -54,6 +54,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | 7a440b1c8 #20252 | skip successful duplicate connection log saves | applied verbatim; `connection-log-buffer.ts` matched upstream. Several save requests between two appends each copied the entries and each wrote them; a per-host revision now carries one snapshot and one `saved` flag, and a failed revision still retries |
 | ef3b7e83b #20224 | reuse numeric collators across source control sorts | applied verbatim across the three files, which matched upstream. `localeCompare(…, { numeric: true })` builds a collator per comparison, so an O(n log n) sort built O(n log n) collators; one `Intl.Collator` per sort now. Upstream's `config/scripts/mobile-source-control-collation-benchmark.mjs` was not taken — this fork does not carry the benchmark scripts |
 | 701dc2211 #20233 | precompute task sort keys and reuse repository collation | applied verbatim; the tasks screens here match upstream. Sort keys were derived inside the comparator, so each was rebuilt O(log n) times per item, and the repository sort built a collator per comparison |
+| a045af361 #20249 | precompute Linear issue sort keys | applied verbatim; this fork has the Linear task screens and the files matched upstream |
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
