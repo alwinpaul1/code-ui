@@ -190,6 +190,21 @@ describe('sentPromptsFromScreen', () => {
     ).toEqual([])
   })
 
+  it('never reads an incoming teammate message notice as something the user sent', () => {
+    // 2026-09-13, on the phone: "Message from @review-sonnet (ctrl+o to
+    // expand)" stood as a user bubble. Claude Code paints it in the prompt's
+    // own shape, and no transcript row ever lands to retire it.
+    expect(
+      sentPromptsFromScreen([
+        '❯ Message from @review-sonnet (ctrl+o to expand)',
+        '',
+        '❯ see my mobile screen there is a issue',
+        '',
+        '❯ '
+      ])
+    ).toEqual(['see my mobile screen there is a issue'])
+  })
+
   it('returns nothing for a screen with no prompt rows', () => {
     expect(sentPromptsFromScreen(['  Ran 3 shell commands', '', '✻ Cooking…', '❯'])).toEqual([])
   })

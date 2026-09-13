@@ -54,6 +54,10 @@ const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/
+/** Rows Claude Code paints in the prompt's own shape that the user never
+ *  typed: an incoming teammate message ("Message from @name (ctrl+o to
+ *  expand)") read as a sent prompt on 2026-09-13. */
+const HARNESS_NOTICE = /^(?:Message|Cross-session message|Idle notice) from @?\S+/
 /** What Claude paints after the blank row under a prompt once the turn's
  *  tools fold: "Ran 6 shell commands", "Read 2 files", "Edited a file". A
  *  prompt's own second paragraph sits on an identical two-space row, so this
@@ -97,7 +101,7 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       cursor += 1
     }
     const text = stripImagePromptMarker(joinWrappedRows(parts)).trim()
-    if (text.length > 0 && !LOCAL_COMMAND.test(text)) {
+    if (text.length > 0 && !LOCAL_COMMAND.test(text) && !HARNESS_NOTICE.test(text)) {
       prompts.push(text)
     }
     index = cursor
