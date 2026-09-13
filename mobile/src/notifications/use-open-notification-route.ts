@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
+import { useAppUpdateStore } from '../app-update/app-update-store'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
 import {
@@ -35,5 +36,8 @@ export function useOpenAppUpdateNotification(): () => void {
   const router = useRouter()
   return useCallback(() => {
     router.navigate('/')
+    // The tap IS the person asking now, so it bypasses the 30-minute throttle
+    // that otherwise left Home showing no banner (2026-09-13).
+    void useAppUpdateStore.getState().checkForUpdate({ force: true })
   }, [router])
 }

@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { loadBackgroundUpdateCheckEnabled } from './auto-update-preference'
 import { performUpdateCheck } from './check-update'
+import { LAST_AVAILABLE_KEY } from './app-update-store'
 import { getInstalledBuildNumber, getInstalledVersion } from './installed-version'
 import {
   appUpdateNotificationContent,
@@ -48,6 +49,13 @@ export async function runBackgroundUpdateCheck(): Promise<void> {
     })
   } finally {
     clearTimeout(timer)
+  }
+  // Why persist here too: the app's own check is throttled to 30 minutes, so
+  // a tap on this notification could open a Home whose last foreground answer
+  // was "up to date" and show no banner until the user asked again by hand
+  // (2026-09-13). The store hydrates from this key on every open.
+  if (result.status === 'available') {
+    await AsyncStorage.setItem(LAST_AVAILABLE_KEY, JSON.stringify(result)).catch(() => {})
   }
   const lastNotifiedVersion = await AsyncStorage.getItem(LAST_NOTIFIED_KEY).catch(() => null)
   const plan = planBackgroundUpdateCheck({ enabled, result, lastNotifiedVersion })

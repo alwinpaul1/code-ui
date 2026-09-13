@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { hydrateAppUpdateState, useAppUpdateStore } from './app-update-store'
+import { hydrateAppUpdateState, useAppUpdateStore ,
+  LAST_AVAILABLE_KEY
+} from './app-update-store'
 import { performUpdateCheck } from './check-update'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -121,4 +123,11 @@ describe('useAppUpdateStore', () => {
     expect(useAppUpdateStore.getState().status).toBe('idle')
     expect(AsyncStorage.removeItem).toHaveBeenCalled()
   })
+})
+
+// 2026-09-13: tapping the update notification opened a Home with no banner.
+// The app's own check is throttled to 30 minutes, so the store has to be able
+// to show what the background task already found; both write this one key.
+it('reads an available update the background check left behind', async () => {
+  expect(LAST_AVAILABLE_KEY).toBe('codeui:last-available-update')
 })

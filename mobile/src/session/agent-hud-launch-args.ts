@@ -413,7 +413,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   '$j=$null',
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$E={param($s) ([string]$s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
-  '$o="CUIHUD1 agent=claude"',
+  '$o="CUIHUD1 agent=claude hk=1"',
   'if($j.model.id){$o=$o+" model="+(& $E $j.model.id)}',
   'if($j.model.display_name){$o=$o+" name="+(& $E $j.model.display_name)}',
   'if($j.effort.level){$o=$o+" effort="+(& $E $j.effort.level)}',

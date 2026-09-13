@@ -23,7 +23,8 @@ import { getInstalledBuildNumber, getInstalledVersion } from './installed-versio
 // check-update.ts (unit-tested); this module only wires it to device storage.
 
 const LAST_CHECK_KEY = 'codeui:last-update-check'
-const LAST_AVAILABLE_KEY = 'codeui:last-available-update'
+/** Shared with the background check, which writes the same shape (2026-09-13). */
+export const LAST_AVAILABLE_KEY = 'codeui:last-available-update'
 // Why 30 minutes: a new release should reach a phone that is opened a few
 // times a day within the hour, without polling GitHub on every foreground.
 const CHECK_INTERVAL_MS = 30 * 60 * 1000
