@@ -19,8 +19,10 @@ import { XTERM_HTML } from './terminal-webview-html'
 // that owes the finger its frames.
 // Then: the write hold wakes its own pump when the cap expires, or a resize's
 // re-serialised buffer could sit in the queue forever and leave a blank view.
-const EXPECTED_SHA256 = '0e28ba7e2d66d389f01087164e3e82e5cbfac60bcbd6042c55fbb62b9f4c8df0'
-const EXPECTED_LENGTH = 757011
+// Then: nextQueuedWrite() clears the slot it consumed, so an already-submitted
+// chunk is not kept reachable until compaction (upstream 42a2c6510).
+const EXPECTED_SHA256 = '702a03ae215fd44f05c506459edd81e4973af1bffdc3cfe9ea401235dcaa69e2'
+const EXPECTED_LENGTH = 757055
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

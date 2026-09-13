@@ -1,5 +1,8 @@
 // Also carries disposeTermObservers() and extractMouseModeScanTail(): both belong to
 // other concerns, but emitted-document order pins them inside this queue.
+// nextQueuedWrite() clears each slot before advancing the head; otherwise consumed slots keep
+// already-submitted chunks reachable until compaction, which is up to half a backlog away.
+// Kept out of the template literal below: anything inside it ships to every device.
 export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drains anyway: a reader parked in scrollback
   // must not freeze the live view indefinitely.
   var SCROLL_WRITE_HOLD_MAX_MS = 1200;
@@ -54,6 +57,7 @@ export const TERMINAL_HTML_WRITE_QUEUE = `  // A scroll that outlasts this drain
       return undefined;
     }
     var next = writeQueue[writeQueueHead];
+    writeQueue[writeQueueHead] = undefined;
     writeQueueHead++;
     // Why: high-throughput terminals can enqueue faster than xterm parses;
     // compact consumed slots so drain work stays O(1) without retaining old chunks.
