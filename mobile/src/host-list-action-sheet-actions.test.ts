@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getHostListActionSheetActions } from './host-list-action-sheet-actions'
+import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './host-controls/mac-host-state'
 import type { ConnectionState, HostProfile } from './transport/types'
 
 vi.mock('lucide-react-native', () => ({
@@ -120,7 +121,15 @@ describe('getHostListActionSheetActions', () => {
 
 const MAC_LABELS = ['Lock Mac', 'Unlock Mac', 'Sleep display', 'Wake display']
 
-function buildWithMac(mac: { hostPlatform: NodeJS.Platform | null; worktreeId?: string | null }) {
+function macLabelsOf(actions: { label: string }[]): string[] {
+  return actions.map((action) => action.label).filter((label) => MAC_LABELS.includes(label))
+}
+
+function buildWithMac(mac: {
+  hostPlatform: NodeJS.Platform | null
+  worktreeId?: string | null
+  state?: MacHostState | 'checking'
+}) {
   const onMacAction = vi.fn()
   const actions = getHostListActionSheetActions({
     host: HOST,
@@ -135,6 +144,7 @@ function buildWithMac(mac: { hostPlatform: NodeJS.Platform | null; worktreeId?: 
     mac: {
       hostPlatform: mac.hostPlatform,
       worktreeId: mac.worktreeId === undefined ? 'wt-1' : mac.worktreeId,
+      state: mac.state ?? UNKNOWN_MAC_HOST_STATE,
       onAction: onMacAction
     }
   })
@@ -184,6 +194,67 @@ describe('the Mac controls on the host sheet', () => {
     expect(lock?.disabled).toBe(true)
     expect(lock?.hint).toBe('Open a workspace on this Mac first')
     lock?.onPress()
+    expect(onMacAction).not.toHaveBeenCalled()
+  })
+
+  it('offers only Lock and Sleep to an awake, unlocked Mac', () => {
+    const { actions } = buildWithMac({
+      hostPlatform: 'darwin',
+      state: { lock: 'unlocked', display: 'on' }
+    })
+    expect(macLabelsOf(actions)).toEqual(['Lock Mac', 'Sleep display'])
+  })
+
+  it('offers only Unlock and Wake to a locked Mac with its display off', () => {
+    const { actions } = buildWithMac({
+      hostPlatform: 'darwin',
+      state: { lock: 'locked', display: 'off' }
+    })
+    expect(macLabelsOf(actions)).toEqual(['Unlock Mac', 'Wake display'])
+  })
+
+  it('offers Unlock and Sleep to a locked Mac whose display is still on', () => {
+    const { actions } = buildWithMac({
+      hostPlatform: 'darwin',
+      state: { lock: 'locked', display: 'on' }
+    })
+    expect(macLabelsOf(actions)).toEqual(['Unlock Mac', 'Sleep display'])
+  })
+
+  it('offers Lock and Wake to an unlocked Mac whose display has gone dark', () => {
+    const { actions } = buildWithMac({
+      hostPlatform: 'darwin',
+      state: { lock: 'unlocked', display: 'off' }
+    })
+    expect(macLabelsOf(actions)).toEqual(['Lock Mac', 'Wake display'])
+  })
+
+  it('falls back to all four when the Mac would not say what state it is in', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'darwin', state: UNKNOWN_MAC_HOST_STATE })
+    expect(macLabelsOf(actions)).toEqual(MAC_LABELS)
+  })
+
+  it('offers the half it does know when only one answer came back', () => {
+    expect(
+      macLabelsOf(
+        buildWithMac({ hostPlatform: 'darwin', state: { lock: 'locked', display: 'unknown' } })
+          .actions
+      )
+    ).toEqual(['Unlock Mac', 'Sleep display', 'Wake display'])
+  })
+
+  it('says it is checking, and offers nothing to tap, until the Mac answers', () => {
+    const { actions, onMacAction } = buildWithMac({ hostPlatform: 'darwin', state: 'checking' })
+    const labels = actions.map((action) => action.label)
+    expect(labels).toContain('Checking the Mac…')
+    for (const label of MAC_LABELS) {
+      expect(labels).not.toContain(label)
+    }
+    const checking = actions.find((action) => action.label === 'Checking the Mac…')
+    expect(checking?.disabled).toBe(true)
+    expect(checking?.loading).toBe(true)
+    expect(checking?.group).toBe('Mac')
+    checking?.onPress()
     expect(onMacAction).not.toHaveBeenCalled()
   })
 

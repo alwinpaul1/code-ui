@@ -51,7 +51,11 @@ export function MobileHomeScreen() {
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
-  const mac = useMacHostControls({ clients: data.allClients, worktreeInfo: data.worktreeInfo })
+  const mac = useMacHostControls({
+    clients: data.allClients,
+    worktreeInfo: data.worktreeInfo,
+    openHostId: actionTarget?.id ?? null
+  })
 
   const openResume = useCallback(
     (card: HomeResumeCard) => {
@@ -191,7 +195,7 @@ export function MobileHomeScreen() {
             data.router.push({ pathname: '/connection-log', params: { hostId } }),
           onEdit: openMobileHostEdit,
           onRemove: (host) => setConfirmRemove(host),
-          mac: mac.macOptionsForHost(actionTarget?.id ?? null)
+          mac: mac.macOptions
         })}
         onClose={() => setActionTarget(null)}
       />
