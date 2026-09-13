@@ -560,6 +560,27 @@ describe('finished background tasks ride the Claude beacon', () => {
     expect(tools(pick ?? '')).toEqual(['awk', 'printf', 'tr'])
   })
 
+  // The Windows twin of the prompt hook: no PowerShell on this machine, so
+  // only its shape is checked. It has NOT run on Windows (2026-09-13).
+  it('ships the prompt hook to Windows as an encoded PowerShell command', () => {
+    const settings = JSON.parse(buildClaudeHudSettingsJson('win32'))
+    const command = settings.hooks.UserPromptSubmit[0].hooks[0].command
+    expect(command).toMatch(
+      /^powershell -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/
+    )
+    const script = Buffer.from(command.split(' ').at(-1) ?? '', 'base64').toString('utf16le')
+    expect(script).toContain('$j.prompt')
+    expect(script).toContain('up=')
+    expect(script).toContain('Write-Beacon')
+  })
+
+  it('gives a POSIX host the sh prompt hook, and both hosts the Stop hook', () => {
+    const posix = JSON.parse(buildClaudeHudSettingsJson('darwin'))
+    expect(posix.hooks.UserPromptSubmit[0].hooks[0].command).toContain('up=$$:')
+    expect(posix.hooks.Stop[0].hooks[0].command).toContain('run=')
+    expect(JSON.parse(buildClaudeHudSettingsJson('win32')).hooks.Stop).toBeDefined()
+  })
+
   it('leaves the done field off when the transcript has no notifications, or is unreadable', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cuihud-transcript-'))
     const empty = join(dir, 'empty.jsonl')
