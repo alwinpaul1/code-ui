@@ -62,6 +62,11 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
+The sweep on 2026-09-13 covered every upstream commit to `origin/main`
+(fe4237cd4) whose subject carries `(mobile)`, plus the three mobile Markdown
+and terminal fixes that do not. `UPSTREAM.txt` is unchanged by that sweep: all
+twelve ports are mobile-only, and its pin list records `src/shared/` files.
+
 **This table is behind `main` for work outside the chat-rendering and
 shared-path batches.** It was last rewritten at 588b199, and several ports have
 landed since without adding a row — the pins in `UPSTREAM.txt` for
@@ -83,6 +88,11 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | Commit(s) | Why |
 |---|---|
 | 3160b54c6 #18554, reverted by d53cbed43 #19203 | upstream pulled its own push-notification feature |
+| 74cc9b503 #19935, d33354cfd #19951, 341b13cf6 #20068, reverted in part by e187c8267 #20040 | the re-landed desktop/mobile push integration. Code UI has no push feature and no paired-desktop push transport; the desktop half is `src/main/` this fork does not vendor. Upstream itself pulled the rollout once already |
+| afce0c85c #19115 | `mobile/src/sync-runtime-graph/` does not exist here. The agent-status projection join it short-circuits is part of the runtime graph this fork does not carry |
+| eedd35645 #20018 | typed RPC operations. Needs `src/shared/rpc-contract/` (not vendored here) and `rpc-params-catalog.generated.ts`, which `config/scripts/generate-rpc-params-catalog.mjs` generates from the HOST registry under `src/main/` — also not vendored. Porting the ~1,500 lines of machinery with no catalog and no call-site migration would land unreachable code that cannot be checked against the real params. Revisit if `src/shared/rpc-contract/` is ever vendored |
+| 4e1681338 #19675 | a 5,200-line pure refactor that moves settings, diagnostics and editor-document screens out of their routes. These are among the most diverged files in this fork — Code UI wrote its own settings, voice and connection-log screens — so the extraction has no common ground to land on and no behaviour to gain |
+| 1798786d4 #19869 | transcript row windowing. Every visible file is `src/renderer/` (NativeChatMessageList and 14 new modules beside it); mobile draws its own list. Its `src/shared/` delta is two optional fields on journal types owned by another agent this session. Windowing the phone's transcript is a Code UI decision, not a port |
 | 23df74d85, e628090ad, c37413271, ceafdcad2, 83b1558ec, 0ba7f8dc8, 643571def | the relay speed pass, reverted upstream by d74f8cb78 and d936d8da8 pending a smaller re-land. Code UI already has the dial-stage timing and the network-type gate |
 | b51bbf3fc #12772, 4b4acf26a #19769 | iOS only; this app is Android |
 | 821c8b7df, da48ad2b4, 2265fce59, 36d209f51 | version bumps and repo chores |
