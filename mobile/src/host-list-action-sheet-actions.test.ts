@@ -5,8 +5,12 @@ import type { ConnectionState, HostProfile } from './transport/types'
 vi.mock('lucide-react-native', () => ({
   Activity: vi.fn(),
   Edit3: vi.fn(),
+  Lock: vi.fn(),
+  LockOpen: vi.fn(),
+  MonitorOff: vi.fn(),
   PowerOff: vi.fn(),
-  RefreshCw: vi.fn()
+  RefreshCw: vi.fn(),
+  Sunrise: vi.fn()
 }))
 
 const HOST: HostProfile = {
@@ -111,5 +115,96 @@ describe('getHostListActionSheetActions', () => {
         onRemove: vi.fn()
       })
     ).toEqual([])
+  })
+})
+
+const MAC_LABELS = ['Lock Mac', 'Unlock Mac', 'Sleep display', 'Wake display']
+
+function buildWithMac(mac: { hostPlatform: NodeJS.Platform | null; worktreeId?: string | null }) {
+  const onMacAction = vi.fn()
+  const actions = getHostListActionSheetActions({
+    host: HOST,
+    state: 'connected',
+    hasEverConnected: true,
+    onDismiss: vi.fn(),
+    onReconnect: vi.fn(),
+    onDisconnect: vi.fn(),
+    onDiagnostics: vi.fn(),
+    onEdit: vi.fn(),
+    onRemove: vi.fn(),
+    mac: {
+      hostPlatform: mac.hostPlatform,
+      worktreeId: mac.worktreeId === undefined ? 'wt-1' : mac.worktreeId,
+      onAction: onMacAction
+    }
+  })
+  return { actions, onMacAction }
+}
+
+describe('the Mac controls on the host sheet', () => {
+  it('offers lock, unlock, sleep and wake on a Mac', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'darwin' })
+    expect(actions.map((action) => action.label)).toEqual([
+      'Reconnect',
+      'Disconnect',
+      ...MAC_LABELS,
+      'Network diagnostics',
+      'Edit host',
+      'Remove'
+    ])
+  })
+
+  it.each(['win32', 'linux'] as const)('shows a %s user nothing about a Mac', (hostPlatform) => {
+    const labels = buildWithMac({ hostPlatform }).actions.map((action) => action.label)
+    for (const label of MAC_LABELS) {
+      expect(labels).not.toContain(label)
+    }
+  })
+
+  it('stays quiet until the host has said which platform it is', () => {
+    const labels = buildWithMac({ hostPlatform: null }).actions.map((action) => action.label)
+    expect(labels).not.toContain('Lock Mac')
+  })
+
+  it('heads the group so the rows below it read as host actions again', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'darwin' })
+    expect(actions.find((action) => action.label === 'Lock Mac')?.group).toBe('Mac')
+    expect(actions.find((action) => action.label === 'Network diagnostics')?.group).toBe('Host')
+    expect(actions.find((action) => action.label === 'Reconnect')?.group).toBeUndefined()
+  })
+
+  it('leaves the sheet ungrouped when there are no Mac rows to separate', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'win32' })
+    expect(actions.every((action) => action.group === undefined)).toBe(true)
+  })
+
+  it('says why it cannot act when the Mac has no workspace to run in', () => {
+    const { actions, onMacAction } = buildWithMac({ hostPlatform: 'darwin', worktreeId: null })
+    const lock = actions.find((action) => action.label === 'Lock Mac')
+    expect(lock?.disabled).toBe(true)
+    expect(lock?.hint).toBe('Open a workspace on this Mac first')
+    lock?.onPress()
+    expect(onMacAction).not.toHaveBeenCalled()
+  })
+
+  it('waits for the sheet to close before Unlock can raise the password drawer', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'darwin' })
+    for (const label of MAC_LABELS) {
+      expect(actions.find((action) => action.label === label)?.closeBeforePress).toBe(true)
+    }
+  })
+
+  it('hands each tap its own action', () => {
+    const { actions, onMacAction } = buildWithMac({ hostPlatform: 'darwin' })
+    for (const [label, action] of [
+      ['Lock Mac', 'lock'],
+      ['Unlock Mac', 'unlock'],
+      ['Sleep display', 'sleep-display'],
+      ['Wake display', 'wake-display']
+    ] as const) {
+      onMacAction.mockClear()
+      actions.find((entry) => entry.label === label)?.onPress()
+      expect(onMacAction).toHaveBeenCalledWith(action)
+    }
   })
 })
