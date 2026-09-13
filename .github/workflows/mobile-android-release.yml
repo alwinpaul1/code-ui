@@ -28,12 +28,14 @@ on:
         type: boolean
 
 concurrency:
-  # One release build at a time, queued in order. Never cancel: a cancelled
-  # tag build leaves a tag with no release, and the in-app update card skips
-  # a release with no asset, so users would be stuck on the older build. (The
-  # 0.5.41/0.5.42 cancellations on 2026-09-13 were a GitHub Actions incident,
-  # not a pile-up.)
-  group: mobile-android-release
+  # One group PER TAG, never cancelled: every tag builds on its own and none
+  # is dropped. A shared group was tried on 2026-09-13 and, even with
+  # cancel-in-progress off, GitHub keeps only ONE pending run per group, so
+  # pushing 0.5.50 while 0.5.48 built silently cancelled the queued 0.5.49 and
+  # left a tag with no release. (The 0.5.41/0.5.42 cancellations that morning
+  # were a GitHub Actions incident, not a pile-up; parallel tag builds are
+  # fine.)
+  group: mobile-android-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
