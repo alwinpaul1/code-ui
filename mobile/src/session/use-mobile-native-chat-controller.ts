@@ -491,6 +491,7 @@ export function useMobileNativeChatController(
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatDesktopPrompts: hudBeacon?.desktopPrompts ?? NO_DESKTOP_PROMPTS,
+    nativeChatPromptHook: hudBeacon?.promptHook ?? null,
     nativeChatContextWindow: hudObservation?.context ?? null,
     nativeChatPermissionMode: hudObservation?.permissionMode ?? null,
     nativeChatAgentMode: hudObservation?.agentMode ?? null,

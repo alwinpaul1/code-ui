@@ -53,6 +53,8 @@ export type AgentHudBeacon = {
   /** A prompt the user submitted on the DESKTOP, with the hook process id that
    *  sent it, so two identical prompts stay distinct. Null on every beacon
    *  that is not a prompt submission. */
+  /** Whether this terminal was launched with the desktop-prompt hook. */
+  promptHook: boolean
   desktopPrompt: { nonce: string; text: string } | null
   /** Every desktop prompt seen on this terminal, oldest first, newest last. */
   desktopPrompts: { nonce: string; text: string }[]
@@ -148,6 +150,7 @@ export function parseAgentHudBeaconPayload(
     // could not know about a shell started later in a long turn.
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
+    promptHook: values.get('hk') === '1',
     desktopPrompt: readDesktopPrompt(values.get('up')),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
@@ -211,6 +214,7 @@ function publish(handle: string, payload: string): void {
         // must keep the ones that came before it.
         desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt),
         desktopPrompt: beacon.desktopPrompt ?? previous.desktopPrompt,
+        promptHook: beacon.promptHook || previous.promptHook,
         receivedAt: beacon.receivedAt
       }
     : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }

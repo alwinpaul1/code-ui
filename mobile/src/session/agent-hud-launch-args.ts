@@ -161,7 +161,12 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // (2026-09-13: capped lists left a 12:28 shell running all evening).
   '[ -n "$ba" ] && lv=$(printf "%s\\n" "$ba" | awk -v d="$dc" "index(d, \\",\\"\\$0\\",\\")==0" | tr "\\n" ",")',
   '[ -n "$da" ] && dn=$(printf "%s\\n" "$da" | awk -v b=",$bg," "{a[NR]=\\$0} END{for(i=1;i<=NR;i++) if (index(b, \\",\\"a[i]\\",\\")>0 || i>NR-32) print a[i]}" | tr "\\n" ",")',
-  'o="CUIHUD1 agent=claude"',
+  // `hk` says this tab was launched with the prompt hook. Claude Code reads
+  // --settings once at launch (its hot reload watches settings FILES, which
+  // Code UI must not write), so a tab started before the hook existed can
+  // never gain it — the phone says so rather than silently dropping the
+  // desktop's messages (2026-09-13).
+  'o="CUIHUD1 agent=claude hk=1"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
   '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
@@ -526,7 +531,12 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   '$pr=""',
   'if($j -and $j.prompt){ $pr=[string]$j.prompt }',
   'if($pr.Length -gt 2000){ $pr=$pr.Substring(0,2000) }',
-  '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B" -replace "`r","%0D" -replace "`n","%0A"',
+  // Send the JSON string BODY, exactly as the sh hook does: the phone undoes
+  // one escaping, and a Windows path in the prompt must not lose its
+  // backslashes on the way (2026-09-13).
+  '$pr=(ConvertTo-Json $pr -Compress)',
+  'if($pr.Length -ge 2){ $pr=$pr.Substring(1,$pr.Length-2) }',
+  '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B"',
   '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   'if($pr){ Write-Beacon $o }'

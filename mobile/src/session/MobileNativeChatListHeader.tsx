@@ -4,6 +4,7 @@ import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import { useMobileRunningTaskCount } from './use-mobile-running-task-count'
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
+import { MobileDesktopPromptNotice } from './MobileDesktopPromptNotice'
 import { MobileNativeChatQueue } from './MobileNativeChatQueue'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import type { NativeChatTurnActivity } from './mobile-native-chat-turn-activity'
@@ -20,6 +21,7 @@ export function MobileNativeChatListHeader({
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
+  promptHookMissing = false,
   queuedMessages,
   onEditQueue,
   unanchoredTurnStatus,
@@ -38,6 +40,8 @@ export function MobileNativeChatListHeader({
   /** The structured lane's own roster from the host. Authoritative when the
    *  host has reported one — including when it has cleared it to `null`. */
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** This tab was launched before the desktop-prompt hook existed. */
+  promptHookMissing?: boolean
   queuedMessages?: readonly MobileChatQueueEntry[]
   onEditQueue?: (index: number, tapped: string) => Promise<void>
   /** Set only while the live turn has no user message to hang its status under. */
@@ -62,6 +66,7 @@ export function MobileNativeChatListHeader({
         />
       ) : null}
       <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
+      {promptHookMissing ? <MobileDesktopPromptNotice /> : null}
       <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
     </>
   )

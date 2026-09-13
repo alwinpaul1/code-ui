@@ -174,6 +174,7 @@ export function MobileNativeChatOverlay({
         onEditQueue={controller.openNativeChatQueueEditor}
         queueEditor={controller.nativeChatQueueEditor}
         pending={pendingWithDesktopPrompts}
+        promptHookMissing={controller.nativeChatPromptHook === false}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

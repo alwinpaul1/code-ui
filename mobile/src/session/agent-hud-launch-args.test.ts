@@ -112,7 +112,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     // Empty stdout is the whole point: Claude Code draws no status row for it.
     expect(run.stdout).toBe('')
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -122,7 +122,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     })
     // The percentage is truncated to an integer, not passed through as 64.95.
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
     expect(run.stdout).toBe('')
   })
@@ -223,7 +223,7 @@ describe('a Windows host has no PTY device, so the script writes to the console'
     })
     expect(run.stdout).toBe('')
     expect(readFileSync(console_, 'utf8')).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -570,8 +570,15 @@ describe('finished background tasks ride the Claude beacon', () => {
     )
     const script = Buffer.from(command.split(' ').at(-1) ?? '', 'base64').toString('utf16le')
     expect(script).toContain('$j.prompt')
+    // Same wire form as the sh hook: the JSON string body, so a Windows path
+    // in the prompt keeps its backslashes.
+    expect(script).toContain('ConvertTo-Json')
     expect(script).toContain('up=')
     expect(script).toContain('Write-Beacon')
+  })
+
+  it('marks a tab launched with the prompt hook, so the phone can say when one is not', () => {
+    expect(CLAUDE_HUD_STATUSLINE_SCRIPT).toContain('CUIHUD1 agent=claude hk=1')
   })
 
   it('gives a POSIX host the sh prompt hook, and both hosts the Stop hook', () => {
@@ -756,7 +763,7 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
 
   run('runs as Claude Code would run it: -EncodedCommand, JSON on stdin', () => {
     const ps = runClaudePowerShell({ json: statusJson, encoded: true })
-    expect(ps.beacon).toContain('CUIHUD1 agent=claude model=claude-fable-5-1')
+    expect(ps.beacon).toContain('CUIHUD1 agent=claude hk=1 model=claude-fable-5-1')
   })
 
   run('adds the token total and percentage once Claude Code has replied', () => {
