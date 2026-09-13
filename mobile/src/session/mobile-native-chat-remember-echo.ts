@@ -37,7 +37,9 @@ export function rememberEchoInPending(
   // A reading that only extends a complete one already stored is the
   // screen's own rows glued on; and a stored reading that this one beats
   // (a `…` stub, or a glued variant) gives way to it.
-  if (current.some((item) => isWitnessed(item.id) && preferredWitnessReading(item.text, text) === 'a')) {
+  // …and a phone send of its own beats a witnessed reading that glues rows
+  // onto it, whichever came first.
+  if (current.some((item) => preferredWitnessReading(item.text, text) === 'a')) {
     return previous
   }
   const kept = current.filter(
@@ -71,12 +73,10 @@ function isWitnessed(id: string): boolean {
 export function sweepWitnessedEchoes(
   list: readonly MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
-  const witnessed = dedupeWitnessReadings(
-    list.filter((item) => isWitnessed(item.id)),
-    (item) => item.text
-  )
-  const keep = new Set(witnessed.map((item) => item.id))
-  const swept = list.filter((item) => !isWitnessed(item.id) || keep.has(item.id))
+  // Phone sends first so they win against witnessed readings of themselves.
+  const ordered = [...list.filter((item) => !isWitnessed(item.id)), ...list.filter((item) => isWitnessed(item.id))]
+  const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text).map((item) => item.id))
+  const swept = list.filter((item) => !isWitnessed(item.id) || kept.has(item.id))
   return swept.length === list.length ? [...list] : swept
 }
 

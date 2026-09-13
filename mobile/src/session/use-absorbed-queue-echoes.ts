@@ -72,7 +72,10 @@ export function useAbsorbedQueueEchoes(
     if (key.length === 0 || anchorId === null || live.some((k) => sameMessage(k, key))) {
       return
     }
-    if (skipOwn && own.some((k) => sameMessage(k, key))) {
+    // A reading that only glues the screen's rows onto one of the phone's
+    // own sends is that send, not a new message (2026-09-13: "phone test
+    // message from adb Reading 1 file…").
+    if (skipOwn && own.some((k) => sameMessage(k, key) || preferredWitnessReading(k, key) === 'a')) {
       return
     }
     const existing = [...held.current.entries()].find(
@@ -104,11 +107,11 @@ export function useAbsorbedQueueEchoes(
   // phone is already watching, which is exactly the mid-turn absorb this
   // witness exists for. An entry already held still grows from a fuller
   // reading, so a truncated queue entry is not stuck short.
-  // One exception to the baseline: the NEWEST prompts on the first reading.
+  // One exception to the baseline: the NEWEST prompt on the first reading.
   // A message the desktop absorbed just before the phone opened has no row
-  // to land and would otherwise never show (2026-09-13 review). Bounded to
-  // the last two so a stale transcript window can leave at most two bubbles
-  // that retire as it catches up, never a wall.
+  // to land and would otherwise never show (2026-09-13 review). Only the
+  // newest: an older prompt still on screen is anchored to the wrong row
+  // when held this way, and the store would keep that placement.
   const seenSent = previousSent.current
   const candidates = seenSent === null ? sentPrompts.slice(-FIRST_READING_HOLD) : sentPrompts
   for (const text of candidates) {
@@ -200,7 +203,7 @@ function cutKey(text: string): string {
 type HeldEcho = { text: string; anchorId: string | null; seq: number }
 
 /** How many of the newest on-screen prompts the first reading may hold. */
-const FIRST_READING_HOLD = 2
+const FIRST_READING_HOLD = 1
 
 /** One key for the same message however it reached here: the queue box, the
  *  scrollback and the transcript each wrap it differently, and only the

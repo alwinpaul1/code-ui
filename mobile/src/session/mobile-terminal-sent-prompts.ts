@@ -149,7 +149,10 @@ function isFoldSummary(text: string, screen: readonly string[], index: number): 
  *  screen right now". Told apart by the timer, by "Running", or by the `⎿`
  *  row that follows it; a paragraph of the prompt has none of those. */
 function isToolRow(text: string, screen: readonly string[], index: number): boolean {
-  if (/ · \d+s\b/.test(text) || /^Running \d+ /.test(text) || /^Running .*…$/.test(text)) {
+  // "Running 1 shell command…", "Reading 1 file…", "Capturing the phone
+  // screen right now · 3s": a live tool row is a gerund with an ellipsis or
+  // a timer. A paragraph the user typed is neither.
+  if (/ · \d+s\b/.test(text) || /^[A-Z][a-z]+ing\b.*…$/.test(text)) {
     return true
   }
   return /^\s*⎿/.test(screen[index + 1] ?? '')

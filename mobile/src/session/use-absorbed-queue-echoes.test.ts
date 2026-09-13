@@ -457,8 +457,24 @@ it('holds the newest unlanded prompt from the first reading, but never the backl
       })
     )
   })
-  expect(latest!.map((e) => e.text)).toEqual(['old three', 'absorbed just before opening'].slice(-2))
-  expect(latest).toHaveLength(2)
-  expect(latest!.map((e) => e.text)).not.toContain('old one')
+  expect(latest!.map((e) => e.text)).toEqual(['absorbed just before opening'])
+  act(() => renderer!.unmount())
+})
+
+// 2026-09-13: "phone test message from adb Reading 1 file…" stood beside the
+// phone's own send of "phone test message from adb".
+it('skips a reading that only glues rows onto one of the phone\'s own sends', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeOwn, {
+        sent: ['phone test message from adb Reading 1 file…'],
+        own: ['phone test message from adb'],
+        folded
+      })
+    )
+  })
+  expect(latest).toEqual([])
   act(() => renderer!.unmount())
 })

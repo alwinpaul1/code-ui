@@ -202,6 +202,10 @@ describe('sentPromptsFromScreen', () => {
         '────────────────────────────────────────────────────────────────────────────────────────────────────'
       ])
     ).toEqual(["run exactly this one command and then say done: python3 -c 'import time; time.sleep(45)'"])
+    // "Reading 1 file…" under a prompt, seen on the phone on 2026-09-13.
+    expect(
+      sentPromptsFromScreen(['❯ phone test message from adb', '  Reading 1 file…', '', '❯ '])
+    ).toEqual(['phone test message from adb'])
     // And the shape the phone showed: the description glued straight under
     // the prompt, no blank row, then its command.
     expect(

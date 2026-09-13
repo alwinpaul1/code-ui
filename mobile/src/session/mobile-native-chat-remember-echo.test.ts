@@ -37,6 +37,13 @@ describe('remembered readings of one message', () => {
     const fixed = rememberEchoInPending(withGlued, 'k', echoMemoryId(clean), clean, 'a1', [], 'd')
     expect(fixed.k!.map((i) => i.text)).toEqual([clean])
   })
+  it('refuses a witnessed reading that glues rows onto a phone send, and sweeps one already on disk', () => {
+    const send = { id: 'pending-1', text: clean, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
+    expect(rememberEchoInPending({ k: [send] }, 'k', echoMemoryId(glued), glued, 'a1', [], 'd')).toEqual({ k: [send] })
+    const onDisk = [{ ...send, id: echoMemoryId(glued), text: glued }, send]
+    expect(sweepWitnessedEchoes(onDisk).map((i) => i.id)).toEqual(['pending-1'])
+  })
+
   it('sweeps glued variants already on disk down to the clean reading', () => {
     const stored = [
       { id: echoMemoryId(glued), text: glued, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
