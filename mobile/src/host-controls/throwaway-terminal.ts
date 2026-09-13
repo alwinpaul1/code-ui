@@ -9,6 +9,9 @@ export type ThrowawayTerminalWatch<T> = {
   worktreeId: string
   command: string
   timeoutMs: number
+  /** The command carries a secret, so no host text may be surfaced about it.
+   *  The unlock command has the user's password on its own command line. */
+  secret?: boolean
   /** Reads the screen after each poll; a non-null answer ends the watch. */
   read: (lines: string[]) => T | null
 }
@@ -51,7 +54,16 @@ export async function watchThrowawayTerminal<T>(
     return { ok: false, reason: 'The Mac did not answer.' }
   }
   if (!created.ok) {
-    return { ok: false, reason: created.error?.message || 'The Mac refused the command.' }
+    // The host echoes the rejected request in some errors, and for unlock that
+    // request IS the password. The sibling catch above already refuses to
+    // derive anything from an error for exactly this reason; this arm was the
+    // asymmetry (2026-09-14 review).
+    return {
+      ok: false,
+      reason: args.secret
+        ? 'The Mac refused the command.'
+        : created.error?.message || 'The Mac refused the command.'
+    }
   }
   const tab = (created.result as { tab?: { id?: unknown; terminal?: unknown } } | null)?.tab
   const tabId = typeof tab?.id === 'string' ? tab.id : null
@@ -76,6 +88,14 @@ export async function watchThrowawayTerminal<T>(
   } catch {
     // The screen is a courtesy; the close below still runs.
   } finally {
+    // A tab with no usable id cannot be closed by id, and for unlock its
+    // scrollback holds the password — so fall back to closing the terminal
+    // itself rather than leaving it standing on the desktop (2026-09-14).
+    if (!tabId && handle) {
+      void args.client
+        .sendRequest('terminal.close', { terminal: handle })
+        .catch(() => undefined)
+    }
     if (tabId) {
       void args.client
         .sendRequest('session.tabs.close', {

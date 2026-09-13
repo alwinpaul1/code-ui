@@ -91,7 +91,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/hooks/use-mobile-dictation.ts', references: 4 },
 
   // src/host-controls/ — CODE UI: host control sheet actions
-  { file: 'src/host-controls/throwaway-terminal.ts', references: 4 },
+  { file: 'src/host-controls/throwaway-terminal.ts', references: 5 },
   { file: 'src/host-controls/use-mac-host-controls.ts', references: 1 },
 
   // src/host-screen/ — host screen catalog and actions

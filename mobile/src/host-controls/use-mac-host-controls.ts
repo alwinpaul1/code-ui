@@ -134,7 +134,14 @@ export function useMacHostControls(args: {
         return
       }
       showToast(MAC_HOST_ACTION_PROGRESS[action])
-      const outcome = await runMacHostCommand({ client, worktreeId, command })
+      const outcome = await runMacHostCommand({
+        client,
+        worktreeId,
+        command,
+        // The unlock command line carries the password, so nothing the host
+        // says about it may reach a toast.
+        secret: action === 'unlock'
+      })
       if (!outcome.ok) {
         // The reason comes from the host's own error text, never from the command.
         showToast(outcome.reason)

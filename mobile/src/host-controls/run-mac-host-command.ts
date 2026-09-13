@@ -15,13 +15,25 @@ export async function runMacHostCommand(args: {
   client: ThrowawayTerminalClient
   worktreeId: string
   command: string
+  /** Set for unlock: no host text about this command may be shown. */
+  secret?: boolean
 }): Promise<MacHostCommandOutcome> {
   const outcome = await watchThrowawayTerminal({
     client: args.client,
     worktreeId: args.worktreeId,
     command: args.command,
     timeoutMs: MAC_HOST_COMMAND_TIMEOUT_MS,
+    secret: args.secret,
     read: (lines) => (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? true : null)
   })
-  return outcome.ok ? { ok: true } : outcome
+  if (!outcome.ok) {
+    return outcome
+  }
+  // The shell prints the marker once the command is through. Never seeing it
+  // inside the budget means it did not finish — a wrong unlock password, or
+  // osascript refused Accessibility. Reporting that as success left both
+  // outcomes ending in silence (2026-09-14 review).
+  return outcome.answer === true
+    ? { ok: true }
+    : { ok: false, reason: 'The Mac did not finish that. Check the desktop.' }
 }

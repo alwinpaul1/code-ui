@@ -1,4 +1,5 @@
 import { useTerminalEngine } from '../terminal/use-terminal-engine'
+import { useRef } from 'react'
 import { stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
@@ -105,6 +106,10 @@ export function MobileSessionActiveContent({
   // on the same key. Press, wait for the footer to move, judge, repeat — and
   // give up after a lap and say so. See terminal-mode-stepper.ts for why a
   // fixed sleep between presses was not enough.
+  // Render-synced, so a stepper started on one tab can tell it no longer owns
+  // the screen after the user switches away.
+  const liveHandleRef = useRef(activeHandle)
+  liveHandleRef.current = activeHandle
   const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
   const pressShiftTab = async () => {
     if (shiftTab) {
@@ -113,18 +118,21 @@ export function MobileSessionActiveContent({
   }
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
   const selectAgentMode = async (target: TerminalAgentMode) => {
+    const startedOn = liveHandleRef.current
     const reached = await stepTerminalMode<TerminalAgentMode>({
       read: async () => (await nativeChatController.refreshNativeChatHud())?.agentMode ?? null,
       press: pressShiftTab,
       wait,
       wanted: target,
-      maxPresses: 4
+      maxPresses: 4,
+      stillOurs: () => liveHandleRef.current === startedOn
     })
     if (!reached) {
       showToast('That mode is not available in this session')
     }
   }
   const selectPermissionMode = async (target: TerminalPermissionMode) => {
+    const startedOn = liveHandleRef.current
     // 'default' and 'manual' are two names for one mode. Read the mode the
     // footer STATED: `permissionMode` collapses "no footer on screen" to
     // 'default', which reads as Manual, so a blank mid-repaint frame made the
@@ -137,7 +145,8 @@ export function MobileSessionActiveContent({
       press: pressShiftTab,
       wait,
       wanted: asShown(target) as TerminalPermissionMode,
-      maxPresses: 6
+      maxPresses: 6,
+      stillOurs: () => liveHandleRef.current === startedOn
     })
     if (!reached) {
       showToast('That mode is not available in this session')

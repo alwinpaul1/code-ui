@@ -27,6 +27,12 @@ export type TerminalModeStep<Mode extends string> = {
    *  into 85 reads and minutes of Shift+Tab (2026-09-14). */
   budgetMs?: number
   now?: () => number
+  /** False once this run no longer owns the screen it is stepping — the user
+   *  switched tabs. `press()` is pinned to the tab it started on and gets
+   *  dropped, while `read()` follows whatever is active now, so without this
+   *  the run could match the NEW tab's footer and report a change it never
+   *  made (2026-09-14 review). */
+  stillOurs?: () => boolean
 }
 
 /** True once the footer shows `wanted`; false after `maxPresses` without it. */
@@ -37,12 +43,13 @@ export async function stepTerminalMode<Mode extends string>(
   const pollMs = step.pollMs ?? 120
   const now = step.now ?? Date.now
   const deadline = now() + (step.budgetMs ?? 8000)
-  let current = await step.read()
-  if (current === step.wanted) {
+  const ours = step.stillOurs ?? (() => true)
+  let current = ours() ? await step.read() : null
+  if (current !== null && current === step.wanted) {
     return true
   }
   for (let presses = 0; presses < step.maxPresses; presses += 1) {
-    if (now() >= deadline) {
+    if (now() >= deadline || !ours()) {
       return false
     }
     await step.press()
@@ -52,6 +59,9 @@ export async function stepTerminalMode<Mode extends string>(
     const settleBy = Math.min(now() + settleMs, deadline)
     while (now() < settleBy) {
       await step.wait(pollMs)
+      if (!ours()) {
+        return false
+      }
       seen = await step.read()
       if (seen !== null && seen !== current) {
         break

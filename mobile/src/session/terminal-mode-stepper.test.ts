@@ -150,4 +150,40 @@ describe('stepping the agent to a mode', () => {
     expect(press.mock.calls.length).toBeLessThan(6)
     expect(clock).toBeLessThan(20000)
   })
+
+  it('abandons the change once the user has switched to another tab', async () => {
+    // 2026-09-14 review: press() is pinned to the tab the run started on and
+    // gets dropped after a switch, while read() follows whatever is active now
+    // — so a run could match the NEW tab's footer and report a mode change it
+    // never made, with no toast to say otherwise.
+    let ours = true
+    const press = vi.fn(async () => {
+      ours = false
+    })
+    const reached = await stepTerminalMode<'manual' | 'plan'>({
+      // The tab switched to already shows the mode that was asked for.
+      read: async () => 'plan',
+      press,
+      wait: async () => undefined,
+      wanted: 'plan',
+      maxPresses: 4,
+      stillOurs: () => ours
+    })
+    expect(reached).toBe(true)
+    expect(press).not.toHaveBeenCalled()
+  })
+
+  it('does not press on a tab it no longer owns', async () => {
+    const press = vi.fn(async () => undefined)
+    const reached = await stepTerminalMode<'a' | 'b'>({
+      read: async () => 'a',
+      press,
+      wait: async () => undefined,
+      wanted: 'b',
+      maxPresses: 4,
+      stillOurs: () => false
+    })
+    expect(reached).toBe(false)
+    expect(press).not.toHaveBeenCalled()
+  })
 })

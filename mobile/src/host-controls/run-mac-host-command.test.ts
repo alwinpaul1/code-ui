@@ -85,9 +85,13 @@ describe('running a Mac control on the host', () => {
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
-  it('closes the tab anyway when the shell never reports done', async () => {
+  it('says so when the shell never reports done, instead of claiming success', async () => {
+    // 2026-09-14 review: the marker was read and thrown away, so a wrong unlock
+    // password looked exactly like a success and both outcomes ended in silence.
     const fake = fakeClient([['nothing']])
-    expect(await run(fake)).toEqual({ ok: true })
+    const outcome = await run(fake)
+    expect(outcome.ok).toBe(false)
+    expect(outcome.ok === false && outcome.reason).toMatch(/did not finish/i)
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
@@ -115,11 +119,40 @@ describe('running a Mac control on the host', () => {
     expect(JSON.stringify(outcome)).not.toContain('hunter2')
   })
 
-  it('still counts as sent when the host answers without a tab to close', async () => {
-    const fake = fakeClient([], {
-      'session.tabs.createTerminal': okResponse({})
-    })
-    expect(await run(fake)).toEqual({ ok: true })
+  it('reports a host that opened no terminal rather than calling it sent', async () => {
+    const fake = fakeClient([], { 'session.tabs.createTerminal': okResponse({}) })
+    expect((await run(fake)).ok).toBe(false)
     expect(fake.calls).toHaveLength(1)
+  })
+
+  it('never shows the host\'s own words about a command that carries the password', async () => {
+    const fake = fakeClient([], {
+      'session.tabs.createTerminal': {
+        id: '1',
+        ok: false,
+        error: { code: 'boom', message: `rejected: ${SECRET}` },
+        _meta: { runtimeId: 'r' }
+      }
+    })
+    const pending = runMacHostCommand({
+      client: fake.client,
+      worktreeId: 'wt-1',
+      command: SECRET,
+      secret: true
+    })
+    await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS)
+    const outcome = await pending
+    expect(outcome.ok).toBe(false)
+    expect(JSON.stringify(outcome)).not.toContain('hunter2')
+  })
+
+  it('closes a terminal the host opened without a usable tab id', async () => {
+    // Otherwise it stands on the desktop forever — and for unlock its
+    // scrollback holds the password.
+    const fake = fakeClient([['nothing']], {
+      'session.tabs.createTerminal': okResponse({ tab: { terminal: 'term-9' } })
+    })
+    await run(fake)
+    expect(fake.methods()).toContain('terminal.close')
   })
 })
