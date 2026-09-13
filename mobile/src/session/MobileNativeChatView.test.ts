@@ -105,6 +105,7 @@ type Overrides = {
   hasMore?: boolean
   onLoadEarlier?: () => void
   structuredActivityUi?: boolean
+  turnThinking?: boolean
   agentWorking?: boolean
   sendSurfaceId?: string
 }
@@ -462,9 +463,37 @@ describe('MobileNativeChatView', () => {
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(true)
-      expect(props.turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+      // Nothing reports reasoning, so the live row counts instead of guessing
+      // "Thinking" from the turn having produced nothing yet (Orca #19977).
+      expect(props.turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)
+    })
+
+    it('says Thinking only when the journal says the live turn is reasoning', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnThinking: true
+      })
+      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+    })
+
+    it('keeps saying Thinking after the turn has already spoken', async () => {
+      // The old rule stopped at the first renderable output, which is usually
+      // where the reasoning actually starts.
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'Let me check')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnThinking: true
+      })
+      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
     })
 
     it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {

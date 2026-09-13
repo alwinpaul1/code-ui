@@ -38,8 +38,10 @@ src/shared/native-chat-agent-profiles.ts: dda103d2cf69dbdd730d0a7179bb3021b64675
 src/shared/native-chat-agent-profiles.test.ts: dda103d2cf69dbdd730d0a7179bb3021b6467501
 src/shared/native-chat-tool-activity.ts: c1e15c400
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
-src/shared/native-chat-turn-status.ts: b0c67eaf8
-src/shared/native-chat-turn-status.test.ts: b0c67eaf8
+src/shared/native-chat-turn-status.ts: fab78c766
+src/shared/native-chat-turn-status.test.ts: fab78c766
+src/shared/structured-agent-session-live-turn.ts: fab78c766 (partial, see LOCAL-FILES.md)
+src/shared/structured-agent-session-live-turn.test.ts: fab78c766 (partial, see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.ts: c1e15c400
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a

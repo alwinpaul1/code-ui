@@ -83,6 +83,7 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | d15a6df22 #19230 (`update_plan` icon, in effect) | the one-line `native-chat-tool-icon.ts` map entry is vendored so the pin moves, but it draws nothing here. Mobile imports only `isShellActivityToolCall` from that file and picks between a terminal and a wrench; it never calls `nativeChatToolCategory` or `nativeChatToolRunIconName`, and the new entry does not change `isShellActivityToolCall`. The checklist's own `list-checks` glyph comes from the mobile component, not from the category map |
 | a567e33bf #17795 | GitHub Projects roadmap timeline | desktop renderer plus `project-roadmap-timeline.ts`, which nothing under `mobile/` imports. The `fieldName` wire field on a date cell is unused here |
 | 72befaf36 #18806 | Claude subagent activity on the shared carrier | host-side Claude translation, same residual as #18773. The shared delta is a test fixture for `subagent-group`. Mobile still shows the host's frozen sentence |
+| fab78c766 #19977 | one live-turn indicator, and Thinking means reasoning | **done, partial.** Shared: `native-chat-turn-status.ts` re-vendored whole (adds `describeNativeChatActiveTurnLabel`/`formatNativeChatActiveTurnLabel` and the host-settled turn map, drops `nativeChatTurnHasResponse`); `structured-agent-session-live-turn.ts` ported partially for `isStructuredAgentSessionThinking`. Mobile: the live turn's `thinking` now comes from the journal's reasoning tail instead of "this turn has produced nothing yet", and the live label goes through the shared resolver. **Not ported:** upstream also moves the live row from the user row to the list footer — this fork's inverted list already owns that placement through its own header/footer, and the restructure is unrelated to the reasoning fix. The `src/main` halves (Claude `thinking` journalled as a `reasoning` message, Codex streamed-reasoning markers) and `src/renderer` are desktop, not vendored — see the note below on what the installed desktop can send |
 | ef6ad2243 #19364 | renderer work plus one optional `projectItems` argument in `structured-agent-session-message-projection.ts`. The phone already calls that function with the default projector |
 
 ## Pending
@@ -105,3 +106,27 @@ shape before touching it. The #19822 verdict lives in
 - Live Codex `projectNativeChatTaskListFrames` (a `plan` notification rewritten
   as an `update_plan` tool call so the checklist can draw it) is still desktop
   only. The phone already draws a real `update_plan` call.
+
+## Claude `thinking` on the terminal-driven transcript lane (2026-09-13)
+
+The reported bug — the model's summarized thoughts drawn as its reply — is
+**not fixed by #19977 and cannot be fixed on the phone today.**
+
+- Orca's transcript reader (`src/main/native-chat/transcript-record-blocks.ts`)
+  turns a Claude `thinking` content block into a plain `{type:'text'}` block on
+  an ordinary assistant message. `transcript-line-decoders-claude.ts` has a
+  comment saying a thinking-only message becomes a `reasoning`-role message, but
+  `claudeMessageRole` returns `assistant` unchanged, and the test named
+  "marks thinking-only assistant content as a reasoning surface" only asserts
+  the block, never the role. Verified at upstream `origin/main` fe4237cd4
+  (2026-09-13) and in the installed Orca 1.4.200 bundle. So on this lane a
+  thought and a reply are byte-identical to the phone: same role, same block
+  type, same `source: 'transcript'`. Per this repo's rule, the phone shows the
+  row as it arrives rather than guessing.
+- #19977 fixes the **structured** lane only: `claude-structured-journal-translation.ts`
+  stops appending a Claude thought as `kind: 'status'` and appends
+  `kind: 'message', role: 'reasoning'` instead. The installed 1.4.200 still
+  writes `kind: 'status'` (checked in the bundle), so even the structured lane
+  cannot deliver reasoning as reasoning until the desktop is updated past
+  fab78c766 (2026-09-11). No Orca tag contains that commit yet; `package.json`
+  reads 1.4.197 both at fab78c766 and at `origin/main`.

@@ -547,3 +547,55 @@ describe('agent-read thumbnails across a mid-turn split', () => {
     expect(data[1]?.blocks.at(-1)).toEqual(thumbnail)
   })
 })
+
+describe('foldMobileNativeChatMessages with a reasoning row', () => {
+  // On the structured lane a Claude or Codex turn journals its reasoning as its
+  // own `reasoning` message (Orca #19977). The phone draws that as a collapsed
+  // "Thinking" disclosure, so it must never swallow the turn's work or fold into
+  // the reply before it.
+  function reasoning(id: string, text: string): NativeChatMessage {
+    return {
+      id,
+      role: 'reasoning',
+      blocks: [{ type: 'text', text }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+  }
+  function toolOnly(id: string, name: string): NativeChatMessage {
+    return {
+      id,
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name, input: {} }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+  }
+
+  it('keeps the thought its own row and folds the work that follows it', () => {
+    const folded = foldMobileNativeChatMessages([
+      user('u1', 'go'),
+      reasoning('r1', 'Weighing two approaches'),
+      toolOnly('t1', 'Bash'),
+      toolOnly('t2', 'Read')
+    ])
+    expect(folded.map((message) => [message.id, message.role])).toEqual([
+      ['u1', 'user'],
+      ['r1', 'reasoning'],
+      ['t1', 'assistant']
+    ])
+    expect(folded[1].blocks).toEqual([{ type: 'text', text: 'Weighing two approaches' }])
+    expect(folded[2].blocks).toHaveLength(2)
+  })
+
+  it('leaves the reply before the thought alone instead of folding later work into it', () => {
+    const folded = foldMobileNativeChatMessages([
+      user('u1', 'go'),
+      assistant('a1', 'Here is the plan'),
+      reasoning('r1', 'Weighing two approaches'),
+      toolOnly('t1', 'Bash')
+    ])
+    expect(folded.map((message) => message.id)).toEqual(['u1', 'a1', 'r1', 't1'])
+    expect(folded[1].blocks).toEqual([{ type: 'text', text: 'Here is the plan' }])
+  })
+})

@@ -94,23 +94,10 @@ export function MobileNativeChatOverlay({
   // themselves against; the second breaks the tool fold at those anchors too,
   // so two prompts sent one after another keep the work between them instead
   // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
-  // Claude's summarized thoughts reach the phone as hook rows; folded as
-  // replies, then split into collapsed Thinking rows (2026-09-13).
-  const thinkingScope = useMemo(
-    () => ({
-      agent: controller.nativeChatAgent,
-      transcriptReadable: controller.nativeChatTranscriptIsLocalReadable === true
-    }),
-    [controller.nativeChatAgent, controller.nativeChatTranscriptIsLocalReadable]
-  )
   const baseFolded = useMemo(
     () =>
-      foldMobileNativeChatMessages(
-        session.messages,
-        pendingFoldBoundaries(projectedQueue.pending),
-        thinkingScope
-      ),
-    [projectedQueue.pending, session.messages, thinkingScope]
+      foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(projectedQueue.pending)),
+    [projectedQueue.pending, session.messages]
   )
   // Prompts typed on the desktop never reach the phone through Orca; they
   // ride the HUD beacon instead (2026-09-13).
@@ -149,11 +136,10 @@ export function MobileNativeChatOverlay({
       desktopEchoes.length > 0 || absorbedEchoes.length > 0
         ? foldMobileNativeChatMessages(
             session.messages,
-            pendingFoldBoundaries([...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes]),
-            thinkingScope
+            pendingFoldBoundaries([...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes])
           )
         : baseFolded,
-    [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages, thinkingScope]
+    [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages]
   )
   const pendingWithDesktopPrompts = useMemo(
     () =>
@@ -205,6 +191,7 @@ export function MobileNativeChatOverlay({
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
         turnActivity={controller.nativeChatTurnActivity}
+        turnThinking={controller.nativeChatTurnThinking}
         agentStatus={controller.nativeChatAgentStatus}
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}

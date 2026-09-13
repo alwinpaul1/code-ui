@@ -46,6 +46,8 @@ export type MobileNativeChatViewProps = {
   structuredActivityUi?: boolean
   /** Provider-authored copy for the live turn tail (Orca #19055). */
   turnActivity?: { kind: 'description'; text: string } | null
+  /** Whether the live turn is reasoning right now (structured lane only). */
+  turnThinking?: boolean
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */

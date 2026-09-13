@@ -5,7 +5,6 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
-import { splitHookThinkingRows, type ThinkingRowScope } from './mobile-native-chat-thinking-rows'
 import {
   isImageRefBlock,
   type NativeChatBlock,
@@ -59,13 +58,9 @@ export type MobileNativeChatPendingItem = {
 
 export function foldMobileNativeChatMessages(
   messages: NativeChatMessage[],
-  splitAfterIds?: ReadonlySet<string>,
-  /** When given, hook-delivered reasoning is split off AFTER the fold; see
-   *  `splitHookThinkingRows` for why after. */
-  thinking?: ThinkingRowScope
+  splitAfterIds?: ReadonlySet<string>
 ): NativeChatMessage[] {
-  const folded = foldWithBoundaries(messages, splitAfterIds)
-  return thinking ? splitHookThinkingRows(folded, thinking) : folded
+  return foldWithBoundaries(messages, splitAfterIds)
 }
 
 function foldWithBoundaries(

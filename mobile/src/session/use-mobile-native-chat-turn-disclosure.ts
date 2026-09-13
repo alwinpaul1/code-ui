@@ -25,11 +25,14 @@ export function useMobileNativeChatTurnDisclosure({
   messages,
   enabled,
   isWorking,
+  thinking = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking: boolean
+  /** Whether the turn is reasoning right now, derived from its journal content. */
+  thinking?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
   scopeKey: string
 }): {
@@ -43,6 +46,7 @@ export function useMobileNativeChatTurnDisclosure({
     messages,
     enabled,
     isWorking,
+    thinking,
     scopeKey
   })
   const [expandedTurns, setExpandedTurns] = useState<{

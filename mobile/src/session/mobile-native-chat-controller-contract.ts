@@ -46,9 +46,6 @@ export type MobileNativeChatController = {
   showNativeChatRef: MutableRefObject<boolean>
   /** Resolved agent for the active chat tab (names the empty-state copy). */
   nativeChatAgent: string | null
-  /** Whether this tab's transcript is read from disk. Hook-only chats (no
-   *  readable transcript) keep every hook row as a reply. */
-  nativeChatTranscriptIsLocalReadable: boolean
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number
@@ -60,6 +57,11 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   /** Provider-authored copy for the live turn tail. Null off the structured lane. */
   nativeChatTurnActivity: { kind: 'description'; text: string } | null
+  /** Whether the live turn is reasoning right now, from its journal content.
+   *  Upstream carries this beside the activity text in one
+   *  `NativeChatLiveTurnIndicator`; this fork already threads the activity text
+   *  on its own prop, so only the reading it lacked is added (Orca #19977). */
+  nativeChatTurnThinking: boolean
   nativeChatAgentWorking: boolean
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */

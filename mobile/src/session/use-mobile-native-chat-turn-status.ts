@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
-  nativeChatTurnHasResponse,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
   type NativeChatTurnStatus,
@@ -25,12 +24,15 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   isWorking,
   workingStartedAt,
+  thinking = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Whether the turn is reasoning right now, derived from its journal content. */
+  thinking?: boolean
   /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
   scopeKey: string
 }): {
@@ -41,7 +43,6 @@ export function useMobileNativeChatTurnStatus({
   const latestUserIndex = enabled
     ? messages.findLastIndex((message) => message.role === 'user')
     : -1
-  const hasCurrentTurnResponse = enabled && nativeChatTurnHasResponse(messages, latestUserIndex)
   const latestUserId = latestUserIndex !== -1 ? (messages[latestUserIndex]?.id ?? null) : null
   const activeTurnKey = latestUserId ?? MOBILE_UNANCHORED_TURN_KEY
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
@@ -91,15 +92,16 @@ export function useMobileNativeChatTurnStatus({
   // turn re-renders ~20x/s. Without this, every settled turn's row gets fresh
   // props each tick and the memoized message rows all re-render.
   const turnIsWorking = enabled && isWorking
+  const turnIsThinking = enabled && thinking
   const statuses = useMemo(
     () =>
       selectNativeChatTurnStatuses(timingByTurn, {
         activeTurnKey,
         isWorking: turnIsWorking,
         workingStartedAt,
-        hasCurrentTurnResponse
+        thinking: turnIsThinking
       }),
-    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, hasCurrentTurnResponse]
+    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking]
   )
   return { ...statuses, activeTurnKey }
 }

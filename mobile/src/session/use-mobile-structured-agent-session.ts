@@ -6,6 +6,7 @@ import { structuredAgentSessionSendBody } from '../../../src/shared/structured-a
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { isStructuredAgentSessionThinking } from '../../../src/shared/structured-agent-session-live-turn'
 import {
   activeStructuredAgentSessionTurnId,
   hasUnansweredStructuredAgentSessionDispatch
@@ -251,6 +252,9 @@ export function useMobileStructuredAgentSession(args: {
     [state.items, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  // "Thinking" means the turn is reasoning right now, read off the journal's
+  // tail, not inferred from the turn having produced nothing yet (Orca #19977).
+  const turnThinking = isStructuredAgentSessionThinking(state.items)
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
     [state.activity, state.items, turnId]
@@ -282,6 +286,7 @@ export function useMobileStructuredAgentSession(args: {
       hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
     canStop: turnId !== null,
     turnId,
+    turnThinking,
     turnActivity,
     sendWithOutcome,
     cancel,
