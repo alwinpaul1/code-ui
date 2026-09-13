@@ -516,7 +516,11 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   'pr=$(printf %s "$pr" | awk "{print substr(\\$0,1,2000)}")',
   'o="CUIHUD1 agent=claude up=$$:$(q "$pr")"',
   '[ -z "$pr" ] && exit 0',
-  ...TTY_WRITE
+  ...TTY_WRITE,
+  // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,
+  // and a non-zero exit as a hook error (issue #13912, 2026). This script
+  // prints nothing and always succeeds, whatever the tty write did.
+  'exit 0'
 ].join('; ')
 
 /**
@@ -539,7 +543,8 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B"',
   '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
-  'if($pr){ Write-Beacon $o }'
+  'if($pr){ Write-Beacon $o }',
+  'exit 0'
 ].join('\n')
 
 /**

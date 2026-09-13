@@ -49,4 +49,15 @@ describe('the desktop prompt hook', () => {
   it('writes nothing at all when there is no prompt', () => {
     expect(runHook({ session_id: 'x' })).toBe('')
   })
+
+  // Claude Code treats any stdout from a UserPromptSubmit hook as context and
+  // a non-zero exit as a hook error (issue #13912, 2026).
+  it('prints nothing and exits clean even with no tty to write to', () => {
+    const out = execFileSync('/bin/sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
+      input: JSON.stringify({ prompt: 'hello' }),
+      encoding: 'utf8',
+      env: { ...process.env, CUIHUD_TTY: '/nonexistent/tty' }
+    })
+    expect(out).toBe('')
+  })
 })
