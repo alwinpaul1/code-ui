@@ -83,7 +83,12 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
         // One blank row, then another two-space row, is a paragraph break
         // inside the prompt — unless that row is the tool fold.
         const next = CONTINUATION.exec(screen[cursor + 1] ?? '')
-        if (cursor + 1 >= limit || !next || isFoldSummary(next[1] ?? '', screen, cursor + 1)) {
+        if (
+          cursor + 1 >= limit ||
+          !next ||
+          isFoldSummary(next[1] ?? '', screen, cursor + 1) ||
+          isToolRow(next[1] ?? '', screen, cursor + 1)
+        ) {
           break
         }
         parts.push('', next[1] ?? '')
@@ -94,7 +99,7 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       // A prompt absorbed mid-turn gets its fold painted straight under it,
       // with no blank row between: "…verify on my phone Ran 7 shell commands"
       // was one bubble on the phone (2026-09-13, Claude Code 2.1.270).
-      if (!more || isFoldSummary(more[1] ?? '', screen, cursor)) {
+      if (!more || isFoldSummary(more[1] ?? '', screen, cursor) || isToolRow(more[1] ?? '', screen, cursor)) {
         break
       }
       parts.push(more[1] ?? '')
@@ -134,6 +139,20 @@ function isFoldSummary(text: string, screen: readonly string[], index: number): 
   }
   const after = screen[index + 1] ?? ''
   return after.trim().length === 0 || !CONTINUATION.test(after)
+}
+
+/** The running tool, painted under the prompt while it works: a plain
+ *  two-space row such as "Running Python sleep for 45 seconds · 18s" with
+ *  the `⎿  $ command` row beneath it (captured 2026-09-13, 2.1.270). Its
+ *  timer changes every second, so read as a paragraph it made a new bubble
+ *  per poll — "…dude Running 1 shell command…", "…dude Capturing the phone
+ *  screen right now". Told apart by the timer, by "Running", or by the `⎿`
+ *  row that follows it; a paragraph of the prompt has none of those. */
+function isToolRow(text: string, screen: readonly string[], index: number): boolean {
+  if (/ · \d+s\b/.test(text) || /^Running \d+ /.test(text) || /^Running .*…$/.test(text)) {
+    return true
+  }
+  return /^\s*⎿/.test(screen[index + 1] ?? '')
 }
 
 /** Rejoin what the terminal wrapped: a blank row is a real paragraph break,

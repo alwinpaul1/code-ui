@@ -182,6 +182,39 @@ describe('sentPromptsFromScreen', () => {
     ])
   })
 
+  it('leaves the running tool\'s rows out of an absorbed prompt', () => {
+    // Captured 2026-09-13 (2.1.270) while a tool ran: the tool's description
+    // is a plain two-space row with a ticking timer, the command under it.
+    expect(
+      sentPromptsFromScreen([
+        "❯ run exactly this one command and then say done: python3 -c 'import time; time.sleep(45)'",
+        '',
+        '  Running Python sleep for 45 seconds · 18s',
+        "  ⎿  $ python3 -c 'import time; time.sleep(45)' (18s)",
+        '     (ctrl+b ctrl+b (twice) to run in background)',
+        '',
+        '✢ Thinking… (21s · ↓ 172 tokens)',
+        '',
+        '  ❯ this is a message typed while you were busy',
+        '',
+        '────────────────────────────────────────────────────────────────────────────────────────────────────',
+        '❯\u00a0Press up to edit queued messages',
+        '────────────────────────────────────────────────────────────────────────────────────────────────────'
+      ])
+    ).toEqual(["run exactly this one command and then say done: python3 -c 'import time; time.sleep(45)'"])
+    // And the shape the phone showed: the description glued straight under
+    // the prompt, no blank row, then its command.
+    expect(
+      sentPromptsFromScreen([
+        '❯ see these messages what happening dude',
+        '  Capturing the phone screen right now',
+        '  ⎿  $ adb exec-out screencap',
+        '',
+        '❯ '
+      ])
+    ).toEqual(['see these messages what happening dude'])
+  })
+
   it('never reads a markdown blockquote in the agent\'s own answer as a message', () => {
     // 2026-09-13: `> quoted line` at column 0 inside an answer came back as a
     // message the user had sent, and it could never retire.

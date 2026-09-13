@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useStableEchoes } from './use-stable-echoes'
+import { preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
 import {
   normalizeNativeChatUserText,
   stripImagePromptMarker
@@ -74,11 +75,14 @@ export function useAbsorbedQueueEchoes(
     if (skipOwn && own.some((k) => sameMessage(k, key))) {
       return
     }
-    const existing = [...held.current.entries()].find(([k]) => sameMessage(k, key))
+    const existing = [...held.current.entries()].find(
+      ([k]) => sameMessage(k, key) || preferredWitnessReading(k, key) !== null
+    )
     if (existing) {
-      // The queue box cuts a long entry short with an ellipsis; the
-      // scrollback later shows all of it. Same bubble, fuller text.
-      if (key.length > existing[0].length) {
+      // One message, two readings: the queue box's `…` stub grows into the
+      // full text, and a reading that only glues the screen's own rows onto
+      // a complete one loses to it (see `preferredWitnessReading`).
+      if (preferredWitnessReading(existing[0], key) === 'b') {
         held.current.delete(existing[0])
         held.current.set(key, { ...existing[1], text })
       }

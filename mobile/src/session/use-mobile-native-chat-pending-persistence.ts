@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { rememberEchoInPending } from './mobile-native-chat-remember-echo'
+import { rememberEchoInPending, sweepWitnessedEchoes } from './mobile-native-chat-remember-echo'
 import {
   readNativeChatPendingEchoes,
   writeNativeChatPendingEchoes
@@ -65,7 +65,7 @@ export function useMobileNativeChatPendingPersistence(
         return {
           ...previous,
           [sessionKey]: [
-            ...stored
+            ...sweepWitnessedEchoes(stored)
               .filter((item) => !liveIds.has(item.id))
               .map((item) => ({ ...item, restored: true })),
             ...live
