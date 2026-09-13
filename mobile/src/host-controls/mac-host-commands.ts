@@ -24,10 +24,12 @@ export const MAC_HOST_ACTION_PROGRESS: Record<MacHostAction, string> = {
   unmute: 'Unmuting the Mac…'
 }
 
-// Why `; exit`: the command runs as a throwaway terminal tab's startup command, so the
-// tab closes itself the moment the shell is done. The caller still closes the tab as a
-// fallback for a host that keeps the pane alive.
-const SELF_CLOSE = '; exit'
+// Why a printed marker and not `; exit`: a shell that exits leaves the desktop with a
+// dead "Terminal N" tab the phone can no longer close (2026-09-13). The shell stays up,
+// prints this once the command is through, and the phone closes the live tab. The
+// `%s` keeps the command's own echo on the screen from matching the pattern.
+const SELF_CLOSE = `; printf 'CUIDONE %s\\n' ok`
+export const MAC_HOST_COMMAND_DONE_PATTERN = /CUIDONE ok\b/
 
 // Why the sleep fallback: `keystroke` needs Accessibility permission for the Orca
 // process, and when macOS refuses, osascript exits non-zero. The old CGSession

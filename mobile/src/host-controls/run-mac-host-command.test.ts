@@ -1,26 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAC_HOST_COMMAND_CLOSE_DELAY_MS, runMacHostCommand } from './run-mac-host-command'
+import { MAC_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
+import { THROWAWAY_TERMINAL_POLL_MS } from './throwaway-terminal'
 
-const SECRET = "caffeinate -u -t 2; sleep 1; osascript -e 'keystroke \"hunter2\"'; exit"
+const SECRET = "caffeinate -u -t 2; sleep 1; osascript -e 'keystroke \"hunter2\"'; printf 'CUIDONE %s\\n' ok"
+const COMMAND = "pmset displaysleepnow; printf 'CUIDONE %s\\n' ok"
 
-function fakeClient(responses: Record<string, unknown>) {
+function okResponse(result: unknown) {
+  return { id: '1', ok: true as const, result, _meta: { runtimeId: 'r' } }
+}
+
+function fakeClient(screens: string[][], overrides: Record<string, unknown> = {}) {
   const calls: { method: string; params: unknown }[] = []
-  return {
-    calls,
-    client: {
-      sendRequest: vi.fn(async (method: string, params?: unknown) => {
-        calls.push({ method, params })
-        return (
-          responses[method] ?? {
-            id: '1',
-            ok: true,
-            result: { tab: { id: 'tab-9', type: 'terminal' } },
-            _meta: { runtimeId: 'r' }
-          }
-        )
-      })
-    }
+  let read = 0
+  const client = {
+    sendRequest: vi.fn(async (method: string, params?: unknown) => {
+      calls.push({ method, params })
+      if (overrides[method]) {
+        return overrides[method]
+      }
+      if (method === 'session.tabs.createTerminal') {
+        return okResponse({ tab: { id: 'tab-9', type: 'terminal', terminal: 'term-9' } })
+      }
+      if (method === 'terminal.read') {
+        const lines = screens[read] ?? screens.at(-1) ?? []
+        read += 1
+        return okResponse({ terminal: { lines } })
+      }
+      return okResponse({})
+    })
   }
+  return { client, calls, methods: () => calls.map((call) => call.method) }
+}
+
+async function run(fake: ReturnType<typeof fakeClient>, command = COMMAND) {
+  const pending = runMacHostCommand({ client: fake.client, worktreeId: 'wt-1', command })
+  await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS + THROWAWAY_TERMINAL_POLL_MS)
+  return pending
 }
 
 beforeEach(() => {
@@ -33,14 +48,13 @@ afterEach(() => {
 
 describe('running a Mac control on the host', () => {
   it('opens a throwaway terminal in that worktree without stealing the desktop', async () => {
-    const { client, calls } = fakeClient({})
-    const outcome = await runMacHostCommand({ client, worktreeId: 'wt-1', command: 'pmset displaysleepnow; exit' })
-    expect(outcome).toEqual({ ok: true })
-    expect(calls[0]).toEqual({
+    const fake = fakeClient([[COMMAND, 'CUIDONE ok']])
+    expect(await run(fake)).toEqual({ ok: true })
+    expect(fake.calls[0]).toEqual({
       method: 'session.tabs.createTerminal',
       params: {
         worktree: 'id:wt-1',
-        command: 'pmset displaysleepnow; exit',
+        command: COMMAND,
         activate: false,
         select: false,
         navigation: 'caller'
@@ -48,19 +62,37 @@ describe('running a Mac control on the host', () => {
     })
   })
 
-  it('closes the tab it opened, in case the shell outlives its own exit', async () => {
-    const { client, calls } = fakeClient({})
-    await runMacHostCommand({ client, worktreeId: 'wt-1', command: 'pmset displaysleepnow; exit' })
-    expect(calls).toHaveLength(1)
-    await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_CLOSE_DELAY_MS)
-    expect(calls[1]).toEqual({
-      method: 'session.tabs.close',
-      params: { worktree: 'id:wt-1', tabId: 'tab-9', reason: 'user' }
-    })
+  it('closes the tab as soon as the shell says it is done, so no Terminal N is left on the desktop', async () => {
+    // 2026-09-13: five dead "Terminal N" tabs stood in the desktop strip after a
+    // few Mac controls. The old `; exit` killed the shell, and the desktop keeps an
+    // exited terminal as a tab the phone can no longer close.
+    const fake = fakeClient([['starting'], [COMMAND, 'CUIDONE ok']])
+    await run(fake)
+    expect(fake.methods()).toEqual([
+      'session.tabs.createTerminal',
+      'terminal.read',
+      'terminal.read',
+      'session.tabs.close'
+    ])
+    expect(fake.calls.at(-1)?.params).toEqual({ worktree: 'id:wt-1', tabId: 'tab-9', reason: 'user' })
+  })
+
+  it("does not take the command's own echo for the done marker", async () => {
+    const fake = fakeClient([[COMMAND]])
+    await run(fake)
+    // Polled to the timeout — the echoed `CUIDONE %s` never counted as done.
+    expect(fake.methods().filter((method) => method === 'terminal.read').length).toBeGreaterThan(20)
+    expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
+  })
+
+  it('closes the tab anyway when the shell never reports done', async () => {
+    const fake = fakeClient([['nothing']])
+    expect(await run(fake)).toEqual({ ok: true })
+    expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
   it('reports a refused host without echoing the command back', async () => {
-    const { client } = fakeClient({
+    const fake = fakeClient([], {
       'session.tabs.createTerminal': {
         id: '1',
         ok: false,
@@ -68,9 +100,8 @@ describe('running a Mac control on the host', () => {
         _meta: { runtimeId: 'r' }
       }
     })
-    const outcome = await runMacHostCommand({ client, worktreeId: 'wt-1', command: SECRET })
-    expect(outcome.ok).toBe(false)
-    expect(outcome.ok === false && outcome.reason).toBe('worktree not found')
+    const outcome = await run(fake, SECRET)
+    expect(outcome).toEqual({ ok: false, reason: 'worktree not found' })
   })
 
   it('never leaks the command — password and all — through a thrown error', async () => {
@@ -85,13 +116,10 @@ describe('running a Mac control on the host', () => {
   })
 
   it('still counts as sent when the host answers without a tab to close', async () => {
-    const { client, calls } = fakeClient({
-      'session.tabs.createTerminal': { id: '1', ok: true, result: {}, _meta: { runtimeId: 'r' } }
+    const fake = fakeClient([], {
+      'session.tabs.createTerminal': okResponse({})
     })
-    expect(await runMacHostCommand({ client, worktreeId: 'wt-1', command: 'x; exit' })).toEqual({
-      ok: true
-    })
-    await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_CLOSE_DELAY_MS)
-    expect(calls).toHaveLength(1)
+    expect(await run(fake)).toEqual({ ok: true })
+    expect(fake.calls).toHaveLength(1)
   })
 })
