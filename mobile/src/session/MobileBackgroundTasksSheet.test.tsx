@@ -20,7 +20,7 @@ vi.mock('react-native', () => ({
     timing: () => ({}),
     sequence: () => ({})
   },
-  Easing: { linear: 0, quad: 0, inOut: () => 0 },
+  Easing: { linear: 0, quad: 0, inOut: () => 0, out: () => 0 },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',

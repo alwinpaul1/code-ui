@@ -518,6 +518,10 @@ describe('finished background tasks ride the Claude beacon', () => {
       expect(run.beacon).not.toContain('bquotedone')
       const bg = (run.beacon ?? '').split(' ').find((field) => field.startsWith('bg='))
       expect(bg?.replace(/[^A-Za-z0-9_,=-]/g, '')).toBe('bg=bajgl5wmo,b7woddzjt,bywd6lvod')
+      // `live` is launched minus finished over the whole file: bajgl5wmo has a
+      // notification, the other two do not (2026-09-13).
+      const live = (run.beacon ?? '').split(' ').find((field) => field.startsWith('live='))
+      expect(live?.replace(/[^A-Za-z0-9_,=-]/g, '')).toBe('live=b7woddzjt,bywd6lvod')
     })
   }
 

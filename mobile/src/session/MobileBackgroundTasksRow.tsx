@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { Animated, Easing, Pressable } from 'react-native'
-import { Sparkles } from 'lucide-react-native'
+import { Pressable } from 'react-native'
 import { useTheme } from '../theme/theme-context'
+import { MobileBackgroundTasksPulse } from './MobileBackgroundTasksPulse'
 import { Txt } from '../ui/Txt'
 import { formatRunningTaskCount } from './mobile-background-task-labels'
 
@@ -43,37 +42,10 @@ export function MobileBackgroundTasksRow({
         backgroundColor: pressed ? colors.accentSoft : 'transparent'
       })}
     >
-      <SpinningSparkle color={colors.accentText} />
+      <MobileBackgroundTasksPulse color={colors.accentText} />
       <Txt variant="label" weight="medium" tone="accent">
         {label}
       </Txt>
     </Pressable>
-  )
-}
-
-/** The star breathes while tasks run (2026-09-13): it scales and brightens,
- *  no rotation — a quiet sign of work in flight, not a spinner. Native-driven,
- *  so it costs the JS thread nothing while the agent streams. */
-function SpinningSparkle({ color }: { color: string }) {
-  const breath = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true })
-      ])
-    )
-    pulse.start()
-    return () => pulse.stop()
-  }, [breath])
-  return (
-    <Animated.View
-      style={{
-        transform: [{ scale: breath.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.16] }) }],
-        opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] })
-      }}
-    >
-      <Sparkles size={14} color={color} />
-    </Animated.View>
   )
 }

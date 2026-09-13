@@ -137,10 +137,11 @@ export function parseAgentHudBeaconPayload(
     doneTaskIds: (values.get('done') ?? '')
       .split(',')
       .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
-    runningTaskIds: values.has('run')
-      ? (values.get('run') ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
-      : null,
-    runningTaskIdsAt: values.has('run') ? receivedAt : null,
+    // `live` (status line, every refresh: launched minus finished over the
+    // whole transcript) beats `run` (Stop hook, only at turn end), which
+    // could not know about a shell started later in a long turn.
+    runningTaskIds: liveOrRun(values),
+    runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
       .filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
@@ -297,4 +298,12 @@ export function useAgentHudBeacon(handle: string | null): AgentHudBeacon | null 
     () => getAgentHudBeacon(handle),
     () => null
   )
+}
+
+function liveOrRun(values: Map<string, string>): string[] | null {
+  const key = values.has('live') ? 'live' : values.has('run') ? 'run' : null
+  if (key === null) {
+    return null
+  }
+  return (values.get(key) ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
 }

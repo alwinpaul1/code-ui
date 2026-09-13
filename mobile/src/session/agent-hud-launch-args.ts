@@ -146,12 +146,20 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // window the phone loads. Measured 2026-09-11: the desk read "3 shells",
   // the phone "1".
   'bg=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
-  // Every completion for an id `bg` saw launched rides along, however old,
-  // plus the 32 newest overall. No completion can age out while its own
-  // launch is still listed (2026-09-13: one 12:28 launch read as running all
-  // evening because both lists were capped at 32 independently).
+  'ba=""',
+  'lv=""',
+  // Whole file, both scans: a launch and its completion must be weighed
+  // against each other, and a day's worth of either would not fit a tail.
+  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
+  '[ -n "$ba" ] && bg=$(printf "%s\\n" "$ba" | tail -n 64 | tr "\\n" ",")',
   '[ -n "$tp" ] && [ -r "$tp" ] && da=$(grep -F "<status>" "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
+  'dc=","',
+  '[ -n "$da" ] && dc=",$(printf "%s\\n" "$da" | tr "\\n" ",")"',
+  // `live` is the answer the phone actually needs: launched and not yet
+  // finished, computed over the whole transcript on every status refresh.
+  // `done`/`bg` stay for readers that retire launches they found themselves
+  // (2026-09-13: capped lists left a 12:28 shell running all evening).
+  '[ -n "$ba" ] && lv=$(printf "%s\\n" "$ba" | awk -v d="$dc" "index(d, \\",\\"\\$0\\",\\")==0" | tr "\\n" ",")',
   '[ -n "$da" ] && dn=$(printf "%s\\n" "$da" | awk -v b=",$bg," "{a[NR]=\\$0} END{for(i=1;i<=NR;i++) if (index(b, \\",\\"a[i]\\",\\")>0 || i>NR-32) print a[i]}" | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
@@ -164,6 +172,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
   '[ -n "$dn" ] && o="$o done=${dn%,}"',
   '[ -n "$bg" ] && o="$o bg=${bg%,}"',
+  '[ -n "$lv" ] && o="$o live=${lv%,}"',
   ...TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
   // exactly their bar. settings.json is multi-line JSON. Each reader is tried
