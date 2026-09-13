@@ -245,3 +245,36 @@ it('draws a desktop message without the image markers the phone cannot show', ()
   expect(latest).toMatchObject([{ text: 'See this tooo' }])
   act(() => renderer!.unmount())
 })
+
+// 2026-09-13: Claude's queue box cuts a long entry short with an ellipsis, so
+// the phone drew "…see this and…" and never matched it to the full message
+// the scrollback and the transcript carried.
+it('grows a truncated queue entry into the full message and retires it once landed', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  const full = 'Too much rubbish and jargon happening in chatui of code ui see this and some times chat ui flashes'
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeBoth, {
+        queued: ['Too much rubbish and jargon happening in chatui of code ui see this and…'],
+        sent: [],
+        folded
+      })
+    )
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeBoth, { queued: [], sent: [full], folded }))
+  })
+  expect(latest).toMatchObject([{ text: full }])
+  act(() => {
+    renderer!.update(
+      createElement(ProbeBoth, {
+        queued: [],
+        sent: [full],
+        folded: [...folded, row('u2', 'user', `[Image #90] ${full}`)]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})

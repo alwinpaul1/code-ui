@@ -171,13 +171,25 @@ jobs:
           set -euo pipefail
           tag="${{ steps.release.outputs.tag }}"
           apk="dist/${{ steps.apk.outputs.name }}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "$apk"
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file dist/release-notes.md
-          else
-            gh release create "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "Code UI Android v${{ steps.release.outputs.version }}" \
-              --notes-file dist/release-notes.md \
-              "$apk"
-          fi
+          # GitHub's API answered HTTP 500 to a create once (2026-09-13) and a
+          # passed 30-minute build was thrown away; try a few times.
+          publish() {
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "$apk"
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file dist/release-notes.md
+            else
+              gh release create "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "Code UI Android v${{ steps.release.outputs.version }}" \
+                --notes-file dist/release-notes.md \
+                "$apk"
+            fi
+          }
+          for attempt in 1 2 3 4 5; do
+            if publish; then
+              exit 0
+            fi
+            echo "release attempt $attempt failed; retrying in $((attempt * 30))s"
+            sleep $((attempt * 30))
+          done
+          exit 1

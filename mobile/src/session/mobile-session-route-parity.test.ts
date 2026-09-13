@@ -118,7 +118,7 @@ const HEAD_TIMER_CREATION_SHA256 =
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
   'd4680243df9e8330f7e2cbcf64350d3d5001dbbcdbf69cdc255222b6a4e600dc'
-const HEAD_HOST_JSX_SHA256 = 'dc5d421bcef936c482490835f6b9939a05040800e9e495a45d9756a14249840e'
+const HEAD_HOST_JSX_SHA256 = 'e92b8273d48578f9a698069559a409968bacf5a63debcc4402edf1bb66c9b70b'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.

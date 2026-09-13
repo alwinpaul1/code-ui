@@ -59,7 +59,32 @@ function midTurn(seconds: number): string[] {
   ]
 }
 
+// Read off the phone's own terminal view of the same build (2026-09-13): a
+// prompt with a second paragraph, the fold after the turn, and the reply.
+const TWO_PARAGRAPHS = [
+  '❯ When a model switch happens this too appears fix that and',
+  '  here is the rest of the first paragraph',
+  '',
+  '  How did this appear fix this',
+  '',
+  '  Ran 1 shell command',
+  '',
+  '⏺ Applying the parser fix: prompt text now stops at the first blank row.',
+  '',
+  '  Ran 3 shell commands',
+  '',
+  '────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '❯',
+  '────────────────────────────────────────────────────────────────────────────────────────────────────'
+]
+
 describe('sentPromptsFromScreen', () => {
+  it('keeps a second paragraph of the prompt and still leaves the fold out', () => {
+    expect(sentPromptsFromScreen(TWO_PARAGRAPHS)).toEqual([
+      'When a model switch happens this too appears fix that and here is the rest of the first paragraph\n\nHow did this appear fix this'
+    ])
+  })
+
   it('reads a prompt the agent already took, rejoining the rows it wrapped', () => {
     expect(sentPromptsFromScreen(SCREEN)).toEqual([
       'run echo one and then echo two, then reply with the single word done second prompt that is long enough to wrap around the terminal width of one hundred columns for sure yes'

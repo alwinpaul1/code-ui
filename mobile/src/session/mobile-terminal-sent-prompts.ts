@@ -49,6 +49,12 @@ const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/
+/** What Claude paints after the blank row under a prompt once the turn's
+ *  tools fold: "Ran 6 shell commands", "Read 2 files", "Edited a file". A
+ *  prompt's own second paragraph sits on an identical two-space row, so this
+ *  is the one place the parser has to judge by wording (2.1.270). */
+const FOLD_SUMMARY =
+  /^(?:Ran|Read|Edited|Wrote|Searched|Listed|Fetched|Updated|Called|Used|Created|Deleted) (?:\d+|a|an|one) /
 
 export function sentPromptsFromScreen(screen: readonly string[]): string[] {
   const prompts: string[] = []
@@ -63,14 +69,26 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
     const parts = [head[1] ?? '']
     let cursor = index + 1
     while (cursor < limit) {
-      const more = CONTINUATION.exec(screen[cursor] ?? '')
+      const line = screen[cursor] ?? ''
+      if (line.trim().length === 0) {
+        // One blank row, then another two-space row, is a paragraph break
+        // inside the prompt — unless that row is the tool fold.
+        const next = CONTINUATION.exec(screen[cursor + 1] ?? '')
+        if (cursor + 1 >= limit || !next || FOLD_SUMMARY.test(next[1] ?? '')) {
+          break
+        }
+        parts.push('', next[1] ?? '')
+        cursor += 2
+        continue
+      }
+      const more = CONTINUATION.exec(line)
       if (!more) {
         break
       }
       parts.push(more[1] ?? '')
       cursor += 1
     }
-    const text = stripImagePromptMarker(parts.join(' ')).trim()
+    const text = stripImagePromptMarker(joinWrappedRows(parts)).trim()
     if (text.length > 0 && !LOCAL_COMMAND.test(text)) {
       prompts.push(text)
     }
@@ -89,4 +107,18 @@ function composerIndex(screen: readonly string[]): number {
     }
   }
   return screen.length
+}
+
+/** Rejoin what the terminal wrapped: a blank row is a real paragraph break,
+ *  every other row continues the sentence above it. */
+function joinWrappedRows(parts: readonly string[]): string {
+  let out = ''
+  for (const part of parts) {
+    if (part === '') {
+      out += '\n\n'
+      continue
+    }
+    out += out.length === 0 || out.endsWith('\n') ? part : ` ${part}`
+  }
+  return out
 }
