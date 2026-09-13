@@ -20,7 +20,8 @@ export type ThemeColors = {
   /** The composer dock over the chat: the conversation shows through, as in
    *  the Claude app (2026-09-13). */
   bgDock: string
-  /** The composer box on that dock: a touch more solid, still see-through. */
+  /** The composer box on that dock: solid enough that the chat behind it does
+   *  not read through the text, as in the Claude app (2026-09-13). */
   bgPanelGlass: string
   border: string
   borderStrong: string
@@ -69,7 +70,7 @@ export const lightColors: ThemeColors = {
   bgSunken: '#ECE9E1',
   bgOverlay: 'rgba(30, 28, 25, 0.42)',
   bgDock: 'rgba(243, 241, 234, 0.72)',
-  bgPanelGlass: 'rgba(251, 250, 246, 0.78)',
+  bgPanelGlass: 'rgba(251, 250, 246, 0.93)',
   border: '#E1DDD2',
   borderStrong: '#CCC7BB',
   text: '#1E1C19',
@@ -108,7 +109,7 @@ export const darkColors: ThemeColors = {
   bgSunken: '#161513',
   bgOverlay: 'rgba(0, 0, 0, 0.55)',
   bgDock: 'rgba(26, 25, 23, 0.72)',
-  bgPanelGlass: 'rgba(33, 31, 28, 0.78)',
+  bgPanelGlass: 'rgba(33, 31, 28, 0.93)',
   border: '#332F2A',
   borderStrong: '#45403A',
   text: '#ECE9E2',
