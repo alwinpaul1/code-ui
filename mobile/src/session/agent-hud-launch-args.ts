@@ -75,7 +75,10 @@ const TTY_WRITE = [
 
 /** Percent-encodes what would otherwise break the `key=value` grammar:
  *  `%` first (or it would double-encode), then space and `;`. */
-const ENCODE_FN = 'q(){ printf %s "$1" | sed -e "s/%/%25/g" -e "s/ /%20/g" -e "s/;/%3B/g"; }'
+// LC_ALL=C: the prompt hook cuts its text at 2000 BYTES, and a byte-cut
+// multibyte character made sed abort with "illegal byte sequence" in a UTF-8
+// locale, so a long prompt with one umlaut or emoji sent nothing (2026-09-13).
+const ENCODE_FN = 'q(){ printf %s "$1" | LC_ALL=C sed -e "s/%/%25/g" -e "s/ /%20/g" -e "s/;/%3B/g"; }'
 
 /**
  * Claude Code's status-line command.
@@ -148,11 +151,14 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'bg=""',
   'ba=""',
   'lv=""',
-  // Whole file, both scans: a launch and its completion must be weighed
-  // against each other, and a day's worth of either would not fit a tail.
-  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
+  // The last 16 MiB, both scans, so a launch and its completion are weighed
+  // against each other over the same window. The whole file was tried on
+  // 2026-09-13 and cost 1.9 s of CPU per status-line repaint on a 213 MB
+  // transcript — Claude repaints while streaming, so that pegged a core.
+  // 16 MiB is hours of a busy session and reads in about 0.1 s.
+  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
   '[ -n "$ba" ] && bg=$(printf "%s\\n" "$ba" | tail -n 64 | tr "\\n" ",")',
-  '[ -n "$tp" ] && [ -r "$tp" ] && da=$(grep -F "<status>" "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && da=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
   'dc=","',
   '[ -n "$da" ] && dc=",$(printf "%s\\n" "$da" | tr "\\n" ",")"',
   // `live` is the answer the phone actually needs: launched and not yet
@@ -177,7 +183,10 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
   '[ -n "$dn" ] && o="$o done=${dn%,}"',
   '[ -n "$bg" ] && o="$o bg=${bg%,}"',
-  '[ -n "$lv" ] && o="$o live=${lv%,}"',
+  // Sent whenever the transcript was readable, EMPTY included: left out when
+  // nothing is running, the phone kept the previous list and its count until
+  // the turn ended (2026-09-13).
+  '[ -n "$tp" ] && [ -r "$tp" ] && o="$o live=${lv%,}"',
   ...TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
   // exactly their bar. settings.json is multi-line JSON. Each reader is tried
@@ -509,7 +518,7 @@ export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
  */
 export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   'i=$(cat 2>/dev/null || true)',
-  'g(){ printf %s "$i" | sed -nE "s/.*$1.*/\\1/p"; }',
+  'g(){ printf %s "$i" | LC_ALL=C sed -nE "s/.*$1.*/\\1/p"; }',
   ENCODE_FN,
   // JSON-escaped, so the value is one line and any quote inside it is \".
   'pr=$(g "\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\"")',
@@ -543,7 +552,9 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B"',
   '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
-  'if($pr){ Write-Beacon $o }',
+  // The console writer above defines `W`; a call to a name it never
+  // defined was swallowed by SilentlyContinue and wrote nothing (2026-09-13).
+  'if($pr){ W $o }',
   'exit 0'
 ].join('\n')
 

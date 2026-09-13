@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { useStableEchoes } from './use-stable-echoes'
 import {
   normalizeNativeChatUserText,
   stripImagePromptMarker
@@ -60,7 +61,9 @@ export function useAbsorbedQueueEchoes(
   const anchorId = rawMessages.at(-1)?.id ?? null
   const hold = (text: string, skipOwn: boolean): void => {
     const key = promptKey(text)
-    if (key.length === 0 || live.some((k) => sameMessage(k, key))) {
+    // No transcript yet means no row to anchor on, and a null anchor pins
+    // the echo to the bottom for good; it is picked up on a later render.
+    if (key.length === 0 || anchorId === null || live.some((k) => sameMessage(k, key))) {
       return
     }
     if (skipOwn && own.some((k) => sameMessage(k, key))) {
@@ -94,11 +97,14 @@ export function useAbsorbedQueueEchoes(
     )
     .map(promptKey)
   for (const key of Array.from(held.current.keys())) {
-    if ([...landed, ...live, ...own].some((other) => sameMessage(other, key))) {
+    if (
+      [...live, ...own].some((other) => sameMessage(other, key)) ||
+      landed.some((other) => sameMessage(other, key) || isCutOf(key, other))
+    ) {
       held.current.delete(key)
     }
   }
-  return [...held.current.values()]
+  const echoes = [...held.current.values()]
     .sort((a, b) => a.seq - b.seq)
     .map((entry) => ({
       id: `queued-${entry.seq}`,
@@ -108,6 +114,14 @@ export function useAbsorbedQueueEchoes(
       baselineTailMessageId: entry.anchorId,
       baselineResolved: true
     }))
+  return useStableEchoes(echoes)
+}
+
+/** A screen reading that stops short of the row that landed — the parser
+ *  ends a prompt at a row it cannot tell from the tool fold — still names
+ *  the same message (2026-09-13). */
+function isCutOf(shorter: string, longer: string): boolean {
+  return shorter.length >= 24 && longer.length > shorter.length && longer.startsWith(shorter)
 }
 
 type HeldEcho = { text: string; anchorId: string | null; seq: number }

@@ -278,3 +278,62 @@ it('grows a truncated queue entry into the full message and retires it once land
   expect(latest).toEqual([])
   act(() => renderer!.unmount())
 })
+
+// 2026-09-13: the parser ends a prompt at a row it cannot tell from the tool
+// fold, so a reading can stop short of the row that lands; it still names
+// the same message and must retire with it.
+it('retires a reading that stopped short of the row that landed', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeOwn, { sent: ['please look at the failure in the build'], own: [], folded })
+    )
+  })
+  expect(latest).toHaveLength(1)
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, {
+        sent: ['please look at the failure in the build'],
+        own: [],
+        folded: [
+          ...folded,
+          row('u2', 'user', 'please look at the failure in the build\n\nRan 3 tests locally and two blew up')
+        ]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
+// 2026-09-13: a fresh array every render was a dependency of the fold over
+// the whole transcript, so every 1 Hz screen poll refolded everything.
+it('returns the same array while nothing changed', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { sent: ['hold this'], own: [], folded }))
+  })
+  const first = latest
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { sent: ['hold this'], own: [], folded }))
+  })
+  expect(latest).toBe(first)
+  act(() => renderer!.unmount())
+})
+
+it('waits for a transcript row before holding anything, so nothing pins to the bottom', () => {
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [] }))
+  })
+  expect(latest).toEqual([])
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [row('a1', 'assistant', 'hi')] })
+    )
+  })
+  expect(latest).toMatchObject([{ text: 'early prompt', baselineTailMessageId: 'a1' }])
+  act(() => renderer!.unmount())
+})

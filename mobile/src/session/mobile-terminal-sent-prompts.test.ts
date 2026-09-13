@@ -118,6 +118,12 @@ describe('sentPromptsFromScreen', () => {
     expect(sentPromptsFromScreen(midTurn(6)).join(' ')).not.toContain('Fable 5.1')
   })
 
+  it('reads nothing when no composer row is on screen, so a live draft is never taken for a prompt', () => {
+    // 2026-09-13: with no composer row found, the whole screen was parsed,
+    // and the desktop's half-typed draft came back as an accepted prompt.
+    expect(sentPromptsFromScreen(['❯ a prompt that was accepted', '', '⏺ reply'])).toEqual([])
+  })
+
   it('returns nothing for a screen with no prompt rows', () => {
     expect(sentPromptsFromScreen(['  Ran 3 shell commands', '', '✻ Cooking…', '❯'])).toEqual([])
   })

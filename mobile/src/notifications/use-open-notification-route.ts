@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
-import { useAppUpdateStore } from '../app-update/app-update-store'
+import { hydrateAppUpdateState, useAppUpdateStore } from '../app-update/app-update-store'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
 import {
@@ -37,7 +37,13 @@ export function useOpenAppUpdateNotification(): () => void {
   return useCallback(() => {
     router.navigate('/')
     // The tap IS the person asking now, so it bypasses the 30-minute throttle
-    // that otherwise left Home showing no banner (2026-09-13).
-    void useAppUpdateStore.getState().checkForUpdate({ force: true })
+    // that otherwise left Home showing no banner (2026-09-13). What the
+    // background check already found is restored first: the forced check
+    // flips the store to "checking" before Home mounts, which is exactly when
+    // Home's own restore declines to run, and offline the tap then ended on
+    // an error with no banner at all.
+    void hydrateAppUpdateState().then(() =>
+      useAppUpdateStore.getState().checkForUpdate({ force: true })
+    )
   }, [router])
 }

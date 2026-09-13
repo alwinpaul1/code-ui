@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  appendDesktopPrompt,
   consumeAgentHudBeacons,
   getAgentHudBeacon,
   parseAgentHudBeaconPayload,
@@ -152,4 +153,12 @@ describe('finished task ids on the beacon', () => {
     expect(getAgentHudBeacon('h')?.launchedTaskIds).toEqual(['b1', 'b2'])
     expect(getAgentHudBeacon('h')?.runningTaskIds).toEqual(['b2'])
   })
+})
+
+// 2026-09-13: a fresh copy on every status-line repaint changed the list's
+// identity and refolded the whole chat downstream.
+it('returns the same list when the beacon repeats a prompt it already holds', () => {
+  const previous = [{ nonce: '1', text: 'a' }]
+  expect(appendDesktopPrompt(previous, { nonce: '1', text: 'a' })).toBe(previous)
+  expect(appendDesktopPrompt(previous, null)).toBe(previous)
 })

@@ -17,6 +17,17 @@ describe('withoutLandedDesktopPrompts', () => {
     )
   })
 
+  it('drops a prompt the phone itself sent, which already has its pending echo', () => {
+    const prompts = [{ nonce: 'n1', text: 'from the phone' }]
+    expect(withoutLandedDesktopPrompts(prompts, [], ['from the phone'])).toEqual([])
+  })
+
+  it('matches a prompt the hook cut at 2000 characters as a prefix of its row', () => {
+    const long = 'x'.repeat(2400)
+    const prompts = [{ nonce: 'n1', text: long.slice(0, 2000) }]
+    expect(withoutLandedDesktopPrompts(prompts, [user('u1', long)])).toEqual([])
+  })
+
   it('keeps a prompt the transcript does not show', () => {
     const prompts = [{ nonce: 'n1', text: 'fix the dock' }]
     expect(withoutLandedDesktopPrompts(prompts, [user('u1', 'something else')])).toEqual(prompts)

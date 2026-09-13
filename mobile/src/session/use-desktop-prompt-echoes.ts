@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useStableEchoes } from './use-stable-echoes'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import {
@@ -33,7 +34,9 @@ export function useDesktopPromptEchoes(
   const anchors = useRef(new Map<string, string | null>())
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
-    if (!anchors.current.has(prompt.nonce)) {
+    // A beacon restored before the transcript loads would pin the echo to
+    // the bottom for good; wait for a row to anchor on (2026-09-13).
+    if (!anchors.current.has(prompt.nonce) && rawMessages.length > 0) {
       anchors.current.set(prompt.nonce, rawMessages.at(-1)?.id ?? null)
     }
     echoes.push({
@@ -46,7 +49,7 @@ export function useDesktopPromptEchoes(
       baselineResolved: true
     })
   }
-  return echoes
+  return useStableEchoes(echoes)
 }
 
 /** Drop prompts the transcript already shows: a prompt submitted while the
@@ -55,18 +58,27 @@ export function useDesktopPromptEchoes(
  *  row carrying `[Image #1]` markers or different wrapping still counts. */
 export function withoutLandedDesktopPrompts(
   prompts: readonly DesktopPrompt[],
-  folded: readonly NativeChatMessage[]
+  folded: readonly NativeChatMessage[],
+  alsoShown: readonly string[] = []
 ): DesktopPrompt[] {
-  const seen = new Set(
-    folded
+  const seen = [
+    ...folded
       .filter((message) => message.role === 'user')
       .map((message) =>
-        message.blocks
-          .map((block) => (block.type === 'text' ? block.text : ''))
-          .join('')
-      )
-      .map(normalizeNativeChatUserText)
-      .filter((text) => text.length > 0)
-  )
-  return prompts.filter((prompt) => !seen.has(normalizeNativeChatUserText(prompt.text)))
+        message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+      ),
+    ...alsoShown
+  ]
+    .map(normalizeNativeChatUserText)
+    .filter((text) => text.length > 0)
+  return prompts.filter((prompt) => {
+    const key = normalizeNativeChatUserText(prompt.text)
+    // The hook cuts a prompt at 2000 characters, so a long one can only ever
+    // be matched as a prefix of the row that landed (2026-09-13).
+    const cut = key.length >= HOOK_CUT_CHARS
+    return !seen.some((other) => other === key || (cut && other.startsWith(key)))
+  })
 }
+
+/** The prompt hook's own cap, less a little so a multibyte cut still counts. */
+const HOOK_CUT_CHARS = 1900

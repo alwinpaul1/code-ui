@@ -10,7 +10,18 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
+const chatMounts = vi.hoisted(() => ({ count: 0 }))
+vi.mock('./MobileNativeChatView', async () => {
+  const { useEffect, createElement: h } = await import('react')
+  return {
+    MobileNativeChatView: (props: Record<string, unknown>) => {
+      useEffect(() => {
+        chatMounts.count += 1
+      }, [])
+      return h('ChatView', props)
+    }
+  }
+})
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
@@ -279,6 +290,25 @@ describe('MobileNativeChatOverlay across a reconnect blink', () => {
       vi.advanceTimersByTime(1600)
     })
     expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
+  })
+
+  // 2026-09-13: the hold was decided in an effect, so the first blank frame
+  // returned null — the terminal showed for a frame and the whole chat list
+  // unmounted and mounted again, losing its scroll position and its state.
+  it('keeps the same chat mounted across the blink, without a remount', async () => {
+    const prior = [assistantTurn('a1', 'Hello')]
+    await act(async () => {
+      renderer = create(overlayElement({ messages: prior }))
+    })
+    const mounted = chatMounts.count
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior, show: false, eligible: false }))
+    })
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: prior }))
+    })
+    expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(1)
+    expect(chatMounts.count).toBe(mounted)
   })
 
   it('shows nothing when chat was never on for this surface', async () => {

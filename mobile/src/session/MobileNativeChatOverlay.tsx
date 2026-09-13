@@ -102,9 +102,16 @@ export function MobileNativeChatOverlay({
   // Prompts typed on the desktop never reach the phone through Orca; they
   // ride the HUD beacon instead (2026-09-13).
   const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  // The hook fires for the phone's own sends too, and those already have a
+  // pending echo, so anything matching one is left out (2026-09-13).
   const unlandedPrompts = useMemo(
-    () => withoutLandedDesktopPrompts(desktopPrompts, baseFolded),
-    [desktopPrompts, baseFolded]
+    () =>
+      withoutLandedDesktopPrompts(
+        desktopPrompts,
+        baseFolded,
+        controller.chatPending.map((p) => p.text)
+      ),
+    [controller.chatPending, desktopPrompts, baseFolded]
   )
   const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded, session.messages)
   // Existing sessions have no hook, but the agent draws its own queue and the
@@ -254,28 +261,28 @@ export function MobileNativeChatOverlay({
 const CHAT_FRAME_HOLD_MS = 1500
 
 /** The last chat the overlay drew for this surface, replayed while the source
- *  blanks briefly. Timing lives in an effect so render stays pure. */
+ *  blanks briefly. The hold is decided in the same render that blanks: an
+ *  earlier version set it from an effect, so the first blank frame returned
+ *  null, the terminal showed for that frame and the whole chat list
+ *  remounted — the flash this exists to stop (2026-09-13). Only the expiry
+ *  lives in an effect. */
 function useHeldChatFrame(
   blank: boolean,
   surfaceId: string
 ): { element: React.JSX.Element | null; remember: (element: React.JSX.Element) => void } {
   const lastRef = useRef<{ surfaceId: string; element: React.JSX.Element } | null>(null)
-  const [holding, setHolding] = useState(false)
+  const [expired, setExpired] = useState(false)
   useEffect(() => {
     if (!blank) {
-      setHolding(false)
+      setExpired(false)
       return
     }
-    if (lastRef.current?.surfaceId !== surfaceId) {
-      return
-    }
-    setHolding(true)
-    const timer = setTimeout(() => setHolding(false), CHAT_FRAME_HOLD_MS)
+    const timer = setTimeout(() => setExpired(true), CHAT_FRAME_HOLD_MS)
     return () => clearTimeout(timer)
   }, [blank, surfaceId])
   const last = lastRef.current
   return {
-    element: blank && holding && last?.surfaceId === surfaceId ? last.element : null,
+    element: blank && !expired && last?.surfaceId === surfaceId ? last.element : null,
     remember: (drawn) => {
       lastRef.current = { surfaceId, element: drawn }
     }

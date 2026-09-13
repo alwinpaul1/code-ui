@@ -99,14 +99,16 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
 
 /** Nothing below the composer is scrollback. Found by its own shape rather than
  *  a fixed tail, because the status area under it is as tall as the user's
- *  status line makes it. */
+ *  status line makes it. No composer on screen (a permission dialog, a
+ *  different agent, a build that paints it differently) means nothing can be
+ *  told apart from a live draft, so nothing is read. */
 function composerIndex(screen: readonly string[]): number {
   for (let index = screen.length - 1; index >= 0; index -= 1) {
     if (COMPOSER_ROW.test(screen[index] ?? '')) {
       return index
     }
   }
-  return screen.length
+  return 0
 }
 
 /** Rejoin what the terminal wrapped: a blank row is a real paragraph break,

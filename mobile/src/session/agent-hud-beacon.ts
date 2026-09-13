@@ -387,7 +387,9 @@ export function appendDesktopPrompt(
   next: { nonce: string; text: string } | null
 ): { nonce: string; text: string }[] {
   if (!next || previous.some((prompt) => prompt.nonce === next.nonce)) {
-    return [...previous]
+    // The same array back: this runs on every status-line repaint, and a
+    // fresh copy each time refolded the whole chat downstream (2026-09-13).
+    return previous as { nonce: string; text: string }[]
   }
   return [...previous, next].slice(-MAX_DESKTOP_PROMPTS)
 }

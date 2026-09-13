@@ -10,6 +10,7 @@ import {
   buildAgentHudLaunchArgs,
   buildClaudeHudSettingsJson,
   buildCodexHudNotifyOverride,
+  CLAUDE_HUD_PROMPT_HOOK_SCRIPT,
   CLAUDE_HUD_STATUSLINE_POWERSHELL,
   CLAUDE_HUD_STATUSLINE_SCRIPT,
   CLAUDE_HUD_WINDOWS_COMMAND,
@@ -546,7 +547,7 @@ describe('finished background tasks ride the Claude beacon', () => {
     // Why: this line runs on every status-line refresh on Windows, macOS and
     // Linux. Anything outside this set breaks one of them silently.
     const parts = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ')
-    const scan = parts.find((part) => part.includes('da=$(grep -F'))
+    const scan = parts.find((part) => part.includes('da=$(tail -c'))
     const pick = parts.find((part) => part.includes('dn=$(printf'))
     expect(scan).toBeDefined()
     expect(pick).toBeDefined()
@@ -556,7 +557,7 @@ describe('finished background tasks ride the Claude beacon', () => {
           text.match(/\b(tail|grep|sed|awk|tr|printf|cat|head|cut|sort|uniq|perl|python3?|node|jq|xargs|rev|tac|mapfile|readarray)\b/g) ?? []
         )
       ].sort()
-    expect(tools(scan ?? '')).toEqual(['awk', 'grep', 'sed'])
+    expect(tools(scan ?? '')).toEqual(['awk', 'grep', 'sed', 'tail'])
     expect(tools(pick ?? '')).toEqual(['awk', 'printf', 'tr'])
   })
 
@@ -574,7 +575,33 @@ describe('finished background tasks ride the Claude beacon', () => {
     // in the prompt keeps its backslashes.
     expect(script).toContain('ConvertTo-Json')
     expect(script).toContain('up=')
-    expect(script).toContain('Write-Beacon')
+    // 2026-09-13: the hook called `Write-Beacon`, a name the console writer
+    // never defines (it defines `W`), and SilentlyContinue hid the miss, so
+    // the Windows prompt hook never wrote anything.
+    expect(script).toContain('W $o')
+    expect(script).not.toContain('Write-Beacon')
+  })
+
+  it('emits live= even when nothing is running, so a finished shell retires mid-turn', () => {
+    // 2026-09-13: `live=` was left out when the list was empty, so the phone
+    // kept the previous list and its count until the turn ended.
+    expect(CLAUDE_HUD_STATUSLINE_SCRIPT).toContain('[ -n "$tp" ] && [ -r "$tp" ] && o="$o live=${lv%,}"')
+  })
+
+  it('bounds both transcript scans to a tail, not the whole file', () => {
+    // 2026-09-13: the whole-file scans cost 1.9 s of CPU per status-line
+    // repaint on a 213 MB transcript.
+    const scans = CLAUDE_HUD_STATUSLINE_SCRIPT.split('; ').filter((part) => part.includes('grep -F'))
+    expect(scans).toHaveLength(2)
+    for (const scan of scans) {
+      expect(scan).toContain('tail -c 16777216 "$tp"')
+    }
+  })
+
+  it('percent-encodes under the C locale so a byte-cut prompt still reaches the phone', () => {
+    // 2026-09-13: awk cut a long prompt at 2000 BYTES, mid-character, and the
+    // UTF-8-locale sed then aborted, sending nothing for the whole prompt.
+    expect(CLAUDE_HUD_PROMPT_HOOK_SCRIPT).toContain('LC_ALL=C sed -e "s/%/%25/g"')
   })
 
   it('marks a tab launched with the prompt hook, so the phone can say when one is not', () => {

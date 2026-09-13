@@ -28,11 +28,13 @@ on:
         type: boolean
 
 concurrency:
-  # One release build at a time, newest tag wins: three tags pushed in quick
-  # succession piled up on the runner and all three were cancelled mid-build
-  # (2026-09-13).
+  # One release build at a time, queued in order. Never cancel: a cancelled
+  # tag build leaves a tag with no release, and the in-app update card skips
+  # a release with no asset, so users would be stuck on the older build. (The
+  # 0.5.41/0.5.42 cancellations on 2026-09-13 were a GitHub Actions incident,
+  # not a pile-up.)
   group: mobile-android-release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   android-release:
@@ -148,14 +150,20 @@ jobs:
           # Why commit subjects, not --generate-notes: the in-app update card
           # shows this body as bullets, and this repo lands most work as direct
           # commits, which GitHub's generated notes leave out.
-          previous="$(git tag --list 'mobile-android-v*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
+          # The previous PUBLISHED release, not the previous tag: a tag whose
+          # build failed has no release, and cutting the notes at it would
+          # leave its commits in no release at all (2026-09-13).
+          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' 2>/dev/null | grep '^mobile-android-v' | grep -vx "$tag" | sort -t v -k 3 -V -r | head -n 1 || true)"
+          if [ -z "$previous" ]; then
+            previous="$(git tag --list 'mobile-android-v*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
+          fi
           range="${previous:+$previous..}HEAD"
           {
             echo "## What's changed"
             echo
             # Why drop "Release x.y.z": the version-bump commit is every
             # release's first line and says nothing the release title does not.
-            git log --no-merges --pretty='- %s' "$range" | grep -vE '^- (Code UI Android [0-9]|Release-script test|Release v?[0-9]+(\.[0-9]+)*$)' | head -n 40
+            git log --no-merges --pretty='- %s' "$range" | { grep -vE '^- (Code UI Android [0-9]|Release-script test|Release v?[0-9]+(\.[0-9]+)*$)' || true; } | head -n 40
             echo
             if [ -n "$previous" ]; then
               echo "**Full Changelog**: https://github.com/$GITHUB_REPOSITORY/compare/$previous...$tag"
@@ -173,16 +181,19 @@ jobs:
           apk="dist/${{ steps.apk.outputs.name }}"
           # GitHub's API answered HTTP 500 to a create once (2026-09-13) and a
           # passed 30-minute build was thrown away; try a few times.
+          # `|| return 1` on each call: `set -e` is off inside a function
+          # used as an `if` condition, so a failed upload followed by a
+          # successful edit would have counted as published.
           publish() {
             if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "$apk"
-              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file dist/release-notes.md
+              gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "$apk" || return 1
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file dist/release-notes.md || return 1
             else
               gh release create "$tag" \
                 --repo "$GITHUB_REPOSITORY" \
                 --title "Code UI Android v${{ steps.release.outputs.version }}" \
                 --notes-file dist/release-notes.md \
-                "$apk"
+                "$apk" || return 1
             fi
           }
           for attempt in 1 2 3 4 5; do
