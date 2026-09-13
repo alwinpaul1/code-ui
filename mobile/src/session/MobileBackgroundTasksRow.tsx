@@ -1,4 +1,5 @@
-import { Pressable } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Animated, Easing, Pressable } from 'react-native'
 import { Sparkles } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -42,10 +43,48 @@ export function MobileBackgroundTasksRow({
         backgroundColor: pressed ? colors.accentSoft : 'transparent'
       })}
     >
-      <Sparkles size={14} color={colors.accentText} />
+      <SpinningSparkle color={colors.accentText} />
       <Txt variant="label" weight="medium" tone="accent">
         {label}
       </Txt>
     </Pressable>
+  )
+}
+
+/** The star turns slowly and breathes while tasks run (2026-09-13): a quiet
+ *  sign of work in flight, not a spinner. Native-driven, so it costs the JS
+ *  thread nothing while the agent streams. */
+function SpinningSparkle({ color }: { color: string }) {
+  const turn = useRef(new Animated.Value(0)).current
+  const breath = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    const spin = Animated.loop(
+      Animated.timing(turn, { toValue: 1, duration: 6000, easing: Easing.linear, useNativeDriver: true })
+    )
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true })
+      ])
+    )
+    spin.start()
+    pulse.start()
+    return () => {
+      spin.stop()
+      pulse.stop()
+    }
+  }, [breath, turn])
+  return (
+    <Animated.View
+      style={{
+        transform: [
+          { rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+          { scale: breath.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.15] }) }
+        ],
+        opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1] })
+      }}
+    >
+      <Sparkles size={14} color={color} />
+    </Animated.View>
   )
 }

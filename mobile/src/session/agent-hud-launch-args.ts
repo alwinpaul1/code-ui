@@ -125,7 +125,12 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // Only records that carry a <status>: a Monitor emits a <task-id> with no
   // status for every EVENT while it is still running. Assistant records are
   // skipped — prose or a command that quotes a notification is not one.
-  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(tail -c 4194304 "$tp" 2>/dev/null | grep "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  // The whole file, not a byte tail: on 2026-09-13 a 182 MB transcript put a
+  // 4 MiB tail seven minutes back, so a shell that finished eight minutes ago
+  // stayed "running" on the phone. Its completion is an attachment record the
+  // desktop's reader drops, so this scan is the phone's only way to learn of
+  // it. `grep -F` on the marker first keeps it to ~50 ms at 182 MB.
+  '[ -n "$tp" ] && [ -r "$tp" ] && dn=$(grep -F "<status>" "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   // Every shell Claude has started, from its own tool results: a tool_result
   // whose content STARTS with "Command running in background with ID: <id>"
   // or "Command did not complete … moved to the background (ID: <id>)".
@@ -141,7 +146,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // window the phone loads. Measured 2026-09-11: the desk read "3 shells",
   // the phone "1".
   'bg=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(tail -c 4194304 "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && bg=$(grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++" | tail -n 32 | tr "\\n" ",")',
   'o="CUIHUD1 agent=claude"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',

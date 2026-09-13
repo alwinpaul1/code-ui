@@ -8,6 +8,19 @@ vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => nul
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
+  Animated: {
+    View: 'AnimatedView',
+    Value: class {
+      interpolate() {
+        return 0
+      }
+    },
+    loop: () => ({ start: () => {}, stop: () => {} }),
+    timing: () => ({}),
+    sequence: () => ({})
+  },
+  Easing: { linear: 0, quad: 0, inOut: () => 0 },
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

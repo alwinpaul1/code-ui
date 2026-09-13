@@ -9,6 +9,18 @@ import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 
 vi.mock('react-native', () => ({
+  Animated: {
+    View: 'AnimatedView',
+    Value: class {
+      interpolate() {
+        return 0
+      }
+    },
+    loop: () => ({ start: () => {}, stop: () => {} }),
+    timing: () => ({}),
+    sequence: () => ({})
+  },
+  Easing: { linear: 0, quad: 0, inOut: () => 0 },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
