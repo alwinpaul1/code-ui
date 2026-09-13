@@ -28,8 +28,11 @@ on:
         type: boolean
 
 concurrency:
-  group: mobile-android-release-${{ github.ref }}
-  cancel-in-progress: false
+  # One release build at a time, newest tag wins: three tags pushed in quick
+  # succession piled up on the runner and all three were cancelled mid-build
+  # (2026-09-13).
+  group: mobile-android-release
+  cancel-in-progress: true
 
 jobs:
   android-release:

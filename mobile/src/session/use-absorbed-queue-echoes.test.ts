@@ -151,3 +151,51 @@ function ProbeSent({ sent, folded }: { sent: string[]; folded: NativeChatMessage
   latest = useAbsorbedQueueEchoes([], sent, folded, 'tab-a', folded)
   return null
 }
+
+// 2026-09-13: the same message showed twice — the queue box and the scrollback
+// wrapped it differently, and only the transcript carried its image markers.
+it('shows one bubble however the same message was wrapped or marked', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeBoth, {
+        queued: ['fix the duplicate\n\nplease'],
+        sent: ['fix the duplicate please'],
+        folded
+      })
+    )
+  })
+  act(() => {
+    renderer!.update(
+      createElement(ProbeBoth, { queued: [], sent: ['fix the duplicate please'], folded })
+    )
+  })
+  expect(latest).toHaveLength(1)
+
+  // The transcript row carries the marker; it still retires the echo.
+  act(() => {
+    renderer!.update(
+      createElement(ProbeBoth, {
+        queued: [],
+        sent: ['fix the duplicate please'],
+        folded: [...folded, row('u2', 'user', '[Image #1] fix the duplicate please')]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
+function ProbeBoth({
+  queued,
+  sent,
+  folded
+}: {
+  queued: string[]
+  sent: string[]
+  folded: NativeChatMessage[]
+}): null {
+  latest = useAbsorbedQueueEchoes(queued, sent, folded, 'tab-a', folded)
+  return null
+}

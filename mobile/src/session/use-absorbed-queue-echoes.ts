@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 
 /**
  * Messages the user queued on the DESKTOP, kept on screen after the agent
@@ -44,16 +45,19 @@ export function useAbsorbedQueueEchoes(
     held.current = new Map()
     previous.current = []
   }
-  const live = new Set(queued.map((text) => text.trim()).filter((text) => text.length > 0))
+  // Keyed on collapsed whitespace: the queue box and the scrollback wrap the
+  // same message differently, and keying on the raw text showed it twice
+  // (2026-09-13).
+  const live = new Set(queued.map(promptKey).filter((text) => text.length > 0))
   for (const text of sentPrompts) {
-    const key = text.trim()
+    const key = promptKey(text)
     if (key.length > 0 && !live.has(key) && !held.current.has(key)) {
       counter.current += 1
       held.current.set(key, { text, anchorId: rawMessages.at(-1)?.id ?? null, seq: counter.current })
     }
   }
   for (const text of previous.current) {
-    const key = text.trim()
+    const key = promptKey(text)
     if (key.length > 0 && !live.has(key) && !held.current.has(key)) {
       counter.current += 1
       held.current.set(key, {
@@ -72,8 +76,8 @@ export function useAbsorbedQueueEchoes(
         message.blocks
           .map((block) => (block.type === 'text' ? block.text : ''))
           .join('')
-          .trim()
       )
+      .map(promptKey)
   )
   for (const key of Array.from(held.current.keys())) {
     if (landed.has(key) || live.has(key)) {
@@ -89,4 +93,11 @@ export function useAbsorbedQueueEchoes(
       baselineTailMessageId: entry.anchorId,
       baselineResolved: true
     }))
+}
+
+/** One key for the same message however it reached here: the queue box, the
+ *  scrollback and the transcript each wrap it differently, and only the
+ *  transcript keeps the `[Image #1]` markers, so both are normalised away. */
+function promptKey(text: string): string {
+  return normalizeNativeChatUserText(text)
 }
