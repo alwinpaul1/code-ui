@@ -34,9 +34,9 @@ export function useNativeChatAttachmentScopeWriters() {
     [setAttachmentsByScope]
   )
   const settleUploads = useCallback(
-    (scope: string) => {
+    (scope: string, batch?: string) => {
       setAttachmentsByScope((prev) =>
-        withScopeAttachments(prev, scope, dropUploadingNativeChatImages(prev[scope] ?? []))
+        withScopeAttachments(prev, scope, dropUploadingNativeChatImages(prev[scope] ?? [], batch))
       )
     },
     [setAttachmentsByScope]

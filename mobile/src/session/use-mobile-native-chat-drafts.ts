@@ -7,7 +7,7 @@ import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countUserTextOccurrences,
-  findLandedImagePreviewEchoes,
+  draftWasSent, findLandedImagePreviewEchoes,
   findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
@@ -184,13 +184,12 @@ export function useMobileNativeChatDrafts(args: {
   // Why: over relay the send RPC can take seconds (or lose only its ack), and a
   // composer that waits for settlement to empty reads as "my prompt didn't
   // send". Clear at send time; a definite rejection restores the text below.
-  // A document rides along as a note ahead of the text; the draft is only the
-  // text, so match and restore that part.
+  // A document rides ahead as a note; the draft is only the text.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     const draftText = stripMobileNativeChatFileNotes(text)
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
-      (previous[origin.draftKey] ?? '') === draftText
+      draftWasSent(previous[origin.draftKey] ?? '', draftText)
         ? { ...previous, [origin.draftKey]: '' }
         : previous
     )

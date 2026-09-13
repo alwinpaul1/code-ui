@@ -39,8 +39,13 @@ import { stripImagePromptMarker } from '../../../src/shared/native-chat-image-tr
  * draft out of it, leaving a bare `❯`.
  */
 
-/** An accepted prompt: the marker at column 0 and a PLAIN space after it. */
-const PROMPT_ROW = /^[>❯›] (\S.*)$/
+/** An accepted prompt: the marker at column 0 and a PLAIN space after it.
+ *  `>` is deliberately NOT a prompt marker, though it is accepted for the
+ *  composer below: a markdown blockquote in the agent's own answer reaches
+ *  column 0 as `> quoted line` and was read as a message the user had sent
+ *  (2026-09-13). Claude Code 2.1.270 paints `❯`; a build that paints `>`
+ *  loses this witness rather than inventing messages from the agent's prose. */
+const PROMPT_ROW = /^[❯›] (\S.*)$/
 /** The live composer: the marker followed by a no-break space, or nothing. */
 const COMPOSER_ROW = /^[>❯›](?:\u00a0.*|\s*)$/
 /** A wrapped continuation of the prompt: exactly two spaces, then text that
@@ -54,7 +59,7 @@ const LOCAL_COMMAND = /^[/!]/
  *  prompt's own second paragraph sits on an identical two-space row, so this
  *  is the one place the parser has to judge by wording (2.1.270). */
 const FOLD_SUMMARY =
-  /^(?:Ran|Read|Edited|Wrote|Searched|Listed|Fetched|Updated|Called|Used|Created|Deleted) (?:\d+|a|an|one) /
+  /^(?:Ran|Read|Edited|Wrote|Searched|Listed|Fetched|Updated|Called|Used|Created|Deleted) (?:\d+|a|an|one) [a-z]+[a-z0-9 ,()]*$/
 
 export function sentPromptsFromScreen(screen: readonly string[]): string[] {
   const prompts: string[] = []
@@ -74,7 +79,7 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
         // One blank row, then another two-space row, is a paragraph break
         // inside the prompt — unless that row is the tool fold.
         const next = CONTINUATION.exec(screen[cursor + 1] ?? '')
-        if (cursor + 1 >= limit || !next || FOLD_SUMMARY.test(next[1] ?? '')) {
+        if (cursor + 1 >= limit || !next || isFoldSummary(next[1] ?? '', screen, cursor + 1)) {
           break
         }
         parts.push('', next[1] ?? '')
@@ -109,6 +114,19 @@ function composerIndex(screen: readonly string[]): number {
     }
   }
   return 0
+}
+
+/** The tool fold, not a second paragraph of the prompt. Both are two-space
+ *  rows after a blank, so two things must hold: the row reads exactly like a
+ *  summary (no punctuation a sentence would carry), and it ENDS its block —
+ *  a paragraph runs on into more prose. Guessing on the wording alone ate a
+ *  real paragraph that opened "Created a branch called …" (2026-09-13). */
+function isFoldSummary(text: string, screen: readonly string[], index: number): boolean {
+  if (!FOLD_SUMMARY.test(text)) {
+    return false
+  }
+  const after = screen[index + 1] ?? ''
+  return after.trim().length === 0 || !CONTINUATION.test(after)
 }
 
 /** Rejoin what the terminal wrapped: a blank row is a real paragraph break,

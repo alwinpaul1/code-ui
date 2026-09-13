@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useStableEchoes } from './use-stable-echoes'
+import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import {
@@ -7,7 +8,6 @@ import {
   stripImagePromptMarker
 } from '../../../src/shared/native-chat-image-transcript-markers'
 
-type DesktopPrompt = { nonce: string; text: string }
 
 /**
  * Prompts the user typed on the DESKTOP, drawn on the phone as their own
@@ -73,12 +73,12 @@ export function withoutLandedDesktopPrompts(
     .filter((text) => text.length > 0)
   return prompts.filter((prompt) => {
     const key = normalizeNativeChatUserText(prompt.text)
-    // The hook cuts a prompt at 2000 characters, so a long one can only ever
-    // be matched as a prefix of the row that landed (2026-09-13).
-    const cut = key.length >= HOOK_CUT_CHARS
-    return !seen.some((other) => other === key || (cut && other.startsWith(key)))
+    // A prompt the hook had to shorten can only ever be matched as a prefix
+    // of the row that landed. The hook says when it shortened one; guessing
+    // from the length was wrong whenever escapes or multibyte text moved the
+    // boundary (2026-09-13).
+    return !seen.some(
+      (other) => other === key || (prompt.cut === true && key.length > 0 && other.startsWith(key))
+    )
   })
 }
-
-/** The prompt hook's own cap, less a little so a multibyte cut still counts. */
-const HOOK_CUT_CHARS = 1900

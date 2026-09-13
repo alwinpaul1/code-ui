@@ -308,3 +308,11 @@ export function findLandedUnconfirmedSends(
   }
   return landed
 }
+
+/** Whether the text that went out is the draft still in the box. Compared
+ *  trimmed as well as exactly: a file rides ahead of the message as a note
+ *  built from the TRIMMED draft, so one trailing space from the keyboard left
+ *  the two unequal and the words stayed in the composer (2026-09-13). */
+export function draftWasSent(held: string, sent: string): boolean {
+  return held === sent || held.trim() === sent.trim()
+}

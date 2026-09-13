@@ -124,7 +124,10 @@ export function MobileNativeChatOverlay({
     queuedMessages ?? [],
     controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
     baseFolded,
-    sendSurfaceId,
+    // Scoped on the STREAM key, which carries the session id: the surface id
+    // is host/worktree/tab only, so after a `/clear` a held echo survived into
+    // the new conversation and stuck to the top of it (2026-09-13).
+    controller.nativeChatStreamScopeKey,
     session.messages,
     ownPrompts
   )

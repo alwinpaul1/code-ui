@@ -153,7 +153,10 @@ jobs:
           # The previous PUBLISHED release, not the previous tag: a tag whose
           # build failed has no release, and cutting the notes at it would
           # leave its commits in no release at all (2026-09-13).
-          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' 2>/dev/null | grep '^mobile-android-v' | grep -vx "$tag" | sort -t v -k 3 -V -r | head -n 1 || true)"
+          # Sorted by version with the prefix stripped: `sort -t v -k 3` left
+          # the key empty and fell back to string order, which called v0.5.9
+          # newer than v0.5.46 (2026-09-13).
+          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 50 --json tagName --jq '.[].tagName' 2>/dev/null | grep '^mobile-android-v' | grep -vx "$tag" | sed 's/^mobile-android-v//' | sort -V -r | head -n 1 | sed 's/^/mobile-android-v/' || true)"
           if [ -z "$previous" ]; then
             previous="$(git tag --list 'mobile-android-v*' --sort=-v:refname | grep -vx "$tag" | head -n 1 || true)"
           fi

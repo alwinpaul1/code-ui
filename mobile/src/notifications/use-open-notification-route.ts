@@ -42,8 +42,10 @@ export function useOpenAppUpdateNotification(): () => void {
     // flips the store to "checking" before Home mounts, which is exactly when
     // Home's own restore declines to run, and offline the tap then ended on
     // an error with no banner at all.
-    void hydrateAppUpdateState().then(() =>
-      useAppUpdateStore.getState().checkForUpdate({ force: true })
-    )
+    // The check runs whether or not the restore worked: an unhandled
+    // rejection here used to swallow the check the tap asked for.
+    void hydrateAppUpdateState()
+      .catch(() => {})
+      .then(() => useAppUpdateStore.getState().checkForUpdate({ force: true }))
   }, [router])
 }

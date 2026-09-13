@@ -86,7 +86,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // is sent at once instead of paced, and the ghostty pane routes taps to file/URL.
 // 2026-09-11: hardware back moved from the markdown actions to the view switch,
 // where it can return a terminal-mode tab to its chat view before leaving.
-const HEAD_CALLBACK_BODY_SHA256 = 'd8a97643f7e4719c02ada4862cfbf020311d4f277e9dda4500633a99ac3411d3'
+const HEAD_CALLBACK_BODY_SHA256 = '1c186b132e80ecca988437281d723229b14a4334d03a580b8253faeb5d7035ee'
 const HEAD_EFFECT_SHA256 = 'a123a0fd0b45e180aff593c9876a4227144c4a9f53fac5dbdb2a73c5dbb4bbbd'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
@@ -118,13 +118,13 @@ const HEAD_TIMER_CREATION_SHA256 =
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
   'd4680243df9e8330f7e2cbcf64350d3d5001dbbcdbf69cdc255222b6a4e600dc'
-const HEAD_HOST_JSX_SHA256 = 'e92b8273d48578f9a698069559a409968bacf5a63debcc4402edf1bb66c9b70b'
+const HEAD_HOST_JSX_SHA256 = '2152aab3bb439dcf7d0649e3e939114cde1159666f48d42e05ca39021c366764'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '22dd7f222e310d3cb16b90ef4ea3e46156de35d8bc765e9253c1bf74955409fd'
+const HEAD_LEAF_JSX_SHA256 = 'f6c16895bd0cb202911c6fba1fe385b9c52c953d06949301f21fbb5902e6d283'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '9a9835916fa0bf1376eb73118dc898372b0dc7888c226f5cc084c1d1f03eb436'
+  '0e639c970aa7f34b8e7837374e01d85abf3e2f067e00d1ca8303f00be72c2127'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '56470d1fc5a5cce89bc14d6a5a3cc55a6b70923445ad6288e8f11047a56efad8'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -565,11 +565,11 @@ describe('mobile session route extraction parity', () => {
     expect(strings).toHaveLength(639)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(95)
+    expect(jsx.host).toHaveLength(94)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(68)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(89)
+    expect(jsx.styleReferences).toHaveLength(91)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

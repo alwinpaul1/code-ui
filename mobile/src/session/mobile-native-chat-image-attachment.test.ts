@@ -209,3 +209,14 @@ describe('uploadMobileNativeChatImages', () => {
     expect(dropUploadingNativeChatImages(filled)).toEqual(filled)
   })
 })
+
+// 2026-09-13: picking a large video then a small photo let the photo's sweep
+// delete the video's chip, and the video never went with the message.
+it('sweeps only the selection that finished, leaving another still uploading', () => {
+  const chips = [
+    { id: 'a', path: '', previewUri: 'v', uploading: true, batch: 'batch-1' },
+    { id: 'b', path: '', previewUri: 'p', uploading: true, batch: 'batch-2' }
+  ]
+  expect(dropUploadingNativeChatImages(chips, 'batch-2').map((c) => c.id)).toEqual(['a'])
+  expect(dropUploadingNativeChatImages(chips).map((c) => c.id)).toEqual([])
+})

@@ -30,7 +30,7 @@ export function useMobileNativeChatImageUpload(args: {
   /** A picked file is on its way: show its chip now, with a spinner. */
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
-  onUploadSettled?: (scope: string) => void
+  onUploadSettled?: (scope: string, batch?: string) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
@@ -54,6 +54,7 @@ export function useMobileNativeChatImageUpload(args: {
   } = args
   const [isAttaching, setIsAttaching] = useState(false)
   const attachingCount = useRef(0)
+  const batchCounter = useRef(0)
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
     connStateRef.current = connState
@@ -74,6 +75,8 @@ export function useMobileNativeChatImageUpload(args: {
         return
       }
       let started = false
+      batchCounter.current += 1
+      const batch = `batch-${batchCounter.current}`
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
       try {
@@ -82,7 +85,7 @@ export function useMobileNativeChatImageUpload(args: {
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages,
           onImageUploaded: (image) => uploadedImages.push(image),
-          onImageStart: (image) => onImageUploading?.(scope, image),
+          onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
           onUploadStart: () => {
             started = true
             attachingCount.current += 1
@@ -103,7 +106,7 @@ export function useMobileNativeChatImageUpload(args: {
         onImagesUploaded(scope, uploadedImages)
         onAttachSuccess?.()
       }
-      onUploadSettled?.(scope)
+      onUploadSettled?.(scope, batch)
       if (uploadError !== null) {
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { restamp, unchangedBeacon } from './agent-hud-beacon-identity'
 import {
   readWarmStartBeacons,
   rememberWarmStartBeacon
@@ -32,6 +33,10 @@ export type AgentHudBeaconLimit = {
   resetsAt: number | null
 }
 
+/** A desktop submission: the hook's process id (so two identical prompts stay
+ *  distinct), the text, and whether the hook had to shorten it. */
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean }
+
 export type AgentHudBeacon = {
   agent: string
   modelId: string | null
@@ -50,14 +55,12 @@ export type AgentHudBeacon = {
    *  when this beacon did not carry the field, which is not the same as an
    *  empty list: empty means "nothing is running", null means "no answer". */
   runningTaskIds: string[] | null
-  /** A prompt the user submitted on the DESKTOP, with the hook process id that
-   *  sent it, so two identical prompts stay distinct. Null on every beacon
-   *  that is not a prompt submission. */
   /** Whether this terminal was launched with the desktop-prompt hook. */
   promptHook: boolean
-  desktopPrompt: { nonce: string; text: string } | null
+  /** Null on every beacon that is not a prompt submission. */
+  desktopPrompt: DesktopPrompt | null
   /** Every desktop prompt seen on this terminal, oldest first, newest last. */
-  desktopPrompts: { nonce: string; text: string }[]
+  desktopPrompts: DesktopPrompt[]
   /** When `runningTaskIds` was received (phone clock, epoch ms); null until a
    *  beacon has carried `run=`. The Stop hook speaks only when a turn ends,
    *  so its list cannot name a shell launched after it — the reader uses this
@@ -151,7 +154,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     promptHook: values.get('hk') === '1',
-    desktopPrompt: readDesktopPrompt(values.get('up')),
+    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1'),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
@@ -205,8 +208,8 @@ function publish(handle: string, payload: string): void {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
-        runningTaskIdsAt:
-          beacon.runningTaskIds !== null ? beacon.runningTaskIdsAt : (previous.runningTaskIdsAt ?? null),
+        // Restamped only when the list moved: see `unchangedBeacon`.
+        runningTaskIdsAt: restamp(beacon, previous),
         doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
         launchedTaskIds:
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
@@ -218,6 +221,10 @@ function publish(handle: string, payload: string): void {
         receivedAt: beacon.receivedAt
       }
     : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
+  // A repeat says nothing new: keep the object readers already hold.
+  if (previous && unchangedBeacon(previous, merged)) {
+    return
+  }
   beacons.set(handle, merged)
   storeForWarmStart(handle, merged)
   for (const listener of listeners) {
@@ -326,7 +333,7 @@ function liveOrRun(values: Map<string, string>): string[] | null {
 
 /** `up=<hook pid>:<percent-encoded JSON string body>`. The body is the raw
  *  JSON text of the prompt, so `\n` and `\"` are still escaped there. */
-function readDesktopPrompt(raw: string | undefined): { nonce: string; text: string } | null {
+function readDesktopPrompt(raw: string | undefined, cutByHook: boolean): DesktopPrompt | null {
   if (!raw) {
     return null
   }
@@ -345,7 +352,7 @@ function readDesktopPrompt(raw: string | undefined): { nonce: string; text: stri
   } catch {
     decoded = body
   }
-  return { nonce, text: unescapeJsonStringBody(decoded) }
+  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook }
 }
 
 /** Undo the escaping a JSON string body carries, without a JSON parse: the
@@ -383,13 +390,13 @@ const MAX_DESKTOP_PROMPTS = 40
 
 /** Keeps each submission once, by the hook's own process id. */
 export function appendDesktopPrompt(
-  previous: readonly { nonce: string; text: string }[],
-  next: { nonce: string; text: string } | null
-): { nonce: string; text: string }[] {
+  previous: readonly DesktopPrompt[],
+  next: DesktopPrompt | null
+): DesktopPrompt[] {
   if (!next || previous.some((prompt) => prompt.nonce === next.nonce)) {
     // The same array back: this runs on every status-line repaint, and a
     // fresh copy each time refolded the whole chat downstream (2026-09-13).
-    return previous as { nonce: string; text: string }[]
+    return previous as DesktopPrompt[]
   }
   return [...previous, next].slice(-MAX_DESKTOP_PROMPTS)
 }

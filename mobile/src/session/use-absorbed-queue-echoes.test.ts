@@ -337,3 +337,28 @@ it('waits for a transcript row before holding anything, so nothing pins to the b
   expect(latest).toMatchObject([{ text: 'early prompt', baselineTailMessageId: 'a1' }])
   act(() => renderer!.unmount())
 })
+
+// 2026-09-13: retiring on a plain prefix dropped a message that had no
+// transcript row of its own, because a LATER prompt happened to start with
+// the same words. A cut reading ends on a paragraph break; nothing else counts.
+it('keeps a held message when a later prompt merely starts with the same words', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeOwn, { sent: ['check the build failure'], own: [], folded })
+    )
+  })
+  expect(latest).toHaveLength(1)
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, {
+        sent: ['check the build failure'],
+        own: [],
+        folded: [...folded, row('u2', 'user', 'check the build failure again please')]
+      })
+    )
+  })
+  expect(latest).toMatchObject([{ text: 'check the build failure' }])
+  act(() => renderer!.unmount())
+})

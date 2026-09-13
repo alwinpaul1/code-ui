@@ -156,7 +156,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // 2026-09-13 and cost 1.9 s of CPU per status-line repaint on a 213 MB
   // transcript — Claude repaints while streaming, so that pegged a core.
   // 16 MiB is hours of a busy session and reads in about 0.1 s.
-  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " "$tp" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
   '[ -n "$ba" ] && bg=$(printf "%s\\n" "$ba" | tail -n 64 | tr "\\n" ",")',
   '[ -n "$tp" ] && [ -r "$tp" ] && da=$(tail -c 16777216 "$tp" 2>/dev/null | grep -F "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
   'dc=","',
@@ -522,8 +522,14 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   ENCODE_FN,
   // JSON-escaped, so the value is one line and any quote inside it is \".
   'pr=$(g "\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\"")',
-  'pr=$(printf %s "$pr" | awk "{print substr(\\$0,1,2000)}")',
-  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")"',
+  'pf=$(printf %s "$pr" | awk "{print substr(\\$0,1,2000)}")',
+  // `cut=1` when the text was shortened: the phone matched a long prompt to
+  // its transcript row by guessing at the cut length, and the guess was wrong
+  // whenever escapes or multibyte text moved the boundary (2026-09-13).
+  'ct=""',
+  '[ "$pf" != "$pr" ] && ct=" cut=1"',
+  'pr="$pf"',
+  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")$ct"',
   '[ -z "$pr" ] && exit 0',
   ...TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,
@@ -543,14 +549,15 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$pr=""',
   'if($j -and $j.prompt){ $pr=[string]$j.prompt }',
-  'if($pr.Length -gt 2000){ $pr=$pr.Substring(0,2000) }',
+  '$ct=""',
+  'if($pr.Length -gt 2000){ $pr=$pr.Substring(0,2000); $ct=" cut=1" }',
   // Send the JSON string BODY, exactly as the sh hook does: the phone undoes
   // one escaping, and a Windows path in the prompt must not lose its
   // backslashes on the way (2026-09-13).
   '$pr=(ConvertTo-Json $pr -Compress)',
   'if($pr.Length -ge 2){ $pr=$pr.Substring(1,$pr.Length-2) }',
   '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B"',
-  '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr',
+  '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr + $ct',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   // The console writer above defines `W`; a call to a name it never
   // defined was swallowed by SilentlyContinue and wrote nothing (2026-09-13).

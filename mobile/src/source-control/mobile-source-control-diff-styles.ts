@@ -10,6 +10,11 @@ export const diffStyles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl
   },
+  /** Fills the scroller that carries pull-to-refresh, so an empty state is
+   *  still tall enough to pull on. */
+  stateScrollContent: {
+    flexGrow: 1
+  },
   stateTitle: {
     color: colors.textPrimary,
     fontSize: 16,

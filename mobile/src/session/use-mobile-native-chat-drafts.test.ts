@@ -123,6 +123,24 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('')
   })
 
+  // 2026-09-13: a file rides ahead of the text as a note built from the
+  // TRIMMED draft, so a trailing space from the keyboard left the sent text
+  // and the held draft unequal and the words stayed in the box.
+  it('clears a draft whose only difference from the sent text is edge whitespace', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('check this '))
+    const origin = state?.captureSendOrigin('check this ')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(
+          origin,
+          'Attached file "a.pdf" is on this machine at /tmp/a.pdf before reading it.\n\ncheck this'
+        )
+      }
+    })
+    expect(state?.composerText).toBe('')
+  })
+
   it('tracks every composer mutation with a stable route-owned generation', async () => {
     await mount('a')
     const getter = state!.getComposerEditGeneration

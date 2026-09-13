@@ -224,7 +224,9 @@ export function useMobileSessionNativeChatDictation(
   ])
 
   const cancelDictation = useCallback((forSend = false) => {
-    if (forSend && !(useLiveTranscription && liveTargetRef.current.kind === 'chat' && (dictation.isStarting || dictation.isRecording || dictation.isProcessing))) {
+    // Either route: gated on live transcription, the mic kept running on a
+    // phone without one and wrote the spoken words back in (2026-09-13).
+    if (forSend && !(liveTargetRef.current.kind === 'chat' && (dictation.isStarting || dictation.isRecording || dictation.isProcessing))) {
       return
     }
     dictationRouteContextRef.current = null

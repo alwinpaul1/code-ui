@@ -90,16 +90,19 @@ export function useAbsorbedQueueEchoes(
   }
   previous.current = queued
   // A queued message that did land as its own user turn needs no echo.
-  const landed = folded
+  const landedText = folded
     .filter((message) => message.role === 'user')
     .map((message) =>
       message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
     )
-    .map(promptKey)
+  const landed = landedText.map(promptKey)
+  const landedCutKeys = landedText.map(cutKey)
   for (const key of Array.from(held.current.keys())) {
+    const entry = held.current.get(key)
     if (
       [...live, ...own].some((other) => sameMessage(other, key)) ||
-      landed.some((other) => sameMessage(other, key) || isCutOf(key, other))
+      landed.some((other) => sameMessage(other, key)) ||
+      (entry != null && landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other)))
     ) {
       held.current.delete(key)
     }
@@ -117,11 +120,25 @@ export function useAbsorbedQueueEchoes(
   return useStableEchoes(echoes)
 }
 
-/** A screen reading that stops short of the row that landed — the parser
- *  ends a prompt at a row it cannot tell from the tool fold — still names
- *  the same message (2026-09-13). */
+/** A screen reading that stops short of the row that landed — the parser ends
+ *  a prompt at a row it cannot tell from the tool fold — still names the same
+ *  message (2026-09-13). The cut can only fall on a paragraph break, so the
+ *  landed text must continue with one: comparing on plain prefixes retired
+ *  "check the build failure" against a later "check the build failure again"
+ *  and lost a message that had no transcript row of its own. */
 function isCutOf(shorter: string, longer: string): boolean {
-  return shorter.length >= 24 && longer.length > shorter.length && longer.startsWith(shorter)
+  return shorter.length > 0 && longer.startsWith(`${shorter}\n`)
+}
+
+/** Like `promptKey`, but paragraph breaks survive, because that is where a
+ *  cut reading ends. */
+function cutKey(text: string): string {
+  return stripImagePromptMarker(text)
+    .split('\n')
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter((line, index, all) => line.length > 0 || (index > 0 && all[index - 1] !== ''))
+    .join('\n')
+    .trim()
 }
 
 type HeldEcho = { text: string; anchorId: string | null; seq: number }
@@ -145,7 +162,9 @@ function sameMessage(a: string, b: string): boolean {
 }
 
 function truncatedStem(key: string): string | null {
-  const match = /^(.*?)\s*(?:…|\.\.\.)$/.exec(key)
+  // Only the box's own `…`: a user who ends a sentence with "..." was read as
+  // a truncation, and two different messages collapsed into one (2026-09-13).
+  const match = /^(.*?)\s*…$/.exec(key)
   const stem = match?.[1] ?? ''
   return stem.length >= 12 ? stem : null
 }

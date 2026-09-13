@@ -18,6 +18,11 @@ export type PendingNativeChatImage = {
   /** Picked and on its way to the host: drawn as a chip with a spinner, not
    *  sendable yet (2026-09-13, the Claude app's per-file loading ring). */
   readonly uploading?: boolean
+  /** Which selection put this chip here. One selection's sweep must not clear
+   *  another's chips: picking a large video then a small photo let the photo
+   *  settle first and delete the video's chip, and the video never went with
+   *  the message (2026-09-13). */
+  readonly batch?: string
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */
@@ -53,11 +58,15 @@ export function addUploadingNativeChatImage(
   return [...current, { id: `img-${idCounter.current}`, path: '', uploading: true, ...image }]
 }
 
-/** Drop chips whose upload never finished (the selection failed or was cut off). */
+/** Drop chips whose upload never finished (the selection failed or was cut
+ *  off), from ONE selection when a batch is named. */
 export function dropUploadingNativeChatImages(
-  current: readonly PendingNativeChatImage[]
+  current: readonly PendingNativeChatImage[],
+  batch?: string
 ): PendingNativeChatImage[] {
-  return current.some((chip) => chip.uploading) ? current.filter((chip) => !chip.uploading) : [...current]
+  const stranded = (chip: PendingNativeChatImage): boolean =>
+    chip.uploading === true && (batch === undefined || chip.batch === batch)
+  return current.some(stranded) ? current.filter((chip) => !stranded(chip)) : [...current]
 }
 
 export type UploadNativeChatImagesDeps = {

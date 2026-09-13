@@ -124,6 +124,34 @@ describe('sentPromptsFromScreen', () => {
     expect(sentPromptsFromScreen(['❯ a prompt that was accepted', '', '⏺ reply'])).toEqual([])
   })
 
+  it('keeps a second paragraph that merely opens like a tool fold', () => {
+    // 2026-09-13: "Created a branch called hud-fix, reuse it" was eaten as if
+    // it were the fold, and the text was lost with no sign of it.
+    expect(
+      sentPromptsFromScreen([
+        '❯ please look at the deploy script and tell me what is wrong',
+        '',
+        '  Created a branch called hud-fix earlier today, reuse it rather than',
+        '  making a new one',
+        '',
+        '  Ran 2 shell commands',
+        '',
+        '⏺ looking',
+        '❯ '
+      ])
+    ).toEqual([
+      'please look at the deploy script and tell me what is wrong\n\nCreated a branch called hud-fix earlier today, reuse it rather than making a new one'
+    ])
+  })
+
+  it('never reads a markdown blockquote in the agent\'s own answer as a message', () => {
+    // 2026-09-13: `> quoted line` at column 0 inside an answer came back as a
+    // message the user had sent, and it could never retire.
+    expect(
+      sentPromptsFromScreen(['⏺ quoting the docs:', '', '> a quoted line', '', '❯ '])
+    ).toEqual([])
+  })
+
   it('returns nothing for a screen with no prompt rows', () => {
     expect(sentPromptsFromScreen(['  Ran 3 shell commands', '', '✻ Cooking…', '❯'])).toEqual([])
   })

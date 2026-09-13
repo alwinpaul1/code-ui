@@ -3,11 +3,17 @@
 // <slug>` applies through the picker driver exactly like a sheet tap.
 import { useCallback, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 
 export function useCodexChatCommandIntercept(args: {
   agentRef: MutableRefObject<string | null>
   sessionOptions: MobileNativeChatSessionOptionPickersProps | null
+  /** The composer seam. An intercepted command never reaches the send that
+   *  normally empties the box, so `/model` stayed there and glued itself to
+   *  the front of the next message (2026-09-13). */
+  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   rawSendWithOutcome: (
     text: string,
     images?: string[],
@@ -22,7 +28,17 @@ export function useCodexChatCommandIntercept(args: {
     deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
 } {
-  const { agentRef, sessionOptions, rawSendWithOutcome } = args
+  const { agentRef, captureSendOrigin, clearDraftForSend, sessionOptions, rawSendWithOutcome } =
+    args
+  const clearComposer = useCallback(
+    (text: string) => {
+      const origin = captureSendOrigin(text)
+      if (origin) {
+        clearDraftForSend(origin, text)
+      }
+    },
+    [captureSendOrigin, clearDraftForSend]
+  )
   const [modelSheetRequest, setModelSheetRequest] = useState(0)
   const sessionOptionsRef = useRef(sessionOptions)
   useLayoutEffect(() => {
@@ -37,13 +53,17 @@ export function useCodexChatCommandIntercept(args: {
       }
       const slug = match[1]
       if (!slug) {
+        clearComposer(text)
         setModelSheetRequest((current) => current + 1)
         return 'accepted'
       }
       const applied = await sessionOptionsRef.current?.controller.setOption('model', slug)
+      if (applied) {
+        clearComposer(text)
+      }
       return applied ? 'accepted' : 'rejected'
     },
-    [agentRef]
+    [agentRef, clearComposer]
   )
   const handleNativeChatSendWithOutcome = useCallback(
     async (

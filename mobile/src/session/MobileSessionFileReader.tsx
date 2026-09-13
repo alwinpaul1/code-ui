@@ -290,23 +290,29 @@ export function FileReader({
     const gutterWidth = gutterWidthForLines(lines.length)
     return (
       <View style={styles.markdownEditor}>
-        <ScrollView
+        {/* A list, not a mapped ScrollView: one Text per line mounted the
+            whole file at once, and a 4000-line file blocked the UI thread
+            (2026-09-13). The diff view above already uses one. */}
+        <FlatList
           style={styles.filePreviewScroll}
           contentContainerStyle={styles.filePreviewContent}
-        >
-          <View accessibilityLabel={`${title} preview`}>
-            {lines.map((segments, index) => (
-              <MobileSyntaxLine
-                key={index}
-                number={index + 1}
-                segments={segments}
-                gutterWidth={gutterWidth}
-                lineStyle={styles.filePreviewText}
-                gutterStyle={styles.filePreviewGutter}
-              />
-            ))}
-          </View>
-        </ScrollView>
+          data={lines}
+          accessibilityLabel={`${title} preview`}
+          keyExtractor={(_line, index) => String(index)}
+          initialNumToRender={60}
+          windowSize={9}
+          removeClippedSubviews
+          renderItem={({ item, index }) => (
+            <MobileSyntaxLine
+              number={index + 1}
+              segments={item}
+              gutterWidth={gutterWidth}
+              gutterDigits={String(lines.length).length}
+              lineStyle={styles.filePreviewText}
+              gutterStyle={styles.filePreviewGutter}
+            />
+          )}
+        />
       </View>
     )
   }

@@ -398,13 +398,13 @@ export function useMobileNativeChatController(
   })
   const codexIntercept = useCodexChatCommandIntercept({
     agentRef: activeChatAgentRef,
+    captureSendOrigin,
+    clearDraftForSend,
     sessionOptions: nativeChatSessionOptions,
     rawSendWithOutcome: rawHandleNativeChatSendWithOutcome
   })
   const { handleNativeChatSend, handleNativeChatSendWithOutcome } = codexIntercept
-  useEffect(() => {
-    setModelSheetRequestState(codexIntercept.modelSheetRequest)
-  }, [codexIntercept.modelSheetRequest])
+  useEffect(() => setModelSheetRequestState(codexIntercept.modelSheetRequest), [codexIntercept.modelSheetRequest])
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])

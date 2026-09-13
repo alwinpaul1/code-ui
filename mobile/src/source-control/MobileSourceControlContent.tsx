@@ -160,10 +160,19 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
       </View>
 
       {!hasVisibleChanges ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>No local changes</Text>
-          <Text style={styles.stateText}>Working tree is clean.</Text>
-        </View>
+        // A scroller, not a bare View: with the header's refresh button gone,
+        // a clean tree had no way to be refreshed at all, so a change made on
+        // the desktop could never reach the phone (2026-09-13).
+        <ScrollView
+          style={hubStyles.tabBody}
+          contentContainerStyle={styles.stateScrollContent}
+          refreshControl={refreshControl}
+        >
+          <View style={styles.state}>
+            <Text style={styles.stateTitle}>No local changes</Text>
+            <Text style={styles.stateText}>Working tree is clean.</Text>
+          </View>
+        </ScrollView>
       ) : sections.length === 0 ? (
         // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
         // which hid "Committed on Branch" when only branch files remain.

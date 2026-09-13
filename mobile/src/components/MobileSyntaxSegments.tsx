@@ -7,19 +7,23 @@ export function MobileSyntaxLine({
   number,
   segments,
   gutterWidth,
+  gutterDigits = 3,
   lineStyle,
   gutterStyle
 }: {
   number: number
   segments: MobileSyntaxSegment[]
   gutterWidth: number
+  /** Digits in the file's LAST line number. A fixed 3 shifted every line from
+   *  1000 onward, because a nested `Text` ignores `width` (2026-09-13). */
+  gutterDigits?: number
   lineStyle: TextStyle
   gutterStyle: TextStyle
 }) {
   return (
     <Text selectable style={lineStyle}>
       <Text selectable={false} style={[gutterStyle, { width: gutterWidth }]}>
-        {String(number).padStart(3, ' ') + '  '}
+        {String(number).padStart(gutterDigits, ' ') + '  '}
       </Text>
       <MobileSyntaxSegments segments={segments} />
     </Text>
