@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react'
-import { ScrollView, View } from 'react-native'
+import { ScrollView, useWindowDimensions, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
@@ -15,6 +15,11 @@ function MobileNativeChatPermissionImpl({
   onRespond: (send: string) => Promise<boolean>
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
+  // The card sits in the dock, which the chat list clears; a tall one would push
+  // the composer off a short screen, so the reading area gives up space first and
+  // the choices keep theirs. Half the window leaves the conversation visible.
+  const { height: windowHeight } = useWindowDimensions()
+  const readingMaxHeight = Math.max(72, Math.min(160, Math.round(windowHeight * 0.22)))
   const [accepted, setAccepted] = useState(false)
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
@@ -77,7 +82,7 @@ function MobileNativeChatPermissionImpl({
       </View>
       {description || command ? (
         <ScrollView
-          style={{ maxHeight: 160 }}
+          style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
           nestedScrollEnabled
           contentContainerStyle={{ gap: space.md }}
         >
@@ -129,7 +134,8 @@ function MobileNativeChatPermissionImpl({
               {rememberedPrefix || rememberedScope ? (
                 <ScrollView
                   style={{
-                    maxHeight: 160,
+                    maxHeight: readingMaxHeight,
+                    flexShrink: 1,
                     borderRadius: radius.md,
                     backgroundColor: colors.bgSunken
                   }}

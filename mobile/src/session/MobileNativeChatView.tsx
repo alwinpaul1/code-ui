@@ -392,20 +392,22 @@ export function MobileNativeChatView({
         onClose={() => setBackgroundTasksOpen(false)}
       />
       <MobileNativeChatQueueEditor editor={queueEditor} />
-      <MobileNativeChatPromptCard
-        ask={ask}
-        askKey={askKey}
-        onDismissAsk={onDismissAsk}
-        onAnswerAsk={onAnswerAsk}
-        onCancelAsk={onCancelAsk}
-        {...{ question, onAnswerQuestion }}
-        {...{ permission, onRespondPermission }}
-      />
       <View
         style={[styles.dock, { paddingBottom: bottomPad }]}
         onLayout={onDockLayout}
         testID="native-chat-dock"
       >
+      {/* Inside the dock, not above it: the dock is absolutely positioned at the
+          bottom, so a card left in normal flow was painted under it and its
+          buttons could not be tapped (a long "Allow Bash?" on 0.5.67). Here its
+          height is measured with the dock, which is what the list's spacer
+          clears, so the newest rows still sit above it. */}
+      <MobileNativeChatPromptCard
+        ask={ask} askKey={askKey} onDismissAsk={onDismissAsk}
+        onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk}
+        {...{ question, onAnswerQuestion }}
+        {...{ permission, onRespondPermission }}
+      />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}

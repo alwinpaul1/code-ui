@@ -8,7 +8,10 @@ vi.mock('react-native', () => ({
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
-  View: 'View'
+  View: 'View',
+  // The card sizes its reading area against the window so a long prompt cannot
+  // push the choices off a short screen.
+  useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
 
 vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion' }))
