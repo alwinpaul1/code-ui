@@ -438,7 +438,7 @@ export function useMobileNativeChatController(
     activeChatEligible,
     showNativeChat,
     showNativeChatRef,
-    nativeChatAgent: activeChatResolution?.agent ?? null, nativeChatTranscriptIsLocalReadable,
+    nativeChatAgent: activeChatResolution?.agent ?? null,
     chatComposerText,
     setChatComposerText,
     getChatComposerEditGeneration,
