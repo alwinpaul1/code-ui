@@ -1,4 +1,5 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import { mobileNativeChatFrameToShow } from './mobile-native-chat-frame-decision'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
@@ -188,8 +189,16 @@ export function MobileNativeChatOverlay({
     : !controller.viewResolved ||
       (!controller.activeChatEligible && !controller.terminalPeekActive)
   const held = useHeldChatFrame(blank && blink, sendSurfaceId)
-  if (blank) {
+  const frame = mobileNativeChatFrameToShow({
+    blank,
+    showNativeChat: controller.showNativeChat,
+    hasHeldFrame: held.element != null
+  })
+  if (frame === 'hold') {
     return held.element
+  }
+  if (frame === 'terminal') {
+    return null
   }
   const drawn = (
     <View style={styles.overlay}>

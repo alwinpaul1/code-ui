@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
-import { Pressable, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
@@ -23,6 +23,11 @@ type Props = {
  *  options or none apply. */
 export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
+  // The choices scroll instead of pushing Submit and the reply box off the
+  // screen. The card lives in the dock, which the chat list clears, so a card
+  // taller than the dock's share would cover the composer it sits above.
+  const { height: windowHeight } = useWindowDimensions()
+  const choicesMaxHeight = Math.max(160, Math.round(windowHeight * 0.34))
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState('')
   const [sending, setSending] = useState(false)
@@ -129,7 +134,12 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
       </View>
 
       {hasOptions ? (
-        <View style={{ gap: space.xs + 2 }}>
+        <ScrollView
+          style={{ maxHeight: choicesMaxHeight, flexShrink: 1 }}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: space.xs + 2 }}
+        >
           {optionRows.map(({ label, description, key }, optIndex) => {
             const isSelected = selectedOptionIndexes.includes(optIndex)
             return (
@@ -178,7 +188,7 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
               </Pressable>
             )
           })}
-        </View>
+        </ScrollView>
       ) : null}
 
       {question.multiSelect && hasOptions ? (

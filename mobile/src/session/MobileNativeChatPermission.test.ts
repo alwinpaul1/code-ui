@@ -197,4 +197,39 @@ describe('MobileNativeChatPermission', () => {
     )
     expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')
   })
+
+  it('keeps the choices reachable when the agent offers many long ones', () => {
+    // 2026-09-13, from a screen recording: a long "Allow Bash?" had its buttons
+    // under the tools row and the composer, with nothing to tap. The card sits
+    // in the dock now, so it must also bound itself — the choices are the only
+    // thing the user can act on, so they scroll rather than run off the bottom.
+    const options = Array.from({ length: 8 }, (_, index) => ({
+      label: `Yes, and don't ask again for commands that start with ${'x'.repeat(120)}${index}`,
+      send: String(index)
+    }))
+    let tree: ReactTestRenderer | null = null
+    act(() => {
+      tree = create(
+        createElement(MobileNativeChatPermission, {
+          permission: { title: 'Allow Bash?', detail: 'y'.repeat(4000), options },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const scrollers = tree!.root.findAllByType('ScrollView')
+    const bounded = scrollers.filter((node) => {
+      const style = node.props.style as { maxHeight?: number } | undefined
+      return typeof style?.maxHeight === 'number' && style.maxHeight > 0
+    })
+    // Reading area, remembered-scope blocks, and the choices themselves.
+    expect(bounded.length).toBeGreaterThanOrEqual(2)
+    const choices = scrollers.find((node) =>
+      node.findAllByType('Text').some((text) => String(text.props.children).includes('Allow and remember'))
+    )
+    expect(choices).toBeDefined()
+    const choiceStyle = choices!.props.style as { maxHeight?: number; flexShrink?: number }
+    expect(choiceStyle.maxHeight).toBeGreaterThan(0)
+    expect(choiceStyle.flexShrink).toBe(1)
+    act(() => tree!.unmount())
+  })
 })

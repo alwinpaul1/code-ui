@@ -20,6 +20,10 @@ function MobileNativeChatPermissionImpl({
   // the choices keep theirs. Half the window leaves the conversation visible.
   const { height: windowHeight } = useWindowDimensions()
   const readingMaxHeight = Math.max(72, Math.min(160, Math.round(windowHeight * 0.22)))
+  // The choices scroll rather than run off the bottom. Capping the reading area
+  // alone was not enough: the options are the only thing the user can act on,
+  // and a prompt with four long labels still pushed them past the composer.
+  const choicesMaxHeight = Math.max(160, Math.round(windowHeight * 0.34))
   const [accepted, setAccepted] = useState(false)
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
@@ -110,7 +114,12 @@ function MobileNativeChatPermissionImpl({
           ) : null}
         </ScrollView>
       ) : null}
-      <View style={{ gap: space.sm }}>
+      <ScrollView
+        style={{ maxHeight: choicesMaxHeight, flexShrink: 1 }}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ gap: space.sm }}
+      >
         {permission.options.map((option, index) => {
           const rememberedPrefix = option.label.match(
             /^Yes, and don't ask again for commands that start with\s+(.+)$/is
@@ -195,7 +204,7 @@ function MobileNativeChatPermissionImpl({
             </View>
           )
         })}
-      </View>
+      </ScrollView>
     </View>
   )
 }

@@ -13,7 +13,9 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
-  useColorScheme: () => colorScheme
+  useColorScheme: () => colorScheme,
+  ScrollView: 'ScrollView',
+  useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
 
 vi.mock('lucide-react-native', () => ({
