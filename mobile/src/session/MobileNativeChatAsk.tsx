@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
-import { Pressable, ScrollView, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useTheme } from '../theme/theme-context'
@@ -24,6 +24,12 @@ const OTHER = -1
  *  on the last step), and a Cancel that dismisses the prompt. */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
+  // 400 was a fixed guess: with the keyboard up on a short phone it grew the
+  // dock past the viewport and clipped the card's own question off the top,
+  // with nothing to scroll. The dock is bottom-anchored and has no cap of its
+  // own, so the card carries one that follows the screen.
+  const { height: windowHeight } = useWindowDimensions()
+  const cardMaxHeight = Math.max(240, Math.min(400, Math.round(windowHeight * 0.52)))
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -118,7 +124,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
   return (
     <View
       style={{
-        maxHeight: 400,
+        maxHeight: cardMaxHeight,
         marginHorizontal: space.md,
         marginBottom: space.xs,
         borderRadius: radius.lg,

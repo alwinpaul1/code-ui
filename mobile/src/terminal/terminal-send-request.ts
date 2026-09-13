@@ -1,5 +1,4 @@
 import type { SendRequestOptions } from '../transport/rpc-client'
-import { stripTerminalScreenControl } from './terminal-screen-control-strip'
 
 type TerminalSendParams = {
   readonly terminal: string
@@ -20,13 +19,7 @@ export function buildTerminalSendParams(args: {
 }): TerminalSendParams {
   return {
     terminal: args.terminal,
-    // Why stripped here: this is the one choke point every phone-originated
-    // write passes through — keys, gestures, the chat draft mirror, the queue
-    // editor's pastes. A screen-control sequence can only have come from
-    // emulator output that turned back into input, and the agent's TUI renders
-    // it as text the user never typed (2026-09-13). Query replies take their
-    // own path and are shape-checked there.
-    text: stripTerminalScreenControl(args.text),
+    text: args.text,
     enter: args.enter,
     ...(args.deviceToken ? { client: { id: args.deviceToken, type: 'mobile' as const } } : {})
   }
