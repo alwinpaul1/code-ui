@@ -10,6 +10,13 @@ export type MobileMarkdownBlock =
 
 const ESCAPED_PIPE = '\u0000'
 
+// The paragraph loop below stops at the same lines the block dispatchers claim.
+// Both sides must test the SAME pattern: a looser guard (`startsWith('```')`)
+// stops the paragraph on a line no dispatcher will consume, so the index never
+// advances and the parser spins forever on ```c++ or on a bare `# `.
+const HEADING = /^(#{1,6})\s+(.+)$/
+const CODE_FENCE = /^```([A-Za-z0-9_-]+)?\s*$/
+
 function splitTableRow(line: string): string[] {
   // An escaped pipe (`\|`) is a literal inside a cell, not a column break.
   return line
@@ -39,7 +46,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       continue
     }
 
-    const fence = line.match(/^```([A-Za-z0-9_-]+)?\s*$/)
+    const fence = line.match(CODE_FENCE)
     if (fence) {
       index += 1
       const code: string[] = []
@@ -85,7 +92,7 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
       continue
     }
 
-    const heading = line.match(/^(#{1,6})\s+(.+)$/)
+    const heading = line.match(HEADING)
     if (heading) {
       blocks.push({ type: 'heading', level: heading[1]!.length, text: heading[2]!.trim() })
       index += 1
@@ -126,8 +133,8 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
     while (
       index < lines.length &&
       lines[index]?.trim() &&
-      !(lines[index] ?? '').startsWith('```') &&
-      !/^(#{1,6})\s+/.test(lines[index] ?? '') &&
+      !CODE_FENCE.test(lines[index] ?? '') &&
+      !HEADING.test(lines[index] ?? '') &&
       !/^>\s?/.test(lines[index] ?? '') &&
       !/^\s*(?:[-*+]|\d+[.)])\s+/.test(lines[index] ?? '') &&
       !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index] ?? '')

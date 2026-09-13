@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
+  rankSkillSuggestions,
   rankSlashCommandSuggestions,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
@@ -123,5 +124,124 @@ describe('rankSlashCommandSuggestions', () => {
   it('is case-insensitive and drops non-matches', () => {
     expect(rankSlashCommandSuggestions(commands, 'CLE').map((c) => c.name)).toEqual(['clear'])
     expect(rankSlashCommandSuggestions(commands, 'zzz')).toEqual([])
+  })
+
+  it('preserves command identity and metadata for duplicate names', () => {
+    const catalog = [
+      { name: 'team-review', description: 'First' },
+      { name: 'team-review', argumentHint: '<branch>' },
+      { name: 'review', kindUnspecified: true as const }
+    ]
+    const result = rankSlashCommandSuggestions(catalog, 'review', 3)
+    expect(result[0]).toBe(catalog[2])
+    expect(result[1]).toBe(catalog[0])
+    expect(result[2]).toBe(catalog[1])
+  })
+})
+
+describe.each([
+  { name: 'file', rank: rankSuggestions },
+  {
+    name: 'slash',
+    rank: (names: readonly string[], query: string, limit: number): string[] =>
+      rankSlashCommandSuggestions(
+        names.map((name) => ({ name })),
+        query,
+        limit
+      ).map((command) => command.name)
+  }
+])('$name suggestion bounds', ({ rank }) => {
+  it('keeps later prefixes ahead of the earliest substring matches', () => {
+    const candidates = ['team-review', 'team-review', 'pre-review', 'review-a', 'REVIEW-b']
+    expect(rank(candidates, 'REVIEW', 4)).toEqual([
+      'review-a',
+      'REVIEW-b',
+      'team-review',
+      'team-review'
+    ])
+  })
+
+  it('stops substring matching once enough fallback suggestions are retained', () => {
+    const candidates = Array.from({ length: 10_000 }, (_, index) => `team-review-${index}`)
+    candidates.push('review-last', 'review-final')
+    const includes = String.prototype.includes
+    let substringChecks = 0
+    const spy = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
+      this: string,
+      search: string,
+      position?: number
+    ) {
+      substringChecks += 1
+      return includes.call(this, search, position)
+    })
+    let result: string[]
+    try {
+      result = rank(candidates, 'review', 8)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(result).toEqual(['review-last', 'review-final', ...candidates.slice(0, 6)])
+    expect(substringChecks).toBeLessThanOrEqual(8)
+  })
+
+  it.each([0, -0, -1, -0.5, -Infinity, Number.NaN])(
+    'preserves empty results for limit %s',
+    (limit) => {
+      expect(rank(['team-review', 'review-a', 'review-b'], 'review', limit)).toEqual([])
+    }
+  )
+
+  it.each([0.5, 1.5, 2.5, Infinity])('preserves slice truncation for limit %s', (limit) => {
+    const candidates = ['team-review', 'pre-review', 'review-a', 'review-b']
+    expect(rank(candidates, 'review', limit)).toEqual(
+      ['review-a', 'review-b', 'team-review', 'pre-review'].slice(0, limit)
+    )
+    expect(rank(candidates, '', limit)).toEqual(candidates.slice(0, limit))
+  })
+})
+
+// Code UI's own ranker, found by the same grep as upstream's two. It matches a
+// skill's description as well as its name, so an unbounded substring list here
+// also retains every non-shown row in the catalog.
+describe('skill suggestion bounds', () => {
+  it('stops substring matching once enough fallback suggestions are retained', () => {
+    const skills = Array.from({ length: 10_000 }, (_v, index) => ({
+      name: `team-review-${index}`,
+      description: 'review helper'
+    }))
+    skills.push({ name: 'review-last', description: '' }, { name: 'review-final', description: '' })
+    const includes = String.prototype.includes
+    let substringChecks = 0
+    const spy = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
+      this: string,
+      search: string,
+      position?: number
+    ) {
+      substringChecks += 1
+      return includes.call(this, search, position)
+    })
+    let names: string[]
+    try {
+      names = rankSkillSuggestions(skills, 'review', 8).map((skill) => skill.name)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(names).toEqual([
+      'review-last',
+      'review-final',
+      ...skills.slice(0, 6).map((skill) => skill.name)
+    ])
+    expect(substringChecks).toBeLessThanOrEqual(16)
+  })
+
+  it('keeps prefix matches ahead of description matches', () => {
+    const skills = [
+      { name: 'deploy', description: 'run a review first' },
+      { name: 'review-notes', description: '' }
+    ]
+    expect(rankSkillSuggestions(skills, 'review', 4).map((skill) => skill.name)).toEqual([
+      'review-notes',
+      'deploy'
+    ])
   })
 })
