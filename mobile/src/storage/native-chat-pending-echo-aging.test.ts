@@ -65,3 +65,25 @@ it('never writes a pasted screenshot into storage', async () => {
   expect(raw).not.toContain('data:image/png')
   expect(raw).toContain('file:///photo.jpg')
 })
+
+// 2026-09-13: witnessed echoes written before the generation mark could carry
+// a wrong anchor (an old prompt held on the first reading and anchored to the
+// tail of that moment). An envelope without the mark sheds them once; the
+// phone's own sends in the same envelope are untouched.
+it('sheds witnessed echoes from an envelope written before the witnessed generation', async () => {
+  const now = 1_000_000
+  store.set(
+    'orca:chatPendingEchoes:s1',
+    JSON.stringify({
+      savedAt: now,
+      pending: [echo('pending-1'), echo('absorbed-abc-5'), echo('desk-77')],
+      createdAt: { 'pending-1': now, 'absorbed-abc-5': now, 'desk-77': now }
+    })
+  )
+  const read = await readNativeChatPendingEchoes('s1', now + 1000)
+  expect(read?.map((item) => item.id)).toEqual(['pending-1'])
+  // Written back by this build, they are kept.
+  await writeNativeChatPendingEchoes('s1', [echo('pending-1'), echo('absorbed-abc-5')], now + 2000)
+  const again = await readNativeChatPendingEchoes('s1', now + 3000)
+  expect(again?.map((item) => item.id)).toEqual(['pending-1', 'absorbed-abc-5'])
+})

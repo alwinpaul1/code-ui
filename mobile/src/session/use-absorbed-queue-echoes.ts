@@ -50,12 +50,14 @@ export function useAbsorbedQueueEchoes(
   const previousSent = useRef<readonly string[] | null>(null)
   /** Screen prompts that appeared while the phone was watching, by key. */
   const appeared = useRef(new Map<string, string>())
+  const provisional = useRef(new Set<string>())
   const scope = useRef(scopeKey)
   const counter = useRef(0)
   if (scope.current !== scopeKey) {
     scope.current = scopeKey
     held.current = new Map()
     previous.current = []
+    provisional.current = new Set()
     previousSent.current = null
     appeared.current = new Map()
   }
@@ -95,7 +97,7 @@ export function useAbsorbedQueueEchoes(
       return
     }
     counter.current += 1
-    held.current.set(key, { text, anchorId, seq: counter.current })
+    held.current.set(key, { text, anchorId, seq: counter.current, provisional: provisional.current.has(key) })
   }
   // The scrollback is a BACKLOG, not an event: every prompt of the session
   // still painted on screen is in it, including ones whose transcript rows
@@ -118,6 +120,9 @@ export function useAbsorbedQueueEchoes(
     const key = promptKey(text)
     if (!(seenSent ?? []).some((other) => sameMessage(promptKey(other), key))) {
       appeared.current.set(key, text)
+      if (seenSent === null) {
+        provisional.current.add(key)
+      }
     }
   }
   previousSent.current = sentPrompts
@@ -174,7 +179,8 @@ export function useAbsorbedQueueEchoes(
       text: stripImagePromptMarker(entry.text),
       expectedOccurrence: 0,
       baselineTailMessageId: entry.anchorId,
-      baselineResolved: true
+      baselineResolved: true,
+      ...(entry.provisional ? { provisional: true } : {})
     }))
   return useStableEchoes(echoes)
 }
@@ -200,7 +206,7 @@ function cutKey(text: string): string {
     .trim()
 }
 
-type HeldEcho = { text: string; anchorId: string | null; seq: number }
+type HeldEcho = { text: string; anchorId: string | null; seq: number; provisional?: boolean }
 
 /** How many of the newest on-screen prompts the first reading may hold. */
 const FIRST_READING_HOLD = 1

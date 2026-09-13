@@ -11,9 +11,15 @@ function storageKey(sessionKey: string): string {
   return `${PREFIX}${encodeURIComponent(sessionKey)}`
 }
 
+/** Witnessed echoes (`absorbed-*`, `desk-*`) written before this generation
+ *  could carry a wrong anchor (2026-09-13, the first-reading hold anchored an
+ *  old prompt to the current tail); an envelope without it sheds them once. */
+const WITNESSED_GENERATION = 1
+
 type Stored = {
   savedAt: number
   pending: MobileNativeChatPendingMessage[]
+  witnessed?: number
   /** When each echo was FIRST written, by id. `savedAt` is re-stamped on every
    *  write and hydration itself triggers a write, so the age was measured from
    *  the last time the app was opened and the expiry could never fire: an echo
@@ -67,7 +73,11 @@ export async function readNativeChatPendingEchoes(
     const createdAt = parsed.createdAt
     const born = (id: string): number =>
       typeof createdAt?.[id] === 'number' ? createdAt[id]! : parsed.savedAt!
-    const fresh = parsed.pending.filter((item) => now - born(item.id) <= PENDING_ECHO_MAX_AGE_MS)
+    const fresh = parsed.pending.filter(
+      (item) =>
+        now - born(item.id) <= PENDING_ECHO_MAX_AGE_MS &&
+        (parsed.witnessed === WITNESSED_GENERATION || !isWitnessedId(item.id))
+    )
     if (fresh.length === 0) {
       return null
     }
@@ -102,6 +112,10 @@ function rememberCreatedAt(
 }
 
 /** Test-only: the map outlives a single test's hooks. */
+function isWitnessedId(id: string): boolean {
+  return id.startsWith('absorbed-') || id.startsWith('desk-')
+}
+
 export function resetNativeChatPendingEchoClocksForTests(): void {
   createdAtBySession.clear()
 }
@@ -129,7 +143,12 @@ export function writeNativeChatPendingEchoes(
   for (const item of persistable) {
     createdAt[item.id] = seen?.get(item.id) ?? now
   }
-  const stored: Stored = { savedAt: now, pending: [...persistable], createdAt }
+  const stored: Stored = {
+    savedAt: now,
+    pending: [...persistable],
+    createdAt,
+    witnessed: WITNESSED_GENERATION
+  }
   const write = (barriers.get(sessionKey) ?? Promise.resolve()).then(() =>
     pending.length > 0
       ? AsyncStorage.setItem(key, JSON.stringify(stored))

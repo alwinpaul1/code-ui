@@ -14,6 +14,9 @@ export type MobileNativeChatPendingMessage = {
   baselineResolved: boolean
   /** Restored echoes with no retained boundary must not appear as new sends. */
   restored?: boolean
+  /** Held from the first screen reading, anchored to whatever the tail was
+   *  then: drawn, but never written to disk (2026-09-13). */
+  provisional?: boolean
 }
 
 export type MobileNativeChatSendOrigin = {

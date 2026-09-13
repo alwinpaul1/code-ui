@@ -458,6 +458,9 @@ it('holds the newest unlanded prompt from the first reading, but never the backl
     )
   })
   expect(latest!.map((e) => e.text)).toEqual(['absorbed just before opening'])
+  // Anchored to whatever the tail was at that reading, so drawn but never
+  // written to disk (2026-09-13: an old prompt stored under a newer fold).
+  expect(latest![0]).toMatchObject({ provisional: true })
   act(() => renderer!.unmount())
 })
 

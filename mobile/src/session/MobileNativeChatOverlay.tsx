@@ -147,7 +147,7 @@ export function MobileNativeChatOverlay({
   const rememberEcho = controller.rememberEcho
   useEffect(() => {
     for (const echo of [...absorbedEchoes, ...desktopEchoes]) {
-      if (echo.baselineTailMessageId) {
+      if (echo.baselineTailMessageId && !echo.provisional) {
         const id = echo.id.startsWith('desk-') ? echo.id : echoMemoryId(echo.text)
         rememberEcho?.(id, echo.text, echo.baselineTailMessageId)
       }
