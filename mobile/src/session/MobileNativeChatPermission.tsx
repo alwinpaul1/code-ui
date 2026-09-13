@@ -24,6 +24,14 @@ function MobileNativeChatPermissionImpl({
   // alone was not enough: the options are the only thing the user can act on,
   // and a prompt with four long labels still pushed them past the composer.
   const choicesMaxHeight = Math.max(160, Math.round(windowHeight * 0.34))
+  // The Claude app offers exactly three: allow once, always for this session,
+  // deny. The TUI's "switch to auto mode" is a mode change, not an answer to
+  // this prompt. Filtering never leaves nothing to tap: if it would, the agent
+  // offered only that, so keep what it gave rather than render a dead card.
+  const withoutAutoMode = permission.options.filter(
+    (option) => !/^Yes, and switch to auto mode\b/i.test(option.label)
+  )
+  const choices = withoutAutoMode.length > 0 ? withoutAutoMode : permission.options
   const [accepted, setAccepted] = useState(false)
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
@@ -84,30 +92,35 @@ function MobileNativeChatPermissionImpl({
           {permission.title}
         </Txt>
       </View>
-      {command || description ? (
-        // The Claude app's shape: one sunken monospace block, nothing wrapped.
-        // A one-line command scrolls sideways so a long path stays a path; a
-        // multi-line one scrolls down within the cap, each line still whole.
+      {description || command ? (
         <ScrollView
-          style={{
-            maxHeight: readingMaxHeight,
-            flexShrink: 1,
-            borderRadius: radius.md,
-            backgroundColor: colors.bgSunken
-          }}
+          style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
           nestedScrollEnabled
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{ gap: space.md }}
         >
-          <ScrollView
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator
-            contentContainerStyle={{ padding: space.md }}
-          >
-            <Txt variant="mono" selectable>
-              {command ?? description}
+          {/* The agent's own words about what it wants to do. Prose, so it
+              wraps — it went into the command's horizontal scroll for one
+              release and a sentence ran off the side with no way back. */}
+          {description ? (
+            <Txt variant="body" tone="secondary" selectable>
+              {description}
             </Txt>
-          </ScrollView>
+          ) : null}
+          {/* The command itself: the Claude app's sunken monospace block, never
+              wrapped, scrolling sideways so a long path stays one path. */}
+          {command ? (
+            <ScrollView
+              horizontal
+              nestedScrollEnabled
+              showsHorizontalScrollIndicator
+              style={{ borderRadius: radius.md, backgroundColor: colors.bgSunken }}
+              contentContainerStyle={{ padding: space.md }}
+            >
+              <Txt variant="mono" selectable>
+                {command}
+              </Txt>
+            </ScrollView>
+          ) : null}
         </ScrollView>
       ) : null}
       <ScrollView
@@ -119,41 +132,28 @@ function MobileNativeChatPermissionImpl({
         {/* The Claude app offers exactly three: allow once, always for this
             session, deny. The TUI's "switch to auto mode" is a mode change, not
             an answer to this prompt, and is left out on the user's instruction. */}
-        {permission.options
-          .filter((option) => !/^Yes, and switch to auto mode\b/i.test(option.label))
-          .map((option, index) => {
+        {choices.map((option, index) => {
           const rememberedPrefix = option.label.match(
             /^Yes, and don't ask again for commands that start with\s+(.+)$/is
           )?.[1]
           const rememberedScope = option.label.match(
             /^Yes, and don['’]t ask again for:?\s+(.+)$/is
           )?.[1]
-          const autoMode = /^Yes, and switch to auto mode\b/i.test(option.label)
           const shortLabel =
             rememberedPrefix || rememberedScope
               ? 'Always allow for this session'
-              : autoMode
-                ? 'Allow and switch to auto mode'
-                : /^Yes$/i.test(option.label)
-                  ? 'Allow once'
-                  : /^No$/i.test(option.label)
-                    ? 'Deny'
-                    : option.label
+              : /^Yes$/i.test(option.label)
+                ? 'Allow once'
+                : /^No$/i.test(option.label)
+                  ? 'Deny'
+                  : option.label
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
-              {autoMode ? (
-                <Txt variant="body" tone="secondary" selectable style={{ paddingTop: space.sm }}>
-                  {option.label.replace(/^Yes, and switch to auto mode\s*[·:]?\s*/i, '') ||
-                    'Switches this session to auto mode.'}
+              {submittingIndex === index ? (
+                <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
+                  {accepted ? 'Response sent · waiting for agent' : 'Sending response…'}
                 </Txt>
               ) : null}
-              <View style={{ minHeight: 18 }}>
-                {submittingIndex === index ? (
-                  <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
-                    {accepted ? 'Response sent · waiting for agent' : 'Sending response…'}
-                  </Txt>
-                ) : null}
-              </View>
               <PressScale
                 accessibilityRole="button"
                 accessibilityLabel={option.label}

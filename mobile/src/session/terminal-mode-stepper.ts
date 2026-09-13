@@ -22,6 +22,11 @@ export type TerminalModeStep<Mode extends string> = {
   /** Longest to wait for the footer to change after a press. */
   settleMs?: number
   pollMs?: number
+  /** Wall-clock ceiling for the whole run. Each `read()` is a relay round trip,
+   *  so counting polls alone bounded nothing: a slow link turned six presses
+   *  into 85 reads and minutes of Shift+Tab (2026-09-14). */
+  budgetMs?: number
+  now?: () => number
 }
 
 /** True once the footer shows `wanted`; false after `maxPresses` without it. */
@@ -30,16 +35,22 @@ export async function stepTerminalMode<Mode extends string>(
 ): Promise<boolean> {
   const settleMs = step.settleMs ?? 1500
   const pollMs = step.pollMs ?? 120
+  const now = step.now ?? Date.now
+  const deadline = now() + (step.budgetMs ?? 8000)
   let current = await step.read()
   if (current === step.wanted) {
     return true
   }
   for (let presses = 0; presses < step.maxPresses; presses += 1) {
+    if (now() >= deadline) {
+      return false
+    }
     await step.press()
     // Wait for the footer to move off the mode it showed before the press.
     // A null read is "could not see", not "unchanged", and does not count.
     let seen: Mode | null = null
-    for (let waited = 0; waited < settleMs; waited += pollMs) {
+    const settleBy = Math.min(now() + settleMs, deadline)
+    while (now() < settleBy) {
       await step.wait(pollMs)
       seen = await step.read()
       if (seen !== null && seen !== current) {

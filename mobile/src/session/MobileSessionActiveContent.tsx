@@ -125,10 +125,15 @@ export function MobileSessionActiveContent({
     }
   }
   const selectPermissionMode = async (target: TerminalPermissionMode) => {
+    // 'default' and 'manual' are two names for one mode. Read the mode the
+    // footer STATED: `permissionMode` collapses "no footer on screen" to
+    // 'default', which reads as Manual, so a blank mid-repaint frame made the
+    // stepper report success having pressed nothing (2026-09-14).
     const asShown = (mode: TerminalPermissionMode | null | undefined) =>
-      mode === 'default' ? 'manual' : (mode ?? null)
+      mode == null ? null : mode === 'default' ? 'manual' : mode
     const reached = await stepTerminalMode<TerminalPermissionMode>({
-      read: async () => asShown((await nativeChatController.refreshNativeChatHud())?.permissionMode),
+      read: async () =>
+        asShown((await nativeChatController.refreshNativeChatHud())?.permissionModeSeen),
       press: pressShiftTab,
       wait,
       wanted: asShown(target) as TerminalPermissionMode,

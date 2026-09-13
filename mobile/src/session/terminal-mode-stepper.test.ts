@@ -96,4 +96,58 @@ describe('stepping the agent to a mode', () => {
     ).toBe(true)
     expect(press).toHaveBeenCalledTimes(1)
   })
+
+  it('never reports success from a frame where the footer was not visible', () => {
+    // 2026-09-14: the permission read collapsed "no footer on screen" to
+    // 'default', which the caller mapped to 'manual'. Asked for Manual while
+    // the agent was on Accept edits, one blank frame made this return true with
+    // zero presses, and the pill then claimed a mode the agent was not in.
+    return (async () => {
+      const press = vi.fn(async () => undefined)
+      let call = 0
+      const reached = await stepTerminalMode<'manual' | 'acceptEdits'>({
+        // Every read is blank: the footer never states a mode.
+        read: async () => {
+          call += 1
+          return null
+        },
+        press,
+        wait: async () => undefined,
+        wanted: 'manual',
+        maxPresses: 2,
+        settleMs: 300,
+        pollMs: 100,
+        budgetMs: 100000,
+        now: () => call * 10
+      })
+      expect(reached).toBe(false)
+      expect(press).toHaveBeenCalled()
+    })()
+  })
+
+  it('stops at its wall-clock budget instead of pressing for minutes', async () => {
+    // Each read is a relay round trip; counting polls bounded nothing, so a
+    // slow link turned six presses into 85 reads (2026-09-14).
+    let clock = 0
+    const press = vi.fn(async () => undefined)
+    const reached = await stepTerminalMode<'a' | 'b'>({
+      read: async () => {
+        clock += 2500
+        return 'a'
+      },
+      press,
+      wait: async () => {
+        clock += 120
+      },
+      wanted: 'b',
+      maxPresses: 6,
+      settleMs: 1500,
+      pollMs: 120,
+      budgetMs: 8000,
+      now: () => clock
+    })
+    expect(reached).toBe(false)
+    expect(press.mock.calls.length).toBeLessThan(6)
+    expect(clock).toBeLessThan(20000)
+  })
 })

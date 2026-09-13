@@ -18,7 +18,8 @@ describe('parseTerminalHudObservation', () => {
       modelId: 'fable',
       effort: 'high',
       context: { usedPercent: 78, usedLabel: '776k', windowLabel: '1.0M' },
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
   })
 
@@ -30,7 +31,8 @@ describe('parseTerminalHudObservation', () => {
       modelId: 'opus',
       effort: null,
       context: { usedPercent: 61, usedLabel: null, windowLabel: null },
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
   })
 
@@ -42,11 +44,13 @@ describe('parseTerminalHudObservation', () => {
       modelId: 'fable',
       effort: 'high',
       context: { usedPercent: 54, usedLabel: '537.2k', windowLabel: '1M' },
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
     expect(parseTerminalHudObservation(['[Fable 5.1 · effort high] ~/x'])).toMatchObject({
       context: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
   })
 
@@ -58,14 +62,16 @@ describe('parseTerminalHudObservation', () => {
       modelId: 'fable',
       effort: 'high',
       context: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
     expect(parseTerminalHudObservation(['[Sonnet 5] ~/x'])).toEqual({
       modelLabel: 'Sonnet 5',
       modelId: 'sonnet',
       effort: null,
       context: null,
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
   })
 
@@ -77,7 +83,8 @@ describe('parseTerminalHudObservation', () => {
       modelId: 'opus',
       effort: 'xhigh',
       context: { usedPercent: 62, usedLabel: null, windowLabel: null },
-      permissionMode: 'default'
+      permissionMode: 'default',
+      permissionModeSeen: null
     })
     expect(parseTerminalHudObservation(['nothing here', '[not a model | x]'])).toBeNull()
   })
@@ -114,6 +121,7 @@ describe('parseTerminalHudObservation — Codex footer', () => {
       effort: 'medium',
       context: null,
       permissionMode: 'default',
+      permissionModeSeen: null,
       agentMode: 'default'
     })
   })

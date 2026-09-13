@@ -19,6 +19,10 @@ export type TerminalHudObservation = {
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
    *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
   permissionMode: TerminalPermissionMode
+  /** The mode the footer actually STATED, or null when no footer row was on
+   *  screen. `permissionMode` collapses null to 'default' for the pill; anything
+   *  that acts on the mode must read this instead. */
+  permissionModeSeen?: TerminalPermissionMode | null
   /** Codex's collaboration mode from its footer ("Plan mode (shift+tab to
    *  cycle)" or nothing for Default). Absent for agents without one. */
   agentMode?: TerminalAgentMode | null
@@ -111,7 +115,17 @@ function activityField(lines: readonly string[]): { activity?: string } {
   return activity ? { activity } : {}
 }
 
-export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
+/** The mode the footer states, or null when no footer row is on this screen.
+ *
+ *  Null is a real answer and callers must keep it. `parseTerminalPermissionMode`
+ *  collapses it to 'default' for the HUD, which reads as Manual — fine for a
+ *  pill that shows the last known mode, wrong for anything that ACTS on it. The
+ *  mode stepper treated a blank mid-repaint frame as "already Manual" and
+ *  reported success having pressed nothing, so the pill claimed Manual while the
+ *  agent kept auto-accepting edits (2026-09-14). */
+export function readTerminalPermissionMode(
+  lines: readonly string[]
+): TerminalPermissionMode | null {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const line = lines[index] ?? ''
     for (const [pattern, mode] of PERMISSION_MODE_PATTERNS) {
@@ -120,7 +134,11 @@ export function parseTerminalPermissionMode(lines: readonly string[]): TerminalP
       }
     }
   }
-  return 'default'
+  return null
+}
+
+export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
+  return readTerminalPermissionMode(lines) ?? 'default'
 }
 
 export function permissionModeLabel(mode: TerminalPermissionMode): string {
@@ -275,6 +293,7 @@ export function parseCodexHudObservation(lines: readonly string[]): TerminalHudO
       effort,
       context: parseCodexStatusContext(lines),
       permissionMode: parseTerminalPermissionMode(lines),
+      permissionModeSeen: readTerminalPermissionMode(lines),
       agentMode: parseCodexAgentMode(lines)
     }
   }
@@ -334,7 +353,8 @@ export function parseTerminalHudObservation(
       effort,
       context,
       ...activityField(lines),
-      permissionMode: parseTerminalPermissionMode(lines)
+      permissionMode: parseTerminalPermissionMode(lines),
+      permissionModeSeen: readTerminalPermissionMode(lines)
     }
   }
   // No status-line badge, but Claude Code's own footer is on screen: read the
@@ -350,7 +370,8 @@ export function parseTerminalHudObservation(
           effort: null,
           context,
           ...activityField(lines),
-          permissionMode: parseTerminalPermissionMode(lines)
+          permissionMode: parseTerminalPermissionMode(lines),
+      permissionModeSeen: readTerminalPermissionMode(lines)
         }
       }
     }

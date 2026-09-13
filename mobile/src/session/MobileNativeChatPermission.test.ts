@@ -238,4 +238,68 @@ describe('MobileNativeChatPermission', () => {
     expect(choiceStyle.flexShrink).toBe(1)
     act(() => tree!.unmount())
   })
+
+  it("keeps the agent's own explanation next to the command it is asking about", async () => {
+    // 2026-09-14: the card rendered `command ?? description`, so whenever a
+    // command was present the agent's summary of what it wanted to do was
+    // dropped — the user approved a command with its explanation removed.
+    const command = 'rm -rf /private/tmp/codeui-scratch'
+    const detail = 'Clear the scratch directory before the next run'
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Allow Bash?',
+            detail,
+            command,
+            options: [
+              { label: 'Yes', send: '1' },
+              { label: 'No', send: '2' }
+            ]
+          },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const texts = renderer!.root.findAllByType('Text').map((text) => String(text.props.children))
+    expect(texts.some((text) => text.includes(detail))).toBe(true)
+    expect(texts.some((text) => text.includes(command))).toBe(true)
+  })
+
+  it('wraps prose instead of running it off the side of a horizontal scroll', async () => {
+    // A permission with no command carries only prose. It briefly shared the
+    // command's horizontal scroll, which has unbounded width, so a sentence
+    // never wrapped and had to be scrolled sideways.
+    const detail = 'This session wants to write outside the workspace. '.repeat(6)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: { title: 'Approve?', detail, options: [{ label: 'Yes', send: '1' }] },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    const horizontal = renderer!.root
+      .findAllByType('ScrollView')
+      .filter((node) => node.props.horizontal === true)
+    for (const scroller of horizontal) {
+      const inside = scroller.findAllByType('Text').map((text) => String(text.props.children))
+      expect(inside.some((text) => text.includes('write outside the workspace'))).toBe(false)
+    }
+  })
+
+  it('keeps the agent\'s choices when auto mode is the only one it offered', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Approve?',
+            options: [{ label: 'Yes, and switch to auto mode · handles these for you', send: '3' }]
+          },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    expect(renderer!.root.findAllByType('Pressable')).toHaveLength(1)
+  })
 })
