@@ -63,6 +63,10 @@ export function makeMarkdownStyles(theme: Theme) {
       paddingHorizontal: 5,
       paddingVertical: 1,
       marginHorizontal: 1,
+      // Air above and below, so a span that wraps onto a second line does not
+      // touch the pill above it; the line box grows with the margin, which is
+      // what keeps the text around it evenly spaced (2026-09-13).
+      marginVertical: 3,
       // Android hangs an inline View from the baseline, so a chip taller than
       // the text's ascent floats above the line (2026-09-12, "peak" sat above
       // its sentence). Half the extra height brings it level.
