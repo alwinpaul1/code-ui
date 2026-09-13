@@ -48,7 +48,10 @@ export function createMobileNativeChatStreamingGate(
 }
 
 function assistantTailText(tail: NativeChatMessage | undefined): string {
-  if (!tail || tail.role !== 'assistant') {
+  // A reasoning row counts: on Claude the live preview is often the model's
+  // summarized thought, which lands as a collapsed Thinking row, and the
+  // preview must retire against it or it stays on screen as prose.
+  if (!tail || (tail.role !== 'assistant' && tail.role !== 'reasoning')) {
     return ''
   }
   return tail.blocks

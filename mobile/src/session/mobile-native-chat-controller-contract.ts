@@ -46,6 +46,9 @@ export type MobileNativeChatController = {
   showNativeChatRef: MutableRefObject<boolean>
   /** Resolved agent for the active chat tab (names the empty-state copy). */
   nativeChatAgent: string | null
+  /** Whether this tab's transcript is read from disk. Hook-only chats (no
+   *  readable transcript) keep every hook row as a reply. */
+  nativeChatTranscriptIsLocalReadable: boolean
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   getChatComposerEditGeneration: () => number

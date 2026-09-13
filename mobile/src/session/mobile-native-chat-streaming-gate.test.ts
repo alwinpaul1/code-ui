@@ -271,3 +271,23 @@ describe('deriveMobileNativeChatStreaming', () => {
     expect(results).toEqual([null, 'Hello', null])
   })
 })
+
+// 2026-09-13: on Claude the live preview is often the model's summarized
+// thought. It lands as a collapsed Thinking row, not assistant prose, and the
+// preview stayed on screen as a reply because the gate never matched it.
+it('retires a preview that landed as a thinking row', () => {
+  const before = [assistant('a0', 'earlier reply')]
+  const thought: NativeChatMessage = {
+    id: 'a1:thinking',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: '0.5.48 published fine, but 0.5.49 was cancelled because…' }],
+    timestamp: 0,
+    source: 'hook'
+  }
+  const { results } = run([
+    { folded: before, live: true },
+    { folded: before, text: '0.5.48 published fine, but 0.5.49 was cancelled', live: true },
+    { folded: [...before, thought], text: '0.5.48 published fine, but 0.5.49 was cancelled', live: true }
+  ])
+  expect(results).toEqual([null, '0.5.48 published fine, but 0.5.49 was cancelled', null])
+})
