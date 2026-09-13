@@ -1,4 +1,5 @@
 import { useTerminalEngine } from '../terminal/use-terminal-engine'
+import { stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -100,40 +101,42 @@ export function MobileSessionActiveContent({
     createTabBusy
   } = controller
   // Claude Code only cycles modes (Shift+Tab), and which modes are in the cycle
-  // depends on how the session was started. So: press, re-read the footer, and
-  // stop when it shows the pick; give up after a full lap and say so.
-  // Codex has two collaboration modes on the same Shift+Tab cycle.
-  const selectAgentMode = async (target: TerminalAgentMode) => {
-    const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
-    if (!shiftTab) {
-      return
-    }
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const seen = await nativeChatController.refreshNativeChatHud()
-      if (seen?.agentMode === target) {
-        return
-      }
+  // depends on how the session was started; Codex has two collaboration modes
+  // on the same key. Press, wait for the footer to move, judge, repeat — and
+  // give up after a lap and say so. See terminal-mode-stepper.ts for why a
+  // fixed sleep between presses was not enough.
+  const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
+  const pressShiftTab = async () => {
+    if (shiftTab) {
       await handleAccessoryKey(createTerminalLiveAccessoryInput(shiftTab))
-      await new Promise((resolve) => setTimeout(resolve, 450))
     }
-    showToast('That mode is not available in this session')
+  }
+  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+  const selectAgentMode = async (target: TerminalAgentMode) => {
+    const reached = await stepTerminalMode<TerminalAgentMode>({
+      read: async () => (await nativeChatController.refreshNativeChatHud())?.agentMode ?? null,
+      press: pressShiftTab,
+      wait,
+      wanted: target,
+      maxPresses: 4
+    })
+    if (!reached) {
+      showToast('That mode is not available in this session')
+    }
   }
   const selectPermissionMode = async (target: TerminalPermissionMode) => {
-    const shiftTab = TERMINAL_ACCESSORY_KEY_DEFINITIONS.find((key) => key.id === 'shiftTab')
-    if (!shiftTab) {
-      return
+    const asShown = (mode: TerminalPermissionMode | null | undefined) =>
+      mode === 'default' ? 'manual' : (mode ?? null)
+    const reached = await stepTerminalMode<TerminalPermissionMode>({
+      read: async () => asShown((await nativeChatController.refreshNativeChatHud())?.permissionMode),
+      press: pressShiftTab,
+      wait,
+      wanted: asShown(target) as TerminalPermissionMode,
+      maxPresses: 6
+    })
+    if (!reached) {
+      showToast('That mode is not available in this session')
     }
-    const wanted = target === 'default' ? 'manual' : target
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const seen = await nativeChatController.refreshNativeChatHud()
-      const current = seen?.permissionMode === 'default' ? 'manual' : seen?.permissionMode
-      if (current === wanted) {
-        return
-      }
-      await handleAccessoryKey(createTerminalLiveAccessoryInput(shiftTab))
-      await new Promise((resolve) => setTimeout(resolve, 450))
-    }
-    showToast('That mode is not available in this session')
   }
 
   return showLoadingState ? (

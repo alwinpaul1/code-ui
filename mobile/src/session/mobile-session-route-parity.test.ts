@@ -117,7 +117,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'fd2d6417e301e14839b5d559151b9fc755837b33d82cb9d8f4cc6c671c1ba309'
+  '538fc217b6393106b5f72560beb41e78e92bc9d81741e5ef2b5d447ae9475c08'
 const HEAD_HOST_JSX_SHA256 = '2152aab3bb439dcf7d0649e3e939114cde1159666f48d42e05ca39021c366764'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -562,7 +562,8 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    expect(strings).toHaveLength(639)
+    // 636 since 2026-09-14: the two Shift+Tab mode pickers share one stepper.
+    expect(strings).toHaveLength(636)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(94)
