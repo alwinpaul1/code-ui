@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Pressable, StyleSheet, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import {
+  formatNativeChatActiveTurnLabel,
   formatNativeChatTurnStatusLabel,
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
@@ -46,12 +47,15 @@ export function MobileNativeChatTurnStatus({
 }): React.JSX.Element {
   const theme = useTheme()
   const styles = useMemo(() => makeTurnStatusStyles(theme), [theme])
-  const counting = !thinking && workedSeconds == null
+  const settled = workedSeconds != null
+  const counting = !settled && !thinking && !activityText?.trim()
   const elapsedSeconds = useElapsedSeconds(startedAt, counting)
-  const label =
-    activityText && workedSeconds == null
-      ? activityText
-      : formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+  // A live turn is labelled through the shared resolver — provider activity,
+  // then "Thinking" while the turn is reasoning, then the running clock — so the
+  // phone and the desktop cannot disagree about the one live row (Orca #19977).
+  const label = settled
+    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+    : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
 
   const pulse = useRef(new Animated.Value(1)).current
   useEffect(() => {

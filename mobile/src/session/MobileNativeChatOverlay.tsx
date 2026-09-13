@@ -191,6 +191,7 @@ export function MobileNativeChatOverlay({
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
         turnActivity={controller.nativeChatTurnActivity}
+        turnThinking={controller.nativeChatTurnThinking}
         agentStatus={controller.nativeChatAgentStatus}
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}

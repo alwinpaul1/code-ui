@@ -451,6 +451,7 @@ export function useMobileNativeChatController(
     nativeChatSession,
     nativeChatStructured: activeChatStructured,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,
+    nativeChatTurnThinking: activeChatStructured ? structuredNativeChat.turnThinking : false,
     nativeChatAgentWorking,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,

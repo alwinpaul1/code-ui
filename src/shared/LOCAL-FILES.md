@@ -136,3 +136,15 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 upstream's `mcpIdentity` field. #19226 landed, so both were re-vendored whole at
 their c1e15c400 pin and the field is back; the entry is gone.
 
+
+- `structured-agent-session-live-turn.ts` and its test carry only
+  `isStructuredAgentSessionThinking` out of Orca #19977 (fab78c766). Upstream's
+  file also holds `activeStructuredAgentSessionTurnId` and
+  `activeStructuredAgentSessionToolCall`, which this fork still keeps in
+  `structured-agent-session-projection.ts`, and reads the turn record through
+  `readAgentJournalTurn` — a typed `turn` journal item this fork's
+  `agent-session-journal-types.ts` does not have. Here the turn record is the
+  legacy status row carrying `turnLifecycle`, which is what this fork's hosts
+  write; the two typed-`turn` cases in upstream's test are dropped for the same
+  reason. The divergence is marked
+  `CODE UI HAND-APPLIED UPSTREAM PORT` in the source.

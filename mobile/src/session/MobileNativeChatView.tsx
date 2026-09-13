@@ -59,6 +59,7 @@ export function MobileNativeChatView({
   canStop,
   structuredActivityUi = false,
   turnActivity = null,
+  turnThinking = false,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
@@ -209,6 +210,7 @@ export function MobileNativeChatView({
     messages: data,
     enabled: structuredActivityUi,
     isWorking: agentWorking === true,
+    thinking: turnThinking,
     scopeKey: sendSurfaceId
   })
 

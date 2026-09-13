@@ -23,6 +23,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   turnId: string | null
   /** Provider-authored copy for the live turn tail. Null when there is none. */
   turnActivity: NativeChatTurnActivity | null
+  /** Whether the live turn is reasoning right now, read off the journal tail. */
+  turnThinking: boolean
   sendWithOutcome: (
     text: string,
     images?: string[],
