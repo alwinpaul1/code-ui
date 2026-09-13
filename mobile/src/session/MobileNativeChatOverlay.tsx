@@ -105,10 +105,15 @@ export function MobileNativeChatOverlay({
     () => withoutLandedDesktopPrompts(desktopPrompts, baseFolded),
     [desktopPrompts, baseFolded]
   )
-  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded)
+  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded, session.messages)
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
-  const absorbedEchoes = useAbsorbedQueueEchoes(queuedMessages ?? [], baseFolded, sendSurfaceId)
+  const absorbedEchoes = useAbsorbedQueueEchoes(
+    queuedMessages ?? [],
+    baseFolded,
+    sendSurfaceId,
+    session.messages
+  )
   const folded = useMemo(
     () =>
       desktopEchoes.length > 0 || absorbedEchoes.length > 0

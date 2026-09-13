@@ -22,7 +22,12 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
 export function useAbsorbedQueueEchoes(
   queued: readonly string[],
   folded: readonly NativeChatMessage[],
-  scopeKey: string
+  scopeKey: string,
+  // Anchored on the RAW record, not the folded row: a folded run is one row
+  // for the whole turn, so every echo would land on the same boundary and
+  // stack (2026-09-13). The raw tail moves with each tool result, which is
+  // what puts a "Ran N commands" fold between one prompt and the next.
+  rawMessages: readonly NativeChatMessage[] = folded
 ): MobileNativeChatPendingMessage[] {
   const held = useRef(new Map<string, { text: string; anchorId: string | null; seq: number }>())
   const previous = useRef<readonly string[]>([])
@@ -40,7 +45,7 @@ export function useAbsorbedQueueEchoes(
       counter.current += 1
       held.current.set(key, {
         text,
-        anchorId: folded.at(-1)?.id ?? null,
+        anchorId: rawMessages.at(-1)?.id ?? null,
         seq: counter.current
       })
     }

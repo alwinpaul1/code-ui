@@ -21,13 +21,16 @@ type DesktopPrompt = { nonce: string; text: string }
  */
 export function useDesktopPromptEchoes(
   prompts: readonly DesktopPrompt[],
-  folded: readonly NativeChatMessage[]
+  folded: readonly NativeChatMessage[],
+  // The RAW tail, for the same reason the absorbed-queue echoes use it: a
+  // folded run is one row, so folded anchors would stack every echo together.
+  rawMessages: readonly NativeChatMessage[] = folded
 ): MobileNativeChatPendingMessage[] {
   const anchors = useRef(new Map<string, string | null>())
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
     if (!anchors.current.has(prompt.nonce)) {
-      anchors.current.set(prompt.nonce, folded.at(-1)?.id ?? null)
+      anchors.current.set(prompt.nonce, rawMessages.at(-1)?.id ?? null)
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,

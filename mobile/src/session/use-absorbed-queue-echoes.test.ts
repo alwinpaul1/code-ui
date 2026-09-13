@@ -89,3 +89,36 @@ describe('messages absorbed off the agent queue', () => {
     expect(latest).toEqual([])
   })
 })
+
+// 2026-09-13: three prompts sent one after another stacked with nothing
+// between them, because a folded run is a single row and every echo anchored
+// to it. The raw tail moves with each tool result, so each echo gets its own
+// fold boundary and the work between them shows.
+it('anchors each absorbed message to the raw record, not the folded run', () => {
+  const folded = [row('a1', 'assistant', 'working')]
+  const raw = [row('a1', 'assistant', 'working'), row('a2', 'assistant', 'tool')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(
+      createElement(ProbeRaw, { queued: ['first'], folded, raw })
+    )
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeRaw, { queued: [], folded, raw }))
+  })
+  expect(latest).toMatchObject([{ baselineTailMessageId: 'a2' }])
+  act(() => renderer!.unmount())
+})
+
+function ProbeRaw({
+  queued,
+  folded,
+  raw
+}: {
+  queued: string[]
+  folded: NativeChatMessage[]
+  raw: NativeChatMessage[]
+}): null {
+  latest = useAbsorbedQueueEchoes(queued, folded, 'tab-a', raw)
+  return null
+}
