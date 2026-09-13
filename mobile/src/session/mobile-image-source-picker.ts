@@ -1,4 +1,5 @@
 import * as DocumentPicker from 'expo-document-picker'
+import { normalizeMobileClipboardImageBase64 } from './mobile-clipboard-image'
 import { File as FsFile } from 'expo-file-system'
 import * as ImagePicker from 'expo-image-picker'
 import {
@@ -8,7 +9,7 @@ import {
 } from '../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 
-export type MobileImageSource = 'library' | 'files'
+export type MobileImageSource = 'library' | 'files' | 'clipboard'
 
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
@@ -41,6 +42,11 @@ type MobileImageFile = {
   readonly size: number
   open(): MobileImageFileHandle
 }
+
+/** Reads an image off the system clipboard, or null when it holds none.
+ *  Supplied by the caller rather than defaulted here: `expo-clipboard` pulls in
+ *  React Native's Flow-typed entry, which this module's tests cannot parse. */
+export type ClipboardImageReader = () => Promise<{ data: string } | null>
 
 export type MobileImageFileFactory = (uri: string) => MobileImageFile
 
@@ -174,6 +180,29 @@ type MobileImagePickerDeps = {
   readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
   readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
   readonly createFile?: MobileImageFileFactory
+  readonly readClipboardImage?: ClipboardImageReader
+}
+
+/** A screenshot or a copied image, straight off the system clipboard.
+ *
+ *  The terminal has had this since 0.2.x; the chat composer never did, so a
+ *  screenshot had to be saved to the gallery first and picked from there
+ *  (reported 2026-09-14). `expo-clipboard` hands back a data URL, which the
+ *  existing normalizer turns into the raw base64 the upload wants, and the same
+ *  string doubles as the composer's preview URI — a clipboard image has no file
+ *  of its own to point at. */
+async function* pickFromClipboard(
+  getImage: ClipboardImageReader | undefined
+): AsyncGenerator<PickedMobileImage> {
+  const image = await getImage?.()
+  if (!image?.data) {
+    return
+  }
+  const base64 = normalizeMobileClipboardImageBase64(image.data)
+  if (!base64) {
+    return
+  }
+  yield { base64, uri: `data:image/png;base64,${base64}`, name: 'Pasted image' }
 }
 
 function pickMobileImagesWithMode(
@@ -181,6 +210,9 @@ function pickMobileImagesWithMode(
   multiple: boolean,
   deps?: MobileImagePickerDeps
 ): AsyncIterable<PickedMobileImage> {
+  if (source === 'clipboard') {
+    return pickFromClipboard(deps?.readClipboardImage)
+  }
   if (source === 'library') {
     return pickFromLibrary(
       multiple,

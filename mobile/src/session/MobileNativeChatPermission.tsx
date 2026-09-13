@@ -1,4 +1,5 @@
 import { memo, useRef, useState } from 'react'
+import { splitPermissionDetail } from './mobile-permission-detail'
 import { ScrollView, useWindowDimensions, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
@@ -19,7 +20,7 @@ function MobileNativeChatPermissionImpl({
   // the composer off a short screen, so the reading area gives up space first and
   // the choices keep theirs. Half the window leaves the conversation visible.
   const { height: windowHeight } = useWindowDimensions()
-  const readingMaxHeight = Math.max(72, Math.min(160, Math.round(windowHeight * 0.22)))
+  const readingMaxHeight = Math.max(64, Math.min(132, Math.round(windowHeight * 0.16)))
   // The choices scroll rather than run off the bottom. Capping the reading area
   // alone was not enough: the options are the only thing the user can act on,
   // and a prompt with four long labels still pushed them past the composer.
@@ -36,12 +37,18 @@ function MobileNativeChatPermissionImpl({
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
   const submittingRef = useRef(false)
+  // A `$ ` line is the older shape; the structured lane hands over the TUI's
+  // whole prompt body, which needs splitting. See mobile-permission-detail.ts.
   const commandStart = permission.detail?.search(/^\$ /m) ?? -1
-  const description =
-    commandStart >= 0 ? permission.detail?.slice(0, commandStart).trim() : permission.detail
-  const command =
-    permission.command ??
-    (commandStart >= 0 ? permission.detail?.slice(commandStart + 2).trim() : undefined)
+  const split =
+    commandStart >= 0
+      ? {
+          description: permission.detail?.slice(0, commandStart).trim() || null,
+          command: permission.command ?? permission.detail?.slice(commandStart + 2).trim() ?? null
+        }
+      : splitPermissionDetail(permission.detail, permission.command)
+  const description = split.description ?? undefined
+  const command = split.command ?? undefined
   const respond = async (send: string, index: number): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -66,8 +73,8 @@ function MobileNativeChatPermissionImpl({
       style={{
         marginHorizontal: space.md,
         marginVertical: space.sm,
-        padding: space.lg,
-        gap: space.md,
+        padding: space.md,
+        gap: space.sm,
         borderRadius: radius.lg,
         borderWidth: 1,
         borderColor: colors.border,
@@ -76,19 +83,8 @@ function MobileNativeChatPermissionImpl({
       accessibilityRole="alert"
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.accentSoft
-          }}
-        >
-          <ShieldQuestion size={16} color={colors.accentText} strokeWidth={2} />
-        </View>
-        <Txt variant="heading" weight="semibold" style={{ flex: 1 }}>
+        <ShieldQuestion size={15} color={colors.accentText} strokeWidth={2.2} />
+        <Txt variant="label" weight="semibold" style={{ flex: 1 }}>
           {permission.title}
         </Txt>
       </View>

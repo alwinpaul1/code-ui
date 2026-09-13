@@ -21,6 +21,12 @@ import {
   type HookArgs
 } from './use-mobile-native-chat-image-attachments.test-support'
 
+vi.mock('expo-clipboard', () => ({
+  hasImageAsync: vi.fn(async () => false),
+  getImageAsync: vi.fn(async () => null),
+  setStringAsync: vi.fn()
+}))
+
 const pick = vi.mocked(pickMobileImages)
 
 // 2026-09-13: leaving the session screen (source control, another worktree)

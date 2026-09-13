@@ -5,7 +5,14 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
+vi.mock('expo-clipboard', () => ({
+  hasImageAsync: vi.fn(async () => false),
+  getImageAsync: vi.fn(async () => null),
+  setStringAsync: vi.fn()
+}))
+
 vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => undefined }), currentState: 'active' },
   StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   View: 'View'
 }))

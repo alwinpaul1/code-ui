@@ -85,6 +85,8 @@ export type MobileNativeChatViewProps = {
   composerText: string
   onComposerTextChange: (text: string) => void
   onAttachImage?: () => void
+  /** Present only while the clipboard holds an image. */
+  onPasteImage?: () => void
   onAttachFile?: () => void
   /** Pending image attachments shown as composer thumbnails until the next send. */
   attachments?: PendingNativeChatImage[]

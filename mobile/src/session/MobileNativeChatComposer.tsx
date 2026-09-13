@@ -55,6 +55,7 @@ type Props = {
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
   onAttachImage?: () => void
+  onPasteImage?: () => void
   /** Any document via the system file picker; shown as a named chip. */
   onAttachFile?: () => void
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
@@ -110,6 +111,7 @@ export function MobileNativeChatComposer({
   agent,
   sessionOptions,
   onAttachImage,
+  onPasteImage,
   onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -436,6 +438,7 @@ export function MobileNativeChatComposer({
         showAttachSheet={showAttachSheet}
         onCloseAttachSheet={() => setShowAttachSheet(false)}
         onAttachImage={onAttachImage}
+        onPasteImage={onPasteImage}
         onAttachFile={onAttachFile}
       />
     </View>

@@ -208,3 +208,34 @@ describe('pickMobileImage', () => {
     expect(file.close).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('pasting an image from the clipboard', () => {
+  it('takes a copied screenshot straight into the composer', async () => {
+    // 2026-09-14, reported from the phone: an image on the clipboard could not
+    // be pasted into the chat composer at all — only the terminal had a paste
+    // path, so a screenshot had to be saved to the gallery and picked from
+    // there. expo-clipboard hands back a data URL.
+    const png = 'iVBORw0KGgoAAAANSUhEUg=='
+    const picked = await pickMobileImage('clipboard', {
+      readClipboardImage: async () => ({ data: `data:image/png;base64,${png}` })
+    })
+    expect(picked?.base64).toBe(png)
+    // The data URL doubles as the preview: a clipboard image has no file to point at.
+    expect(picked?.uri).toBe(`data:image/png;base64,${png}`)
+  })
+
+  it('takes raw base64 too, without a data-url prefix', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUg=='
+    expect((await pickMobileImage('clipboard', { readClipboardImage: async () => ({ data: png }) }))?.base64).toBe(png)
+  })
+
+  it('picks nothing when the clipboard holds no image', async () => {
+    expect(await pickMobileImage('clipboard', { readClipboardImage: async () => null })).toBeNull()
+  })
+
+  it('refuses clipboard content that is not base64 rather than uploading junk', async () => {
+    await expect(
+      pickMobileImage('clipboard', { readClipboardImage: async () => ({ data: 'not base64 !!' }) })
+    ).rejects.toThrow(/base64/i)
+  })
+})

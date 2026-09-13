@@ -35,6 +35,12 @@ import {
   type HookArgs
 } from './use-mobile-native-chat-image-attachments.test-support'
 
+vi.mock('expo-clipboard', () => ({
+  hasImageAsync: vi.fn(async () => false),
+  getImageAsync: vi.fn(async () => null),
+  setStringAsync: vi.fn()
+}))
+
 describe('useMobileNativeChatImageAttachments', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: Hook | null = null

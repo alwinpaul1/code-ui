@@ -1,4 +1,6 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import { AppState } from 'react-native'
+import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { mobileNativeChatFrameToShow } from './mobile-native-chat-frame-decision'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -89,6 +91,30 @@ export function MobileNativeChatOverlay({
   // data identity stable. Unmemoized, every 1 Hz screen poll rebuilt the whole
   // list and re-ran the autoscroll — the layout churn 0.2.41 set out to remove.
   const queuedMessages = controller.nativeChatQueuedMessages
+  // Only offer the paste row when there is actually an image to paste; an
+  // empty clipboard would give the user a row that silently does nothing.
+  const [clipboardImage, setClipboardImage] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    const check = () => {
+      void clipboardHasImage().then((has) => {
+        if (!cancelled) {
+          setClipboardImage(has)
+        }
+      })
+    }
+    check()
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        check()
+      }
+    })
+    return () => {
+      cancelled = true
+      subscription.remove()
+    }
+  }, [])
+
   const projectedQueue = useMemo(
     () => projectMobileChatQueue(controller.chatPending, queuedMessages ?? []),
     [controller.chatPending, queuedMessages]
@@ -253,6 +279,7 @@ export function MobileNativeChatOverlay({
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}
         onAttachImage={() => void images.attachImage('library')}
+        onPasteImage={clipboardImage ? () => void images.attachImage('clipboard') : undefined}
         onAttachFile={() => void images.attachDocument()}
         attachments={images.attachments}
         onRemoveAttachment={images.removeAttachment}

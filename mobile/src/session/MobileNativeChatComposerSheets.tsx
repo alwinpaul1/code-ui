@@ -1,4 +1,4 @@
-import { Image as ImageIcon, Paperclip } from 'lucide-react-native'
+import { Image as ImageIcon, ClipboardPaste, Paperclip } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
@@ -23,6 +23,7 @@ export function MobileNativeChatComposerSheets({
   showAttachSheet,
   onCloseAttachSheet,
   onAttachImage,
+  onPasteImage,
   onAttachFile
 }: {
   showModeSheet: boolean
@@ -37,6 +38,8 @@ export function MobileNativeChatComposerSheets({
   showAttachSheet: boolean
   onCloseAttachSheet: () => void
   onAttachImage?: () => void
+  /** Absent when the clipboard holds no image, so the row only shows when it works. */
+  onPasteImage?: () => void
   onAttachFile?: () => void
 }) {
   return (
@@ -78,6 +81,16 @@ export function MobileNativeChatComposerSheets({
               icon: ImageIcon,
               onPress: onAttachImage
             },
+            ...(onPasteImage
+              ? [
+                  {
+                    label: 'Paste image',
+                    hint: 'Use the screenshot or image on your clipboard',
+                    icon: ClipboardPaste,
+                    onPress: onPasteImage
+                  }
+                ]
+              : []),
             {
               label: 'Files',
               hint: 'PDF, documents, code, anything on this phone',
