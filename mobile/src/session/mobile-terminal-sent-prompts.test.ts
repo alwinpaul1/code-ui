@@ -124,6 +124,44 @@ describe('sentPromptsFromScreen', () => {
     expect(sentPromptsFromScreen(['❯ a prompt that was accepted', '', '⏺ reply'])).toEqual([])
   })
 
+  it('leaves out a fold painted straight under an absorbed prompt, with no blank row', () => {
+    // 2026-09-13, on the phone running 0.5.49: a message typed on the desktop
+    // mid-turn came back as "fix the agent-read image thumbnail one and verify
+    // on my phone Ran 7 shell commands" — the fold row sat directly under the
+    // prompt, and the parser only knew to stop at one after a blank row.
+    expect(
+      sentPromptsFromScreen([
+        '❯ fix the agent-read image thumbnail one and verify on my phone',
+        '  Ran 7 shell commands',
+        '',
+        '❯ which is the version with all fixes',
+        '',
+        '❯ 0.5.48 where is this update not on ci',
+        '  Ran 1 shell command',
+        '',
+        '⏺ Bash(Check the 0.5.48 CI run)',
+        '',
+        '❯ '
+      ])
+    ).toEqual([
+      'fix the agent-read image thumbnail one and verify on my phone',
+      'which is the version with all fixes',
+      '0.5.48 where is this update not on ci'
+    ])
+  })
+
+  it('still keeps a wrapped line that merely starts like a fold and runs on', () => {
+    expect(
+      sentPromptsFromScreen([
+        '❯ yesterday I',
+        '  Ran 3 shell commands by hand and the second one hung, can you',
+        '  check why',
+        '',
+        '❯ '
+      ])
+    ).toEqual(['yesterday I Ran 3 shell commands by hand and the second one hung, can you check why'])
+  })
+
   it('keeps a second paragraph that merely opens like a tool fold', () => {
     // 2026-09-13: "Created a branch called hud-fix, reuse it" was eaten as if
     // it were the fold, and the text was lost with no sign of it.

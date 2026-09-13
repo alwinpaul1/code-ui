@@ -87,7 +87,10 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
         continue
       }
       const more = CONTINUATION.exec(line)
-      if (!more) {
+      // A prompt absorbed mid-turn gets its fold painted straight under it,
+      // with no blank row between: "…verify on my phone Ran 7 shell commands"
+      // was one bubble on the phone (2026-09-13, Claude Code 2.1.270).
+      if (!more || isFoldSummary(more[1] ?? '', screen, cursor)) {
         break
       }
       parts.push(more[1] ?? '')
