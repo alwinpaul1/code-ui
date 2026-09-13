@@ -56,6 +56,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | 701dc2211 #20233 | precompute task sort keys and reuse repository collation | applied verbatim; the tasks screens here match upstream. Sort keys were derived inside the comparator, so each was rebuilt O(log n) times per item, and the repository sort built a collator per comparison |
 | a045af361 #20249 | precompute Linear issue sort keys | applied verbatim; this fork has the Linear task screens and the files matched upstream |
 | 7e9ade7c7 #20431 | reuse Linear grouping between list and board | applied verbatim, before df375cdd8 (it creates the projection test the later commit edits) |
+| df375cdd8 #20314 | reuse Linear issue ordering when grouping list and board | applied verbatim on top of 7e9ade7c7 |
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
 
 
