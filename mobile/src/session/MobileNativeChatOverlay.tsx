@@ -10,6 +10,7 @@ import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
+import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -101,9 +102,15 @@ export function MobileNativeChatOverlay({
     [desktopPrompts, folded]
   )
   const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, folded)
+  // Existing sessions have no hook, but the agent draws its own queue and the
+  // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
+  const absorbedEchoes = useAbsorbedQueueEchoes(queuedMessages ?? [], folded, sendSurfaceId)
   const pendingWithDesktopPrompts = useMemo(
-    () => (desktopEchoes.length > 0 ? [...projectedQueue.pending, ...desktopEchoes] : projectedQueue.pending),
-    [desktopEchoes, projectedQueue.pending]
+    () =>
+      desktopEchoes.length > 0 || absorbedEchoes.length > 0
+        ? [...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes]
+        : projectedQueue.pending,
+    [absorbedEchoes, desktopEchoes, projectedQueue.pending]
   )
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
@@ -174,7 +181,6 @@ export function MobileNativeChatOverlay({
         onEditQueue={controller.openNativeChatQueueEditor}
         queueEditor={controller.nativeChatQueueEditor}
         pending={pendingWithDesktopPrompts}
-        promptHookMissing={controller.nativeChatPromptHook === false}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

@@ -1,0 +1,91 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
+
+function row(id: string, role: 'user' | 'assistant', text: string): NativeChatMessage {
+  return { id, role, blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
+}
+
+let latest: ReturnType<typeof useAbsorbedQueueEchoes> | null = null
+
+function Probe({
+  queued,
+  folded,
+  scopeKey = 'tab-a'
+}: {
+  queued: string[]
+  folded: NativeChatMessage[]
+  scopeKey?: string
+}): null {
+  latest = useAbsorbedQueueEchoes(queued, folded, scopeKey)
+  return null
+}
+
+// 2026-09-13: a message typed on the desktop mid-turn vanished from the phone
+// the moment Claude took it off its queue — the record it writes is one Orca's
+// reader drops. The agent's own on-screen queue is the only witness a session
+// already running has.
+describe('messages absorbed off the agent queue', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    latest = null
+  })
+
+  it('keeps a queued message on screen once the agent takes it', () => {
+    const folded = [row('u1', 'user', 'go'), row('a1', 'assistant', 'working')]
+    act(() => {
+      renderer = create(createElement(Probe, { queued: ['check the dock'], folded }))
+    })
+    expect(latest).toEqual([])
+
+    act(() => {
+      renderer!.update(createElement(Probe, { queued: [], folded }))
+    })
+    expect(latest).toMatchObject([{ text: 'check the dock', baselineTailMessageId: 'a1' }])
+
+    // It stays put as the turn goes on.
+    act(() => {
+      renderer!.update(
+        createElement(Probe, { queued: [], folded: [...folded, row('a2', 'assistant', 'more')] })
+      )
+    })
+    expect(latest).toHaveLength(1)
+  })
+
+  it('drops it once the transcript shows it as a real user turn', () => {
+    const folded = [row('a1', 'assistant', 'working')]
+    act(() => {
+      renderer = create(createElement(Probe, { queued: ['hello there'], folded }))
+    })
+    act(() => {
+      renderer!.update(createElement(Probe, { queued: [], folded }))
+    })
+    expect(latest).toHaveLength(1)
+
+    act(() => {
+      renderer!.update(
+        createElement(Probe, { queued: [], folded: [...folded, row('u2', 'user', 'hello there')] })
+      )
+    })
+    expect(latest).toEqual([])
+  })
+
+  it('forgets everything when the tab changes', () => {
+    const folded = [row('a1', 'assistant', 'working')]
+    act(() => {
+      renderer = create(createElement(Probe, { queued: ['one'], folded }))
+    })
+    act(() => {
+      renderer!.update(createElement(Probe, { queued: [], folded }))
+    })
+    expect(latest).toHaveLength(1)
+    act(() => {
+      renderer!.update(createElement(Probe, { queued: [], folded, scopeKey: 'tab-b' }))
+    })
+    expect(latest).toEqual([])
+  })
+})

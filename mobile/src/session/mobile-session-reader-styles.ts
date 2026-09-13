@@ -25,6 +25,11 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl
   },
+  filePreviewGutter: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+  },
   filePreviewText: {
     color: colors.textPrimary,
     fontSize: typography.bodySize,

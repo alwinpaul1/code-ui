@@ -84,7 +84,6 @@ export function MobileNativeChatView({
   attachments,
   onRemoveAttachment,
   isAttaching,
-  promptHookMissing = false,
   onMicPress,
   onBeforeSend,
   micActive,
@@ -359,7 +358,6 @@ export function MobileNativeChatView({
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
-                promptHookMissing={promptHookMissing}
               />
               {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
               <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />

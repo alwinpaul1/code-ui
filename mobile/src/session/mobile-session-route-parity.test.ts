@@ -118,13 +118,13 @@ const HEAD_TIMER_CREATION_SHA256 =
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
   'd4680243df9e8330f7e2cbcf64350d3d5001dbbcdbf69cdc255222b6a4e600dc'
-const HEAD_HOST_JSX_SHA256 = '1e54bb23081f72ebe765526bb90d22643705e0e9884817e8ccb519af8e5ffe97'
+const HEAD_HOST_JSX_SHA256 = 'dc5d421bcef936c482490835f6b9939a05040800e9e495a45d9756a14249840e'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '12f405367ae65373626f682d30dd7e4fa732aea1260c28d9b401cc85aeeec83e'
+const HEAD_LEAF_JSX_SHA256 = '22dd7f222e310d3cb16b90ef4ea3e46156de35d8bc765e9253c1bf74955409fd'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  'dc3045316785412e2e97a73a867ea70a4fdb0a00b3f7a43a7bb0a0da8b03ac62'
+  '9a9835916fa0bf1376eb73118dc898372b0dc7888c226f5cc084c1d1f03eb436'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '56470d1fc5a5cce89bc14d6a5a3cc55a6b70923445ad6288e8f11047a56efad8'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -569,7 +569,7 @@ describe('mobile session route extraction parity', () => {
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(68)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(88)
+    expect(jsx.styleReferences).toHaveLength(89)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

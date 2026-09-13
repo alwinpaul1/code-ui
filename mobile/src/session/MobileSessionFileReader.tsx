@@ -12,7 +12,8 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
-import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
+import { MobileSyntaxLine } from '../components/MobileSyntaxSegments'
+import { gutterWidthForLines, splitSyntaxIntoLines } from '../components/mobile-syntax-lines'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
@@ -276,24 +277,39 @@ export function FileReader({
     )
   }
 
-  const renderSourceText = (content: string) => (
-    <View style={styles.markdownEditor}>
-      <ScrollView
-        style={styles.filePreviewScroll}
-        contentContainerStyle={styles.filePreviewContent}
-      >
-        <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <MobileSyntaxSegments
-            segments={
-              fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
-                ? fileSyntax.segments
-                : [{ text: content, kind: 'plain' }]
-            }
-          />
-        </Text>
-      </ScrollView>
-    </View>
-  )
+  const renderSourceText = (content: string) => {
+    // Numbered lines, as an editor shows them: the highlighter's segments run
+    // across newlines, so they are cut per line and the gutter drawn inside
+    // each line's own Text, which keeps it aligned when a long line wraps
+    // (2026-09-13).
+    const highlighted =
+      fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
+        ? fileSyntax.segments
+        : [{ text: content, kind: 'plain' as const }]
+    const lines = splitSyntaxIntoLines(highlighted)
+    const gutterWidth = gutterWidthForLines(lines.length)
+    return (
+      <View style={styles.markdownEditor}>
+        <ScrollView
+          style={styles.filePreviewScroll}
+          contentContainerStyle={styles.filePreviewContent}
+        >
+          <View accessibilityLabel={`${title} preview`}>
+            {lines.map((segments, index) => (
+              <MobileSyntaxLine
+                key={index}
+                number={index + 1}
+                segments={segments}
+                gutterWidth={gutterWidth}
+                lineStyle={styles.filePreviewText}
+                gutterStyle={styles.filePreviewGutter}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    )
+  }
 
   if (doc.kind === 'html') {
     return (

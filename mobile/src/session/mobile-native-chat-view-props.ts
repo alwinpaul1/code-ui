@@ -88,8 +88,6 @@ export type MobileNativeChatViewProps = {
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
   isAttaching?: boolean
-  /** The active tab was launched before the desktop-prompt hook existed. */
-  promptHookMissing?: boolean
   onMicPress?: () => void
   /** Runs before a composer send goes out (ends live dictation). */
   onBeforeSend?: () => void
