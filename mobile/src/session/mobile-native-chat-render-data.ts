@@ -14,6 +14,7 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
+import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -60,9 +61,12 @@ export function foldMobileNativeChatMessages(
   messages: NativeChatMessage[],
   splitAfterIds?: ReadonlySet<string>
 ): NativeChatMessage[] {
-  // Normalize first (desktop assembler parity): image marker turns fold into
+  // A queued message records its images when composed but delivers its prompt
+  // later, so the agent's turns sit between them; pull those images back next
+  // to their prompt before normalizing, or they render above the bubble.
+  // Normalize (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  const normalized = normalizeImageTranscriptMessages(messages)
+  const normalized = normalizeImageTranscriptMessages(foldQueuedImageTurns(messages))
   if (!splitAfterIds?.size) {
     return stripNoiseMessages(foldToolMessages(normalized))
   }
