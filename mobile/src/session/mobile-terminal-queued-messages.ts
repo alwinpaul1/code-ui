@@ -140,9 +140,11 @@ export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   if (row === want) {
     return true
   }
-  const shorter = row.length < want.length ? row : want
-  const longer = row.length < want.length ? want : row
-  return shorter.length >= QUEUE_ROW_MATCH_FLOOR && longer.startsWith(shorter)
+  // One direction only. The drawn row is a SHORTENED form of what was sent, so
+  // the send starts with the row — never the reverse. Accepting both let a
+  // short pending claim a longer message's row: its own bubble vanished while
+  // it was still queued, and the longer one showed twice (2026-09-14 review).
+  return row.length >= QUEUE_ROW_MATCH_FLOOR && want.startsWith(row)
 }
 
 export function pendingOutsideVisibleQueue<T extends { text: string }>(
@@ -151,11 +153,20 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
 ): T[] {
   const remaining = [...queue]
   return pending.filter((item) => {
-    const index = remaining.findIndex((row) => queueRowIsPendingSend(item.text, row))
-    if (index === -1) {
+    // Longest match wins. With two pendings where one starts the other, taking
+    // the first match let the shorter one consume the longer one's row.
+    let best = -1
+    let bestLength = -1
+    for (const [index, row] of remaining.entries()) {
+      if (row !== null && queueRowIsPendingSend(item.text, row) && row.length > bestLength) {
+        best = index
+        bestLength = row.length
+      }
+    }
+    if (best === -1) {
       return true
     }
-    remaining.splice(index, 1)
+    remaining.splice(best, 1)
     return false
   })
 }

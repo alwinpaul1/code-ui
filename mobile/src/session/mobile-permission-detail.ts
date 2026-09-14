@@ -16,7 +16,9 @@ export type PermissionDetailParts = {
   description: string | null
 }
 
-const GUTTER = /^\s*[│|]\s?/
+// Only the box-drawing gutter the TUI paints. An ASCII pipe is far more likely
+// to be a shell pipe inside the command than a gutter (2026-09-14 review).
+const GUTTER = /^\s*│\s?/
 const AUTO_MODE_TIP = /^\s*Tip:.*auto mode/i
 const PROCEED = /^\s*(?:Do you want to proceed\??|Proceed\??)\s*$/i
 
@@ -39,12 +41,23 @@ export function splitPermissionDetail(
       prose.push(line.trim())
     }
   }
+  // Deliberately NOT requiring the gutter lines to be contiguous: in the real
+  // captured body the TUI gutters the command AND the hook's reason, with the
+  // step description sitting between them as plain prose (2026-09-14). A
+  // reviewer proposed refusing a broken gutter, on the theory that a command
+  // with a literal newline leaves its continuation ungutttered — the capture
+  // shows the TUI gutters every line of the command, so that would have thrown
+  // away the real shape to guard a hypothetical one.
   const fromGutter = gutter.join('\n').trim()
   const resolved = command?.trim() || fromGutter || null
   const text = prose.join('\n').trim()
   // Prose that merely repeats the command is not worth a second block.
   const dense = (value: string) => value.replace(/\s+/g, '')
-  const description =
+  const described =
     text.length > 0 && (!resolved || !dense(resolved).includes(dense(text))) ? text : null
+  // Never leave the card with a title and no body: a summary of nothing but the
+  // tip and the proceed line dropped to empty (2026-09-14 review). Falling back
+  // to what the agent sent is better than showing the user nothing to read.
+  const description = described ?? (resolved ? null : ((detail ?? '').trim() || null))
   return { command: resolved, description }
 }

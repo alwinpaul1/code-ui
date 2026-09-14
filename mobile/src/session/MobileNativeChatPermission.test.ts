@@ -267,14 +267,21 @@ describe('MobileNativeChatPermission', () => {
   })
 
   it('wraps prose instead of running it off the side of a horizontal scroll', async () => {
-    // A permission with no command carries only prose. It briefly shared the
-    // command's horizontal scroll, which has unbounded width, so a sentence
-    // never wrapped and had to be scrolled sideways.
-    const detail = 'This session wants to write outside the workspace. '.repeat(6)
+    // 2026-09-14 review: the previous version of this test rendered a
+    // permission with NO command, so the horizontal ScrollView never existed
+    // and its assertion loop ran zero times — it passed whatever the code did.
+    // Give it a command, so the horizontal block is really there, and prove the
+    // prose is not inside it.
+    const detail = 'This session wants to write outside the workspace. '.repeat(4)
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatPermission, {
-          permission: { title: 'Approve?', detail, options: [{ label: 'Yes', send: '1' }] },
+          permission: {
+            title: 'Approve?',
+            detail,
+            command: 'rm -rf /private/tmp/scratch',
+            options: [{ label: 'Yes', send: '1' }]
+          },
           onRespond: vi.fn(async () => true)
         })
       )
@@ -282,10 +289,16 @@ describe('MobileNativeChatPermission', () => {
     const horizontal = renderer!.root
       .findAllByType('ScrollView')
       .filter((node) => node.props.horizontal === true)
+    // The block must exist, or this test proves nothing.
+    expect(horizontal.length).toBeGreaterThan(0)
     for (const scroller of horizontal) {
       const inside = scroller.findAllByType('Text').map((text) => String(text.props.children))
       expect(inside.some((text) => text.includes('write outside the workspace'))).toBe(false)
+      expect(inside.some((text) => text.includes('rm -rf'))).toBe(true)
     }
+    // And the prose is rendered somewhere, wrapping, outside that block.
+    const all = renderer!.root.findAllByType('Text').map((text) => String(text.props.children))
+    expect(all.some((text) => text.includes('write outside the workspace'))).toBe(true)
   })
 
   it('keeps the agent\'s choices when auto mode is the only one it offered', async () => {

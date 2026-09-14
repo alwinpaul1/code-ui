@@ -280,3 +280,24 @@ describe('sentPromptsFromScreen', () => {
     ).toEqual(['Did you do all the changes i told in this session'])
   })
 })
+
+it('leaves the effort and mode picker rows out of the prompt above them', () => {
+  // 2026-09-14, from the phone: a sent message came back with "xhigh · /effort"
+  // glued on its end. Claude draws the picker's chosen row with a radio glyph,
+  // which the continuation rule did not exclude — and once the bubble's text
+  // had that suffix it no longer matched its own queue row, so the message
+  // showed as sent AND queued at the same time.
+  expect(
+    sentPromptsFromScreen([
+      '❯ Same message goes with images and text glued',
+      '  ◉ xhigh · /effort',
+      '',
+      '❯ '
+    ])
+  ).toEqual(['Same message goes with images and text glued'])
+  for (const glyph of ['◉', '○', '●', '◦']) {
+    expect(
+      sentPromptsFromScreen([`❯ pick a mode`, `  ${glyph} manual · /mode`, '', '❯ '])
+    ).toEqual(['pick a mode'])
+  }
+})

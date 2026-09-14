@@ -53,3 +53,24 @@ describe('splitting an approval summary', () => {
     })
   })
 })
+
+it('drops the boilerplate on the legacy "$ " shape too', () => {
+  // 2026-09-14 review: any summary with a `$ ` line took a different branch
+  // that filtered nothing, so the auto-mode tip came straight back.
+  const legacy = [
+    'Tip: auto mode handles these prompts for you — choose "switch to auto mode" below',
+    'Rebuild the release bundle',
+    'Do you want to proceed?'
+  ].join('\n')
+  const parts = splitPermissionDetail(legacy, undefined)
+  expect(parts.description).toBe('Rebuild the release bundle')
+  expect(parts.description ?? '').not.toMatch(/auto mode|proceed/i)
+})
+
+it('treats an ASCII pipe as part of the command, not as a gutter', () => {
+  // A shell pipe at the start of a continuation line is far more likely than a
+  // gutter the TUI drew; only the box-drawing bar means gutter.
+  const parts = splitPermissionDetail('   │ grep -r foo .\n| head -20', undefined)
+  expect(parts.command).toContain('grep -r foo .')
+  expect(`${parts.command}\n${parts.description}`).toContain('| head -20')
+})

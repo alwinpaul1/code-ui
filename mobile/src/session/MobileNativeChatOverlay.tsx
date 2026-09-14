@@ -19,6 +19,8 @@ import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
+const CLIPBOARD_POLL_MS = 3000
+
 const NO_PROMPTS: { nonce: string; text: string }[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 
@@ -104,6 +106,11 @@ export function MobileNativeChatOverlay({
       })
     }
     check()
+    // Re-check on a timer as well as on foreground: copying an image while the
+    // app is already open never fired the AppState listener, so the row never
+    // appeared — and emptying the clipboard the same way left a row that did
+    // nothing when tapped (2026-09-14 review).
+    const timer = setInterval(check, CLIPBOARD_POLL_MS)
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         check()
@@ -111,6 +118,7 @@ export function MobileNativeChatOverlay({
     })
     return () => {
       cancelled = true
+      clearInterval(timer)
       subscription.remove()
     }
   }, [])

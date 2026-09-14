@@ -50,7 +50,12 @@ const PROMPT_ROW = /^[❯›] (\S.*)$/
 const COMPOSER_ROW = /^[>❯›](?:\u00a0.*|\s*)$/
 /** A wrapped continuation of the prompt: exactly two spaces, then text that
  *  is not one of the glyphs the agent uses for its own rows. */
-const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓].*)$/
+// The radio glyphs Claude draws beside a picker's rows (`◉ xhigh · /effort`)
+// join the spinner and fold glyphs here: a picker row is the agent's own
+// chrome, never part of the prompt above it. Without them a mode or effort
+// change was glued onto the message, which then no longer matched its own
+// queue row, so it showed as sent AND queued (2026-09-14).
+const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓◉◎○●◦].*)$/
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/

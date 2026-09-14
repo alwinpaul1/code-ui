@@ -43,7 +43,12 @@ function MobileNativeChatPermissionImpl({
   const split =
     commandStart >= 0
       ? {
-          description: permission.detail?.slice(0, commandStart).trim() || null,
+          // The same boilerplate has to go here too: any summary carrying a
+          // `$ ` line took this branch and the auto-mode tip came back with it
+          // (2026-09-14 review).
+          description:
+            splitPermissionDetail(permission.detail?.slice(0, commandStart), undefined)
+              .description,
           command: permission.command ?? permission.detail?.slice(commandStart + 2).trim() ?? null
         }
       : splitPermissionDetail(permission.detail, permission.command)

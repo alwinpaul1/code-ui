@@ -153,6 +153,6 @@ describe('running a Mac control on the host', () => {
       'session.tabs.createTerminal': okResponse({ tab: { terminal: 'term-9' } })
     })
     await run(fake)
-    expect(fake.methods()).toContain('terminal.close')
+    expect(fake.methods()).toContain('terminal.closeTab')
   })
 })

@@ -258,3 +258,22 @@ describe('Claude transcript echoes', () => {
     ])
   })
 })
+
+it('does not let a short send claim a longer message\'s queue row', () => {
+  // 2026-09-14 review: the match was accepted in BOTH directions, so a pending
+  // whose text merely STARTS another one matched the longer one's drawn row.
+  // Its own bubble vanished while it was still queued, and the longer message
+  // showed twice — the duplicate the user reported, reached the other way.
+  const a = 'run the whole regression gate now'
+  const b = `${a} and then tag the release`
+  expect(pendingOutsideVisibleQueue([{ text: a }, { text: b }], [b])).toEqual([{ text: a }])
+})
+
+it('gives a drawn row to the longest send that starts with it', () => {
+  const a = 'run the whole regression gate now'
+  const b = `${a} and then tag the release`
+  // The row is a shortened form of B; A must not take it first.
+  expect(
+    pendingOutsideVisibleQueue([{ text: a }, { text: b }], [a, `${a} and then tag the rel…`])
+  ).toEqual([])
+})

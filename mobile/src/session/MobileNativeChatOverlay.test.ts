@@ -5,14 +5,22 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
+const clipboard = { hasImage: false }
+const appStateListeners: ((state: string) => void)[] = []
 vi.mock('expo-clipboard', () => ({
-  hasImageAsync: vi.fn(async () => false),
+  hasImageAsync: vi.fn(async () => clipboard.hasImage),
   getImageAsync: vi.fn(async () => null),
   setStringAsync: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
-  AppState: { addEventListener: () => ({ remove: () => undefined }), currentState: 'active' },
+  AppState: {
+    addEventListener: (_event: string, listener: (state: string) => void) => {
+      appStateListeners.push(listener)
+      return { remove: () => undefined }
+    },
+    currentState: 'active'
+  },
   StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
   View: 'View'
 }))
@@ -356,4 +364,33 @@ describe('MobileNativeChatOverlay across a reconnect blink', () => {
     })
     expect(renderer!.root.findAllByType('ChatView' as never)).toHaveLength(0)
   })
+})
+
+it('offers the paste row only once the clipboard actually holds an image', async () => {
+  // 2026-09-14 review: every clipboard mock hardcoded "no image", so the gate
+  // that decides whether to show the row was never exercised on its true
+  // branch — deleting it would have failed nothing.
+  clipboard.hasImage = false
+  let renderer: ReactTestRenderer | null = null
+  await act(async () => {
+    renderer = create(overlayElement({}))
+  })
+  const pasteProp = () =>
+    renderer!.root.findAllByType('ChatView' as never)[0]?.props.onPasteImage
+  await act(async () => {
+    await Promise.resolve()
+  })
+  expect(pasteProp()).toBeUndefined()
+
+  // Copy an image, then bring the app back to the foreground.
+  clipboard.hasImage = true
+  await act(async () => {
+    for (const listener of appStateListeners) {
+      listener('active')
+    }
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  expect(typeof pasteProp()).toBe('function')
+  act(() => renderer!.unmount())
 })

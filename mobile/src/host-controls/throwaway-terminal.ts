@@ -93,7 +93,10 @@ export async function watchThrowawayTerminal<T>(
     // itself rather than leaving it standing on the desktop (2026-09-14).
     if (!tabId && handle) {
       void args.client
-        .sendRequest('terminal.close', { terminal: handle })
+        // closeTab, not close: this fork's own note records that
+        // `terminal.close` kills one pane and leaves the tab standing, which is
+        // the thing this arm exists to prevent (2026-09-14 review).
+        .sendRequest('terminal.closeTab', { terminal: handle })
         .catch(() => undefined)
     }
     if (tabId) {
