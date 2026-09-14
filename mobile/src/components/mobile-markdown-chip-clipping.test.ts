@@ -55,3 +55,42 @@ describe('an inline code chip inside a table', () => {
     )
   })
 })
+
+// 2026-09-14, from the phone: a long inline code span (`feat/mobile-charging-
+// ops-glanceable-and-gated`) split into two pills that wrapped onto consecutive
+// lines, and the pills MERGED — the lower one's border cut across the upper
+// one's descenders, so the text read as cropped. An inline View is hung from
+// the text baseline and its vertical margins are ignored by Android's text
+// layout, so the ONLY thing that separates one wrapped pill from the pill on
+// the line below is the prose line height. If a pill's painted footprint
+// (its box plus the downward baseline shift) is taller than the line, the two
+// lines' pills overlap. Pin the arithmetic so a future line-height or padding
+// tweak cannot bring the overlap back.
+describe('a wrapped inline code chip does not collide with the pill on the next line', () => {
+  const MIN_GAP = 2
+  it.each(['dark', 'light'] as const)(
+    'keeps a full line-gap above and below each pill in %s',
+    (scheme) => {
+      const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as {
+        paragraph: { lineHeight: number }
+        listText: { lineHeight: number }
+        quoteText: { lineHeight: number }
+        inlineCodeChip: { paddingVertical?: number; borderWidth?: number } & Box
+        inlineCodeChipText: { lineHeight: number }
+      }
+      const chip = styles.inlineCodeChip
+      const shift =
+        chip.transform?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0
+      const chipHeight =
+        styles.inlineCodeChipText.lineHeight +
+        2 * (chip.paddingVertical ?? 0) +
+        2 * (chip.borderWidth ?? 0)
+      const footprint = shift + chipHeight
+      // Every prose block a chip can wrap inside must clear the pill's footprint
+      // with room to spare, or two wrapped pills touch.
+      for (const block of [styles.paragraph, styles.listText, styles.quoteText]) {
+        expect(block.lineHeight).toBeGreaterThanOrEqual(footprint + MIN_GAP)
+      }
+    }
+  )
+})

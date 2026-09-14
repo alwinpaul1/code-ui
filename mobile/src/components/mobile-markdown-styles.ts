@@ -10,7 +10,7 @@ export const MARKDOWN_BASE_SIZE = 15
  *  it: any ancestor that clips (the table, which needs `overflow: hidden` for
  *  its rounded corners) cuts the chip off unless it leaves this much room.
  *  A chip in a table cell was sliced across the middle (2026-09-14). */
-export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 4
+export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 2
 
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
@@ -21,7 +21,11 @@ export function makeMarkdownStyles(theme: Theme) {
     paragraph: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_BASE_SIZE + 8,
+      // +10, not +8: a wrapped inline code pill is an inline View whose only
+      // separation from the pill on the next line is this line height (Android
+      // ignores an inline View's vertical margins). See the collision invariant
+      // in mobile-markdown-chip-clipping.test.ts (2026-09-14).
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
     heading: {
@@ -82,7 +86,10 @@ export function makeMarkdownStyles(theme: Theme) {
     inlineCodeChipText: {
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 2,
-      lineHeight: MARKDOWN_BASE_SIZE + 3,
+      // +1 (16 at base 15): tall enough for the mono font's descenders, short
+      // enough that the pill's painted footprint clears the prose line height,
+      // so a wrapped pill never overlaps the pill on the line below.
+      lineHeight: MARKDOWN_BASE_SIZE + 1,
       color: colors.codeSpanText
     },
     inlineCodeLink: {
@@ -97,7 +104,7 @@ export function makeMarkdownStyles(theme: Theme) {
     quoteText: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_BASE_SIZE + 8,
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.textSecondary
     },
     codeBlock: {
@@ -186,7 +193,7 @@ export function makeMarkdownStyles(theme: Theme) {
       width: 22,
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 1,
-      lineHeight: MARKDOWN_BASE_SIZE + 8,
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.textSecondary
     },
     listText: {
@@ -194,7 +201,7 @@ export function makeMarkdownStyles(theme: Theme) {
       minWidth: 0,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_BASE_SIZE + 8,
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
     rule: {
