@@ -513,3 +513,32 @@ it('retires a held reading once the row it was read from lands, even shortened',
   expect(latest).toEqual([])
   act(() => renderer!.unmount())
 })
+
+it('retires a reading that is LONGER than the row it landed as', () => {
+  // 2026-09-14 review: 0.5.83 made the matcher one-directional, which is right
+  // for the queue box but re-opened this. Two messages typed while the agent is
+  // busy stack as plain rows and the parser joins them into one reading, so the
+  // reading is longer than either landed row and nothing retired it.
+  const first = 'run the whole regression gate now and report what fails'
+  const joined = `${first} and then tag the release when it is green`
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { sent: [joined], own: [], folded }))
+  })
+  expect(latest).toHaveLength(1)
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, {
+        sent: [joined],
+        own: [],
+        folded: [...folded, row('u2', 'user', first)]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})

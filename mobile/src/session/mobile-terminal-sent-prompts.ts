@@ -50,12 +50,12 @@ const PROMPT_ROW = /^[❯›] (\S.*)$/
 const COMPOSER_ROW = /^[>❯›](?:\u00a0.*|\s*)$/
 /** A wrapped continuation of the prompt: exactly two spaces, then text that
  *  is not one of the glyphs the agent uses for its own rows. */
-// The radio glyphs Claude draws beside a picker's rows (`◉ xhigh · /effort`)
-// join the spinner and fold glyphs here: a picker row is the agent's own
-// chrome, never part of the prompt above it. Without them a mode or effort
-// change was glued onto the message, which then no longer matched its own
-// queue row, so it showed as sent AND queued (2026-09-14).
-const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓◉◎○●◦].*)$/
+const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓].*)$/
+/** A picker's chosen row: a radio glyph, the value, and the command that set it
+ *  — `◉ xhigh · /effort`. Matched by SHAPE, not by the glyph alone: excluding
+ *  the glyph outright ended the prompt at any bullet the user wrote, and the
+ *  rest of their message went with it (2026-09-14 review). */
+const PICKER_ROW = /^[◉◎○●◦]\s+\S.*\s·\s\/\w+\s*$/
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/
@@ -111,7 +111,7 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       // row — same shape as a wrap (captured at 100 columns, 2026-09-14). A
       // slash command is never part of the prompt above it, and once one has
       // appeared every row after it is its own entry, not this prompt's tail.
-      if (LOCAL_COMMAND.test(more[1] ?? '')) {
+      if (LOCAL_COMMAND.test(more[1] ?? '') || PICKER_ROW.test(more[1] ?? '')) {
         break
       }
       parts.push(more[1] ?? '')

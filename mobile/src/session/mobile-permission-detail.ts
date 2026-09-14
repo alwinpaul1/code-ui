@@ -55,9 +55,11 @@ export function splitPermissionDetail(
   const dense = (value: string) => value.replace(/\s+/g, '')
   const described =
     text.length > 0 && (!resolved || !dense(resolved).includes(dense(text))) ? text : null
-  // Never leave the card with a title and no body: a summary of nothing but the
-  // tip and the proceed line dropped to empty (2026-09-14 review). Falling back
-  // to what the agent sent is better than showing the user nothing to read.
-  const description = described ?? (resolved ? null : ((detail ?? '').trim() || null))
+  // No raw fallback. Handing the untouched summary back resurfaced the very
+  // lines this function exists to drop — the card re-printed "choose switch to
+  // auto mode" beside a choice list that filters that option out (2026-09-14
+  // review). When a command survives it IS the body; when nothing survives,
+  // nothing is what the agent actually said worth reading.
+  const description = described
   return { command: resolved, description }
 }

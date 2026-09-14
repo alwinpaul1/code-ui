@@ -147,6 +147,30 @@ export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   return row.length >= QUEUE_ROW_MATCH_FLOOR && want.startsWith(row)
 }
 
+/** Whether a screen READING and a landed transcript row are the same message.
+ *
+ *  Either side can be the longer one here, unlike the queue case: the box
+ *  shortens a long message, but the scrollback parser can also JOIN two entries
+ *  stacked while the agent was busy, making the reading longer than any one row.
+ *  Over-matching here only retires a duplicate bubble, which is safe; the queue
+ *  matcher stays one-directional because over-matching there loses a message
+ *  (2026-09-14 review).
+ */
+export function readingMatchesLandedRow(landed: string, reading: string): boolean {
+  const dense = (text: string) => text.replace(/\s+/g, '')
+  const a = dense(landed).replace(/(?:\u2026|\.{3})$/, '')
+  const b = dense(reading).replace(/(?:\u2026|\.{3})$/, '')
+  if (!a || !b) {
+    return false
+  }
+  if (a === b) {
+    return true
+  }
+  const shorter = a.length < b.length ? a : b
+  const longer = a.length < b.length ? b : a
+  return shorter.length >= QUEUE_ROW_MATCH_FLOOR && longer.startsWith(shorter)
+}
+
 export function pendingOutsideVisibleQueue<T extends { text: string }>(
   pending: readonly T[],
   queue: readonly string[]

@@ -74,3 +74,26 @@ it('treats an ASCII pipe as part of the command, not as a gutter', () => {
   expect(parts.command).toContain('grep -r foo .')
   expect(`${parts.command}\n${parts.description}`).toContain('| head -20')
 })
+
+it('never hands the dropped boilerplate back as the description', () => {
+  // 2026-09-14 review: an "always show something" fallback re-printed the
+  // auto-mode tip the filter had just removed — beside a choice list that
+  // deliberately omits that option.
+  for (const only of [
+    'Tip: auto mode handles these prompts for you — choose "switch to auto mode" below',
+    'Do you want to proceed?',
+    'Tip: auto mode handles these prompts for you\nDo you want to proceed?'
+  ]) {
+    const parts = splitPermissionDetail(only, undefined)
+    expect(`${parts.command ?? ''}\n${parts.description ?? ''}`).not.toMatch(/auto mode|proceed/i)
+  }
+})
+
+it('still says nothing rather than something wrong when only a command survives', () => {
+  const parts = splitPermissionDetail(
+    'Tip: auto mode handles these prompts for you\n   │ pnpm test\nDo you want to proceed?',
+    undefined
+  )
+  expect(parts.command).toBe('pnpm test')
+  expect(parts.description).toBeNull()
+})

@@ -301,3 +301,20 @@ it('leaves the effort and mode picker rows out of the prompt above them', () => 
     ).toEqual(['pick a mode'])
   }
 })
+
+it('keeps a bullet list the user wrote, and the lines after it', () => {
+  // 2026-09-14 review: excluding the radio glyph outright ended the prompt at
+  // any bullet, and everything after it was dropped with no second prompt.
+  expect(
+    sentPromptsFromScreen([
+      '❯ here is my plan, pick one of these:',
+      '  ○ ship it today',
+      '  ● ship it tomorrow',
+      '  and tell me which you picked and why',
+      '',
+      '❯ '
+    ])
+  ).toEqual([
+    'here is my plan, pick one of these: ○ ship it today ● ship it tomorrow and tell me which you picked and why'
+  ])
+})

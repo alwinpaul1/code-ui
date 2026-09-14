@@ -1,4 +1,5 @@
 import { claudeQueueViewFromScreen, type ClaudeQueueView } from './mobile-terminal-queued-messages'
+import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
 import {
   checkScreen,
   clearInput,
@@ -219,16 +220,26 @@ export async function finishNativeQueueEdit(
  *  emptied composer looked exactly like a successful delete — the message stayed
  *  queued and the editor closed anyway (reported from the phone, 2026-09-14).
  *  Every other path already confirms against the queue; this one did not. */
+/** Every poll is a relay round trip; without a budget six of them could hold
+ *  the sheet disabled for about sixteen seconds. */
+const CONFIRM_REMOVED_BUDGET_MS = 6000
+
 async function confirmRemoved(
   io: QueueEditorIo,
   agent: QueueEditorAgent,
   removed: string
 ): Promise<void> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  // `sameEntry` matches in both directions, which is right for pairing a recall
+  // against a caption but wrong here: deleting "ok do it" while "ok do it now,
+  // carefully" is still queued would report a failed delete that in fact
+  // succeeded, and leave the sheet stuck (2026-09-14 review). The drawn row is a
+  // shortened form of the removed message, never the other way round.
+  const deadline = Date.now() + CONFIRM_REMOVED_BUDGET_MS
+  for (let attempt = 0; attempt < 6 && Date.now() < deadline; attempt += 1) {
     await io.pause()
     const screen = await io.read()
     checkScreen(agent, screen)
-    if (!queueFromScreen(agent, screen).some((entry) => sameEntry(removed, entry))) {
+    if (!queueFromScreen(agent, screen).some((entry) => queueRowIsPendingSend(removed, entry))) {
       return
     }
   }

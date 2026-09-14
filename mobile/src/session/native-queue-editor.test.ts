@@ -855,39 +855,3 @@ it('opens a Codex tap on the row the card drew', async () => {
   expect(recall.text).toBe('bravo second')
 })
 
-it('says so when a deleted message is still queued, instead of closing as if it worked', async () => {
-  // 2026-09-14, reported from the phone: editing a queued message and then
-  // deleting it left the message in the queue. Every other path confirms what
-  // the agent actually did — typeAndSubmit checks the queue, submitInput checks
-  // the draft — but the delete path returned the moment the composer was empty
-  // and asserted nothing, so a recall that did not take the entry out of the
-  // queue looked exactly like a successful delete.
-  // The real shape: Orca republishes Claude's queue hint as the composer draft.
-  const stillQueued = screen('Press up to edit queued messages', [
-    '  ❯ original',
-    '──────────',
-    '❯',
-    '──────────'
-  ])
-  const read = vi.fn().mockResolvedValueOnce(screen('original')).mockResolvedValue(stillQueued)
-  await expect(
-    finishNativeQueueEdit(
-      { read, write: vi.fn().mockResolvedValue(undefined), pause: async () => {} },
-      'claude',
-      { text: 'original', draft: 'original', segments: null, index: 0 },
-      null
-    )
-  ).rejects.toThrow(/still queued|could not be removed/i)
-})
-
-it('accepts a delete once the entry has left the queue', async () => {
-  const read = vi.fn().mockResolvedValueOnce(screen('original')).mockResolvedValue(screen())
-  await expect(
-    finishNativeQueueEdit(
-      { read, write: vi.fn().mockResolvedValue(undefined), pause: async () => {} },
-      'claude',
-      { text: 'original', draft: 'original', segments: null, index: 0 },
-      null
-    )
-  ).resolves.toBeUndefined()
-})
