@@ -268,6 +268,16 @@ function splitByStatus(
     if (launches.has(id) || notifications.has(id) || listed.has(id) || paneDone) {
       continue
     }
+    // The status line emits `bg=` (launched shells) only when it is non-empty,
+    // so once the last shell finishes the phone keeps the previous non-empty
+    // list. The `live`/`run` list IS emitted every refresh and is authoritative
+    // over what is still running, so a launched id absent from it has finished —
+    // even if its completion notification never reached the loaded window. Skip
+    // it, or a stale `bg=` id shows a finished shell as running (6 rows for 2
+    // live shells, reported 2026-09-14).
+    if (agentSaysRunning !== null && !agentSaysRunning.has(id)) {
+      continue
+    }
     running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })
   }
   // A subagent the host is tracking but the loaded transcript window never

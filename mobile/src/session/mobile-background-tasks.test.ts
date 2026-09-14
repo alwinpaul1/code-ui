@@ -733,6 +733,31 @@ describe('a tab opened after its turn ended with shells still running', () => {
     expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
   })
 
+  it('drops a stale launched id the authoritative running list no longer names', () => {
+    // From the phone, 2026-09-14: six running tasks shown while two were alive.
+    // The status line emits `bg=` (launched shells) ONLY when non-empty, so once
+    // the last one finished the phone kept the previous non-empty list. Those
+    // stale ids, not in the loaded window, were shown as running. The `live`
+    // list IS emitted every refresh and IS authoritative, so a launched id
+    // absent from it has finished — even if its completion notification is
+    // outside the window.
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      runningTaskIds: ['bajgl5wmo'],
+      launchedTaskIds: ['bajgl5wmo', 'bpast1done', 'bpast2done', 'bpast3done']
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
+  })
+
+  it('keeps a launched id when there is no authoritative running list to check it against', () => {
+    // With no live/run beacon at all, the launched list is the only evidence,
+    // so a launch the window never showed still counts — the pre-existing
+    // behaviour, unchanged.
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      launchedTaskIds: ['bajgl5wmo']
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
+  })
+
   it('adds nothing when the window already shows a launch, or when the pane is done', () => {
     const shown = deriveBackgroundTasks(
       [
