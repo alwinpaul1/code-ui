@@ -5,6 +5,13 @@ import { useTheme, type Theme } from '../theme/theme-context'
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
 export const MARKDOWN_BASE_SIZE = 15
 
+/** How far an inline code chip is painted BELOW its layout box, to sit level
+ *  with the text around it. It is a transform, so layout does not know about
+ *  it: any ancestor that clips (the table, which needs `overflow: hidden` for
+ *  its rounded corners) cuts the chip off unless it leaves this much room.
+ *  A chip in a table cell was sliced across the middle (2026-09-14). */
+export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 4
+
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
   return StyleSheet.create({
@@ -70,7 +77,7 @@ export function makeMarkdownStyles(theme: Theme) {
       // Android hangs an inline View from the baseline, so a chip taller than
       // the text's ascent floats above the line (2026-09-12, "peak" sat above
       // its sentence). Half the extra height brings it level.
-      transform: [{ translateY: 4 }]
+      transform: [{ translateY: MARKDOWN_INLINE_CHIP_BASELINE_SHIFT }]
     },
     inlineCodeChipText: {
       fontFamily: fonts.mono,
@@ -147,7 +154,11 @@ export function makeMarkdownStyles(theme: Theme) {
       borderBottomWidth: 1,
       borderColor: colors.border,
       paddingHorizontal: space.sm,
-      paddingVertical: space.xs,
+      paddingTop: space.xs,
+      // The extra room below is for an inline code chip: it is painted
+      // MARKDOWN_INLINE_CHIP_BASELINE_SHIFT px lower than it is laid out, and
+      // the table clips, so without this the chip loses its bottom.
+      paddingBottom: space.xs + MARKDOWN_INLINE_CHIP_BASELINE_SHIFT,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE - 2,
       lineHeight: MARKDOWN_BASE_SIZE + 4,
