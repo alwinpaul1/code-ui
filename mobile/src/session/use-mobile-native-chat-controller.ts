@@ -27,6 +27,7 @@ import type {
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { useMobileNativeChatHud } from './use-mobile-native-chat-hud'
+import { useStickyLiveHud } from './use-sticky-live-hud'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import {
   withTerminalDialogOptions,
@@ -172,6 +173,7 @@ export function useMobileNativeChatController(
   // The agent's footer counts its shells live; fold that into the beacon-built
   // report so the pill and sheet can use it as a floor when the beacon's
   // transcript tail lags on a huge session.
+  const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId)
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
   const backgroundTaskReportWithScreen = useMemo(
     () => ({ ...backgroundTaskReport, onScreenShellCount }),
@@ -365,11 +367,8 @@ export function useMobileNativeChatController(
       reportedModel:
         activeChatResolution?.agent === 'codex'
           ? codexModel.model
-          : (hudObservation?.modelId ?? activeSessionTab?.agentStatus?.model ?? null),
-      reportedEffort:
-        activeChatResolution?.agent === 'codex'
-          ? codexModel.effort
-          : (hudObservation?.effort ?? null),
+          : (liveHud.model ?? activeSessionTab?.agentStatus?.model ?? null),
+      reportedEffort: activeChatResolution?.agent === 'codex' ? codexModel.effort : liveHud.effort,
       openRequest: modelSheetRequest,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,

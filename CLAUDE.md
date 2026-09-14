@@ -29,6 +29,22 @@ So, for every reported bug:
    states; a hardcoded colour passes every automated check and still ships
    the wrong theme.
 
+## Every change is diffed against current code and regression-checked
+
+Before calling any change done: **diff it against the current code** (`git
+diff`, and for a port, upstream's parent against this fork's file) and read
+what actually changed, not what you meant to change. Then **run the
+regression suite** (`cd mobile && npx tsc --noEmit && npx vitest run && npx
+oxlint`) and, for anything that touched ordering, parsing, or a pinned
+contract, have a second reviewer (an Opus or Sonnet agent) hunt the diff for
+regressions. **A reported regression is confirmed or disproved with a test,
+never by re-reading the diff**: reproduce it, and if it is real, fix it with
+its own failing-first test in the same pass. Only a green gate plus a
+confirmed-clear review means done. (2026-09-14: a hold-guard fix routed a
+re-pin through the follow gate and silently broke dock re-pins; two
+independent reviews caught it, a failing-first test proved it, and it was
+fixed before shipping. That is the bar.)
+
 ## The second time you fix one shape of bug, sweep for the rest
 
 Fixing the same kind of defect twice means it is a habit, not an incident.
