@@ -318,3 +318,19 @@ it('keeps a bullet list the user wrote, and the lines after it', () => {
     'here is my plan, pick one of these: ○ ship it today ● ship it tomorrow and tell me which you picked and why'
   ])
 })
+
+it('leaves a hyphenated picker row out too, and keeps what follows it', () => {
+  // 2026-09-14 review: the picker pattern required \w+ after the slash, so
+  // `/output-style` was not recognised and glued itself onto the prompt — the
+  // same "sent AND queued" symptom, just for a different picker. And ending the
+  // block at a picker row threw away everything after it.
+  expect(
+    sentPromptsFromScreen([
+      '❯ set it up the way I like',
+      '  ◉ asd-ste100 · /output-style',
+      '  and then run the tests',
+      '',
+      '❯ '
+    ])
+  ).toEqual(['set it up the way I like and then run the tests'])
+})

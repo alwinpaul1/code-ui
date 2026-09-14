@@ -55,7 +55,7 @@ const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓
  *  — `◉ xhigh · /effort`. Matched by SHAPE, not by the glyph alone: excluding
  *  the glyph outright ended the prompt at any bullet the user wrote, and the
  *  rest of their message went with it (2026-09-14 review). */
-const PICKER_ROW = /^[◉◎○●◦]\s+\S.*\s·\s\/\w+\s*$/
+const PICKER_ROW = /^[◉◎○●◦]\s+\S.*\s·\s\/[\w-]+\s*$/
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/
@@ -111,7 +111,14 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       // row — same shape as a wrap (captured at 100 columns, 2026-09-14). A
       // slash command is never part of the prompt above it, and once one has
       // appeared every row after it is its own entry, not this prompt's tail.
-      if (LOCAL_COMMAND.test(more[1] ?? '') || PICKER_ROW.test(more[1] ?? '')) {
+      // A picker row is the agent's own chrome sitting inside the block, so drop
+      // just that row and keep reading: ending the block here threw away
+      // everything after it, which is what the glyph exclusion did wrong.
+      if (PICKER_ROW.test(more[1] ?? '')) {
+        cursor += 1
+        continue
+      }
+      if (LOCAL_COMMAND.test(more[1] ?? '')) {
         break
       }
       parts.push(more[1] ?? '')

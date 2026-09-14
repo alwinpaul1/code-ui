@@ -520,7 +520,8 @@ it('retires a reading that is LONGER than the row it landed as', () => {
   // busy stack as plain rows and the parser joins them into one reading, so the
   // reading is longer than either landed row and nothing retired it.
   const first = 'run the whole regression gate now and report what fails'
-  const joined = `${first} and then tag the release when it is green`
+  const second = 'and then tag the release when it is green'
+  const joined = `${first} ${second}`
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
@@ -535,10 +536,38 @@ it('retires a reading that is LONGER than the row it landed as', () => {
       createElement(ProbeOwn, {
         sent: [joined],
         own: [],
-        folded: [...folded, row('u2', 'user', first)]
+        folded: [...folded, row('u2', 'user', first), row('u3', 'user', second)]
       })
     )
   })
   expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
+it('keeps a held reading that a later, longer message merely extends', () => {
+  // 2026-09-14 review: matching a reading against a landed row by prefix alone
+  // retired "check the build failure on main again, this time with logs"
+  // against a landed "check the build failure on main" — a lost message with no
+  // row of its own. Only a reading fully accounted for by landed rows retires.
+  const landedRow = 'check the build failure on main'
+  const held = `${landedRow} again, this time with logs`
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { sent: [held], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, {
+        sent: [held],
+        own: [],
+        folded: [...folded, row('u2', 'user', landedRow)]
+      })
+    )
+  })
+  expect(latest).toMatchObject([{ text: held }])
   act(() => renderer!.unmount())
 })

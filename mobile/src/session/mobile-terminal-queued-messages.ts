@@ -147,28 +147,45 @@ export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   return row.length >= QUEUE_ROW_MATCH_FLOOR && want.startsWith(row)
 }
 
-/** Whether a screen READING and a landed transcript row are the same message.
+/** Whether a screen READING is nothing but landed rows the parser joined.
  *
- *  Either side can be the longer one here, unlike the queue case: the box
- *  shortens a long message, but the scrollback parser can also JOIN two entries
- *  stacked while the agent was busy, making the reading longer than any one row.
- *  Over-matching here only retires a duplicate bubble, which is safe; the queue
- *  matcher stays one-directional because over-matching there loses a message
- *  (2026-09-14 review).
+ *  Messages typed while the agent is busy stack as plain rows and the scrollback
+ *  parser joins them into one reading, so the reading can be LONGER than any one
+ *  transcript row. A prefix test cannot be used to spot that: a genuinely
+ *  different, longer message extends a landed row exactly the same way, and
+ *  retiring on that loses a message with no row of its own — the loss `isCutOf`
+ *  was written to prevent (2026-09-14 review).
+ *
+ *  So require the whole reading to be accounted for: it must be a run of landed
+ *  rows, in order, with nothing left over. Then every part of it is already on
+ *  screen as a real row and the held copy is redundant by construction.
  */
-export function readingMatchesLandedRow(landed: string, reading: string): boolean {
+export function readingIsJoinedLandedRows(
+  landed: readonly string[],
+  reading: string
+): boolean {
   const dense = (text: string) => text.replace(/\s+/g, '')
-  const a = dense(landed).replace(/(?:\u2026|\.{3})$/, '')
-  const b = dense(reading).replace(/(?:\u2026|\.{3})$/, '')
-  if (!a || !b) {
+  const want = dense(reading)
+  if (want.length < QUEUE_ROW_MATCH_FLOOR) {
     return false
   }
-  if (a === b) {
-    return true
+  const rows = landed.map(dense).filter((row) => row.length > 0)
+  for (let start = 0; start < rows.length; start += 1) {
+    let at = 0
+    for (let index = start; index < rows.length; index += 1) {
+      const row = rows[index]!
+      if (!want.startsWith(row, at)) {
+        break
+      }
+      at += row.length
+      if (at === want.length && index > start) {
+        // `index > start`: a single row is the plain equality case, which the
+        // caller already covers; this branch exists only for a joined reading.
+        return true
+      }
+    }
   }
-  const shorter = a.length < b.length ? a : b
-  const longer = a.length < b.length ? b : a
-  return shorter.length >= QUEUE_ROW_MATCH_FLOOR && longer.startsWith(shorter)
+  return false
 }
 
 export function pendingOutsideVisibleQueue<T extends { text: string }>(

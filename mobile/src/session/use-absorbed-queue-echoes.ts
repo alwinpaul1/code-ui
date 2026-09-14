@@ -1,5 +1,8 @@
 import { useRef } from 'react'
-import { readingMatchesLandedRow } from './mobile-terminal-queued-messages'
+import {
+  queueRowIsPendingSend,
+  readingIsJoinedLandedRows
+} from './mobile-terminal-queued-messages'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useStableEchoes } from './use-stable-echoes'
@@ -172,7 +175,13 @@ export function useAbsorbedQueueEchoes(
       // wrapped and can be shortened; the landed row carries what the author
       // typed. Comparing them exactly left a shortened reading standing beside
       // its own row, so one send showed as two bubbles (2026-09-14).
-      (entry != null && landedText.some((other) => readingMatchesLandedRow(other, entry.text)))
+      // Two safe shapes, and only these. The screen SHORTENED the row it read,
+      // so the landed text starts with the reading; or the parser JOINED
+      // several stacked rows, so the reading is exactly those rows end to end.
+      // A reading that merely extends one landed row is a different message and
+      // must be kept (2026-09-14 review).
+      (entry != null && landedText.some((other) => queueRowIsPendingSend(other, entry.text))) ||
+      (entry != null && readingIsJoinedLandedRows(landedText, entry.text))
     ) {
       held.current.delete(key)
     }

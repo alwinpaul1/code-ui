@@ -111,8 +111,16 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     void claimFloorUntilAccepted({
       claim: () => setDisplayModeRef.current(handle, 'auto'),
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      // The same three the release guard uses, inverted. Handle and view alone
+      // were not enough: neither changes when the app is backgrounded or the
+      // route closes, so a claim retrying at 250/1000/3000 ms could re-take the
+      // desk right after HOME had handed it back — and the handle was already
+      // out of the driven set, so nothing released it again (2026-09-14 review).
       isAbandoned: () =>
-        activeHandleStateRef.current !== handle || showNativeChatStateRef.current
+        routeClosedRef.current ||
+        AppState.currentState !== 'active' ||
+        activeHandleStateRef.current !== handle ||
+        showNativeChatStateRef.current
     })
   }, [activeHandle, setDisplayMode, showNativeChat])
 

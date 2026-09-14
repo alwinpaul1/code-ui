@@ -334,9 +334,13 @@ export function useMobileNativeChatDrafts(args: {
     // read settled can still claim an older photo turn, exactly as it does on
     // main. Fixing that needs a tail that excludes older image turns without
     // excluding the send's own echo, which is a separate change.
+    // Rebase FIRST so the binder sees the list retirement will: rebasing inside
+    // the updater left a photo sent before the transcript settled invisible to
+    // the binder yet retirable in that same pass (2026-09-14 review).
+    const rebased = transcriptSettled ? rebaseMobileNativeChatPendingBaselines(messages, pending) : pending
     const landedImagePreviews = findLandedImagePreviewEchoes(
       messages,
-      pending.filter((item) => item.baselineResolved)
+      rebased.filter((item) => item.baselineResolved)
     )
     const landedImagePendingIds = new Set(landedImagePreviews.map((preview) => preview.pendingId))
     if (landedImagePreviews.length > 0) {
@@ -346,12 +350,10 @@ export function useMobileNativeChatDrafts(args: {
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
-      // Rebase before retiring: a send captured before the history was known has
-      // to own a real boundary before any row can be judged against it.
-      const rebased = transcriptSettled
-        ? rebaseMobileNativeChatPendingBaselines(messages, current)
-        : current
-      const next = retireLandedMobileNativeChatPending(messages, rebased, landedImagePendingIds)
+      // The same rebased list the binder saw, so a photo cannot be retired in a
+      // pass where the binder never had the chance to claim its thumbnail.
+      const list = current === pending ? rebased : rebaseMobileNativeChatPendingBaselines(messages, current)
+      const next = retireLandedMobileNativeChatPending(messages, list, landedImagePendingIds)
       if (next === current) {
         return previous
       }
