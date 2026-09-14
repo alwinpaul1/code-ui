@@ -43,6 +43,10 @@ export type ActiveTabBackgroundTaskReport = {
   runningTaskIdsAt: number | null
   /** Every shell the beacon saw launched in the transcript tail. */
   launchedTaskIds: readonly string[]
+  /** How many shells the agent's own footer says are running, read off the
+   *  screen. The truthful floor when the beacon's transcript tail cannot reach
+   *  a shell's launch on a huge session; null when no footer count is on screen. */
+  onScreenShellCount?: number | null
 }
 
 /** What the agent has said about its background work, all three halves. */

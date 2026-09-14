@@ -24,7 +24,8 @@ export function useMobileRunningTaskCount(input: {
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
         runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
-        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? []
+        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
+        onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null
       }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages]
   )

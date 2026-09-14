@@ -77,6 +77,13 @@ export type BackgroundTaskDeriveOptions = {
    *  running — this is the transcript itself, read further back than the
    *  window, and fresher than the Stop hook's `run=` mid-turn. */
   launchedTaskIds?: readonly string[]
+  /** How many background shells the agent's OWN footer says are running, read
+   *  off the screen (`parseClaudeRunningShellCount`). Claude Code counts these
+   *  live and in full, so on a huge session where the beacon's transcript tail
+   *  cannot reach a shell's launch, this is the truthful floor: if fewer shells
+   *  were named than the footer counts, the rest are shown as unnamed running
+   *  shells rather than dropped. Null when no footer count is on screen. */
+  onScreenShellCount?: number | null
 }
 
 /** `shell`, `agent` and `monitor` are what the transcript reader can name.
@@ -166,7 +173,7 @@ export function deriveBackgroundTasks(
       notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
     }
   }
-  return splitByStatus(
+  const tasks = splitByStatus(
     launches,
     notifications,
     now,
@@ -176,6 +183,37 @@ export function deriveBackgroundTasks(
     options.launchedTaskIds ?? [],
     options.runningTaskIdsAt ?? null
   )
+  return padToOnScreenShellCount(tasks, options.onScreenShellCount ?? null)
+}
+
+/** The agent's footer counts its background shells live and in full; when it
+ *  says more shells are running than the transcript-and-beacon walk could name
+ *  — a shell launched further back than the beacon's tail can reach, on a huge
+ *  session — the remainder are shown as unnamed running shells rather than
+ *  dropped, so the count matches what the desk shows (2026-09-14). Never
+ *  removes a named shell, and does nothing when the footer count is absent or
+ *  already covered. */
+export function padToOnScreenShellCount(
+  tasks: BackgroundTasks,
+  onScreenShellCount: number | null
+): BackgroundTasks {
+  if (onScreenShellCount === null) {
+    return tasks
+  }
+  const namedShells = tasks.running.filter((task) => task.kind === 'shell').length
+  const missing = onScreenShellCount - namedShells
+  if (missing <= 0) {
+    return tasks
+  }
+  const filler: BackgroundTask[] = Array.from({ length: missing }, (_unused, index) => ({
+    id: `onscreen-shell-${index}`,
+    kind: 'shell',
+    title: 'Background shell',
+    status: 'running',
+    startedAt: null,
+    elapsedMs: null
+  }))
+  return { running: [...tasks.running, ...filler], finished: tasks.finished }
 }
 
 function splitByStatus(

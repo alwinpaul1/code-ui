@@ -733,6 +733,61 @@ describe('a tab opened after its turn ended with shells still running', () => {
     expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
   })
 
+  it('counts footer shells and live subagents together, padding only the shells', () => {
+    // Subagents are not shells: the footer's "· N shells" counts only shells,
+    // and running subagents come from the host's live roster (SubagentStop
+    // hooks), which is fresh and not bounded by the beacon's transcript tail.
+    // Both belong in the running list; the shell floor never pads an agent.
+    const tasks = deriveBackgroundTasks([], NOW, {
+      state: 'working',
+      subagents: [
+        { id: 'a1', description: 'Review auth', state: 'working', startedAt: T0 },
+        { id: 'a2', description: 'Sweep formatting', state: 'working', startedAt: T0 }
+      ]
+    }, { onScreenShellCount: 4 })
+    expect(tasks.running.filter((task) => task.kind === 'agent')).toHaveLength(2)
+    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(4)
+    expect(tasks.running).toHaveLength(6)
+  })
+
+  it('does not pad shells for an idle subagent the roster excludes', () => {
+    const tasks = deriveBackgroundTasks([], NOW, {
+      state: 'working',
+      subagents: [{ id: 'a1', description: 'reviewer', state: 'idle', startedAt: T0 }]
+    }, { onScreenShellCount: 0 })
+    expect(tasks.running).toEqual([])
+  })
+
+  it('shows the shells the agent footer counts even when the beacon tail cannot reach them', () => {
+    // From the phone, 2026-09-14: desktop footer "· 4 shells" while the phone
+    // showed none, because this session's 301 MB transcript put the shell
+    // launches beyond the beacon's 4 MB tail. The agent counts them live, so
+    // its on-screen figure is the truthful floor.
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, { onScreenShellCount: 4 })
+    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(4)
+    expect(tasks.running.every((task) => task.status === 'running')).toBe(true)
+  })
+
+  it('does not double-count a shell the footer counts and the beacon already named', () => {
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      runningTaskIds: ['bajgl5wmo'],
+      launchedTaskIds: ['bajgl5wmo'],
+      onScreenShellCount: 2
+    })
+    // One named from the beacon, one unnamed filler to reach the footer's 2.
+    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(2)
+    expect(tasks.running.some((task) => task.id === 'bajgl5wmo')).toBe(true)
+  })
+
+  it('adds no filler when the named shells already meet the footer count', () => {
+    const tasks = deriveBackgroundTasks([], NOW, monitoring, {
+      runningTaskIds: ['bajgl5wmo'],
+      launchedTaskIds: ['bajgl5wmo'],
+      onScreenShellCount: 1
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
+  })
+
   it('drops a stale launched id the authoritative running list no longer names', () => {
     // From the phone, 2026-09-14: six running tasks shown while two were alive.
     // The status line emits `bg=` (launched shells) ONLY when non-empty, so once

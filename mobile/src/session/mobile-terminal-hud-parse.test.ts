@@ -1,6 +1,7 @@
 import { parseTerminalActivity } from './mobile-terminal-hud-parse'
 import { describe, expect, it } from 'vitest'
 import {
+  parseClaudeRunningShellCount,
   parseTerminalHudObservation,
   parseTerminalPermissionMode
 } from './mobile-terminal-hud-parse'
@@ -237,5 +238,34 @@ describe('parseTerminalActivity', () => {
   it('is null when nothing is spinning', () => {
     expect(parseTerminalActivity(['⏺ Done.', '> '])).toBeNull()
     expect(parseTerminalActivity([])).toBeNull()
+  })
+})
+
+describe('parseClaudeRunningShellCount', () => {
+  // Real footer, 2026-09-14: "▶▶ auto mode on · 4 shells · ← for agents".
+  it('reads the shell count Claude Code prints in its footer', () => {
+    expect(
+      parseClaudeRunningShellCount(['▶▶ auto mode on · 4 shells · ← for agents'])
+    ).toBe(4)
+    expect(parseClaudeRunningShellCount(['⏵⏵ accept edits on · 2 shells'])).toBe(2)
+    expect(parseClaudeRunningShellCount(['⏵ auto mode on · 1 shell'])).toBe(1)
+  })
+
+  it('is null when the footer states no shells', () => {
+    expect(parseClaudeRunningShellCount(['▶▶ auto mode on · ← for agents'])).toBeNull()
+    expect(parseClaudeRunningShellCount(['> ', '❯'])).toBeNull()
+  })
+
+  it('does not mistake "N shells" in ordinary output for the footer', () => {
+    // No middot separator: a line of prose that happens to say "4 shells".
+    expect(parseClaudeRunningShellCount(['I opened 4 shells earlier'])).toBeNull()
+  })
+
+  it('carries the footer count onto the observation', () => {
+    const observation = parseTerminalHudObservation([
+      '[Opus 4.8 (1M context) xhigh | Max 20x]  55% (548k/1.0M)',
+      '▶▶ auto mode on · 4 shells · ← for agents'
+    ])
+    expect(observation?.runningShellCount).toBe(4)
   })
 })

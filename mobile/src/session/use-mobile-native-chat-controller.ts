@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -169,6 +169,14 @@ export function useMobileNativeChatController(
       nativeChatStatus?.state === 'waiting',
     agentStatus: activeSessionTab?.agentStatus ?? null
   })
+  // The agent's footer counts its shells live; fold that into the beacon-built
+  // report so the pill and sheet can use it as a floor when the beacon's
+  // transcript tail lags on a huge session.
+  const onScreenShellCount = hudObservation?.runningShellCount ?? null
+  const backgroundTaskReportWithScreen = useMemo(
+    () => ({ ...backgroundTaskReport, onScreenShellCount }),
+    [backgroundTaskReport, onScreenShellCount]
+  )
 
   const {
     permission: reportedNativeChatPermission,
@@ -456,7 +464,7 @@ export function useMobileNativeChatController(
     nativeChatAgentWorking,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
-    nativeChatBackgroundTaskReport: backgroundTaskReport,
+    nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
     nativeChatBackgroundTasks: activeChatStructured
       ? structuredNativeChat.backgroundTasks
       : undefined,

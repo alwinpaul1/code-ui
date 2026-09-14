@@ -22,6 +22,7 @@ import {
   type BackgroundTask
 } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
+import { groupRunningTasksByKind } from './mobile-background-task-groups'
 import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
@@ -95,10 +96,12 @@ export function MobileBackgroundTasksSheetBody({
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
         runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
-        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? []
+        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
+        onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null
       }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
   )
+  const runningGroups = useMemo(() => groupRunningTasksByKind(running), [running])
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -119,8 +122,17 @@ export function MobileBackgroundTasksSheetBody({
         onToggle={() => setRunningOpen((open) => !open)}
       >
         {running.length > 0 ? (
-          running.map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} onStop={onStopTask} />
+          runningGroups.map((group) => (
+            <View key={group.kind} style={{ gap: space.sm }}>
+              {/* Shells and agents are different work; label each group so the
+                  reader sees the split, not one mixed list (2026-09-14). */}
+              <Txt variant="caption" weight="medium" tone="muted">
+                {group.heading}
+              </Txt>
+              {group.tasks.map((task) => (
+                <BackgroundTaskCard key={task.id} task={task} onStop={onStopTask} />
+              ))}
+            </View>
           ))
         ) : (
           <Txt variant="caption" tone="muted">
