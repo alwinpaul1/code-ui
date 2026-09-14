@@ -196,6 +196,7 @@ export async function finishNativeQueueEdit(
     }
     await clearInput(io, agent, edit.draft, onReplaced)
     if (!text) {
+      await confirmRemoved(io, agent, edit.text)
       return
     }
     await typeInput(io, agent, text, onReplaced)
@@ -211,6 +212,29 @@ export async function finishNativeQueueEdit(
 /** Raised once part of a rebuild has reached the agent. Retrying from here
  * would queue the messages that already landed a second time, so the editor
  * must stop offering to write and let the user read what is left. */
+/** A delete is finished only once the agent's own queue no longer holds it.
+ *
+ *  Clearing the composer is not the same thing: the recall is what takes an
+ *  entry out of the queue, and on a build whose recall leaves it there, an
+ *  emptied composer looked exactly like a successful delete — the message stayed
+ *  queued and the editor closed anyway (reported from the phone, 2026-09-14).
+ *  Every other path already confirms against the queue; this one did not. */
+async function confirmRemoved(
+  io: QueueEditorIo,
+  agent: QueueEditorAgent,
+  removed: string
+): Promise<void> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await io.pause()
+    const screen = await io.read()
+    checkScreen(agent, screen)
+    if (!queueFromScreen(agent, screen).some((entry) => sameEntry(removed, entry))) {
+      return
+    }
+  }
+  throw new Error('That message is still queued on the agent. It has not been deleted.')
+}
+
 export class QueueRebuildError extends Error {
   readonly remaining: string[]
   constructor(message: string, remaining: string[]) {
