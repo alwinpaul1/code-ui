@@ -3,13 +3,14 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "d31a674342fc8a0cdb690d923d760425e5eab2cec25ac85aa2a423acc9471c84",
+  "recorderSha256": "d4284ed45a8952e0dafbac0a46996dfd995462cac45ed76ed3564889ff31a605",
+  "scenarioSha256": "db1fb2a584cd806028b9be861283a63aa4836c83f61558f3d518ddbb7a59498d",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 4,
   "values": {
     "88185276c233": {
       "status": "fulfilled",
