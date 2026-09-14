@@ -94,3 +94,19 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
     }
   )
 })
+
+// 2026-09-14, from the phone: `chapters/_archive_pre_outline_2026-09-08/` split
+// into two pills that landed side by side, and their rounded borders overlapped
+// into one broken-looking pill. Adjacent pills need a visible gap.
+describe('two inline code pills side by side', () => {
+  it.each(['dark', 'light'] as const)('keep a clear gap between them in %s', (scheme) => {
+    const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as {
+      inlineCodeChip: { marginHorizontal?: number; borderRadius?: number }
+    }
+    const chip = styles.inlineCodeChip
+    // Each pill's own margin on both sides adds up to the gap between two; the
+    // rounded corners need at least that much or they touch.
+    const gap = 2 * (chip.marginHorizontal ?? 0)
+    expect(gap).toBeGreaterThanOrEqual(6)
+  })
+})

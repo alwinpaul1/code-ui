@@ -73,7 +73,10 @@ export function makeMarkdownStyles(theme: Theme) {
       borderRadius: 7,
       paddingHorizontal: 5,
       paddingVertical: 1,
-      marginHorizontal: 1,
+      // Two pieces of one split path can land side by side on the same line
+      // ("chapters/" then "_archive…/"); at 1px their rounded borders collided
+      // and read as one broken pill (2026-09-14). This keeps a clear gap.
+      marginHorizontal: 3,
       // Air above and below, so a span that wraps onto a second line does not
       // touch the pill above it; the line box grows with the margin, which is
       // what keeps the text around it evenly spaced (2026-09-13).

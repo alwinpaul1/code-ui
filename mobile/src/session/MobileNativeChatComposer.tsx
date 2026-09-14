@@ -2,8 +2,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
-import { AgentModePill } from '../components/AgentModePill'
-import { PermissionModePill } from '../components/PermissionModePill'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
 import type {
@@ -73,11 +71,11 @@ type Props = {
   micLevel?: number
   /** Context window figure from the desktop status line; shows the ring. */
   contextWindow?: TerminalHudContextWindow | null
-  /** Permission mode from the terminal footer; shows the pill. */
+  /** Permission mode from the terminal footer; drives the mode sheet. */
   permissionMode?: TerminalPermissionMode | null
   /** Steps the terminal to the chosen mode (Shift+Tab until its footer agrees). */
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
-  /** Codex collaboration mode from its footer; shows the Default/Plan pill. */
+  /** Codex collaboration mode from its footer; drives the mode sheet. */
   agentMode?: TerminalAgentMode | null
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
   /** Dictation trigger style — 'hold' uses press-in/out, 'toggle' uses tap. */
@@ -361,19 +359,6 @@ export function MobileNativeChatComposer({
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
                 sendInFlight={sending}
-              />
-            ) : null}
-            {agentMode ? (
-              <AgentModePill
-                mode={agentMode}
-                onPress={() => setShowModeSheet(true)}
-                disabled={disabled || !onSelectAgentMode}
-              />
-            ) : permissionMode ? (
-              <PermissionModePill
-                mode={permissionMode}
-                onPress={() => setShowModeSheet(true)}
-                disabled={disabled || !onSelectPermissionMode}
               />
             ) : null}
             {contextWindow ? (
