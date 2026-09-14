@@ -37,7 +37,15 @@ export function useDesktopPromptEchoes(
     // A beacon restored before the transcript loads would pin the echo to
     // the bottom for good; wait for a row to anchor on (2026-09-13).
     if (!anchors.current.has(prompt.nonce) && rawMessages.length > 0) {
-      anchors.current.set(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+      // The hook beacons the row that was last at SUBMIT time (`at=`). When
+      // the phone holds that row, anchor there — however late the beacon
+      // arrived, the message lands where the Claude app shows the record.
+      // Only without it (an older hook, or the row paged out of the window)
+      // does the arrival-time tail stand in (2026-09-14).
+      const beaconed = prompt.anchorId
+      const anchorRow =
+        beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
+      anchors.current.set(prompt.nonce, anchorRow?.id ?? rawMessages.at(-1)?.id ?? null)
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,

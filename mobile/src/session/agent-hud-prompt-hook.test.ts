@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
 import { unescapeJsonStringBody } from './agent-hud-beacon'
 
-function runHook(payload: unknown): string {
+function runHook(payload: Record<string, unknown>, transcript?: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-prompt-'))
   const tty = join(dir, 'tty')
+  let input: Record<string, unknown> = payload
+  if (transcript !== undefined) {
+    const transcriptPath = join(dir, 'session.jsonl')
+    writeFileSync(transcriptPath, transcript)
+    input = { ...payload, transcript_path: transcriptPath }
+  }
   execFileSync('/bin/sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
-    input: JSON.stringify(payload),
+    input: JSON.stringify(input),
     encoding: 'utf8',
     env: { ...process.env, CUIHUD_TTY: tty }
   })
@@ -48,6 +54,36 @@ describe('the desktop prompt hook', () => {
 
   it('writes nothing at all when there is no prompt', () => {
     expect(runHook({ session_id: 'x' })).toBe('')
+  })
+
+  // 2026-09-14, from the phone against the Claude app: a prompt queued while
+  // a turn ran landed several turns too LOW on the phone. Its echo anchored to
+  // the tail at beacon ARRIVAL, and on a lagging link that was long after the
+  // moment it was typed. The hook now beacons the transcript's last projected
+  // row at submit time, so the phone anchors where the record actually sits.
+  it('beacons the last user/assistant row uuid at submit time as at=', () => {
+    // Real row shapes: a projected assistant row, a projected user row, then
+    // the queue records Claude writes for the submit itself — which are never
+    // projected to the phone, so they must NOT be chosen as the anchor.
+    const transcript = [
+      '{"type":"assistant","uuid":"a1a1a1a1-0000-4000-8000-000000000001","parentUuid":null,"message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}',
+      '{"type":"user","uuid":"b2b2b2b2-0000-4000-8000-000000000002","parentUuid":"a1a1a1a1-0000-4000-8000-000000000001","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}',
+      '{"type":"assistant","uuid":"c3c3c3c3-0000-4000-8000-000000000003","parentUuid":"b2b2b2b2-0000-4000-8000-000000000002","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash"}]}}',
+      '{"type":"queue-operation","uuid":"d4d4d4d4-0000-4000-8000-000000000004","operation":"enqueue"}',
+      '{"type":"attachment","uuid":"e5e5e5e5-0000-4000-8000-000000000005","attachment":{"type":"queued_command","prompt":[{"type":"text","text":"queued"}]}}'
+    ].join('\n') + '\n'
+    const out = runHook({ prompt: 'queued while busy' }, transcript)
+    expect(out).toContain('CUIHUD1 agent=claude up=')
+    // The LAST projected row, not the queue records after it.
+    expect(out).toContain(' at=c3c3c3c3-0000-4000-8000-000000000003')
+    expect(out).not.toContain('at=e5e5e5e5')
+    expect(out).not.toContain('at=d4d4d4d4')
+  })
+
+  it('omits at= when there is no readable transcript', () => {
+    const out = runHook({ prompt: 'hello' })
+    expect(out).toContain('up=')
+    expect(out).not.toContain(' at=')
   })
 
   // Claude Code treats any stdout from a UserPromptSubmit hook as context and

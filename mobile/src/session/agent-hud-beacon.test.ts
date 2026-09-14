@@ -95,6 +95,27 @@ describe('the HUD beacon never reaches the terminal the user is looking at', () 
 
 describe('what the payload is allowed to say', () => {
   it('reports no percentage and no tokens when the agent stated none', () => {
+    // 2026-09-14: the prompt hook beacons the transcript's last projected row
+    // at submit time, so a queued prompt anchors where its record sits rather
+    // than wherever the phone's tail was when the beacon arrived.
+    const anchored = parseAgentHudBeaconPayload(
+      'CUIHUD1 agent=claude up=4242:queued%20while%20busy at=c3c3c3c3-0000-4000-8000-000000000003'
+    )
+    expect(anchored?.desktopPrompt).toEqual({
+      nonce: '4242',
+      text: 'queued while busy',
+      cut: false,
+      anchorId: 'c3c3c3c3-0000-4000-8000-000000000003'
+    })
+    // An older hook sends no at=; a malformed one is not trusted as an anchor.
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude up=1:hi')?.desktopPrompt).toEqual({
+      nonce: '1',
+      text: 'hi',
+      cut: false
+    })
+    expect(
+      parseAgentHudBeaconPayload('CUIHUD1 agent=claude up=1:hi at=not_a_uuid!')?.desktopPrompt
+    ).toEqual({ nonce: '1', text: 'hi', cut: false })
     const beacon = parseAgentHudBeaconPayload('CUIHUD1 agent=claude model=x win=200000')
     expect(beacon).toMatchObject({ usedTokens: null, usedPercent: null, windowTokens: 200000 })
   })

@@ -531,7 +531,20 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   'ct=""',
   '[ "$pf" != "$pr" ] && ct=" cut=1"',
   'pr="$pf"',
-  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")$ct"',
+  // `at=<uuid>`: the transcript's last user/assistant row AT THE MOMENT of
+  // submit. A prompt queued while a turn runs is never projected as a row of
+  // its own, so the phone draws it from this beacon — and used to anchor it to
+  // whatever its tail was when the beacon ARRIVED. On a lagging link that was
+  // several turns late, so the message landed far below where the Claude app
+  // (which reads the record in place) shows it (2026-09-14). Capturing the
+  // anchor here, at the source, makes the position independent of arrival.
+  // Only user/assistant rows are projected, so only those uuids can anchor.
+  'tp=$(g "\\"transcript_path\\":\\"([^\\"]*)\\"")',
+  // Same as the status line: a Windows path arrives JSON-escaped with
+  // backslashes, which Git Bash cannot open; slashes work on every platform.
+  '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
+  '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
+  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")$ct${at:+ at=$at}"',
   '[ -z "$pr" ] && exit 0',
   ...TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,
@@ -559,7 +572,11 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   '$pr=(ConvertTo-Json $pr -Compress)',
   'if($pr.Length -ge 2){ $pr=$pr.Substring(1,$pr.Length-2) }',
   '$pr=$pr -replace "%","%25" -replace " ","%20" -replace ";","%3B"',
+  // `at=<uuid>`: the last user/assistant row at submit time, as the sh hook
+  // captures it, so the phone anchors a queued prompt where the record sits.
+  'if($j -and $j.transcript_path -and (Test-Path -LiteralPath $j.transcript_path)){ $tl=@(Get-Content -LiteralPath $j.transcript_path -Tail 4000 | Where-Object {$_ -match \'"type":"(user|assistant)"\'}); if($tl.Count -gt 0){ $m=[regex]::Match($tl[-1], \'"uuid":"([0-9a-fA-F-]+)"\'); if($m.Success){ $at=$m.Groups[1].Value } } }',
   '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr + $ct',
+  'if($at){ $o=$o + " at=" + $at }',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   // The console writer above defines `W`; a call to a name it never
   // defined was swallowed by SilentlyContinue and wrote nothing (2026-09-13).

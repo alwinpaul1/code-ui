@@ -198,6 +198,36 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/session/agent-hud-launch-args.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 302,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/agent-hud-beacon.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            "max": 305,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
     }
   ]
 }

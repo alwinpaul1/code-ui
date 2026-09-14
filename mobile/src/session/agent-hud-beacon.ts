@@ -35,7 +35,11 @@ export type AgentHudBeaconLimit = {
 
 /** A desktop submission: the hook's process id (so two identical prompts stay
  *  distinct), the text, and whether the hook had to shorten it. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean }
+/** `anchorId`: the transcript's last user/assistant row (its uuid, which is
+ *  the phone's message id) at the moment the prompt was submitted, beaconed
+ *  by the hook as `at=`. The echo anchors right after that row wherever it
+ *  sits, so a late-arriving beacon cannot land the message turns too low. */
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string }
 
 export type AgentHudBeacon = {
   agent: string
@@ -154,7 +158,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     promptHook: values.get('hk') === '1',
-    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1'),
+    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at')),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
@@ -333,7 +337,11 @@ function liveOrRun(values: Map<string, string>): string[] | null {
 
 /** `up=<hook pid>:<percent-encoded JSON string body>`. The body is the raw
  *  JSON text of the prompt, so `\n` and `\"` are still escaped there. */
-function readDesktopPrompt(raw: string | undefined, cutByHook: boolean): DesktopPrompt | null {
+function readDesktopPrompt(
+  raw: string | undefined,
+  cutByHook: boolean,
+  anchorRaw?: string
+): DesktopPrompt | null {
   if (!raw) {
     return null
   }
@@ -352,7 +360,9 @@ function readDesktopPrompt(raw: string | undefined, cutByHook: boolean): Desktop
   } catch {
     decoded = body
   }
-  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook }
+  // A uuid the hook read off the transcript; anything else is not an anchor.
+  const anchorId = anchorRaw && /^[0-9a-fA-F-]{8,}$/.test(anchorRaw) ? anchorRaw : undefined
+  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook, ...(anchorId ? { anchorId } : {}) }
 }
 
 /** Undo the escaping a JSON string body carries, without a JSON parse: the

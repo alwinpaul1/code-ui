@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
+import type { DesktopPrompt } from './agent-hud-beacon'
+import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { useDesktopPromptEchoes, withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -41,5 +45,94 @@ describe('withoutLandedDesktopPrompts', () => {
   it('keeps a prompt the transcript does not show', () => {
     const prompts = [{ nonce: 'n1', text: 'fix the dock' }]
     expect(withoutLandedDesktopPrompts(prompts, [user('u1', 'something else')])).toEqual(prompts)
+  })
+})
+
+// ─── Anchoring: where a queued desktop prompt lands ─────────────────────────
+
+
+function assistant(id: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text: id }],
+    timestamp: 0,
+    source: 'transcript'
+  }
+}
+
+let latest: MobileNativeChatPendingMessage[] = []
+function Probe({
+  prompts,
+  raw
+}: {
+  prompts: readonly DesktopPrompt[]
+  raw: readonly NativeChatMessage[]
+}) {
+  latest = useDesktopPromptEchoes(prompts, raw, raw)
+  return null
+}
+
+describe('where a desktop prompt echo anchors', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  // 2026-09-14, compared against the Claude app on the same session: a prompt
+  // queued while a turn ran showed in the Claude app right where its record
+  // sits, but on the phone several turns LOWER. The echo had anchored to the
+  // tail at the moment the beacon ARRIVED, and on a lagging link that tail
+  // was already turns past the submit. The hook now beacons the row that was
+  // last at submit time; the echo anchors there whatever has loaded since.
+  it('anchors a queued prompt to the row that was last when it was typed, not the tail when the beacon arrived', () => {
+    // The beacon says the prompt was typed right after row a3. By the time the
+    // phone processes it, rows a4 and a5 (later turns) have already loaded.
+    const raw = [assistant('a1'), assistant('a2'), assistant('a3'), assistant('a4'), assistant('a5')]
+    const prompts: DesktopPrompt[] = [{ nonce: '7', text: 'queued while busy', anchorId: 'a3' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw }))
+    })
+    expect(latest).toHaveLength(1)
+    expect(latest[0]!.baselineTailMessageId).toBe('a3')
+  })
+
+  it('falls back to the arrival tail when the beacon carries no anchor (older hook)', () => {
+    const raw = [assistant('a1'), assistant('a2'), assistant('a3')]
+    const prompts: DesktopPrompt[] = [{ nonce: '8', text: 'plain' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a3')
+  })
+
+  it('falls back to the tail when the beaconed row is not in the loaded window', () => {
+    const raw = [assistant('a4'), assistant('a5')]
+    const prompts: DesktopPrompt[] = [{ nonce: '9', text: 'old', anchorId: 'a1-paged-out' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a5')
+  })
+
+  it('keeps the anchor once set, even as later rows keep arriving', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: '10', text: 'queued', anchorId: 'a2' }]
+    act(() => {
+      renderer = create(
+        createElement(Probe, { prompts, raw: [assistant('a1'), assistant('a2'), assistant('a3')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
+    // Two more turns land; the echo must not drift down with them.
+    act(() => {
+      renderer!.update(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('a1'), assistant('a2'), assistant('a3'), assistant('a4'), assistant('a5')]
+        })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
   })
 })
