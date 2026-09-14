@@ -178,6 +178,34 @@ describe('the `/` menu of a structured chat that has not reported its surface', 
     expect(catalog.skills).toEqual([scanned])
   })
 
+  it('offers Codex the /goal its own model carries out', () => {
+    // Codex's app-server reports no catalog, so this fallback IS its `/` menu.
+    // The model owns goal tools and acts on `/goal <objective>` as prose, so
+    // hiding it made the one agent-run command typable but undiscoverable.
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'codex',
+      scannedSkills: [],
+      conversationCommands: ['clear', 'compact']
+    })
+    expect(catalog.commands.map((command) => command.name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'goal'
+    ])
+  })
+
+  it('keeps a pass-through command out of the menu twice', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'codex',
+      scannedSkills: [],
+      conversationCommands: ['clear']
+    })
+    const goals = catalog.commands.filter((command) => command.name === 'goal')
+    expect(goals).toHaveLength(1)
+  })
+
   it('yields to the session report once one arrives', () => {
     const catalog = mobileNativeChatSlashCatalog({
       agent: 'claude',

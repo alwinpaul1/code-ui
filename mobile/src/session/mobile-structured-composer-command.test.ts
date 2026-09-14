@@ -87,6 +87,35 @@ describe('mobile structured conversation commands', () => {
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  it('lets /init reach Claude instead of answering "not available in chat sessions"', async () => {
+    // Claude's own harness expands a slash command out of the message body, so
+    // the host never had a way to run `/init` — claiming it only produced a
+    // refusal for a command Claude does carry out.
+    const { input, sendRequest } = setup()
+    input.controller.agent = 'claude'
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/init' })).toBeNull()
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(input.onError).not.toHaveBeenCalled()
+  })
+
+  it('lets /goal reach Codex, whose model runs it through its own goal tools', async () => {
+    const { input, sendRequest } = setup()
+    expect(
+      await dispatchMobileStructuredCommand({ ...input, text: '/goal ship the release' })
+    ).toBeNull()
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(input.onError).not.toHaveBeenCalled()
+  })
+
+  it.each(['codex', 'claude'])(
+    'still claims /clear for %s so a hand-typed one never reaches the model as text',
+    async (agent) => {
+      const { input } = setup()
+      input.controller.agent = agent
+      expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('accepted')
+    }
+  )
+
   it('keeps ordinary messages on the existing send path', async () => {
     const { input, sendRequest } = setup()
     expect(await dispatchMobileStructuredCommand({ ...input, text: 'hello' })).toBeNull()

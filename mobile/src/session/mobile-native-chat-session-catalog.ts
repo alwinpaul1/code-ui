@@ -78,7 +78,10 @@ export function mobileNativeChatSlashCatalog(args: {
   const scanned = filterNativeChatSkillsForAgent(scannedSkills, agent)
   if (sessionCommands === undefined) {
     if (conversationCommands !== undefined) {
-      return { commands: structuredSlashCommands(conversationCommands), skills: scanned }
+      // The agent decides what else the menu may offer: a host with no catalog
+      // to report would otherwise hide the commands the agent itself runs from
+      // message text, e.g. Codex's `/goal`.
+      return { commands: structuredSlashCommands(conversationCommands, agent), skills: scanned }
     }
     return { commands: agent ? getVerifiedNativeChatCommands(agent) : [], skills: scanned }
   }

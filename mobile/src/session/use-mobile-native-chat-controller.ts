@@ -172,7 +172,7 @@ export function useMobileNativeChatController(
 
   const {
     permission: reportedNativeChatPermission,
-    question: legacyNativeChatQuestion,
+    question: legacyQuestion,
     detectedAsk: nativeChatDetectedAsk,
     ask: nativeChatAskPrompt
   } = useMobileNativeChatPrompts({
@@ -221,7 +221,7 @@ export function useMobileNativeChatController(
       client != null &&
       connState === 'connected' &&
       legacyNativeChatPermission == null &&
-      legacyNativeChatQuestion == null &&
+      legacyQuestion == null &&
       nativeChatAskPrompt == null,
     handleRef: activeHandleRef,
     deviceTokenRef,
@@ -306,6 +306,7 @@ export function useMobileNativeChatController(
   })
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
+    agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -466,9 +467,7 @@ export function useMobileNativeChatController(
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission
       : withTerminalDialogOptions(legacyNativeChatPermission, terminalDialogOptions),
-    nativeChatQuestion: activeChatStructured
-      ? structuredNativeChat.question
-      : legacyNativeChatQuestion,
+    nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,
     dismissNativeChatAsk,
