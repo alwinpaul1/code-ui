@@ -27,6 +27,17 @@ export default defineConfig({
     // .tsx too: component tests exist (react-test-renderer + mocked react-native) and were
     // silently never collected, so render-level regressions shipped untested.
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // Why: the 5 s default is a wall-clock budget, and two things here spend wall clock without
+    // the test under it doing any more work. The RPC recording oracle (#20521, #20544) transpiles
+    // product source through the TypeScript compiler API on every scenario, so whichever of its
+    // tests runs first in a cold process absorbs the warmup — `b1` records in under a second warm
+    // and timed out at 5277 ms cold. And it is CPU-bound for half a minute across four files, so
+    // the rest of the pass runs starved: `e2ee-base64` round-trips 512 KB in well under a second
+    // alone and took 7.0 s beside it, `agent-hud-launch-args` 5.9 s. Neither test got slower;
+    // both waited. A timeout that fires only on a busy box names the wrong file, so the ceiling
+    // moves instead of the tests. Upstream leaves this at the default and puts 30_000 on its own
+    // reply-matrix tests — the same number, applied where this fork actually needs it.
+    testTimeout: 30_000,
     // Why: this fork vendors only `src/shared` from the Orca monorepo. The PR
     // creation test imports a desktop renderer module that is not part of the
     // mobile app; the code under test itself does not.
