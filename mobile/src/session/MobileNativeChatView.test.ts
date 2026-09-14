@@ -426,6 +426,52 @@ describe('MobileNativeChatView', () => {
     expect(scrollToOffset).not.toHaveBeenCalled()
   })
 
+  // The dock's height is the spacer at the list's end, so a dock that grows —
+  // a permission card, the key strip — leaves the newest row underneath it
+  // (2026-09-13, first open of 0.5.29). That re-pin used to reach for the list
+  // itself from `use-mobile-chat-dock`; it now goes through the tail-follow
+  // owner, which is the only caller allowed to move the list.
+  it('lifts the newest row clear of a dock that grew, through the one scroll owner', async () => {
+    const scrollToOffset = vi.fn()
+    await act(async () => {
+      renderer = create(chatViewElement({ folded: [assistantTurn('a1', 'Reply')] }), {
+        createNodeMock: (node) =>
+          node.type === 'FlashList' ? { scrollToEnd: vi.fn(), scrollToOffset } : null
+      })
+    })
+    const dock = () => renderer!.root.findByProps({ testID: 'native-chat-dock' })
+    await act(async () => dock().props.onLayout({ nativeEvent: { layout: { height: 120 } } }))
+    expect(scrollToOffset.mock.calls).toEqual([[{ offset: 0, animated: false }]])
+
+    // A reader up in history keeps their place, dock or no dock.
+    scrollToOffset.mockClear()
+    act(() => renderer!.root.findByType('FlashList').props.onScrollBeginDrag())
+    await act(async () => dock().props.onLayout({ nativeEvent: { layout: { height: 180 } } }))
+    expect(scrollToOffset).not.toHaveBeenCalled()
+  })
+
+  // Ported from Orca 2fc84cb49 (#20493), whose non-inverted list has to chase a
+  // tail offset that moves with the viewport. An inverted list keeps its tail
+  // at offset 0 through a keyboard opening on its own, so this only re-asserts
+  // it — and, like every other command, only while the reader is following.
+  it('re-asserts the tail after a viewport layout only while the reader is following', async () => {
+    const scrollToOffset = vi.fn()
+    await act(async () => {
+      renderer = create(chatViewElement({ folded: [assistantTurn('a1', 'Reply')] }), {
+        createNodeMock: (node) =>
+          node.type === 'FlashList' ? { scrollToEnd: vi.fn(), scrollToOffset } : null
+      })
+    })
+    const list = () => renderer!.root.findByType('FlashList')
+    act(() => list().props.onLayout({ nativeEvent: { layout: { height: 400 } } }))
+    expect(scrollToOffset.mock.calls).toEqual([[{ offset: 0, animated: false }]])
+
+    scrollToOffset.mockClear()
+    act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onLayout({ nativeEvent: { layout: { height: 240 } } }))
+    expect(scrollToOffset).not.toHaveBeenCalled()
+  })
+
   it('does not duplicate the route banner when the composer rejects', async () => {
     const onClearSendError = vi.fn()
     await render({

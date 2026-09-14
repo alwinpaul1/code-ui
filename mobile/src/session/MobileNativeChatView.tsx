@@ -1,7 +1,6 @@
-import { FlashList, type FlashListRef } from '@shopify/flash-list'
+import { FlashList } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
-import { useMobileChatFollowing } from './use-mobile-chat-following'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -27,7 +26,7 @@ import {
 import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { useMobileChatScrollHandlers } from './use-mobile-chat-scroll-handlers'
+import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
@@ -125,30 +124,11 @@ export function MobileNativeChatView({
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
   const drawDistance = chatListDrawDistanceDp(useWindowDimensions().height)
-  const listRef = useRef<FlashListRef<NativeChatMessage>>(null)
-  const jumpingRef = useRef(false)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
-  const { dockHeight, onDockLayout } = useChatDock(listRef, () => followingRef.current)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-
-  // Following is a ref: onContentSizeChange runs before React commits `atBottom`,
-  // and a state flag yanked the list back down mid-read (#11638).
-  const {
-    followingRef,
-    scrollingRef,
-    holdingRef,
-    touchStart,
-    touchEnd,
-    followGate,
-    textSelectable,
-    showJumpToLatest,
-    setFollowing,
-    beginScroll,
-    endScroll
-  } = useMobileChatFollowing()
 
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const ChatScrollView = useChatScrollView(pinchGesture)
@@ -175,8 +155,34 @@ export function MobileNativeChatView({
   // divider honest across midnight without churning the rows.
   const dividerNow = useNow(5 * 60_000)
   const dividerLabels = useMemo(() => chatTimeDividerLabels(data, dividerNow), [data, dividerNow])
-  followGate.noteData(newestFirst)
   const { predecessors: taskListPredecessors, composerList } = useMobileNativeChatTaskProgress(data)
+
+  // One owner for the transcript's scroll position: what the reader wants,
+  // where the list is, and every command that moves it. Nothing else in this
+  // file may touch the list's offset (ported from Orca 2fc84cb49, #20493).
+  const {
+    listRef,
+    showJumpToLatest,
+    textSelectable,
+    touchStart,
+    touchEnd,
+    evaluateEdge,
+    onEndReached,
+    onScrollBeginDrag,
+    onScrollEndDrag,
+    onMomentumScrollBegin,
+    onMomentumScrollEnd,
+    pinToTail,
+    pinToTailAfterContentResize,
+    jumpToTail,
+    onScrollToMessage
+  } = useMobileNativeChatTailFollow<NativeChatMessage>({
+    rows: newestFirst,
+    hasMore,
+    loadingEarlier,
+    onLoadEarlier
+  })
+  const { dockHeight, onDockLayout } = useChatDock(pinToTail)
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -189,28 +195,6 @@ export function MobileNativeChatView({
     },
     [onSend, onClearSendError]
   )
-
-  const {
-    evaluateEdge,
-    onEndReached,
-    onScrollBeginDrag,
-    onScrollEndDrag,
-    onMomentumScrollBegin,
-    onMomentumScrollEnd,
-    jumpToLatest,
-    onScrollToMessage
-  } = useMobileChatScrollHandlers({
-    listRef,
-    followingRef,
-    scrollingRef,
-    jumpingRef,
-    hasMore,
-    loadingEarlier,
-    onLoadEarlier,
-    setFollowing,
-    beginScroll,
-    endScroll
-  })
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
@@ -326,13 +310,13 @@ export function MobileNativeChatView({
             scrollEventThrottle={16}
             // Why: while the reader is up in history, content growing above the
             // fold must not shift what they are reading. At the live edge,
-            // native anchoring fights scrollToEnd and briefly shows old rows.
+            // native anchoring fights the tail pin and briefly shows old rows.
             maintainVisibleContentPosition={contentPosition}
-            onContentSizeChange={() => {
-              if (data.length > 0 && followGate.shouldFollow(followingRef.current, holdingRef.current)) {
-                listRef.current?.scrollToOffset({ offset: 0, animated: false })
-              }
-            }}
+            onContentSizeChange={pinToTailAfterContentResize}
+            // A viewport resize — the keyboard, a rotation — keeps an inverted
+            // list's tail at offset 0 by itself, so this only re-asserts it,
+            // and only while the reader is still following.
+            onLayout={pinToTail}
             // Message descendants hold disclosure and copy state. Keep it
             // scoped to the message when off-screen cells leave the window.
             maxItemsInRecyclePool={0}
@@ -378,7 +362,7 @@ export function MobileNativeChatView({
             }
           />
           </ChatTextSelectableContext.Provider>
-          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToLatest(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
+          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}
       <MobileBackgroundTasksSheet
