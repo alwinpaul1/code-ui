@@ -41,6 +41,42 @@ describe('visible agent queue', () => {
       ])
     ).toEqual(['run on Willi\nand test and confirm', 'another task'])
   })
+  // 2026-09-14, from the phone with a screenshot: Claude draws its context
+  // warning inside the same composer block as the queue, so the scan glued it
+  // onto the last queued entry. The phone then printed "1% until auto-compact"
+  // inside the user's own bubble, and — because the contaminated text no longer
+  // equalled the message the agent had been told about — the echo never retired
+  // and the one message stood three times over.
+  it("keeps Claude's context warning out of the queued message", () => {
+    expect(
+      queuedMessagesFromScreen([
+        '⏺ Earlier response',
+        '',
+        '✻ Working…',
+        '',
+        '  ❯ Always check the difference against current code',
+        '    and confirm if confirmed fix that save this to project claude.md',
+        '  1% until auto-compact',
+        '────────',
+        '❯ Press up to edit queued messages'
+      ])
+    ).toEqual([
+      'Always check the difference against current code\nand confirm if confirmed fix that save this to project claude.md'
+    ])
+  })
+
+  it('keeps a message that merely mentions auto-compact in its own words', () => {
+    expect(
+      queuedMessagesFromScreen([
+        '✻ Working…',
+        '',
+        '  ❯ what happens at 1% until auto-compact exactly',
+        '────────',
+        '❯ Press up to edit queued messages'
+      ])
+    ).toEqual(['what happens at 1% until auto-compact exactly'])
+  })
+
   it('ignores normal composer drafts and removes entries when the footer disappears', () => {
     expect(queuedMessagesFromScreen(['❯ unsent draft'])).toEqual([])
     expect(queuedMessagesFromScreen(['Running queued task'])).toEqual([])

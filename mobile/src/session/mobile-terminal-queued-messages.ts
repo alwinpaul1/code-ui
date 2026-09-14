@@ -110,7 +110,32 @@ export function claudeQueueViewFromScreen(
       entries[entries.length - 1] += '\n' + line.trim()
     }
   }
-  return { entries, selectable, selecting: false, selected: null, selectedOldest: false }
+  return {
+    entries: entries.map(withoutComposerNotice),
+    selectable,
+    selecting: false,
+    selected: null,
+    selectedOldest: false
+  }
+}
+
+/** Claude's own context warning, drawn in the composer box beside the queue
+ *  ("1% until auto-compact"). It is not part of anyone's message, but it sits
+ *  inside the block this scan walks, so it was glued onto the last queued entry
+ *  — the phone then drew it inside the user's own bubble AND, because the
+ *  contaminated text no longer equalled the message the agent was told about,
+ *  the echo never retired and the message stood three times over
+ *  (2026-09-14, from the phone with a screenshot). */
+const COMPOSER_NOTICE = /^\s*\d+%\s+until\s+auto-compact\s*$/i
+
+export function withoutComposerNotice(entry: string): string {
+  const lines = entry.split('\n')
+  while (lines.length > 1 && COMPOSER_NOTICE.test(lines[lines.length - 1]!)) {
+    lines.pop()
+  }
+  // A lone notice is not a message at all; keep it rather than return nothing,
+  // so an entry is never silently emptied.
+  return lines.join('\n')
 }
 
 export function queuedMessagesFromScreen(screen: readonly string[], draft?: unknown): string[] {
