@@ -1,5 +1,5 @@
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
-import { RelayDirectorHttpError } from './mobile-relay-resume-director'
+import { RelayDirectorHttpError, isRelayCredentialRejected } from './mobile-relay-resume-director'
 
 export function logRelayConnected(
   log: RelayRecoveryLog,
@@ -43,4 +43,24 @@ export function logRelayCredentialUnavailable(log: RelayRecoveryLog, hasBundle: 
     undefined,
     { level: 'warn', code: 'relay-credential-unavailable' }
   )
+}
+
+/**
+ * Logs a failed dial, and treats a REFUSED credential as one.
+ *
+ * A 401 is not a failure another dial can clear. Without this the phone
+ * re-dialled on the ordinary backoff and took forty-odd 401s in eight minutes:
+ * the slow reprobe that exists for an unusable credential only ran when there
+ * was NO credential at all (reported from another person's phone, 2026-09-14).
+ */
+export function noteRelayDialFailure(
+  log: RelayRecoveryLog,
+  error: Error | null,
+  armCredentialReprobe: () => void
+): void {
+  logRelayDialFailure(log, error)
+  if (isRelayCredentialRejected(error)) {
+    logRelayCredentialUnavailable(log, true)
+    armCredentialReprobe()
+  }
 }

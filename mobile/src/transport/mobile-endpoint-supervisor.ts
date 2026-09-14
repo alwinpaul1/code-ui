@@ -1,5 +1,4 @@
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
-import { isRelayCredentialRejected } from './mobile-relay-resume-director'
 import { DirectReturnProbe } from './mobile-direct-return-probe'
 import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
@@ -33,7 +32,8 @@ import { directEndpointUrls, withPreferredDirectEndpoint } from './mobile-direct
 import {
   logRelayConnected,
   logRelayCredentialUnavailable,
-  logRelayDialFailure
+  logRelayDialFailure,
+  noteRelayDialFailure
 } from './mobile-relay-diagnostic-log'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
@@ -164,17 +164,8 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) => {
-        logRelayDialFailure(this.logRelay, error)
-        // A refused credential is not a failure another dial can clear. Without
-        // this the phone re-dialled on the ordinary backoff and took forty-odd
-        // 401s in eight minutes; the slow reprobe that exists for an unusable
-        // credential only ran when there was NO credential at all (2026-09-14).
-        if (isRelayCredentialRejected(error)) {
-          logRelayCredentialUnavailable(this.logRelay, true)
-          this.relayReconnect.armCredentialReprobe()
-        }
-      }
+      onDialFailure: (error) =>
+        noteRelayDialFailure(this.logRelay, error, () => this.relayReconnect.armCredentialReprobe())
     })
     this.directVerdict = new DirectVerdictMemory(dependencies, () => this.host, (h) => (this.host = h))
     this.directProbe = new DirectReturnProbe(dependencies, {
@@ -344,6 +335,7 @@ export class MobileEndpointSupervisor {
     this.unsubscribeState = null
     this.backgroundGrace.stop()
   }
+
 
   private isActive(): boolean {
     return !this.stopped && this.backgroundGrace.isForeground()
