@@ -163,10 +163,21 @@ export function retireLandedMobileNativeChatPending(
       landedPendingIds.add(item.id)
       continue
     }
-    // Keep image echoes until their local preview reaches the authoritative message.
     // An unresolved baseline has nothing to count against yet — `messages` is not
     // known to be the transcript this send was issued into.
-    if (item.images?.length || !item.baselineResolved) {
+    if (!item.baselineResolved) {
+      continue
+    }
+    // Image echoes are held back so their local preview can reach the
+    // authoritative row first; the transcript's host path cannot render a
+    // phone-local photo. But that was the ONLY way out, so when the binding
+    // missed the optimistic bubble outlived the real row and the send showed
+    // twice, once with the photo and once as text (2026-09-14). A captioned
+    // photo whose own row has landed now retires like any other send: the
+    // thumbnail is worth less than a duplicate that never goes away. A
+    // caption-less photo still waits, since it has no text to be sure by.
+    const captioned = item.text.trim() !== ''
+    if (item.images?.length && !captioned) {
       continue
     }
     const landed =
