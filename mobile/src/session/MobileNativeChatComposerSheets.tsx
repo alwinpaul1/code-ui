@@ -1,5 +1,4 @@
-import { Image as ImageIcon, ClipboardPaste, Paperclip } from 'lucide-react-native'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { MobileNativeChatAttachSheet } from './MobileNativeChatAttachSheet'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 import { MobileAgentModeSheet } from './MobileAgentModeSheet'
@@ -22,9 +21,10 @@ export function MobileNativeChatComposerSheets({
   contextWindow,
   showAttachSheet,
   onCloseAttachSheet,
+  onCaptureImage,
   onAttachImage,
-  onPasteImage,
-  onAttachFile
+  onAttachFile,
+  onOpenPermission
 }: {
   showModeSheet: boolean
   onCloseModeSheet: () => void
@@ -37,10 +37,11 @@ export function MobileNativeChatComposerSheets({
   contextWindow: TerminalHudContextWindow | null
   showAttachSheet: boolean
   onCloseAttachSheet: () => void
+  onCaptureImage?: () => void
   onAttachImage?: () => void
-  /** Absent when the clipboard holds no image, so the row only shows when it works. */
-  onPasteImage?: () => void
   onAttachFile?: () => void
+  /** Opens the permission-mode sheet from the attach sheet's permission row. */
+  onOpenPermission?: () => void
 }) {
   return (
     <>
@@ -71,34 +72,14 @@ export function MobileNativeChatComposerSheets({
         onClose={onCloseContextSheet}
       />
       {onAttachImage && onAttachFile ? (
-        <ActionSheetModal
+        <MobileNativeChatAttachSheet
           visible={showAttachSheet}
-          title="Add to chat"
-          actions={[
-            {
-              label: 'Photos',
-              hint: 'Pick from your photo library',
-              icon: ImageIcon,
-              onPress: onAttachImage
-            },
-            ...(onPasteImage
-              ? [
-                  {
-                    label: 'Paste image',
-                    hint: 'Use the screenshot or image on your clipboard',
-                    icon: ClipboardPaste,
-                    onPress: onPasteImage
-                  }
-                ]
-              : []),
-            {
-              label: 'Files',
-              hint: 'PDF, documents, code, anything on this phone',
-              icon: Paperclip,
-              onPress: onAttachFile
-            }
-          ]}
           onClose={onCloseAttachSheet}
+          onCaptureImage={onCaptureImage}
+          onAttachImage={onAttachImage}
+          onAttachFile={onAttachFile}
+          permissionMode={permissionMode}
+          onOpenPermission={onOpenPermission}
         />
       ) : null}
     </>

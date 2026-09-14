@@ -79,7 +79,7 @@ export function MobileNativeChatView({
   imagePreviewsByMessageId,
   composerText,
   onComposerTextChange,
-  onAttachImage, onPasteImage,
+  onCaptureImage, onAttachImage, onPasteImage,
   onAttachFile,
   attachments,
   onRemoveAttachment,
@@ -413,6 +413,7 @@ export function MobileNativeChatView({
         {...{ getSendCompletionGeneration, getComposerEditGeneration }}
         agent={agent}
         sessionOptions={sessionOptions}
+        onCaptureImage={onCaptureImage}
         onAttachImage={onAttachImage} onPasteImage={onPasteImage}
         onAttachFile={onAttachFile}
         attachments={attachments}

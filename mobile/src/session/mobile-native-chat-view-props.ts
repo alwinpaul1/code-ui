@@ -84,6 +84,8 @@ export type MobileNativeChatViewProps = {
   /** Controlled composer text (owned by the route so dictation can write to it). */
   composerText: string
   onComposerTextChange: (text: string) => void
+  /** A photo taken with the camera right now. */
+  onCaptureImage?: () => void
   onAttachImage?: () => void
   /** Present only while the clipboard holds an image. */
   onPasteImage?: () => void

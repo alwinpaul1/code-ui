@@ -2,7 +2,7 @@
   "expo": {
     "name": "Code UI",
     "slug": "code-ui",
-    "version": "0.5.93",
+    "version": "0.5.94",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -76,12 +76,13 @@
       },
       "allowBackup": false,
       "permissions": [
+        "CAMERA",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "REQUEST_INSTALL_PACKAGES"
       ],
       "package": "com.alwinpaul.codeui",
-      "versionCode": 215,
+      "versionCode": 216,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
@@ -122,7 +123,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Code UI to attach photos from your library to a terminal session on your paired desktop."
+          "photosPermission": "Allow Code UI to attach photos from your library to a terminal session on your paired desktop.",
+          "cameraPermission": "Allow Code UI to take a photo to attach to a terminal session on your paired desktop."
         }
       ],
       [

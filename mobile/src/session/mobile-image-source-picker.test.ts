@@ -3,7 +3,9 @@ import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-
 
 vi.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: vi.fn(),
-  launchImageLibraryAsync: vi.fn()
+  launchImageLibraryAsync: vi.fn(),
+  requestCameraPermissionsAsync: vi.fn(),
+  launchCameraAsync: vi.fn()
 }))
 vi.mock('expo-document-picker', () => ({
   getDocumentAsync: vi.fn()
@@ -57,6 +59,35 @@ function fileFactory(
 
 describe('pickMobileImage', () => {
   afterEach(() => vi.restoreAllMocks())
+
+  it('takes a photo with the camera and reads it as base64', async () => {
+    const { createFile } = fileFactory(new Uint8Array([1, 2, 3, 4]))
+    const launchCamera = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/shot.jpg', fileSize: 4 }]
+    })
+    const requestCameraPermission = vi.fn().mockResolvedValue(granted)
+    const result = await pickMobileImage('camera', {
+      requestCameraPermission,
+      launchCamera,
+      createFile
+    })
+    expect(requestCameraPermission).toHaveBeenCalledOnce()
+    expect(launchCamera).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
+    expect(result?.uri).toBe('file:///tmp/shot.jpg')
+    expect(result?.base64).toBeTruthy()
+  })
+
+  it('refuses the camera without permission, with the shared permission error', async () => {
+    const launchCamera = vi.fn()
+    await expect(
+      pickMobileImage('camera', {
+        requestCameraPermission: vi.fn().mockResolvedValue(denied),
+        launchCamera
+      })
+    ).rejects.toBeInstanceOf(ImageLibraryPermissionError)
+    expect(launchCamera).not.toHaveBeenCalled()
+  })
 
   it('reads a photo URI without relying on React Native fetch', async () => {
     const bytes = new Uint8Array([0, 1, 2, 3])

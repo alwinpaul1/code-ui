@@ -54,6 +54,8 @@ type Props = {
   /** Model/session-option pickers shown in the composer action row; null when
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
+  /** A photo taken with the camera right now. */
+  onCaptureImage?: () => void
   onAttachImage?: () => void
   onPasteImage?: () => void
   /** Any document via the system file picker; shown as a named chip. */
@@ -110,8 +112,8 @@ export function MobileNativeChatComposer({
   getComposerEditGeneration,
   agent,
   sessionOptions,
+  onCaptureImage,
   onAttachImage,
-  onPasteImage,
   onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -347,7 +349,9 @@ export function MobileNativeChatComposer({
                 ]}
                 // Why: with a file option the "+" opens a small chooser (Claude's
                 // "Add to Chat" sheet); without one it keeps opening Photos directly.
-                onPress={onAttachFile ? () => setShowAttachSheet(true) : onAttachImage}
+                onPress={
+                  onAttachFile || onCaptureImage ? () => setShowAttachSheet(true) : onAttachImage
+                }
                 disabled={disabled}
               >
                 <Plus size={20} color={colors.textSecondary} strokeWidth={2} />
@@ -437,9 +441,17 @@ export function MobileNativeChatComposer({
         contextWindow={contextWindow}
         showAttachSheet={showAttachSheet}
         onCloseAttachSheet={() => setShowAttachSheet(false)}
+        onCaptureImage={onCaptureImage}
         onAttachImage={onAttachImage}
-        onPasteImage={onPasteImage}
         onAttachFile={onAttachFile}
+        onOpenPermission={
+          (agentMode ? onSelectAgentMode : onSelectPermissionMode)
+            ? () => {
+                setShowAttachSheet(false)
+                setShowModeSheet(true)
+              }
+            : undefined
+        }
       />
     </View>
   )

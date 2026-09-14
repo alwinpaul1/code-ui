@@ -9,7 +9,7 @@ import {
 } from '../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 
-export type MobileImageSource = 'library' | 'files' | 'clipboard'
+export type MobileImageSource = 'camera' | 'library' | 'files' | 'clipboard'
 
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
@@ -90,6 +90,34 @@ async function readUriAsBase64(
     return base64
   } finally {
     handle.close()
+  }
+}
+
+/** A photo taken right now with the camera. Same read path as the library:
+ *  the asset's file is streamed to base64 for the host upload, and its URI
+ *  renders the composer preview. A hard permission denial reuses the library
+ *  error so the composer surfaces one "allow access" message for both. */
+async function* pickFromCamera(
+  requestPermission: typeof ImagePicker.requestCameraPermissionsAsync = ImagePicker.requestCameraPermissionsAsync,
+  launch: typeof ImagePicker.launchCameraAsync = ImagePicker.launchCameraAsync,
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  const permission = await requestPermission()
+  if (!permission.granted) {
+    throw new ImageLibraryPermissionError()
+  }
+  const result = await launch({ mediaTypes: ['images'], base64: false, quality: 1 })
+  if (result.canceled) {
+    return
+  }
+  for (const asset of result.assets) {
+    if (!asset.uri) {
+      continue
+    }
+    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
+    if (base64) {
+      yield { base64, uri: asset.uri }
+    }
   }
 }
 
@@ -176,6 +204,8 @@ export async function* pickMobileDocuments(
 }
 
 type MobileImagePickerDeps = {
+  readonly requestCameraPermission?: typeof ImagePicker.requestCameraPermissionsAsync
+  readonly launchCamera?: typeof ImagePicker.launchCameraAsync
   readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
   readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
   readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
@@ -212,6 +242,9 @@ function pickMobileImagesWithMode(
 ): AsyncIterable<PickedMobileImage> {
   if (source === 'clipboard') {
     return pickFromClipboard(deps?.readClipboardImage)
+  }
+  if (source === 'camera') {
+    return pickFromCamera(deps?.requestCameraPermission, deps?.launchCamera, deps?.createFile)
   }
   if (source === 'library') {
     return pickFromLibrary(
