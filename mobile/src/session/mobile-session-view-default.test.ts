@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chatDefaultAgent,
   defaultSessionViewForAgent,
   mobileSessionChatViewToggle
 } from './mobile-session-view-default'
@@ -41,5 +42,28 @@ describe('mobileSessionChatViewToggle', () => {
     expect(
       mobileSessionChatViewToggle({ eligible: true, chatVisible: false, tabId: null })
     ).toBeNull()
+  })
+})
+
+describe('which agent decides a tab default view', () => {
+  it('lets a launched or hook-owned agent open its tab in chat', () => {
+    expect(chatDefaultAgent('claude', 'launch')).toBe('claude')
+    expect(chatDefaultAgent('claude', 'status')).toBe('claude')
+    expect(chatDefaultAgent('codex', 'beacon')).toBe('codex')
+  })
+
+  it('leaves a terminal someone typed the agent into in the terminal view', () => {
+    // The toggle is offered either way; only the DEFAULT is withheld, so the
+    // view does not flip while the person is still typing in it.
+    expect(chatDefaultAgent('claude', 'transcript')).toBeNull()
+    expect(defaultSessionViewForAgent(chatDefaultAgent('claude', 'transcript'), 'chat')).toBe(
+      'terminal'
+    )
+    expect(defaultSessionViewForAgent(chatDefaultAgent('claude', 'launch'), 'chat')).toBe('chat')
+  })
+
+  it('has nothing to say when no agent was identified', () => {
+    expect(chatDefaultAgent(null, 'launch')).toBeNull()
+    expect(chatDefaultAgent(undefined, undefined)).toBeNull()
   })
 })

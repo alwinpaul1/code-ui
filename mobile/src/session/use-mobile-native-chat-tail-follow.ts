@@ -137,12 +137,18 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // The one place the list is told where to sit. Never animated: an animated
   // command eases toward the endpoint measured when it started, so while
   // tokens keep arriving it runs backwards until the next pin yanks it forward.
+  // The hold gate belongs here, not on one caller: the dock's re-pin and the
+  // list's own onLayout both reach this directly, and a pin under a held finger
+  // is the select-text-and-jump symptom the gate exists to end (2026-09-14).
   const pinToTail = useCallback(() => {
-    if (!followingRef.current || !hasItems) {
+    if (!hasItems) {
+      return
+    }
+    if (!followGate.shouldFollow(followingRef.current, holdingRef.current)) {
       return
     }
     listRef.current?.scrollToOffset({ offset: 0, animated: false })
-  }, [followingRef, hasItems])
+  }, [followGate, followingRef, hasItems, holdingRef])
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, _height: number) => {
@@ -151,11 +157,10 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       }
       // Upstream pins at the height the list just measured. An inverted list
       // needs neither number: its tail is offset 0 whatever the content does.
-      if (followGate.shouldFollow(followingRef.current, holdingRef.current)) {
-        pinToTail()
-      }
+      // `pinToTail` owns the gate itself.
+      pinToTail()
     },
-    [followGate, followingRef, hasItems, holdingRef, pinToTail]
+    [hasItems, pinToTail]
   )
 
   const detachFromTail = useCallback(() => {

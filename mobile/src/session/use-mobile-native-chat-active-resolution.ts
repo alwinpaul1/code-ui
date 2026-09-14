@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { useAgentHudBeacon } from './agent-hud-beacon'
+import { chatDefaultAgent } from './mobile-session-view-default'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 
@@ -68,9 +69,12 @@ export function useMobileNativeChatActiveResolution(args: {
           beaconAgent
         )
       : null
+  // The agent that decides the DEFAULT view, which a hand-started one does not:
+  // see `chatDefaultAgent`. An explicit toggle is an override and still wins.
+  const defaultViewAgent = chatDefaultAgent(chatIdentity?.agent, chatIdentity?.source)
   const tabWantsChat =
     activeSessionTab?.type === 'agent-session' ||
-    (activeSessionTabId ? isTabChatView(activeSessionTabId, chatIdentity?.agent ?? null) : false)
+    (activeSessionTabId ? isTabChatView(activeSessionTabId, defaultViewAgent) : false)
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat ? chatIdentity : null
   const showNativeChat = activeChatResolution != null

@@ -30,10 +30,10 @@ import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
 import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import { directEndpointUrls, withPreferredDirectEndpoint } from './mobile-direct-endpoint-list'
 import {
+  RelayCredentialRefusalTracker,
   logRelayConnected,
   logRelayCredentialUnavailable,
-  logRelayDialFailure,
-  noteRelayDialFailure
+  logRelayDialFailure
 } from './mobile-relay-diagnostic-log'
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
@@ -61,6 +61,11 @@ export class MobileEndpointSupervisor {
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
   private readonly relayReconnect: RelayReconnectController
+  // Two director 401s in a row is a refused credential worth reprobing for; a
+  // lone one is a rotation racing an in-flight dial and must not park a phone.
+  private readonly credentialRefusals = new RelayCredentialRefusalTracker(() =>
+    this.relayReconnect.armCredentialReprobe()
+  )
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
   private readonly directProbe: DirectReturnProbe
@@ -146,6 +151,7 @@ export class MobileEndpointSupervisor {
           this.directVerdict.remember(false)
         }
         this.relayRotationPending = false
+        this.credentialRefusals.noteConnected()
         this.hysteresis.recordMigration(dependencies.now())
         const startedAt = this.relayDialStartedAt
         this.relayDialStartedAt = null
@@ -164,8 +170,7 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) =>
-        noteRelayDialFailure(this.logRelay, error, () => this.relayReconnect.armCredentialReprobe())
+      onDialFailure: (error) => this.credentialRefusals.noteFailure(this.logRelay, error)
     })
     this.directVerdict = new DirectVerdictMemory(dependencies, () => this.host, (h) => (this.host = h))
     this.directProbe = new DirectReturnProbe(dependencies, {

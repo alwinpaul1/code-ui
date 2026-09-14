@@ -86,6 +86,7 @@ describe('resolveMobileNativeChat', () => {
       })
     ).toEqual({
       agent: 'claude',
+      source: 'launch',
       sessionId: 'sess-1',
       transcriptPath: '/tmp/claude-real-transcript.jsonl'
     })
@@ -106,12 +107,13 @@ describe('resolveMobileNativeChat', () => {
         type: 'terminal',
         agentStatus: status({ agentType: 'codex' })
       })
-    ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null })
+    ).toEqual({ agent: 'codex', source: 'status', sessionId: null, transcriptPath: null })
   })
 
   it('admits OpenClaude with its distinct agent identity', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'openclaude' })).toEqual({
       agent: 'openclaude',
+      source: 'launch',
       sessionId: null,
       transcriptPath: null
     })
@@ -169,6 +171,7 @@ describe('resolveMobileNativeChat', () => {
       })
     ).toEqual({
       agent: 'codex',
+      source: 'launch',
       sessionId: 'structured-1',
       transcriptPath: null
     })
@@ -183,6 +186,7 @@ describe('resolveMobileNativeChat', () => {
       })
     ).toEqual({
       agent: 'claude',
+      source: 'launch',
       sessionId: 'structured-1',
       transcriptPath: null
     })
@@ -196,6 +200,78 @@ describe('resolveMobileNativeChat', () => {
         agent: 'grok'
       })
     ).toBeNull()
+  })
+
+  // 2026-09-14, reported from the phone: open a terminal from the phone, type
+  // `claude` into it by hand, and the header offers no "Show chat" at all. The
+  // tab has no launchAgent (the phone opened a plain shell) and the desktop's
+  // pane-owner lookup answers null for an agent it did not launch, so the only
+  // thing left on the tab is the provider session the agent's own hook
+  // reported — a real session id and the transcript path beside it.
+  it('offers chat for an agent someone started by hand in a phone-opened terminal', () => {
+    const transcriptPath =
+      '/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Code-UI/' +
+      '11ab2e5b-269d-41ec-ac14-6f4cd692eead.jsonl'
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: {
+          state: 'idle',
+          updatedAt: 1,
+          providerSession: { key: 'session_id', id: 'sess-1', transcriptPath }
+        } as never
+      })
+    ).toEqual({ agent: 'claude', source: 'transcript', sessionId: 'sess-1', transcriptPath })
+  })
+
+  it('names Codex from its own rollout when the desktop left the pane unowned', () => {
+    const transcriptPath =
+      '/Users/alwinpaul/.codex/sessions/2026/09/11/' +
+      'rollout-2026-09-11T02-42-13-01a08dea-3c89-78e0-b629-04a87f33c43e.jsonl'
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: {
+          state: 'idle',
+          updatedAt: 1,
+          agentType: 'unknown',
+          providerSession: { key: 'session_id', id: 'sess-2', transcriptPath }
+        } as never
+      })
+    ).toEqual({ agent: 'codex', source: 'transcript', sessionId: 'sess-2', transcriptPath })
+  })
+
+  it('still refuses a terminal whose captured transcript names no agent it can read', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: {
+          state: 'idle',
+          updatedAt: 1,
+          providerSession: { key: 'session_id', id: 'sess-3', transcriptPath: '/tmp/pi.jsonl' }
+        } as never
+      })
+    ).toBeNull()
+  })
+
+  it('leaves the launch hint in charge when the desktop did name the pane owner', () => {
+    // The fallback must never outrank a real identity: a Claude transcript
+    // captured under an openclaude launch stays openclaude.
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'openclaude',
+        agentStatus: {
+          state: 'idle',
+          updatedAt: 1,
+          providerSession: {
+            key: 'session_id',
+            id: 'sess-4',
+            transcriptPath: '/Users/me/.claude/projects/-repo/abc.jsonl'
+          }
+        } as never
+      })?.agent
+    ).toBe('openclaude')
   })
 
   it('canShowMobileNativeChat mirrors resolution', () => {

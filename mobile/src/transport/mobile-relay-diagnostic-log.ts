@@ -45,8 +45,26 @@ export function logRelayCredentialUnavailable(log: RelayRecoveryLog, hasBundle: 
   )
 }
 
+/** Consecutive refusals a dial must collect before the phone stops trying.
+ *
+ *  One is not enough. A credential rotating under an in-flight dial answers 401
+ *  once and the next dial succeeds; arming on that single answer parked a
+ *  healthy phone for the length of the slow reprobe, which is the opposite of
+ *  the bug this exists to fix. Two in a row is a refusal, not a race: the
+ *  reported failure was forty-odd of them in eight minutes, so nothing real is
+ *  lost by spending one more dial to be sure (2026-09-14 review).
+ */
+export const RELAY_CREDENTIAL_REFUSALS_BEFORE_REPROBE = 2
+
+/** Consecutive 401s seen while dialling. Cleared by anything that is not one. */
+export type RelayCredentialRefusalRun = { consecutive: number }
+
+export function createRelayCredentialRefusalRun(): RelayCredentialRefusalRun {
+  return { consecutive: 0 }
+}
+
 /**
- * Logs a failed dial, and treats a REFUSED credential as one.
+ * Logs a failed dial, and treats a REPEATEDLY refused credential as unusable.
  *
  * A 401 is not a failure another dial can clear. Without this the phone
  * re-dialled on the ordinary backoff and took forty-odd 401s in eight minutes:
@@ -56,11 +74,43 @@ export function logRelayCredentialUnavailable(log: RelayRecoveryLog, hasBundle: 
 export function noteRelayDialFailure(
   log: RelayRecoveryLog,
   error: Error | null,
-  armCredentialReprobe: () => void
+  armCredentialReprobe: () => void,
+  run: RelayCredentialRefusalRun = createRelayCredentialRefusalRun()
 ): void {
   logRelayDialFailure(log, error)
-  if (isRelayCredentialRejected(error)) {
-    logRelayCredentialUnavailable(log, true)
-    armCredentialReprobe()
+  if (!isRelayCredentialRejected(error)) {
+    // Any other answer means the credential was not the thing being judged.
+    run.consecutive = 0
+    return
+  }
+  run.consecutive += 1
+  if (run.consecutive < RELAY_CREDENTIAL_REFUSALS_BEFORE_REPROBE) {
+    return
+  }
+  logRelayCredentialUnavailable(log, true)
+  armCredentialReprobe()
+}
+
+/** A dial that got through: the run of refusals is over. */
+export function noteRelayDialSucceeded(run: RelayCredentialRefusalRun): void {
+  run.consecutive = 0
+}
+
+
+/** Owns a run of consecutive dial refusals and the reprobe it arms, so a caller
+ *  can hand it a dial outcome without also holding the counter. Constructed with
+ *  the reprobe to arm; `noteFailure` arms it on the second refusal in a row,
+ *  `noteConnected` clears the run when a dial gets through. */
+export class RelayCredentialRefusalTracker {
+  private readonly run = createRelayCredentialRefusalRun()
+
+  constructor(private readonly armCredentialReprobe: () => void) {}
+
+  noteFailure(log: RelayRecoveryLog, error: Error | null): void {
+    noteRelayDialFailure(log, error, this.armCredentialReprobe, this.run)
+  }
+
+  noteConnected(): void {
+    noteRelayDialSucceeded(this.run)
   }
 }

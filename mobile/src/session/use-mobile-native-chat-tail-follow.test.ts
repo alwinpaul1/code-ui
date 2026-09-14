@@ -92,6 +92,19 @@ describe('the chat transcript has one owner for its scroll position', () => {
     expect(list.scrollToOffset).not.toHaveBeenCalled()
   })
 
+  // 2026-09-14 review: the guard above lived only on the content-resize path,
+  // so the dock's re-pin and the list's own onLayout could still move the list
+  // under a held finger — the same select-text-and-jump symptom, reached by the
+  // two callers added when this hook took ownership.
+  it('will not move the list from a dock or layout re-pin while a finger is down', () => {
+    render()
+
+    act(() => latest!.touchStart())
+    act(() => latest!.pinToTail())
+
+    expect(list.scrollToOffset).not.toHaveBeenCalled()
+  })
+
   // The dock's height is the spacer at the list's end; when it grows, the
   // newest row ends up underneath it. That re-pin is the same command as every
   // other, so it goes through the same owner and obeys the same refusal.
