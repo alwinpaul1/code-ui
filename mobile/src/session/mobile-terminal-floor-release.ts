@@ -64,3 +64,43 @@ export async function releaseFloorUntilAccepted(args: {
   }
   return false
 }
+
+export const FLOOR_CLAIM_RETRY_DELAYS_MS: readonly number[] = [0, 250, 1000, 3000]
+
+/**
+ * Retries the take-floor until the host accepts it.
+ *
+ * The comment above says taking the floor is cheap because "it happens whenever
+ * the terminal is shown" — but a REFUSED request is not retried by that, and
+ * nothing else asks either: the effect that pairs view with width fires only
+ * when the view CHANGES, so one refusal left the terminal at desktop width for
+ * as long as the user stayed on it. That is "all terminals open in desktop
+ * mode, not mobile" (reported 2026-09-14). The refusal is real — the host can
+ * reject a request that arrives before the pane has been measured, or while
+ * another actor holds the floor.
+ *
+ * `isAbandoned` stops the moment the terminal is no longer the visible view, so
+ * a late claim cannot narrow a desk the user has already left.
+ */
+export async function claimFloorUntilAccepted(args: {
+  claim: () => Promise<boolean>
+  wait: (ms: number) => Promise<void>
+  isAbandoned: () => boolean
+  delays?: readonly number[]
+}): Promise<boolean> {
+  for (const delayMs of args.delays ?? FLOOR_CLAIM_RETRY_DELAYS_MS) {
+    if (args.isAbandoned()) {
+      return false
+    }
+    if (delayMs > 0) {
+      await args.wait(delayMs)
+      if (args.isAbandoned()) {
+        return false
+      }
+    }
+    if (await args.claim()) {
+      return true
+    }
+  }
+  return false
+}

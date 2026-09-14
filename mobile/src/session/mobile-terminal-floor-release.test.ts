@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  FLOOR_CLAIM_RETRY_DELAYS_MS,
   FLOOR_RELEASE_RETRY_DELAYS_MS,
+  claimFloorUntilAccepted,
   releaseFloorUntilAccepted,
-  shouldReleaseFloor
+  shouldReleaseFloor,
 } from './mobile-terminal-floor-release'
 
 describe('handing the desk back its floor', () => {
@@ -88,5 +90,47 @@ describe('handing the desk back its floor', () => {
 
     expect(ok).toBe(false)
     expect(attempts).toBe(1)
+  })
+})
+
+describe('claiming the floor for phone width', () => {
+  it('retries a refused request instead of leaving the desk at desktop width', async () => {
+    // 2026-09-14, reported from the phone: terminals opened at desktop width.
+    // The request went out once and its answer was discarded, and the effect
+    // that would ask again only fires when the VIEW changes — so one refusal
+    // stuck for as long as the user stayed on that terminal.
+    let attempts = 0
+    const claim = vi.fn(async () => {
+      attempts += 1
+      return attempts >= 3
+    })
+    expect(
+      await claimFloorUntilAccepted({
+        claim,
+        wait: async () => undefined,
+        isAbandoned: () => false
+      })
+    ).toBe(true)
+    expect(claim).toHaveBeenCalledTimes(3)
+  })
+
+  it('gives up when the user has left the terminal, so a late claim cannot narrow the desk', async () => {
+    const claim = vi.fn(async () => false)
+    expect(
+      await claimFloorUntilAccepted({
+        claim,
+        wait: async () => undefined,
+        isAbandoned: () => true
+      })
+    ).toBe(false)
+    expect(claim).not.toHaveBeenCalled()
+  })
+
+  it('stops after its delays rather than retrying forever', async () => {
+    const claim = vi.fn(async () => false)
+    expect(
+      await claimFloorUntilAccepted({ claim, wait: async () => undefined, isAbandoned: () => false })
+    ).toBe(false)
+    expect(claim).toHaveBeenCalledTimes(FLOOR_CLAIM_RETRY_DELAYS_MS.length)
   })
 })

@@ -9,7 +9,11 @@ import {
   readHeldFloors,
   rememberHeldFloor
 } from './mobile-held-floor-store'
-import { releaseFloorUntilAccepted, shouldReleaseFloor } from './mobile-terminal-floor-release'
+import {
+  claimFloorUntilAccepted,
+  releaseFloorUntilAccepted,
+  shouldReleaseFloor
+} from './mobile-terminal-floor-release'
 import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-panel-route-actions'
 
 /**
@@ -96,7 +100,20 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     if (last && last.handle === activeHandle && last.chat === showNativeChat) {
       return
     }
-    void setDisplayMode(activeHandle, want)
+    if (want === 'desktop') {
+      void setDisplayMode(activeHandle, want)
+      return
+    }
+    // Phone width is retried: the answer used to be discarded, and nothing else
+    // asks again while the view stays put, so one refusal left the terminal at
+    // desktop width for the whole visit (2026-09-14).
+    const handle = activeHandle
+    void claimFloorUntilAccepted({
+      claim: () => setDisplayModeRef.current(handle, 'auto'),
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      isAbandoned: () =>
+        activeHandleStateRef.current !== handle || showNativeChatStateRef.current
+    })
   }, [activeHandle, setDisplayMode, showNativeChat])
 
   // Why: asking for phone dims is also the presence-lock take-floor gesture, so
