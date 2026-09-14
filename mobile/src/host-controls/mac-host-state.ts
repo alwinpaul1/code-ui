@@ -14,23 +14,26 @@ export const UNKNOWN_MAC_HOST_STATE: MacHostState = {
 
 const MARKER = 'CUIMAC'
 
-// Verified on macOS 26, 2026-09-13. `ioreg`'s CGSSessionScreenIsLocked is the lock
-// signal; the tail of `pmset -g log` is the only display signal that works here —
-// `pmset -g powerstate IODisplayWrangler` and ioreg's CurrentPowerState both lie.
-// The `%s` placeholders matter: the shell paints this command line on the screen too,
-// and the format string must not match the marker pattern the parser hunts for.
+// Verified on macOS 26. `ioreg`'s CGSSessionScreenIsLocked is the lock signal and
+// `output muted` is the speaker flag; both answer in about a second.
+//
+// Display state is NOT asked for. `pmset -g log` was the only source that ever
+// answered it correctly here, and it dumps the entire power log: measured at 28
+// SECONDS on this Mac against a 4-second probe budget, so the whole probe timed
+// out and every row showed as unknown — including lock and mute, which are cheap
+// and were right (2026-09-14). The alternatives lie or are worse: `pmset -g
+// powerstate IODisplayWrangler` fails outright, ioreg's CurrentPowerState tracks
+// system sleep rather than the display, and `log show` took 123 seconds. Two
+// honest answers beat three where one costs the other two.
+//
+// The `%s` placeholders matter: the shell paints this command line on the screen
+// too, and the format string must not match the marker the parser hunts for.
 export const MAC_HOST_STATE_PROBE_COMMAND =
-  `printf '${MARKER} lock=%s display=%s mute=%s\\n' ` +
+  `printf '${MARKER} lock=%s mute=%s\\n' ` +
   `"$(ioreg -n Root -d1 -a | plutil -p - | grep -c '"CGSSessionScreenIsLocked" => true')" ` +
-  `"$(pmset -g log | grep -iE 'Display is turned (off|on)' | tail -1 | grep -qi 'turned off' && echo off || echo on)" ` +
-  // `output muted` is the speaker mute flag; verified round-trip on macOS 26, 2026-09-13.
-  // Why no `; exit` here, unlike the action commands: the phone has to read this
-  // tab's screen after the shell prints, and a shell that exits at once takes the
-  // terminal with it before the first poll (every row showed on 0.5.61 because of
-  // this). The probe closes the tab itself once it has read the marker.
   `"$(osascript -e 'output muted of (get volume settings)')"`
 
-const MARKER_PATTERN = new RegExp(`${MARKER} lock=([01]) display=(on|off) mute=(true|false)\\b`)
+const MARKER_PATTERN = new RegExp(`${MARKER} lock=([01]) mute=(true|false)\\b`)
 
 /** The last marker painted on the screen, or unknown. Unknown is a real answer here —
  *  it means "show every row" rather than "assume the Mac is awake". */
@@ -40,8 +43,9 @@ export function parseMacHostState(lines: string[]): MacHostState {
     if (match) {
       return {
         lock: match[1] === '1' ? 'locked' : 'unlocked',
-        display: match[2] === 'off' ? 'off' : 'on',
-        mute: match[3] === 'true' ? 'muted' : 'unmuted'
+        // Not asked for; both display rows show, which is the honest answer.
+        display: 'unknown',
+        mute: match[2] === 'true' ? 'muted' : 'unmuted'
       }
     }
   }

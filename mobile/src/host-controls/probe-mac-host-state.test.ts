@@ -50,9 +50,9 @@ describe('asking the Mac what state it is in', () => {
     const { state, calls, methods } = await runProbe([
       [],
       ['still starting up'],
-      ['CUIMAC lock=1 display=off mute=true']
+      ['CUIMAC lock=1 mute=true']
     ])
-    expect(state).toEqual({ lock: 'locked', display: 'off', mute: 'muted' })
+    expect(state).toEqual({ lock: 'locked', display: 'unknown', mute: 'muted' })
     expect(calls[0]?.method).toBe('session.tabs.createTerminal')
     expect(calls[1]).toEqual({
       method: 'terminal.read',
@@ -63,7 +63,7 @@ describe('asking the Mac what state it is in', () => {
   })
 
   it('closes the throwaway tab once it has its answer', async () => {
-    const { calls } = await runProbe([['CUIMAC lock=0 display=on mute=false']])
+    const { calls } = await runProbe([['CUIMAC lock=0 mute=false']])
     expect(calls.at(-1)).toEqual({
       method: 'session.tabs.close',
       params: { worktree: 'id:wt-1', tabId: 'tab-9', reason: 'user' }

@@ -11,7 +11,9 @@ import {
 } from './throwaway-terminal'
 
 export const MAC_HOST_STATE_PROBE_INTERVAL_MS = THROWAWAY_TERMINAL_POLL_MS
-export const MAC_HOST_STATE_PROBE_TIMEOUT_MS = 4000
+// The two questions take about a second each and a relay round trip sits on top
+// of every poll, so four seconds could not cover them (2026-09-14).
+export const MAC_HOST_STATE_PROBE_TIMEOUT_MS = 12000
 
 /** Opens the same kind of throwaway terminal the actions use, watches its screen for
  *  the marker line, then closes the tab. Never guesses: a screen that never paints the
