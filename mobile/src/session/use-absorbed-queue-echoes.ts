@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useStableEchoes } from './use-stable-echoes'
@@ -166,7 +167,12 @@ export function useAbsorbedQueueEchoes(
     if (
       [...live, ...own].some((other) => sameMessage(other, key)) ||
       landed.some((other) => sameMessage(other, key)) ||
-      (entry != null && landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other)))
+      (entry != null && landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other))) ||
+      // The witness reads the message off the agent's SCREEN, where it is
+      // wrapped and can be shortened; the landed row carries what the author
+      // typed. Comparing them exactly left a shortened reading standing beside
+      // its own row, so one send showed as two bubbles (2026-09-14).
+      (entry != null && landedText.some((other) => queueRowIsPendingSend(other, entry.text)))
     ) {
       held.current.delete(key)
     }

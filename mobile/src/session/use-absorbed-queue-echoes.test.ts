@@ -481,3 +481,35 @@ it('skips a reading that only glues rows onto one of the phone\'s own sends', ()
   expect(latest).toEqual([])
   act(() => renderer!.unmount())
 })
+
+// 2026-09-14, two screenshots from the phone: one send stood as two identical
+// bubbles. The witness reads the message off the agent's SCREEN, where it is
+// wrapped and can be shortened, while the transcript row carries what the
+// author actually typed. Retirement compared the two exactly, so a shortened
+// reading never matched its own landed row and lived on beside it.
+it('retires a held reading once the row it was read from lands, even shortened', () => {
+  const typed =
+    'Did you do all the changes i told in this session reead thr session transcript deeply\n\n' +
+    '1. Check all the messages or user prompts i asked to you where done and confirm it'
+  const onScreen = 'Did you do all the changes i told in this session reead thr session transcript'
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { sent: [onScreen], own: [], folded }))
+  })
+  expect(latest).toHaveLength(1)
+  act(() => {
+    renderer!.update(
+      createElement(ProbeOwn, {
+        sent: [onScreen],
+        own: [],
+        folded: [...folded, row('u2', 'user', typed)]
+      })
+    )
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})

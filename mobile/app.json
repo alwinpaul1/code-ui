@@ -2,7 +2,7 @@
   "expo": {
     "name": "Code UI",
     "slug": "code-ui",
-    "version": "0.5.81",
+    "version": "0.5.82",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -81,7 +81,7 @@
         "REQUEST_INSTALL_PACKAGES"
       ],
       "package": "com.alwinpaul.codeui",
-      "versionCode": 203,
+      "versionCode": 204,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
