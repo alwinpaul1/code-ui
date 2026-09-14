@@ -137,18 +137,21 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // The one place the list is told where to sit. Never animated: an animated
   // command eases toward the endpoint measured when it started, so while
   // tokens keep arriving it runs backwards until the next pin yanks it forward.
-  // The hold gate belongs here, not on one caller: the dock's re-pin and the
-  // list's own onLayout both reach this directly, and a pin under a held finger
-  // is the select-text-and-jump symptom the gate exists to end (2026-09-14).
+  //
+  // Guards on `holding` as well as `following`, so the dock re-pin and the
+  // list's own onLayout — which both reach this directly — cannot yank the
+  // transcript out from under a held finger (the select-text-and-jump symptom).
+  // It must NOT consult the follow gate: that gate consumes a pending-data flag
+  // so a re-measure cannot follow, but a dock or keyboard re-pin legitimately
+  // fires with no new data and still has to keep the newest row above the dock
+  // (2026-09-14: gating this on new data hid the newest message under the
+  // keyboard whenever the reader tapped the composer of an idle agent).
   const pinToTail = useCallback(() => {
-    if (!hasItems) {
-      return
-    }
-    if (!followGate.shouldFollow(followingRef.current, holdingRef.current)) {
+    if (!followingRef.current || !hasItems || holdingRef.current) {
       return
     }
     listRef.current?.scrollToOffset({ offset: 0, animated: false })
-  }, [followGate, followingRef, hasItems, holdingRef])
+  }, [followingRef, hasItems, holdingRef])
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, _height: number) => {
@@ -157,10 +160,14 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       }
       // Upstream pins at the height the list just measured. An inverted list
       // needs neither number: its tail is offset 0 whatever the content does.
-      // `pinToTail` owns the gate itself.
-      pinToTail()
+      // Only NEW data may follow here: the gate consumes the pending change so a
+      // re-measure (selection handles, a font pinch) does not pull the reader to
+      // the newest message. `pinToTail` then applies the holding/following guard.
+      if (followGate.shouldFollow(followingRef.current, holdingRef.current)) {
+        pinToTail()
+      }
     },
-    [hasItems, pinToTail]
+    [followGate, followingRef, hasItems, holdingRef, pinToTail]
   )
 
   const detachFromTail = useCallback(() => {

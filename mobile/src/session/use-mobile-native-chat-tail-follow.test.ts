@@ -120,6 +120,28 @@ describe('the chat transcript has one owner for its scroll position', () => {
     expect(list.scrollToOffset).not.toHaveBeenCalled()
   })
 
+  // 2026-09-14 review (Opus + Sonnet): the hold guard was added by routing
+  // pinToTail through the follow gate, which ALSO consumes the gate's one-shot
+  // "new data" flag. That flag is for the content-resize path — a re-measure
+  // must not follow. But the dock re-pin and onLayout legitimately fire with no
+  // new data: the keyboard opens under an idle agent, the composer grows, a
+  // permission card appears. Gating those on new data hid the newest row under
+  // the dock again — the exact 2026-09-13 bug the dock re-pin exists to fix.
+  it('re-pins on every dock or layout resize while following, even with no new message', () => {
+    render()
+
+    // First re-pin (keyboard opens): scrolls to the tail.
+    act(() => latest!.pinToTail())
+    // Second re-pin (composer grows a line) with no new data in between: must
+    // still scroll, or the newest row sits under the dock.
+    act(() => latest!.pinToTail())
+
+    expect(list.scrollToOffset.mock.calls).toEqual([
+      [{ offset: 0, animated: false }],
+      [{ offset: 0, animated: false }]
+    ])
+  })
+
   it('never pins an empty transcript, which has no newest row to pin to', () => {
     render({ rows: [] })
 

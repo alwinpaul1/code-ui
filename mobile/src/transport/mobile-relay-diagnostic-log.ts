@@ -75,7 +75,10 @@ export function noteRelayDialFailure(
   log: RelayRecoveryLog,
   error: Error | null,
   armCredentialReprobe: () => void,
-  run: RelayCredentialRefusalRun = createRelayCredentialRefusalRun()
+  // Required, not defaulted: a fresh run per call would count 0->1 forever and
+  // never arm — the fix reintroduced from the other side. The tracker below
+  // owns the one persistent run; callers pass it (2026-09-14 review).
+  run: RelayCredentialRefusalRun
 ): void {
   logRelayDialFailure(log, error)
   if (!isRelayCredentialRejected(error)) {
