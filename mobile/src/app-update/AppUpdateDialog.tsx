@@ -296,41 +296,6 @@ function DialogBody({ state, onDismiss }: { state: DialogState; onDismiss: () =>
         </View>
       )
     }
-    case 'downloading': {
-      const percent = Math.round(state.progress * 100)
-      return (
-        <View style={{ gap: space.lg }}>
-          <DialogHeader version={version} />
-          <Txt variant="title" weight="semibold" align="center">
-            {state.background ? 'Downloading in the background' : 'Downloading update'}
-          </Txt>
-          <View style={{ gap: space.sm }}>
-            <View
-              accessibilityRole="progressbar"
-              accessibilityValue={{ min: 0, max: 100, now: percent }}
-              style={{
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: colors.bgSunken,
-                overflow: 'hidden'
-              }}
-            >
-              <View
-                style={{ width: `${percent}%`, height: '100%', backgroundColor: colors.accent }}
-              />
-            </View>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Txt variant="caption" tone="muted">
-                {state.background ? 'You can close Code UI. It installs on its own.' : 'Keep Code UI open'}
-              </Txt>
-              <Txt variant="caption" tone="muted">
-                {percent}%
-              </Txt>
-            </View>
-          </View>
-        </View>
-      )
-    }
     case 'installing':
       return (
         <View style={{ gap: space.lg, alignItems: 'center' }}>
