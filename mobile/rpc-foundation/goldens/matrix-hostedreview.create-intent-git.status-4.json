@@ -3,13 +3,14 @@
   "family": "hostedReview.create-intent",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "5ec0b2698fbb74574650d21f96ccef8d4cb33d4f",
+  "baseline": "e53f1557e1b5a6e26e85cfca390b34f7f8a7d26c",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ca89784762a974c383ad856326314c6fa2c24af5105c548a20fd4e458b55ebe",
+  "recorderSha256": "a92934867dcff11d729da656336031e4165c4deb30af2d7f6937f1630e022c82",
+  "scenarioSha256": "45cda6757b76399d282d4b07992dab21bbb8236faadedba5e92eab8818e886bf",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 3,
+  "goldenFormatVersion": 4,
   "values": {
     "01bc4ad46170": {
       "outcome": {
