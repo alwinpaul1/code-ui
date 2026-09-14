@@ -19,6 +19,22 @@ type DiagnoseConnectionArgs = {
   entries: readonly ConnectionLogEntry[]
 }
 
+const REJECTED_RESUME_CREDENTIAL: ConnectionDiagnosis = {
+  likelyCause: 'Relay rejected the saved resume credential.',
+  nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.',
+  reportability: 'none'
+}
+
+/** Whether this run of failures includes a refused credential at all. */
+function hasRejectedCredential(entries: readonly ConnectionLogEntry[]): boolean {
+  const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
+  return entries
+    .slice(boundaryIndex + 1)
+    .some((entry) =>
+      /resolve failed \(401\)/i.test(`${entry.message} ${entry.detail ?? ''}`)
+    )
+}
+
 export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiagnosis {
   if (args.state === 'connected') {
     return {
@@ -29,13 +45,23 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
   }
   const failure = findCurrentDiagnosticFailure(args.entries)
   const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
+  // A rejected credential outranks a 503 that merely landed after it. Reported
+  // 2026-09-14: four "resolve failed (401)" in a row, then one 503, and the
+  // screen said the relay was temporarily unavailable and to keep Orca open
+  // because recovery would retry. It never could — 401 means the saved resume
+  // credential was refused, and no amount of retrying fixes that, so the person
+  // was told to wait for something that would never happen.
+  //
+  // Only against a 503, deliberately. A newer failure of a DIFFERENT kind means
+  // the transport has moved on and the 401 is stale, which a sibling test pins.
+  // A 503 is the same director call saying "try again shortly", and that advice
+  // is precisely what is wrong while the credential is being refused.
+  if (/resolve failed \(503\)/i.test(evidence) && hasRejectedCredential(args.entries)) {
+    return REJECTED_RESUME_CREDENTIAL
+  }
 
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
-    return {
-      likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.',
-      reportability: 'none'
-    }
+    return REJECTED_RESUME_CREDENTIAL
   }
 
   if (/relay director resolve failed \(503\)/i.test(evidence)) {

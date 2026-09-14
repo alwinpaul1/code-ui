@@ -336,3 +336,48 @@ describe('diagnoseConnection', () => {
     ).toBeNull()
   })
 })
+
+describe('a rejected credential behind a passing blip', () => {
+  // Reported 2026-09-14 from another person's phone: four "relay director
+  // resolve failed (401)" in a row, then one 503, and the screen said the relay
+  // was "temporarily unavailable" and to keep Orca open because recovery would
+  // retry. It never could: 401 is a rejected resume credential and no amount of
+  // retrying fixes it. The analysis read only the LAST failure.
+  const entry = (message: string, detail: string) => ({
+    at: 0,
+    level: 'error' as const,
+    code: 'relay-dial-failed',
+    message,
+    detail,
+    path: 'relay' as const
+  })
+  const realLog = [
+    entry('Relay: relay dial failed', 'RelayDirectorHttpError: relay director resolve failed (401)'),
+    entry('Relay: relay dial failed', 'RelayDirectorHttpError: relay director resolve failed (401)'),
+    entry('Relay: relay dial failed', 'RelayDirectorHttpError: relay director resolve failed (401)'),
+    entry(
+      'Relay: relay dial failed',
+      'RelayDirectorHttpError: relay director resolve failed (503); retry-after=5000ms'
+    )
+  ]
+
+  it('names the rejected credential, not the one 503 that landed last', () => {
+    const diagnosis = diagnoseConnection({
+      endpoint: '192.168.0.15:6768',
+      state: 'connecting',
+      entries: realLog
+    })
+    expect(diagnosis.likelyCause).toMatch(/rejected the saved resume credential/i)
+    expect(diagnosis.nextStep).toMatch(/pair this device again/i)
+    expect(diagnosis.likelyCause).not.toMatch(/temporarily unavailable/i)
+  })
+
+  it('still calls a lone 503 temporary, since that one does recover on its own', () => {
+    const diagnosis = diagnoseConnection({
+      endpoint: '192.168.0.15:6768',
+      state: 'connecting',
+      entries: [realLog[3]!]
+    })
+    expect(diagnosis.likelyCause).toMatch(/temporarily unavailable/i)
+  })
+})
