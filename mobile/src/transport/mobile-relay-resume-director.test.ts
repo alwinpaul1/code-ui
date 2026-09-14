@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RelayDirectorHttpError, resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
+import {
+  RelayDirectorHttpError,
+  isRelayCredentialRejected,
+  resolveMobileRelayEndpoint
+} from './mobile-relay-resume-director'
 
 const relay = {
   v: 1 as const,
@@ -98,5 +102,20 @@ describe('mobile relay resume director', () => {
       retryAfterMs: null
     })
     await expect(resolveWith({})).rejects.toBeInstanceOf(RelayDirectorHttpError)
+  })
+})
+
+describe('a refused relay credential', () => {
+  it('is told apart from a failure another attempt could clear', () => {
+    // 2026-09-14, from another person's diagnostics: forty-odd relay dials in
+    // eight minutes, every one "relay director resolve failed (401)". A 401 is
+    // the director refusing the credential this phone holds; dialling again
+    // with the same one gets the same answer.
+    expect(isRelayCredentialRejected(new RelayDirectorHttpError(401, null))).toBe(true)
+    for (const status of [500, 502, 503, 504, 429, 404]) {
+      expect(isRelayCredentialRejected(new RelayDirectorHttpError(status, null))).toBe(false)
+    }
+    expect(isRelayCredentialRejected(new Error('socket closed'))).toBe(false)
+    expect(isRelayCredentialRejected(null)).toBe(false)
   })
 })

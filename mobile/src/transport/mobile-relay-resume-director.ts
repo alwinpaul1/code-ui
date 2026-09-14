@@ -18,6 +18,21 @@ export class RelayDirectorHttpError extends Error {
   }
 }
 
+/**
+ * Whether the director REFUSED the credential we hold, rather than failing for
+ * a reason another attempt could clear.
+ *
+ * 401 is not retryable: the saved resume credential is rejected, and dialling
+ * again with the same one gets the same answer. A phone in that state made
+ * forty-odd dials in eight minutes, every one a 401, because a refused
+ * credential was handled as an ordinary dial failure — the slow reprobe that
+ * exists for an unusable credential only ran when there was NO credential at
+ * all (reported from another person's phone, 2026-09-14).
+ */
+export function isRelayCredentialRejected(error: unknown): boolean {
+  return error instanceof RelayDirectorHttpError && error.status === 401
+}
+
 // 0 when the director asked for nothing, so it only ever floors a local backoff.
 export function relayDirectorRetryAfterMs(error: Error | null): number {
   return error instanceof RelayDirectorHttpError ? (error.retryAfterMs ?? 0) : 0
