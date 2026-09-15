@@ -150,6 +150,13 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
   const blocks: MobileMarkdownBlock[] = []
   for (const token of tokens) {
     switch (token.type) {
+      // `space` is blank lines. `def` is a link reference definition
+      // (`[d]: https://…`), which is metadata rather than content and which
+      // react-markdown hides on the desktop too — the line loop this replaced
+      // leaked it onto the screen as literal text. The inline matcher does not
+      // resolve `[text][d]` yet, so on a document written that way the URL is
+      // now nowhere; resolving reference links belongs with moving the inline
+      // pass onto marked as well.
       case 'space':
       case 'def':
         break
