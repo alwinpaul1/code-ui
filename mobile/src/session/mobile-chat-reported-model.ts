@@ -27,7 +27,11 @@ export type ReportedModelPair = {
  */
 export function reportedModelPair(
   live: { model: string | null; effort: string | null },
-  agentStatus: AgentStatusEntry | null | undefined
+  /** Kept in the signature, and deliberately unread: it is where the launch
+   *  record arrives, and the point of this function is that the launch record
+   *  is not a model source. Dropping the parameter would hide that decision at
+   *  every call site. */
+  _agentStatus?: AgentStatusEntry | null
 ): ReportedModelPair {
   if (live.model) {
     return { model: live.model, effort: live.effort, source: 'live' }
