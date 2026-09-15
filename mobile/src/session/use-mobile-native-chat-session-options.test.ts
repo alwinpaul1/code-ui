@@ -7,6 +7,7 @@ import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
+import { MODEL_PICK_GRACE_MS } from './mobile-native-chat-model-report-authority'
 
 type HookArgs = Parameters<typeof useMobileNativeChatSessionOptions>[0]
 
@@ -216,6 +217,54 @@ describe('useMobileNativeChatSessionOptions', () => {
     update({ scopeKey: 'host\0worktree\0tab' })
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
+  })
+
+  // 2026-09-15, the reported symptom, end to end: "it shows sometimes wrong
+  // model". The user picks a model in the sheet, Claude declines the switch —
+  // it confirms a cached-history change, and dismissing that leaves the model
+  // alone — and the agent goes on being what it was. Its live report therefore
+  // never CHANGES, and the old rule only applied a report that changed, so the
+  // pill kept stating a model the session had never run. It did not heal on
+  // remount either, because the latch outlives the component.
+  it('gives up a pick the agent never honoured, and says what the agent says', async () => {
+    vi.useFakeTimers()
+    try {
+      mount({ reportedModel: 'claude-opus-5', reportedEffort: 'high', reportedModelSource: 'live' })
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
+      await act(async () => {
+        await api!.setOption('model', 'fable')
+      })
+      // Optimistic straight away, so the tap feels answered.
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'fable' })
+      // The agent repaints, still Opus: the same report as before the pick.
+      update({ reportedModel: 'claude-opus-5' })
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'fable' })
+      // Once the grace lapses the agent's own word wins and the pill corrects.
+      await act(async () => {
+        vi.advanceTimersByTime(MODEL_PICK_GRACE_MS + 50)
+      })
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
+      expect(api!.snapshot[0]).toMatchObject({ valueSource: 'reported' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a pick the agent does honour', async () => {
+    vi.useFakeTimers()
+    try {
+      mount({ reportedModel: 'claude-opus-5', reportedEffort: 'high', reportedModelSource: 'live' })
+      await act(async () => {
+        await api!.setOption('model', 'fable')
+      })
+      update({ reportedModel: 'claude-fable-5-1' })
+      await act(async () => {
+        vi.advanceTimersByTime(MODEL_PICK_GRACE_MS + 50)
+      })
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'fable' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('still lets a genuinely new report supersede a local pick', async () => {

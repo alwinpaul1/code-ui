@@ -6,6 +6,7 @@ import type {
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import type { ModelReportSource } from './mobile-native-chat-model-report-authority'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
@@ -24,6 +25,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   isWorking: boolean
   reportedModel: string | null
   reportedEffort?: string | null
+  /** Which source `reportedModel` came from; a live reading outranks a local
+   *  pick, the launch record does not. */
+  reportedModelSource?: ModelReportSource
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
   structured: {
@@ -56,6 +60,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isWorking,
     reportedModel,
     reportedEffort,
+    reportedModelSource,
     openRequest = 0,
     structured,
     toggleTabChatView,
@@ -98,6 +103,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
     reportedEffort,
+    reportedModelSource,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     discoveredModels: codex.discoveredModels,

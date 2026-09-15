@@ -1,7 +1,14 @@
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { hudFieldsFromAgentStatus } from './hud-agent-status-fields'
+import type { ModelReportSource } from './mobile-native-chat-model-report-authority'
 
-export type ReportedModelPair = { model: string | null; effort: string | null }
+export type ReportedModelPair = {
+  model: string | null
+  effort: string | null
+  /** Which of the two sources answered; they are not equal evidence. See
+   *  `mobile-native-chat-model-report-authority.ts`. */
+  source: ModelReportSource
+}
 
 /**
  * The model the chat pill states, and the effort that belongs TO IT.
@@ -24,10 +31,11 @@ export function reportedModelPair(
   agentStatus: AgentStatusEntry | null | undefined
 ): ReportedModelPair {
   if (live.model) {
-    return { model: live.model, effort: live.effort }
+    return { model: live.model, effort: live.effort, source: 'live' }
   }
   return {
     model: agentStatus?.model ?? null,
-    effort: hudFieldsFromAgentStatus(agentStatus).effort ?? null
+    effort: hudFieldsFromAgentStatus(agentStatus).effort ?? null,
+    source: 'launch'
   }
 }

@@ -16,13 +16,13 @@ describe('the model the chat pill states', () => {
         { model: 'opus', effort: 'xhigh' },
         status({ model: 'fable', effort: 'medium' })
       )
-    ).toEqual({ model: 'opus', effort: 'xhigh' })
+    ).toEqual({ model: 'opus', effort: 'xhigh', source: 'live' })
   })
 
   it('states a live model with no effort rather than borrowing one', () => {
     expect(
       reportedModelPair({ model: 'opus', effort: null }, status({ model: 'fable', effort: 'medium' }))
-    ).toEqual({ model: 'opus', effort: null })
+    ).toEqual({ model: 'opus', effort: null, source: 'live' })
   })
 
   // The launch record is coherent with itself, so when the agent has said
@@ -31,21 +31,24 @@ describe('the model the chat pill states', () => {
   it('falls back to the launch record for the model AND its effort', () => {
     expect(reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: 'high' }))).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      source: 'launch'
     })
   })
 
   it('states nothing when neither source has a model', () => {
     expect(reportedModelPair({ model: null, effort: null }, null)).toEqual({
       model: null,
-      effort: null
+      effort: null,
+      source: 'launch'
     })
   })
 
   it('ignores an effort the host did not really send', () => {
     expect(reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: '' }))).toEqual({
       model: 'opus',
-      effort: null
+      effort: null,
+      source: 'launch'
     })
   })
 })

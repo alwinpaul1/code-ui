@@ -376,6 +376,10 @@ export function useMobileNativeChatController(
         activeChatResolution?.agent === 'codex' ? codexModel.model : claudeReported.model,
       reportedEffort:
         activeChatResolution?.agent === 'codex' ? codexModel.effort : claudeReported.effort,
+      // Codex resolves its own model elsewhere and has no launch-record path
+      // here, so its report is always the live one.
+      reportedModelSource:
+        activeChatResolution?.agent === 'codex' ? 'live' : claudeReported.source,
       openRequest: modelSheetRequest,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
