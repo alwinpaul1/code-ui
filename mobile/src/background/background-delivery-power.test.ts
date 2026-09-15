@@ -4,7 +4,7 @@
 // Doze suspended the link's network while the phone sat idle. A foreground
 // service does not lift that; only the exemption does.
 import { describe, expect, it } from 'vitest'
-import { adviseBackgroundDeliveryPower } from './background-delivery-power'
+import { BACKGROUND_POWER_PROMPT, adviseBackgroundDeliveryPower } from './background-delivery-power'
 
 describe('background delivery power advice', () => {
   it('asks for unrestricted battery use when delivery is on but Android still optimises the app', () => {
@@ -121,5 +121,28 @@ describe('an exemption that was granted and then taken away', () => {
     })
     expect(advice.promptOnOpen).toBe(false)
     expect(advice.showRow).toBe(false)
+  })
+})
+
+/**
+ * Android's own dialog reads "Allow [app] to always run in the background? This
+ * may use more battery." It says nothing about what is lost by declining, so
+ * people decline it reflexively — and then notifications are late and nothing
+ * connects the two. One plain sentence beforehand is the only lever that
+ * actually moves acceptance (2026-09-15).
+ */
+describe('what the app says before Android asks', () => {
+  it('leads with what the reader gets, not with the permission', () => {
+    expect(BACKGROUND_POWER_PROMPT.body).toMatch(/notification/i)
+    expect(BACKGROUND_POWER_PROMPT.body).not.toMatch(/battery optimi[sz]ation/i)
+  })
+
+  it('names the cost honestly rather than hiding it', () => {
+    expect(BACKGROUND_POWER_PROMPT.body).toMatch(/battery/i)
+  })
+
+  it('offers a way out that is not a dead end', () => {
+    expect(BACKGROUND_POWER_PROMPT.dismiss).toBeTruthy()
+    expect(BACKGROUND_POWER_PROMPT.confirm).toBeTruthy()
   })
 })

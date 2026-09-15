@@ -43,6 +43,24 @@ export type BackgroundDeliveryPowerAdvice = {
   caption: string
 }
 
+/**
+ * What the app says immediately before Android's own dialog.
+ *
+ * Android asks "Allow Code UI to always run in the background? This may use more
+ * battery." That names the cost and not the benefit, so it is declined
+ * reflexively — and then notifications are late and nothing connects the two.
+ *
+ * So: lead with what the reader gets, name the cost plainly rather than hiding
+ * it, and leave a way out that is not a dead end. The settings row keeps the
+ * offer open for anyone who says not now.
+ */
+export const BACKGROUND_POWER_PROMPT = {
+  title: 'Keep notifications instant',
+  body: "Android pauses background connections to save power, so agent notifications can sit unseen until you open the app. Allowing unrestricted battery use keeps them arriving the moment they happen. It does use a little more battery, and you can undo it any time in Settings.",
+  confirm: 'Keep them instant',
+  dismiss: 'Not now'
+} as const
+
 export const UNRESTRICTED_BATTERY_CAPTION =
   'Android pauses background connections to save power, so notifications can wait until you open the app. Allow unrestricted battery use to keep them instant.'
 
