@@ -184,7 +184,11 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
 
       <ScrollView
         style={{ paddingHorizontal: space.lg }}
-        contentContainerStyle={{ paddingBottom: space.sm }}
+        // The free-text box carries its own border and the footer carries a
+        // divider, so these two lines meet unless the list clears them. At
+        // `space.sm` they sat almost on top of each other and the card read as
+        // clutter (2026-09-15).
+        contentContainerStyle={{ paddingBottom: space.lg }}
         keyboardShouldPersistTaps="always"
       >
         <Txt variant="heading" weight="semibold" style={{ marginVertical: space.md }}>
@@ -218,7 +222,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
               fontSize: type.body.size,
               padding: space.md,
               minHeight: 46,
-              marginBottom: space.xs
+              marginBottom: space.sm
             }}
             value={otherText[index]}
             onChangeText={(v) => setOther(index, v)}
@@ -237,7 +241,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: space.md,
-          paddingVertical: space.sm + 2,
+          paddingVertical: space.md,
           gap: space.sm,
           borderTopWidth: 1,
           borderTopColor: colors.border
