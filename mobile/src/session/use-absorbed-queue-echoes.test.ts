@@ -123,451 +123,49 @@ function ProbeRaw({
   return null
 }
 
-// 2026-09-13: a prompt taken between two tool calls never renders as queued,
-// so the queue witness misses it entirely. The agent prints it into its
-// scrollback instead, and that row is the only thing left to read.
-it('holds a prompt the agent already printed, without it ever being queued', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeSent, { sent: [], folded }))
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeSent, { sent: ['bump the version'], folded }))
-  })
-  expect(latest).toMatchObject([{ text: 'bump the version' }])
-
-  // And it goes when the transcript finally carries it.
-  act(() => {
-    renderer!.update(
-      createElement(ProbeSent, {
-        sent: ['bump the version'],
-        folded: [...folded, row('u2', 'user', 'bump the version')]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-function ProbeSent({ sent, folded }: { sent: string[]; folded: NativeChatMessage[] }): null {
-  latest = useAbsorbedQueueEchoes([], sent, folded, 'tab-a', folded)
-  return null
-}
-
-// 2026-09-13: the same message showed twice — the queue box and the scrollback
-// wrapped it differently, and only the transcript carried its image markers.
-it('shows one bubble however the same message was wrapped or marked', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(
-      createElement(ProbeBoth, {
-        queued: ['fix the duplicate\n\nplease'],
-        sent: ['fix the duplicate please'],
-        folded
-      })
-    )
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeBoth, { queued: [], sent: ['fix the duplicate please'], folded })
-    )
-  })
-  expect(latest).toHaveLength(1)
-
-  // The transcript row carries the marker; it still retires the echo.
-  act(() => {
-    renderer!.update(
-      createElement(ProbeBoth, {
-        queued: [],
-        sent: ['fix the duplicate please'],
-        folded: [...folded, row('u2', 'user', '[Image #1] fix the duplicate please')]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-function ProbeBoth({
-  queued,
-  sent,
-  folded
-}: {
-  queued: string[]
-  sent: string[]
-  folded: NativeChatMessage[]
-}): null {
-  latest = useAbsorbedQueueEchoes(queued, sent, folded, 'tab-a', folded)
-  return null
-}
-
-// 2026-09-13: a prompt sent from the phone is painted into the scrollback like
-// any other, and came back as a second bubble under the phone's own echo. The
-// same for a desktop prompt the hook had already delivered.
-it('skips a prompt the phone itself sent or the hook already delivered', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: ['[Image #85] See this', 'a desktop prompt', 'a real absorbed one'],
-        own: ['See this', 'a desktop\nprompt'],
-        folded
-      })
-    )
-  })
-  expect(latest).toMatchObject([{ text: 'a real absorbed one' }])
-  act(() => renderer!.unmount())
-})
-
-function ProbeOwn({
-  sent,
-  own,
-  folded
-}: {
-  sent: string[]
-  own: string[]
-  folded: NativeChatMessage[]
-}): null {
-  latest = useAbsorbedQueueEchoes([], sent, folded, 'tab-a', folded, own)
-  return null
-}
-
-// 2026-09-13: a desktop message with pasted screenshots was drawn as
-// "[Image #96] [Image #97] See this tooo"; the phone has no bytes for those.
-it('draws a desktop message without the image markers the phone cannot show', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, { sent: ['[Image #96] [Image #97] See this tooo'], own: [], folded })
-    )
-  })
-  expect(latest).toMatchObject([{ text: 'See this tooo' }])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13: Claude's queue box cuts a long entry short with an ellipsis, so
-// the phone drew "…see this and…" and never matched it to the full message
-// the scrollback and the transcript carried.
-it('grows a truncated queue entry into the full message and retires it once landed', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  const full = 'Too much rubbish and jargon happening in chatui of code ui see this and some times chat ui flashes'
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(
-      createElement(ProbeBoth, {
-        queued: ['Too much rubbish and jargon happening in chatui of code ui see this and…'],
-        sent: [],
-        folded
-      })
-    )
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeBoth, { queued: [], sent: [full], folded }))
-  })
-  expect(latest).toMatchObject([{ text: full }])
-  act(() => {
-    renderer!.update(
-      createElement(ProbeBoth, {
-        queued: [],
-        sent: [full],
-        folded: [...folded, row('u2', 'user', `[Image #90] ${full}`)]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13: the parser ends a prompt at a row it cannot tell from the tool
-// fold, so a reading can stop short of the row that lands; it still names
-// the same message and must retire with it.
-it('retires a reading that stopped short of the row that landed', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, { sent: ['please look at the failure in the build'], own: [], folded })
-    )
-  })
-  expect(latest).toHaveLength(1)
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: ['please look at the failure in the build'],
-        own: [],
-        folded: [
-          ...folded,
-          row('u2', 'user', 'please look at the failure in the build\n\nRan 3 tests locally and two blew up')
-        ]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13: a fresh array every render was a dependency of the fold over
-// the whole transcript, so every 1 Hz screen poll refolded everything.
+// The same array back while nothing changed: this runs on every status-line
+// repaint, and a fresh copy each time refolded the whole chat downstream
+// (2026-09-13). Driven by the queue box now that the scrollback witness is gone.
 it('returns the same array while nothing changed', () => {
   const folded = [row('a1', 'assistant', 'working')]
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: ['hold this'], own: [], folded }))
+    renderer = create(createElement(Probe, { queued: ['hold this'], folded }))
   })
   const first = latest
   act(() => {
-    renderer!.update(createElement(ProbeOwn, { sent: ['hold this'], own: [], folded }))
+    renderer!.update(createElement(Probe, { queued: ['hold this'], folded }))
   })
   expect(latest).toBe(first)
   act(() => renderer!.unmount())
 })
 
-it('waits for a transcript row before holding anything, so nothing pins to the bottom', () => {
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded: [] }))
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [] }))
-  })
-  expect(latest).toEqual([])
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, { sent: ['early prompt'], own: [], folded: [row('a1', 'assistant', 'hi')] })
-    )
-  })
-  expect(latest).toMatchObject([{ text: 'early prompt', baselineTailMessageId: 'a1' }])
-  act(() => renderer!.unmount())
-})
 
-// 2026-09-13, "Why is all my messages stacked like these where are my older
-// responses": Claude's scrollback still paints prompts from earlier in the
-// session, and the first reading adopted ALL of them at once. They anchor to
-// whatever the transcript tail was at that moment, so they render as one run
-// of user bubbles with no reply between them, and they can never retire — the
-// rows that carry them landed long before the page of transcript the phone
-// loaded. Only a prompt that APPEARS while the phone is already watching is
-// one the transcript is missing.
-it('does not stack the scrollback backlog as bubbles when the chat opens', () => {
-  const backlog = ['first old prompt', 'second old prompt', 'bump the version and tag it', 'now check the release notes']
-  const folded = [
-    row('a1', 'assistant', 'working'),
-    row('u1', 'user', 'bump the version and tag it'),
-    row('u2', 'user', 'now check the release notes')
-  ]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeSent, { sent: backlog, folded }))
-  })
-  // The two oldest are backlog and never held; the two newest have rows and
-  // retire at once.
-  expect(latest).toEqual([])
-
-  // Still the same screen a second later: still nothing new to draw.
-  act(() => {
-    renderer!.update(createElement(ProbeSent, { sent: backlog, folded }))
-  })
-  expect(latest).toEqual([])
-
-  // A prompt absorbed mid-turn appears underneath them — that one is drawn.
-  act(() => {
-    renderer!.update(
-      createElement(ProbeSent, { sent: [...backlog, 'and does it work on windows'], folded })
-    )
-  })
-  expect(latest).toMatchObject([{ text: 'and does it work on windows' }])
-
-  // And once its row lands it goes for good, even though the agent still
-  // paints it on screen.
-  const landed = [...backlog, 'and does it work on windows']
-  act(() => {
-    renderer!.update(
-      createElement(ProbeSent, {
-        sent: landed,
-        folded: [...folded, row('u2', 'user', 'and does it work on windows')]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => {
-    renderer!.update(
-      createElement(ProbeSent, {
-        sent: landed,
-        folded: [...folded, row('u2', 'user', 'and does it work on windows')]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13: retiring on a plain prefix dropped a message that had no
-// transcript row of its own, because a LATER prompt happened to start with
-// the same words. A cut reading ends on a paragraph break; nothing else counts.
-it('keeps a held message when a later prompt merely starts with the same words', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, { sent: ['check the build failure'], own: [], folded })
-    )
-  })
-  expect(latest).toHaveLength(1)
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: ['check the build failure'],
-        own: [],
-        folded: [...folded, row('u2', 'user', 'check the build failure again please')]
-      })
-    )
-  })
-  expect(latest).toMatchObject([{ text: 'check the build failure' }])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13 review: a message the desktop absorbed just before the phone
-// opened has no transcript row and was never watched appearing, so the
-// baseline rule dropped it. The newest prompts on the first reading are the
-// one exception, bounded so a stale window cannot rebuild the wall.
-it('holds the newest unlanded prompt from the first reading, but never the backlog behind it', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(
-      createElement(ProbeSent, {
-        sent: ['old one', 'old two', 'old three', 'absorbed just before opening'],
-        folded
-      })
-    )
-  })
-  expect(latest!.map((e) => e.text)).toEqual(['absorbed just before opening'])
-  // Anchored to whatever the tail was at that reading, so drawn but never
-  // written to disk (2026-09-13: an old prompt stored under a newer fold).
-  expect(latest![0]).toMatchObject({ provisional: true })
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-13: "phone test message from adb Reading 1 file…" stood beside the
-// phone's own send of "phone test message from adb".
-it('skips a reading that only glues rows onto one of the phone\'s own sends', () => {
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(
-      createElement(ProbeOwn, {
-        sent: ['phone test message from adb Reading 1 file…'],
-        own: ['phone test message from adb'],
-        folded
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-// 2026-09-14, two screenshots from the phone: one send stood as two identical
-// bubbles. The witness reads the message off the agent's SCREEN, where it is
-// wrapped and can be shortened, while the transcript row carries what the
-// author actually typed. Retirement compared the two exactly, so a shortened
-// reading never matched its own landed row and lived on beside it.
-it('retires a held reading once the row it was read from lands, even shortened', () => {
-  const typed =
-    'Did you do all the changes i told in this session reead thr session transcript deeply\n\n' +
-    '1. Check all the messages or user prompts i asked to you where done and confirm it'
-  const onScreen = 'Did you do all the changes i told in this session reead thr session transcript'
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeOwn, { sent: [onScreen], own: [], folded }))
-  })
-  expect(latest).toHaveLength(1)
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: [onScreen],
-        own: [],
-        folded: [...folded, row('u2', 'user', typed)]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-it('retires a reading that is LONGER than the row it landed as', () => {
-  // 2026-09-14 review: 0.5.83 made the matcher one-directional, which is right
-  // for the queue box but re-opened this. Two messages typed while the agent is
-  // busy stack as plain rows and the parser joins them into one reading, so the
-  // reading is longer than either landed row and nothing retired it.
-  const first = 'run the whole regression gate now and report what fails'
-  const second = 'and then tag the release when it is green'
-  const joined = `${first} ${second}`
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeOwn, { sent: [joined], own: [], folded }))
-  })
-  expect(latest).toHaveLength(1)
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: [joined],
-        own: [],
-        folded: [...folded, row('u2', 'user', first), row('u3', 'user', second)]
-      })
-    )
-  })
-  expect(latest).toEqual([])
-  act(() => renderer!.unmount())
-})
-
-it('keeps a held reading that a later, longer message merely extends', () => {
-  // 2026-09-14 review: matching a reading against a landed row by prefix alone
-  // retired "check the build failure on main again, this time with logs"
-  // against a landed "check the build failure on main" — a lost message with no
-  // row of its own. Only a reading fully accounted for by landed rows retires.
-  const landedRow = 'check the build failure on main'
-  const held = `${landedRow} again, this time with logs`
-  const folded = [row('a1', 'assistant', 'working')]
-  let renderer: ReactTestRenderer | null = null
-  act(() => {
-    renderer = create(createElement(ProbeOwn, { sent: [], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(createElement(ProbeOwn, { sent: [held], own: [], folded }))
-  })
-  act(() => {
-    renderer!.update(
-      createElement(ProbeOwn, {
-        sent: [held],
-        own: [],
-        folded: [...folded, row('u2', 'user', landedRow)]
-      })
-    )
-  })
-  expect(latest).toMatchObject([{ text: held }])
-  act(() => renderer!.unmount())
-})
+// REMOVED 2026-09-15, with the scrollback witness they exercised:
+//
+//   holds a prompt the agent already printed, without it ever being queued
+//   shows one bubble however the same message was wrapped or marked
+//   skips a prompt the phone itself sent or the hook already delivered
+//   draws a desktop message without the image markers the phone cannot show
+//   grows a truncated queue entry into the full message and retires it once landed
+//   retires a reading that stopped short of the row that landed
+//   waits for a transcript row before holding anything, so nothing pins to the bottom
+//   does not stack the scrollback backlog as bubbles when the chat opens
+//   keeps a held message when a later prompt merely starts with the same words
+//   holds the newest unlanded prompt from the first reading, but never the backlog behind it
+//   skips a reading that only glues rows onto one of the phone's own sends
+//   retires a held reading once the row it was read from lands, even shortened
+//   retires a reading that is LONGER than the row it landed as
+//   keeps a held reading that a later, longer message merely extends
+//
+// They drove prompts read out of the agent's SCROLLBACK, which is gone: a queued
+// prompt lands as a real user row now, so the witness was inventing a second
+// copy of a message the phone already had. Evidence and the new contract are in
+// mobile-scrollback-prompt-witness.test.ts.
+//
+// The RULES they carried are not lost. Retirement against a row that extends a
+// reading is pinned in mobile-native-chat-stub-retirement.test.ts; retirement of
+// a reading longer than its row, in mobile-native-chat-glued-echo-retirement.ts;
+// image markers, in mobile-terminal-prompt-images.test.ts and
+// mobile-desktop-image-placeholders.test.ts; anchoring and tab scoping, by the
+// queue-box tests still in this file.

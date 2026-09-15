@@ -31,12 +31,30 @@ import {
  */
 export function useAbsorbedQueueEchoes(
   queued: readonly string[],
-  // Prompts the agent has already printed into its scrollback. A queued entry
-  // is held when it LEAVES the queue; one of these is held as soon as it is
-  // seen, because by then the agent has taken it — that is the only witness
-  // for a prompt absorbed between two tool calls, which never renders as
-  // queued at all (2026-09-13).
-  sentPrompts: readonly string[],
+  /**
+   * WITHDRAWN, and kept in the signature so the decision is visible at the call
+   * site rather than silently absent.
+   *
+   * These were prompts read out of the agent's SCROLLBACK. The reader takes a
+   * prompt's wrapped rows by their two-space indent, and the agent's own prose
+   * sits on rows of exactly that shape — nothing visible tells them apart. So it
+   * glued replies onto messages (a bubble ending in the agent's "session:ok",
+   * reported as a leak), lost the paragraph its image rows sat under, and
+   * stripped the markers that say an image was sent. Each was fixed in turn;
+   * the guessing was the defect.
+   *
+   * It existed because a prompt queued mid-turn was said to land only as an
+   * `attachment`/`queued_command` record the phone cannot read (verified
+   * 2026-09-13). That is no longer true: on Claude Code 2.1.272 it lands as an
+   * ordinary `user` row with `promptSource: "queued"`, which the phone already
+   * reads — 18 of them in the session this was reported from, every one a real
+   * row. So the witness was inventing a second copy of a message the phone
+   * already had. See mobile-scrollback-prompt-witness.test.ts for the evidence.
+   *
+   * The QUEUE BOX below is a different witness and is kept: short entries the
+   * agent lists for itself, not prose guessed out of its output.
+   */
+  _sentPrompts: readonly string[],
   folded: readonly NativeChatMessage[],
   scopeKey: string,
   // Anchored on the RAW record, not the folded row: a folded run is one row
@@ -113,46 +131,8 @@ export function useAbsorbedQueueEchoes(
   // phone is already watching, which is exactly the mid-turn absorb this
   // witness exists for. An entry already held still grows from a fuller
   // reading, so a truncated queue entry is not stuck short.
-  // One exception to the baseline: the NEWEST prompt on the first reading.
-  // A message the desktop absorbed just before the phone opened has no row
-  // to land and would otherwise never show (2026-09-13 review). Only the
-  // newest: an older prompt still on screen is anchored to the wrong row
-  // when held this way, and the store would keep that placement.
-  const seenSent = previousSent.current
-  const candidates = seenSent === null ? sentPrompts.slice(-FIRST_READING_HOLD) : sentPrompts
-  for (const text of candidates) {
-    const key = promptKey(text)
-    if (!(seenSent ?? []).some((other) => sameMessage(promptKey(other), key))) {
-      appeared.current.set(key, text)
-      if (seenSent === null) {
-        provisional.current.add(key)
-      }
-    }
-  }
-  previousSent.current = sentPrompts
-  // Retried every reading: a prompt that appeared before the transcript had a
-  // row to anchor on is held as soon as one arrives, rather than pinned to
-  // the bottom (2026-09-13).
-  const handedOver: string[] = []
-  for (const [key, text] of appeared.current) {
-    hold(text, true)
-    // Handed over to `held`, which owns it from here — including retiring it
-    // when the transcript catches up. Left in place it would be re-created on
-    // the very next render and never retire at all.
-    for (const other of held.current.keys()) {
-      if (sameMessage(other, key)) {
-        handedOver.push(key)
-        break
-      }
-    }
-  }
-  for (const key of handedOver) {
-    appeared.current.delete(key)
-  }
-  // A reading that no longer shows it still grows an entry already held.
-  for (const text of sentPrompts) {
-    hold(text, true, false)
-  }
+  // Nothing is taken from the scrollback any more; see `_sentPrompts`. The
+  // agent's queue box below is the only screen witness left.
   for (const text of previous.current) {
     hold(text, false)
   }
@@ -191,7 +171,17 @@ export function useAbsorbedQueueEchoes(
     .map((entry) => ({
       id: `queued-${entry.seq}`,
       // No bytes on the phone for a desktop-pasted image: drop its marker.
-      text: stripImagePromptMarker(entry.text),
+      // The RAW text, markers and all. Stripping `[Image #N]` here left a
+      // queued prompt that carried pictures reading as though nothing had been
+      // attached — no photo, since the phone has no bytes for a desktop paste,
+      // and no "Image on Desktop" either, because the placeholder is applied
+      // where the bubble is DRAWN and needs the marker to still be there
+      // (2026-09-15, a prompt with two images). Matching is unaffected: the key
+      // functions below normalise the markers away on both sides.
+      //
+      // Third place this same strip was found — the screen reader and the
+      // landed transcript row were the others.
+      text: entry.text,
       expectedOccurrence: 0,
       baselineTailMessageId: entry.anchorId,
       baselineResolved: true,
@@ -223,8 +213,6 @@ function cutKey(text: string): string {
 
 type HeldEcho = { text: string; anchorId: string | null; seq: number; provisional?: boolean }
 
-/** How many of the newest on-screen prompts the first reading may hold. */
-const FIRST_READING_HOLD = 1
 
 /** One key for the same message however it reached here: the queue box, the
  *  scrollback and the transcript each wrap it differently, and only the

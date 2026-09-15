@@ -10,7 +10,6 @@ import { claudePermissionFromScreen } from './claude-terminal-permission'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
-import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -122,12 +121,14 @@ export function useMobileTerminalHudObservation(args: {
         setQueuedMessages((current) =>
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued
         )
-        // Only Claude paints its accepted prompts this way; Codex does not.
-        const sent =
-          agent === 'claude' || agent === 'openclaude' ? sentPromptsFromScreen(lines) : []
-        setSentPrompts((current) =>
-          JSON.stringify(current) === JSON.stringify(sent) ? current : sent
-        )
+        // Withdrawn 2026-09-15. Prompts used to be read out of the agent's
+        // SCROLLBACK here, which meant guessing which two-space rows were the
+        // message — and the agent's own prose sits on rows of exactly that
+        // shape. A queued prompt lands as a real user row now, so the transcript
+        // carries it and the guess is not needed. The state is still set, to
+        // empty, so anything holding a reading from before drops it.
+        // See mobile-scrollback-prompt-witness.test.ts.
+        setSentPrompts((current) => (current.length === 0 ? current : []))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         // The screen parser names only Claude's Bash dialog, so tracking
         // dismissal by it alone meant an Edit or MCP approval was never seen
