@@ -13,9 +13,14 @@ export type BackgroundDeliveryPowerState = {
   deliveryOn: boolean
   /** Android reports the app exempt from battery optimisation ("Unrestricted"). */
   unrestricted: boolean
-  /** Whether this install has already been asked on open. Absent on the
-   *  switch-on path, which asks regardless. */
-  askedOnOpen?: boolean
+  /** Already asked on open in THIS app version. Absent on the switch-on path,
+   *  which asks regardless. */
+  askedThisVersion?: boolean
+  /** The exemption was granted when the app last looked. Going from granted to
+   *  not granted is a REVOCATION — by the user, or by Android's own adaptive
+   *  battery — and leaves the app in exactly the state this mechanism exists to
+   *  prevent. It is worth one more ask even within a version already asked. */
+  wasUnrestricted?: boolean
 }
 
 export type BackgroundDeliveryPowerAdvice = {
@@ -31,8 +36,9 @@ export type BackgroundDeliveryPowerAdvice = {
    *  and is only seen by someone who goes looking, so they got slow
    *  notifications indefinitely with nothing saying why (2026-09-15).
    *
-   *  Once per install, not every launch — a dialog that reappears forever is
-   *  one people learn to dismiss without reading. The row stays either way. */
+   *  Once per app version, not every launch — a dialog that reappears forever is
+   *  one people learn to dismiss without reading — plus once more if a grant we
+   *  had is taken away. The row stays either way. */
   promptOnOpen: boolean
   caption: string
 }
@@ -47,7 +53,8 @@ export function adviseBackgroundDeliveryPower(
   return {
     showRow: needsExemption,
     promptOnEnable: !state.unrestricted,
-    promptOnOpen: needsExemption && state.askedOnOpen !== true,
+    promptOnOpen:
+      needsExemption && (state.askedThisVersion !== true || state.wasUnrestricted === true),
     caption: needsExemption ? UNRESTRICTED_BATTERY_CAPTION : ''
   }
 }

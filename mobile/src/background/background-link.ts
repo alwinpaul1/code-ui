@@ -10,8 +10,10 @@ import {
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
 import {
   loadBackgroundPowerAskedVersion,
+  loadBackgroundPowerLastSeen,
   loadPushNotificationsEnabled,
-  saveBackgroundPowerAskedVersion
+  saveBackgroundPowerAskedVersion,
+  saveBackgroundPowerLastSeen
 } from '../storage/preferences'
 import { getInstalledVersion } from '../app-update/installed-version'
 import { adviseBackgroundDeliveryPower } from './background-delivery-power'
@@ -151,14 +153,20 @@ export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
     return
   }
   const version = getInstalledVersion()
-  const [deliveryOn, askedVersion] = await Promise.all([
+  const [deliveryOn, askedVersion, wasUnrestricted] = await Promise.all([
     syncBackgroundLinkFromPreferences(),
-    loadBackgroundPowerAskedVersion()
+    loadBackgroundPowerAskedVersion(),
+    loadBackgroundPowerLastSeen()
   ])
+  const unrestricted = isBackgroundDeliveryUnrestricted()
+  // Recorded every open, so the next one can tell a grant that was taken away
+  // from one that was never given.
+  await saveBackgroundPowerLastSeen(unrestricted)
   const advice = adviseBackgroundDeliveryPower({
     deliveryOn,
-    unrestricted: isBackgroundDeliveryUnrestricted(),
-    askedOnOpen: askedVersion === version
+    unrestricted,
+    askedThisVersion: askedVersion === version,
+    wasUnrestricted
   })
   if (!advice.promptOnOpen) {
     return

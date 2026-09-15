@@ -45,28 +45,28 @@ describe('background delivery power advice', () => {
 describe('a user who already had notifications on and updated the app', () => {
   it('is asked for the exemption when the app opens', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: false })
         .promptOnOpen
     ).toBe(true)
   })
 
   it('is not asked again on the next launch', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: true })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: true })
         .promptOnOpen
     ).toBe(false)
   })
 
   it('is not asked when the exemption is already granted', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedOnOpen: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedThisVersion: false })
         .promptOnOpen
     ).toBe(false)
   })
 
   it('is not asked when delivery is off', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: false, unrestricted: false, askedOnOpen: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: false, unrestricted: false, askedThisVersion: false })
         .promptOnOpen
     ).toBe(false)
   })
@@ -74,8 +74,52 @@ describe('a user who already had notifications on and updated the app', () => {
   // The row is the standing reminder for anyone who declined the dialog.
   it('still shows the row after declining, so it can be granted later', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: true })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: true })
         .showRow
     ).toBe(true)
+  })
+})
+
+/**
+ * The exemption is not permanent: the user can revoke it, and Android's own
+ * adaptive battery can take it back. Once that happens the app is in exactly the
+ * state this whole mechanism exists to prevent — Doze suspending the link — but
+ * it had already asked for this version, so it would never ask again and the
+ * notifications would just go quiet.
+ *
+ * A grant we SAW and then lost is a revocation, and is worth one more ask.
+ */
+describe('an exemption that was granted and then taken away', () => {
+  it('asks again, even though this version already asked once', () => {
+    expect(
+      adviseBackgroundDeliveryPower({
+        deliveryOn: true,
+        unrestricted: false,
+        askedThisVersion: true,
+        wasUnrestricted: true
+      }).promptOnOpen
+    ).toBe(true)
+  })
+
+  it('does not keep asking once that one ask is spent', () => {
+    expect(
+      adviseBackgroundDeliveryPower({
+        deliveryOn: true,
+        unrestricted: false,
+        askedThisVersion: true,
+        wasUnrestricted: false
+      }).promptOnOpen
+    ).toBe(false)
+  })
+
+  it('says nothing while the exemption still stands', () => {
+    const advice = adviseBackgroundDeliveryPower({
+      deliveryOn: true,
+      unrestricted: true,
+      askedThisVersion: true,
+      wasUnrestricted: true
+    })
+    expect(advice.promptOnOpen).toBe(false)
+    expect(advice.showRow).toBe(false)
   })
 })

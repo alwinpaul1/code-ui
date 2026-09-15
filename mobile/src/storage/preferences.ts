@@ -50,6 +50,29 @@ export async function loadBackgroundPowerAskedVersion(): Promise<string | null> 
   }
 }
 
+// The exemption state the app last observed. A grant we saw and then lost is a
+// revocation — by the user, or by Android's adaptive battery — and earns one
+// more ask even inside a version that already asked (2026-09-15).
+const POWER_LAST_SEEN_KEY = 'orca:backgroundPowerLastSeenUnrestricted'
+
+export async function loadBackgroundPowerLastSeen(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(POWER_LAST_SEEN_KEY)) === 'true'
+  } catch {
+    // Unknown is treated as "never granted": at worst one ask is skipped,
+    // which is better than one that repeats.
+    return false
+  }
+}
+
+export async function saveBackgroundPowerLastSeen(unrestricted: boolean): Promise<void> {
+  try {
+    await AsyncStorage.setItem(POWER_LAST_SEEN_KEY, String(unrestricted))
+  } catch {
+    // Best effort.
+  }
+}
+
 export async function saveBackgroundPowerAskedVersion(version: string): Promise<void> {
   try {
     await AsyncStorage.setItem(POWER_ASKED_VERSION_KEY, version)
