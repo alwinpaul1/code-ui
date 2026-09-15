@@ -118,12 +118,31 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
         const unorderedMatch = current.match(/^\s*[-*+]\s+(.+)$/)
         ordered ||= Boolean(orderedMatch)
         const rawText = (orderedMatch?.[1] ?? unorderedMatch?.[1] ?? '').trim()
-        const task = rawText.match(/^\[([ xX])\]\s+(.+)$/)
+        index += 1
+        // A wrapped item continues on the lines under it: indented, non-blank,
+        // and not a marker of its own. Without this the list ended at the first
+        // continuation line, that line became its own paragraph at the left
+        // margin, and the next item opened a fresh list — so every item was
+        // numbered 1 (2026-09-15, CLAUDE.md on the phone). Markdown hard-wrapped
+        // at 80 columns is the normal shape of this project's docs and of
+        // anything an agent writes.
+        const continued = [rawText]
+        while (index < lines.length) {
+          const next = lines[index] ?? ''
+          if (!next.trim() || !/^\s/.test(next) || /^\s*(?:[-*+]|\d+[.)])\s+/.test(next)) {
+            break
+          }
+          continued.push(next.trim())
+          index += 1
+        }
+        // Joined with a space: a single newline inside a paragraph is not a
+        // line break in markdown, it reflows.
+        const itemText = continued.join(' ')
+        const task = itemText.match(/^\[([ xX])\]\s+(.+)$/)
         items.push({
-          text: task?.[2] ?? rawText,
+          text: task?.[2] ?? itemText,
           checked: task ? task[1]?.toLowerCase() === 'x' : undefined
         })
-        index += 1
       }
       blocks.push({ type: 'list', ordered, items })
       continue
