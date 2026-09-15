@@ -105,6 +105,52 @@ describe('the chat transcript has one owner for its scroll position', () => {
     expect(list.scrollToOffset).not.toHaveBeenCalled()
   })
 
+  // 2026-09-15 regression review: the long-press hand-over was undone by the
+  // very first scroll sample. A long-press is not a drag, so `scrollingRef` is
+  // false, and any sample inside the tail slop put `following` back on — which
+  // switched the list's native scroll anchoring back off and let the stream
+  // slide the selection away again. Enabling that anchoring is itself what
+  // moves `contentOffset` off 0, so the fix generated the sample that undid it.
+  // A finger on the glass owns the list, exactly as the re-pin paths already
+  // assume.
+  it('does not hand the list back on a scroll sample while a finger is still down', () => {
+    vi.useFakeTimers()
+    try {
+      render()
+      act(() => latest!.touchStart())
+      // The long-press mark passes with the finger still down: the reader owns
+      // the list, which is what turns the native scroll anchoring on.
+      act(() => {
+        vi.advanceTimersByTime(450)
+      })
+      expect(latest!.showJumpToLatest).toBe(true)
+
+      // A sample right at the live edge — exactly what enabling that anchoring
+      // produces — must NOT hand the list back.
+      act(() => latest!.evaluateEdge(at(0)))
+      expect(latest!.showJumpToLatest).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hands the list back on a settled sample at the tail once the finger lifts', () => {
+    vi.useFakeTimers()
+    try {
+      render()
+      act(() => latest!.touchStart())
+      act(() => {
+        vi.advanceTimersByTime(450)
+      })
+      act(() => latest!.touchEnd())
+
+      act(() => latest!.evaluateEdge(at(0)))
+      expect(latest!.showJumpToLatest).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // The dock's height is the spacer at the list's end; when it grows, the
   // newest row ends up underneath it. That re-pin is the same command as every
   // other, so it goes through the same owner and obeys the same refusal.

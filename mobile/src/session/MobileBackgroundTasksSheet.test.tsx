@@ -319,12 +319,18 @@ const HOST_ROSTER: AgentSessionBackgroundTaskState = {
   tasks: [
     {
       id: 'task-live',
-      kind: 'agent',
+      // A command, not an agent: subagents are no longer surfaced at all (see
+      // `withoutAgentTasks`), so an agent here would test the filter rather than
+      // what this fixture is for — the host's roster outranking the transcript.
+      kind: 'command',
       description: 'Audit the release notes',
       state: 'working',
       startedAt: NOW - (19 * 60_000 + 8_000)
     },
-    { id: 'task-watch', kind: 'monitor', description: 'Watch the build log', state: 'monitoring' }
+    { id: 'task-watch', kind: 'monitor', description: 'Watch the build log', state: 'monitoring' },
+    // Dropped from the sheet: the user asked for agents off this row on
+    // 2026-09-15, and the count beside it must drop them the same way.
+    { id: 'task-agent', kind: 'agent', description: 'Review the diff', state: 'working' }
   ],
   settledTasks: [{ id: 'task-gone', kind: 'command', description: 'pnpm test', state: 'blocked' }]
 }
@@ -369,6 +375,8 @@ describe('a structured tab reading its background tasks from the host', () => {
   it("shows the host's roster instead of what the transcript guessed", async () => {
     const { texts } = await renderHosted('light')
     expect(texts).toContain('Audit the release notes')
+    // The roster's subagent is not listed.
+    expect(texts).not.toContain('Review the diff')
     expect(texts).toContain('Watch the build log')
     expect(texts).toContain('Monitor')
     expect(texts).toContain('19m 8s')

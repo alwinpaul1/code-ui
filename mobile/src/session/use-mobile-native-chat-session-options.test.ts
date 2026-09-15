@@ -250,6 +250,36 @@ describe('useMobileNativeChatSessionOptions', () => {
     }
   })
 
+  // 2026-09-15, found by a regression probe: the wake timer was re-armed for a
+  // FULL grace every time the effect re-ran, and it re-runs on `version`, which
+  // every unrelated record write bumps. So a user changing effort, or typing a
+  // command, every few seconds starved it — the timer never fired and the pill
+  // stayed on a pick the agent had refused, indefinitely. It must be scheduled
+  // for the time remaining on the pick, not a fresh grace.
+  it('corrects the pill even while unrelated writes keep bumping the record', async () => {
+    vi.useFakeTimers()
+    try {
+      mount({ reportedModel: 'claude-opus-5', reportedEffort: 'high', reportedModelSource: 'live' })
+      await act(async () => {
+        await api!.setOption('model', 'fable')
+      })
+      update({ reportedModel: 'claude-opus-5', reportedEffort: 'high', reportedModelSource: 'live' })
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'fable' })
+      // Unrelated activity well inside the grace, repeatedly, past its end.
+      for (let round = 0; round < 6; round += 1) {
+        await act(async () => {
+          vi.advanceTimersByTime(3000)
+        })
+        await act(async () => {
+          await api!.setOption('effort', round % 2 === 0 ? 'medium' : 'low')
+        })
+      }
+      expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a pick the agent does honour', async () => {
     vi.useFakeTimers()
     try {

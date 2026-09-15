@@ -22,8 +22,11 @@ import {
   clearPendingModelPick,
   clearPendingModelPicksForTests,
   decideModelReport,
+  forgetLiveModelReport,
   getPendingModelPick,
+  hasSeenLiveModelReport,
   MODEL_PICK_GRACE_MS,
+  noteLiveModelReport,
   notePendingModelPick,
   type ModelReportSource
 } from './mobile-native-chat-model-report-authority'
@@ -103,6 +106,7 @@ function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOpti
     recordsByScope.delete(oldest)
     appliedReportByScope.delete(oldest)
     clearPendingModelPick(oldest)
+    forgetLiveModelReport(oldest)
   }
   return record
 }
@@ -292,12 +296,16 @@ export function useMobileNativeChatSessionOptions(args: {
         lastAppliedKey: appliedReportByScope.get(scopeKey),
         reportKey,
         pendingPick: getPendingModelPick(scopeKey),
+        sawLive: hasSeenLiveModelReport(scopeKey),
         now: Date.now()
       }) === 'skip'
     ) {
       return
     }
     clearPendingModelPick(scopeKey)
+    if (reportedModelSource === 'live') {
+      noteLiveModelReport(scopeKey)
+    }
     appliedReportByScope.set(scopeKey, reportKey)
     const record = getScopedRecord(scopeKey, agent)
     const applyEffort = shouldApplyReportedEffort({
@@ -319,11 +327,20 @@ export function useMobileNativeChatSessionOptions(args: {
   }, [agent, bump, catalog, reconcileTick, reportedEffort, reportedModel, reportedModelSource, scopeKey])
 
   // Wake the seeding effect once the grace on a dispatched pick has passed.
+  //
+  // Scheduled for the time REMAINING on that pick, never a fresh full grace.
+  // This effect re-runs on `version`, which every unrelated record write bumps —
+  // an effort change, a typed command — and re-arming a full 6 s each time
+  // starved the timer so it never fired: the pill stayed on a pick the agent had
+  // refused for as long as the user kept touching anything else. Found by a
+  // regression probe, 2026-09-15.
   useEffect(() => {
-    if (!scopeKey || !getPendingModelPick(scopeKey)) {
+    const pick = scopeKey ? getPendingModelPick(scopeKey) : null
+    if (!pick) {
       return
     }
-    const timer = setTimeout(() => setReconcileTick((tick) => tick + 1), MODEL_PICK_GRACE_MS)
+    const remaining = Math.max(0, pick.at + MODEL_PICK_GRACE_MS - Date.now())
+    const timer = setTimeout(() => setReconcileTick((tick) => tick + 1), remaining)
     return () => clearTimeout(timer)
     // `version` so a freshly dispatched pick arms this: the pending map is
     // module state, and `bump()` is what says it may have moved.

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   countRunningBackgroundTasks,
-  deriveBackgroundTasks
+  deriveBackgroundTasks,
+  withoutAgentTasks
 } from './mobile-background-tasks'
 import { formatBackgroundTaskElapsed, formatRunningTaskCount } from './mobile-background-task-labels'
 
@@ -402,8 +403,13 @@ describe('background tasks derived from the chat transcript', () => {
     expect(finished.map((task) => task.title)).toEqual(['Sleep for 15 seconds'])
   })
 
+  // 3, not 4: the subagent in this conversation is no longer surfaced. The
+  // user asked for agents off the background-tasks row on 2026-09-15 — a
+  // subagent lives and dies inside its turn, which the working indicator
+  // already shows. `deriveBackgroundTasks` still names them; only the surface
+  // drops them, which is why this count and the sheet below both move together.
   it('counts the running tasks without being told the time', () => {
-    expect(countRunningBackgroundTasks(conversation())).toBe(4)
+    expect(countRunningBackgroundTasks(conversation())).toBe(3)
     expect(countRunningBackgroundTasks([])).toBe(0)
   })
 
@@ -893,7 +899,8 @@ describe('the running-tasks row agrees with the sheet', () => {
     const messages = conversation()
 
     const rowCount = countRunningBackgroundTasks(messages, null, options)
-    const sheet = deriveBackgroundTasks(messages, NOW, null, options)
+    // What the sheet actually renders: agents are dropped at the surface.
+    const sheet = withoutAgentTasks(deriveBackgroundTasks(messages, NOW, null, options))
 
     expect(rowCount).toBe(sheet.running.length)
     expect(rowCount).toBeGreaterThan(1)
@@ -903,18 +910,19 @@ describe('the running-tasks row agrees with the sheet', () => {
     const messages = conversation()
 
     expect(countRunningBackgroundTasks(messages, null, options)).toBe(
-      deriveBackgroundTasks(messages, NOW + 60 * 60_000, null, options).running.length
+      withoutAgentTasks(deriveBackgroundTasks(messages, NOW + 60 * 60_000, null, options)).running
+        .length
     )
   })
 
   it('agrees after the agent retires one through its Stop hook', () => {
     const messages = conversation()
-    const running = deriveBackgroundTasks(messages, NOW, null, options).running
+    const running = withoutAgentTasks(deriveBackgroundTasks(messages, NOW, null, options)).running
     const keptIds = running.slice(1).map((task) => task.id)
     const retired = { finishedTaskIds: [], runningTaskIds: keptIds }
 
     const rowCount = countRunningBackgroundTasks(messages, null, retired)
-    const sheet = deriveBackgroundTasks(messages, NOW, null, retired)
+    const sheet = withoutAgentTasks(deriveBackgroundTasks(messages, NOW, null, retired))
 
     expect(rowCount).toBe(sheet.running.length)
     expect(rowCount).toBe(running.length - 1)

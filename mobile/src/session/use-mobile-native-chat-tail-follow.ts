@@ -189,7 +189,13 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     (metrics: NativeScrollEvent) => {
       setAtTail(isAtTail(metrics))
       // A gesture in flight owns the list; only a settled one may hand it back.
-      if (!scrollingRef.current && atTailRef.current) {
+      // A FINGER STILL DOWN counts as in flight even though it is not a drag:
+      // without that, the first sample inside the tail slop handed the list
+      // straight back mid-long-press, switching the native scroll anchoring off
+      // again and letting the stream slide the reader's selection away. Since
+      // enabling that anchoring is what moves `contentOffset` off 0, the
+      // hand-over generated the very sample that undid it (2026-09-15).
+      if (!scrollingRef.current && !holdingRef.current && atTailRef.current) {
         setFollowing(true)
       }
       // Near the far end — page in older history.
@@ -197,7 +203,16 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
         loadEarlier()
       }
     },
-    [followingRef, hasMore, loadEarlier, loadingEarlier, scrollingRef, setAtTail, setFollowing]
+    [
+      followingRef,
+      hasMore,
+      holdingRef,
+      loadEarlier,
+      loadingEarlier,
+      scrollingRef,
+      setAtTail,
+      setFollowing
+    ]
   )
 
   const evaluateEdge = useCallback(

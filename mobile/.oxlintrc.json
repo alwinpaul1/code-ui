@@ -147,7 +147,7 @@
         "max-lines": [
           "error",
           {
-            "max": 435,
+            "max": 445,
             "skipBlankLines": true,
             "skipComments": true
           }

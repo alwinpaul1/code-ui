@@ -1,7 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
-import { useStickyLiveHud, type StickyLiveHud } from './use-sticky-live-hud'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  clearStickyLiveHudForTests,
+  useStickyLiveHud,
+  type StickyLiveHud
+} from './use-sticky-live-hud'
 
 type Observation = {
   modelId: string | null
@@ -25,6 +29,7 @@ function Probe({
 
 describe('the model and effort the badge last stated', () => {
   let renderer: ReactTestRenderer | null = null
+  beforeEach(() => clearStickyLiveHudForTests())
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
@@ -125,6 +130,43 @@ describe('the model and effort the badge last stated', () => {
       model: 'opus',
       effort: 'xhigh'
     })
+  })
+
+  // 2026-09-15 from the phone: the pill "switches automatically when i send a
+  // message and comes back randomly when the response ends". The hold lived in
+  // a `useRef`, so it belonged to one component INSTANCE. Every chat/terminal
+  // flip and route change threw it away, while the record and beacon caches
+  // beside it — both module-level — survived. With the hold gone the pill fell
+  // back to `agentStatus.model`, the model the tab was LAUNCHED as, and stated
+  // Fable on a session running Opus. What the agent said about itself has to
+  // outlive the view that happened to be mounted when it said it.
+  it('still knows the model after the view is torn down and remounted', () => {
+    render({ modelId: 'opus', effort: 'xhigh' }, 'tab-1', 'term_a')
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(render(null, 'tab-1', 'term_a')).toMatchObject({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
+  // 2026-09-15 regression review: `activeHandle` is React state and can dip to
+  // null on a tab whose id never changes — `use-mobile-session-tab-application`
+  // nulls it whenever the active tab's `terminal` is not a string, which its own
+  // type allows for a tab that is still resolving. Keying on a null handle threw
+  // the whole hold away, MODEL AND CONTEXT RING, and the ring vanishing is
+  // exactly what was reported and fixed in 0.5.99. A null handle is "not known
+  // yet", not "a different terminal".
+  it('holds on through a handle that is momentarily unknown', () => {
+    const context = { usedPercent: 91, usedLabel: '914k', windowLabel: '1.0M' }
+    render({ modelId: 'opus', effort: 'xhigh', context }, 'tab-1', 'term_a')
+    expect(render(null, 'tab-1', null)).toMatchObject({
+      model: 'opus',
+      effort: 'xhigh',
+      context
+    })
+    // And it is still there when the same terminal comes back.
+    expect(render(null, 'tab-1', 'term_a')).toMatchObject({ model: 'opus', context })
   })
 
   // 2026-09-15: the ring is read off the same badge, so an empty read blanked

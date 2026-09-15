@@ -17,6 +17,7 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   deriveBackgroundTasks,
+  withoutAgentTasks,
   type BackgroundTaskHostStatus,
   type BackgroundTaskKind,
   type BackgroundTask
@@ -89,8 +90,11 @@ export function MobileBackgroundTasksSheetBody({
   // Re-derived on each tick rather than caching elapsed separately: the walk is
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
+  // Subagents are not listed: see `withoutAgentTasks`. Applied to whichever
+  // source answers, so the sheet and the count pill can never disagree.
   const { running, finished } = useMemo(
     () =>
+      withoutAgentTasks(
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
       deriveBackgroundTasks(messages, now, agentStatus ?? null, {
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
@@ -98,7 +102,8 @@ export function MobileBackgroundTasksSheetBody({
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
         launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
         onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null
-      }),
+      })
+      ),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
   )
   const runningGroups = useMemo(() => groupRunningTasksByKind(running), [running])

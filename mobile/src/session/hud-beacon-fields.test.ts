@@ -124,3 +124,57 @@ describe('a host with no status line of its own', () => {
     })
   })
 })
+
+// 2026-09-15 regression review: the merge order puts `agentStatus` in FIRST
+// (`use-mobile-native-chat-hud.ts`), so a beacon that names a model but carries
+// no effort inherited the host's LAUNCH-time effort from the base. The pair was
+// already mixed before `useStickyLiveHud` — which now moves the two together —
+// ever saw it, so "Opus Medium" on an Opus xhigh session survived through this
+// second door. A beacon naming a model speaks for the effort beside it too.
+describe('the effort that belongs to a beaconed model', () => {
+  // Real payload shape, minus the effort field: Claude omits it entirely when
+  // the model carries no reasoning level.
+  const NO_EFFORT = beaconOf(
+    'CUIHUD1 agent=claude model=claude-opus-5 name=Opus%205 used=649540 win=1000000 pct=64'
+  )
+  // What the host's agentStatus merge leaves on the base: a launch-time effort.
+  const withLaunchEffort: TerminalHudObservation = {
+    modelLabel: 'Fable 5.1',
+    modelId: 'claude-fable-5-1',
+    effort: 'medium',
+    context: null,
+    permissionMode: 'default'
+  }
+
+  it('does not let a beaconed model inherit the launch effort', () => {
+    expect(applyAgentHudBeaconFields(withLaunchEffort, NO_EFFORT)).toMatchObject({
+      modelId: 'claude-opus-5',
+      effort: null
+    })
+  })
+
+  it('keeps the effort a beacon states alongside its model', () => {
+    expect(applyAgentHudBeaconFields(withLaunchEffort, CLAUDE)).toMatchObject({
+      modelId: 'claude-fable-5-1',
+      effort: 'medium'
+    })
+  })
+
+  // A beacon naming no model is the Stop hook speaking about running tasks. It
+  // says nothing about either half, so both must stand.
+  it('leaves the pair alone for a beacon that names no model', () => {
+    const stopHook = beaconOf('CUIHUD1 agent=claude run=abc123')
+    expect(
+      applyAgentHudBeaconFields(
+        {
+          modelLabel: 'Opus 5',
+          modelId: 'claude-opus-5',
+          effort: 'xhigh',
+          context: null,
+          permissionMode: 'default'
+        },
+        stopHook
+      )
+    ).toMatchObject({ modelId: 'claude-opus-5', effort: 'xhigh' })
+  })
+})

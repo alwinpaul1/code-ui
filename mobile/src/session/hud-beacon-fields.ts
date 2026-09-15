@@ -52,7 +52,15 @@ export function applyAgentHudBeaconFields(
     ...base,
     modelLabel: beacon.modelLabel ?? beacon.modelId ?? base.modelLabel,
     modelId: beacon.modelId ?? base.modelId,
-    effort: beacon.effort ?? base.effort,
+    // A beacon that NAMES a model speaks for the effort beside it too, null
+    // included. Falling back to the base was how a launch-time effort got
+    // welded onto a model the agent had since switched to: the merge order puts
+    // `agentStatus` in first, so `base.effort` is the launch value, and the pair
+    // was already mixed before `useStickyLiveHud` could hold the two together
+    // ("Opus Medium" on an Opus xhigh session, 2026-09-15). A beacon naming no
+    // model is the Stop hook talking about running tasks and says nothing about
+    // either half, so there the base stands.
+    effort: beacon.modelId !== null || beacon.modelLabel !== null ? beacon.effort : base.effort,
     context
   }
 }

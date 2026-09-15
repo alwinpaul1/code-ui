@@ -46,6 +46,21 @@ export type PendingModelPick = { model: string; at: number; wasReporting: string
  *  outlive the component, which remounts on every chat/terminal flip. */
 const pendingByScope = new Map<string, PendingModelPick>()
 
+/** Scopes where a live reading has already been applied. */
+const sawLiveByScope = new Set<string>()
+
+export function noteLiveModelReport(scopeKey: string): void {
+  sawLiveByScope.add(scopeKey)
+}
+
+export function hasSeenLiveModelReport(scopeKey: string): boolean {
+  return sawLiveByScope.has(scopeKey)
+}
+
+export function forgetLiveModelReport(scopeKey: string): void {
+  sawLiveByScope.delete(scopeKey)
+}
+
 export function notePendingModelPick(
   scopeKey: string,
   model: string,
@@ -65,6 +80,7 @@ export function clearPendingModelPick(scopeKey: string): void {
 
 export function clearPendingModelPicksForTests(): void {
   pendingByScope.clear()
+  sawLiveByScope.clear()
 }
 
 export function decideModelReport(input: {
@@ -78,9 +94,11 @@ export function decideModelReport(input: {
   /** A model pick dispatched locally and not yet confirmed by the agent.
    *  `wasReporting` is what the agent was reporting when it was dispatched. */
   pendingPick: PendingModelPick | null
+  /** Whether a LIVE reading has already been applied for this scope. */
+  sawLive: boolean
   now: number
 }): ModelReportDecision {
-  const { source, reported, lastAppliedKey, reportKey, pendingPick, now } = input
+  const { source, reported, lastAppliedKey, reportKey, pendingPick, sawLive, now } = input
   // A pick the agent has been asked for but has not had time to report yet.
   // Holding it briefly is what keeps a successful switch from flickering.
   //
@@ -99,7 +117,17 @@ export function decideModelReport(input: {
   if (source === 'live') {
     return 'apply'
   }
-  // The launch record: only a value that CHANGED is new evidence, because the
-  // same one is re-delivered on every tab re-entry and reconnect.
+  // Once the agent has stated its own model for this session, what it was
+  // LAUNCHED as says nothing further about it. Without this the pill flipped
+  // back and forth: a live reading holds while the agent works, the reading
+  // stops when the turn ends, and the launch record — differing, so counting as
+  // "changed" — overwrote the truth. Reported 2026-09-15 as the model coming
+  // "back randomly when the response ends".
+  if (sawLive) {
+    return 'skip'
+  }
+  // Before then, the launch record is all there is: only a value that CHANGED
+  // is new evidence, because the same one is re-delivered on every tab re-entry
+  // and reconnect.
   return lastAppliedKey === reportKey ? 'skip' : 'apply'
 }
