@@ -538,12 +538,20 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // several turns late, so the message landed far below where the Claude app
   // (which reads the record in place) shows it (2026-09-14). Capturing the
   // anchor here, at the source, makes the position independent of arrival.
-  // Only user/assistant rows are projected, so only those uuids can anchor.
+  // A row type is NOT enough. Claude writes tool calls, tool results and
+  // thinking as `user`/`assistant` rows too, and Orca projects none of them —
+  // tool activity folds into "Ran a command" and thinking is dropped. Anchoring
+  // to one names a uuid the phone will never hold, the lookup fails, and every
+  // queued prompt of a turn falls back to the arrival tail and stacks at the
+  // bottom under its own replies (device screenshots, 2026-09-15). Verified
+  // against a live 2.1.270 transcript whose last six rows were tool_use,
+  // tool_result, tool_use, tool_result, thinking, text. Only the text row
+  // reaches the phone, so only rows like it may anchor.
   'tp=$(g "\\"transcript_path\\":\\"([^\\"]*)\\"")',
   // Same as the status line: a Windows path arrives JSON-escaped with
   // backslashes, which Git Bash cannot open; slashes work on every platform.
   '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
-  '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | grep -v -E "\\"(tool_use|tool_result|thinking)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
   'o="CUIHUD1 agent=claude up=$$:$(q "$pr")$ct${at:+ at=$at}"',
   '[ -z "$pr" ] && exit 0',
   ...TTY_WRITE,

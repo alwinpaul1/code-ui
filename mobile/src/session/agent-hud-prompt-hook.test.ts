@@ -62,9 +62,13 @@ describe('the desktop prompt hook', () => {
   // moment it was typed. The hook now beacons the transcript's last projected
   // row at submit time, so the phone anchors where the record actually sits.
   it('beacons the last user/assistant row uuid at submit time as at=', () => {
-    // Real row shapes: a projected assistant row, a projected user row, then
-    // the queue records Claude writes for the submit itself — which are never
-    // projected to the phone, so they must NOT be chosen as the anchor.
+    // Real row shapes. Only the assistant TEXT row reaches the phone: Orca
+    // folds tool activity into "Ran a command", drops thinking, and never
+    // projects the queue records Claude writes for the submit itself. This test
+    // used to expect the tool_use row and called it projected — the same wrong
+    // assumption the hook carried, which anchored every queued prompt to a uuid
+    // the phone does not hold, so they all fell back to the tail and stacked
+    // (device screenshots, 2026-09-15).
     const transcript = [
       '{"type":"assistant","uuid":"a1a1a1a1-0000-4000-8000-000000000001","parentUuid":null,"message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}',
       '{"type":"user","uuid":"b2b2b2b2-0000-4000-8000-000000000002","parentUuid":"a1a1a1a1-0000-4000-8000-000000000001","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}',
@@ -74,8 +78,10 @@ describe('the desktop prompt hook', () => {
     ].join('\n') + '\n'
     const out = runHook({ prompt: 'queued while busy' }, transcript)
     expect(out).toContain('CUIHUD1 agent=claude up=')
-    // The LAST projected row, not the queue records after it.
-    expect(out).toContain(' at=c3c3c3c3-0000-4000-8000-000000000003')
+    // The last row the phone will actually hold.
+    expect(out).toContain(' at=a1a1a1a1-0000-4000-8000-000000000001')
+    expect(out).not.toContain('at=c3c3c3c3')
+    expect(out).not.toContain('at=b2b2b2b2')
     expect(out).not.toContain('at=e5e5e5e5')
     expect(out).not.toContain('at=d4d4d4d4')
   })
