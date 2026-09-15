@@ -308,7 +308,53 @@ function outsideFences(source: string): string {
   return kept.join('\n')
 }
 
+/** How many parsed messages are held. A screenful of chat is a handful of rows;
+ *  this is sized for the run either side of it that a flick passes over, and it
+ *  is a cap on COUNT, so one enormous message can still hold a lot of blocks. */
+export const MOBILE_MARKDOWN_PARSE_CACHE_CAP = 48
+
+const parsedBySource = new Map<string, MobileMarkdownBlock[]>()
+
+/**
+ * What the parser returns is CACHED BY SOURCE TEXT, and the returned array must
+ * be treated as read-only.
+ *
+ * `MobileMarkdown` memoizes its own parse per text, which covers a re-render.
+ * It does not cover a re-MOUNT, and FlashList recycles rows: a message scrolled
+ * off and back on parses again from nothing. The hand-rolled loop this replaced
+ * cost 0.03 ms a message, so nobody had to care. marked costs ~2 ms for a
+ * document the size of this repository's CLAUDE.md on a Mac, several times that
+ * on the phone, and a flick mounts several rows per frame — on a screen the
+ * user has already called slow (2026-09-15).
+ *
+ * Eviction renews on READ, not only on write. A plain FIFO drops whatever has
+ * been in longest, which on a chat is the message being read right now; the
+ * sticky HUD hold had exactly this defect the same day.
+ */
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
+  const cached = parsedBySource.get(content)
+  if (cached) {
+    parsedBySource.delete(content)
+    parsedBySource.set(content, cached)
+    return cached
+  }
+  const blocks = readMobileMarkdown(content)
+  if (content) {
+    if (parsedBySource.size >= MOBILE_MARKDOWN_PARSE_CACHE_CAP) {
+      // Map iterates in insertion order, so the first key is the least recently
+      // read. A streamed reply is a fresh miss every tick and would otherwise
+      // keep every intermediate draft of the session alive.
+      const oldest = parsedBySource.keys().next()
+      if (!oldest.done) {
+        parsedBySource.delete(oldest.value)
+      }
+    }
+    parsedBySource.set(content, blocks)
+  }
+  return blocks
+}
+
+function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
   const source = content.replace(/\r\n?/g, '\n')
   let tokens: Token[]
   try {
