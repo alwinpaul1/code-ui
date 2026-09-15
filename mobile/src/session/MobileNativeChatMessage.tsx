@@ -11,6 +11,7 @@ import {
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
+import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { Prose } from './MobileNativeChatProse'
@@ -248,10 +249,17 @@ function MobileNativeChatMessageImpl({
     )
   }
 
-  // Separate the agent's words from its tool activity: prose renders first, the
-  // tool calls fold into a collapsible run beneath. The user's own messages get
-  // a soft bubble so they stand apart from agent prose.
-  const { prose, tools } = splitNativeChatBlocks(message.blocks)
+  // A turn is drawn in the order it HAPPENED: runs of words and runs of work,
+  // interleaved as the transcript recorded them. Bucketing all prose above all
+  // tools — which is what `splitNativeChatBlocks` does — put a reply written
+  // before a command underneath it, and a reply written after it above; the
+  // words lost their place relative to the work (reported 2026-09-15 against
+  // the terminal, which shows the true order). The user's own messages still
+  // get a soft bubble so they stand apart from agent prose.
+  const segments = splitTurnIntoSegments(message.blocks)
+  // Still needed whole: the active call is chosen across the turn, and whether
+  // any work ran at all decides the settled-tools rule below.
+  const { tools } = splitNativeChatBlocks(message.blocks)
   const activeCall = structuredActivityUi
     ? selectActiveToolCall(tools, { activeTurnIsWorking })
     : null
@@ -266,6 +274,11 @@ function MobileNativeChatMessageImpl({
     !turnExpanded &&
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
+  // The turn's controls hang off the final run of work.
+  const lastToolSegment = segments.reduce(
+    (last, segment, index) => (segment.kind === 'tools' ? index : last),
+    -1
+  )
 
   const handleCopy = (): void => {
     const text = nativeChatMessageText(message.blocks)
@@ -315,39 +328,57 @@ function MobileNativeChatMessageImpl({
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
-          <View style={interim && isAgent ? styles.interimNote : null}>
-            {groupProseBlocks(prose).map((group, index, groups) => (
-              // Air between a picture and the caption under it.
-              <View key={index} style={imageLeadsText(groups, index) ? styles.imageLead : null}>
-                {group.type === 'image-strip' ? (
-                  <MobileNativeChatImageStrip uris={group.uris} label={group.alt} styles={styles} />
-                ) : (
-                  <Prose
-                    block={group.block}
-                    invert={isUser}
-                    fontScale={fontScale}
-                    onOpenFile={onOpenFile}
-                    styles={styles}
-                  />
-                )}
+          {segments.map((segment, segmentIndex) =>
+            segment.kind === 'prose' ? (
+              <View
+                key={`p${segmentIndex}`}
+                style={interim && isAgent ? styles.interimNote : null}
+              >
+                {groupProseBlocks(segment.blocks).map((group, index, groups) => (
+                  // Air between a picture and the caption under it.
+                  <View
+                    key={index}
+                    style={imageLeadsText(groups, index) ? styles.imageLead : null}
+                  >
+                    {group.type === 'image-strip' ? (
+                      <MobileNativeChatImageStrip
+                        uris={group.uris}
+                        label={group.alt}
+                        styles={styles}
+                      />
+                    ) : (
+                      <Prose
+                        block={group.block}
+                        invert={isUser}
+                        fontScale={fontScale}
+                        onOpenFile={onOpenFile}
+                        styles={styles}
+                      />
+                    )}
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          {showToolRun ? (
-            <ToolRun
-              // Why: a global toggle intentionally resets all per-run/per-line
-              // overrides in one remount, avoiding an effect-driven second render.
-              key={`${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
-              blocks={tools}
-              defaultExpanded={turnExpanded || toolsExpanded}
-              expandChildren={turnExpanded ? false : toolsExpanded}
-              activeCall={activeCall}
-              taskListPredecessors={taskListPredecessors}
-              trailing={controls}
-              onOpenFile={onOpenFile}
-              styles={styles}
-            />
-          ) : onCancelQueued ? (
+            ) : showToolRun ? (
+              <ToolRun
+                // Why: a global toggle intentionally resets all per-run/per-line
+                // overrides in one remount, avoiding an effect-driven second render.
+                key={`t${segmentIndex}:${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
+                blocks={segment.blocks}
+                defaultExpanded={turnExpanded || toolsExpanded}
+                expandChildren={turnExpanded ? false : toolsExpanded}
+                // The active call lives in whichever run holds it; the others
+                // are handed it and simply do not match.
+                activeCall={activeCall}
+                taskListPredecessors={taskListPredecessors}
+                // The controls belong to the turn, so only the LAST run carries
+                // them — otherwise every run would grow its own copy.
+                trailing={segmentIndex === lastToolSegment ? controls : undefined}
+                onOpenFile={onOpenFile}
+                styles={styles}
+              />
+            ) : null
+          )}
+          {showToolRun ? null : onCancelQueued ? (
             <View style={styles.controlsRow}>
               <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
                 Queued

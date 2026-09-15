@@ -75,6 +75,35 @@ describe('MobileNativeChatMessage', () => {
   const textIn = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  // 2026-09-15, reported against the terminal: a reply read as though it came
+  // after work it had actually come before. The renderer bucketed a turn into
+  // all prose then all tools, so the words lost their place relative to the
+  // work. The transcript's order is the record of what happened.
+  it('draws a turn in the order it happened, not words first and work after', () => {
+    const tree = render(
+      toolMessage([
+        { type: 'text', text: 'BEFORE the command' },
+        { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool-result', output: 'ok' },
+        { type: 'text', text: 'AFTER the command' }
+      ])
+    )
+    // The serialized tree preserves render order, and prose goes through a
+    // mocked MobileMarkdown rather than a Text node.
+    const order = JSON.stringify(tree.toJSON())
+    const before = order.indexOf('BEFORE the command')
+    const after = order.indexOf('AFTER the command')
+    // The collapsed run names itself, not the tool inside it.
+    const work = order.indexOf('Ran a command')
+    expect(before).toBeGreaterThanOrEqual(0)
+    expect(after).toBeGreaterThanOrEqual(0)
+    expect(work).toBeGreaterThanOrEqual(0)
+    // The words written before the command sit above it; the words written
+    // after sit below. Bucketing put both above.
+    expect(before).toBeLessThan(work)
+    expect(work).toBeLessThan(after)
+  })
+
   it('lets the reader select the text of their own sent prompt', () => {
     // Why: reported 2026-09-12 — press-and-hold on a sent prompt selected
     // nothing, while an agent's answer selected. Only the agent side was
