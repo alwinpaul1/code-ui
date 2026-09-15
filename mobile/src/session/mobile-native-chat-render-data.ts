@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { showDesktopPromptImages } from './mobile-desktop-prompt-images'
+import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import {
   isImageRefBlock,
@@ -80,7 +81,13 @@ export function foldMobileNativeChatMessages(
   // to their prompt before normalizing, or they render above the bubble.
   // Normalize (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  const normalized = normalizeImageTranscriptMessages(foldQueuedImageTurns(messages))
+  const foldedForImages = foldQueuedImageTurns(messages)
+  // Orca's normalizer deletes a `[Image #N]` it cannot turn into a picture, and
+  // on the phone the bytes never arrive; see mobile-desktop-image-placeholders.
+  const normalized = keepDesktopImagePlaceholders(
+    foldedForImages,
+    normalizeImageTranscriptMessages(foldedForImages)
+  )
   if (!splitAfterIds?.size) {
     return stripNoiseMessages(foldToolMessages(normalized))
   }
