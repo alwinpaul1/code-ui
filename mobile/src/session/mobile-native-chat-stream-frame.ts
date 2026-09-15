@@ -68,13 +68,27 @@ function replayRetainedTailStart(
  *  survives a socket blip instead of collapsing to the replayed window. A
  *  discontinuous replay (long outage, compaction while away) can't be stitched
  *  without a gap, so it falls back to the fresh authoritative window. */
+/** How many transcript records the live window may hold.
+ *
+ *  Sized by what one long turn actually produces, not by what fills a screen:
+ *  the turn that exposed this wrote 67 records in eight minutes, and a busy one
+ *  can write several times that. Generous enough that no realistic turn evicts
+ *  its own head, small enough that a day-long session does not keep every row
+ *  and every tool output alive on a phone. Paging older history still grows the
+ *  read window past this on demand. */
+export const LIVE_WINDOW_CEILING = 400
+
 export function applyMobileNativeChatStreamFrame(args: {
   merger: NativeChatMerger
   frame: MobileNativeChatStreamFrame
   limit: number
+  /** Ceiling the live window may grow to. Defaults to `LIVE_WINDOW_CEILING`;
+   *  tests pass a small one to exercise trimming without 400 rows. */
+  ceiling?: number
   replaceSnapshot: boolean
 }): AppliedMobileNativeChatFrame {
   const { merger, frame, limit, replaceSnapshot } = args
+  const ceiling = args.ceiling ?? LIVE_WINDOW_CEILING
   if (frame.type === 'error') {
     return { kind: 'error', error: frame.message ?? frame.error ?? 'Transcript stream failed' }
   }
@@ -104,7 +118,30 @@ export function applyMobileNativeChatStreamFrame(args: {
     }
   }
   const previousFirstId = merger.list[0]?.id
-  const messages = applyAppend(merger, frame.messages, limit)
+  // The live window may only GROW. Re-trimming to the subscribe limit on every
+  // append made a long turn evict its own earlier replies while the user was
+  // reading it: Claude Code writes one record per content block, so a reply
+  // plus three commands is seven records and a 40-record window is about four
+  // replies. A turn of 67 records therefore threw away its own head, and the
+  // user's bubble — anchored on a row that had just gone — was re-pinned to the
+  // top of what remained, which read as "my message and the replies after it
+  // are missing" (2026-09-15). The bound still exists so a long session cannot
+  // grow without limit; it is simply no longer the size of the first page.
+  // Live appends may only GROW the window; a snapshot replay keeps the original
+  // bound, so every paging contract built on a replay's metadata is untouched.
+  //
+  // Re-trimming to the subscribe limit on every APPEND is what made a long turn
+  // evict its own earlier replies while the user was reading it: Claude Code
+  // writes one record per content block, so a reply plus three commands is
+  // seven records and a 40-record window is about four replies. A turn of 67
+  // records threw away its own head, and the user's bubble — anchored on a row
+  // that had just gone — was re-pinned to the top of what remained, which read
+  // as "my message and the replies after it are missing" (2026-09-15).
+  const messages = applyAppend(
+    merger,
+    frame.messages,
+    frame.type === 'appended' ? Math.max(limit, ceiling) : limit
+  )
   const cursorInvalidated = Boolean(previousFirstId && messages[0]?.id !== previousFirstId)
   const replayStillStartsAtOldest = frame.type === 'snapshot' && replayStartIndex === 0
   return {

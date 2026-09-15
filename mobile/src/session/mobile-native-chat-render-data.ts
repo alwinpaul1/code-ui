@@ -4,6 +4,7 @@ import {
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { showDesktopPromptImages } from './mobile-desktop-prompt-images'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import {
   isImageRefBlock,
@@ -247,7 +248,12 @@ export function buildMobileNativeChatTransientData({
       // the transcript echo lands.
       blocks: [
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri })),
-        ...(item.text ? [{ type: 'text' as const, text: item.text }] : [])
+        // Drawn, not matched: a desktop-pasted image becomes "Image on
+        // Desktop" here so the reader can see one was sent, while `item.text`
+        // keeps the raw marker that retirement matches on (2026-09-15).
+        ...(item.text
+          ? [{ type: 'text' as const, text: showDesktopPromptImages(item.text) }]
+          : [])
       ],
       timestamp: null,
       source: 'transcript'

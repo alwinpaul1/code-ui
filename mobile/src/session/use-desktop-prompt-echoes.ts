@@ -4,7 +4,6 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
-import { showDesktopPromptImages } from './mobile-desktop-prompt-images'
 
 
 /**
@@ -47,11 +46,13 @@ export function useDesktopPromptEchoes(
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,
-      // The phone has no bytes for a desktop-pasted image, so it cannot draw
-      // the picture — but it must still say one was sent. Stripping the marker
-      // outright made the prompt read as though nothing had been attached
-      // (2026-09-15); a placeholder is the honest middle.
-      text: showDesktopPromptImages(prompt.text),
+      // The RAW text, marker and all. It is what this echo is matched against
+      // when its transcript row lands — and `normalizeNativeChatUserText`
+      // deletes `[Image #N]` from both sides, so the keys agree. Rewriting the
+      // marker here instead made them diverge, and the echo could never retire:
+      // the message drew twice, for good (2026-09-15). The placeholder the
+      // reader sees is applied where the bubble is BUILT, not here.
+      text: prompt.text,
       expectedOccurrence: 0,
       baselineTailMessageId: anchors.current.get(prompt.nonce) ?? null,
       baselineResolved: true
