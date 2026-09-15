@@ -9,7 +9,7 @@ import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
-import { echoMemoryId } from './mobile-native-chat-remember-echo'
+import { witnessesToRemember } from './mobile-native-chat-witness-memory'
 import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
@@ -185,11 +185,11 @@ export function MobileNativeChatOverlay({
   // survive a reconnect, a tab switch and a relaunch (2026-09-13).
   const rememberEcho = controller.rememberEcho
   useEffect(() => {
-    for (const echo of [...absorbedEchoes, ...desktopEchoes]) {
-      if (echo.baselineTailMessageId && !echo.provisional) {
-        const id = echo.id.startsWith('desk-') ? echo.id : echoMemoryId(echo.text)
-        rememberEcho?.(id, echo.text, echo.baselineTailMessageId)
-      }
+    // The rule lives in `witnessesToRemember` so it can be tested: inline here
+    // it guarded two things nothing asserted — that a provisional reading is
+    // never made permanent, and which id each kind is stored under.
+    for (const witness of witnessesToRemember([...absorbedEchoes, ...desktopEchoes])) {
+      rememberEcho?.(witness.id, witness.text, witness.anchorId)
     }
   }, [absorbedEchoes, desktopEchoes, rememberEcho])
   const pendingWithDesktopPrompts = useMemo(
