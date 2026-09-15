@@ -70,6 +70,10 @@ const LOCAL_COMMAND = /^[/!]/
  *  typed: an incoming teammate message ("Message from @name (ctrl+o to
  *  expand)") read as a sent prompt on 2026-09-13. */
 const HARNESS_NOTICE = /^(?:Message|Cross-session message|Idle notice) from @?\S+/
+/** The prompt's OWN attachment row: `⎿  [Image #3]`, listing a picture the
+ *  message carried. Claude prints these directly under the prompt, in the same
+ *  shape a tool's output row uses. */
+const ATTACHMENT_ROW = /^\s*⎿\s*\[Image #\d+\]\s*$/
 /** What Claude paints after the blank row under a prompt once the turn's
  *  tools fold: "Ran 6 shell commands", "Read 2 files", "Edited a file". A
  *  prompt's own second paragraph sits on an identical two-space row, so this
@@ -204,7 +208,14 @@ function isToolRow(text: string, screen: readonly string[], index: number): bool
   if (/ · \d+s\b/.test(text) || /^[A-Z][a-z]+ing\b.*…$/.test(text)) {
     return true
   }
-  return /^\s*⎿/.test(screen[index + 1] ?? '')
+  // A following `⎿` row is evidence of a tool only when it carries OUTPUT. The
+  // attachment rows under a prompt look identical and carry `[Image #N]`, and
+  // Claude prints them directly beneath the prompt — so the last paragraph of
+  // any prompt that included an image was read as a tool row and dropped, with
+  // the paragraph going with it (host screenshot, 2026-09-15: "also have a
+  // search bar for this" never reached the phone).
+  const next = screen[index + 1] ?? ''
+  return /^\s*⎿/.test(next) && !ATTACHMENT_ROW.test(next)
 }
 
 /** Rejoin what the terminal wrapped: a blank row is a real paragraph break,
