@@ -372,3 +372,71 @@ describe('a queued prompt while it waits for its row', () => {
     expect(latest[0]!.baselineTailMessageId).toBe('x2')
   })
 })
+
+// Reported 2026-09-15 from the device, in the very session being fixed: two
+// prompts stacked at the bottom with the reply to the first drawn ABOVE them.
+//
+// The provisional position added for the invisible-message regression was
+// `rawMessages.at(-1)` read fresh on EVERY render. So a prompt waiting for its
+// row did not hold still — it followed the tail down as the turn wrote new
+// rows, and ended up below the reply it had caused. The old code froze the
+// arrival tail at once, which was roughly right; the waiting has to keep that
+// and only UPGRADE to the beaconed row when it appears.
+describe('where a waiting prompt sits while rows keep arriving', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('holds the tail it first saw instead of sliding down the turn', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'hold-1', text: 'typed mid-turn', anchorId: 'gone' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('t1'), assistant('t2')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('t2')
+    // The turn writes its reply. The prompt must stay above it.
+    act(() => {
+      renderer!.update(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('t1'), assistant('t2'), assistant('t3'), assistant('t4')]
+        })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('t2')
+  })
+
+  it('keeps two prompts of one turn on the rows they were typed after', () => {
+    const first: DesktopPrompt[] = [{ nonce: 'hold-a', text: 'first', anchorId: 'gone-a' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts: first, raw: [assistant('u1')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('u1')
+    // A reply lands, then the second prompt is typed.
+    const both: DesktopPrompt[] = [
+      ...first,
+      { nonce: 'hold-b', text: 'second', anchorId: 'gone-b' }
+    ]
+    act(() => {
+      renderer!.update(
+        createElement(Probe, { prompts: both, raw: [assistant('u1'), assistant('u2')] })
+      )
+    })
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['u1', 'u2'])
+  })
+
+  it('still upgrades to the beaconed row when it finally arrives', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'hold-2', text: 'queued', anchorId: 'y2' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('y9')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('y9')
+    act(() => {
+      renderer!.update(
+        createElement(Probe, { prompts, raw: [assistant('y1'), assistant('y2'), assistant('y9')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('y2')
+  })
+})

@@ -59,6 +59,15 @@ const DESKTOP_PROMPT_ANCHOR_CAP = 256
  */
 const ANCHOR_WAIT_READINGS = 30
 const waitsByNonce = new Map<string, number>()
+/** The tail when a waiting prompt was FIRST seen, held still.
+ *
+ *  Read fresh each render instead, the provisional position followed the tail
+ *  down as the turn wrote rows, and the prompt ended up below the reply it had
+ *  caused — two of them stacking on the same last row (device screenshot,
+ *  2026-09-15). The tail at first sighting is roughly where a mid-turn prompt
+ *  belongs, which is what the code did before the waiting was added; the wait
+ *  only ever UPGRADES it to the beaconed row. */
+const provisionalByNonce = new Map<string, string | null>()
 
 function rememberedAnchor(nonce: string): string | null | undefined {
   if (!anchorByNonce.has(nonce)) {
@@ -71,6 +80,7 @@ function rememberedAnchor(nonce: string): string | null | undefined {
 }
 
 function rememberAnchor(nonce: string, anchor: string | null): void {
+  provisionalByNonce.delete(nonce)
   anchorByNonce.delete(nonce)
   if (anchorByNonce.size >= DESKTOP_PROMPT_ANCHOR_CAP) {
     const oldest = anchorByNonce.keys().next()
@@ -125,7 +135,11 @@ export function useDesktopPromptEchoes(
     // and moves up the moment its real row arrives. Visible in roughly the right
     // place beats correct and invisible.
     const settled = rememberedAnchor(prompt.nonce)
-    const placement = settled === undefined ? (rawMessages.at(-1)?.id ?? null) : settled
+    if (settled === undefined && !provisionalByNonce.has(prompt.nonce)) {
+      provisionalByNonce.set(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+    }
+    const placement =
+      settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
     echoes.push({
       id: `desk-${prompt.nonce}`,
       // The RAW text, marker and all. It is what this echo is matched against
