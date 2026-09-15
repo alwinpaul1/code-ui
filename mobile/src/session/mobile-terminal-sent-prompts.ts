@@ -67,6 +67,11 @@ const HARNESS_NOTICE = /^(?:Message|Cross-session message|Idle notice) from @?\S
  *  tools fold: "Ran 6 shell commands", "Read 2 files", "Edited a file". A
  *  prompt's own second paragraph sits on an identical two-space row, so this
  *  is the one place the parser has to judge by wording (2.1.270). */
+/** The terminal's own truncation mark on a row it could not fit. */
+function endsCut(text: string): boolean {
+  return /[\u2026]\s*$/.test(text)
+}
+
 const FOLD_SUMMARY =
   /^(?:Ran|Read|Edited|Wrote|Searched|Listed|Fetched|Updated|Called|Used|Created|Deleted) (?:\d+|a|an|one) [a-z]+[a-z0-9 ,()]*$/
 
@@ -81,7 +86,12 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       continue
     }
     const parts = [head[1] ?? '']
-    let cursor = index + 1
+    // A row the screen CUT is finished: the terminal replaced the rest of the
+    // message with the ellipsis, so the rows under it are not more of it — they
+    // are the agent's reply, printed on the same two-space indent a wrapped
+    // prompt uses. Reading them as prompt drew the message and the answer to it
+    // as one bubble (2026-09-15, real screen from a live pr-919 session).
+    let cursor = endsCut(head[1] ?? '') ? limit : index + 1
     while (cursor < limit) {
       const line = screen[cursor] ?? ''
       if (line.trim().length === 0) {

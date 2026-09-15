@@ -334,3 +334,41 @@ it('leaves a hyphenated picker row out too, and keeps what follows it', () => {
     ])
   ).toEqual(['set it up the way I like and then run the tests'])
 })
+
+// Real bytes, `orca terminal read --screen` against a live Claude pr-919
+// session on 2026-09-15 (Claude Code 2.1.270). The prompt row was CUT by the
+// screen — it ends in an ellipsis — and the agent's reply is printed beneath it
+// on rows indented exactly two spaces, the same shape a wrapped prompt uses.
+// The parser read the whole reply as more prompt, so the phone drew the user's
+// message and the answer to it as one bubble.
+describe('a prompt the screen cut short', () => {
+  const SCREEN = [
+    '❯ One caveat worth your attention: the geometry-persistence change writes a new key into a live JSONB column on every reroute. The te…',
+    '  - F8 offline restoration — left off on your call. It is a parked product decision, not a defect.',
+    '  - Native device verification — none of the HERE truck-routing work, the tab-bar badge, or the phone sheet has been seen on a handset.',
+    '  And the honest caveat on my own record this session: the peer reviewer caught real defects twice.',
+    '  session:ok',
+    '',
+    '❯ '
+  ]
+
+  it('does not read the reply printed under it as more of the message', () => {
+    const [prompt = ''] = sentPromptsFromScreen(SCREEN)
+    expect(prompt).toContain('One caveat worth your attention')
+    expect(prompt).not.toContain('F8 offline restoration')
+    expect(prompt).not.toContain('session:ok')
+  })
+
+  // A prompt the screen did NOT cut still gathers its own wrapped rows.
+  it('still gathers the wrapped rows of a prompt that was not cut', () => {
+    const [prompt = ''] = sentPromptsFromScreen([
+      '❯ first line of what I typed',
+      '  - a bullet I wrote myself',
+      '  and a second paragraph',
+      '',
+      '❯ '
+    ])
+    expect(prompt).toContain('a bullet I wrote myself')
+    expect(prompt).toContain('second paragraph')
+  })
+})
