@@ -17,13 +17,11 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   deriveBackgroundTasks,
-  withoutAgentTasks,
   type BackgroundTaskHostStatus,
   type BackgroundTaskKind,
   type BackgroundTask
 } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
-import { groupRunningTasksByKind } from './mobile-background-task-groups'
 import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
@@ -90,11 +88,8 @@ export function MobileBackgroundTasksSheetBody({
   // Re-derived on each tick rather than caching elapsed separately: the walk is
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
-  // Subagents are not listed: see `withoutAgentTasks`. Applied to whichever
-  // source answers, so the sheet and the count pill can never disagree.
   const { running, finished } = useMemo(
     () =>
-      withoutAgentTasks(
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
       deriveBackgroundTasks(messages, now, agentStatus ?? null, {
         finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
@@ -102,11 +97,9 @@ export function MobileBackgroundTasksSheetBody({
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
         launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
         onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null
-      })
-      ),
+      }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
   )
-  const runningGroups = useMemo(() => groupRunningTasksByKind(running), [running])
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -126,18 +119,14 @@ export function MobileBackgroundTasksSheetBody({
         open={runningOpen}
         onToggle={() => setRunningOpen((open) => !open)}
       >
+        {/* One flat list. The per-kind headings ("Shells · 4", "Agents · 2")
+            were removed at the user's request on 2026-09-15 — the row's own
+            count already says how much is running, and the labels were noise
+            above a short list. This supersedes the 2026-09-14 ask to show the
+            two kinds as separate labelled groups. */}
         {running.length > 0 ? (
-          runningGroups.map((group) => (
-            <View key={group.kind} style={{ gap: space.sm }}>
-              {/* Shells and agents are different work; label each group so the
-                  reader sees the split, not one mixed list (2026-09-14). */}
-              <Txt variant="caption" weight="medium" tone="muted">
-                {group.heading}
-              </Txt>
-              {group.tasks.map((task) => (
-                <BackgroundTaskCard key={task.id} task={task} onStop={onStopTask} />
-              ))}
-            </View>
+          running.map((task) => (
+            <BackgroundTaskCard key={task.id} task={task} onStop={onStopTask} />
           ))
         ) : (
           <Txt variant="caption" tone="muted">

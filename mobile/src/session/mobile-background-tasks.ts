@@ -193,26 +193,6 @@ export function deriveBackgroundTasks(
  *  dropped, so the count matches what the desk shows (2026-09-14). Never
  *  removes a named shell, and does nothing when the footer count is absent or
  *  already covered. */
-/**
- * Drop the agent's own subagents from the background-task surface.
- *
- * They are not background work in the sense this row means. A shell the agent
- * launched keeps running whether or not the agent is busy, and the user may
- * want to go and look at it; a subagent lives and dies inside the turn that
- * spawned it, and the turn's own working indicator already says it is going.
- * Showing them here counted the agent's internal structure as things the user
- * has to track. Removed at the user's request, 2026-09-15 ("Agents 2, remove
- * this from bg tasks"), which supersedes the 2026-09-14 instruction to show
- * shells and agents as separate groups — the split remains implemented in
- * `mobile-background-task-groups.ts` for any kind that is still surfaced.
- */
-export function withoutAgentTasks(tasks: BackgroundTasks): BackgroundTasks {
-  return {
-    running: tasks.running.filter((task) => task.kind !== 'agent'),
-    finished: tasks.finished.filter((task) => task.kind !== 'agent')
-  }
-}
-
 export function padToOnScreenShellCount(
   tasks: BackgroundTasks,
   onScreenShellCount: number | null
@@ -435,6 +415,5 @@ export function countRunningBackgroundTasks(
   options: BackgroundTaskDeriveOptions = {},
   now: number = Date.now()
 ): number {
-  return withoutAgentTasks(deriveBackgroundTasks(messages, now, hostStatus, options)).running
-    .length
+  return deriveBackgroundTasks(messages, now, hostStatus, options).running.length
 }

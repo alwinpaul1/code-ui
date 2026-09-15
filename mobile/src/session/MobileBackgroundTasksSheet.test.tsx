@@ -319,18 +319,12 @@ const HOST_ROSTER: AgentSessionBackgroundTaskState = {
   tasks: [
     {
       id: 'task-live',
-      // A command, not an agent: subagents are no longer surfaced at all (see
-      // `withoutAgentTasks`), so an agent here would test the filter rather than
-      // what this fixture is for — the host's roster outranking the transcript.
-      kind: 'command',
+      kind: 'agent',
       description: 'Audit the release notes',
       state: 'working',
       startedAt: NOW - (19 * 60_000 + 8_000)
     },
-    { id: 'task-watch', kind: 'monitor', description: 'Watch the build log', state: 'monitoring' },
-    // Dropped from the sheet: the user asked for agents off this row on
-    // 2026-09-15, and the count beside it must drop them the same way.
-    { id: 'task-agent', kind: 'agent', description: 'Review the diff', state: 'working' }
+    { id: 'task-watch', kind: 'monitor', description: 'Watch the build log', state: 'monitoring' }
   ],
   settledTasks: [{ id: 'task-gone', kind: 'command', description: 'pnpm test', state: 'blocked' }]
 }
@@ -372,11 +366,20 @@ describe('a structured tab reading its background tasks from the host', () => {
     return readTree(renderer!)
   }
 
+  // 2026-09-15, user's instruction: "remove that header like agents 2". The
+  // per-kind labels ("Shells · 4", "Agents · 2") are gone and every running
+  // task is listed straight through — the row's own count already says how
+  // many. This supersedes the 2026-09-14 ask to group the two kinds.
+  it('lists running work straight through, with no per-kind headings', async () => {
+    const { texts } = await renderHosted('light')
+    expect(texts).toContain('Audit the release notes')
+    expect(texts).toContain('Watch the build log')
+    expect(texts.some((line) => /^(Shell|Agent|Monitor)s? · \d+$/.test(line))).toBe(false)
+  })
+
   it("shows the host's roster instead of what the transcript guessed", async () => {
     const { texts } = await renderHosted('light')
     expect(texts).toContain('Audit the release notes')
-    // The roster's subagent is not listed.
-    expect(texts).not.toContain('Review the diff')
     expect(texts).toContain('Watch the build log')
     expect(texts).toContain('Monitor')
     expect(texts).toContain('19m 8s')

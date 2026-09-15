@@ -33,10 +33,11 @@ describe('the running-tasks number under the last message', () => {
     return latest
   }
 
-  // The user's instruction, 2026-09-15: subagents are not background work the
-  // row is about. The count has to drop them exactly as the sheet does, or the
-  // number and the list it opens disagree.
-  it('does not count the agent\'s own subagents', () => {
+  // Every kind the host reports is background work the row is about — shells,
+  // subagents and monitors alike. They are listed as one flat run in the sheet
+  // (the per-kind headings came off on 2026-09-15), so the number beside it
+  // counts the same set.
+  it('counts every running task the host reports, subagents included', () => {
     expect(
       render(
         roster([
@@ -45,13 +46,7 @@ describe('the running-tasks number under the last message', () => {
           { id: 'a2', kind: 'agent', description: 'Audit the notes', state: 'working' }
         ])
       )
-    ).toBe(1)
-  })
-
-  it('reads a roster of nothing but subagents as nothing running', () => {
-    expect(
-      render(roster([{ id: 'a1', kind: 'agent', description: 'Review', state: 'working' }]))
-    ).toBe(0)
+    ).toBe(3)
   })
 
   // A host that answers "none" is an answer, not a reason to go and guess from
