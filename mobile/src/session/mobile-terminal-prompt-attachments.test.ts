@@ -57,9 +57,9 @@ describe('a prompt whose images are listed under it', () => {
     expect(prompts).toEqual(['run the tests'])
   })
 
-  it('reads a single-paragraph prompt with one image', () => {
+  it('reads a single-paragraph prompt with one image, marker kept', () => {
     expect(
       sentPromptsFromScreen(['❯ [Image #1] look at this', '  ⎿ [Image #1]', '', '❯ '])
-    ).toEqual(['look at this'])
+    ).toEqual(['[Image #1] look at this'])
   })
 })

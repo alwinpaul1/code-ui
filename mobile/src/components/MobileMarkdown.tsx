@@ -23,6 +23,7 @@ import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markd
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
 
 /** Every inline span is a rounded, bordered View chip, as in the Claude app.
  *  Only a span with a newline in it stays a nested Text. */
@@ -126,7 +127,9 @@ function renderTextRun(
 function renderInline(
   styles: MarkdownStyles,
   text: string,
-  onOpenFile?: (pathText: string) => void
+  onOpenFile?: (pathText: string) => void,
+  /** Pill sizes at the reader's zoom; null when they have not zoomed. */
+  chipScale?: ReturnType<typeof markdownChipScale>
 ): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern = createMarkdownInlineMatcher(
@@ -191,9 +194,31 @@ function renderInline(
         // the message copy button still carries it.
         splitInlineCodeChips(code).forEach((piece, pieceIndex) => {
           parts.push(
-            <View key={`${key}c${pieceIndex}`} style={styles.inlineCodeChip}>
+            <View
+              key={`${key}c${pieceIndex}`}
+              // A plain object when the reader has not zoomed: an array per
+              // chip costs an allocation on every render of every message, and
+              // it hides `borderRadius` from anything reading the style.
+              style={
+                chipScale
+                  ? [
+                      styles.inlineCodeChip,
+                      {
+                        paddingVertical: chipScale.paddingVertical,
+                        borderRadius: chipScale.borderRadius
+                      }
+                    ]
+                  : styles.inlineCodeChip
+              }
+            >
               <Text
-                style={[styles.inlineCodeChipText, openFile ? styles.inlineCodeLink : null]}
+                style={[
+                  styles.inlineCodeChipText,
+                  chipScale
+                    ? { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
+                    : null,
+                  openFile ? styles.inlineCodeLink : null
+                ]}
                 onPress={openFile}
               >
                 {piece}
@@ -215,19 +240,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile, chipScale)}
         </Text>
       )
     }
@@ -245,10 +270,11 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
-  // Scale prose sizes; inline spans inherit fontSize from the wrapping Text.
-  const scaled = (size: number): { fontSize: number; lineHeight: number } | null =>
-    textScale !== 1 ? { fontSize: size * textScale, lineHeight: (size + 8) * textScale } : null
+  // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
+  // why the line height is not simply `(size + 8) * scale`.
+  const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
+  const chipScale = markdownChipScale(textScale)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -291,7 +317,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                   {memberIndex > 0 ? '\n\n' : null}
                   {member.type === 'heading' ? (
                     <Text style={[styles.heading, headingScale(styles, member.level)]}>
-                      {renderInline(styles, member.text, onOpenFile)}
+                      {renderInline(styles, member.text, onOpenFile, chipScale)}
                     </Text>
                   ) : (
                     // One inline pass over the WHOLE paragraph. Matching line by
@@ -299,7 +325,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                     // next as literal asterisks on the phone (reported from the
                     // device); the parser has already reflowed soft wraps, so
                     // any newline left here is a deliberate hard break.
-                    renderInline(styles, member.text, onOpenFile)
+                    renderInline(styles, member.text, onOpenFile, chipScale)
                   )}
                 </Fragment>
               ))}
@@ -310,7 +336,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.quote}>
               <Text selectable={selectable} style={[styles.quoteText, proseScale]}>
-                {renderInline(styles, block.text, onOpenFile)}
+                {renderInline(styles, block.text, onOpenFile, chipScale)}
               </Text>
             </View>
           )
@@ -365,7 +391,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                       selectable={selectable}
                       style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
                     >
-                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile)}
+                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile, chipScale)}
                     </Text>
                   ))}
                 </View>
@@ -377,7 +403,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                         selectable={selectable}
                         style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
                       >
-                        {renderInline(styles, row[cellIndex] ?? '', onOpenFile)}
+                        {renderInline(styles, row[cellIndex] ?? '', onOpenFile, chipScale)}
                       </Text>
                     ))}
                   </View>
@@ -406,7 +432,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                 >
                   <Text style={[styles.listMarker, proseScale]}>{listMarker(item)}</Text>
                   <Text selectable={selectable} style={[styles.listText, proseScale]}>
-                    {renderInline(styles, item.text, onOpenFile)}
+                    {renderInline(styles, item.text, onOpenFile, chipScale)}
                   </Text>
                 </View>
               ))}

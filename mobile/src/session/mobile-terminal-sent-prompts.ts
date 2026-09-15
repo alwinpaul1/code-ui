@@ -1,4 +1,3 @@
-import { stripImagePromptMarker } from '../../../src/shared/native-chat-image-transcript-markers'
 
 /**
  * Prompts Claude has already accepted, read off its own screen.
@@ -158,7 +157,18 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       parts.push(more[1] ?? '')
       cursor += 1
     }
-    const text = stripImagePromptMarker(joinWrappedRows(parts)).trim()
+    // The RAW text, markers and all. Deleting `[Image #N]` here left the phone
+    // with no sign that anything had been attached — not the picture, which it
+    // has no bytes for, and not the "Image on Desktop" placeholder either, which
+    // is applied where the bubble is DRAWN and so needs the marker to still be
+    // present (host screenshot, 2026-09-15). A prompt that was only an image
+    // came through as the empty string and was dropped outright.
+    //
+    // Matching is unaffected: `normalizeNativeChatUserText` removes the markers
+    // from both sides when an echo is reconciled against its transcript row, so
+    // the keys agree either way. The desktop-beacon path already keeps them for
+    // exactly this reason.
+    const text = joinWrappedRows(parts).trim()
     if (text.length > 0 && !LOCAL_COMMAND.test(text) && !HARNESS_NOTICE.test(text)) {
       prompts.push(text)
     }

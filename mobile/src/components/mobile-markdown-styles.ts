@@ -3,7 +3,8 @@ import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
-export const MARKDOWN_BASE_SIZE = 15
+import { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
+export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
 
 /** How far an inline code chip is painted BELOW its layout box, to sit level
  *  with the text around it. It is a transform, so layout does not know about
