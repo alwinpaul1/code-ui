@@ -71,12 +71,15 @@ function replayRetainedTailStart(
 /** How many transcript records the live window may hold.
  *
  *  Sized by what one long turn actually produces, not by what fills a screen:
- *  the turn that exposed this wrote 67 records in eight minutes, and a busy one
- *  can write several times that. Generous enough that no realistic turn evicts
- *  its own head, small enough that a day-long session does not keep every row
- *  and every tool output alive on a phone. Paging older history still grows the
- *  read window past this on demand. */
-export const LIVE_WINDOW_CEILING = 400
+ *  the turn that exposed this wrote 67 records in eight minutes. 150 is a
+ *  little over twice that, which covers a long turn without keeping ten times
+ *  the rows alive — at 400 the list held enough rows and tool output to make
+ *  scrolling drag, and the extra headroom bought nothing (2026-09-15).
+ *
+ *  The cost is NOT the fold, which was measured at 0.06 ms for 40 messages and
+ *  0.09 ms for 400; it is what the list has to keep mounted and recycle.
+ *  Paging older history still grows the read window past this on demand. */
+export const LIVE_WINDOW_CEILING = 150
 
 export function applyMobileNativeChatStreamFrame(args: {
   merger: NativeChatMerger
