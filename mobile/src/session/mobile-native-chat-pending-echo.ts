@@ -7,6 +7,15 @@ export type MobileNativeChatPendingMessage = {
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
   baselineTailMessageId: string | null
+  /** Where to DRAW an echo that captured no boundary of its own, kept apart
+   *  from `baselineTailMessageId` because reconciliation and placement want
+   *  opposite things out of the same row. An image echo counts the image turns
+   *  AFTER its boundary, so a boundary taken from a read that already carries
+   *  the echo's own row would strand the bubble forever (see the rebase) — but
+   *  it still has to be drawn somewhere, and with nothing here that somewhere
+   *  is the bottom of the conversation, under every reply that answered it.
+   *  Nothing that reconciles, glues or retires reads this. */
+  placementAnchorId?: string | null
   /** Whether the transcript this baseline was captured from was already this
    *  session's own history. A send issued mid-hydration is captured unresolved
    *  and rebased onto the first authoritative read instead of reconciling

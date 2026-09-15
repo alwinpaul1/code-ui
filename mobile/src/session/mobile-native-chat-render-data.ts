@@ -55,7 +55,20 @@ export type MobileNativeChatPendingItem = {
    *  that row, so a send whose row never arrives stays where it was sent instead
    *  of trailing every turn that lands afterwards. */
   baselineTailMessageId?: string | null
+  /** Where to draw an echo that captured no boundary of its own; see
+   *  `MobileNativeChatPendingMessage`. Placement only — never reconciliation. */
+  placementAnchorId?: string | null
+  /** False while the read this send was issued against was still unsettled, so
+   *  a missing anchor means "not known yet" rather than "the conversation was
+   *  empty". */
+  baselineResolved?: boolean
   restored?: boolean
+}
+
+/** The row an echo is DRAWN after: its own captured boundary when it has one,
+ *  otherwise the one the rebase handed it on the first settled read. */
+function pendingPlacementAnchorId(item: MobileNativeChatPendingItem): string | null {
+  return item.baselineTailMessageId ?? item.placementAnchorId ?? null
 }
 
 export function foldMobileNativeChatMessages(
@@ -209,7 +222,7 @@ export function buildMobileNativeChatTransientData({
   const foldedIds = new Set(renderedFolded.map((message) => message.id))
   const missingBaselineIds = new Set<string>()
   for (const item of pending) {
-    const baselineId = item.baselineTailMessageId
+    const baselineId = pendingPlacementAnchorId(item)
     if (baselineId && !foldedIds.has(baselineId)) {
       missingBaselineIds.add(baselineId)
     }
@@ -259,7 +272,7 @@ export function buildMobileNativeChatTransientData({
       source: 'transcript'
     }
     // Tool/noise rows fold backward; image-source rows fold into their following prompt.
-    const baselineId = item.baselineTailMessageId
+    const baselineId = pendingPlacementAnchorId(item)
     if (baselineId && leadingBaselineIds.has(baselineId)) {
       leadingPending.push(bubble)
       continue
@@ -282,6 +295,17 @@ export function buildMobileNativeChatTransientData({
       continue
     }
     if (!anchor || !foldedIds.has(anchor)) {
+      // No row to sit after at all. A send captured against a read already
+      // known to be this session's own EMPTY history came before everything
+      // that has landed since, so it leads — the same place an echo whose row
+      // left the window is kept. Only a send whose read had not settled waits
+      // at the tail: its position is genuinely unknown, the first settled read
+      // is about to give it one, and moving it to the top for that one frame
+      // would shove the whole list.
+      if (item.baselineResolved === true && renderedFolded.length > 0) {
+        leadingPending.push(bubble)
+        continue
+      }
       trailingPending.push(bubble)
       continue
     }

@@ -31,6 +31,14 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  * retire — image entries have no other retirement path. A captioned one is worse
  * still: it binds by an ordinal counted over the whole transcript, so a tail
  * without a matching recount leaves it claiming nothing at all.
+ *
+ * Every echo does get a PLACEMENT anchor, though — including the ones held back
+ * above. Withholding the reconcile boundary was never meant to decide where the
+ * bubble is DRAWN, but that is what it did: with no row to sit after, the view
+ * dropped it at the tail and kept it there, so a photo sent while the transcript
+ * was still loading re-read below every reply that answered it, and a second one
+ * stacked under the first (2026-09-15). The placement anchor is this read's own
+ * tail, which is where the send happened; no reconciler reads it.
  */
 export function rebaseMobileNativeChatPendingBaselines(
   messages: readonly NativeChatMessage[],
@@ -44,10 +52,23 @@ export function rebaseMobileNativeChatPendingBaselines(
     if (item.baselineResolved) {
       return item
     }
+    const resolved = { ...item, baselineResolved: true }
+    // A send that captured its own tail is already drawn after it.
+    if (item.baselineTailMessageId !== null) {
+      return resolved
+    }
     const reconcilesAgainstItsOwnTail =
       Boolean(item.images?.length) || normalizeReconcileText(item.text) === ''
-    return item.baselineTailMessageId !== null || reconcilesAgainstItsOwnTail
-      ? { ...item, baselineResolved: true }
-      : { ...item, baselineResolved: true, baselineTailMessageId }
+    if (!reconcilesAgainstItsOwnTail) {
+      return { ...resolved, baselineTailMessageId }
+    }
+    // The boundary stays withheld, for the reasons above — but the bubble still
+    // has to be drawn somewhere, and an echo with no row to sit after is drawn
+    // at the tail and kept there. This anchor says where; no reconciler reads
+    // it. A read that is itself empty gives none, which is the truth: the
+    // conversation really was empty when this was sent, so it leads.
+    return baselineTailMessageId === null
+      ? resolved
+      : { ...resolved, placementAnchorId: baselineTailMessageId }
   })
 }
