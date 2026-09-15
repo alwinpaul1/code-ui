@@ -44,23 +44,43 @@ export type MobileMarkdownBlock =
 
 const MARKED_OPTIONS = { gfm: true, breaks: false } as const
 
-// Reflow, in two passes rather than one: the source is split at the hard
-// breaks first, so collapsing the soft newlines inside each piece cannot touch
-// them. Doing it with a sentinel character instead would put a literal NUL in
-// this file, which git then reads as binary.
-const HARD_BREAK_SOURCE = /(?:[ \t]{2,}|\\)\n[ \t]*/
-const SOFT_BREAK_SOURCE = /[ \t]*\n[ \t]*/g
-const FENCE_OPENER = /^ {0,3}(?:`{3,}|~{3,})/
-const FENCE_TERMINATOR = /^ {0,3}(?:`{3,}|~{3,})[ \t]*$/
+const FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})/
+const FENCE_TERMINATOR = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 
-/** Fill prose to the phone's width: soft newlines become spaces, and the two
- *  deliberate hard breaks (two trailing spaces, a trailing backslash) stay. */
+/** How many backslashes a line ends with. Only an ODD run ends in an
+ *  UNESCAPED one, and only an unescaped one is a hard break: `C:\\` at the end
+ *  of a line is an escaped backslash followed by a soft break, which
+ *  CommonMark renders as a space. */
+function trailingBackslashes(line: string): number {
+  let count = 0
+  while (count < line.length && line[line.length - 1 - count] === '\\') {
+    count += 1
+  }
+  return count
+}
+
+/** Fill prose to the phone's width: a soft newline becomes a space, and the two
+ *  deliberate hard breaks (two trailing spaces, an unescaped trailing
+ *  backslash) stay. Line by line rather than by regex, because telling an
+ *  escaped backslash from an unescaped one means counting the run. */
 function reflowProse(value: string): string {
-  return value
-    .split(HARD_BREAK_SOURCE)
-    .map((line) => line.replace(SOFT_BREAK_SOURCE, ' '))
-    .join('\n')
-    .trim()
+  const lines = value.split('\n')
+  let filled = ''
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = index > 0 ? lines[index]!.replace(/^[ \t]+/, '') : lines[index]!
+    if (index === lines.length - 1) {
+      filled += line.replace(/[ \t]+$/, '')
+      break
+    }
+    if (trailingBackslashes(line) % 2 === 1) {
+      filled += `${line.slice(0, -1)}\n`
+    } else if (/ {2,}$/.test(line)) {
+      filled += `${line.replace(/[ \t]+$/, '')}\n`
+    } else {
+      filled += `${line.replace(/[ \t]+$/, '')} `
+    }
+  }
+  return filled.trim()
 }
 
 /** The info string's first word: ```` ```ts title="x" ```` is a TypeScript fence,
@@ -72,15 +92,26 @@ function infoLanguage(lang: string | undefined): string | undefined {
 
 /** Unterminated fences are still streaming in, and MobileMarkdown holds a
  *  mermaid diagram back until its fence closes rather than reloading the
- *  WebView on every tick. marked does not report it, so read the raw source:
- *  a closed fence ends on its terminator line. */
+ *  WebView on every tick. marked does not report it, so read the raw source.
+ *  A terminator only counts if it uses the OPENER'S character and is at least
+ *  as long, per CommonMark — three backticks do not close ````mermaid, and no
+ *  number of backticks closes a ~~~ fence. Reading "looks like a fence" alone
+ *  mounted the WebView mid-stream. */
 function isFenceClosed(raw: string): boolean {
   const lines = raw.replace(/\n+$/, '').split('\n')
-  if (!FENCE_OPENER.test(lines[0] ?? '')) {
+  const opener = FENCE_OPENER.exec(lines[0] ?? '')
+  if (!opener) {
     // An indented code block has no terminator to wait for.
     return true
   }
-  return lines.length > 1 && FENCE_TERMINATOR.test(lines.at(-1) ?? '')
+  if (lines.length < 2) {
+    return false
+  }
+  const terminator = FENCE_TERMINATOR.exec(lines.at(-1) ?? '')
+  const marker = opener[1]!
+  return Boolean(
+    terminator && terminator[1]![0] === marker[0] && terminator[1]!.length >= marker.length
+  )
 }
 
 /** A paragraph holding nothing but one web image is the image block the
@@ -148,18 +179,34 @@ function flattenList(token: Tokens.List, depth: number, into: MobileMarkdownList
 
 function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
   const blocks: MobileMarkdownBlock[] = []
+  // True while the previous token was also a link reference definition, so a
+  // block of them lands in one paragraph instead of one paragraph each.
+  let definitionRun = false
   for (const token of tokens) {
+    const continuesDefinitions = definitionRun
+    definitionRun = false
     switch (token.type) {
-      // `space` is blank lines. `def` is a link reference definition
-      // (`[d]: https://…`), which is metadata rather than content and which
-      // react-markdown hides on the desktop too — the line loop this replaced
-      // leaked it onto the screen as literal text. The inline matcher does not
-      // resolve `[text][d]` yet, so on a document written that way the URL is
-      // now nowhere; resolving reference links belongs with moving the inline
-      // pass onto marked as well.
       case 'space':
-      case 'def':
         break
+      case 'def': {
+        // A link reference definition (`[d]: https://…`). The desktop hides it,
+        // and hiding it here is what this parser did at first — but the inline
+        // matcher cannot resolve `[text][d]`, so the label rendered as literal
+        // brackets and the URL was then nowhere at all, and a message that was
+        // ONLY definitions rendered as an empty View. Until reference links
+        // resolve inline, the definition stays on screen, where its URL is at
+        // least autolinked. Consecutive definitions share one paragraph rather
+        // than getting a blank line each.
+        const text = token.raw.trim()
+        const previous = blocks.at(-1)
+        if (continuesDefinitions && previous?.type === 'paragraph') {
+          previous.text = `${previous.text}\n${text}`
+        } else if (text) {
+          blocks.push({ type: 'paragraph', text })
+        }
+        definitionRun = true
+        continue
+      }
       case 'heading':
         blocks.push({
           type: 'heading',
@@ -219,20 +266,55 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
   return blocks
 }
 
-/** Two shapes marked cannot take at scale, both far past anything a document
+/** Three shapes marked cannot take at scale, all far past anything a document
  *  contains. Pairing emphasis delimiters costs time quadratic in the run's
  *  length (6.4k stacked `*` = 155 ms, 12.8k = 507 ms on marked 18.0.12), past
- *  the deadline the progress suite holds this parser to; nested blockquotes
+ *  the deadline the progress suite holds this parser to. Nested blockquotes
  *  cost a stack frame each and blow the stack somewhere past 3.4k, at a depth
- *  that moves with whatever stack the runtime happens to have left. Refuse
- *  both rather than guess: the source comes back verbatim and nothing is lost. */
-const RUNAWAY_NESTING = /\*{1000,}|_{1000,}|^ {0,3}(?:>[ \t]?){200,}/m
+ *  that moves with whatever stack the runtime happens to have left. And a
+ *  nested LIST is the third recursion: 400 levels took 148 ms, 1000 took
+ *  1.6 s, and 2000 exhausted the heap — a fatal OOM, which no try/catch can
+ *  catch, so it has to be refused before marked sees it. 200 leading spaces is
+ *  100 levels of the usual two-space step. Refuse rather than guess: the
+ *  source comes back verbatim and nothing is lost. */
+const RUNAWAY_NESTING = /\*{1000,}|_{1000,}|^ {0,3}(?:>[ \t]?){200,}|^[ \t]{200,}\S/m
+
+/** The guard must not fire on what is INSIDE a fence. A progress bar, a banner
+ *  or a graph dump in a code block is content, not nesting, and refusing the
+ *  whole document over one such line flattened everything around it — heading,
+ *  fence and all — into a single paragraph. */
+function outsideFences(source: string): string {
+  const kept: string[] = []
+  let open: { marker: string } | null = null
+  for (const line of source.split('\n')) {
+    if (open) {
+      const terminator = FENCE_TERMINATOR.exec(line)
+      if (
+        terminator &&
+        terminator[1]![0] === open.marker[0] &&
+        terminator[1]!.length >= open.marker.length
+      ) {
+        open = null
+      }
+      continue
+    }
+    const opener = FENCE_OPENER.exec(line)
+    if (opener) {
+      open = { marker: opener[1]! }
+      continue
+    }
+    kept.push(line)
+  }
+  return kept.join('\n')
+}
 
 export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
   const source = content.replace(/\r\n?/g, '\n')
   let tokens: Token[]
   try {
-    if (RUNAWAY_NESTING.test(source)) {
+    // The cheap whole-source test rejects almost every document in one pass;
+    // only a hit pays for the fence-aware second look.
+    if (RUNAWAY_NESTING.test(source) && RUNAWAY_NESTING.test(outsideFences(source))) {
       throw new RangeError('nesting past what the parser can take in time')
     }
     tokens = marked.lexer(source, MARKED_OPTIONS)

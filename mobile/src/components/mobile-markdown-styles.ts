@@ -209,8 +209,10 @@ export function makeMarkdownStyles(theme: Theme) {
       gap: space.sm
     },
     listMarker: {
-      // minWidth, not width: `10.` and beyond would be clipped by a fixed 22,
-      // and the markers of one list still share a width so their text lines up.
+      // minWidth, not width: a fixed 22 clipped `10.` and beyond. Each marker
+      // then sizes to its own content, so a list that crosses 9 indents its
+      // tenth item a few px further than its ninth — the readable trade against
+      // a clipped number.
       minWidth: 22,
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 1,

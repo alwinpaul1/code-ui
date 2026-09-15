@@ -50,7 +50,11 @@ function stripTags(value: string): string {
     stripMobileMarkdownMarkupTags(protectedText.replace(/<!--[\s\S]*?-->/g, '')),
     true
   )
-    .replace(/[ \t]+\n/g, '\n')
+    // Trailing whitespace goes, EXCEPT the two spaces that are Markdown's hard
+    // break. Stripping them was harmless while every newline rendered as a
+    // break; now that prose reflows they are the only way a writer can ask for
+    // a line to end, and deleting them here meant the parser never saw one.
+    .replace(/[ \t]+\n/g, (run) => (/ {2}\n$/.test(run) ? '  \n' : '\n'))
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 
