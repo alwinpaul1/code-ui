@@ -121,6 +121,13 @@ export function resetNotificationChannelForTests(): void {
   channelReady = null
 }
 
+/** The one banner a session owns. A worktree is the grain the reader thinks in
+ *  — one project, one thing to deal with — and the host is in the key because
+ *  the same project can be open on two of them. */
+function sessionBannerIdentifier(hostId: string, worktreeId: string | undefined): string {
+  return `codeui:${hostId}:${worktreeId ?? 'host'}`
+}
+
 function presentedNotificationContent(event: NotificationEvent, hostId: string) {
   return {
     ...presentDesktopNotification({
@@ -186,6 +193,14 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     return Notifications.scheduleNotificationAsync({
+      // One banner per SESSION, carrying its latest word. Android adds a banner
+      // per notification unless they share an identifier, in which case a newer
+      // one replaces the older — and a session that spoke five times was five
+      // banners to clear, four of them already dealt with (2026-09-15).
+      //
+      // Per session, not globally: two projects wanting attention are two
+      // different things, and collapsing those would hide one of them.
+      identifier: sessionBannerIdentifier(hostId, event.worktreeId),
       content: presentedNotificationContent(event, hostId),
       trigger: notificationTrigger()
     })
