@@ -55,9 +55,9 @@ export type BackgroundDeliveryPowerAdvice = {
  * offer open for anyone who says not now.
  */
 export const BACKGROUND_POWER_PROMPT = {
-  title: 'Keep notifications instant',
-  body: "Android pauses background connections to save power, so agent notifications can sit unseen until you open the app. Allowing unrestricted battery use keeps them arriving the moment they happen. It does use a little more battery, and you can undo it any time in Settings.",
-  confirm: 'Keep them instant',
+  title: 'Keep notifications on time',
+  body: 'Android pauses background connections to save power, so notifications turn up late \u2014 or not until you open the app. Unrestricted battery use stops that. It costs a little battery, and you can turn it off in Settings.',
+  confirm: 'Allow',
   dismiss: 'Not now'
 } as const
 
