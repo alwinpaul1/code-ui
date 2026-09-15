@@ -30,16 +30,6 @@ const SCREEN = [
 ]
 
 describe('a prompt whose images are listed under it', () => {
-  it('keeps the paragraph the attachment rows sit beneath', () => {
-    const [prompt = ''] = sentPromptsFromScreen(SCREEN)
-    expect(prompt).toContain('also have a search bar for this')
-  })
-
-  it('keeps the paragraphs above it too', () => {
-    const [prompt = ''] = sentPromptsFromScreen(SCREEN)
-    expect(prompt).toContain('so where is this slider')
-    expect(prompt).toContain('the text is completely outside')
-  })
 
   it('still stops before the agent’s reply', () => {
     const [prompt = ''] = sentPromptsFromScreen(SCREEN)
@@ -63,3 +53,15 @@ describe('a prompt whose images are listed under it', () => {
     ).toEqual(['[Image #1] look at this'])
   })
 })
+
+// REMOVED 2026-09-15, with the continuation gathering they pinned:
+//
+//   keeps the paragraph the attachment rows sit beneath
+//   keeps the paragraphs above it too
+//
+// The reader takes the `❯` row and nothing under it. Those rows are shaped
+// exactly like the agent's own prose — two spaces, then words — and nothing
+// visible tells them apart, which is how replies ended up inside user bubbles.
+// A wrapped prompt now comes back as its first row, a prefix of the real
+// message, and retirement gives way to the transcript row when it lands.
+// The contract is pinned in mobile-terminal-single-row-prompts.test.ts.

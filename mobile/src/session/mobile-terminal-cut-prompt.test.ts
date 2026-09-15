@@ -57,19 +57,18 @@ describe('a prompt the phone’s terminal was too narrow to print', () => {
     ).toEqual(['a prompt that fit on one row'])
   })
 
-  it('reads a prompt that wrapped rather than being cut', () => {
-    expect(
-      sentPromptsFromScreen([
-        '❯ a prompt long enough that the terminal wrapped it onto',
-        '  a second row without cutting anything',
-        '',
-        '  Ran 1 shell command',
-        '❯ '
-      ])
-    ).toEqual(['a prompt long enough that the terminal wrapped it onto a second row without cutting anything'])
-  })
-
   it('reads nothing at all from a screen that is only a cut prompt', () => {
     expect(sentPromptsFromScreen(['❯ one very long message that got cut…', '❯ '])).toEqual([])
   })
 })
+
+// REMOVED 2026-09-15, with the continuation gathering they pinned:
+//
+//   reads a prompt that wrapped rather than being cut
+//
+// The reader takes the `❯` row and nothing under it. Those rows are shaped
+// exactly like the agent's own prose — two spaces, then words — and nothing
+// visible tells them apart, which is how replies ended up inside user bubbles.
+// A wrapped prompt now comes back as its first row, a prefix of the real
+// message, and retirement gives way to the transcript row when it lands.
+// The contract is pinned in mobile-terminal-single-row-prompts.test.ts.

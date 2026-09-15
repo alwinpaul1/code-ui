@@ -158,12 +158,26 @@ function matchGluedRun(
  * otherwise never go away is worth more than holding a stub for a row that may
  * never come.
  */
-function stubLanded(text: string, landedCounts: ReadonlyMap<string, number>): boolean {
+function stubLanded(
+  id: string,
+  text: string,
+  landedCounts: ReadonlyMap<string, number>
+): boolean {
   const key = normalizeReconcileText(text)
-  if (!key.endsWith('…')) {
+  // A reading the screen CUT ends in an ellipsis. A reading taken from the `❯`
+  // row of a prompt that WRAPPED ends at no marker at all — it is simply the
+  // first row. Both are prefixes of the row that lands, and both must give way
+  // to it, or the message draws twice for the rest of the session (2026-09-15).
+  //
+  // WITNESSED readings only. The phone's own sends are routinely prefixes of a
+  // row too — that is exactly what glue is, several sends landing as one row —
+  // and retiring the first of those early breaks the glue pass
+  // (mobile-native-chat-pending-retirement.test.ts caught it).
+  const witnessed = id.startsWith('queued-') || id.startsWith('absorbed-') || id.startsWith('desk-')
+  if (!witnessed && !key.endsWith('…')) {
     return false
   }
-  const stem = key.slice(0, -1).trimEnd()
+  const stem = (key.endsWith('…') ? key.slice(0, -1) : key).trimEnd()
   if (stem === '') {
     return false
   }
@@ -262,7 +276,7 @@ export function retireLandedMobileNativeChatPending(
         ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >=
           item.expectedOccurrence
         : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence ||
-          stubLanded(item.text, landedCounts) ||
+          stubLanded(item.id, item.text, landedCounts) ||
           gluedLanded(item.text, landedCounts)
     if (landed) {
       landedPendingIds.add(item.id)

@@ -59,37 +59,8 @@ function midTurn(seconds: number): string[] {
   ]
 }
 
-// Read off the phone's own terminal view of the same build (2026-09-13): a
-// prompt with a second paragraph, the fold after the turn, and the reply.
-const TWO_PARAGRAPHS = [
-  '❯ When a model switch happens this too appears fix that and',
-  '  here is the rest of the first paragraph',
-  '',
-  '  How did this appear fix this',
-  '',
-  '  Ran 1 shell command',
-  '',
-  '⏺ Applying the parser fix: prompt text now stops at the first blank row.',
-  '',
-  '  Ran 3 shell commands',
-  '',
-  '────────────────────────────────────────────────────────────────────────────────────────────────────',
-  '❯',
-  '────────────────────────────────────────────────────────────────────────────────────────────────────'
-]
 
 describe('sentPromptsFromScreen', () => {
-  it('keeps a second paragraph of the prompt and still leaves the fold out', () => {
-    expect(sentPromptsFromScreen(TWO_PARAGRAPHS)).toEqual([
-      'When a model switch happens this too appears fix that and here is the rest of the first paragraph\n\nHow did this appear fix this'
-    ])
-  })
-
-  it('reads a prompt the agent already took, rejoining the rows it wrapped', () => {
-    expect(sentPromptsFromScreen(SCREEN)).toEqual([
-      'run echo one and then echo two, then reply with the single word done second prompt that is long enough to wrap around the terminal width of one hundred columns for sure yes'
-    ])
-  })
 
   it('leaves the "Ran N shell commands" fold under the prompt out of it', () => {
     expect(sentPromptsFromScreen(SCREEN).join(' ')).not.toContain('Ran 1 shell command')
@@ -147,38 +118,6 @@ describe('sentPromptsFromScreen', () => {
       'fix the agent-read image thumbnail one and verify on my phone',
       'which is the version with all fixes',
       '0.5.48 where is this update not on ci'
-    ])
-  })
-
-  it('still keeps a wrapped line that merely starts like a fold and runs on', () => {
-    expect(
-      sentPromptsFromScreen([
-        '❯ yesterday I',
-        '  Ran 3 shell commands by hand and the second one hung, can you',
-        '  check why',
-        '',
-        '❯ '
-      ])
-    ).toEqual(['yesterday I Ran 3 shell commands by hand and the second one hung, can you check why'])
-  })
-
-  it('keeps a second paragraph that merely opens like a tool fold', () => {
-    // 2026-09-13: "Created a branch called hud-fix, reuse it" was eaten as if
-    // it were the fold, and the text was lost with no sign of it.
-    expect(
-      sentPromptsFromScreen([
-        '❯ please look at the deploy script and tell me what is wrong',
-        '',
-        '  Created a branch called hud-fix earlier today, reuse it rather than',
-        '  making a new one',
-        '',
-        '  Ran 2 shell commands',
-        '',
-        '⏺ looking',
-        '❯ '
-      ])
-    ).toEqual([
-      'please look at the deploy script and tell me what is wrong\n\nCreated a branch called hud-fix earlier today, reuse it rather than making a new one'
     ])
   })
 
@@ -301,77 +240,36 @@ it('leaves the effort and mode picker rows out of the prompt above them', () => 
     ).toEqual(['pick a mode'])
   }
 })
-
-it('keeps a bullet list the user wrote, and the lines after it', () => {
-  // 2026-09-14 review: excluding the radio glyph outright ended the prompt at
-  // any bullet, and everything after it was dropped with no second prompt.
+// Real bytes, `orca terminal read --screen` against a live Claude pr-919 session
+// on 2026-09-15 (2.1.270). The prompt row was CUT by the screen — it ends in an
+// ellipsis — and the agent's reply is printed beneath it on two-space rows.
+// Its own fixture: the describe this sat in lost its rows when the continuation
+// gathering went, and it silently fell through to the file's main SCREEN.
+it('offers nothing at all, because a prefix can never retire', () => {
   expect(
     sentPromptsFromScreen([
-      '❯ here is my plan, pick one of these:',
-      '  ○ ship it today',
-      '  ● ship it tomorrow',
-      '  and tell me which you picked and why',
+      '❯ One caveat worth your attention: the geometry-persistence change writes a new key into a live JSONB column on every reroute. The te…',
+      '  - F8 offline restoration — left off on your call.',
+      '  session:ok',
       '',
       '❯ '
     ])
-  ).toEqual([
-    'here is my plan, pick one of these: ○ ship it today ● ship it tomorrow and tell me which you picked and why'
-  ])
+  ).toEqual([])
 })
 
-it('leaves a hyphenated picker row out too, and keeps what follows it', () => {
-  // 2026-09-14 review: the picker pattern required \w+ after the slash, so
-  // `/output-style` was not recognised and glued itself onto the prompt — the
-  // same "sent AND queued" symptom, just for a different picker. And ending the
-  // block at a picker row threw away everything after it.
-  expect(
-    sentPromptsFromScreen([
-      '❯ set it up the way I like',
-      '  ◉ asd-ste100 · /output-style',
-      '  and then run the tests',
-      '',
-      '❯ '
-    ])
-  ).toEqual(['set it up the way I like and then run the tests'])
-})
-
-// Real bytes, `orca terminal read --screen` against a live Claude pr-919
-// session on 2026-09-15 (Claude Code 2.1.270). The prompt row was CUT by the
-// screen — it ends in an ellipsis — and the agent's reply is printed beneath it
-// on rows indented exactly two spaces, the same shape a wrapped prompt uses.
-// The parser read the whole reply as more prompt, so the phone drew the user's
-// message and the answer to it as one bubble.
-describe('a prompt the screen cut short', () => {
-  const SCREEN = [
-    '❯ One caveat worth your attention: the geometry-persistence change writes a new key into a live JSONB column on every reroute. The te…',
-    '  - F8 offline restoration — left off on your call. It is a parked product decision, not a defect.',
-    '  - Native device verification — none of the HERE truck-routing work, the tab-bar badge, or the phone sheet has been seen on a handset.',
-    '  And the honest caveat on my own record this session: the peer reviewer caught real defects twice.',
-    '  session:ok',
-    '',
-    '❯ '
-  ]
-
-  // This test used to assert the opposite — that the CUT HEAD ROW is the
-  // message, and only the reply beneath it is dropped. The device disproved it
-  // on 2026-09-15: a prefix can never equal the transcript row it belongs to, so
-  // the echo it makes never retires, and the truncated bubble sat above the next
-  // prompt with the reply missing between them. Refusing the whole reading is
-  // the fix; see mobile-terminal-cut-prompt.test.ts.
-  it('offers nothing at all, because a prefix can never retire', () => {
-    expect(sentPromptsFromScreen(SCREEN)).toEqual([])
-  })
-
-  // A prompt the screen did NOT cut still gathers its own wrapped rows.
-  it('still gathers the wrapped rows of a prompt that was not cut', () => {
-    const [prompt = ''] = sentPromptsFromScreen([
-      '❯ first line of what I typed',
-      '  - a bullet I wrote myself',
-      '  and a second paragraph',
-      '',
-      '❯ '
-    ])
-    expect(prompt).toContain('a bullet I wrote myself')
-    expect(prompt).toContain('second paragraph')
-  })
-})
+// REMOVED 2026-09-15, with the continuation gathering they pinned:
+//
+//   keeps a second paragraph of the prompt and still leaves the fold out
+//   reads a prompt the agent already took, rejoining the rows it wrapped
+//   still keeps a wrapped line that merely starts like a fold and runs on
+//   keeps a second paragraph that merely opens like a tool fold
+//   keeps a bullet list the user wrote, and the lines after it
+//   leaves a hyphenated picker row out too, and keeps what follows it
+//   still gathers the wrapped rows of a prompt that was not cut
+//
+// The reader takes the `❯` row and nothing under it. Those rows are shaped
+// exactly like the agent's own prose — two spaces, then words — and nothing
+// visible tells them apart, which is how replies ended up inside user bubbles.
+// A wrapped prompt now comes back as its first row, a prefix of the real
+// message, and retirement gives way to the transcript row when it lands.
+// The contract is pinned in mobile-terminal-single-row-prompts.test.ts.

@@ -29,20 +29,16 @@ describe('a framed panel printed under a prompt', () => {
       ])
     }
   })
-
-  it('still gathers an ordinary wrapped line', () => {
-    expect(
-      sentPromptsFromScreen(['❯ push the branch', '  and open a PR', '', '❯ '])
-    ).toEqual(['push the branch and open a PR'])
-  })
-
-  it('keeps a dash the user actually typed', () => {
-    // An em dash or a hyphen opens plenty of real sentences and bullet lines.
-    expect(sentPromptsFromScreen(['❯ do it', '  - first thing', '', '❯ '])).toEqual([
-      'do it - first thing'
-    ])
-    expect(sentPromptsFromScreen(['❯ do it', '  — first thing', '', '❯ '])).toEqual([
-      'do it — first thing'
-    ])
-  })
 })
+
+// REMOVED 2026-09-15, with the continuation gathering they pinned:
+//
+//   still gathers an ordinary wrapped line
+//   keeps a dash the user actually typed
+//
+// The reader takes the `❯` row and nothing under it. Those rows are shaped
+// exactly like the agent's own prose — two spaces, then words — and nothing
+// visible tells them apart, which is how replies ended up inside user bubbles.
+// A wrapped prompt now comes back as its first row, a prefix of the real
+// message, and retirement gives way to the transcript row when it lands.
+// The contract is pinned in mobile-terminal-single-row-prompts.test.ts.

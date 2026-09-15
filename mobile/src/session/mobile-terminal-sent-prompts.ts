@@ -47,21 +47,6 @@
 const PROMPT_ROW = /^[❯›] (\S.*)$/
 /** The live composer: the marker followed by a no-break space, or nothing. */
 const COMPOSER_ROW = /^[>❯›](?:\u00a0.*|\s*)$/
-/** A wrapped continuation of the prompt: exactly two spaces, then text that
- *  is not one of the glyphs the agent uses for its own rows.
- *
- *  `\u2500-\u259f` is the box-drawing block and the block elements after it,
- *  refused ENTIRE rather than a glyph at a time. The list used to name │ ├ ╰ ╭
- *  └ individually, each added after it was reported, and a framed panel printed
- *  under a prompt then arrived as a bubble reading "push ┌────┬────┐" because
- *  ┌ and ─ were not among them (2026-09-15). Nothing in that block starts a
- *  line a person typed; a hyphen and an em dash are outside it and still do. */
-const CONTINUATION = /^ {2}([^\s\u2500-\u259f⎿⌊⏺✻✓✗⏸◐◑◒◓].*)$/
-/** A picker's chosen row: a radio glyph, the value, and the command that set it
- *  — `◉ xhigh · /effort`. Matched by SHAPE, not by the glyph alone: excluding
- *  the glyph outright ended the prompt at any bullet the user wrote, and the
- *  rest of their message went with it (2026-09-14 review). */
-const PICKER_ROW = /^[◉◎○●◦]\s+\S.*\s·\s\/[\w-]+\s*$/
 /** Slash commands and `!` shell lines are typed into the same row, but they
  *  are not messages, and their output lands right under them. */
 const LOCAL_COMMAND = /^[/!]/
@@ -69,10 +54,6 @@ const LOCAL_COMMAND = /^[/!]/
  *  typed: an incoming teammate message ("Message from @name (ctrl+o to
  *  expand)") read as a sent prompt on 2026-09-13. */
 const HARNESS_NOTICE = /^(?:Message|Cross-session message|Idle notice) from @?\S+/
-/** The prompt's OWN attachment row: `⎿  [Image #3]`, listing a picture the
- *  message carried. Claude prints these directly under the prompt, in the same
- *  shape a tool's output row uses. */
-const ATTACHMENT_ROW = /^\s*⎿\s*\[Image #\d+\]\s*$/
 /** What Claude paints after the blank row under a prompt once the turn's
  *  tools fold: "Ran 6 shell commands", "Read 2 files", "Edited a file". A
  *  prompt's own second paragraph sits on an identical two-space row, so this
@@ -81,9 +62,6 @@ const ATTACHMENT_ROW = /^\s*⎿\s*\[Image #\d+\]\s*$/
 function endsCut(text: string): boolean {
   return /[\u2026]\s*$/.test(text)
 }
-
-const FOLD_SUMMARY =
-  /^(?:Ran|Read|Edited|Wrote|Searched|Listed|Fetched|Updated|Called|Used|Created|Deleted) (?:\d+|a|an|one) [a-z]+[a-z0-9 ,()]*$/
 
 export function sentPromptsFromScreen(screen: readonly string[]): string[] {
   const prompts: string[] = []
@@ -113,66 +91,25 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       index += 1
       continue
     }
-    const parts = [head[1] ?? '']
-    let cursor = index + 1
-    while (cursor < limit) {
-      const line = screen[cursor] ?? ''
-      if (line.trim().length === 0) {
-        // One blank row, then another two-space row, is a paragraph break
-        // inside the prompt — unless that row is the tool fold.
-        const next = CONTINUATION.exec(screen[cursor + 1] ?? '')
-        if (
-          cursor + 1 >= limit ||
-          !next ||
-          isFoldSummary(next[1] ?? '', screen, cursor + 1) ||
-          isToolRow(next[1] ?? '', screen, cursor + 1)
-        ) {
-          break
-        }
-        parts.push('', next[1] ?? '')
-        cursor += 2
-        continue
-      }
-      const more = CONTINUATION.exec(line)
-      // A prompt absorbed mid-turn gets its fold painted straight under it,
-      // with no blank row between: "…verify on my phone Ran 7 shell commands"
-      // was one bubble on the phone (2026-09-13, Claude Code 2.1.270).
-      if (!more || isFoldSummary(more[1] ?? '', screen, cursor) || isToolRow(more[1] ?? '', screen, cursor)) {
-        break
-      }
-      // Anything typed while the agent is busy stacks here as a plain two-space
-      // row — same shape as a wrap (captured at 100 columns, 2026-09-14). A
-      // slash command is never part of the prompt above it, and once one has
-      // appeared every row after it is its own entry, not this prompt's tail.
-      // A picker row is the agent's own chrome sitting inside the block, so drop
-      // just that row and keep reading: ending the block here threw away
-      // everything after it, which is what the glyph exclusion did wrong.
-      if (PICKER_ROW.test(more[1] ?? '')) {
-        cursor += 1
-        continue
-      }
-      if (LOCAL_COMMAND.test(more[1] ?? '')) {
-        break
-      }
-      parts.push(more[1] ?? '')
-      cursor += 1
-    }
-    // The RAW text, markers and all. Deleting `[Image #N]` here left the phone
-    // with no sign that anything had been attached — not the picture, which it
-    // has no bytes for, and not the "Image on Desktop" placeholder either, which
-    // is applied where the bubble is DRAWN and so needs the marker to still be
-    // present (host screenshot, 2026-09-15). A prompt that was only an image
-    // came through as the empty string and was dropped outright.
+    // The `❯` ROW AND NOTHING ELSE.
     //
-    // Matching is unaffected: `normalizeNativeChatUserText` removes the markers
-    // from both sides when an echo is reconciled against its transcript row, so
-    // the keys agree either way. The desktop-beacon path already keeps them for
-    // exactly this reason.
-    const text = joinWrappedRows(parts).trim()
+    // The rows under a prompt used to be gathered as its wrapped continuation.
+    // They are shaped exactly like the agent's own prose — two spaces, then
+    // words — and nothing visible tells the two apart. So replies were glued
+    // into messages (a bubble ending in the agent's own "session:ok", reported
+    // as a leak), the paragraph under a prompt's image rows was lost, and a
+    // framed panel arrived as "push ┌────┬────┐". Each was patched in turn; the
+    // guessing was the defect, and this is the refusal the project's own rule
+    // asks for when a screen is ambiguous.
+    //
+    // A long prompt therefore comes back as its first row, which is a PREFIX of
+    // the real message. Retirement handles a prefix, so the transcript row
+    // supersedes it when it lands.
+    const text = (head[1] ?? '').trim()
     if (text.length > 0 && !LOCAL_COMMAND.test(text) && !HARNESS_NOTICE.test(text)) {
       prompts.push(text)
     }
-    index = cursor
+    index += 1
   }
   return prompts
 }
@@ -191,53 +128,5 @@ function composerIndex(screen: readonly string[]): number {
   return 0
 }
 
-/** The tool fold, not a second paragraph of the prompt. Both are two-space
- *  rows after a blank, so two things must hold: the row reads exactly like a
- *  summary (no punctuation a sentence would carry), and it ENDS its block —
- *  a paragraph runs on into more prose. Guessing on the wording alone ate a
- *  real paragraph that opened "Created a branch called …" (2026-09-13). */
-function isFoldSummary(text: string, screen: readonly string[], index: number): boolean {
-  if (!FOLD_SUMMARY.test(text)) {
-    return false
-  }
-  const after = screen[index + 1] ?? ''
-  return after.trim().length === 0 || !CONTINUATION.test(after)
-}
 
-/** The running tool, painted under the prompt while it works: a plain
- *  two-space row such as "Running Python sleep for 45 seconds · 18s" with
- *  the `⎿  $ command` row beneath it (captured 2026-09-13, 2.1.270). Its
- *  timer changes every second, so read as a paragraph it made a new bubble
- *  per poll — "…dude Running 1 shell command…", "…dude Capturing the phone
- *  screen right now". Told apart by the timer, by "Running", or by the `⎿`
- *  row that follows it; a paragraph of the prompt has none of those. */
-function isToolRow(text: string, screen: readonly string[], index: number): boolean {
-  // "Running 1 shell command…", "Reading 1 file…", "Capturing the phone
-  // screen right now · 3s": a live tool row is a gerund with an ellipsis or
-  // a timer. A paragraph the user typed is neither.
-  if (/ · \d+s\b/.test(text) || /^[A-Z][a-z]+ing\b.*…$/.test(text)) {
-    return true
-  }
-  // A following `⎿` row is evidence of a tool only when it carries OUTPUT. The
-  // attachment rows under a prompt look identical and carry `[Image #N]`, and
-  // Claude prints them directly beneath the prompt — so the last paragraph of
-  // any prompt that included an image was read as a tool row and dropped, with
-  // the paragraph going with it (host screenshot, 2026-09-15: "also have a
-  // search bar for this" never reached the phone).
-  const next = screen[index + 1] ?? ''
-  return /^\s*⎿/.test(next) && !ATTACHMENT_ROW.test(next)
-}
 
-/** Rejoin what the terminal wrapped: a blank row is a real paragraph break,
- *  every other row continues the sentence above it. */
-function joinWrappedRows(parts: readonly string[]): string {
-  let out = ''
-  for (const part of parts) {
-    if (part === '') {
-      out += '\n\n'
-      continue
-    }
-    out += out.length === 0 || out.endsWith('\n') ? part : ` ${part}`
-  }
-  return out
-}
