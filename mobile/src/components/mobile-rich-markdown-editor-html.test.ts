@@ -487,3 +487,70 @@ describe('a hard-wrapped document opened in the .md tab', () => {
     expect(html).toContain('one\ntwo')
   })
 })
+
+// The .md tab rendered EMPTY — just "Start writing..." over an editor with no
+// document (device screenshot, 2026-09-15). The script parts are concatenated
+// fragments, not whole files: `-body-primary` ENDS MID-FUNCTION and
+// `-body-secondary` opens with the `}` that closes it. A new part spliced into
+// that seam made the whole script a syntax error, the WebView threw on load,
+// and the editor came up blank.
+//
+// Every other test here pulls ONE function out of the script with a brace
+// matcher and evaluates it alone, so all of them passed against a script that
+// could never run. This is the check that covers what those do not.
+describe('the assembled editor script', () => {
+  it('parses as JavaScript', () => {
+    const html = buildMobileRichMarkdownEditorHtml()
+    const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? ''
+    expect(script.length).toBeGreaterThan(1000)
+    expect(() => new Function(script)).not.toThrow()
+  })
+
+  // Syntax alone does NOT catch this. Splicing a part into the middle of a
+  // function still PARSES — the new function simply becomes a nested
+  // declaration inside the one it landed in, and the trailing `}` closes the
+  // outer one. It is then out of scope for every caller, so the first call
+  // throws at runtime and the editor renders nothing. That is exactly what
+  // shipped. The invariant is DEPTH: every markdown helper is declared at the
+  // same level as the others.
+  it('declares every markdown helper at the same scope', () => {
+    const html = buildMobileRichMarkdownEditorHtml()
+    const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? ''
+    // Comments FIRST. A quote inside a comment ("the repo's CLAUDE.md") makes
+    // the string matcher run on past it and eat the code that follows — which
+    // it did here, and the test reported the function missing rather than
+    // misplaced. CLAUDE.md names this: strip comments before matching.
+    const source = script
+      .replace(/\/\/[^\n]*/g, '')
+      .replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g, "''")
+    const depths = new Map()
+    let depth = 0
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index]
+      if (char === '{') {
+        depth += 1
+      } else if (char === '}') {
+        depth -= 1
+      } else {
+        const name = /^function ([A-Za-z0-9_]+)/.exec(source.slice(index, index + 64))
+        if (name && (index === 0 || !/[A-Za-z0-9_.]/.test(source[index - 1] ?? ''))) {
+          depths.set(name[1], depth)
+        }
+      }
+    }
+    const helpers = [
+      'reflowLines',
+      'indentationWidth',
+      'parseListLine',
+      'parseListTree',
+      'renderListItems',
+      'markdownToHtml',
+      'isBlockStart'
+    ]
+    for (const helper of helpers) {
+      expect(depths.has(helper), `${helper} is declared`).toBe(true)
+    }
+    const levels = new Set(helpers.map((helper) => depths.get(helper)))
+    expect(levels.size, `helpers sit at depths ${[...levels].join(', ')}`).toBe(1)
+  })
+})
