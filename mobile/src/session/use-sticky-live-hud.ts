@@ -2,6 +2,8 @@ import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
 type Held = {
   model: string | null
+  /** The agent's own name for the held model; null when it stated none. */
+  label: string | null
   effort: string | null
   context: TerminalHudContextWindow | null
 }
@@ -37,6 +39,7 @@ export function clearStickyLiveHudForTests(): void {
 
 export type StickyLiveHud = {
   model: string | null
+  label: string | null
   effort: string | null
   context: TerminalHudContextWindow | null
 }
@@ -74,6 +77,10 @@ export type StickyLiveHud = {
 export function useStickyLiveHud(
   observation: {
     modelId: string | null
+    /** The agent's OWN name for it ("Opus 4.8.5"), held beside the id so the
+     *  pill can state the model actually running rather than the family the id
+     *  collapses to. Travels with the id; never held on its own. */
+    modelLabel?: string | null
     effort: string | null
     context?: TerminalHudContextWindow | null
   } | null,
@@ -87,7 +94,7 @@ export function useStickyLiveHud(
   // A null handle is "not known yet", never "a different terminal".
   const known = handle ?? lastHandleByTab.get(tab) ?? ''
   const key = `${tab}\u0000${known}`
-  const held = heldByScope.get(key) ?? { model: null, effort: null, context: null }
+  const held = heldByScope.get(key) ?? { model: null, label: null, effort: null, context: null }
   // Delete-then-set on every READ, so the scope being looked at becomes the
   // most recent and eviction only ever sheds the oldest UNTOUCHED one. Setting
   // it once on first sight made this FIFO, and a Map iterates in insertion
@@ -116,10 +123,11 @@ export function useStickyLiveHud(
   // The reading that names the model owns the effort beside it, null included.
   if (observation?.modelId) {
     held.model = observation.modelId
+    held.label = observation.modelLabel ?? null
     held.effort = observation.effort
   }
   if (observation?.context) {
     held.context = observation.context
   }
-  return { model: held.model, effort: held.effort, context: held.context }
+  return { model: held.model, label: held.label, effort: held.effort, context: held.context }
 }

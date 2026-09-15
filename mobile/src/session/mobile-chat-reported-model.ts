@@ -3,6 +3,10 @@ import type { ModelReportSource } from './mobile-native-chat-model-report-author
 
 export type ReportedModelPair = {
   model: string | null
+  /** The agent's OWN name for it ("Opus 4.8.5"), for stating what is running
+   *  rather than the catalog family the id collapses to. Never present without
+   *  a model: a name alone says nothing about this session. */
+  label: string | null
   effort: string | null
   /** Which of the two sources answered; they are not equal evidence. See
    *  `mobile-native-chat-model-report-authority.ts`. */
@@ -26,7 +30,7 @@ export type ReportedModelPair = {
  * it answers for both.
  */
 export function reportedModelPair(
-  live: { model: string | null; effort: string | null },
+  live: { model: string | null; label?: string | null; effort: string | null },
   /** Kept in the signature, and deliberately unread: it is where the launch
    *  record arrives, and the point of this function is that the launch record
    *  is not a model source. Dropping the parameter would hide that decision at
@@ -34,7 +38,7 @@ export function reportedModelPair(
   _agentStatus?: AgentStatusEntry | null
 ): ReportedModelPair {
   if (live.model) {
-    return { model: live.model, effort: live.effort, source: 'live' }
+    return { model: live.model, label: live.label ?? null, effort: live.effort, source: 'live' }
   }
   // Nothing, rather than the launch record.
   //
@@ -51,5 +55,5 @@ export function reportedModelPair(
   // it states nothing for the second before the agent speaks. The project's own
   // rule, and the reason it exists: show nothing rather than a figure from
   // somewhere else.
-  return { model: null, effort: null, source: 'launch' }
+  return { model: null, label: null, effort: null, source: 'launch' }
 }

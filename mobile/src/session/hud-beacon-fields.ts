@@ -50,8 +50,14 @@ export function applyAgentHudBeaconFields(
       : base.context
   return {
     ...base,
-    modelLabel: beacon.modelLabel ?? beacon.modelId ?? base.modelLabel,
-    modelId: beacon.modelId ?? base.modelId,
+    // The id and the NAME are one statement about one session, so they fall
+    // back together. Falling back independently kept the previous id beside a
+    // new name (or the reverse), and the pill stated a pair that never existed
+    // — the same defect as "Opus Medium" on an Opus xhigh session, one field
+    // over. A beacon that names a model either way owns both halves.
+    ...(beacon.modelId !== null || beacon.modelLabel !== null
+      ? { modelLabel: beacon.modelLabel ?? beacon.modelId ?? '', modelId: beacon.modelId }
+      : { modelLabel: base.modelLabel, modelId: base.modelId }),
     // A beacon that NAMES a model speaks for the effort beside it too, null
     // included. Falling back to the base was how a launch-time effort got
     // welded onto a model the agent had since switched to: the merge order puts

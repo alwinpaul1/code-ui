@@ -13,7 +13,8 @@ type Observation = {
   context?: { usedPercent: number; usedLabel: string | null; windowLabel: string | null } | null
 } | null
 
-let latest: StickyLiveHud = { model: null, effort: null, context: null }
+let latest: StickyLiveHud = { label: null,
+      model: null, effort: null, context: null }
 function Probe({
   observation,
   tabId,
@@ -75,12 +76,14 @@ describe('the model and effort the badge last stated', () => {
   })
 
   it('states nothing before the badge has been read', () => {
-    expect(render(null)).toEqual({ model: null, effort: null, context: null })
+    expect(render(null)).toEqual({ label: null,
+      model: null, effort: null, context: null })
   })
 
   it('does not carry one tab\'s badge onto another', () => {
     render({ modelId: 'opus', effort: 'xhigh' }, 'tab-1')
-    expect(render(null, 'tab-2')).toEqual({ model: null, effort: null, context: null })
+    expect(render(null, 'tab-2')).toEqual({ label: null,
+      model: null, effort: null, context: null })
   })
 
   // 2026-09-15, still wrong on 0.5.98: model and effort were held SEPARATELY,
@@ -118,6 +121,7 @@ describe('the model and effort the badge last stated', () => {
   it('drops the figures when the tab gets a new terminal', () => {
     render({ modelId: 'opus', effort: 'xhigh' }, 'tab-1', 'term_a')
     expect(render(null, 'tab-1', 'term_b')).toEqual({
+      label: null,
       model: null,
       effort: null,
       context: null

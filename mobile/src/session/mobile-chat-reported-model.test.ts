@@ -16,13 +16,15 @@ describe('the model the chat pill states', () => {
         { model: 'opus', effort: 'xhigh' },
         status({ model: 'fable', effort: 'medium' })
       )
-    ).toEqual({ model: 'opus', effort: 'xhigh', source: 'live' })
+    ).toEqual({ label: null,
+      model: 'opus', effort: 'xhigh', source: 'live' })
   })
 
   it('states a live model with no effort rather than borrowing one', () => {
     expect(
       reportedModelPair({ model: 'opus', effort: null }, status({ model: 'fable', effort: 'medium' }))
-    ).toEqual({ model: 'opus', effort: null, source: 'live' })
+    ).toEqual({ label: null,
+      model: 'opus', effort: null, source: 'live' })
   })
 
   // 2026-09-15, after the model read wrong on the phone for the fifth time in
@@ -35,11 +37,13 @@ describe('the model the chat pill states', () => {
   it('states nothing rather than the model the session was launched as', () => {
     expect(
       reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: 'high' }))
-    ).toEqual({ model: null, effort: null, source: 'launch' })
+    ).toEqual({ label: null,
+      model: null, effort: null, source: 'launch' })
   })
 
   it('states nothing when neither source has a model', () => {
     expect(reportedModelPair({ model: null, effort: null }, null)).toEqual({
+      label: null,
       model: null,
       effort: null,
       source: 'launch'

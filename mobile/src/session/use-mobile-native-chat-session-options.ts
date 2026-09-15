@@ -8,7 +8,6 @@ import {
 } from '../storage/session-option-records'
 import {
   getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog,
   type CatalogCommandDelivery,
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
@@ -31,10 +30,7 @@ import {
   buildNativeChatSessionOptionCommand,
   recordNativeChatSessionOptionCommand
 } from '../../../src/shared/native-chat-session-option-commands'
-import {
-  buildNativeChatSessionOptionSnapshot,
-  withTrackedNativeChatModel
-} from '../../../src/shared/native-chat-session-option-snapshot'
+import { buildNativeChatSessionOptionSnapshot } from '../../../src/shared/native-chat-session-option-snapshot'
 import {
   applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
@@ -44,6 +40,7 @@ import {
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from '../../../src/shared/native-chat-session-option-state'
+import { activeModels } from './mobile-chat-model-row-naming'
 
 export type MobileNativeChatSessionOptionsController = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -112,13 +109,6 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 
 /** The model list every consumer must see: the catalog's, plus the tracked model
  *  when the catalog no longer lists it. Desktop reconciles identically. */
-function activeModels(
-  catalog: AgentSessionOptionCatalog,
-  record: NativeChatSessionOptionRecord
-): CatalogModel[] {
-  return withTrackedNativeChatModel(catalog, catalog.models, record)
-}
-
 export function useMobileNativeChatSessionOptions(args: {
   agent: string | null
   /** Stable per-tab scope (host + worktree + tab), or null when no tab is active. */
@@ -127,6 +117,9 @@ export function useMobileNativeChatSessionOptions(args: {
   reportedModel: string | null
   /** Effort level as the terminal's status line shows it, when observed. */
   reportedEffort?: string | null
+  /** The agent's OWN name for the reported model ("Opus 4.8.5"); the catalog
+   *  knows only families. See mobile-chat-model-row-naming.ts. */
+  reportedModelLabel?: string | null
   /** Which source the report came from. A `'live'` reading — the agent's own
    *  beacon or badge — always outranks a locally dispatched guess; `'launch'`
    *  is the host's start-of-session record and only counts when it changes.
@@ -153,6 +146,7 @@ export function useMobileNativeChatSessionOptions(args: {
   applyOverride?: (id: string, value: SessionOptionValue) => Promise<boolean | null>
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
+  const reportedModelLabel = args.reportedModelLabel ?? null
   const { discoveredModels, discoveredModelApply, applyOverride } = args
   const reportedEffort = args.reportedEffort ?? null
   const reportedModelSource = args.reportedModelSource ?? 'launch'
@@ -345,7 +339,7 @@ export function useMobileNativeChatSessionOptions(args: {
       catalog,
       // The snapshot no longer self-heals an unlisted tracked model; every caller
       // reconciles it in, so a value the seed dropped keeps its row and options.
-      models: activeModels(catalog, record),
+      models: activeModels(catalog, record, reportedModel, reportedModelLabel),
       record,
       mode: 'live',
       modelLabel: 'Model',
@@ -400,7 +394,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : activeModels(catalog, record, reportedModel, reportedModelLabel)
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
         if (applyOverride) {
@@ -437,7 +431,7 @@ export function useMobileNativeChatSessionOptions(args: {
           apply,
           modelId: previousModelId,
           catalog,
-          models: activeModels(catalog, record),
+          models: activeModels(catalog, record, reportedModel, reportedModelLabel),
           record
         })
         if (!command) {
@@ -497,7 +491,7 @@ export function useMobileNativeChatSessionOptions(args: {
         const apply =
           id === 'model'
             ? catalog.modelApply
-            : activeModels(catalog, record)
+            : activeModels(catalog, record, reportedModel, reportedModelLabel)
                 .find((model) => model.id === modelId)
                 ?.options.find((option) => option.id === id)?.apply
         const midSession = apply?.midSession
@@ -531,7 +525,7 @@ export function useMobileNativeChatSessionOptions(args: {
       const record = getScopedRecord(scopeKey, agent)
       const result = recordNativeChatSessionOptionCommand({
         catalog,
-        models: activeModels(catalog, record),
+        models: activeModels(catalog, record, reportedModel, reportedModelLabel),
         record,
         command
       })

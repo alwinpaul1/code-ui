@@ -375,6 +375,9 @@ export function useMobileNativeChatController(
       // footer, when a turn has drawn it, is only a fresher override.
       reportedModel: isCodexChat ? codexModel.model : claudeReported.model,
       reportedEffort: isCodexChat ? codexModel.effort : claudeReported.effort,
+      // The agent's own name for it, so the pill can say "Opus 4.8.5" rather
+      // than the family the catalog collapses every Opus onto.
+      reportedModelLabel: isCodexChat ? null : claudeReported.label,
       // Codex resolves its own model elsewhere and has no launch-record path
       // here, so its report is always the live one.
       reportedModelSource: isCodexChat ? 'live' : claudeReported.source,

@@ -25,6 +25,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   isWorking: boolean
   reportedModel: string | null
   reportedEffort?: string | null
+  /** The agent's OWN name for the reported model ("Opus 4.8.5"); the catalog
+   *  knows only families. */
+  reportedModelLabel?: string | null
   /** Which source `reportedModel` came from; a live reading outranks a local
    *  pick, the launch record does not. */
   reportedModelSource?: ModelReportSource
@@ -62,6 +65,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isWorking,
     reportedModel,
     reportedEffort,
+    reportedModelLabel,
     reportedModelSource,
     terminalHandle,
     openRequest = 0,
@@ -106,6 +110,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
     reportedEffort,
+    reportedModelLabel,
     reportedModelSource,
     terminalHandle,
     dispatchCommand,
