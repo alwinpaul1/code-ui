@@ -88,7 +88,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // where it can return a terminal-mode tab to its chat view before leaving.
 const HEAD_CALLBACK_BODY_SHA256 = '1c186b132e80ecca988437281d723229b14a4334d03a580b8253faeb5d7035ee'
 const HEAD_EFFECT_SHA256 = 'a123a0fd0b45e180aff593c9876a4227144c4a9f53fac5dbdb2a73c5dbb4bbbd'
-const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+const HEAD_CONTENT_HOOK_SHA256 = 'afa08b0da2bac9f30daee744098184f10a3db59755ffb75ef0bcdc4327f85750'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -117,8 +117,8 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  'e1a539d877cedb0203d9b7e639a6617d99ff3df6cae729056a923af4f7624a91'
-const HEAD_HOST_JSX_SHA256 = '24ee5328958d290dd3738ec31c4f117fb5015b23f7819583e682bb2671369841'
+  '97fbda848e76787b764d1d8b0aee92c6b9941687267396ccfaf80c50b303b042'
+const HEAD_HOST_JSX_SHA256 = 'fdec8bd6c39d6a2703b52a439c22d1b57b75d0f0bd28813d149b4457dc2f9a3d'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -128,7 +128,7 @@ const HEAD_HOST_JSX_SHA256 = '24ee5328958d290dd3738ec31c4f117fb5015b23f7819583e6
 // lent. Exactly one leaf record changed — verified by extracting the reader's
 // JSX records before and after; host and style-reference records are untouched,
 // which is why only this pin moved.
-const HEAD_LEAF_JSX_SHA256 = '2ad056b0bf3bbae377956169f97ae6653eabeee0da75b9eeeee9779c21ae1da8'
+const HEAD_LEAF_JSX_SHA256 = '0e52eefdf2ba74bf189d26041095ad35d6ec5a1d13d1fb58919ac1e4de8d9e4e'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -527,7 +527,7 @@ describe('mobile session route extraction parity', () => {
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(23)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
-    expect(contentBindings).toHaveLength(14)
+    expect(contentBindings).toHaveLength(17)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
     expect(nestedFunctions).toHaveLength(12)
@@ -570,14 +570,20 @@ describe('mobile session route extraction parity', () => {
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
     // 637 since 2026-09-15: a markdown file renders as a document with a source
     // toggle, the way the desktop has always shown it, instead of as raw text.
-    expect(strings).toHaveLength(637)
+    // 654 since 2026-09-15 (later): the .md TAB gets its own Preview/Edit
+    // toggle, so opening a document reads it instead of opening an editor.
+    expect(strings).toHaveLength(654)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
-    expect(jsx.host).toHaveLength(95)
+    // 99 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — its bar,
+    // the two pressables it maps, and the preview's own scroller.
+    expect(jsx.host).toHaveLength(99)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     // 69 since 2026-09-15: the markdown preview's own leaf element.
-    expect(jsx.leaf).toHaveLength(69)
+    // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
+    // and the label inside each of the two pressables fold to two leaf records.
+    expect(jsx.leaf).toHaveLength(71)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     expect(jsx.styleReferences).toHaveLength(92)
