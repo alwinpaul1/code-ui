@@ -3,6 +3,7 @@ import { MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT } from './mobile-rich-mark
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
 import { MOBILE_RICH_MARKDOWN_SELECTION_SCRIPT } from './mobile-rich-markdown-selection-script'
 import { MOBILE_RICH_MARKDOWN_EDITOR_BODY_PRIMARY } from './mobile-rich-markdown-editor-body-primary'
+import { MOBILE_RICH_MARKDOWN_EDITOR_BODY_REFLOW } from './mobile-rich-markdown-editor-body-reflow'
 import { MOBILE_RICH_MARKDOWN_EDITOR_BODY_SECONDARY } from './mobile-rich-markdown-editor-body-secondary'
 import {
   MOBILE_RICH_MARKDOWN_EDITOR_AFTER_KEYBOARD_DISMISS,
@@ -31,6 +32,7 @@ export function buildMobileRichMarkdownEditorHtml(): string {
       --primary: ${colors.textPrimary};
       --primary-foreground: ${colors.bgBase};
       --accent-link: ${colors.accentBlue}${MOBILE_RICH_MARKDOWN_EDITOR_BODY_PRIMARY}
+${MOBILE_RICH_MARKDOWN_EDITOR_BODY_REFLOW}
 ${MOBILE_RICH_MARKDOWN_EDITOR_BODY_SECONDARY}${MOBILE_RICH_MARKDOWN_SELECTION_SCRIPT}
 ${MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT}${MOBILE_RICH_MARKDOWN_EDITOR_AFTER_KEYBOARD_DISMISS}${MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT}${MOBILE_RICH_MARKDOWN_EDITOR_DOCUMENT_END}`
 }

@@ -54,6 +54,7 @@ function runtimeMarkdownToHtml(markdown: string, editable: boolean): string {
     extractFunctionSource(script, 'renderInline'),
     extractFunctionSource(script, 'isBlockStart'),
     extractFunctionSource(script, 'indentationWidth'),
+    extractFunctionSource(script, 'reflowLines'),
     extractFunctionSource(script, 'parseListLine'),
     extractFunctionSource(script, 'listKind'),
     extractFunctionSource(script, 'parseListTree'),
@@ -430,5 +431,59 @@ describe('mobile rich markdown editor HTML', () => {
     runtime.restoreSelectionOrEnd()
 
     expect(runtime.selectedContainer()).toBe('editor-end')
+  })
+})
+
+// The .md tab is a THIRD markdown renderer — the WebView rich editor — and it
+// still painted an 80-column document the way the chat view used to before the
+// marked migration. Reported from the device on 2026-09-15 with a screenshot of
+// this repository's own CLAUDE.md: "too many line breaks for md … why dont
+// renderer it normally like the normal md".
+describe('a hard-wrapped document opened in the .md tab', () => {
+  it('reflows a wrapped paragraph instead of breaking every source line', () => {
+    const html = runtimeMarkdownToHtml(
+      ['A paragraph written long enough that its author', 'wrapped it at eighty columns.'].join(
+        '\n'
+      ),
+      true
+    )
+    expect(html).not.toContain('<br />')
+    expect(html).toContain('A paragraph written long enough that its author wrapped it at eighty columns.')
+  })
+
+  it('keeps the two breaks the author actually asked for', () => {
+    const twoSpaces = runtimeMarkdownToHtml('first line  \nsecond line', true)
+    expect(twoSpaces).toContain('<br />')
+    const backslash = runtimeMarkdownToHtml('first line\\\nsecond line', true)
+    expect(backslash).toContain('<br />')
+  })
+
+  it('keeps a wrapped list item inside its own item', () => {
+    // The symptom in the screenshot: the rest of numbered item 2 sat at the LEFT
+    // MARGIN, outside the list, as its own paragraph. Third instance of this one
+    // defect — the chat parser and the PR comment parser had it too.
+    const html = runtimeMarkdownToHtml(
+      [
+        '1. **Feed it the real screen, not a paraphrase.** Terminal parsers break on',
+        '   the exact bytes an agent paints: the indent, the wrap column.',
+        '2. Second item.'
+      ].join('\n'),
+      true
+    )
+    expect(html).toContain('the exact bytes an agent paints')
+    // One list, two items, and no stray paragraph holding the continuation.
+    expect(html.match(/<li/g)?.length).toBe(2)
+    expect(html).not.toMatch(/<p>\s*the exact bytes/)
+  })
+
+  it('still ends the list at a blank line', () => {
+    const html = runtimeMarkdownToHtml(['- One', '', 'A following paragraph.'].join('\n'), true)
+    expect(html.match(/<li/g)?.length).toBe(1)
+    expect(html).toContain('<p>A following paragraph.</p>')
+  })
+
+  it('leaves a fenced block’s lines exactly as written', () => {
+    const html = runtimeMarkdownToHtml(['```sh', 'one', 'two', '```'].join('\n'), true)
+    expect(html).toContain('one\ntwo')
   })
 })

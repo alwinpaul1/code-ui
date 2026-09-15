@@ -145,10 +145,16 @@ describe('what the runaway-nesting guard refuses', () => {
 
 describe('the cost of a long list while it streams', () => {
   it('parses a thousand-item list inside a frame', () => {
-    const list = Array.from({ length: 1000 }, (_, index) => `${index + 1}. item ${index}`).join('\n')
-    parseMobileMarkdown(list)
+    // A DISTINCT string per call. The parser caches by source text, so timing a
+    // repeat of one document times the cache and would report a parser cost of
+    // nearly zero however slow the parser got — the same defect this file's
+    // sibling had (fixed in 081ef73; this copy was missed, and the sweep should
+    // have caught it).
+    const list = (tag: string) =>
+      Array.from({ length: 1000 }, (_, index) => `${index + 1}. item ${index} ${tag}`).join('\n')
+    parseMobileMarkdown(list('warm'))
     const started = performance.now()
-    parseMobileMarkdown(list)
+    parseMobileMarkdown(list('measured'))
     expect(performance.now() - started).toBeLessThan(16)
   })
 })
