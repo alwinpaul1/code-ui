@@ -175,6 +175,49 @@ function stubLanded(text: string, landedCounts: ReadonlyMap<string, number>): bo
   return false
 }
 
+/**
+ * A witnessed echo the screen glued the AGENT'S reply onto, retired by the
+ * prompt it was built from.
+ *
+ * The screen reader takes a prompt's wrapped rows by their two-space indent, and
+ * the agent's own prose sits on rows of exactly that shape. Nothing visible
+ * tells them apart, so a reply can be read as more of the message. The result
+ * matched no transcript row, could never retire, and left the agent's words
+ * attributed to the user — reported with a screenshot and the word "leaked"
+ * (2026-09-15: a bubble ending in the agent's own "session:ok").
+ *
+ * The real row is a PREFIX of the glued reading, which is the handle. It is
+ * deliberately narrow: the row must be a prefix at a word boundary AND the extra
+ * text must be long enough to be a reply rather than the rest of a sentence the
+ * user actually typed. A user's own longer message is pinned as NOT retired in
+ * mobile-native-chat-glued-echo-retirement.ts.
+ */
+const GLUED_REPLY_MIN_EXTRA = 40
+
+function gluedLanded(text: string, landedCounts: ReadonlyMap<string, number>): boolean {
+  const key = normalizeReconcileText(text)
+  if (key.length <= GLUED_REPLY_MIN_EXTRA) {
+    return false
+  }
+  for (const landed of landedCounts.keys()) {
+    if (landed.length === 0 || landed.length >= key.length) {
+      continue
+    }
+    if (!key.startsWith(landed)) {
+      continue
+    }
+    // At a word boundary, so "fix the parse" never claims "fix the parser".
+    const next = key.charAt(landed.length)
+    if (next !== '' && !/\s/.test(next)) {
+      continue
+    }
+    if (key.length - landed.length >= GLUED_REPLY_MIN_EXTRA) {
+      return true
+    }
+  }
+  return false
+}
+
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
@@ -219,7 +262,8 @@ export function retireLandedMobileNativeChatPending(
         ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >=
           item.expectedOccurrence
         : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence ||
-          stubLanded(item.text, landedCounts)
+          stubLanded(item.text, landedCounts) ||
+          gluedLanded(item.text, landedCounts)
     if (landed) {
       landedPendingIds.add(item.id)
       exactLandedIds.add(item.id)
