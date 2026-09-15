@@ -49,8 +49,15 @@ const PROMPT_ROW = /^[❯›] (\S.*)$/
 /** The live composer: the marker followed by a no-break space, or nothing. */
 const COMPOSER_ROW = /^[>❯›](?:\u00a0.*|\s*)$/
 /** A wrapped continuation of the prompt: exactly two spaces, then text that
- *  is not one of the glyphs the agent uses for its own rows. */
-const CONTINUATION = /^ {2}([^\s⎿└⌊⏺✻✓✗⏸│├╰╭◐◑◒◓].*)$/
+ *  is not one of the glyphs the agent uses for its own rows.
+ *
+ *  `\u2500-\u259f` is the box-drawing block and the block elements after it,
+ *  refused ENTIRE rather than a glyph at a time. The list used to name │ ├ ╰ ╭
+ *  └ individually, each added after it was reported, and a framed panel printed
+ *  under a prompt then arrived as a bubble reading "push ┌────┬────┐" because
+ *  ┌ and ─ were not among them (2026-09-15). Nothing in that block starts a
+ *  line a person typed; a hyphen and an em dash are outside it and still do. */
+const CONTINUATION = /^ {2}([^\s\u2500-\u259f⎿⌊⏺✻✓✗⏸◐◑◒◓].*)$/
 /** A picker's chosen row: a radio glyph, the value, and the command that set it
  *  — `◉ xhigh · /effort`. Matched by SHAPE, not by the glyph alone: excluding
  *  the glyph outright ended the prompt at any bullet the user wrote, and the
