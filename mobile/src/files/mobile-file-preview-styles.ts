@@ -98,38 +98,11 @@ export const filePreviewStyles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19
   },
-  markdownContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl
-  },
-  modeContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  modeToolbar: {
-    flexDirection: 'row',
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.md,
-    marginVertical: spacing.sm,
-    padding: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  modeToggle: {
-    width: 34,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.row,
-    backgroundColor: 'transparent',
-    opacity: 0.72
-  },
-  modeToggleActive: {
-    backgroundColor: colors.bgRaised,
-    opacity: 1
-  },
+  // The markdown preview's own chrome — container, toolbar, the two mode
+  // toggles, the content padding — used to live here, on the static dark
+  // palette. It moved into MobileFileMarkdownPreview.tsx as a themed factory so
+  // the preview follows light mode; these copies were left behind with no
+  // reader. Anything that needs them again should take the themed ones.
   truncatedNote: {
     marginBottom: spacing.md,
     color: colors.textSecondary,

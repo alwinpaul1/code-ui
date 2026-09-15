@@ -352,11 +352,14 @@ describe('a prompt the screen cut short', () => {
     '❯ '
   ]
 
-  it('does not read the reply printed under it as more of the message', () => {
-    const [prompt = ''] = sentPromptsFromScreen(SCREEN)
-    expect(prompt).toContain('One caveat worth your attention')
-    expect(prompt).not.toContain('F8 offline restoration')
-    expect(prompt).not.toContain('session:ok')
+  // This test used to assert the opposite — that the CUT HEAD ROW is the
+  // message, and only the reply beneath it is dropped. The device disproved it
+  // on 2026-09-15: a prefix can never equal the transcript row it belongs to, so
+  // the echo it makes never retires, and the truncated bubble sat above the next
+  // prompt with the reply missing between them. Refusing the whole reading is
+  // the fix; see mobile-terminal-cut-prompt.test.ts.
+  it('offers nothing at all, because a prefix can never retire', () => {
+    expect(sentPromptsFromScreen(SCREEN)).toEqual([])
   })
 
   // A prompt the screen did NOT cut still gathers its own wrapped rows.

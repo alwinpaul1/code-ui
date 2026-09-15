@@ -85,13 +85,26 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
       index += 1
       continue
     }
+    // A row the screen CUT is not the message, it is a PREFIX of it: the
+    // terminal replaced the rest with an ellipsis. Two things follow, and the
+    // first attempt at this got both wrong (2026-09-15, live pr-919 session).
+    //
+    // It must not be offered as a prompt. A prefix can never equal the
+    // transcript row it belongs to, so the echo it makes can never retire — it
+    // sat on the phone as a bubble reading "…utilise the entire spac…", pinned
+    // above the NEXT prompt with the agent's whole reply missing between them.
+    // Refusing is the rule here: a truncated reading is a guess.
+    //
+    // And the scan has to carry on past it. Jumping to the composer dropped
+    // every later prompt on the screen with it. The rows under a cut prompt are
+    // the agent's reply on the same two-space indent, which no `❯` matches, so
+    // resuming on the next row skips them harmlessly.
+    if (endsCut(head[1] ?? '')) {
+      index += 1
+      continue
+    }
     const parts = [head[1] ?? '']
-    // A row the screen CUT is finished: the terminal replaced the rest of the
-    // message with the ellipsis, so the rows under it are not more of it — they
-    // are the agent's reply, printed on the same two-space indent a wrapped
-    // prompt uses. Reading them as prompt drew the message and the answer to it
-    // as one bubble (2026-09-15, real screen from a live pr-919 session).
-    let cursor = endsCut(head[1] ?? '') ? limit : index + 1
+    let cursor = index + 1
     while (cursor < limit) {
       const line = screen[cursor] ?? ''
       if (line.trim().length === 0) {
