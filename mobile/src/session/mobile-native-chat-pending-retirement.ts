@@ -141,6 +141,40 @@ function matchGluedRun(
 }
 
 /** Retires exact and glued transcript landings while preserving pending order. */
+/**
+ * A witnessed echo the SCREEN cut short, retired by the row it is a prefix of.
+ *
+ * A terminal too narrow to print a prompt truncates it and marks the cut with an
+ * ellipsis. The screen parser refuses to make new stubs now, but one already
+ * written to disk comes back on every launch, and the exact-text pass above can
+ * never retire it: a prefix is not an equal. It sat on the device as a bubble
+ * reading "…utilise the entire spac…", pinned above the next prompt with the
+ * reply missing between them, and it survived reinstalling the app
+ * (2026-09-15).
+ *
+ * The stem must be a real prefix of a LONGER landed row. That does mean a stub
+ * can be claimed by a different message that happens to start the same way —
+ * pinned as a deliberate limit in the test. Retiring a duplicate that would
+ * otherwise never go away is worth more than holding a stub for a row that may
+ * never come.
+ */
+function stubLanded(text: string, landedCounts: ReadonlyMap<string, number>): boolean {
+  const key = normalizeReconcileText(text)
+  if (!key.endsWith('…')) {
+    return false
+  }
+  const stem = key.slice(0, -1).trimEnd()
+  if (stem === '') {
+    return false
+  }
+  for (const landed of landedCounts.keys()) {
+    if (landed.length > stem.length && landed.startsWith(stem)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
@@ -184,7 +218,8 @@ export function retireLandedMobileNativeChatPending(
       item.text.trim() === ''
         ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >=
           item.expectedOccurrence
-        : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence
+        : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence ||
+          stubLanded(item.text, landedCounts)
     if (landed) {
       landedPendingIds.add(item.id)
       exactLandedIds.add(item.id)
