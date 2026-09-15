@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
+import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
@@ -358,6 +359,12 @@ export function MobileNativeChatComposer({
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
                 sendInFlight={sending}
+              />
+            ) : null}
+            {contextWindow ? (
+              <ContextWindowRing
+                usedPercent={contextWindow.usedPercent}
+                onPress={() => setShowContextSheet(true)}
               />
             ) : null}
             <View style={{ flex: 1, minWidth: 0 }} />

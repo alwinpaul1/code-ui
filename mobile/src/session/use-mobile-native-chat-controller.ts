@@ -500,7 +500,7 @@ export function useMobileNativeChatController(
     nativeChatDesktopPrompts: hudBeacon?.desktopPrompts ?? NO_DESKTOP_PROMPTS,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: hudObservation?.context ?? null, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: liveHud.context, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
   }
 }
