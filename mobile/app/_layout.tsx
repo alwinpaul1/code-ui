@@ -18,7 +18,7 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
-import { syncBackgroundLinkFromPreferences } from '../src/background/background-link'
+import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -64,8 +64,11 @@ function ThemedRoot() {
 
   useEffect(() => {
     // Why here: a foreground service may only be started from the foreground,
-    // and launch is the one moment that is certain.
-    void syncBackgroundLinkFromPreferences()
+    // and launch is the one moment that is certain. The same call asks once for
+    // the battery exemption when delivery is already on without it — someone who
+    // had notifications on before an update never flips the switch that used to
+    // be the only thing that asked (2026-09-15).
+    void askBackgroundDeliveryPowerOnOpen()
   }, [])
 
   useEffect(() => {

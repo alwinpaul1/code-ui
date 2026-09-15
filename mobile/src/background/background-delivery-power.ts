@@ -13,6 +13,9 @@ export type BackgroundDeliveryPowerState = {
   deliveryOn: boolean
   /** Android reports the app exempt from battery optimisation ("Unrestricted"). */
   unrestricted: boolean
+  /** Whether this install has already been asked on open. Absent on the
+   *  switch-on path, which asks regardless. */
+  askedOnOpen?: boolean
 }
 
 export type BackgroundDeliveryPowerAdvice = {
@@ -20,6 +23,17 @@ export type BackgroundDeliveryPowerAdvice = {
   showRow: boolean
   /** Open the system exemption prompt as part of switching delivery on. */
   promptOnEnable: boolean
+  /** Ask once when the app OPENS with delivery already on and no exemption.
+   *
+   *  Without this, someone who already had notifications on and merely updated
+   *  the app was never asked: the prompt hung off switching delivery on, and
+   *  they never switch anything. The settings row was the only other surface
+   *  and is only seen by someone who goes looking, so they got slow
+   *  notifications indefinitely with nothing saying why (2026-09-15).
+   *
+   *  Once per install, not every launch — a dialog that reappears forever is
+   *  one people learn to dismiss without reading. The row stays either way. */
+  promptOnOpen: boolean
   caption: string
 }
 
@@ -33,6 +47,7 @@ export function adviseBackgroundDeliveryPower(
   return {
     showRow: needsExemption,
     promptOnEnable: !state.unrestricted,
+    promptOnOpen: needsExemption && state.askedOnOpen !== true,
     caption: needsExemption ? UNRESTRICTED_BATTERY_CAPTION : ''
   }
 }

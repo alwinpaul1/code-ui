@@ -8,7 +8,13 @@ import {
   stopBackgroundLink
 } from '@codeui/expo-background-link'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
+import {
+  loadBackgroundPowerAskedVersion,
+  loadPushNotificationsEnabled,
+  saveBackgroundPowerAskedVersion
+} from '../storage/preferences'
+import { getInstalledVersion } from '../app-update/installed-version'
+import { adviseBackgroundDeliveryPower } from './background-delivery-power'
 import { subscribeConnectionRevivalTriggers } from '../transport/connection-revival-triggers'
 import { openHostLogicalClient } from '../transport/host-logical-client'
 import { loadHosts } from '../transport/host-store'
@@ -119,4 +125,44 @@ export async function syncBackgroundLinkFromPreferences(): Promise<boolean> {
   const on = delivery && push
   applyBackgroundDelivery(on)
   return on
+}
+
+/**
+ * Ask for the battery exemption, once, when the app opens with delivery already
+ * on and no exemption granted.
+ *
+ * Without this the exemption was only ever requested as part of switching
+ * delivery ON, so anyone who already had notifications on and merely UPDATED the
+ * app was never asked — and the settings row is only seen by someone who goes
+ * looking. They kept getting notifications late with nothing saying why
+ * (2026-09-15). Doze suspends the app's network however long the foreground
+ * service runs; only the exemption lifts it.
+ *
+ * Asked once per app VERSION, and only from the foreground: Android refuses the
+ * dialog from the background, and one that reappears every launch is one people
+ * learn to dismiss without reading. Per version rather than once ever, because
+ * AsyncStorage survives an update — a plain flag would mean someone who declined
+ * once went on getting late notifications forever, with only a settings row to
+ * explain it. An update is a natural moment to ask again. The row remains either
+ * way.
+ */
+export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
+  if (!isBackgroundDeliveryAvailable()) {
+    return
+  }
+  const version = getInstalledVersion()
+  const [deliveryOn, askedVersion] = await Promise.all([
+    syncBackgroundLinkFromPreferences(),
+    loadBackgroundPowerAskedVersion()
+  ])
+  const advice = adviseBackgroundDeliveryPower({
+    deliveryOn,
+    unrestricted: isBackgroundDeliveryUnrestricted(),
+    askedOnOpen: askedVersion === version
+  })
+  if (!advice.promptOnOpen) {
+    return
+  }
+  await saveBackgroundPowerAskedVersion(version)
+  requestBackgroundDeliveryUnrestricted()
 }

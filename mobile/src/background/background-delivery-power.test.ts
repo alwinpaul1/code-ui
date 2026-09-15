@@ -27,3 +27,55 @@ describe('background delivery power advice', () => {
     expect(advice.promptOnEnable).toBe(true)
   })
 })
+
+/**
+ * 2026-09-15, asked by the user: "what if the other users update the app, will
+ * this work?" It did not.
+ *
+ * The exemption was only ever requested as part of switching delivery ON, so
+ * someone who already had notifications on and merely updated was never asked.
+ * The settings row was the only other surface, and it is only seen by someone
+ * who goes looking. They would get slow notifications indefinitely with nothing
+ * saying why — which is exactly the report that started this.
+ *
+ * So it is also asked once when the app opens with delivery already on and no
+ * exemption. Once, not on every launch: a dialog that reappears forever is one
+ * people learn to dismiss without reading.
+ */
+describe('a user who already had notifications on and updated the app', () => {
+  it('is asked for the exemption when the app opens', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: false })
+        .promptOnOpen
+    ).toBe(true)
+  })
+
+  it('is not asked again on the next launch', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: true })
+        .promptOnOpen
+    ).toBe(false)
+  })
+
+  it('is not asked when the exemption is already granted', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedOnOpen: false })
+        .promptOnOpen
+    ).toBe(false)
+  })
+
+  it('is not asked when delivery is off', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: false, unrestricted: false, askedOnOpen: false })
+        .promptOnOpen
+    ).toBe(false)
+  })
+
+  // The row is the standing reminder for anyone who declined the dialog.
+  it('still shows the row after declining, so it can be granted later', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedOnOpen: true })
+        .showRow
+    ).toBe(true)
+  })
+})

@@ -30,6 +30,34 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
 }
 
+// The app version this install was last asked, on open, for the battery
+// exemption background delivery needs.
+//
+// Stored as a VERSION rather than a flag. AsyncStorage survives an update, so a
+// plain flag would ask once ever: someone who declined, or who was never asked
+// because they had notifications on before this shipped, would go on getting
+// late notifications forever with only a settings row to explain it. Keying on
+// the version gives one prompt per update — a natural moment to reconsider —
+// and never more than once per launch cycle (2026-09-15).
+const POWER_ASKED_VERSION_KEY = 'orca:backgroundPowerAskedVersion'
+
+export async function loadBackgroundPowerAskedVersion(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(POWER_ASKED_VERSION_KEY)
+  } catch {
+    // Unreadable storage must not mean asking on every launch.
+    return 'unknown'
+  }
+}
+
+export async function saveBackgroundPowerAskedVersion(version: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(POWER_ASKED_VERSION_KEY, version)
+  } catch {
+    // Best effort; at worst it asks once more.
+  }
+}
+
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
 // Why: the mobile terminal fits the desktop's full column count to the phone
