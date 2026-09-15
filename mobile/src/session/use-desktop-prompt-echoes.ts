@@ -116,6 +116,16 @@ export function useDesktopPromptEchoes(
         }
       }
     }
+    // While a prompt is still waiting for its row it has no REMEMBERED anchor,
+    // and an echo with no position is not drawn at all. That was meant to last a
+    // render or two; it does not, because the wait counts READINGS and readings
+    // only happen while something re-renders — so once the turn went quiet the
+    // message stayed invisible with no way back (reported 2026-09-15, straight
+    // after the waiting landed). It shows at the tail meanwhile, provisionally,
+    // and moves up the moment its real row arrives. Visible in roughly the right
+    // place beats correct and invisible.
+    const settled = rememberedAnchor(prompt.nonce)
+    const placement = settled === undefined ? (rawMessages.at(-1)?.id ?? null) : settled
     echoes.push({
       id: `desk-${prompt.nonce}`,
       // The RAW text, marker and all. It is what this echo is matched against
@@ -126,7 +136,7 @@ export function useDesktopPromptEchoes(
       // reader sees is applied where the bubble is BUILT, not here.
       text: prompt.text,
       expectedOccurrence: 0,
-      baselineTailMessageId: rememberedAnchor(prompt.nonce) ?? null,
+      baselineTailMessageId: placement,
       baselineResolved: true
     })
   }

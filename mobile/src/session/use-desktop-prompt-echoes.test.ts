@@ -119,7 +119,9 @@ describe('where a desktop prompt echo anchors', () => {
     act(() => {
       renderer = create(createElement(Probe, { prompts, raw }))
     })
-    expect(latest[0]!.baselineTailMessageId).toBe(null)
+    // Shown at the tail meanwhile rather than hidden: an echo with no position
+    // is not drawn, and waiting invisibly lost the message outright.
+    expect(latest[0]!.baselineTailMessageId).toBe('a5')
     for (let attempt = 0; attempt < 40; attempt += 1) {
       act(() => {
         renderer!.update(createElement(Probe, { prompts, raw }))
@@ -245,7 +247,9 @@ describe('a desktop prompt whose row has not loaded yet', () => {
         createElement(Probe, { prompts, raw: [assistant('r1'), assistant('r2')] })
       )
     })
-    expect(latest[0]!.baselineTailMessageId).not.toBe('r2')
+    // At the tail provisionally — visible — but NOT committed there, which is
+    // what the second half of this test proves.
+    expect(latest[0]!.baselineTailMessageId).toBe('r2')
     // r5 lands with the rest of the turn.
     act(() => {
       renderer!.update(
@@ -301,5 +305,70 @@ describe('a desktop prompt whose row has not loaded yet', () => {
       )
     })
     expect(latest[0]!.baselineTailMessageId).toBe('p2')
+  })
+})
+
+// Regression reported 2026-09-15, right after the waiting was added: a queued
+// desktop message was not shown AT ALL.
+//
+// While a prompt waited for the row its beacon named, it had no anchor, and an
+// echo with no position is not drawn. That was meant to last a render or two.
+// It does not: the wait ends after a fixed number of READINGS, and readings only
+// happen while something re-renders — so once the turn went quiet the message
+// stayed invisible with no way back.
+describe('a queued prompt while it waits for its row', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('is shown straight away, at the end, rather than not at all', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'vis-1', text: 'queued', anchorId: 'not-here-yet' }]
+    act(() => {
+      renderer = create(
+        createElement(Probe, { prompts, raw: [assistant('v1'), assistant('v2')] })
+      )
+    })
+    expect(latest).toHaveLength(1)
+    expect(latest[0]!.baselineTailMessageId).toBe('v2')
+  })
+
+  it('moves to its real place once the row arrives', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'vis-2', text: 'queued', anchorId: 'w2' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('w9')] }))
+    })
+    // Visible meanwhile, at the tail.
+    expect(latest[0]!.baselineTailMessageId).toBe('w9')
+    act(() => {
+      renderer!.update(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('w1'), assistant('w2'), assistant('w3'), assistant('w9')]
+        })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('w2')
+  })
+
+  it('settles for good once the wait is over', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'vis-3', text: 'queued', anchorId: 'never' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('x1')] }))
+    })
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2')] }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('x2')
+    // A later turn must not drag it down now that it has settled.
+    act(() => {
+      renderer!.update(
+        createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2'), assistant('x3')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('x2')
   })
 })
