@@ -174,7 +174,12 @@ export function useMobileNativeChatController(
   // The agent's footer counts its shells live; fold that into the beacon-built
   // report so the pill and sheet can use it as a floor when the beacon's
   // transcript tail lags on a huge session.
-  const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId)
+  // The handle as well as the tab: the beacon these figures come from is read
+  // per handle, so a tab that keeps its id and gets a new terminal must drop
+  // the old agent's model rather than go on stating it. The STATE handle, not
+  // the ref — a ref read at render time is the impurity
+  // `active-handle-render-purity.test.ts` pins against.
+  const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId, activeHandle)
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
