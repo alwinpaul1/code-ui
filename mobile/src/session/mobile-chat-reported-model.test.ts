@@ -25,15 +25,17 @@ describe('the model the chat pill states', () => {
     ).toEqual({ model: 'opus', effort: null, source: 'live' })
   })
 
-  // The launch record is coherent with itself, so when the agent has said
-  // nothing yet it answers for both halves — a host that sends effort on
-  // `agentStatus` keeps showing it.
-  it('falls back to the launch record for the model AND its effort', () => {
-    expect(reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: 'high' }))).toEqual({
-      model: 'opus',
-      effort: 'high',
-      source: 'launch'
-    })
+  // 2026-09-15, after the model read wrong on the phone for the fifth time in
+  // a day: Orca writes `agentStatus.model` once, when the session starts, and
+  // never updates it for a `/model` typed afterwards. It is the one source
+  // KNOWN to go stale, and every wrong reading traced back to it. So it is no
+  // longer a model source at all — the pill states what the agent has said
+  // about itself, or nothing. The project's own rule: show nothing rather than
+  // a figure from somewhere else.
+  it('states nothing rather than the model the session was launched as', () => {
+    expect(
+      reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: 'high' }))
+    ).toEqual({ model: null, effort: null, source: 'launch' })
   })
 
   it('states nothing when neither source has a model', () => {
@@ -44,11 +46,10 @@ describe('the model the chat pill states', () => {
     })
   })
 
-  it('ignores an effort the host did not really send', () => {
-    expect(reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: '' }))).toEqual({
-      model: 'opus',
-      effort: null,
-      source: 'launch'
-    })
+  it('does not borrow the launch effort either, with no model to attach it to', () => {
+    expect(
+      reportedModelPair({ model: null, effort: null }, status({ model: 'opus', effort: 'high' }))
+        .effort
+    ).toBeNull()
   })
 })

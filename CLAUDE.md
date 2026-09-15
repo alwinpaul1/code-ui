@@ -12,9 +12,15 @@ diff you happened to write today.
 
 So, for every reported bug:
 
-1. **Write the failing test first**, from the real symptom, in the same commit.
-   Run it and watch it fail. A test that passes before the fix is testing
-   something else.
+1. **Write the failing test first**, from the real symptom, in the same commit,
+   and **watch it fail on the unfixed code**. "Fails" means you saw it go red,
+   not that you believe it would. If the test came after the fix, revert the fix
+   — stash it, comment the lines out, copy the old file to /tmp, whatever is
+   quickest — run the test, see red, restore, see green. Say so in the commit:
+   "reverting X fails test Y" is one line and it is the whole difference between
+   a test and a comment. A test written after a fix and never run against the
+   broken code asserts what the code does today, which is true by construction,
+   and it will keep passing when someone reintroduces the bug beside it.
 2. **Feed it the real screen, not a paraphrase.** Terminal parsers break on
    the exact bytes an agent paints: the indent, the wrap column, the marker
    glyph, the hint wording. Capture a real screen (`tmux capture-pane -p`
@@ -28,6 +34,44 @@ So, for every reported bug:
 5. **Cover light and dark** when a change touches UI. Both are required
    states; a hardcoded colour passes every automated check and still ships
    the wrong theme.
+6. **Pin the actual defect, not a proxy near it.** Ask what SHAPE the bug has,
+   then pick the instrument that can see that shape. A wrong value or branch is
+   an ordinary unit test. But a defect of STRUCTURE — which module mounts what,
+   which of two sources a value is read from, whether a rule sits inside a
+   component where nothing can reach it — often has no behavioural handle at
+   all, and a source-reading test is then the only instrument, not a cop-out.
+   `active-handle-render-purity.test.ts` and the RPC port-inventory ratchet are
+   both this kind and both have caught real defects. A source-reading test must
+   match code, not commentary: these files carry long "why" comments, and a bare
+   `includes()` will find the prose above the code every time.
+7. **Test the FAILURE path, not just the happy one.** Anything added to a
+   working path must be proven unable to break it. The phone is full of
+   fail-open contracts — an unreadable store means no warm start, a failed write
+   costs the next launch its cache, a beacon that will not parse is ignored.
+   Drive the genuine failure (an absent file, a rejected RPC, a malformed
+   payload), not a stub that returns empty.
+8. **Test the DEGENERATE size, not just the typical one.** Everything here that
+   positions, folds, anchors, bounds or slices a list has a boundary where first
+   and last are the same row, or there are none. That is where it breaks, and a
+   fixture with seven messages never visits it. For anything indexed, add the
+   one-element and empty cases by default; they cost a line each and that is
+   where the off-by-one lives.
+9. **Fix the diagnostic, not just the defect.** If a failure announced itself
+   with a message that named a symptom but not its cause, that message is part
+   of the bug. Ask: if this happens again while nobody is watching, does the one
+   line it leaves behind say where to look? A send that fails silently is the
+   same defect as a send that fails — the card re-enables either way and a dead
+   button is indistinguishable from a slow one.
+10. **A comment that names a value the code just changed is part of the diff.**
+   When a change moves a literal — a cap, a timeout, a colour, a count, a
+   version an observation was verified against — grep the feature for that
+   literal in PROSE before committing, the same way you grep for the defect's
+   shape. Reviewers read the comment first; a wrong one costs more than none.
+11. **When a check comes back clean, ask what it does not cover.** A green suite
+   clears the floor, not the bar. The suite was green while five functions in
+   the echo system had no test at all, and green again while the `Image on
+   Desktop` placeholder silently broke the key those echoes are retired by —
+   because nothing crossed the two.
 
 ## Every change is diffed against current code and regression-checked
 
@@ -114,6 +158,16 @@ percentage. (The beacon is such evidence — Claude Code states
 `context_window_size` in its own status-line payload, and Codex states
 `model_context_window` in its rollout. That is the agent telling us, not us
 guessing from a model name. With tokens and no window, still show no ring.)
+
+## Never bump the version until asked
+
+**Install the current build on the phone WITHOUT bumping, and wait.** The user
+verifies the fix on the device first; only then does the version move. A bump is
+how a build becomes the one everybody gets, and bumping before the fix is
+confirmed spends a version number on a guess — and on a bad day publishes it.
+Build, install over adb, say what to look at, and stop. (2026-09-15: four
+versions went out in an afternoon, several of them for fixes that turned out to
+be the wrong diagnosis.)
 
 ## Every shipped version gets a tag and a release
 
