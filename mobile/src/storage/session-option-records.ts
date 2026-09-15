@@ -87,9 +87,21 @@ export function mergeStoredSessionOptionRecord(
       }
     }
   }
-  if (!live.model && stored.model) {
-    live.model = { ...stored.model }
-    changed = true
-  }
+  // The stored MODEL is deliberately not restored.
+  //
+  // The per-model option values above are: effort and toggles are never
+  // reported back by the agent, so a record lost with the process is lost for
+  // good unless it is read back from disk. The model is the opposite — the
+  // agent states it on every repaint, on its own beacon and on the badge — so
+  // remembering it buys at most a second and costs a wrong answer for as long
+  // as it takes a live reading to arrive.
+  //
+  // It cost exactly that on 2026-09-15: the pill read "Fable Medium" on a
+  // session whose own status line said `[Opus 5 xhigh | Max 20x]`. The live
+  // host reported no model at all, so this disk record was the only place the
+  // name could have come from — a pick from some earlier session, restored on a
+  // cold start and drawn as though it were current, with nothing to mark it as
+  // a memory. Same shape as the launch record dropped in the same pass: a
+  // remembered value shown as a live one.
   return changed
 }

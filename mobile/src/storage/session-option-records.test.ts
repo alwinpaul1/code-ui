@@ -31,10 +31,36 @@ describe('mergeStoredSessionOptionRecord', () => {
         opus: { effort: { value: 'high', source: 'dispatched' }, fast: { value: true, source: 'reported' } }
       }
     }
-    expect(mergeStoredSessionOptionRecord(live, stored)).toBe(true)
+    // Nothing is merged: the live effort pick is newer, the stored `fast` is a
+    // reported value, and the model is no longer restored at all.
+    expect(mergeStoredSessionOptionRecord(live, stored)).toBe(false)
     expect(live.valuesByModel.opus?.effort?.value).toBe('max')
     expect(live.valuesByModel.opus?.fast).toBeUndefined()
-    // No report yet in memory: the stored model fills the gap.
-    expect(live.model).toEqual({ value: 'opus', source: 'reported' })
+    // The stored MODEL is not restored — see the test below.
+    expect(live.model).toBeUndefined()
+  })
+
+  // 2026-09-15, the last door the wrong model came through. The pill read
+  // "Fable Medium" on a session whose own status line said Opus 5 xhigh, and
+  // the live host reports no model at all (`orca worktree ps`: agentType, no
+  // model), so it was not coming from there. It was the phone's own disk: a
+  // model picked in some earlier session, restored on cold start and shown as
+  // if it were current, with nothing marking it as a memory.
+  //
+  // The per-model OPTION values still restore, and must: effort and toggles are
+  // never reported back by the agent, so a record lost with the process is lost
+  // for good. The model is the opposite — the agent states it on every repaint,
+  // so remembering it buys a second of nothing and costs a wrong answer.
+  it('never restores a remembered model as the current one', () => {
+    const live: NativeChatSessionOptionRecord = { agent: 'claude', valuesByModel: {} }
+    const stored: NativeChatSessionOptionRecord = {
+      agent: 'claude',
+      model: { value: 'fable', source: 'reported' },
+      valuesByModel: { fable: { effort: { value: 'medium', source: 'dispatched' } } }
+    }
+    mergeStoredSessionOptionRecord(live, stored)
+    expect(live.model).toBeUndefined()
+    // The effort pick for that model is still worth keeping.
+    expect(live.valuesByModel.fable?.effort?.value).toBe('medium')
   })
 })
