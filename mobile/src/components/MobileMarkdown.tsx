@@ -218,19 +218,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderTextRun(styles, token.slice(2, -2), `${key}i`, onOpenFile)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderTextRun(styles, token.slice(2, -2), `${key}i`, onOpenFile)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderTextRun(styles, token.slice(1, -1), `${key}i`, onOpenFile)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile)}
         </Text>
       )
     }
@@ -339,7 +339,13 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
                   command or an indented block shreds it, and a reader who
                   wants to copy a line needs the line. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {/* The bar is SHOWN, and kept on Android rather than fading, so a
+                  line the phone cannot fit reads as scrollable instead of as
+                  broken. Reported 2026-09-15: the gate command in CLAUDE.md
+                  ended at "npx" and looked truncated — it scrolled the whole
+                  time, nothing said so. Android only draws the bar when the
+                  content actually overflows, so a short fence gets none. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
                 <Text selectable={selectable} style={styles.codeText}>
                   {block.text}
                 </Text>
@@ -378,7 +384,8 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           })
           const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)
           return (
-            <ScrollView key={index} horizontal showsHorizontalScrollIndicator={false}>
+            // A table that runs past the screen needs the same telling.
+            <ScrollView key={index} horizontal showsHorizontalScrollIndicator persistentScrollbar>
               <View style={styles.table}>
                 <View style={styles.tableRow}>
                   {columns.map((cellIndex) => (
