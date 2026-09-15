@@ -216,6 +216,22 @@ export async function showLocalNotification(
   }
 }
 
+/** Clear a banner the OS is still showing that this process has no record of.
+ *  Matched on the host AND the notification id: two hosts can raise the same
+ *  id, and dismissing the wrong one hides a notification nobody has seen. */
+async function dismissPresentedNotification(hostId: string, notificationId: string): Promise<void> {
+  const presented = await Notifications.getPresentedNotificationsAsync().catch(() => [])
+  for (const item of presented) {
+    const data = item.request?.content?.data as
+      | { hostId?: unknown; notificationId?: unknown }
+      | undefined
+    if (data?.hostId === hostId && data?.notificationId === notificationId) {
+      // The identifier is the REQUEST's, not the notification's.
+      await Notifications.dismissNotificationAsync(item.request.identifier).catch(() => {})
+    }
+  }
+}
+
 export async function dismissLocalNotification(
   event: DismissNotificationEvent,
   hostId: string
@@ -226,6 +242,16 @@ export async function dismissLocalNotification(
   const storedKey = getStoredNotificationKey(hostId, event.notificationId)
   const state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
   if (!state) {
+    // The record lives in memory; the banner lives in the OS, and the two do not
+    // die together. Background delivery is the normal path, so the app
+    // restarting between showing a notification and dismissing it is the common
+    // case — and returning here left that banner in the tray for good, with
+    // every later one stacking on top of something the user had already dealt
+    // with (reported 2026-09-15).
+    //
+    // The OS knows what it is still showing and the payload carries the host and
+    // notification id, so the identifier is recoverable without it.
+    await dismissPresentedNotification(hostId, event.notificationId)
     return
   }
   if (state.pending) {
