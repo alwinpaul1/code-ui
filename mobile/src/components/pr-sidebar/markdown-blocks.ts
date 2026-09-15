@@ -169,8 +169,24 @@ function parseLines(content: string): MarkdownBlock[] {
       const items: string[] = []
       let match = ordered ? ORDERED.exec(line) : UNORDERED.exec(line)
       while (match) {
-        items.push(match[1].trim())
+        // A wrapped item continues on the lines under it: indented, non-blank,
+        // and not a marker of its own. Without this the list ended at the first
+        // continuation line, that line became a paragraph at the left margin,
+        // and the next item opened a fresh list — so every item was numbered 1.
+        // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
+        const parts = [match[1].trim()]
         i += 1
+        while (i < lines.length) {
+          const next = lines[i]
+          if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
+            break
+          }
+          parts.push(next.trim())
+          i += 1
+        }
+        // Joined with a space: a single newline inside a paragraph is not a line
+        // break in markdown, it reflows.
+        items.push(parts.join(' '))
         if (i >= lines.length) {
           break
         }
