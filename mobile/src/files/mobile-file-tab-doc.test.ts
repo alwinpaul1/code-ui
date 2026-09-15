@@ -125,6 +125,23 @@ describe('resolveMobileFileTabDoc', () => {
     expect(doc).toEqual({ status: 'ready', kind: 'html', content: '<h1>hi</h1>' })
   })
 
+  // Why: markdown renders as a document, so the reader cannot see where the text
+  // stops. The host's truncation facts have to travel with it or a cut-off
+  // CLAUDE.md reads as the whole file.
+  it('says a markdown file was cut off instead of rendering the stump as the document', async () => {
+    const client = clientOf({
+      'files.read': ok({ content: '# Rules', truncated: true, byteLength: 400_000 })
+    })
+    const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'CLAUDE.md' })
+    expect(doc).toEqual({
+      status: 'ready',
+      kind: 'markdown',
+      content: '# Rules',
+      truncated: true,
+      byteLength: 400_000
+    })
+  })
+
   it('renders a plain text file via files.read', async () => {
     const client = clientOf({
       'files.read': ok({ content: 'hello', truncated: true, byteLength: 5 })

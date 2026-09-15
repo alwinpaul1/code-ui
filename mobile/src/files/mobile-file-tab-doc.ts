@@ -16,7 +16,13 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'pdf'; uri: string }
   | { status: 'ready'; kind: 'html'; content: string }
-  | { status: 'ready'; kind: 'markdown'; content: string }
+  | {
+      status: 'ready'
+      kind: 'markdown'
+      content: string
+      truncated: boolean
+      byteLength: number
+    }
 
 export type MobileFileTabDocRequest = {
   worktreeId: string
@@ -94,7 +100,16 @@ export async function resolveMobileFileTabDoc(
     return { status: 'ready', kind: 'html', content: result.content }
   }
   if (artifactKind === 'markdown') {
-    return { status: 'ready', kind: 'markdown', content: result.content }
+    // Why truncation travels with it: markdown renders as a document, which
+    // hides where the text stops. A cut-off CLAUDE.md would otherwise read as
+    // the whole file.
+    return {
+      status: 'ready',
+      kind: 'markdown',
+      content: result.content,
+      truncated: result.truncated,
+      byteLength: result.byteLength
+    }
   }
   return {
     status: 'ready',

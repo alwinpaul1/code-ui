@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { ScrollView, Text } from 'react-native'
+import { ScrollView, Text, type StyleProp, type TextStyle } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
@@ -58,9 +58,18 @@ export function MobileFilePreviewSourceText({
   )
 }
 
-export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
+export function MobileFilePreviewTruncatedNote({
+  byteLength,
+  // Why: the markdown preview draws this note over a themed surface, so it
+  // hands in its own colour. It layers over the shared one rather than
+  // replacing it, so a field added below still reaches every caller.
+  style
+}: {
+  byteLength: number
+  style?: StyleProp<TextStyle>
+}) {
   return (
-    <Text style={styles.truncatedNote}>
+    <Text style={[styles.truncatedNote, style]}>
       Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
     </Text>
   )
