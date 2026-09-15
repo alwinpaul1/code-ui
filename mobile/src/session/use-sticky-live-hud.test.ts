@@ -66,6 +66,30 @@ describe('the model and effort the badge last stated', () => {
     expect(render(null, 'tab-2')).toEqual({ model: null, effort: null, context: null })
   })
 
+  // 2026-09-15, still wrong on 0.5.98: model and effort were held SEPARATELY,
+  // so an observation carrying an effort but no model — what the host's own
+  // agent-status merge produces, and its effort is the launch-time one —
+  // overwrote the effort while the model stayed. The pill then read a pair
+  // that never existed, e.g. "Opus Medium" on a session running Opus xhigh.
+  // Effort belongs to a model: only a reading that names a model may set it.
+  it('does not let an effort with no model behind it change the pair', () => {
+    render({ modelId: 'opus', effort: 'xhigh' })
+    expect(render({ modelId: null, effort: 'medium' })).toMatchObject({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
+  it('takes model and effort together from the reading that names the model', () => {
+    render({ modelId: 'opus', effort: 'xhigh' })
+    // A later reading names a model with no effort: the stale xhigh must not
+    // survive onto it, because this reading is the authority on the pair.
+    expect(render({ modelId: 'sonnet', effort: null })).toMatchObject({
+      model: 'sonnet',
+      effort: null
+    })
+  })
+
   // 2026-09-15: the ring is read off the same badge, so an empty read blanked
   // it mid-conversation instead of keeping the figure the agent last stated.
   it('keeps the context figure across an empty screen read', () => {

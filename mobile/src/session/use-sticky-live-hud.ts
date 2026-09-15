@@ -46,10 +46,17 @@ export function useStickyLiveHud(
   if (held.current.tab !== tabId) {
     held.current = { tab: tabId, model: null, effort: null, context: null }
   }
+  // Model and effort move TOGETHER, from the reading that names the model.
+  //
+  // An effort with no model behind it is not a statement about this session's
+  // model: `applyAgentStatusHudFields` builds exactly that observation — a null
+  // model carrying the host's `agentStatus.effort` — whenever the screen read
+  // comes back empty, which on a host with no status line is every tick. Taking
+  // it alone welded a launch-time effort onto a model read somewhere else, and
+  // the pill stated a pair that never existed ("Opus Medium" on Opus xhigh).
+  // The reading that names the model owns the effort beside it, null included.
   if (observation?.modelId) {
     held.current.model = observation.modelId
-  }
-  if (observation?.effort) {
     held.current.effort = observation.effort
   }
   if (observation?.context) {

@@ -67,6 +67,50 @@ describe('a finger on the list', () => {
     expect(latest!.showJumpToLatest).toBe(true)
   })
 
+  // 2026-09-15, reported from the phone: "when i click and hold to copy a
+  // sentence or paragraph it moves down or drifts away".
+  //
+  // Releasing is too late to matter. The list's native scroll anchoring is
+  // configured `{ disabled: !showJumpToLatest }`, so while the reader still
+  // counts as following, nothing holds the content still — and the whole
+  // press-and-hold ran as "following", because intent only flipped at
+  // `touchEnd`. By then the selection has already slid off under the stream.
+  // Control has to pass at the long-press mark, with the finger still down.
+  it('takes control while the finger is still down, not when it lifts', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => latest!.touchStart())
+    expect(latest!.followingRef.current).toBe(true)
+    act(() => {
+      vi.advanceTimersByTime(450)
+    })
+    // Still holding — no touchEnd yet — and the list must already be the
+    // reader's, so the anchoring the jump flag drives is on for the selection.
+    expect(latest!.holdingRef.current).toBe(true)
+    expect(latest!.followingRef.current).toBe(false)
+    expect(latest!.showJumpToLatest).toBe(true)
+  })
+
+  it('does not take control from a finger that lifts before the long-press', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => latest!.touchStart())
+    act(() => {
+      vi.advanceTimersByTime(80)
+    })
+    act(() => latest!.touchEnd())
+    act(() => {
+      // The armed timer must not fire after the finger is gone.
+      vi.advanceTimersByTime(600)
+    })
+    expect(latest!.followingRef.current).toBe(true)
+    expect(latest!.showJumpToLatest).toBe(false)
+  })
+
   it('leaves following alone after a tap', () => {
     vi.useFakeTimers()
     act(() => {
