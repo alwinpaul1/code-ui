@@ -28,6 +28,7 @@ import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-ac
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { useStickyLiveHud } from './use-sticky-live-hud'
+import { reportedModelPair } from './mobile-chat-reported-model'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import {
   withTerminalDialogOptions,
@@ -174,6 +175,8 @@ export function useMobileNativeChatController(
   // report so the pill and sheet can use it as a floor when the beacon's
   // transcript tail lags on a huge session.
   const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId)
+  // Model and effort as one pair, from one source; see the module's comment.
+  const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
   const backgroundTaskReportWithScreen = useMemo(
     () => ({ ...backgroundTaskReport, onScreenShellCount }),
@@ -365,10 +368,9 @@ export function useMobileNativeChatController(
       // id on a Codex pane and falls back to the picker's `(current)` row). The
       // footer, when a turn has drawn it, is only a fresher override.
       reportedModel:
-        activeChatResolution?.agent === 'codex'
-          ? codexModel.model
-          : (liveHud.model ?? activeSessionTab?.agentStatus?.model ?? null),
-      reportedEffort: activeChatResolution?.agent === 'codex' ? codexModel.effort : liveHud.effort,
+        activeChatResolution?.agent === 'codex' ? codexModel.model : claudeReported.model,
+      reportedEffort:
+        activeChatResolution?.agent === 'codex' ? codexModel.effort : claudeReported.effort,
       openRequest: modelSheetRequest,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
