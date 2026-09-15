@@ -58,6 +58,7 @@
     "expo-task-manager": "57.0.16",
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
+    "marked": "18.0.12",
     "mermaid": "11.17.2",
     "react": "^19.2.8",
     "react-dom": "19.2.8",

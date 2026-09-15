@@ -3,7 +3,12 @@ import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import { MARKDOWN_BASE_SIZE, useMarkdownStyles, type MarkdownStyles } from './mobile-markdown-styles'
+import {
+  MARKDOWN_BASE_SIZE,
+  MARKDOWN_LIST_INDENT,
+  useMarkdownStyles,
+  type MarkdownStyles
+} from './mobile-markdown-styles'
 import {
   detectFilePathSegments,
   isFilePathCodeSpan,
@@ -15,7 +20,7 @@ import {
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
@@ -41,6 +46,9 @@ type Props = {
 
 const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
+/** Bullet per nesting level, so a sub-item reads as one even where the indent
+ *  alone is too narrow to see at ~40 columns. Deeper levels reuse the last. */
+const LIST_BULLETS = ['•', '◦', '▪']
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
 
@@ -55,6 +63,31 @@ function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void)
   if (route.kind === 'file' && onOpenFile) {
     onOpenFile(route.pathText)
   }
+}
+
+function headingScale(styles: MarkdownStyles, level: number): MarkdownStyles[keyof MarkdownStyles] | null {
+  if (level <= 1) {
+    return styles.headingLevel1
+  }
+  if (level === 2) {
+    return styles.headingLevel2
+  }
+  if (level === 3) {
+    return styles.headingLevel3
+  }
+  return null
+}
+
+/** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
+ *  a box for a task item whichever list it sits in. */
+function listMarker(item: MobileMarkdownListItem): string {
+  if (item.checked != null) {
+    return item.checked ? '☑' : '☐'
+  }
+  if (item.ordered) {
+    return `${item.number ?? 1}.`
+  }
+  return LIST_BULLETS[Math.min(item.depth, LIST_BULLETS.length - 1)]!
 }
 
 // Render a plain (non-token) text run, splitting out tappable file paths when
@@ -255,16 +288,16 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                 <Fragment key={memberIndex}>
                   {memberIndex > 0 ? '\n\n' : null}
                   {member.type === 'heading' ? (
-                    <Text style={[styles.heading, member.level <= 2 ? styles.headingLarge : null]}>
+                    <Text style={[styles.heading, headingScale(styles, member.level)]}>
                       {renderInline(styles, member.text, onOpenFile)}
                     </Text>
                   ) : (
-                    member.text.split('\n').map((line, lineIndex) => (
-                      <Fragment key={lineIndex}>
-                        {lineIndex > 0 ? '\n' : null}
-                        {renderInline(styles, line, onOpenFile)}
-                      </Fragment>
-                    ))
+                    // One inline pass over the WHOLE paragraph. Matching line by
+                    // line left `**bold` on one source line and `text**` on the
+                    // next as literal asterisks on the phone (reported from the
+                    // device); the parser has already reflowed soft wraps, so
+                    // any newline left here is a deliberate hard break.
+                    renderInline(styles, member.text, onOpenFile)
                   )}
                 </Fragment>
               ))}
@@ -298,9 +331,14 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.codeBlock}>
               {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text selectable={selectable} style={styles.codeText}>
-                {block.text}
-              </Text>
+              {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
+                  command or an indented block shreds it, and a reader who
+                  wants to copy a line needs the line. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Text selectable={selectable} style={styles.codeText}>
+                  {block.text}
+                </Text>
+              </ScrollView>
             </View>
           )
         }
@@ -376,16 +414,14 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.list}>
               {block.items.map((item, itemIndex) => (
-                <View key={itemIndex} style={styles.listItem}>
-                  <Text style={[styles.listMarker, proseScale]}>
-                    {item.checked == null
-                      ? block.ordered
-                        ? `${itemIndex + 1}.`
-                        : '•'
-                      : item.checked
-                        ? '☑'
-                        : '☐'}
-                  </Text>
+                <View
+                  key={itemIndex}
+                  style={[
+                    styles.listItem,
+                    item.depth > 0 ? { marginLeft: item.depth * MARKDOWN_LIST_INDENT } : null
+                  ]}
+                >
+                  <Text style={[styles.listMarker, proseScale]}>{listMarker(item)}</Text>
                   <Text selectable={selectable} style={[styles.listText, proseScale]}>
                     {renderInline(styles, item.text, onOpenFile)}
                   </Text>

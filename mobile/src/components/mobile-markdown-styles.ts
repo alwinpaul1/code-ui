@@ -12,6 +12,10 @@ export const MARKDOWN_BASE_SIZE = 15
  *  A chip in a table cell was sliced across the middle (2026-09-14). */
 export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 2
 
+/** One level of list nesting, in px. Narrow on purpose: at ~40 columns a
+ *  desktop-sized indent leaves a third-level item too little room to read. */
+export const MARKDOWN_LIST_INDENT = 16
+
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
   return StyleSheet.create({
@@ -28,16 +32,28 @@ export function makeMarkdownStyles(theme: Theme) {
       lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
+    // Headings carry the document's structure, and at ~40 columns a reader
+    // scrolls past far more of them than on a desktop. One step of size per
+    // level down to h3 is what makes a section boundary visible without a
+    // heading eating the screen; h4-h6 lean on weight alone.
     heading: {
       fontFamily: fonts.semibold,
       fontSize: MARKDOWN_BASE_SIZE + 1,
-      lineHeight: MARKDOWN_BASE_SIZE + 8,
+      lineHeight: MARKDOWN_BASE_SIZE + 9,
       color: colors.text,
       marginTop: space.xs
     },
-    headingLarge: {
-      fontSize: MARKDOWN_BASE_SIZE + 3,
-      lineHeight: MARKDOWN_BASE_SIZE + 10
+    headingLevel1: {
+      fontSize: MARKDOWN_BASE_SIZE + 7,
+      lineHeight: MARKDOWN_BASE_SIZE + 15
+    },
+    headingLevel2: {
+      fontSize: MARKDOWN_BASE_SIZE + 4,
+      lineHeight: MARKDOWN_BASE_SIZE + 13
+    },
+    headingLevel3: {
+      fontSize: MARKDOWN_BASE_SIZE + 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 11
     },
     bold: {
       fontFamily: fonts.semibold,
@@ -193,7 +209,9 @@ export function makeMarkdownStyles(theme: Theme) {
       gap: space.sm
     },
     listMarker: {
-      width: 22,
+      // minWidth, not width: `10.` and beyond would be clipped by a fixed 22,
+      // and the markers of one list still share a width so their text lines up.
+      minWidth: 22,
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 1,
       lineHeight: MARKDOWN_BASE_SIZE + 10,
