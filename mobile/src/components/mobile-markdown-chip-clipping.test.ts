@@ -73,6 +73,11 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
     (scheme) => {
       const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as {
         paragraph: { lineHeight: number }
+        tableCell: { lineHeight: number }
+        heading: { lineHeight: number }
+        headingLevel1: { lineHeight: number }
+        headingLevel2: { lineHeight: number }
+        headingLevel3: { lineHeight: number }
         listText: { lineHeight: number }
         quoteText: { lineHeight: number }
         inlineCodeChip: { paddingVertical?: number; borderWidth?: number } & Box
@@ -88,7 +93,24 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
       const footprint = shift + chipHeight
       // Every prose block a chip can wrap inside must clear the pill's footprint
       // with room to spare, or two wrapped pills touch.
-      for (const block of [styles.paragraph, styles.listText, styles.quoteText]) {
+      // tableCell joins the list on 2026-09-15. A table's Branch column stacked
+      // two pills of one split path and they collided and clipped (device
+      // screenshot) — the cell's line height was BASE + 4 while a pill paints
+      // BASE + 7. The invariant was right; it just was not asked about every
+      // block a pill can land in, which is the whole lesson.
+      // EVERY block renderInline can put a pill in, not the three that had been
+      // reported so far. The headings already cleared it — h4 exactly — and are
+      // here so they cannot drift below it unnoticed.
+      for (const block of [
+        styles.paragraph,
+        styles.listText,
+        styles.quoteText,
+        styles.tableCell,
+        styles.heading,
+        styles.headingLevel1,
+        styles.headingLevel2,
+        styles.headingLevel3
+      ]) {
         expect(block.lineHeight).toBeGreaterThanOrEqual(footprint + MIN_GAP)
       }
     }

@@ -202,7 +202,13 @@ export function makeMarkdownStyles(theme: Theme) {
       paddingBottom: space.xs + MARKDOWN_INLINE_CHIP_BASELINE_SHIFT,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE - 2,
-      lineHeight: MARKDOWN_BASE_SIZE + 4,
+      // +10, the same headroom the paragraph carries, and for the same reason:
+      // a cell is a block an inline code pill can wrap inside, and Android
+      // ignores an inline View's vertical margins, so this line height is the
+      // only separation there is. At +4 a Branch column that stacked two pills
+      // of one split path collided and clipped them (device screenshot,
+      // 2026-09-15). Pinned in mobile-markdown-chip-clipping.test.ts.
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
     tableHeader: {
