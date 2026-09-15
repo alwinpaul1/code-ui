@@ -1,5 +1,5 @@
 import { peekLiveHostClient } from '../transport/live-host-clients'
-import { Alert, AppState, Platform } from 'react-native'
+import { AppState, Platform } from 'react-native'
 import {
   isBackgroundLinkSupported,
   isBackgroundLinkUnrestricted,
@@ -16,10 +16,8 @@ import {
   saveBackgroundPowerLastSeen
 } from '../storage/preferences'
 import { getInstalledVersion } from '../app-update/installed-version'
-import {
-  BACKGROUND_POWER_PROMPT,
-  adviseBackgroundDeliveryPower
-} from './background-delivery-power'
+import { adviseBackgroundDeliveryPower } from './background-delivery-power'
+import { openBackgroundPowerPrompt } from './background-power-prompt-store'
 import { subscribeConnectionRevivalTriggers } from '../transport/connection-revival-triggers'
 import { openHostLogicalClient } from '../transport/host-logical-client'
 import { loadHosts } from '../transport/host-store'
@@ -177,16 +175,8 @@ export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   // Marked asked BEFORE showing it: a dismissal must not bring it back on the
   // next launch.
   await saveBackgroundPowerAskedVersion(version)
-  // Explained first. Android's own dialog names the cost and not the benefit, so
-  // on its own it is declined reflexively — and then notifications are late and
-  // nothing connects the two.
-  Alert.alert(BACKGROUND_POWER_PROMPT.title, BACKGROUND_POWER_PROMPT.body, [
-    { text: BACKGROUND_POWER_PROMPT.dismiss, style: 'cancel' },
-    {
-      text: BACKGROUND_POWER_PROMPT.confirm,
-      onPress: () => {
-        requestBackgroundDeliveryUnrestricted()
-      }
-    }
-  ])
+  // Explained first, in the app's own sheet. Android's dialog names the cost and
+  // not the benefit, so alone it is dismissed without being read, and the late
+  // notifications that follow are never connected back to it.
+  openBackgroundPowerPrompt()
 }

@@ -19,6 +19,7 @@ import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
+import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -254,6 +255,9 @@ function ThemedRoot() {
           <Stack.Screen name="about" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>
+        {/* Mounted once, above every route: the battery prompt is raised from a
+            launch effect outside the tree and needs somewhere to render. */}
+        <MobileBackgroundPowerPrompt />
       </View>
     </RpcClientProvider>
   )
