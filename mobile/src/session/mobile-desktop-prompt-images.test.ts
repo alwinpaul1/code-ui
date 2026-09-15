@@ -7,13 +7,15 @@ import { showDesktopPromptImages } from './mobile-desktop-prompt-images'
 // desktop-pasted image, so the prompt arrived reading as if nothing had been
 // attached at all.
 describe('a desktop-pasted image in a prompt the phone draws', () => {
-  it('leaves a sign that an image was sent', () => {
-    expect(showDesktopPromptImages('see this [Image #1]')).toBe('see this 🖼 Image')
+  // Same wording the image chip already uses for a picture that lives on the
+  // desktop, so the two do not describe the same thing two ways.
+  it('leaves a sign that an image was sent, worded as the chip words it', () => {
+    expect(showDesktopPromptImages('see this [Image #1]')).toBe('see this Image on Desktop')
   })
 
   it('marks every image in a prompt that carried several', () => {
     expect(showDesktopPromptImages('[Image #1] and [Image #2] here')).toBe(
-      '🖼 Image and 🖼 Image here'
+      'Image on Desktop and Image on Desktop here'
     )
   })
 

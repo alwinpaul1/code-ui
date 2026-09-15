@@ -1,9 +1,11 @@
 /** Claude Code writes a pasted image into the prompt text as `[Image #1]`. */
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 
-/** What the phone shows in its place. A picture, not a number: the count is the
- *  agent's own index into that turn's attachments and means nothing here. */
-const IMAGE_PLACEHOLDER = '🖼 Image'
+/** What the phone shows in its place, matching the wording the image chip
+ *  already uses for a picture that lives on the desktop
+ *  (`MobileNativeChatProse.tsx`: "Image on Desktop"). The agent's `#N` is its
+ *  own index into that turn's attachments and means nothing here, so it goes. */
+const IMAGE_PLACEHOLDER = 'Image on Desktop'
 
 /**
  * Keep a desktop-pasted image VISIBLE in the prompt the phone draws, as a
