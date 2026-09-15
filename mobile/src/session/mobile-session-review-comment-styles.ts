@@ -101,7 +101,11 @@ export const mobileSessionReviewCommentStyles = StyleSheet.create({
     fontWeight: '700'
   },
   markdownRefreshButton: {
-    alignSelf: 'flex-start',
+    // Centred, because both places this is used are the centred error state and
+    // `alignSelf` overrides the parent's `alignItems: center` — so the Retry
+    // button sat at the left margin under a centred message (device screenshot,
+    // 2026-09-15).
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

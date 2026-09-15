@@ -159,6 +159,27 @@ percentage. (The beacon is such evidence — Claude Code states
 `model_context_window` in its rollout. That is the agent telling us, not us
 guessing from a model name. With tokens and no window, still show no ring.)
 
+## Nothing stays stale once the relay connects
+
+**A screen opened before the connection came up must refresh itself when it
+does.** Not on a tap, not on a tab switch: by itself. Someone opens the app,
+taps a project and a file while the relay is still dialling, the read fails, and
+the tab then says "Couldn't load" over a connection that has been healthy for
+minutes. That is the app lying about the current state of the world, and the
+user has no way to know a retry would now succeed (reported 2026-09-15).
+
+So any surface that can hold a FAILED load owns a refetch keyed to
+`useLastConnectedAt(hostId)`, through
+`shouldRefetchAfterReconnect` in `mobile/src/transport/stale-after-reconnect.ts`.
+The rule it enforces is one refetch per NEW connection, never one per render —
+an effect that sees its own failure and retries immediately will spin for as
+long as the host is down. The first sighting of an error only records which
+connection it happened on; the retry comes when that value changes.
+
+**A manual Retry button is not this.** Several screens already had one and
+still sat stale, because a button is the user doing the app's job for it. Keep
+the button for the case where the connection is fine and the read failed anyway.
+
 ## Never bump the version until asked
 
 **Install the current build on the phone WITHOUT bumping, and wait.** The user

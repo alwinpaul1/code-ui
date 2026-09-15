@@ -65,8 +65,8 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = 'ffc5b21088dd60740f52ac4ebcd2c1e40936c684da15e94c128e5a42de4a9d81'
-const HEAD_HOOK_BINDING_SHA256 = '6e4162af65efb48a225547044ddd80584c7b164e369d4a6c28700607619791d5'
+const HEAD_MAIN_HOOK_SHA256 = 'f2637e86c7e0dad0d7455958cfa1f94720a5786e9deabed6e47048dd5a989da9'
+const HEAD_HOOK_BINDING_SHA256 = '483065978842b48e76e3b5225145cd22f5e5ccb3549ea1a11db57825cc399af3'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '6a7e436faf5b6661c09b0339114593c4c1068be2dc1700cdfad61689c307b5e1'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
@@ -87,7 +87,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-11: hardware back moved from the markdown actions to the view switch,
 // where it can return a terminal-mode tab to its chat view before leaving.
 const HEAD_CALLBACK_BODY_SHA256 = '1c186b132e80ecca988437281d723229b14a4334d03a580b8253faeb5d7035ee'
-const HEAD_EFFECT_SHA256 = 'a123a0fd0b45e180aff593c9876a4227144c4a9f53fac5dbdb2a73c5dbb4bbbd'
+const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 const HEAD_CONTENT_HOOK_SHA256 = 'afa08b0da2bac9f30daee744098184f10a3db59755ffb75ef0bcdc4327f85750'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
@@ -117,7 +117,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '97fbda848e76787b764d1d8b0aee92c6b9941687267396ccfaf80c50b303b042'
+  '5f4b8de02c812181dddf7b062ed3146c289b2435f39d297989512fb08d877b57'
 const HEAD_HOST_JSX_SHA256 = 'fdec8bd6c39d6a2703b52a439c22d1b57b75d0f0bd28813d149b4457dc2f9a3d'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
@@ -519,7 +519,9 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(274)
+    // 277 since 2026-09-15: the session tabs re-read a document when the host
+    // reconnects — useLocalSearchParams, useLastConnectedAt and the ledger ref.
+    expect(main.hooks).toHaveLength(277)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(78)
@@ -572,7 +574,9 @@ describe('mobile session route extraction parity', () => {
     // toggle, the way the desktop has always shown it, instead of as raw text.
     // 654 since 2026-09-15 (later): the .md TAB gets its own Preview/Edit
     // toggle, so opening a document reads it instead of opening an editor.
-    expect(strings).toHaveLength(654)
+    // 656 since 2026-09-15 (later): the hostId search param and the two
+    // document statuses the reconnect refetch reads.
+    expect(strings).toHaveLength(656)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

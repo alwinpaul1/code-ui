@@ -1,4 +1,10 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
+import { useLocalSearchParams } from 'expo-router'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 
@@ -23,6 +29,9 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     readMarkdownTab,
     readFileTab
   } = scope
+  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
   // Why: only store the ref; subscribe on web-ready to avoid the blank-terminal race (init queued before xterm.js loaded).
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
     terminalDiagnosticsRef.current.webViewRef(handle, ref != null)
@@ -74,25 +83,44 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
+  // A tab opened before the relay connected used to keep its failure for as
+  // long as it stayed open: these effects only fetched when there was NO
+  // document, and an error IS a document. `lastConnectedAt` moves on each new
+  // connection, and the ledger allows one retry per connection so a host that
+  // stays down is not hammered once per render. See stale-after-reconnect.ts.
   useEffect(() => {
     if (activeSessionTab?.type !== 'markdown') {
       return
     }
     const doc = markdownDocs.get(activeSessionTab.id)
-    if (!doc) {
+    if (
+      shouldRefetchAfterReconnect(
+        staleLedgerRef.current,
+        activeSessionTab.id,
+        doc?.status ?? 'missing',
+        lastConnectedAt
+      )
+    ) {
       void readMarkdownTab(activeSessionTab)
     }
-  }, [activeSessionTab, markdownDocs, readMarkdownTab])
+  }, [activeSessionTab, markdownDocs, readMarkdownTab, lastConnectedAt])
 
   useEffect(() => {
     if (activeSessionTab?.type !== 'file') {
       return
     }
     const doc = fileDocs.get(activeSessionTab.id)
-    if (!doc) {
+    if (
+      shouldRefetchAfterReconnect(
+        staleLedgerRef.current,
+        activeSessionTab.id,
+        doc?.status ?? 'missing',
+        lastConnectedAt
+      )
+    ) {
       void readFileTab(activeSessionTab)
     }
-  }, [activeSessionTab, fileDocs, readFileTab])
+  }, [activeSessionTab, fileDocs, readFileTab, lastConnectedAt])
   return {
     setTerminalWebViewRef,
     handleTerminalWebReady

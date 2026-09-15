@@ -6,6 +6,11 @@ import { ChevronLeft, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import {
   loadMobileFilePreview,
   previewError,
@@ -169,6 +174,24 @@ export function MobileFilePreviewScreen({ route }: Props) {
     }
     void loadPreview()
   }, [connState, forceReconnect, loadPreview, preview, previewParams])
+
+  // The same rule the session tabs follow: a preview opened before the relay
+  // connected must not sit on its failure until someone taps Retry. One refetch
+  // per new connection, never one per render (2026-09-15).
+  const lastConnectedAt = useLastConnectedAt(previewParams?.hostId)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
+  useEffect(() => {
+    const key = previewSource ? sourceKeyForPreview(previewSource) : null
+    if (!key || preview.status !== 'error') {
+      if (key) {
+        shouldRefetchAfterReconnect(staleLedgerRef.current, key, 'ready', lastConnectedAt)
+      }
+      return
+    }
+    if (shouldRefetchAfterReconnect(staleLedgerRef.current, key, 'error', lastConnectedAt)) {
+      void loadPreview()
+    }
+  }, [lastConnectedAt, loadPreview, preview.status, previewSource])
 
   const displayPath =
     previewParams?.source === 'terminalArtifact'
