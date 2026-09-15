@@ -151,6 +151,44 @@ describe('the chat transcript has one owner for its scroll position', () => {
     }
   })
 
+  // 2026-09-15 regression review: the holding guard above stops `following`
+  // being handed back mid-long-press — correct — but the history-paging branch
+  // beside it never checked `holding` at all. In a conversation short enough
+  // that the live edge and the start of loaded history OVERLAP, holding a
+  // selection left following false and immediately paged in older history,
+  // detaching the list from the tail under the reader's finger. A finger down
+  // is a finger down for both branches.
+  it('does not page in history under a finger held on a short conversation', () => {
+    vi.useFakeTimers()
+    try {
+      const onLoadEarlier = vi.fn()
+      render({ rows: [{ id: 'a1' }], hasMore: true, onLoadEarlier })
+      act(() => latest!.touchStart())
+      act(() => {
+        vi.advanceTimersByTime(450)
+      })
+      // Content barely taller than the viewport: at the tail AND at the start
+      // of loaded history at the same time.
+      act(() => latest!.evaluateEdge(at(0, 440)))
+      expect(onLoadEarlier).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still pages in history once the finger lifts', () => {
+    vi.useFakeTimers()
+    try {
+      const onLoadEarlier = vi.fn()
+      render({ rows: [{ id: 'a1' }], hasMore: true, onLoadEarlier })
+      act(() => latest!.onScrollBeginDrag())
+      act(() => latest!.evaluateEdge(at(0, 440)))
+      expect(onLoadEarlier).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // The dock's height is the spacer at the list's end; when it grows, the
   // newest row ends up underneath it. That re-pin is the same command as every
   // other, so it goes through the same owner and obeys the same refusal.

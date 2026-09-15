@@ -19,15 +19,12 @@ import type {
 } from '../../../src/shared/native-chat-session-options'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
-  clearPendingModelPick,
   clearPendingModelPicksForTests,
-  decideModelReport,
-  forgetLiveModelReport,
+  forgetModelReportScope,
   getPendingModelPick,
-  hasSeenLiveModelReport,
   MODEL_PICK_GRACE_MS,
-  noteLiveModelReport,
   notePendingModelPick,
+  resolveReportedModelSeed,
   type ModelReportSource
 } from './mobile-native-chat-model-report-authority'
 import {
@@ -44,7 +41,6 @@ import {
   createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
   isFlipOnlyMidSession,
-  matchNativeChatCatalogModelId,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from '../../../src/shared/native-chat-session-option-state'
@@ -69,12 +65,6 @@ type PendingOperation = { id: string; token: number }
 // scope cache. Bounded so long sessions across many tabs can't grow unbounded.
 const MOBILE_SESSION_OPTION_RECORD_CAP = 32
 const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
-// The catalog model id last taken from a report, per scope. This gates the
-// LAUNCH record only, which repeats itself on every tab re-entry. It used to
-// gate live readings too, on the premise that mobile cannot read the agent's
-// screen — no longer true, and that premise is what froze the pill on a model
-// the session never ran (2026-09-15).
-const appliedReportByScope = new Map<string, string>()
 // Scopes whose stored record has been consulted once this process. Effort and
 // toggles are never reported back by the agent, so a record lost with the
 // process is lost for good unless it is read back from disk.
@@ -91,7 +81,10 @@ function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOpti
   const record =
     existing && existing.agent === agent ? existing : createNativeChatSessionOptionRecord(agent)
   if (record !== existing) {
-    appliedReportByScope.delete(scopeKey)
+    // The agent under this tab changed: nothing the OLD one said about itself
+    // is evidence about this one. Leaving any of it latched left the fresh
+    // record with no model at all (2026-09-15).
+    forgetModelReportScope(scopeKey)
   }
   // Why: delete-then-set on every read makes the touched scope most-recent, so
   // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
@@ -104,16 +97,13 @@ function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOpti
       break
     }
     recordsByScope.delete(oldest)
-    appliedReportByScope.delete(oldest)
-    clearPendingModelPick(oldest)
-    forgetLiveModelReport(oldest)
+    forgetModelReportScope(oldest)
   }
   return record
 }
 
 export function clearMobileSessionOptionRecordsForTests(): void {
   recordsByScope.clear()
-  appliedReportByScope.clear()
   clearPendingModelPicksForTests()
   resetEffortReportGateForTests()
 }
@@ -142,6 +132,9 @@ export function useMobileNativeChatSessionOptions(args: {
    *  is the host's start-of-session record and only counts when it changes.
    *  See `mobile-native-chat-model-report-authority.ts`. */
   reportedModelSource?: ModelReportSource
+  /** The tab's terminal. A scope outlives its terminal, so "this agent has
+   *  stated its model" is remembered per terminal, not per scope. */
+  terminalHandle?: string | null
   dispatchCommand: (
     command: string,
     options?: { delivery?: CatalogCommandDelivery }
@@ -163,6 +156,7 @@ export function useMobileNativeChatSessionOptions(args: {
   const { discoveredModels, discoveredModelApply, applyOverride } = args
   const reportedEffort = args.reportedEffort ?? null
   const reportedModelSource = args.reportedModelSource ?? 'launch'
+  const terminalHandle = args.terminalHandle ?? null
   // The catalog id the agent is currently reporting, for `setOption` to stamp on
   // a pick. A ref because the dispatch runs in a callback, not in render.
   const reportedModelRef = useRef<string | null>(null)
@@ -260,7 +254,7 @@ export function useMobileNativeChatSessionOptions(args: {
       clearNativeChatSessionModel(record)
       // Why: the seeding effect ignores a report it has already applied, so
       // without this the footer's (unchanged) model would never refill the pill.
-      appliedReportByScope.delete(scopeKey)
+      forgetModelReportScope(scopeKey)
       bump()
     }
   }, [agent, bump, discoveredModels, reportedModel, scopeKey, version])
@@ -271,42 +265,26 @@ export function useMobileNativeChatSessionOptions(args: {
     if (!catalog || !scopeKey || !agent || !reportedModel) {
       return
     }
-    // Why: Codex's lineup (gpt-6-astra, …) outpaces the catalog, so track a
-    // reported id it does not list as the raw model; withTrackedNativeChatModel
-    // then names it in the pill. Claude keeps the strict match (its badge label
-    // "Opus 5" is not a catalog id).
-    const matched =
-      matchNativeChatCatalogModelId(catalog, reportedModel) ??
-      (agent === 'codex' ? reportedModel.trim() : null)
-    if (!matched) {
+    const seed = resolveReportedModelSeed({
+      catalog,
+      agent,
+      reportedModel,
+      reportedEffort,
+      source: reportedModelSource,
+      scopeKey,
+      terminalHandle
+    })
+    if (!seed) {
       return
     }
-    reportedModelRef.current = matched
-    // A live reading is the agent describing itself now, so it always wins —
-    // including when it repeats, because a repeat is a second statement, not an
-    // echo. Only the launch record needs the changed-value rule: it is
-    // re-delivered on every tab re-entry and reconnect and cannot have observed
-    // a later `/model`. A pick just dispatched holds the pill briefly so a
-    // successful switch does not flicker. See the authority module.
-    const reportKey = reportedEffort ? `${matched}\0${reportedEffort}` : matched
-    if (
-      decideModelReport({
-        source: reportedModelSource,
-        reported: matched,
-        lastAppliedKey: appliedReportByScope.get(scopeKey),
-        reportKey,
-        pendingPick: getPendingModelPick(scopeKey),
-        sawLive: hasSeenLiveModelReport(scopeKey),
-        now: Date.now()
-      }) === 'skip'
-    ) {
+    // Stamped even when the seed is not applied: it is also what the agent is
+    // currently reporting, which a pick dispatched later records as its
+    // `wasReporting`.
+    reportedModelRef.current = seed.matched
+    if (!seed.apply) {
       return
     }
-    clearPendingModelPick(scopeKey)
-    if (reportedModelSource === 'live') {
-      noteLiveModelReport(scopeKey)
-    }
-    appliedReportByScope.set(scopeKey, reportKey)
+    const matched = seed.matched
     const record = getScopedRecord(scopeKey, agent)
     const applyEffort = shouldApplyReportedEffort({
       scopeKey,
@@ -324,7 +302,17 @@ export function useMobileNativeChatSessionOptions(args: {
     // `reconcileTick` is in the deps so the grace expiring re-runs this. Without
     // it a pick the agent refused would sit there until the report happened to
     // change, which — the agent having not moved — it never does.
-  }, [agent, bump, catalog, reconcileTick, reportedEffort, reportedModel, reportedModelSource, scopeKey])
+  }, [
+    agent,
+    bump,
+    catalog,
+    reconcileTick,
+    reportedEffort,
+    reportedModel,
+    reportedModelSource,
+    scopeKey,
+    terminalHandle
+  ])
 
   // Wake the seeding effect once the grace on a dispatched pick has passed.
   //

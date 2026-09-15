@@ -182,6 +182,7 @@ export function useMobileNativeChatController(
   const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId, activeHandle)
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
+  const isCodexChat = activeChatResolution?.agent === 'codex'
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
   const backgroundTaskReportWithScreen = useMemo(
     () => ({ ...backgroundTaskReport, onScreenShellCount }),
@@ -372,14 +373,12 @@ export function useMobileNativeChatController(
       // through useCodexCurrentModel, which guards the host's occasional Claude
       // id on a Codex pane and falls back to the picker's `(current)` row). The
       // footer, when a turn has drawn it, is only a fresher override.
-      reportedModel:
-        activeChatResolution?.agent === 'codex' ? codexModel.model : claudeReported.model,
-      reportedEffort:
-        activeChatResolution?.agent === 'codex' ? codexModel.effort : claudeReported.effort,
+      reportedModel: isCodexChat ? codexModel.model : claudeReported.model,
+      reportedEffort: isCodexChat ? codexModel.effort : claudeReported.effort,
       // Codex resolves its own model elsewhere and has no launch-record path
       // here, so its report is always the live one.
-      reportedModelSource:
-        activeChatResolution?.agent === 'codex' ? 'live' : claudeReported.source,
+      reportedModelSource: isCodexChat ? 'live' : claudeReported.source,
+      terminalHandle: activeHandle,
       openRequest: modelSheetRequest,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,

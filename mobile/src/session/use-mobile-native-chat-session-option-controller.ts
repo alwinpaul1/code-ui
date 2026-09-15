@@ -28,6 +28,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   /** Which source `reportedModel` came from; a live reading outranks a local
    *  pick, the launch record does not. */
   reportedModelSource?: ModelReportSource
+  /** The tab's terminal, so a new one forgets the old agent's statements. */
+  terminalHandle?: string | null
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
   structured: {
@@ -61,6 +63,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModel,
     reportedEffort,
     reportedModelSource,
+    terminalHandle,
     openRequest = 0,
     structured,
     toggleTabChatView,
@@ -104,6 +107,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModel,
     reportedEffort,
     reportedModelSource,
+    terminalHandle,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     discoveredModels: codex.discoveredModels,

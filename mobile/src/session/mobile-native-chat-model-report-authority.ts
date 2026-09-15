@@ -1,3 +1,6 @@
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import { matchNativeChatCatalogModelId } from '../../../src/shared/native-chat-session-option-state'
+
 /**
  * Whether a model report is allowed to overwrite what the record already says.
  *
@@ -46,19 +49,62 @@ export type PendingModelPick = { model: string; at: number; wasReporting: string
  *  outlive the component, which remounts on every chat/terminal flip. */
 const pendingByScope = new Map<string, PendingModelPick>()
 
-/** Scopes where a live reading has already been applied. */
-const sawLiveByScope = new Set<string>()
+/** Terminals whose agent has already stated its own model.
+ *
+ *  Keyed by scope AND handle, because a scope — host + worktree + tab — outlives
+ *  the terminal inside it. Keyed by scope alone, a tab that got a new terminal
+ *  kept this latched from the DEAD one and threw away the new agent's launch
+ *  record, so the pill stated the model of a terminal that no longer existed.
+ *  That is the same failure the handle-keyed sticky hold fixes, reached through
+ *  this door instead (2026-09-15). */
+const sawLiveByTerminal = new Set<string>()
 
-export function noteLiveModelReport(scopeKey: string): void {
-  sawLiveByScope.add(scopeKey)
+function terminalKey(scopeKey: string, handle: string | null): string {
+  return `${scopeKey}\u0000${handle ?? ''}`
 }
 
-export function hasSeenLiveModelReport(scopeKey: string): boolean {
-  return sawLiveByScope.has(scopeKey)
+export function noteLiveModelReport(scopeKey: string, handle: string | null): void {
+  sawLiveByTerminal.add(terminalKey(scopeKey, handle))
 }
 
+export function hasSeenLiveModelReport(scopeKey: string, handle: string | null): boolean {
+  return sawLiveByTerminal.has(terminalKey(scopeKey, handle))
+}
+
+/** Forget every terminal of a scope — the agent under it changed, or the scope
+ *  was evicted. */
 export function forgetLiveModelReport(scopeKey: string): void {
-  sawLiveByScope.delete(scopeKey)
+  const prefix = `${scopeKey}\u0000`
+  for (const key of sawLiveByTerminal) {
+    if (key.startsWith(prefix)) {
+      sawLiveByTerminal.delete(key)
+    }
+  }
+}
+
+/** The report key last APPLIED per scope. Gates the LAUNCH record only, which
+ *  repeats itself unchanged on every tab re-entry and reconnect. It used to gate
+ *  live readings too, on the premise that mobile cannot read the agent's screen
+ *  — no longer true, and that premise is what froze the pill on a model the
+ *  session never ran (2026-09-15). */
+const appliedByScope = new Map<string, string>()
+
+export function lastAppliedReport(scopeKey: string): string | undefined {
+  return appliedByScope.get(scopeKey)
+}
+
+export function noteAppliedReport(scopeKey: string, reportKey: string): void {
+  appliedByScope.set(scopeKey, reportKey)
+}
+
+/** Drop everything this module remembers about one scope: called when the agent
+ *  under a tab changes, and when a scope is evicted. Three caches had to be
+ *  cleared in step and were not, which is how a new agent inherited the old
+ *  one's model (2026-09-15). One call now, so they cannot drift apart. */
+export function forgetModelReportScope(scopeKey: string): void {
+  appliedByScope.delete(scopeKey)
+  pendingByScope.delete(scopeKey)
+  forgetLiveModelReport(scopeKey)
 }
 
 export function notePendingModelPick(
@@ -79,8 +125,9 @@ export function clearPendingModelPick(scopeKey: string): void {
 }
 
 export function clearPendingModelPicksForTests(): void {
+  appliedByScope.clear()
   pendingByScope.clear()
-  sawLiveByScope.clear()
+  sawLiveByTerminal.clear()
 }
 
 export function decideModelReport(input: {
@@ -130,4 +177,60 @@ export function decideModelReport(input: {
   // is new evidence, because the same one is re-delivered on every tab re-entry
   // and reconnect.
   return lastAppliedKey === reportKey ? 'skip' : 'apply'
+}
+
+
+/**
+ * Resolve a raw model report into the catalog id to seed, and decide whether it
+ * may be applied — with all the per-scope bookkeeping the decision implies.
+ *
+ * It lives here rather than in the hook because every cache it touches lives
+ * here: the applied-report latch, the pending pick, and the record of which
+ * terminals have spoken. Keeping the decision next to the state it reads is
+ * what stops those three drifting apart, which is how a new agent came to
+ * inherit the old one's model (2026-09-15).
+ *
+ * `matched` comes back even when the answer is "do not apply", because it is
+ * also what the agent is CURRENTLY reporting, and a pick dispatched later needs
+ * to stamp that on itself.
+ */
+export function resolveReportedModelSeed(input: {
+  catalog: AgentSessionOptionCatalog
+  agent: string
+  reportedModel: string
+  reportedEffort: string | null
+  source: ModelReportSource
+  scopeKey: string
+  terminalHandle: string | null
+}): { matched: string; apply: boolean } | null {
+  const { catalog, agent, reportedModel, reportedEffort, source, scopeKey, terminalHandle } = input
+  // Codex's lineup (gpt-6-astra, …) outpaces the catalog, so track a reported id
+  // it does not list as the raw model; `withTrackedNativeChatModel` then names
+  // it in the pill. Claude keeps the strict match — its badge label "Opus 5" is
+  // not a catalog id.
+  const matched =
+    matchNativeChatCatalogModelId(catalog, reportedModel) ??
+    (agent === 'codex' ? reportedModel.trim() : null)
+  if (!matched) {
+    return null
+  }
+  const reportKey = reportedEffort ? `${matched}\u0000${reportedEffort}` : matched
+  const decision = decideModelReport({
+    source,
+    reported: matched,
+    lastAppliedKey: lastAppliedReport(scopeKey),
+    reportKey,
+    pendingPick: getPendingModelPick(scopeKey),
+    sawLive: hasSeenLiveModelReport(scopeKey, terminalHandle),
+    now: Date.now()
+  })
+  if (decision === 'skip') {
+    return { matched, apply: false }
+  }
+  clearPendingModelPick(scopeKey)
+  if (source === 'live') {
+    noteLiveModelReport(scopeKey, terminalHandle)
+  }
+  noteAppliedReport(scopeKey, reportKey)
+  return { matched, apply: true }
 }

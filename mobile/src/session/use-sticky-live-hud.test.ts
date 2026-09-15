@@ -169,6 +169,26 @@ describe('the model and effort the badge last stated', () => {
     expect(render(null, 'tab-1', 'term_a')).toMatchObject({ model: 'opus', context })
   })
 
+  // 2026-09-15 regression review: the cap shed by INSERTION order, so the entry
+  // for a tab the user had open all session was the oldest key and the first
+  // one thrown away — while dead handles, one per PTY restart or reconnect,
+  // filled the 32 slots. Losing the entry drops the pill back to the launch
+  // model, which is the whole bug this hold exists to prevent. The option-record
+  // map beside it already documents the rule: delete-then-set on every read, so
+  // eviction only sheds the oldest UNTOUCHED scope.
+  it('keeps a tab that is still being read, however many others come and go', () => {
+    render({ modelId: 'opus', effort: 'xhigh' }, 'tab-live', 'term_live')
+    for (let i = 0; i < 40; i += 1) {
+      render(null, `tab-${i}`, `term_${i}`)
+      // The live tab is still being read between the others.
+      render(null, 'tab-live', 'term_live')
+    }
+    expect(render(null, 'tab-live', 'term_live')).toMatchObject({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
   // 2026-09-15: the ring is read off the same badge, so an empty read blanked
   // it mid-conversation instead of keeping the figure the agent last stated.
   it('keeps the context figure across an empty screen read', () => {

@@ -198,8 +198,18 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       if (!scrollingRef.current && !holdingRef.current && atTailRef.current) {
         setFollowing(true)
       }
-      // Near the far end — page in older history.
-      if (!followingRef.current && isAtHistoryStart(metrics) && hasMore && !loadingEarlier) {
+      // Near the far end — page in older history. Never under a held finger:
+      // on a conversation short enough that the live edge and the start of
+      // loaded history OVERLAP, the guard above leaves `following` false for
+      // the length of a long-press, and this branch then detached the list and
+      // paged in history right under the reader's selection (2026-09-15).
+      if (
+        !followingRef.current &&
+        !holdingRef.current &&
+        isAtHistoryStart(metrics) &&
+        hasMore &&
+        !loadingEarlier
+      ) {
         loadEarlier()
       }
     },
