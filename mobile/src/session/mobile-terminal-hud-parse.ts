@@ -1,4 +1,6 @@
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+/** Read as the badge's FIRST word, never as a substring of it. */
+const MODEL_FAMILIES = ['fable', 'opus', 'sonnet', 'haiku'] as const
 
 export type TerminalHudObservation = {
   /** Model as the status line names it, e.g. "Fable 5.1", "Opus 4.8 (1M context)". */
@@ -273,7 +275,25 @@ export function parseTerminalHudContextWindow(
   return null
 }
 
-const BADGE = /\[([^\]]+)\]/
+/**
+ * The status-line model badge, and ONLY that.
+ *
+ * This used to be `/\[([^\]]+)\]/` — any bracketed text, anywhere on any line
+ * — and the model was then accepted if the contents merely CONTAINED a family
+ * name. So a line the agent printed set the pill: a list of model ids in source,
+ * a file path with "opus" in it, a sentence naming a model. The pill changed to
+ * whatever had scrolled past ("wrong model name at some point randomly",
+ * 2026-09-15).
+ *
+ * It was always this loose; what exposed it was removing the launch record and
+ * the remembered pick as model sources earlier the same day, which left the
+ * screen read carrying far more weight.
+ *
+ * A status line OPENS with its badge. Agent output never does — it is prefixed
+ * by a glyph, an indent or prose. Anchoring is the project's own rule for an
+ * ambiguous screen: refuse rather than guess, and let the beacon answer.
+ */
+const BADGE = /^\s*\[([^\]]+)\]/
 /** Separators and labels a status line may put between the model and the effort. */
 const FILLER = new Set(['·', '•', '|', '-', '—', ':', 'effort', 'effort:'])
 
@@ -360,16 +380,10 @@ export function parseTerminalHudObservation(
     if (!modelLabel) {
       continue
     }
-    const lower = modelLabel.toLowerCase()
-    const modelId = lower.includes('fable')
-      ? 'fable'
-      : lower.includes('opus')
-        ? 'opus'
-        : lower.includes('sonnet')
-          ? 'sonnet'
-          : lower.includes('haiku')
-            ? 'haiku'
-            : null
+    // The FIRST word names the family. `includes` matched the word anywhere in
+    // the bracket, so "docs/opus-migration-notes.md" read as Opus.
+    const first = (words[0] ?? '').toLowerCase()
+    const modelId = MODEL_FAMILIES.find((family) => first === family) ?? null
     if (!modelId) {
       continue
     }
