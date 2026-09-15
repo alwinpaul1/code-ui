@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { LIVE_WINDOW_CEILING } from './mobile-native-chat-stream-frame'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -455,7 +456,13 @@ describe('useMobileNativeChatSession', () => {
       emit = onData
       onData({
         type: 'snapshot',
-        messages: Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`)),
+        // Enough to cross the live ceiling: a LIVE APPEND only trims there now,
+        // because trimming on every append made a long turn evict its own
+        // earlier replies (2026-09-15). The cursor contract below is unchanged;
+        // it just takes a real turn's worth of rows to reach it.
+        messages: Array.from({ length: LIVE_WINDOW_CEILING }, (_unused, index) =>
+          message(`window-${index}`)
+        ),
         hasMore: true,
         beforeOffset: 100
       })
