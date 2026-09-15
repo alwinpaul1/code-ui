@@ -147,6 +147,20 @@ export function makeMarkdownStyles(theme: Theme) {
       lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.text
     },
+    /** The line number beside a fence: dim, so the gutter reads as chrome and
+     *  the eye stays on the code. Same weight the file reader's gutter uses. */
+    codeGutter: {
+      fontFamily: fonts.mono,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 5,
+      color: colors.textMuted
+    },
+    codeTruncated: {
+      fontFamily: fonts.regular,
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: space.xs
+    },
     imageFrame: {
       borderWidth: 1,
       borderColor: colors.border,

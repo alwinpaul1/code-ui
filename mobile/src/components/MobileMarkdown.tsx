@@ -19,11 +19,10 @@ import {
   isIntrawordUnderscoreToken,
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
-import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
-import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
+import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 
 /** Every inline span is a rounded, bordered View chip, as in the Claude app.
  *  Only a span with a newline in it stays a nested Text. */
@@ -49,8 +48,6 @@ const MAX_TABLE_COLUMNS = 8
 /** Bullet per nesting level, so a sub-item reads as one even where the indent
  *  alone is too narrow to see at ~40 columns. Deeper levels reuse the last. */
 const LIST_BULLETS = ['•', '◦', '▪']
-/** Prose base size — passed to MermaidDiagram fallback mono text. */
-const MERMAID_BASE = 13
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
@@ -319,39 +316,13 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           )
         }
         if (block.type === 'code') {
-          // Mermaid fences render as diagrams (WebView), not as raw code — same as PR sidebar.
-          // Unclosed fences are still streaming: mounting the WebView per tick would
-          // reload its document up to 20x/sec, so they stay raw code until terminated.
-          if (isMobileMermaidLanguage(block.language) && block.closed) {
-            const occurrence = mermaidSourceOccurrences.get(block.text) ?? 0
-            mermaidSourceOccurrences.set(block.text, occurrence + 1)
-            return (
-              <MermaidDiagram
-                key={`${block.text}:${occurrence}`}
-                source={block.text}
-                base={MERMAID_BASE}
-              />
-            )
-          }
-          return (
-            <View key={index} style={styles.codeBlock}>
-              {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
-                  command or an indented block shreds it, and a reader who
-                  wants to copy a line needs the line. */}
-              {/* The bar is SHOWN, and kept on Android rather than fading, so a
-                  line the phone cannot fit reads as scrollable instead of as
-                  broken. Reported 2026-09-15: the gate command in CLAUDE.md
-                  ended at "npx" and looked truncated — it scrolled the whole
-                  time, nothing said so. Android only draws the bar when the
-                  content actually overflows, so a short fence gets none. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
-                <Text selectable={selectable} style={styles.codeText}>
-                  {block.text}
-                </Text>
-              </ScrollView>
-            </View>
-          )
+          return renderMarkdownCodeBlock({
+            block,
+            index,
+            styles,
+            selectable,
+            mermaidSourceOccurrences
+          })
         }
         if (block.type === 'image') {
           return (

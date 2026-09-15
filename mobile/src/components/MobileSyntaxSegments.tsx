@@ -9,11 +9,16 @@ export function MobileSyntaxLine({
   gutterWidth,
   gutterDigits = 3,
   lineStyle,
-  gutterStyle
+  gutterStyle,
+  selectable = true
 }: {
   number: number
   segments: MobileSyntaxSegment[]
   gutterWidth: number
+  /** False while a list is scrolling: a selectable Text under a finger that
+   *  stops a fling arms a long-press the reader did not ask for, which
+   *  MobileMarkdown.selection.test.ts pins. The file reader keeps the default. */
+  selectable?: boolean
   /** Digits in the file's LAST line number. A fixed 3 shifted every line from
    *  1000 onward, because a nested `Text` ignores `width` (2026-09-13). */
   gutterDigits?: number
@@ -21,7 +26,7 @@ export function MobileSyntaxLine({
   gutterStyle: TextStyle
 }) {
   return (
-    <Text selectable style={lineStyle}>
+    <Text selectable={selectable} style={lineStyle}>
       <Text selectable={false} style={[gutterStyle, { width: gutterWidth }]}>
         {String(number).padStart(gutterDigits, ' ') + '  '}
       </Text>
