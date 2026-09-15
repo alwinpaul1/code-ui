@@ -1,13 +1,12 @@
-import { useState } from 'react'
-import { Pressable, ScrollView, View } from 'react-native'
+import { useState, type ReactNode } from 'react'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 type Props = {
   relativePath: string
@@ -15,15 +14,35 @@ type Props = {
   truncated: boolean
   byteLength: number
   initialLine?: number
+  /**
+   * The raw file, drawn by the caller's own source view. The session file tab
+   * lends its numbered, virtualized one — a single <Text> holding a 4000-line
+   * file froze the UI thread (2026-09-13). Without it the shared preview text
+   * below is used, which is what the file screen wants.
+   */
+  renderSource?: () => ReactNode
 }
 
+/**
+ * A markdown file as a document, with a toggle back to the raw text.
+ *
+ * Ported from upstream Orca's mobile client, which had already built this. The
+ * mode machine, the icons and the labels are upstream's; the palette is not —
+ * upstream reads the static `colors` object, and in this fork that palette is
+ * dark-only while the rendered document below the toolbar already follows the
+ * appearance setting. So the chrome is built from `useTheme()` instead, or
+ * anyone on Light gets dark chrome over a light page.
+ */
 export function MobileFileMarkdownPreview({
   relativePath,
   content,
   truncated,
   byteLength,
-  initialLine
+  initialLine,
+  renderSource
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(markdownPreviewStyles)
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
@@ -49,7 +68,7 @@ export function MobileFileMarkdownPreview({
         >
           <Code
             size={15}
-            color={sourceSelected ? colors.textPrimary : colors.textSecondary}
+            color={sourceSelected ? colors.text : colors.textSecondary}
             strokeWidth={2.2}
           />
         </Pressable>
@@ -62,16 +81,20 @@ export function MobileFileMarkdownPreview({
         >
           <Pencil
             size={15}
-            color={previewSelected ? colors.textPrimary : colors.textSecondary}
+            color={previewSelected ? colors.text : colors.textSecondary}
             strokeWidth={2.2}
           />
         </Pressable>
       </View>
       {mode === 'preview' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
-          {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
+          {truncated ? (
+            <MobileFilePreviewTruncatedNote byteLength={byteLength} style={styles.truncatedNote} />
+          ) : null}
           <MobileMarkdown content={content} />
         </ScrollView>
+      ) : renderSource ? (
+        renderSource()
       ) : (
         <MobileFilePreviewSourceText
           relativePath={relativePath}
@@ -83,4 +106,51 @@ export function MobileFileMarkdownPreview({
       )}
     </View>
   )
+}
+
+// The token values upstream's `filePreviewStyles` uses for these rows, read
+// from the live theme instead of the legacy dark-only palette.
+function markdownPreviewStyles({ colors, radius, space, type }: Theme) {
+  return StyleSheet.create({
+    modeContainer: {
+      flex: 1,
+      backgroundColor: colors.bg
+    },
+    modeToolbar: {
+      flexDirection: 'row',
+      alignSelf: 'flex-start',
+      marginHorizontal: space.md,
+      marginVertical: space.sm,
+      padding: 1,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radius.xs,
+      backgroundColor: colors.bgPanel
+    },
+    modeToggle: {
+      width: 34,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.xs,
+      backgroundColor: 'transparent',
+      opacity: 0.72
+    },
+    modeToggleActive: {
+      backgroundColor: colors.bgRaised,
+      opacity: 1
+    },
+    scroll: {
+      flex: 1
+    },
+    markdownContent: {
+      padding: space.md,
+      paddingBottom: space.xl
+    },
+    truncatedNote: {
+      marginBottom: space.md,
+      color: colors.textSecondary,
+      fontSize: type.caption.size
+    }
+  })
 }

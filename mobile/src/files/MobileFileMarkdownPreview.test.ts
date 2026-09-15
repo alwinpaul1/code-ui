@@ -6,7 +6,8 @@ import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  View: 'View'
+  View: 'View',
+  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 1 }
 }))
 
 vi.mock('lucide-react-native', () => ({
@@ -23,12 +24,11 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
   MobileFilePreviewTruncatedNote: 'MobileFilePreviewTruncatedNote'
 }))
 
-vi.mock('../theme/mobile-theme', () => ({
-  colors: { textPrimary: '#fff', textSecondary: '#999' }
-}))
-
-vi.mock('./mobile-file-preview-styles', () => ({
-  filePreviewStyles: {}
+// Why: the mode machine is what is under test here; the live palette has its own
+// test (mobile-file-markdown-preview-theme).
+vi.mock('../theme/theme-context', () => ({
+  useTheme: () => ({ colors: { text: '#fff', textSecondary: '#999' } }),
+  useThemedStyles: () => ({})
 }))
 
 type PreviewProps = Parameters<typeof MobileFileMarkdownPreview>[0]
@@ -101,5 +101,50 @@ describe('MobileFileMarkdownPreview', () => {
 
     await updatePreview(renderer, { ...baseProps, relativePath: 'notes/second.md', initialLine: 8 })
     expect(isSelected(renderer, 'View Markdown source')).toBe(true)
+  })
+
+  // Why: the session file tab draws source as numbered, virtualized lines — one
+  // <Text> for the whole file froze the UI on a 4000-line file (2026-09-13). The
+  // toggle must show that view, not a second one of the preview's own.
+  it("shows the caller's own source view when it brought one", async () => {
+    renderer = await renderPreview({
+      relativePath: 'notes/first.md',
+      content: '# First',
+      truncated: false,
+      byteLength: 7,
+      renderSource: () => createElement('CallerSourceView')
+    })
+
+    await selectMode(renderer, 'View Markdown source')
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('CallerSourceView')
+    expect(rendered).not.toContain('MobileFilePreviewSourceText')
+  })
+
+  // Why: with no source view of its own, the shared preview text still has to
+  // appear — the file screen has no numbered view to lend.
+  it('falls back to the shared source text when the caller brought none', async () => {
+    renderer = await renderPreview({
+      relativePath: 'notes/first.md',
+      content: '# First',
+      truncated: false,
+      byteLength: 7
+    })
+
+    await selectMode(renderer, 'View Markdown source')
+    expect(JSON.stringify(renderer.toJSON())).toContain('MobileFilePreviewSourceText')
+  })
+
+  // Why: a document view hides where the text stops, so a host-truncated file
+  // has to say so above the rendering.
+  it('says the document is cut off when the host truncated the file', async () => {
+    renderer = await renderPreview({
+      relativePath: 'notes/first.md',
+      content: '# First',
+      truncated: true,
+      byteLength: 400_000
+    })
+
+    expect(JSON.stringify(renderer.toJSON())).toContain('MobileFilePreviewTruncatedNote')
   })
 })

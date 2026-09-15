@@ -122,7 +122,13 @@ const HEAD_HOST_JSX_SHA256 = '24ee5328958d290dd3738ec31c4f117fb5015b23f7819583e6
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '45de4775864a50b423a9ae7eb2a688b397c4d3afccf4517d4841db52e47bcac9'
+// 2026-09-15 (later): the markdown file tab reaches upstream Orca's own
+// MobileFileMarkdownPreview instead of this fork's hand-rolled one, and hands it
+// the path and the host's truncation facts alongside the source view it already
+// lent. Exactly one leaf record changed — verified by extracting the reader's
+// JSX records before and after; host and style-reference records are untouched,
+// which is why only this pin moved.
+const HEAD_LEAF_JSX_SHA256 = '2ad056b0bf3bbae377956169f97ae6653eabeee0da75b9eeeee9779c21ae1da8'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =

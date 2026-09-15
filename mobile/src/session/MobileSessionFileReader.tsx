@@ -21,7 +21,7 @@ import {
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
-import { MobileMarkdownPreview } from '../components/MobileMarkdownPreview'
+import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
@@ -326,14 +326,18 @@ export function FileReader({
     )
   }
 
-  // Markdown is written to be read, so it renders — with the same toggle back to
-  // the raw text that HTML has. The phone used to show the file as source while
-  // the desktop rendered it (2026-09-15).
+  // Markdown is written to be read, so it renders — with a toggle back to the
+  // raw text. The phone used to show the file as source while the desktop
+  // rendered it (2026-09-15). The preview is upstream Orca's own; source stays
+  // this reader's numbered, virtualized view.
   if (doc.kind === 'markdown') {
     return (
       <View style={styles.markdownEditor}>
-        <MobileMarkdownPreview
-          markdown={doc.content}
+        <MobileFileMarkdownPreview
+          relativePath={relativePath}
+          content={doc.content}
+          truncated={doc.truncated}
+          byteLength={doc.byteLength}
           renderSource={() => renderSourceText(doc.content)}
         />
       </View>
