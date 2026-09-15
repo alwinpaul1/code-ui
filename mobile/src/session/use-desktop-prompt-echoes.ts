@@ -44,6 +44,22 @@ import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-ima
 const anchorByNonce = new Map<string, string | null>()
 const DESKTOP_PROMPT_ANCHOR_CAP = 256
 
+/**
+ * How many readings a prompt may WAIT for the row the beacon named.
+ *
+ * A beacon usually arrives before the transcript rows of the turn it was typed
+ * into. Taking the arrival-time tail in the meantime looked harmless and was
+ * not: the decision is permanent, so every prompt from one turn took the same
+ * tail and they drew as one stack with the replies pushed below them (device
+ * screenshot, 2026-09-15 — "the entire user prompts stack on together").
+ *
+ * So a beaconed prompt waits. The bound exists because the row may genuinely
+ * never come — an older window, a compacted transcript — and a message with no
+ * position must still be shown rather than hidden for good.
+ */
+const ANCHOR_WAIT_READINGS = 30
+const waitsByNonce = new Map<string, number>()
+
 function rememberedAnchor(nonce: string): string | null | undefined {
   if (!anchorByNonce.has(nonce)) {
     return undefined
@@ -85,7 +101,20 @@ export function useDesktopPromptEchoes(
       const beaconed = prompt.anchorId
       const anchorRow =
         beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
-      rememberAnchor(prompt.nonce, anchorRow?.id ?? rawMessages.at(-1)?.id ?? null)
+      if (anchorRow) {
+        waitsByNonce.delete(prompt.nonce)
+        rememberAnchor(prompt.nonce, anchorRow.id)
+      } else if (beaconed === undefined) {
+        // An older hook names no row; the arrival tail is all there is.
+        rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+      } else {
+        const waited = (waitsByNonce.get(prompt.nonce) ?? 0) + 1
+        waitsByNonce.set(prompt.nonce, waited)
+        if (waited > ANCHOR_WAIT_READINGS) {
+          waitsByNonce.delete(prompt.nonce)
+          rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+        }
+      }
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,

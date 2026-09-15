@@ -107,12 +107,24 @@ describe('where a desktop prompt echo anchors', () => {
     expect(latest[0]!.baselineTailMessageId).toBe('a3')
   })
 
-  it('falls back to the tail when the beaconed row is not in the loaded window', () => {
+  // The fallback survives, but it is no longer IMMEDIATE. Taking the tail on the
+  // first reading was the defect behind the stacked-prompts report of
+  // 2026-09-15: a beacon normally arrives before the rows of its own turn, so
+  // "not in the window yet" and "not in the window ever" looked identical and
+  // every prompt of a turn froze onto the same tail. The prompt now waits, and
+  // a row that truly never comes still gets a position.
+  it('falls back to the tail once the beaconed row has clearly not come', () => {
     const raw = [assistant('a4'), assistant('a5')]
     const prompts: DesktopPrompt[] = [{ nonce: '9', text: 'old', anchorId: 'a1-paged-out' }]
     act(() => {
       renderer = create(createElement(Probe, { prompts, raw }))
     })
+    expect(latest[0]!.baselineTailMessageId).toBe(null)
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw }))
+      })
+    }
     expect(latest[0]!.baselineTailMessageId).toBe('a5')
   })
 
@@ -207,5 +219,87 @@ describe('a desktop prompt whose chat view remounted', () => {
       renderer = create(createElement(Probe, { prompts, raw: [assistant('c9')] }))
     })
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['c1', 'c3'])
+  })
+})
+
+// Reported 2026-09-15 with a screenshot: four desktop prompts stacked together
+// with the agent's replies nowhere between them.
+//
+// The cause is the fallback. The hook beacons the row that was last at submit
+// time, but a beacon usually arrives BEFORE the transcript rows of the turn it
+// was typed into. The row was then not found, the arrival-time tail was frozen
+// in its place, and — because that decision is permanent — several prompts from
+// one turn all took the SAME tail and drew as one block.
+describe('a desktop prompt whose row has not loaded yet', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('waits for the beaconed row instead of freezing the tail', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'late-1', text: 'typed mid-turn', anchorId: 'r5' }]
+    // r5 has not arrived yet.
+    act(() => {
+      renderer = create(
+        createElement(Probe, { prompts, raw: [assistant('r1'), assistant('r2')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).not.toBe('r2')
+    // r5 lands with the rest of the turn.
+    act(() => {
+      renderer!.update(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('r1'), assistant('r2'), assistant('r5'), assistant('r6')]
+        })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('r5')
+  })
+
+  it('keeps prompts from one turn on their own rows', () => {
+    const prompts: DesktopPrompt[] = [
+      { nonce: 'late-a', text: 'first', anchorId: 'm2' },
+      { nonce: 'late-b', text: 'second', anchorId: 'm4' },
+      { nonce: 'late-c', text: 'third', anchorId: 'm6' }
+    ]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('m1')] }))
+    })
+    act(() => {
+      renderer!.update(
+        createElement(Probe, {
+          prompts,
+          raw: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'].map((id) => assistant(id))
+        })
+      )
+    })
+    // Three separate anchors, in order — not three copies of the tail.
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['m2', 'm4', 'm6'])
+  })
+
+  it('gives up and shows the message rather than hiding it forever', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'gone-1', text: 'orphan', anchorId: 'never-arrives' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('z1')] }))
+    })
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: [assistant('z1'), assistant('z2')] }))
+      })
+    }
+    // A row that never comes must not strand the message with no position.
+    expect(latest[0]!.baselineTailMessageId).toBe('z2')
+  })
+
+  it('still uses the tail at once when the beacon names no row', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'plain-1', text: 'older hook' }]
+    act(() => {
+      renderer = create(
+        createElement(Probe, { prompts, raw: [assistant('p1'), assistant('p2')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('p2')
   })
 })
