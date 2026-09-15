@@ -117,14 +117,14 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '538fc217b6393106b5f72560beb41e78e92bc9d81741e5ef2b5d447ae9475c08'
-const HEAD_HOST_JSX_SHA256 = '2152aab3bb439dcf7d0649e3e939114cde1159666f48d42e05ca39021c366764'
+  'e1a539d877cedb0203d9b7e639a6617d99ff3df6cae729056a923af4f7624a91'
+const HEAD_HOST_JSX_SHA256 = '24ee5328958d290dd3738ec31c4f117fb5015b23f7819583e682bb2671369841'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
-const HEAD_LEAF_JSX_SHA256 = '2f7b3c5e12b8f125082e0e144e9eaabbf874dd977d001071c2a1c6a74eb9af07'
+const HEAD_LEAF_JSX_SHA256 = '45de4775864a50b423a9ae7eb2a688b397c4d3afccf4517d4841db52e47bcac9'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '0e639c970aa7f34b8e7837374e01d85abf3e2f067e00d1ca8303f00be72c2127'
+  '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '56470d1fc5a5cce89bc14d6a5a3cc55a6b70923445ad6288e8f11047a56efad8'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -562,15 +562,19 @@ describe('mobile session route extraction parity', () => {
     // 622 since 2026-09-09 (night): "data" and "string", from the guard that
     // strips the agents' HUD beacon out of an output chunk.
     // 629 since 2026-09-10: split-sibling Close names the handle-repeat plan.
-    // 636 since 2026-09-14: the two Shift+Tab mode pickers share one stepper.
-    expect(strings).toHaveLength(636)
+    // 637 since 2026-09-15: a markdown file renders as a document with a source
+    // toggle, the way the desktop has always shown it, instead of as raw text.
+    expect(strings).toHaveLength(637)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(94)
+    // 95 since 2026-09-15: the markdown preview's own host element.
+    expect(jsx.host).toHaveLength(95)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
-    expect(jsx.leaf).toHaveLength(68)
+    // 69 since 2026-09-15: the markdown preview's own leaf element.
+    expect(jsx.leaf).toHaveLength(69)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(91)
+    // 92 since 2026-09-15: the markdown preview's own style reference.
+    expect(jsx.styleReferences).toHaveLength(92)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

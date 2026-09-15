@@ -16,6 +16,7 @@ export type MobileFileTabDoc =
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'pdf'; uri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'markdown'; content: string }
 
 export type MobileFileTabDocRequest = {
   worktreeId: string
@@ -91,6 +92,9 @@ export async function resolveMobileFileTabDoc(
   }
   if (artifactKind === 'html') {
     return { status: 'ready', kind: 'html', content: result.content }
+  }
+  if (artifactKind === 'markdown') {
+    return { status: 'ready', kind: 'markdown', content: result.content }
   }
   return {
     status: 'ready',

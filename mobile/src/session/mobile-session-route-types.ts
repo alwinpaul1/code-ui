@@ -101,6 +101,7 @@ export type FileDocState =
   | { status: 'ready'; kind: 'image'; dataUri: string }
   | { status: 'ready'; kind: 'pdf'; uri: string }
   | { status: 'ready'; kind: 'html'; content: string }
+  | { status: 'ready'; kind: 'markdown'; content: string }
   | { status: 'error'; message: string }
 
 export type RenderableDiffLine = MobileHighlightedDiffLine<MobileDiffLine>

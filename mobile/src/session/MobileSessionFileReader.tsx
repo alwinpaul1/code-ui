@@ -21,6 +21,7 @@ import {
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
+import { MobileMarkdownPreview } from '../components/MobileMarkdownPreview'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
@@ -321,6 +322,20 @@ export function FileReader({
     return (
       <View style={styles.markdownEditor}>
         <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
+      </View>
+    )
+  }
+
+  // Markdown is written to be read, so it renders — with the same toggle back to
+  // the raw text that HTML has. The phone used to show the file as source while
+  // the desktop rendered it (2026-09-15).
+  if (doc.kind === 'markdown') {
+    return (
+      <View style={styles.markdownEditor}>
+        <MobileMarkdownPreview
+          markdown={doc.content}
+          renderSource={() => renderSourceText(doc.content)}
+        />
       </View>
     )
   }
