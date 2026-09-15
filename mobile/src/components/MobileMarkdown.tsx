@@ -81,6 +81,11 @@ function headingScale(styles: MarkdownStyles, level: number): MarkdownStyles[key
 /** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
  *  a box for a task item whichever list it sits in. */
 function listMarker(item: MobileMarkdownListItem): string {
+  // The rest of an item that a fence interrupted keeps the indent and takes no
+  // marker; a second bullet would read as a second item.
+  if (item.continuation) {
+    return ''
+  }
   if (item.checked != null) {
     return item.checked ? '☑' : '☐'
   }

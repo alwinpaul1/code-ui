@@ -30,6 +30,10 @@ export type MobileMarkdownListItem = {
   ordered: boolean
   /** 1-based position inside its own list, honouring `3.` as a start. */
   number?: number
+  /** The rest of an item that was interrupted by a block of its own — the prose
+   *  after a fenced command, say. It draws at the item's indent with NO marker,
+   *  because a second bullet would claim it is a second item. */
+  continuation?: boolean
 }
 
 export type MobileMarkdownBlock =
@@ -147,34 +151,81 @@ function quotedText(token: Tokens.Blockquote): string {
 /** Nested lists are flattened to one run of items carrying their depth: the
  *  renderer indents by it, which is how a sub-list stays readable at 40
  *  columns without nesting a View per level. */
-function flattenList(token: Tokens.List, depth: number, into: MobileMarkdownListItem[]): void {
+/**
+ * A list, as a run of blocks rather than a single one.
+ *
+ * A fence inside a list item is the commonest thing an agent writes — a
+ * numbered step with the command for it underneath. Keeping it in the item's
+ * TEXT (what this did first) handed raw source to the inline matcher, which drew
+ * it as one code chip with stray backticks: no code styling, no horizontal
+ * scroller, no mermaid, newlines collapsed. A block child has to come out.
+ *
+ * So the item buffer flushes as a list block, the child is converted by the same
+ * `toBlocks` every other block goes through, and the list resumes after it.
+ * Numbers survive because each item carries its own; indent survives because
+ * each carries its own depth.
+ */
+function flattenList(
+  token: Tokens.List,
+  depth: number,
+  items: MobileMarkdownListItem[],
+  out: MobileMarkdownBlock[],
+  ordered: boolean
+): void {
   const start = typeof token.start === 'number' ? token.start : 1
+  const flush = (): void => {
+    if (items.length > 0) {
+      out.push({ type: 'list', ordered, items: [...items] })
+      items.length = 0
+    }
+  }
   token.items.forEach((item, index) => {
     const own: string[] = []
-    const nested: Tokens.List[] = []
+    let drawn = false
+    // Emit whatever prose has accumulated as an item, so a block child can be
+    // flushed out from between this item and the rest of it.
+    const emit = (): void => {
+      const text = own.filter(Boolean).join('\n')
+      own.length = 0
+      // No bullet for an item that has no words of its own: an item that is
+      // nothing but a fence is the fence, not an empty row above it.
+      if (!text) {
+        return
+      }
+      items.push({
+        text,
+        checked: drawn ? undefined : typeof item.checked === 'boolean' ? item.checked : undefined,
+        depth,
+        ordered: token.ordered,
+        number: !drawn && token.ordered ? start + index : undefined,
+        continuation: drawn ? true : undefined
+      })
+      drawn = true
+    }
     for (const child of item.tokens) {
       if (child.type === 'list') {
-        nested.push(child as Tokens.List)
+        emit()
+        flattenList(child as Tokens.List, depth + 1, items, out, ordered)
       } else if (child.type === 'text' || child.type === 'paragraph') {
         own.push(reflowProse((child as Tokens.Text).text))
       } else if (child.type !== 'space' && child.type !== 'checkbox') {
         // `checkbox` is dropped because `item.checked` already carries it and
-        // the renderer draws the box; everything else left here — a fence, a
-        // table inside an item — keeps its source rather than being lost.
-        own.push(child.raw.replace(/\n+$/, ''))
+        // the renderer draws the box. Everything else is a block in its own
+        // right: a fence, a table, a quote inside an item.
+        emit()
+        flush()
+        out.push(...toBlocks([child]))
       }
     }
-    into.push({
-      text: own.filter(Boolean).join('\n'),
-      checked: typeof item.checked === 'boolean' ? item.checked : undefined,
-      depth,
-      ordered: token.ordered,
-      number: token.ordered ? start + index : undefined
-    })
-    for (const child of nested) {
-      flattenList(child, depth + 1, into)
-    }
+    emit()
   })
+  // Only the outermost call closes the run. A nested list returns with its
+  // items still in the shared buffer, because the parent list continues after
+  // it — flushing here split a list in two at every sub-list (caught by
+  // mobile-markdown-wrapped-source.test.ts, which pins exactly that shape).
+  if (depth === 0) {
+    flush()
+  }
 }
 
 function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
@@ -229,9 +280,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         break
       case 'list': {
         const list = token as Tokens.List
-        const items: MobileMarkdownListItem[] = []
-        flattenList(list, 0, items)
-        blocks.push({ type: 'list', ordered: list.ordered, items })
+        // A list can come back as several blocks: any fence or table inside an
+        // item is drawn between them rather than swallowed by it.
+        flattenList(list, 0, [], blocks, list.ordered)
         break
       }
       case 'table': {
