@@ -86,3 +86,41 @@ describe('a beacon is only used on the tab it came from', () => {
     expect(agentHudBeaconMatches(null, 'codex')).toBe(false)
   })
 })
+
+// 2026-09-15: asked whether any of this works on a host that keeps no status
+// line of its own. It does, and must: the phone's injected status-line command
+// prints nothing, so such a host shows no `[Model effort]` badge and the screen
+// observation is null. Every figure then comes from the agent's own beacon.
+describe('a host with no status line of its own', () => {
+  it('names the model, effort and context from the beacon alone', () => {
+    const merged = applyAgentHudBeaconFields(null, {
+      agent: 'claude',
+      modelId: 'claude-opus-5',
+      modelLabel: 'Opus 5',
+      effort: 'xhigh',
+      usedTokens: 914_000,
+      windowTokens: 1_000_000,
+      usedPercent: 91,
+      limits: [],
+      doneTaskIds: [],
+      runningTaskIds: null,
+      runningTaskIdsAt: null,
+      promptHook: false,
+      desktopPrompt: null,
+      desktopPrompts: [],
+      launchedTaskIds: [],
+      receivedAt: 0
+    })
+    expect({
+      modelId: merged?.modelId,
+      modelLabel: merged?.modelLabel,
+      effort: merged?.effort,
+      usedPercent: merged?.context?.usedPercent
+    }).toEqual({
+      modelId: 'claude-opus-5',
+      modelLabel: 'Opus 5',
+      effort: 'xhigh',
+      usedPercent: 91
+    })
+  })
+})

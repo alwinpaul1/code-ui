@@ -8,23 +8,26 @@ export type StickyLiveHud = {
 }
 
 /**
- * The last model and effort the terminal's OWN status-line badge stated, held
- * per tab across screen reads that come back empty.
+ * The last model, effort and context the LIVE HUD stated, held per tab across
+ * observations that come back empty.
  *
- * Why: the composer's model pill seeds from the badge read off the screen and
- * falls back to the launch-time `agentStatus.model` when there is no read. On
- * a session whose `terminal.read` lags (a 301 MB transcript, 2026-09-14) the
- * read alternates between a real badge and nothing, so the pill flipped
- * between "Opus xhigh" — what the badge said — and "Fable Medium" — what the
- * session was launched as, long since changed by `/model`. A value the badge
- * has stated is better evidence than the launch record for as long as this
- * tab is open, so an empty read keeps it rather than falling back.
+ * The figures reach the HUD two ways, and this holds whichever arrived: the
+ * agent's own OSC beacon, which the phone's injected status-line command emits
+ * on every repaint and which needs no bar on the host at all; and, for a user
+ * who does keep their own status line, the `[Model effort]` badge read off the
+ * screen. Neither is guaranteed on any given tick — a screen read can come back
+ * empty, and a beacon can be missed — and the pill's only fallback is the
+ * launch-time `agentStatus.model`.
  *
- * The context figure is held the same way and for the same reason: it is read
- * off that same badge, so an empty read would otherwise blank the ring the
- * moment it flickered rather than keep the last figure the agent stated.
+ * Why it matters: on a session whose `terminal.read` lags (a 301 MB transcript,
+ * 2026-09-14) the observation alternated between real figures and nothing, so
+ * the pill flipped between "Opus xhigh" — what the session actually is — and
+ * "Fable Medium" — what it was LAUNCHED as, long since changed by `/model`.
+ * The context ring blanked on the same ticks. A figure the agent has stated is
+ * better evidence than the launch record for as long as this tab is open, so an
+ * empty observation keeps it rather than falling back.
  *
- * Reset when the tab changes: the badge belongs to that tab's terminal.
+ * Reset when the tab changes: the figures belong to that tab's agent.
  */
 export function useStickyLiveHud(
   observation: {
