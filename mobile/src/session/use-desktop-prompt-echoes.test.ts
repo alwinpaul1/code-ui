@@ -136,3 +136,76 @@ describe('where a desktop prompt echo anchors', () => {
     expect(latest[0]!.baselineTailMessageId).toBe('a2')
   })
 })
+
+// Reported 2026-09-15: "the follow up prompts send from the desktop werent
+// correctly placed in the chat ui".
+//
+// The anchor map was a `useRef`, so it died with the component. FlashList
+// recycles rows and the chat remounts on a tab switch, and on the next mount
+// every anchor is derived again from nothing. While the beaconed row is still
+// inside the live window (150 rows) that redraw is harmless. Once it has paged
+// out, the fallback takes the CURRENT tail — so a prompt typed ten turns ago
+// jumps to the bottom of the conversation, under replies it came before.
+//
+// This is the second time this exact shape has bitten today: the sticky HUD
+// hold was a `useRef` for the same reason and lost its figures on remount. The
+// rule says the second one is a sweep, not a patch.
+describe('a desktop prompt whose chat view remounted', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('keeps its anchor after a remount, once the beaconed row has paged out', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'remount-1', text: 'typed on the desktop', anchorId: 'a2' }]
+    act(() => {
+      renderer = create(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('a1'), assistant('a2'), assistant('a3')]
+        })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
+
+    // The tab is switched away and back. a2 has since scrolled out of the live
+    // window, so nothing on screen can rediscover where this prompt belonged.
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(
+        createElement(Probe, { prompts, raw: [assistant('a8'), assistant('a9')] })
+      )
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
+  })
+
+  it('still anchors a prompt it has never seen before', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'remount-2', text: 'brand new' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('b1'), assistant('b2')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('b2')
+  })
+
+  it('keeps each follow-up on its own row rather than stacking them on one', () => {
+    const prompts: DesktopPrompt[] = [
+      { nonce: 'remount-3', text: 'first follow-up', anchorId: 'c1' },
+      { nonce: 'remount-4', text: 'second follow-up', anchorId: 'c3' }
+    ]
+    act(() => {
+      renderer = create(
+        createElement(Probe, {
+          prompts,
+          raw: [assistant('c1'), assistant('c2'), assistant('c3')]
+        })
+      )
+    })
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['c1', 'c3'])
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('c9')] }))
+    })
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['c1', 'c3'])
+  })
+})

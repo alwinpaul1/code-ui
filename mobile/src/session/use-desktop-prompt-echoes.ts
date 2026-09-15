@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import { useStableEchoes } from './use-stable-echoes'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -21,6 +20,51 @@ import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-ima
  * when its own transcript row never lands. The anchor is remembered per
  * prompt, so later turns cannot drag it down the conversation.
  */
+
+/**
+ * Where each desktop prompt belongs, kept OUTSIDE the component.
+ *
+ * This was a `useRef`, so it died with the mount. The chat remounts on a tab
+ * switch and FlashList recycles rows, and on the next mount every anchor was
+ * derived again from nothing: while the beaconed row was still inside the live
+ * window that redraw was harmless, but once it had paged out the fallback took
+ * the CURRENT tail, and a prompt typed ten turns ago jumped to the bottom of
+ * the conversation under replies it came before. Several follow-ups all landed
+ * on the same tail, stacked together — which is what was reported on
+ * 2026-09-15 ("the follow up prompts send from the desktop werent correctly
+ * placed").
+ *
+ * Second time this shape has bitten: the sticky HUD hold was a `useRef` for the
+ * same reason, and the rule for a repeat is to sweep rather than patch.
+ *
+ * Eviction renews on READ, not only on write. Plain insertion order drops
+ * whatever has been held longest, which here is the oldest UNRETIRED prompt —
+ * precisely the one whose anchor cannot be rediscovered.
+ */
+const anchorByNonce = new Map<string, string | null>()
+const DESKTOP_PROMPT_ANCHOR_CAP = 256
+
+function rememberedAnchor(nonce: string): string | null | undefined {
+  if (!anchorByNonce.has(nonce)) {
+    return undefined
+  }
+  const anchor = anchorByNonce.get(nonce) ?? null
+  anchorByNonce.delete(nonce)
+  anchorByNonce.set(nonce, anchor)
+  return anchor
+}
+
+function rememberAnchor(nonce: string, anchor: string | null): void {
+  anchorByNonce.delete(nonce)
+  if (anchorByNonce.size >= DESKTOP_PROMPT_ANCHOR_CAP) {
+    const oldest = anchorByNonce.keys().next()
+    if (!oldest.done) {
+      anchorByNonce.delete(oldest.value)
+    }
+  }
+  anchorByNonce.set(nonce, anchor)
+}
+
 export function useDesktopPromptEchoes(
   prompts: readonly DesktopPrompt[],
   folded: readonly NativeChatMessage[],
@@ -28,12 +72,11 @@ export function useDesktopPromptEchoes(
   // folded run is one row, so folded anchors would stack every echo together.
   rawMessages: readonly NativeChatMessage[] = folded
 ): MobileNativeChatPendingMessage[] {
-  const anchors = useRef(new Map<string, string | null>())
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
     // A beacon restored before the transcript loads would pin the echo to
     // the bottom for good; wait for a row to anchor on (2026-09-13).
-    if (!anchors.current.has(prompt.nonce) && rawMessages.length > 0) {
+    if (rememberedAnchor(prompt.nonce) === undefined && rawMessages.length > 0) {
       // The hook beacons the row that was last at SUBMIT time (`at=`). When
       // the phone holds that row, anchor there — however late the beacon
       // arrived, the message lands where the Claude app shows the record.
@@ -42,7 +85,7 @@ export function useDesktopPromptEchoes(
       const beaconed = prompt.anchorId
       const anchorRow =
         beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
-      anchors.current.set(prompt.nonce, anchorRow?.id ?? rawMessages.at(-1)?.id ?? null)
+      rememberAnchor(prompt.nonce, anchorRow?.id ?? rawMessages.at(-1)?.id ?? null)
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,
@@ -54,7 +97,7 @@ export function useDesktopPromptEchoes(
       // reader sees is applied where the bubble is BUILT, not here.
       text: prompt.text,
       expectedOccurrence: 0,
-      baselineTailMessageId: anchors.current.get(prompt.nonce) ?? null,
+      baselineTailMessageId: rememberedAnchor(prompt.nonce) ?? null,
       baselineResolved: true
     })
   }
