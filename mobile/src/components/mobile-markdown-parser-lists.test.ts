@@ -30,7 +30,7 @@ describe('a list whose items are hard-wrapped over several lines', () => {
   })
 
   it('keeps each item’s wrapped text inside that item', () => {
-    const [list] = parseMobileMarkdown(SOURCE).filter((block) => block.type === 'list')
+    const list = parseMobileMarkdown(SOURCE).find((block) => block.type === 'list')
     const items = (list as { items: { text: string }[] }).items
     expect(items[0]?.text).toContain('watch it fail on the unfixed code')
     expect(items[0]?.text).toContain('not that you believe it would')
@@ -38,7 +38,7 @@ describe('a list whose items are hard-wrapped over several lines', () => {
   })
 
   it('rejoins a wrapped line with a space, not a line break', () => {
-    const [list] = parseMobileMarkdown(SOURCE).filter((block) => block.type === 'list')
+    const list = parseMobileMarkdown(SOURCE).find((block) => block.type === 'list')
     expect((list as { items: { text: string }[] }).items[0]?.text).not.toContain('\n')
   })
 
