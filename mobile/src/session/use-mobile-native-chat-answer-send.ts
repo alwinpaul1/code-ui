@@ -111,6 +111,10 @@ export function useMobileNativeChatAnswerSend(args: {
         return false
       }
       if (!hasAskAnswer(prompt, selections)) {
+        // Never silent: the card re-enables on a false result, so returning
+        // here without a word is indistinguishable from a dead Submit button —
+        // which is exactly how it was reported (2026-09-15).
+        onSendError('Answer not sent — nothing was selected')
         return false
       }
       // One composed write sequence per terminal: an answer landing mid-flight

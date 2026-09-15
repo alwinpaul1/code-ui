@@ -3,10 +3,8 @@ import { useStableEchoes } from './use-stable-echoes'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import {
-  normalizeNativeChatUserText,
-  stripImagePromptMarker
-} from '../../../src/shared/native-chat-image-transcript-markers'
+import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { showDesktopPromptImages } from './mobile-desktop-prompt-images'
 
 
 /**
@@ -49,9 +47,11 @@ export function useDesktopPromptEchoes(
     }
     echoes.push({
       id: `desk-${prompt.nonce}`,
-      // The phone has no bytes for a desktop-pasted image, so its marker is
-      // dropped rather than drawn as `[Image #1]` (2026-09-13).
-      text: stripImagePromptMarker(prompt.text),
+      // The phone has no bytes for a desktop-pasted image, so it cannot draw
+      // the picture — but it must still say one was sent. Stripping the marker
+      // outright made the prompt read as though nothing had been attached
+      // (2026-09-15); a placeholder is the honest middle.
+      text: showDesktopPromptImages(prompt.text),
       expectedOccurrence: 0,
       baselineTailMessageId: anchors.current.get(prompt.nonce) ?? null,
       baselineResolved: true
