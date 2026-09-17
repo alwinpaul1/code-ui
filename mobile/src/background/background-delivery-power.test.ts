@@ -45,28 +45,28 @@ describe('background delivery power advice', () => {
 describe('a user who already had notifications on and updated the app', () => {
   it('is asked for the exemption when the app opens', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedAgo: null })
         .promptOnOpen
     ).toBe(true)
   })
 
   it('is not asked again on the next launch', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: true })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedAgo: 60_000 })
         .promptOnOpen
     ).toBe(false)
   })
 
   it('is not asked when the exemption is already granted', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedThisVersion: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedAgo: null })
         .promptOnOpen
     ).toBe(false)
   })
 
   it('is not asked when delivery is off', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: false, unrestricted: false, askedThisVersion: false })
+      adviseBackgroundDeliveryPower({ deliveryOn: false, unrestricted: false, askedAgo: null })
         .promptOnOpen
     ).toBe(false)
   })
@@ -74,7 +74,7 @@ describe('a user who already had notifications on and updated the app', () => {
   // The row is the standing reminder for anyone who declined the dialog.
   it('still shows the row after declining, so it can be granted later', () => {
     expect(
-      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedThisVersion: true })
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: false, askedAgo: 60_000 })
         .showRow
     ).toBe(true)
   })
@@ -95,7 +95,7 @@ describe('an exemption that was granted and then taken away', () => {
       adviseBackgroundDeliveryPower({
         deliveryOn: true,
         unrestricted: false,
-        askedThisVersion: true,
+        askedAgo: 60_000,
         wasUnrestricted: true
       }).promptOnOpen
     ).toBe(true)
@@ -106,7 +106,7 @@ describe('an exemption that was granted and then taken away', () => {
       adviseBackgroundDeliveryPower({
         deliveryOn: true,
         unrestricted: false,
-        askedThisVersion: true,
+        askedAgo: 60_000,
         wasUnrestricted: false
       }).promptOnOpen
     ).toBe(false)
@@ -116,7 +116,7 @@ describe('an exemption that was granted and then taken away', () => {
     const advice = adviseBackgroundDeliveryPower({
       deliveryOn: true,
       unrestricted: true,
-      askedThisVersion: true,
+      askedAgo: 60_000,
       wasUnrestricted: true
     })
     expect(advice.promptOnOpen).toBe(false)
@@ -144,5 +144,68 @@ describe('what the app says before Android asks', () => {
   it('offers a way out that is not a dead end', () => {
     expect(BACKGROUND_POWER_PROMPT.dismiss).toBeTruthy()
     expect(BACKGROUND_POWER_PROMPT.confirm).toBeTruthy()
+  })
+})
+
+/**
+ * Asking once per app VERSION sounded gentle and is not. Nothing records the
+ * answer, so Allow suppresses future prompts only because the exemption then
+ * exists — while "Not now" stores nothing and the next release asks again. Two
+ * versions shipped within an hour on 2026-09-17, so someone who declined was
+ * asked twice in an hour, and the complaint was that every update asks.
+ *
+ * That is the failure this file's own comment warns about — "a dialog that
+ * reappears forever is one people learn to dismiss without reading" — reached
+ * through the update door instead of the launch one.
+ *
+ * A cooldown fixes the frequency without abandoning the reason the prompt
+ * exists: someone whose notifications are silently late still gets reminded,
+ * just not by every release.
+ */
+describe('how often a decline is asked again', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const base = { deliveryOn: true, unrestricted: false }
+
+  it('asks someone who has never been asked', () => {
+    expect(adviseBackgroundDeliveryPower({ ...base, askedAgo: null }).promptOnOpen).toBe(true)
+  })
+
+  it('does not ask again the next day', () => {
+    expect(adviseBackgroundDeliveryPower({ ...base, askedAgo: DAY }).promptOnOpen).toBe(false)
+  })
+
+  // The point of the fix: shipping four releases in a week must not mean four
+  // prompts. Nothing about a version number is evidence the answer has changed.
+  it('does not ask again just because a new version arrived', () => {
+    expect(adviseBackgroundDeliveryPower({ ...base, askedAgo: 2 * DAY }).promptOnOpen).toBe(false)
+  })
+
+  it('asks again once the cooldown has passed', () => {
+    expect(adviseBackgroundDeliveryPower({ ...base, askedAgo: 15 * DAY }).promptOnOpen).toBe(true)
+  })
+
+  /**
+   * A grant that was taken away is different from one never given: the app is
+   * now in exactly the state this mechanism exists to prevent, and the user did
+   * not necessarily do it — Android's adaptive battery revokes on its own.
+   * Worth one ask even inside the cooldown.
+   */
+  it('asks immediately when a grant it had was taken away', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ ...base, askedAgo: DAY, wasUnrestricted: true }).promptOnOpen
+    ).toBe(true)
+  })
+
+  it('never asks when the exemption is already granted', () => {
+    expect(
+      adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted: true, askedAgo: null })
+        .promptOnOpen
+    ).toBe(false)
+  })
+
+  // Degenerate: a clock that went backwards (timezone, NTP, manual change)
+  // must not read as "asked in the future" and suppress the prompt for ever.
+  it('treats a negative age as never asked', () => {
+    expect(adviseBackgroundDeliveryPower({ ...base, askedAgo: -DAY }).promptOnOpen).toBe(true)
   })
 })

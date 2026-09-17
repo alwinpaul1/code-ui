@@ -9,13 +9,12 @@ import {
 } from '@codeui/expo-background-link'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
 import {
-  loadBackgroundPowerAskedVersion,
+  loadBackgroundPowerAskedAgo,
   loadBackgroundPowerLastSeen,
   loadPushNotificationsEnabled,
-  saveBackgroundPowerAskedVersion,
+  saveBackgroundPowerAskedNow,
   saveBackgroundPowerLastSeen
 } from '../storage/preferences'
-import { getInstalledVersion } from '../app-update/installed-version'
 import { adviseBackgroundDeliveryPower } from './background-delivery-power'
 import { openBackgroundPowerPrompt } from './background-power-prompt-store'
 import { subscribeConnectionRevivalTriggers } from '../transport/connection-revival-triggers'
@@ -158,10 +157,9 @@ export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   if (!isBackgroundDeliveryAvailable()) {
     return
   }
-  const version = getInstalledVersion()
-  const [deliveryOn, askedVersion, wasUnrestricted] = await Promise.all([
+  const [deliveryOn, askedAgo, wasUnrestricted] = await Promise.all([
     syncBackgroundLinkFromPreferences(),
-    loadBackgroundPowerAskedVersion(),
+    loadBackgroundPowerAskedAgo(),
     loadBackgroundPowerLastSeen()
   ])
   const unrestricted = isBackgroundDeliveryUnrestricted()
@@ -171,7 +169,7 @@ export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   const advice = adviseBackgroundDeliveryPower({
     deliveryOn,
     unrestricted,
-    askedThisVersion: askedVersion === version,
+    askedAgo,
     wasUnrestricted
   })
   if (!advice.promptOnOpen) {
@@ -179,7 +177,7 @@ export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   }
   // Marked asked BEFORE showing it: a dismissal must not bring it back on the
   // next launch.
-  await saveBackgroundPowerAskedVersion(version)
+  await saveBackgroundPowerAskedNow()
   // Explained first, in the app's own sheet. Android's dialog names the cost and
   // not the benefit, so alone it is dismissed without being read, and the late
   // notifications that follow are never connected back to it.

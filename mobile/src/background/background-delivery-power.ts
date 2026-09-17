@@ -13,9 +13,16 @@ export type BackgroundDeliveryPowerState = {
   deliveryOn: boolean
   /** Android reports the app exempt from battery optimisation ("Unrestricted"). */
   unrestricted: boolean
-  /** Already asked on open in THIS app version. Absent on the switch-on path,
-   *  which asks regardless. */
-  askedThisVersion?: boolean
+  /** Milliseconds since this install was last asked on open, or null if never.
+   *  Absent on the switch-on path, which asks regardless.
+   *
+   *  Was "asked in THIS app version", which is what made every release ask
+   *  again: nothing records the ANSWER, so Allow only suppressed the prompt
+   *  because the exemption then existed, while "Not now" stored nothing at all.
+   *  Two releases inside an hour meant two prompts (2026-09-17). A version
+   *  number is not evidence that somebody's answer has changed; elapsed time at
+   *  least correlates with it. */
+  askedAgo?: number | null
   /** The exemption was granted when the app last looked. Going from granted to
    *  not granted is a REVOCATION — by the user, or by Android's own adaptive
    *  battery — and leaves the app in exactly the state this mechanism exists to
@@ -28,7 +35,7 @@ export type BackgroundDeliveryPowerAdvice = {
   showRow: boolean
   /** Open the system exemption prompt as part of switching delivery on. */
   promptOnEnable: boolean
-  /** Ask once when the app OPENS with delivery already on and no exemption.
+  /** Ask when the app OPENS with delivery already on and no exemption.
    *
    *  Without this, someone who already had notifications on and merely updated
    *  the app was never asked: the prompt hung off switching delivery on, and
@@ -36,9 +43,8 @@ export type BackgroundDeliveryPowerAdvice = {
    *  and is only seen by someone who goes looking, so they got slow
    *  notifications indefinitely with nothing saying why (2026-09-15).
    *
-   *  Once per app version, not every launch — a dialog that reappears forever is
-   *  one people learn to dismiss without reading — plus once more if a grant we
-   *  had is taken away. The row stays either way. */
+   *  At most once per BACKGROUND_POWER_ASK_COOLDOWN_MS, plus once more if a
+   *  grant we had is taken away. The row stays either way. */
   promptOnOpen: boolean
   caption: string
 }
@@ -64,6 +70,29 @@ export const BACKGROUND_POWER_PROMPT = {
 export const UNRESTRICTED_BATTERY_CAPTION =
   'Android pauses background connections to save power, so notifications can wait until you open the app. Allow unrestricted battery use to keep them instant.'
 
+/**
+ * How long a "Not now" is believed.
+ *
+ * Long enough that a run of releases cannot turn into a run of prompts, short
+ * enough that someone whose notifications are quietly late is reminded while
+ * they still care. Two weeks is roughly the interval at which the annoyance is
+ * a reminder rather than nagging.
+ */
+export const BACKGROUND_POWER_ASK_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000
+
+function askedRecently(askedAgo: number | null | undefined): boolean {
+  if (askedAgo === null || askedAgo === undefined) {
+    return false
+  }
+  // A negative age means the clock moved backwards — a timezone change, NTP, or
+  // the user setting it by hand. Treating that as "asked in the future" would
+  // suppress the prompt until the clock caught up, which could be for ever.
+  if (askedAgo < 0) {
+    return false
+  }
+  return askedAgo < BACKGROUND_POWER_ASK_COOLDOWN_MS
+}
+
 export function adviseBackgroundDeliveryPower(
   state: BackgroundDeliveryPowerState
 ): BackgroundDeliveryPowerAdvice {
@@ -72,7 +101,7 @@ export function adviseBackgroundDeliveryPower(
     showRow: needsExemption,
     promptOnEnable: !state.unrestricted,
     promptOnOpen:
-      needsExemption && (state.askedThisVersion !== true || state.wasUnrestricted === true),
+      needsExemption && (!askedRecently(state.askedAgo) || state.wasUnrestricted === true),
     caption: needsExemption ? UNRESTRICTED_BATTERY_CAPTION : ''
   }
 }

@@ -54,37 +54,58 @@ export async function saveRemotePushEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(REMOTE_PUSH_KEY, String(enabled))
 }
 
-// The app version this install was last asked, on open, for the battery
-// exemption background delivery needs.
+// When this install was last asked, on open, for the battery exemption that
+// background delivery needs.
 //
-// Stored as a VERSION rather than a flag. AsyncStorage survives an update, so a
-// plain flag would ask once ever: someone who declined, or who was never asked
-// because they had notifications on before this shipped, would go on getting
-// late notifications forever with only a settings row to explain it. Keying on
-// the version gives one prompt per update — a natural moment to reconsider —
-// and never more than once per launch cycle (2026-09-15).
-const POWER_ASKED_VERSION_KEY = 'orca:backgroundPowerAskedVersion'
+// A TIMESTAMP, not an app version. Version-keying was chosen so each update
+// would be "a natural moment to reconsider", but nothing records the ANSWER:
+// Allow suppresses later prompts only because the exemption then exists, while
+// "Not now" stored nothing, so the next release asked again. Two releases
+// shipped inside an hour on 2026-09-17 and the report was that every update
+// asks. A version number is not evidence anybody's answer has changed; elapsed
+// time at least correlates with it.
+const POWER_ASKED_AT_KEY = 'orca:backgroundPowerAskedAt'
+// Read once so an install that predates the change is not asked immediately on
+// upgrade; never written.
+const LEGACY_POWER_ASKED_VERSION_KEY = 'orca:backgroundPowerAskedVersion'
 
-export async function loadBackgroundPowerAskedVersion(): Promise<string | null> {
+/** Milliseconds since this install was last asked, or null if it never was. */
+export async function loadBackgroundPowerAskedAgo(): Promise<number | null> {
   try {
-    return await AsyncStorage.getItem(POWER_ASKED_VERSION_KEY)
+    const raw = await AsyncStorage.getItem(POWER_ASKED_AT_KEY)
+    if (raw !== null) {
+      const at = Number(raw)
+      return Number.isFinite(at) ? Date.now() - at : null
+    }
+    // A pre-timestamp install that was already asked: treat it as asked JUST
+    // now rather than never, so upgrading into this change does not prompt.
+    return (await AsyncStorage.getItem(LEGACY_POWER_ASKED_VERSION_KEY)) === null ? null : 0
   } catch {
     // Unreadable storage must not mean asking on every launch.
-    return 'unknown'
+    return 0
+  }
+}
+
+export async function saveBackgroundPowerAskedNow(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(POWER_ASKED_AT_KEY, String(Date.now()))
+  } catch {
+    // Best effort; at worst it asks once more.
   }
 }
 
 // The exemption state the app last observed. A grant we saw and then lost is a
 // revocation — by the user, or by Android's adaptive battery — and earns one
-// more ask even inside a version that already asked (2026-09-15).
-const POWER_LAST_SEEN_KEY = 'orca:backgroundPowerLastSeenUnrestricted'
+// ask even inside the cooldown, because the app is then in exactly the state
+// this mechanism exists to prevent.
+const POWER_LAST_SEEN_KEY = 'orca:backgroundPowerLastSeen'
 
 export async function loadBackgroundPowerLastSeen(): Promise<boolean> {
   try {
     return (await AsyncStorage.getItem(POWER_LAST_SEEN_KEY)) === 'true'
   } catch {
-    // Unknown is treated as "never granted": at worst one ask is skipped,
-    // which is better than one that repeats.
+    // Unknown reads as "never granted", so an unreadable store cannot
+    // manufacture a revocation that did not happen.
     return false
   }
 }
@@ -94,14 +115,6 @@ export async function saveBackgroundPowerLastSeen(unrestricted: boolean): Promis
     await AsyncStorage.setItem(POWER_LAST_SEEN_KEY, String(unrestricted))
   } catch {
     // Best effort.
-  }
-}
-
-export async function saveBackgroundPowerAskedVersion(version: string): Promise<void> {
-  try {
-    await AsyncStorage.setItem(POWER_ASKED_VERSION_KEY, version)
-  } catch {
-    // Best effort; at worst it asks once more.
   }
 }
 
