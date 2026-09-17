@@ -85,6 +85,31 @@ describe('the agent’s own prompt receipt confirms a send the transcript has no
     expect(findBeaconConfirmedSends([prompt('', '1')], [send('fix the login')])).toEqual([])
   })
 
+  /** The fence that was missing. `desktopPrompts` is an ACCUMULATED history of
+   *  up to 40 prompts, persisted across launches by warm start, so a receipt
+   *  from hours ago is still in the list. Without a fence it confirms a send
+   *  that never reached the desktop, the 20 s "Delivery unconfirmed" notice is
+   *  cancelled, and because an unacknowledged send never creates a pending
+   *  bubble the message is gone with nothing on screen to say so. */
+  it('does not let a receipt that predates the send confirm it', () => {
+    const entry = send('continue')
+    entry.knownReceiptNonces = new Set(['100'])
+    expect(findBeaconConfirmedSends([prompt('continue', '100')], [entry])).toEqual([])
+  })
+
+  it('still confirms on a receipt that arrived after the send', () => {
+    const entry = send('continue')
+    entry.knownReceiptNonces = new Set(['100'])
+    expect(
+      findBeaconConfirmedSends([prompt('continue', '100'), prompt('continue', '200')], [entry])
+    ).toEqual([entry])
+  })
+
+  it('confirms normally when the send recorded no earlier receipts', () => {
+    const entry = send('continue')
+    expect(findBeaconConfirmedSends([prompt('continue', '100')], [entry])).toEqual([entry])
+  })
+
   it('does not let an empty-text send be confirmed by any receipt', () => {
     expect(findBeaconConfirmedSends([prompt('fix the login', '1')], [send('')])).toEqual([])
   })

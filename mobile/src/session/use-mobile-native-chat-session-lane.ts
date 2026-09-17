@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import { nativeChatIdentityHostId } from './native-chat-identity-host'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -35,10 +36,13 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
-  // `sourceIdentity` is `hostId\0workspaceId`; the host half is all this needs.
+  // `sourceIdentity` is `encodeNativeChatTranscriptIdentity([hostId, worktreeId])`,
+  // which is JSON, not a delimited string. Decoded with the encoder's own
+  // counterpart: splitting it by hand returned the whole JSON string, no host
+  // ever matched, and the reconnect refetch was inert while claiming to work.
   // Read here rather than threaded from the controller because that file and
   // the session route both sit exactly at their max-lines caps.
-  const lastConnectedAt = useLastConnectedAt(sourceIdentity.split('\0')[0] || undefined)
+  const lastConnectedAt = useLastConnectedAt(nativeChatIdentityHostId(sourceIdentity))
   const bridgeSession = useMobileNativeChatSession({
     client,
     sourceIdentity,

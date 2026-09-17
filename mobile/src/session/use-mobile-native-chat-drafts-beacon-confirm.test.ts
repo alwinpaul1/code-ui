@@ -88,6 +88,31 @@ describe('the agent’s prompt receipt stops the unconfirmed clock', () => {
     expect(onUnconfirmed).not.toHaveBeenCalled()
   })
 
+  /** The message-loss case the review caught. `desktopPrompts` is accumulated
+   *  history, so an identical prompt from BEFORE the send is still in the list.
+   *  A send whose ack was lost creates no pending bubble and clears the
+   *  composer, so if that stale receipt cancels the notice the text is gone
+   *  with nothing on screen to say so. */
+  it('does not let a receipt older than the send cancel its unconfirmed notice', async () => {
+    const onUnconfirmed = vi.fn()
+    const older = [{ nonce: '100', text: 'continue' }]
+    await act(async () => {
+      renderer = create(createElement(Harness, { receipts: older }))
+    })
+    await holdSend('continue', onUnconfirmed)
+    // A later, unrelated prompt makes the effect run again with the stale
+    // receipt still in the list.
+    await act(async () => {
+      renderer!.update(
+        createElement(Harness, { receipts: [...older, { nonce: '200', text: 'hello' }] })
+      )
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(30_000)
+    })
+    expect(onUnconfirmed).toHaveBeenCalledTimes(1)
+  })
+
   it('still reports unconfirmed when no receipt ever arrives', async () => {
     const onUnconfirmed = vi.fn()
     await act(async () => {

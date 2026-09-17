@@ -36,6 +36,9 @@ export type MobileNativeChatSendOrigin = {
   baselineOccurrences: number
   baselineTailMessageId: string | null
   baselineResolved: boolean
+  /** Prompt-receipt nonces already reported when this send left the phone, so a
+   *  receipt older than the send cannot later be read as its confirmation. */
+  knownReceiptNonces?: ReadonlySet<string>
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>

@@ -17,6 +17,11 @@ export type UnconfirmedSend = {
   normalizedText: string
   baselineTailMessageId: string | null
   deadline: ReturnType<typeof setTimeout> | null
+  /** Prompt-receipt nonces the agent had already reported when this send left
+   *  the phone. The beacon carries an accumulated history (up to 40, persisted
+   *  across launches), so without this a receipt from hours ago confirms a send
+   *  that never arrived and silently cancels its "Delivery unconfirmed" notice. */
+  knownReceiptNonces?: ReadonlySet<string>
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {

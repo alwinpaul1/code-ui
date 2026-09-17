@@ -18,7 +18,14 @@ export type BeaconPromptReceipt = {
  * Why this is worth having: an ack-lost send otherwise waits
  * `UNCONFIRMED_SEND_DEADLINE_MS` (20 s) for a transcript row before the phone
  * can stop calling it unconfirmed. The hook fires on every submission and its
- * beacon lands in about a second, so the wait collapses to roughly that. The
+ * beacon lands in about a second.
+ *
+ * That gain is narrower than it first looks, and the limit is worth stating: the
+ * confirm effect runs when the RECEIPTS change, while a hold is a ref mutation
+ * that re-runs nothing. So it only helps when the receipt arrives AFTER the
+ * hold, which is the socket-drop path. On the 15 s request-timeout path the
+ * receipt has already landed by the time the send is held, nothing re-runs, and
+ * the send waits the full 20 s exactly as before. The
  * gain is not identity but FIDELITY: the transcript row it replaces is matched
  * against a screen that wraps, truncates and box-draws, while this is the
  * agent's own bytes.
@@ -57,6 +64,13 @@ export function findBeaconConfirmedSends(
     }
     const receipt = normalized.find((candidate) => {
       if (candidate.text === '' || claimedNonces.has(candidate.nonce)) {
+        return false
+      }
+      // Only a receipt the agent reported AFTER this send can be evidence of
+      // it. The beacon's history reaches back across launches, so an older
+      // identical prompt (typed at the desk, or this phone's own earlier send)
+      // would otherwise confirm a message that never arrived.
+      if (entry.knownReceiptNonces?.has(candidate.nonce)) {
         return false
       }
       return candidate.cut

@@ -6,6 +6,7 @@ import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-
 import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-pending-persistence'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
+import { parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
 import {
   countUserTextOccurrences,
   draftWasSent, findLandedImagePreviewEchoes,
@@ -38,8 +39,6 @@ const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 // Route remounts must not reuse the keys of bubbles restored from disk.
 let pendingCounter = 0
 
-// Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
-const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
 export function useMobileNativeChatDrafts(args: {
   hostId: string
@@ -178,6 +177,9 @@ export function useMobileNativeChatDrafts(args: {
         normalizedText,
         baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
         baselineTailMessageId: messagesRef.current.at(-1)?.id ?? null,
+        // Snapshotted at SEND, not at hold: an ack can take 15s to be given up
+        // on, and a receipt arriving in that gap is the real confirmation.
+        knownReceiptNonces: new Set(receiptNoncesRef.current),
         // Only a settled read makes this a boundary. Anything else — hydrating,
         // or a read that failed — hands back an empty list that reads as "the
         // conversation was empty", which lets any row claim this send later.
@@ -239,35 +241,31 @@ export function useMobileNativeChatDrafts(args: {
   // failure (which baits a duplicate): stay quiet when the transcript echo
   // lands, and surface the uncertainty if the deadline passes without one.
   // The composer was already cleared at send time, so this never touches drafts.
+  // Read at send time by captureSendOrigin; a ref so a new beacon reading does
+  // not re-create the send callback on every prompt the agent reports.
+  const receiptNoncesRef = useRef<readonly string[]>([])
+  receiptNoncesRef.current = (args.beaconPromptReceipts ?? []).map((receipt) => receipt.nonce)
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
       if (!mountedRef.current) {
         return
       }
-      const isActiveTranscript =
-        activeDraftKeyRef.current === origin.draftKey &&
-        (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey)
-      const entry: UnconfirmedSend = {
-        draftKey: origin.draftKey,
-        pendingKey: origin.pendingKey,
+      const entry = parkUnconfirmedSend({
+        origin,
         text,
-        normalizedText: origin.normalizedText,
-        baselineTailMessageId: origin.baselineTailMessageId,
-        deadline: null
+        messages: messagesRef.current,
+        isActiveTranscript:
+          activeDraftKeyRef.current === origin.draftKey &&
+          (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey),
+        onUnconfirmed,
+        onExpire: (held) => {
+          unconfirmedRef.current = unconfirmedRef.current.filter((other) => other !== held)
+        }
+      })
+      if (entry) {
+        unconfirmedRef.current = [...unconfirmedRef.current, entry]
       }
-      // Why: the transcript event can beat the lost RPC acknowledgement.
-      if (
-        isActiveTranscript &&
-        findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
-      ) {
-        return
-      }
-      entry.deadline = setTimeout(() => {
-        unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
-        onUnconfirmed()
-      }, UNCONFIRMED_SEND_DEADLINE_MS)
-      unconfirmedRef.current = [...unconfirmedRef.current, entry]
     },
     []
   )

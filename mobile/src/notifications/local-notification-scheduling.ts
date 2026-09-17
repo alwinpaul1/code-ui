@@ -221,12 +221,31 @@ export async function showLocalNotification(
       await Notifications.dismissNotificationAsync(scheduledIdentifier).catch(() => {})
       return
     }
+    // This banner now OWNS the session identifier, so every earlier
+    // notification that was showing on it is superseded. Leaving their records
+    // pointing at it meant a late dismiss for one of them — the desk answering
+    // the prompt from two notifications ago — called dismiss on the identifier
+    // now carrying the newest word, and the reader never saw it. Forgetting the
+    // identifier does not lose the dismiss: it falls through to
+    // `dismissPresentedNotification`, which matches on the notification id and
+    // so can only ever clear its own banner.
+    forgetSupersededBanners(storedKey, scheduledIdentifier)
     notificationState.identifier = scheduledIdentifier
     boundScheduledNotifications()
   } finally {
     if (notificationState.pending === pending) {
       notificationState.pending = undefined
       notificationState.dismissAfterSchedule = false
+    }
+  }
+}
+
+/** Drop the identifier from every record except the one that just claimed it.
+ *  Their banners no longer exist; only the newest notification is on screen. */
+function forgetSupersededBanners(keepKey: string, identifier: string): void {
+  for (const [key, state] of scheduledNotificationsByHostAndNotificationId) {
+    if (key !== keepKey && state.identifier === identifier) {
+      state.identifier = undefined
     }
   }
 }
