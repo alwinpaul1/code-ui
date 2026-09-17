@@ -3,6 +3,7 @@ import { ActivityIndicator, Keyboard, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
+import { sessionModelPillLabel } from './session-model-pill'
 import { IconButton } from '../ui/IconButton'
 import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
@@ -40,6 +41,11 @@ export type MobileNativeChatSessionOptionPickersProps = {
   sendInFlight?: boolean
   /** Bumped by the owner to open the model sheet (a typed `/model` in Codex chat). */
   openRequest?: number
+  /** The agent's own word about what is running — the status-line badge or
+   *  the beacon. When present it labels the pill; the snapshot still decides
+   *  which drawer row is selected, because that is what a pick changes. See
+   *  session-model-pill.ts for the 2026-09-18 case this exists for. */
+  liveModel?: { model: string | null; label: string | null; effort: string | null }
   /** The agent's own model list is still being read (Codex scrapes its picker);
    *  the sheet shows a reader row instead of a placeholder list. */
   modelsPending?: boolean
@@ -51,7 +57,8 @@ export function MobileNativeChatSessionOptionPickers({
   isWorking,
   sendInFlight = false,
   openRequest = 0,
-  modelsPending = false
+  modelsPending = false,
+  liveModel
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
@@ -79,9 +86,13 @@ export function MobileNativeChatSessionOptionPickers({
   const disabled = pendingId !== null || sendInFlight
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id
+  // What is RUNNING outranks what was picked, for the label. The snapshot's
+  // current value is the tracked record, and the pill read "Fable Medium" from
+  // it on a session whose status line painted Opus xhigh (2026-09-18).
+  const live = sessionModelPillLabel(liveModel ?? null)
   const modelLabel = mobileModelPillLabel(model)
   const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) || null : null
-  const pillLabel = optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel
+  const pillLabel = live ?? (optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel)
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 
   const closePicker = (): void => setOpenDescriptorId(null)

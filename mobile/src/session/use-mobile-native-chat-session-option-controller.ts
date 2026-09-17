@@ -160,7 +160,12 @@ export function useMobileNativeChatSessionOptionController(args: {
               controller: sessionOptions,
               isWorking,
               openRequest,
-              modelsPending: codex.modelsPending
+              modelsPending: codex.modelsPending,
+              liveModel: {
+                model: reportedModel,
+                label: reportedModelLabel ?? null,
+                effort: reportedEffort ?? null
+              }
             }
           : null,
     [
@@ -168,6 +173,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       codex.modelsPending,
       isWorking,
       openRequest,
+      reportedEffort,
+      reportedModel,
+      reportedModelLabel,
       sessionOptions,
       structuredController
     ]

@@ -77,7 +77,10 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   const mount = (
     snapshot: SessionOptionDescriptor[],
     isWorking = false,
-    extra: { modelsPending?: boolean } = {}
+    extra: {
+      modelsPending?: boolean
+      liveModel?: { model: string | null; label: string | null; effort: string | null }
+    } = {}
   ): void => {
     const controller: MobileNativeChatSessionOptionsController = {
       snapshot,
@@ -180,6 +183,33 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       .findAll((node) => node.type === 'Text')
       .map((node) => (node.props as { children?: unknown }).children)
     expect(labels).toContain('Sonnet 5 High')
+  })
+
+  /**
+   * The composer pill read "Fable Medium" on a session whose status line
+   * painted `[Opus 5 (1M context) xhigh | Max 20x]`. The snapshot's current
+   * value is the tracked record — a pick, a seed, a remembered value — and the
+   * pill was labelling itself from it. What is RUNNING is the agent's own word,
+   * and the pill states that when it has it; the record still decides which
+   * row the drawer marks as selected, because that is what a pick changes.
+   */
+  it('labels the pill with what the agent says is running, not what was picked', () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' }
+    })
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Opus 5 (1M context) xhigh')
+    const labels = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(labels).toContain('Opus 5 (1M context) xhigh')
+    expect(labels).not.toContain('Sonnet 5 High')
+  })
+
+  it('falls back to the snapshot only while the agent has said nothing', () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: null, label: null, effort: null }
+    })
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5 High')
   })
 
   it('opens the model sheet and applies a picked model', async () => {
