@@ -29,7 +29,7 @@ slightly different angles (52 deg and 50 deg from horizontal).
 Outputs, all overwritten:
   assets/brand/mark.svg          vector master: the tile, viewBox 0 0 741 704
   src/components/app-logo-path.ts the same path for the in-app <AppLogo/>
-  assets/icon.png                1024 opaque: red full-bleed, white knot. The
+  assets/icon.png                1024 red squircle, white knot. Carries its own
                                  OS mask (iOS squircle, Android legacy) supplies
                                  the corners; a tile carrying its own would show
                                  double corners.
@@ -47,6 +47,7 @@ Outputs, all overwritten:
 """
 from __future__ import annotations
 
+import math
 import os
 import shutil
 import subprocess
@@ -153,6 +154,29 @@ def knot_svg_body(extend: float, fill: str) -> str:
     return "".join(polygon(p, fill) for p in knot_polygons(extend))
 
 
+# ---- squircle --------------------------------------------------------------
+# Apple's and One UI's icon silhouette is a SUPERELLIPSE, |x|^n + |y|^n = 1, not
+# a rounded rectangle: the curvature runs continuously into the straight edge
+# instead of meeting it at a tangent, which is why a rounded rect next to one
+# looks pinched at the corner. n = 5 is the usual fit for the iOS shape.
+#
+# Sampled as a polygon rather than fitted to beziers: at 1024 px one segment of
+# 512 is well under a pixel, so the raster is identical to a curve and the code
+# stays something a reader can check against the equation.
+SQUIRCLE_N = 5.0
+
+
+def squircle_path(cx: float, cy: float, r: float, samples: int = 512) -> str:
+    points = []
+    for index in range(samples):
+        t = 2.0 * math.pi * index / samples
+        cos_t, sin_t = math.cos(t), math.sin(t)
+        x = cx + r * math.copysign(abs(cos_t) ** (2.0 / SQUIRCLE_N), cos_t)
+        y = cy + r * math.copysign(abs(sin_t) ** (2.0 / SQUIRCLE_N), sin_t)
+        points.append(f"{x:.2f},{y:.2f}")
+    return "M" + " L".join(points) + " Z"
+
+
 def svg(view_box: str, body: str) -> str:
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}">{body}</svg>'
 
@@ -201,9 +225,20 @@ def main() -> int:
     )
 
     print("raster")
-    # App icon: opaque. Red everywhere, the knot's open ends run off the canvas.
+    # App icon: red with the knot's open ends running off the tile, clipped to a
+    # squircle. It carries its own silhouette because this asset is shown
+    # UNMASKED in most places it appears — the legacy API 24-25 launcher, a
+    # sideload prompt, a file browser, a repository listing — where a full-bleed
+    # square reads as a raw tile. Android 8+ launchers use the adaptive icon and
+    # apply their own mask, so nothing double-rounds.
+    icon_cx, icon_cy = W / 2, H / 2
+    squircle = f'<clipPath id="squircle"><path d="{squircle_path(icon_cx, icon_cy, W / 2)}"/></clipPath>'
     full_bleed = f'<rect x="0" y="{-(W - H) / 2:.2f}" width="{W:.0f}" height="{W:.0f}" fill="{RED}"/>'
-    render(svg(square, full_bleed + knot_svg_body(200, WHITE)), "assets/icon.png", 1024)
+    icon_body = (
+        f"<defs>{squircle}</defs>"
+        f'<g clip-path="url(#squircle)">{full_bleed + knot_svg_body(200, WHITE)}</g>'
+    )
+    render(svg(square, icon_body), "assets/icon.png", 1024)
 
     # Adaptive foreground: the 108dp canvas shows its inner 72dp through the
     # launcher's mask, so the tile's width is mapped onto that 72dp box and the

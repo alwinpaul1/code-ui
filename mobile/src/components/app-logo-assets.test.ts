@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '../test/contrast'
-import {
+import { alphaAt,
   alphaRange,
   decodePng,
   opaqueColours,
@@ -78,10 +78,30 @@ describe('the launcher icon', () => {
     expect(backgroundColor).toBe(brand.red)
   })
 
-  it('has a fully opaque 1024 app icon that is mostly the brand red with a white knot', () => {
+  /**
+   * The icon carries its own squircle rather than being a full-bleed square.
+   * It is shown UNMASKED in most places it turns up — the legacy API 24-25
+   * launcher, a sideload prompt, a file browser, a repository listing — where a
+   * square reads as a raw tile. Android 8+ uses the adaptive icon and applies
+   * its own mask, so nothing double-rounds.
+   *
+   * Pinning the CORNER specifically, because that is the whole change: a
+   * regenerated full-bleed icon would still be 1024, still mostly red and still
+   * have white in it, and would pass every other assertion here.
+   */
+  it('has a 1024 app icon cut to a squircle, red with a white knot', () => {
     const png = asset(expo.icon)
     expect([png.width, png.height]).toEqual([1024, 1024])
-    expect(alphaRange(png).min, 'no alpha anywhere: the OS supplies the corners').toBe(255)
+    expect(alphaAt(png, 4, 4), 'the corner is cut away').toBe(0)
+    expect(alphaAt(png, 512, 512), 'the middle is solid').toBe(255)
+    // A superellipse, not a rounded rectangle. The two shapes only disagree in a
+    // narrow band, so the point is computed, not guessed: at x = 20 the n = 5
+    // squircle is still cut until y = 148, while a rounded rect with an
+    // iOS-sized 180 px radius has finished its arc by y = 98. (20, 120) sits
+    // between them, so it is transparent here and would be solid there. A first
+    // draft guessed (40, 123) and was inside the shape.
+    expect(alphaAt(png, 20, 120), 'still curving where a rounded rect would be solid').toBe(0)
+    expect(alphaAt(png, 512, 2), 'the edge midpoint is solid').toBe(255)
     const colours = visibleColours(png)
     const ranked = [...colours.entries()].sort((a, b) => b[1] - a[1])
     expect(ranked[0][0]).toBe(RED)

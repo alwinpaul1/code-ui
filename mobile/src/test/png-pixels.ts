@@ -172,3 +172,17 @@ export function alphaRange(png: DecodedPng): { min: number; max: number } {
   }
   return { min, max }
 }
+
+/**
+ * The alpha of one pixel, for pinning a SHAPE rather than a distribution.
+ *
+ * `alphaRange` answers "is there any transparency at all", which every masked
+ * icon passes whatever its outline. A silhouette is only pinned by asking at
+ * points the wrong outline would answer differently.
+ */
+export function alphaAt(png: DecodedPng, x: number, y: number): number {
+  if (x < 0 || y < 0 || x >= png.width || y >= png.height) {
+    throw new Error(`alphaAt(${x}, ${y}) is outside a ${png.width}x${png.height} image`)
+  }
+  return png.rgba[(y * png.width + x) * 4 + 3]!
+}

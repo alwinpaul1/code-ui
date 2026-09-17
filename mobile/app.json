@@ -72,7 +72,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F11924"
+        "backgroundColor": "#F11924",
+        "monochromeImage": "./assets/adaptive-icon.png"
       },
       "allowBackup": false,
       "permissions": [
