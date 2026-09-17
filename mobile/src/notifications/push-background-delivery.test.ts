@@ -91,6 +91,23 @@ describe('showing a notification a push delivered while the app was closed', () 
     expect(recorded).toEqual([])
   })
 
+  /**
+   * Asserting the CALL, not the stored result, because both are empty either
+   * way. The defect was that the guard checked two of the three fields the log
+   * requires, so a seq-less push was handed over and rejected inside the log —
+   * indistinguishable from a decision, and it reads at the call site as if the
+   * push had been recorded.
+   *
+   * Such a push genuinely cannot be suppressed: the desktop matches on the
+   * triple, so there is nothing to report and it comes back once as a duplicate.
+   * The point of the guard is that the code says so.
+   */
+  it('does not hand the log a push it cannot report', async () => {
+    await handlePushDelivery({ ...NOTIFICATION, notificationSeq: 'not-a-number' })
+    expect(shown).toHaveLength(1)
+    expect(recorded).toEqual([])
+  })
+
   it('applies a dismiss', async () => {
     await handlePushDelivery({
       t: 'dismiss',

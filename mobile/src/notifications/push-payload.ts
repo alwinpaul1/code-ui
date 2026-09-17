@@ -39,8 +39,12 @@ function readText(value: unknown): string | null {
  *
  * FCM's data block is a flat map of strings, so a seq crosses the wire as
  * `"42"`. Returning undefined for anything unreadable keeps a bad seq from
- * costing the reader the notification it was attached to — the seq only feeds
- * reconnect dedup, and an absent one degrades to fetching a little too much.
+ * costing the reader the notification it was attached to, which is the right
+ * trade — but be clear about what it costs. For the catch-up FETCH an absent
+ * seq means asking for a little too much. For the DELIVERED-PUSH LOG it means
+ * the notification cannot be reported at all, because the desktop matches on
+ * the triple, so it comes back once as a duplicate banner. A banner twice beats
+ * a banner never; it is not free.
  */
 function readSeq(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {

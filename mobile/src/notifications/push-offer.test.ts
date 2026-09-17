@@ -26,7 +26,8 @@ vi.mock('./push-registration', () => ({
   })
 }))
 
-const { offerPushTokenToHost, lastPushRegistrationOutcome } = await import('./push-offer')
+const { offerPushTokenToHost } = await import('./push-offer')
+const { lastPushRegistrationOutcome } = await import('./push-registration-outcome')
 
 const client = {} as RpcClient
 

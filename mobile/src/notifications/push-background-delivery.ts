@@ -55,7 +55,19 @@ export async function handlePushDelivery(envelope: unknown): Promise<void> {
     // this", and the next catch-up suppresses the replay on the strength of it.
     // Claiming a banner that never rendered turns a delayed notification into a
     // lost one.
-    if (event.notificationId != null && event.notificationEpoch != null) {
+    // All THREE, because that is what the desktop matches on. Guarding two of
+    // them let a seq-less push through to be rejected inside the log, which is
+    // the same outcome by a longer route and reads as if it were recorded.
+    //
+    // A push with no usable seq cannot be suppressed at all: `deliveredPushes`
+    // entries are matched on the triple, so there is nothing to send. That is
+    // the contract, not a gap in this guard — such a push comes back once as a
+    // duplicate on the next catch-up.
+    if (
+      event.notificationId != null &&
+      event.notificationEpoch != null &&
+      event.notificationSeq != null
+    ) {
       await recordDeliveredPush(hostId, {
         notificationId: event.notificationId,
         notificationEpoch: event.notificationEpoch,

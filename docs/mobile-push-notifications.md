@@ -89,6 +89,18 @@ together: without it, whoever turns this on gets exactly the silence
 `push-registration.test.ts` says must not happen, unable to tell "refused" from
 "broken".
 
+**Why not ship a switch now, stated as a rule:** a switch that can only ever
+produce a refusal is a WORSE diagnostic than no switch, because it teaches the
+user that push is broken rather than unbuilt.
+
+**Open question for the first real push:** `MobilePushRegisterInput` requires
+`deviceId`, and the phone never sends one — `grep -rn deviceId mobile/src
+mobile/app` is empty. Either the desktop fills it in from the authenticated
+connection (likely: the registration is "persisted on the paired DeviceEntry")
+and that type describes the gateway-facing shape, or every registration fails
+and, until the settings row exists, nothing on the phone can say why. Check it
+against a real desktop before trusting a registration.
+
 **Known, unexercised while the path is dark:** `showLocalNotification`'s dedupe
 is a `pending` guard that only catches a CONCURRENT second call. If the gateway
 ever pushes something the live socket also carried, the push arrives after the
@@ -96,6 +108,16 @@ socket's banner has settled, dismisses it and re-schedules on the same session
 identifier — one banner, but a second heads-up and sound for one notification.
 Whether it is reachable at all depends on whether the sender suppresses what the
 socket already delivered, which is a decision for whoever builds one.
+
+A push whose seq the gateway omits cannot be suppressed at all: `deliveredPushes`
+entries are matched on the triple, so there is nothing to report and the
+notification returns once as a duplicate banner. Send a seq on every push.
+
+One asymmetry left alone: the delivered-push log is purged when a push arrives
+under a new epoch, not when the session learns of one, so between a desktop
+restart and the next push a catch-up can spend its 256-entry budget on entries
+that cannot match. The desktop simply replays, which is correct, so the cost is
+a larger request rather than a wrong one.
 
 ## Payload the sender must produce
 

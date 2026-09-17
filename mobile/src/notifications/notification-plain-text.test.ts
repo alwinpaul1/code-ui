@@ -122,12 +122,42 @@ describe('a table an agent wrote without outer pipes', () => {
   // excerpt and can begin part-way through a table. Prose wrapped in pipes
   // loses that bet, and that is the right way round.
 
-  // Degenerate: a separator with nothing above it is not a table.
-  it('leaves a bare separator alone when nothing heads it', () => {
-    expect(notificationPlainText('--- | ---')).toBe('--- | ---')
+  // Degenerate: a separator with nothing above it. Written the other way round
+  // at first, on the reasoning that a delimiter needs a header to mean
+  // anything. It does not: an excerpt can begin AT one, `---` alone is already
+  // dropped as a thematic break, and nothing in prose looks like `--- | ---`.
+  // Showing it is the |||| symptom in miniature.
+  it('drops a bare separator even with nothing above it', () => {
+    expect(notificationPlainText('--- | ---')).toBe('')
   })
 
   it('keeps a one-column table readable', () => {
     expect(notificationPlainText('| Check |\n| --- |\n| tsc |')).toBe('Check\ntsc')
+  })
+})
+
+/**
+ * A body is an excerpt, so it can begin ANYWHERE in a table — including at the
+ * delimiter row itself. The first fix treated the delimiter as an anchor but
+ * never as a veto: it only classified when a header sat above it, so an excerpt
+ * starting at one left the whole table raw, and a piped delimiter with no
+ * header was flattened into "--- · ---" by the outer-pipe rule instead.
+ *
+ * Nothing else in Markdown looks like `--- | ---`, so it is unambiguous on its
+ * own evidence and is dropped whatever precedes it.
+ */
+describe('an excerpt that begins at the separator row', () => {
+  it('drops a bare separator and still reads the rows under it', () => {
+    expect(notificationPlainText('--- | ---\ntsc | clean\ntests | 6620')).toBe(
+      'tsc \u00b7 clean\ntests \u00b7 6620'
+    )
+  })
+
+  it('does not flatten a piped separator into a row of dashes', () => {
+    expect(notificationPlainText('| --- | --- |\n| tsc | clean |')).toBe('tsc \u00b7 clean')
+  })
+
+  it('drops a separator that is the only thing in the body', () => {
+    expect(notificationPlainText('| --- | --- |')).toBe('')
   })
 })

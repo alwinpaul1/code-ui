@@ -2,6 +2,7 @@ import {
   clearWatermark,
   forgetHostNotificationSession
 } from '../notifications/notification-reconnect-catchup'
+import { forgetPushRegistrationOutcome } from '../notifications/push-registration-outcome'
 import { clearDeliveredPushes } from '../notifications/push-delivery-log'
 import { removeHost } from './host-store'
 
@@ -21,4 +22,5 @@ export async function removeHostAndCloseClient(
   // Same reason: a re-pair that inherited these would tell the new host not to
   // send notifications it has never sent.
   void clearDeliveredPushes(hostId)
+  forgetPushRegistrationOutcome(hostId)
 }

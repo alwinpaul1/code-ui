@@ -89,16 +89,20 @@ function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | un
     /^\s*\|.+\|\s*$/.test(line) ? 'row' : undefined
   )
   lines.forEach((line, index) => {
-    if (index === 0 || !isTableSeparator(line)) {
+    if (!isTableSeparator(line)) {
       return
     }
-    const header = lines[index - 1]
-    // A delimiter with no header above it is just dashes and pipes.
-    if (header === undefined || !header.includes('|')) {
-      return
-    }
+    // A VETO as well as an anchor, and unconditionally: nothing else in Markdown
+    // looks like `--- | ---`, so it is a delimiter on its own evidence whatever
+    // sits above it. An excerpt can begin AT one, and before this that left a
+    // bare table entirely raw and flattened a piped one into "--- · ---" — the
+    // outer-pipe rule above had already claimed it as a row.
     kinds[index] = 'separator'
-    kinds[index - 1] = 'row'
+    const header = index > 0 ? lines[index - 1] : undefined
+    // A header only exists when there is a line above WITH cells in it.
+    if (header !== undefined && header.includes('|')) {
+      kinds[index - 1] = 'row'
+    }
     for (let body = index + 1; body < lines.length; body += 1) {
       if (!lines[body]!.includes('|')) {
         break
