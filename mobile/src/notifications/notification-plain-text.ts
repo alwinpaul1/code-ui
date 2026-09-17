@@ -9,9 +9,8 @@
  * their visible text, and blank-line runs collapse.
  */
 export function notificationPlainText(markdown: string): string {
-  const lines = markdown
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
+  const raw = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const lines = raw
     .map((line) =>
       line
         .replace(/^\s*(```+|~~~+)[^\n]*$/, '')
@@ -32,26 +31,99 @@ export function notificationPlainText(markdown: string): string {
         )
         .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
         .replace(/^\s*([-*_]\s*){3,}$/, '')
-        .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*$/, '')
-        // A table is a layout, and the shade has no columns. The separator row
-        // above is dropped; a CONTENT row used to keep every pipe, so an agent
-        // answering with a table filled the notification with "||||" and no
-        // readable summary (reported from the phone 2026-09-17). Cells joined
-        // by a middot read as one line. Only a line that both starts and ends
-        // with a pipe is treated as a row, so a pipe inside prose is untouched.
-        .replace(/^\s*\|(.+)\|\s*$/, (_, row: string) =>
-          row
-            .split('|')
-            .map((cell) => cell.trim())
-            .filter((cell) => cell !== '')
-            .join(' \u00b7 ')
-        )
         .replace(/\s+$/, '')
     )
+  const tableLines = classifyTableLines(raw)
+  const flattened: string[] = []
+  lines.forEach((line, index) => {
+    const kind = tableLines[index]
+    if (kind === 'separator') {
+      // Dropped ENTIRELY rather than blanked. A blank here survives the collapse
+      // below (its predecessor is the header), and Android's collapsed banner
+      // shows two lines — so the header takes one, the blank takes the other,
+      // and the content row falls below the fold.
+      return
+    }
+    flattened.push(kind === 'row' ? flattenTableRow(line) : line)
+  })
+  return flattened
     .filter(
       (line, index, all) => line.trim() !== '' || (index > 0 && all[index - 1]!.trim() !== '')
     )
-  return lines.join('\n').trim()
+    .join('\n')
+    .trim()
+}
+
+/** A GFM delimiter row, with or without the optional outer pipes. */
+function isTableSeparator(line: string): boolean {
+  const inner = line.trim().replace(/^\|/, '').replace(/\|$/, '')
+  if (!inner.includes('-')) {
+    return false
+  }
+  return inner.split('|').every((cell) => /^\s*:?-+:?\s*$/.test(cell))
+}
+
+/**
+ * Which lines belong to a table, decided over the whole text rather than line by
+ * line.
+ *
+ * Two ways a line qualifies, because two different things can go wrong.
+ *
+ * A line fenced by pipes on both sides is a row by itself: notification bodies
+ * are excerpts and can start part-way through a table, with the header and
+ * delimiter cut off.
+ *
+ * GFM also makes those outer pipes OPTIONAL, so `Check | Result` is a real row —
+ * and so is `ls | wc -l` in prose, which is indistinguishable in isolation. What
+ * makes a table a table there is the DELIMITER row, so a bare row counts only
+ * when a delimiter sits directly under its header. Demanding outer pipes was the
+ * whole rule before, which let a raw `--- | ---` reach the shade.
+ */
+function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | undefined)[] {
+  const kinds: ('row' | 'separator' | undefined)[] = lines.map((line) =>
+    // A body is an EXCERPT of an agent's turn, so it can begin part-way through
+    // a table with the header and delimiter cut off. A line fenced by pipes on
+    // both sides is a row on its own evidence, which is what keeps a truncated
+    // table readable. It is also why a line of prose wrapped in pipes is
+    // flattened: a mid-table excerpt is far likelier than that.
+    /^\s*\|.+\|\s*$/.test(line) ? 'row' : undefined
+  )
+  lines.forEach((line, index) => {
+    if (index === 0 || !isTableSeparator(line)) {
+      return
+    }
+    const header = lines[index - 1]
+    // A delimiter with no header above it is just dashes and pipes.
+    if (header === undefined || !header.includes('|')) {
+      return
+    }
+    kinds[index] = 'separator'
+    kinds[index - 1] = 'row'
+    for (let body = index + 1; body < lines.length; body += 1) {
+      if (!lines[body]!.includes('|')) {
+        break
+      }
+      kinds[body] = 'row'
+    }
+  })
+  return kinds
+}
+
+/**
+ * One table row as a single readable line. A table is a layout and the shade has
+ * no columns, so cells are joined by a middot. Before this, a row kept every
+ * pipe and an agent answering with a table filled the notification with "||||"
+ * and no readable summary (reported from the phone 2026-09-17).
+ */
+function flattenTableRow(line: string): string {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim())
+    .filter((cell) => cell !== '')
+    .join(' \u00b7 ')
 }
 
 type TextStyle = 'bold' | 'italic' | 'bolditalic' | 'mono'

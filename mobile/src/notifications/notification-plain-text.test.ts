@@ -81,3 +81,53 @@ describe('a table an agent wrote', () => {
     expect(notificationPlainText('run a | b to pipe it')).toBe('run a | b to pipe it')
   })
 })
+
+/**
+ * GFM makes a table's outer pipes OPTIONAL, and agents emit them both ways.
+ * Every fixture above has them, which is why the first fix looked complete and
+ * a raw `--- | ---` still reached the shade.
+ *
+ * The blank line matters more than it looks: Android's collapsed banner shows
+ * two lines. If the dropped separator leaves an empty one behind, the header
+ * eats the first and the blank eats the second, so the content row — the part
+ * worth reading — falls below the fold.
+ */
+describe('a table an agent wrote without outer pipes', () => {
+  it('reads as lines, not as a separator row', () => {
+    expect(notificationPlainText('Check | Result\n--- | ---\ntsc | clean\ntests | 6620')).toBe(
+      'Check \u00b7 Result\ntsc \u00b7 clean\ntests \u00b7 6620'
+    )
+  })
+
+  it('leaves no blank line where the separator was', () => {
+    expect(notificationPlainText('| Check | Result |\n| --- | --- |\n| tsc | clean |')).toBe(
+      'Check \u00b7 Result\ntsc \u00b7 clean'
+    )
+  })
+
+  it('reads an aligned separator', () => {
+    expect(notificationPlainText('| A | B |\n|:--- | ---:|\n| 1 | 2 |')).toBe(
+      'A \u00b7 B\n1 \u00b7 2'
+    )
+  })
+
+  // The safeguard that must survive loosening the outer-pipe rule: a pipe in
+  // ordinary prose is not a table and must be left exactly as typed.
+  it('leaves a pipe in prose alone', () => {
+    expect(notificationPlainText('Run ls | wc -l to count them')).toBe('Run ls | wc -l to count them')
+  })
+
+  // Deliberately NOT tested as prose: a line fenced by pipes on both sides is
+  // read as a row even with no header or delimiter, because a body is an
+  // excerpt and can begin part-way through a table. Prose wrapped in pipes
+  // loses that bet, and that is the right way round.
+
+  // Degenerate: a separator with nothing above it is not a table.
+  it('leaves a bare separator alone when nothing heads it', () => {
+    expect(notificationPlainText('--- | ---')).toBe('--- | ---')
+  })
+
+  it('keeps a one-column table readable', () => {
+    expect(notificationPlainText('| Check |\n| --- |\n| tsc |')).toBe('Check\ntsc')
+  })
+})

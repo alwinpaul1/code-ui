@@ -73,10 +73,29 @@ and (b) is awake while the phone is not. The candidates:
 - **The desktop sending directly.** Ruled out by CLAUDE.md, and it would only
   work while Orca is running anyway.
 
-**The settings row.** `loadRemotePushEnabled` / `saveRemotePushEnabled` exist and
-default to false; nothing turns them on yet. `lastPushRegistrationOutcome(hostId)`
-holds the reason to show. Left out on purpose while the 0.7.0 redesign is in
-flight.
+**The settings row, and with it the whole path.** Nothing calls
+`saveRemotePushEnabled`, so `loadRemotePushEnabled` is always false, so
+`offerPushTokenToHost` returns at its first line and neither
+`registerPushBackgroundTask` nor `registerPushForHost` ever runs. **The
+registration and delivery path is dark in the shipped app.** That is deliberate
+for 0.7.0 — there is no sender, so turning it on would only send a token to a
+gateway that will refuse it — but it means the code is unexercised outside its
+tests, and the first build that flips the switch is the first real run.
+
+`lastPushRegistrationOutcome(hostId)` holds the reason push is off
+(`no-push-token`, `no-firebase-config`, `gateway_rejected`, `request_failed`,
+each with a detail) and nothing reads it. Ship the settings row and the reason
+together: without it, whoever turns this on gets exactly the silence
+`push-registration.test.ts` says must not happen, unable to tell "refused" from
+"broken".
+
+**Known, unexercised while the path is dark:** `showLocalNotification`'s dedupe
+is a `pending` guard that only catches a CONCURRENT second call. If the gateway
+ever pushes something the live socket also carried, the push arrives after the
+socket's banner has settled, dismisses it and re-schedules on the same session
+identifier — one banner, but a second heads-up and sound for one notification.
+Whether it is reachable at all depends on whether the sender suppresses what the
+socket already delivered, which is a decision for whoever builds one.
 
 ## Payload the sender must produce
 
