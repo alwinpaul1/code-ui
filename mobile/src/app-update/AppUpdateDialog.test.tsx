@@ -103,7 +103,6 @@ vi.mock('react-native', async () => {
 })
 
 vi.mock('lucide-react-native', () => ({ ExternalLink: 'ExternalLink', X: 'X' }))
-vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
 vi.mock('../components/pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 vi.mock('./installed-version', () => ({
   getInstalledVersion: () => '0.6.4',

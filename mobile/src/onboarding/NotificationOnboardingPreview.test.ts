@@ -45,7 +45,7 @@ vi.mock('react-native', async () => {
   }
 })
 
-vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
+vi.mock('../components/AppLogo', () => ({ AppLogo: 'AppLogo' }))
 
 describe('NotificationOnboardingPreview', () => {
   let renderer: ReactTestRenderer | null = null

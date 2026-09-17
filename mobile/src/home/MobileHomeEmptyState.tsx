@@ -1,6 +1,6 @@
 import { QrCode } from 'lucide-react-native'
 import { View } from 'react-native'
-import { OrcaLogo } from '../components/OrcaLogo'
+import { AppLogo } from '../components/AppLogo'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { SectionLabel } from '../ui/SectionLabel'
@@ -49,7 +49,7 @@ export function MobileHomeEmptyState(props: {
           paddingBottom: space.xxl
         }}
       >
-        <OrcaLogo size={44} />
+        <AppLogo size={44} />
         <Txt variant="title" weight="semibold" align="center" style={{ marginTop: space.xl }}>
           Connect your desktop
         </Txt>

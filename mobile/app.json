@@ -72,7 +72,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#111111"
+        "backgroundColor": "#F11924"
       },
       "allowBackup": false,
       "permissions": [
@@ -98,7 +98,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#C96442"
+          "color": "#F11924"
         }
       ],
       [
