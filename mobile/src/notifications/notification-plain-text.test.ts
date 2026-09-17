@@ -37,3 +37,47 @@ describe('notification text keeps its emphasis without Markdown markers', () => 
     expect(notificationPlainText('a\n\n\n\nb')).toBe('a\n\nb')
   })
 })
+
+/** Reported from the phone 2026-09-17: a wall of "||||" in the shade. The
+ *  converter stripped a table's `|---|---|` separator but left every content
+ *  row's pipes, so an agent that answered with a table filled the notification
+ *  with punctuation and no readable summary. A table is a layout, and a
+ *  notification has no columns; the cells are what the reader wants. */
+describe('a table an agent wrote', () => {
+  const table = [
+    '| Check | Result |',
+    '| --- | --- |',
+    '| tsc | clean |',
+    '| tests | 6620 |'
+  ].join('\n')
+
+  it('leaves no pipes in the shade', () => {
+    expect(notificationPlainText(table)).not.toContain('|')
+  })
+
+  it('keeps every cell, so the summary still says what happened', () => {
+    const out = notificationPlainText(table)
+    for (const cell of ['Check', 'Result', 'tsc', 'clean', 'tests', '6620']) {
+      expect(out).toContain(cell)
+    }
+  })
+
+  it('reads a row as one line', () => {
+    expect(notificationPlainText('| tsc | clean |')).toBe('tsc \u00b7 clean')
+  })
+
+  // Degenerate shapes: one cell, and an empty cell that must not leave a stray
+  // separator dangling.
+  it('handles a single-cell row', () => {
+    expect(notificationPlainText('| done |')).toBe('done')
+  })
+
+  it('drops empty cells rather than printing a bare separator', () => {
+    expect(notificationPlainText('| tsc |  | clean |')).toBe('tsc \u00b7 clean')
+  })
+
+  // A pipe inside prose is not a table and must survive untouched.
+  it('leaves a pipe in ordinary prose alone', () => {
+    expect(notificationPlainText('run a | b to pipe it')).toBe('run a | b to pipe it')
+  })
+})

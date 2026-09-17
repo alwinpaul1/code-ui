@@ -33,6 +33,19 @@ export function notificationPlainText(markdown: string): string {
         .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
         .replace(/^\s*([-*_]\s*){3,}$/, '')
         .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*$/, '')
+        // A table is a layout, and the shade has no columns. The separator row
+        // above is dropped; a CONTENT row used to keep every pipe, so an agent
+        // answering with a table filled the notification with "||||" and no
+        // readable summary (reported from the phone 2026-09-17). Cells joined
+        // by a middot read as one line. Only a line that both starts and ends
+        // with a pipe is treated as a row, so a pipe inside prose is untouched.
+        .replace(/^\s*\|(.+)\|\s*$/, (_, row: string) =>
+          row
+            .split('|')
+            .map((cell) => cell.trim())
+            .filter((cell) => cell !== '')
+            .join(' \u00b7 ')
+        )
         .replace(/\s+$/, '')
     )
     .filter(
