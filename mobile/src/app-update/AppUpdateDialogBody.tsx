@@ -90,7 +90,7 @@ export function AppUpdateDialogBody({
           <AlertTextBlock closed={!notes}>
             <AlertTitle>Update available</AlertTitle>
             <AlertMessage>
-              Code UI {version} is ready to download. You have {installedVersion}.
+              Code UI {version} is ready to download.
             </AlertMessage>
             {notes ? null : <AlertMessage>Fixes and improvements.</AlertMessage>}
           </AlertTextBlock>
