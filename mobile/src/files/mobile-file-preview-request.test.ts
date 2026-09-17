@@ -1,14 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
   createMobileFilePreviewRequest,
   formatPreviewByteLength,
   loadMobileFilePreview,
-  normalizeMobileFilePreviewResponse,
   saveMobileTerminalArtifactPreview
 } from './mobile-file-preview-request'
+import {
+  normalizeMobileFilePreviewResult,
+  previewErrorFromRefusal
+} from './mobile-file-preview-response'
+import { resolveMobilePdfUri } from './mobile-pdf-cache'
 
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///cache' } }))
+vi.mock('./mobile-pdf-cache', () => ({ resolveMobilePdfUri: vi.fn() }))
 function ok(result: unknown): RpcSuccess {
   return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
@@ -593,7 +598,7 @@ describe('mobile-file-preview-request', () => {
     ['missing mimeType', { content: 'aW1hZ2U=', isBinary: true, isImage: true }],
     ['empty content', { content: '', isBinary: true, isImage: true, mimeType: 'image/png' }]
   ])('rejects invalid image preview results: %s', (_label, result) => {
-    expect(normalizeMobileFilePreviewResponse('assets/logo.png', ok(result))).toEqual({
+    expect(normalizeMobileFilePreviewResult('assets/logo.png', result)).toEqual({
       status: 'error',
       message: 'Binary preview unavailable',
       reconnect: false
@@ -602,10 +607,11 @@ describe('mobile-file-preview-request', () => {
 
   it('normalizes markdown, html, text, empty, and truncated reads', () => {
     expect(
-      normalizeMobileFilePreviewResponse(
-        'README.md',
-        ok({ content: '# Hi', truncated: false, byteLength: 4 })
-      )
+      normalizeMobileFilePreviewResult('README.md', {
+        content: '# Hi',
+        truncated: false,
+        byteLength: 4
+      })
     ).toEqual({
       status: 'ready',
       kind: 'markdown',
@@ -614,16 +620,18 @@ describe('mobile-file-preview-request', () => {
       byteLength: 4
     })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'index.html',
-        ok({ content: '<h1>Hi</h1>', truncated: false, byteLength: 11 })
-      )
+      normalizeMobileFilePreviewResult('index.html', {
+        content: '<h1>Hi</h1>',
+        truncated: false,
+        byteLength: 11
+      })
     ).toMatchObject({ status: 'ready', kind: 'html' })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'src/app.ts',
-        ok({ content: 'const a = 1', truncated: true, byteLength: 700_000 })
-      )
+      normalizeMobileFilePreviewResult('src/app.ts', {
+        content: 'const a = 1',
+        truncated: true,
+        byteLength: 700_000
+      })
     ).toEqual({
       status: 'ready',
       kind: 'text',
@@ -632,10 +640,11 @@ describe('mobile-file-preview-request', () => {
       byteLength: 700_000
     })
     expect(
-      normalizeMobileFilePreviewResponse(
-        'empty.txt',
-        ok({ content: '', truncated: false, byteLength: 0 })
-      )
+      normalizeMobileFilePreviewResult('empty.txt', {
+        content: '',
+        truncated: false,
+        byteLength: 0
+      })
     ).toEqual({ status: 'empty', kind: 'text' })
   })
 
@@ -652,7 +661,7 @@ describe('mobile-file-preview-request', () => {
     ['terminal_file_grant_stale', 'Reload preview before saving', false],
     ['permission denied', 'Unable to load preview: permission denied', false]
   ])('maps preview failure %s', (message, expected, reconnect) => {
-    expect(normalizeMobileFilePreviewResponse('src/app.ts', fail(message))).toEqual({
+    expect(previewErrorFromRefusal(fail(message).error)).toEqual({
       status: 'error',
       message: expected,
       reconnect
@@ -663,5 +672,85 @@ describe('mobile-file-preview-request', () => {
     expect(formatPreviewByteLength(512)).toBe('512 B')
     expect(formatPreviewByteLength(4096)).toBe('4 KB')
     expect(formatPreviewByteLength(1_572_864)).toBe('1.5 MB')
+  })
+})
+
+// CODE UI: a worktree PDF pages over in chunks (mobile-file-preview-pdf.ts) because the host's
+// preview read is capped and refuses ordinary PDFs; a terminal artifact keeps the grant path.
+describe('worktree PDF previews', () => {
+  const pdfUri = vi.mocked(resolveMobilePdfUri)
+
+  beforeEach(() => {
+    pdfUri.mockReset()
+  })
+
+  it('pages a worktree PDF over the chunked read and never asks the capped preview read', async () => {
+    pdfUri.mockResolvedValueOnce({
+      uri: 'file:///cache/orca-pdf-1.pdf',
+      byteLength: 12,
+      fromCache: false
+    })
+    const client = clientWith(fail('file_too_large'))
+
+    await expect(loadMobileFilePreview(client, 'wt-1', 'docs/spec.pdf')).resolves.toEqual({
+      status: 'ready',
+      kind: 'pdf',
+      uri: 'file:///cache/orca-pdf-1.pdf'
+    })
+    expect(pdfUri).toHaveBeenCalledWith(client, 'id:wt-1', 'docs/spec.pdf')
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('takes the same path for a typed worktree source', async () => {
+    pdfUri.mockResolvedValueOnce({
+      uri: 'file:///cache/orca-pdf-2.pdf',
+      byteLength: 12,
+      fromCache: true
+    })
+    const client = clientWith(fail('file_too_large'))
+
+    await expect(
+      loadMobileFilePreview(client, {
+        source: 'worktree',
+        worktreeId: 'wt-1',
+        relativePath: 'docs/spec.pdf'
+      })
+    ).resolves.toEqual({ status: 'ready', kind: 'pdf', uri: 'file:///cache/orca-pdf-2.pdf' })
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps a terminal-artifact PDF on the grant-scoped preview read', async () => {
+    const client = clientWith(ok({ content: 'JVBERi0=', isBinary: true }))
+
+    await expect(
+      loadMobileFilePreview(client, {
+        source: 'terminalArtifact',
+        worktreeId: 'wt-1',
+        absolutePath: '/logs/report.pdf',
+        grantId: 'grant-1'
+      })
+    ).resolves.toEqual({
+      status: 'ready',
+      kind: 'pdf',
+      uri: 'data:application/pdf;base64,JVBERi0='
+    })
+    expect(client.sendRequest).toHaveBeenCalledWith('files.readTerminalArtifactPreview', {
+      worktree: 'id:wt-1',
+      absolutePath: '/logs/report.pdf',
+      grantId: 'grant-1'
+    })
+    expect(pdfUri).not.toHaveBeenCalled()
+  })
+
+  it('shows the chunked read failure instead of a blank label', async () => {
+    pdfUri.mockRejectedValueOnce(new Error('disk full'))
+    const client = clientWith(fail('file_too_large'))
+
+    await expect(loadMobileFilePreview(client, 'wt-1', 'docs/spec.pdf')).resolves.toEqual({
+      status: 'error',
+      message: 'Unable to load preview: disk full',
+      reconnect: false
+    })
+    expect(client.sendRequest).not.toHaveBeenCalled()
   })
 })

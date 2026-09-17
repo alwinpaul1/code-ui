@@ -1,10 +1,19 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import { resolveMobilePdfUri } from './mobile-pdf-cache'
+import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcFailure, RpcResponse } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
 import {
-  normalizeMobileFilePreviewResponse,
+  filePreviewImageRead,
+  filePreviewTextRead,
+  terminalArtifactImageRead,
+  terminalArtifactTextRead,
+  terminalArtifactWrite,
+  type MobileFilePreviewRpcSender
+} from './mobile-file-preview-operations'
+import { loadMobileWorktreePdfPreview } from './mobile-file-preview-pdf'
+import {
+  normalizeMobileFilePreviewResult,
   previewError,
+  previewErrorFromRefusal,
   type MobileFilePreviewResult
 } from './mobile-file-preview-response'
 import {
@@ -13,11 +22,8 @@ import {
   type TerminalArtifactRetryOptions
 } from './mobile-terminal-artifact-grant-refresh'
 
-export {
-  formatPreviewByteLength,
-  normalizeMobileFilePreviewResponse,
-  previewError
-} from './mobile-file-preview-response'
+export { formatPreviewByteLength, previewError } from './mobile-file-preview-response'
+
 export type {
   MobileFilePreviewResult,
   MobileFilePreviewTextKind
@@ -36,17 +42,26 @@ export type MobileFilePreviewSource =
     }
   | MobileTerminalArtifactPreviewSource
 
-export type MobileFilePreviewRequest = {
-  method: MobileFilePreviewReadMethod | MobileTerminalArtifactPreviewReadMethod
-  params: {
-    worktree: string
-    relativePath?: string
-    absolutePath?: string
-    grantId?: string
-  }
-}
+/** Which read the path selects, and the params that read takes. */
+export type MobileFilePreviewRequest =
+  | {
+      method: MobileFilePreviewReadMethod
+      params: { worktree: string; relativePath: string }
+    }
+  | {
+      method: MobileTerminalArtifactPreviewReadMethod
+      params: { worktree: string; absolutePath: string; grantId: string }
+    }
 
-type MobileFilePreviewClient = Pick<RpcClient, 'sendRequest'>
+/**
+ * A settled preview send. The refusal is carried rather than interpreted because the preview
+ * screen's fallback copy is the host's `code`, which no acceptance policy exposes, and the grant
+ * refresh reads the same code to decide whether a stale grant is worth re-minting.
+ */
+type MobileFilePreviewOutcome =
+  | { accepted: true; payload: unknown }
+  | { accepted: false; refusal: RpcFailure['error'] }
+
 type TerminalArtifactSource = MobileTerminalArtifactPreviewSource
 type TerminalArtifactSaveOptions = TerminalArtifactRetryOptions & {
   baseContent?: string
@@ -88,56 +103,85 @@ function readsBinaryPreview(path: string): boolean {
   return kind === 'image' || kind === 'pdf'
 }
 
+async function sendMobileFilePreviewRead(
+  client: MobileFilePreviewRpcSender,
+  request: MobileFilePreviewRequest
+): Promise<MobileFilePreviewOutcome> {
+  switch (request.method) {
+    case 'files.read':
+      return settlePreviewSend(
+        await filePreviewTextRead.request(client, request.params),
+        filePreviewTextRead.interpret
+      )
+    case 'files.readPreview':
+      return settlePreviewSend(
+        await filePreviewImageRead.request(client, request.params),
+        filePreviewImageRead.interpret
+      )
+    case 'files.readTerminalArtifact':
+      return settlePreviewSend(
+        await terminalArtifactTextRead.request(client, request.params),
+        terminalArtifactTextRead.interpret
+      )
+    case 'files.readTerminalArtifactPreview':
+      return settlePreviewSend(
+        await terminalArtifactImageRead.request(client, request.params),
+        terminalArtifactImageRead.interpret
+      )
+  }
+}
+
+function settlePreviewSend(
+  reply: RpcResponse,
+  interpret: (reply: RpcResponse) => RpcAcceptedResult<unknown>
+): MobileFilePreviewOutcome {
+  const verdict = interpret(reply)
+  return verdict.accepted
+    ? { accepted: true, payload: verdict.value }
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+      { accepted: false, refusal: (reply as RpcFailure).error }
+}
+
 export async function loadMobileFilePreview(
-  client: MobileFilePreviewClient,
+  client: MobileFilePreviewRpcSender,
   worktreeIdOrSource: string | MobileFilePreviewSource,
   relativePath?: string,
   options: TerminalArtifactRetryOptions = {}
 ): Promise<MobileFilePreviewResult> {
   let source = worktreeIdOrSource
-  // Why: the host's preview read is capped and refuses ordinary PDFs as
-  // `file_too_large`; worktree PDFs page over in chunks instead. Terminal
-  // artifacts keep the grant-scoped preview path.
-  const worktreePdf =
-    typeof source === 'string'
-      ? { worktreeId: source, relativePath: relativePath! }
-      : source.source === 'worktree'
-        ? { worktreeId: source.worktreeId, relativePath: source.relativePath }
-        : null
-  if (worktreePdf && classifyMobileArtifact(worktreePdf.relativePath) === 'pdf') {
-    try {
-      const { uri } = await resolveMobilePdfUri(
-        client,
-        `id:${worktreePdf.worktreeId}`,
-        worktreePdf.relativePath
-      )
-      return { status: 'ready', kind: 'pdf', uri }
-    } catch (error) {
-      return previewError(error instanceof Error ? error.message : 'Unable to load preview')
-    }
+  // CODE UI: a worktree PDF never reaches the preview read; see mobile-file-preview-pdf.ts.
+  const pdf = await loadMobileWorktreePdfPreview(client, source, relativePath)
+  if (pdf) {
+    return pdf
   }
-  let request = createMobileFilePreviewRequest(source, relativePath)
-  let response = await client.sendRequest(request.method, request.params)
-  if (!response.ok && typeof source !== 'string' && source.source === 'terminalArtifact') {
+  let read = await sendMobileFilePreviewRead(
+    client,
+    createMobileFilePreviewRequest(source, relativePath)
+  )
+  if (!read.accepted && typeof source !== 'string' && source.source === 'terminalArtifact') {
     const refreshed = await refreshTerminalArtifactSourceAfterGrantFailure(
       client,
       source,
-      response,
+      read.refusal,
       options
     )
     if (refreshed) {
       source = refreshed
       options.onTerminalArtifactSourceRefreshed?.(refreshed)
-      request = createMobileFilePreviewRequest(source, relativePath)
-      response = await client.sendRequest(request.method, request.params)
+      read = await sendMobileFilePreviewRead(
+        client,
+        createMobileFilePreviewRequest(source, relativePath)
+      )
     }
   }
   const previewPath = typeof source === 'string' ? relativePath! : previewPathForSource(source)
-  return normalizeMobileFilePreviewResponse(previewPath, response)
+  return read.accepted
+    ? normalizeMobileFilePreviewResult(previewPath, read.payload)
+    : previewErrorFromRefusal(read.refusal)
 }
 
 export async function saveMobileTerminalArtifactPreview(
-  client: MobileFilePreviewClient,
+  client: MobileFilePreviewRpcSender,
   source: TerminalArtifactSource,
   content: string,
   options: TerminalArtifactSaveOptions = {}
@@ -161,26 +205,22 @@ export async function saveMobileTerminalArtifactPreview(
       options.onTerminalArtifactSourceRefreshed?.(verified.source)
     }
   }
-  let response = await writeTerminalArtifactPreview(client, writeSource, content)
-  if (response.ok) {
+  let write = await writeTerminalArtifactPreview(client, writeSource, content)
+  if (write.accepted) {
     return { status: 'saved' }
   }
 
   if (typeof options.baseContent !== 'string') {
-    return previewError(
-      (response as RpcFailure).error.message || (response as RpcFailure).error.code
-    )
+    return previewErrorFromRefusal(write.refusal)
   }
   const refreshed = await refreshTerminalArtifactSourceAfterGrantFailure(
     client,
     writeSource,
-    response,
+    write.refusal,
     options
   )
   if (!refreshed) {
-    return previewError(
-      (response as RpcFailure).error.message || (response as RpcFailure).error.code
-    )
+    return previewErrorFromRefusal(write.refusal)
   }
   const verified = await verifyTerminalArtifactBaseContent(client, refreshed, options.baseContent, {
     refreshGrant: false
@@ -190,17 +230,15 @@ export async function saveMobileTerminalArtifactPreview(
   }
   options.onTerminalArtifactSourceRefreshed?.(refreshed)
   writeSource = verified.source
-  response = await writeTerminalArtifactPreview(client, writeSource, content)
-  if (!response.ok) {
-    return previewError(
-      (response as RpcFailure).error.message || (response as RpcFailure).error.code
-    )
+  write = await writeTerminalArtifactPreview(client, writeSource, content)
+  if (!write.accepted) {
+    return previewErrorFromRefusal(write.refusal)
   }
   return { status: 'saved' }
 }
 
 async function verifyTerminalArtifactBaseContent(
-  client: MobileFilePreviewClient,
+  client: MobileFilePreviewRpcSender,
   source: TerminalArtifactSource,
   baseContent: string,
   options: TerminalArtifactRetryOptions
@@ -209,38 +247,26 @@ async function verifyTerminalArtifactBaseContent(
   | { status: 'error'; error: MobileFilePreviewResult }
 > {
   let readSource = source
-  let request = createMobileFilePreviewRequest(readSource)
-  let response = await client.sendRequest(request.method, request.params)
+  let read = await sendMobileFilePreviewRead(client, createMobileFilePreviewRequest(readSource))
   let refreshed = false
-  if (!response.ok) {
+  if (!read.accepted) {
     const nextSource = await refreshTerminalArtifactSourceAfterGrantFailure(
       client,
       readSource,
-      response,
+      read.refusal,
       options
     )
     if (!nextSource) {
-      return {
-        status: 'error',
-        error: previewError(
-          (response as RpcFailure).error.message || (response as RpcFailure).error.code
-        )
-      }
+      return { status: 'error', error: previewErrorFromRefusal(read.refusal) }
     }
     readSource = nextSource
     refreshed = true
-    request = createMobileFilePreviewRequest(readSource)
-    response = await client.sendRequest(request.method, request.params)
+    read = await sendMobileFilePreviewRead(client, createMobileFilePreviewRequest(readSource))
   }
-  if (!response.ok) {
-    return {
-      status: 'error',
-      error: previewError(
-        (response as RpcFailure).error.message || (response as RpcFailure).error.code
-      )
-    }
+  if (!read.accepted) {
+    return { status: 'error', error: previewErrorFromRefusal(read.refusal) }
   }
-  const latest = normalizeMobileFilePreviewResponse(readSource.absolutePath, response)
+  const latest = normalizeMobileFilePreviewResult(readSource.absolutePath, read.payload)
   if (latest.status === 'error' || latest.status === 'waiting') {
     return { status: 'error', error: latest }
   }
@@ -257,17 +283,20 @@ async function verifyTerminalArtifactBaseContent(
   return { status: 'ok', source: readSource, refreshed }
 }
 
-function writeTerminalArtifactPreview(
-  client: MobileFilePreviewClient,
+async function writeTerminalArtifactPreview(
+  client: MobileFilePreviewRpcSender,
   source: TerminalArtifactSource,
   content: string
-): Promise<RpcResponse> {
-  return client.sendRequest('files.writeTerminalArtifact', {
-    worktree: `id:${source.worktreeId}`,
-    absolutePath: source.absolutePath,
-    grantId: source.grantId,
-    content
-  })
+): Promise<MobileFilePreviewOutcome> {
+  return settlePreviewSend(
+    await terminalArtifactWrite.request(client, {
+      worktree: `id:${source.worktreeId}`,
+      absolutePath: source.absolutePath,
+      grantId: source.grantId,
+      content
+    }),
+    terminalArtifactWrite.interpret
+  )
 }
 
 function terminalArtifactPreviewMatchesBase(

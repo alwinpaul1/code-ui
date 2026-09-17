@@ -5,8 +5,11 @@
 // and read it as a preview, so the bubble gets a real thumbnail.
 import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
-import { normalizeMobileFilePreviewResponse } from '../files/mobile-file-preview-response'
+import type { RpcFailure, RpcSuccess } from '../transport/types'
+import {
+  normalizeMobileFilePreviewResult,
+  previewErrorFromRefusal
+} from '../files/mobile-file-preview-response'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import {
   isImageRefBlock,
@@ -168,7 +171,11 @@ export async function loadHostImage(args: {
       const read = await args.client.sendRequest(request.method, request.params, {
         timeoutMs: 30_000
       })
-      const preview = normalizeMobileFilePreviewResponse(args.path, read)
+      // This send is still on the raw port, so the envelope is split here: no acceptance
+      // policy has admitted the payload before the projection sees it.
+      const preview = read.ok
+        ? normalizeMobileFilePreviewResult(args.path, (read as RpcSuccess).result)
+        : previewErrorFromRefusal((read as RpcFailure).error)
       if (preview.status !== 'ready' || preview.kind !== 'image') {
         failedPaths.set(key, Date.now() + RETRY_MS)
         return null
