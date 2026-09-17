@@ -195,7 +195,18 @@ function renderInline(
         splitInlineCodeChips(code).forEach((piece, pieceIndex) => {
           parts.push(
             <View
-              key={`${key}c${pieceIndex}`}
+              // The paragraph's length is in the key on purpose. Android
+              // positions an inline View from the paragraph's layout and does
+              // not move it when the paragraph re-wraps unless the View itself
+              // changes — so a chip near a line break stayed where it had been
+              // before the text ahead of it moved down a line, drawn across the
+              // words now there (2026-09-18, "commits on `main`" with the pill
+              // over "commits", on a message that re-wrapped as it streamed).
+              // `match.index` alone only changes when text before the chip
+              // grows; the length changes when text after it does too. A
+              // changed key is a remount, and a remounted View is placed from
+              // the current layout.
+              key={`${key}c${pieceIndex}:${text.length}`}
               // A plain object when the reader has not zoomed: an array per
               // chip costs an allocation on every render of every message, and
               // it hides `borderRadius` from anything reading the style.
