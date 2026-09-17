@@ -889,3 +889,51 @@ describe('the Claude Stop hook for Windows under a real PowerShell', () => {
     expect(true).toBe(true)
   })
 })
+
+describe('the Windows command line has a ceiling, and the flags must stay under it', () => {
+  /** CreateProcess refuses a command line of 32,767 chars or more, and the
+   *  whole `--settings` JSON rides it as one argument. The PowerShell halves
+   *  are base64 of UTF-16LE (`-EncodedCommand`), which costs ~2.67 command-line
+   *  chars per source char, so a hook that looks small on disk is not.
+   *
+   *  Measured 2026-09-16 against Claude Code 2.1.273: claude/win32 is 30,061
+   *  chars, i.e. ~2,700 of headroom before the binary path, `--model`,
+   *  `--resume` and the host's own quoting are added. A third hook event would
+   *  add ~8,466 encoded chars and put it ~5,800 OVER the cap.
+   *
+   *  Why a bound and not a golden: the exact number moves whenever a script is
+   *  edited, and pinning it would only teach the next person to bump it. The
+   *  ceiling is what must not move. */
+  const WINDOWS_COMMAND_LINE_MAX = 32767
+
+  /** What the host still has to put around our flag: the agent binary's own
+   *  path, plus whatever `--model` / `--resume` the launch carries. Kept
+   *  generous on purpose — headroom we do not reserve is headroom that gets
+   *  spent. */
+  const HOST_RESERVE = 2000
+
+  it('leaves the Windows launch room for the host to add the binary and its own flags', () => {
+    const claude = buildAgentHudLaunchArgs({
+      agent: 'claude',
+      hostDefaultArgs: '',
+      hostPlatform: 'win32'
+    })!
+    expect(claude.length + HOST_RESERVE).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
+  })
+
+  it('keeps every Windows agent under the ceiling, not just the one that nearly fills it', () => {
+    for (const agent of ['claude', 'codex'] as const) {
+      const args = buildAgentHudLaunchArgs({ agent, hostDefaultArgs: '', hostPlatform: 'win32' })!
+      expect(args.length).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
+    }
+  })
+
+  /** The degenerate case the bound above would miss: a host that already
+   *  carries its own long default args spends the same budget we do. */
+  it('counts the host default args against the same ceiling', () => {
+    const hostDefaultArgs = '--model claude-opus-5 --resume 5d877e39-1867-424f-86b5-c080713c1563'
+    const claude = buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs, hostPlatform: 'win32' })!
+    expect(claude).toContain(hostDefaultArgs)
+    expect(claude.length).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
+  })
+})

@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -34,12 +35,17 @@ export function useMobileNativeChatSessionLane({
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
+  // `sourceIdentity` is `hostId\0workspaceId`; the host half is all this needs.
+  // Read here rather than threaded from the controller because that file and
+  // the session route both sit exactly at their max-lines caps.
+  const lastConnectedAt = useLastConnectedAt(sourceIdentity.split('\0')[0] || undefined)
   const bridgeSession = useMobileNativeChatSession({
     client,
     sourceIdentity,
     agent: structured ? null : resolvedAgent,
     sessionId: structured ? null : sessionId,
-    transcriptPath: structured ? null : transcriptPath
+    transcriptPath: structured ? null : transcriptPath,
+    lastConnectedAt
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,

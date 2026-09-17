@@ -80,6 +80,12 @@ vi.mock('./use-mobile-session-view-mode', () => ({
     toggleTabChatView: vi.fn()
   })
 }))
+// The lane reads the host's last-connected time to re-subscribe a transcript
+// that failed while the relay was down. Mocked here for the same reason the
+// session hook is: this suite exercises the controller, not the transport.
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
 }))

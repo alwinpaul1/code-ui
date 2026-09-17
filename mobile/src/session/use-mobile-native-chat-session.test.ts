@@ -780,3 +780,166 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
   })
 })
+
+describe('a transcript that failed while the relay was down refreshes when it comes back', () => {
+  let renderer: ReactTestRenderer | null = null
+  let state: MobileNativeChatSession | null = null
+
+  beforeEach(() => {
+    state = null
+    resetNativeChatTranscriptCacheForTests()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  function Harness({
+    client,
+    lastConnectedAt
+  }: {
+    client: RpcClient | null
+    lastConnectedAt: number | null
+  }): null {
+    state = useMobileNativeChatSession({
+      client,
+      sourceIdentity: 'host-a\0workspace-a',
+      agent: 'claude',
+      sessionId: 'session',
+      transcriptPath: null,
+      lastConnectedAt
+    })
+    return null
+  }
+
+  /** The reported shape: a chat tab opened while the relay was still dialling.
+   *  The subscribe never answers, the ladder gives up, and the tab holds an
+   *  error. The relay is healthy seconds later and nothing notices — the same
+   *  defect `stale-after-reconnect.ts` was written for, on a surface that never
+   *  adopted it. A manual Retry is not this: a button is the user doing the
+   *  app's job for it. */
+  it('re-subscribes once the relay reports a new connection, without a new client', async () => {
+    const subscribe = vi.fn((_method: unknown, _params: unknown, _onData: unknown) => () => {})
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, lastConnectedAt: 1000 }))
+    })
+
+    // Exhaust the retry ladder: every attempt times out with no frame.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(20_000)
+      })
+    }
+    expect(state?.status).toBe('error')
+    const afterGivingUp = subscribe.mock.calls.length
+
+    // The relay reconnects. Same client object — only the connection is new.
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, lastConnectedAt: 2000 }))
+    })
+
+    expect(subscribe.mock.calls.length).toBeGreaterThan(afterGivingUp)
+  })
+
+  /** The failure mode the rule exists to prevent: an effect that sees its own
+   *  failure and retries at once spins for as long as the host stays down. */
+  it('retries once per connection, not once per render, while the host stays down', async () => {
+    const subscribe = vi.fn((_m: unknown, _p: unknown, _d: unknown) => () => {})
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, lastConnectedAt: 1000 }))
+    })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(20_000)
+      })
+    }
+    expect(state?.status).toBe('error')
+    const settledCalls = subscribe.mock.calls.length
+
+    // Same connection, several renders. Nothing may re-subscribe.
+    for (let render = 0; render < 5; render += 1) {
+      await act(async () => {
+        renderer!.update(createElement(Harness, { client, lastConnectedAt: 1000 }))
+      })
+    }
+    expect(subscribe.mock.calls.length).toBe(settledCalls)
+  })
+
+  it('retries again on a SECOND new connection, not just the first', async () => {
+    const subscribe = vi.fn((_m: unknown, _p: unknown, _d: unknown) => () => {})
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, lastConnectedAt: 1000 }))
+    })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(20_000)
+      })
+    }
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, lastConnectedAt: 2000 }))
+    })
+    const afterFirst = subscribe.mock.calls.length
+    // That retry fails too.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(20_000)
+      })
+    }
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, lastConnectedAt: 3000 }))
+    })
+    expect(subscribe.mock.calls.length).toBeGreaterThan(afterFirst)
+  })
+
+  /** An older host reports no connection time at all. Absence must degrade to
+   *  today's behaviour, never to a spin. */
+  it('does not spin when the host reports no connection time', async () => {
+    const subscribe = vi.fn((_m: unknown, _p: unknown, _d: unknown) => () => {})
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, lastConnectedAt: null }))
+    })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(20_000)
+      })
+    }
+    const settledCalls = subscribe.mock.calls.length
+    for (let render = 0; render < 5; render += 1) {
+      await act(async () => {
+        renderer!.update(createElement(Harness, { client, lastConnectedAt: null }))
+      })
+    }
+    expect(subscribe.mock.calls.length).toBe(settledCalls)
+  })
+
+  /** A healthy transcript must not be torn down and re-read just because the
+   *  relay reconnected — that would trade a good list for a spinner. */
+  it('leaves a healthy transcript alone when the relay reconnects', async () => {
+    let onData: ((frame: unknown) => void) | null = null
+    const subscribe = vi.fn((_m: unknown, _p: unknown, d: unknown) => {
+      onData = d as (frame: unknown) => void
+      return () => {}
+    })
+    const client = { sendRequest: vi.fn(), subscribe } as unknown as RpcClient
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, lastConnectedAt: 1000 }))
+    })
+    await act(async () => {
+      onData?.({ type: 'snapshot', messages: [message('a')] })
+    })
+    expect(state?.status).not.toBe('error')
+    const healthyCalls = subscribe.mock.calls.length
+    await act(async () => {
+      renderer!.update(createElement(Harness, { client, lastConnectedAt: 2000 }))
+    })
+    expect(subscribe.mock.calls.length).toBe(healthyCalls)
+  })
+})

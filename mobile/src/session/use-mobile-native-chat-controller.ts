@@ -106,6 +106,7 @@ export function useMobileNativeChatController(
       connState,
       onSendError
     })
+  const hudBeacon = useAgentHudBeacon(activeHandle)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
@@ -122,8 +123,7 @@ export function useMobileNativeChatController(
     holdUnconfirmedSend,
     removePending
   } = useMobileNativeChatDrafts({
-    hostId,
-    worktreeId,
+    hostId, worktreeId,
     tabId: activeSessionTabId,
     sessionId: activeChatSessionId,
     messages: nativeChatSession.messages,
@@ -134,7 +134,8 @@ export function useMobileNativeChatController(
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
     transcriptSettled: nativeChatSession.status === 'ready',
-    onUnconfirmedSendLanded: onSendResolved
+    onUnconfirmedSendLanded: onSendResolved,
+    beaconPromptReceipts: hudBeacon?.desktopPrompts
   })
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport(activeHandle)
@@ -335,7 +336,6 @@ export function useMobileNativeChatController(
     onSendError
   })
 
-  const hudBeacon = useAgentHudBeacon(activeHandle)
   // Desktop-pasted images are host paths: fetch thumbnails through the host.
   const hostImagePreviews = useHostImagePreviews({
     client,

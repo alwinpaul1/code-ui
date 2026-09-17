@@ -10,6 +10,10 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
+import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
@@ -69,8 +73,12 @@ export function useMobileNativeChatSession(args: {
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  /** Moves on each NEW host connection. A transcript that failed while the
+   *  relay was down is re-subscribed when this changes — see the effect below. */
+  lastConnectedAt?: number | null
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const lastConnectedAt = args.lastConnectedAt ?? null
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
@@ -105,6 +113,28 @@ export function useMobileNativeChatSession(args: {
   const settled = initialStatus === 'loading' ? current : null
   const status = settled ? settled.status : initialStatus
   const [error, setError] = useState<string | undefined>(undefined)
+
+  // A chat tab opened before the relay connected leaves the subscribe failing,
+  // and the tab then holds "did not send this transcript in time" over a
+  // connection that has been healthy for minutes. One refetch per NEW
+  // connection, never one per render: the first sighting of an error only
+  // records which connection it happened on, and the retry follows when that
+  // value changes. See stale-after-reconnect.ts. A manual Retry is not this.
+  useEffect(() => {
+    if (
+      shouldRefetchAfterReconnect(
+        staleLedgerRef.current,
+        identity,
+        status === 'error' ? 'error' : 'ready',
+        lastConnectedAt
+      )
+    ) {
+      // A new connection deserves the full first window again, not the rung the
+      // ladder happened to end on.
+      setSubscribeAttempt(0)
+      setReconnectEpoch((epoch) => epoch + 1)
+    }
+  }, [identity, status, lastConnectedAt])
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
   const loadingEarlierRef = useRef(false)
@@ -118,6 +148,11 @@ export function useMobileNativeChatSession(args: {
   useEffect(() => {
     setSubscribeAttempt(0)
   }, [identity])
+  // Why an epoch and not just resetting the attempt: after the ladder gives up
+  // the attempt is already at its last rung, and re-setting it to the same
+  // value re-runs nothing. The epoch is what the subscribe effect watches.
+  const [reconnectEpoch, setReconnectEpoch] = useState(0)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
   // Tracks the live session so a late loadEarlier resolve can detect a swap.
   const sessionIdRef = useRef<string | null>(sessionId)
   sessionIdRef.current = sessionId
@@ -261,7 +296,7 @@ export function useMobileNativeChatSession(args: {
       clearTimeout(watchdog)
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt, reconnectEpoch])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {

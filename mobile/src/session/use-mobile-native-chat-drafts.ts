@@ -5,6 +5,7 @@ import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-dr
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
 import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-pending-persistence'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
 import {
   countUserTextOccurrences,
   draftWasSent, findLandedImagePreviewEchoes,
@@ -64,7 +65,12 @@ export function useMobileNativeChatDrafts(args: {
    *  matters: an ack-lost send returns not-accepted, so the view never retires
    *  a failure notice from an earlier attempt, and the user reads "Message not
    *  sent" directly above the message that was sent. */
-  onUnconfirmedSendLanded?: () => void
+  /** `beaconPromptReceipts`: `up=` readings from the agent's own
+   *  UserPromptSubmit hook — it accepted the submission about a second after the
+   *  send, where a transcript row can take the full 20 s. Confirms only: the
+   *  pending bubble still leaves on a row, never on a receipt. Declared beside
+   *  its neighbour because this file sits at its max-lines cap. */
+  onUnconfirmedSendLanded?: () => void; beaconPromptReceipts?: readonly BeaconPromptReceipt[]
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
@@ -289,6 +295,7 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmedSendLanded?.()
   }, [messages, draftKey, pendingKey, onUnconfirmedSendLanded])
 
+  useMobileNativeChatBeaconConfirm({ unconfirmedRef, draftKey, pendingKey, args })
   useEffect(() => {
     mountedRef.current = true
     return () => {
