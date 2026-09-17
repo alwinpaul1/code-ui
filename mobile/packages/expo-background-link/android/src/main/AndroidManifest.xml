@@ -13,6 +13,11 @@
        switched on; it is what Play permits for apps whose core job is a live
        messaging link. -->
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+  <!-- Why: without this the link stays down after a reboot until somebody opens
+       the app. START_STICKY does not cover it — the process is gone, and Android
+       ignores START_STICKY after a force-stop, which is what an OEM battery
+       manager does. -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <application>
     <service
@@ -20,5 +25,19 @@
       android:exported="false"
       android:foregroundServiceType="remoteMessaging"
       android:stopWithTask="false" />
+    <!-- exported: the system sends these broadcasts, so the receiver has to be
+         visible to it. It acts only on the three actions it matches and starts
+         a service that stops itself when delivery is off, so there is nothing
+         here another app could usefully trigger. -->
+    <receiver
+      android:name="expo.modules.backgroundlink.BackgroundLinkBootReceiver"
+      android:exported="true"
+      android:directBootAware="false">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>
