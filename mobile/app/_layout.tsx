@@ -20,6 +20,10 @@ import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
+import { answerPermissionFromNotification } from '../src/notifications/permission-notification-response'
+import { lookupPendingPermission } from '../src/notifications/permission-lookup'
+import { peekLiveHostClient } from '../src/transport/live-host-clients'
+import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
@@ -153,6 +157,29 @@ function ThemedRoot() {
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        // An Approve/Deny button on a permission banner. It answers WITHOUT
+        // opening the app, which is the point: the alternative was unlock, open,
+        // find the session, tap. Anything that is not one of ours falls through
+        // to the clear below, exactly as before.
+        await answerPermissionFromNotification({
+          actionIdentifier: response.actionIdentifier,
+          data: response.notification.request.content.data,
+          resolveClient: peekLiveHostClient,
+          lookup: lookupPendingPermission,
+          send: async ({ client, terminal, text }) =>
+            (await sendMobileNativeChatPermissionResponse({
+              client,
+              terminal,
+              // Null on this path: it only tags the send with a mobile-client
+              // id for attribution, and the shade has no session to read it
+              // from. The keystrokes are identical either way.
+              deviceToken: null,
+              text
+              // Only 'accepted' counts. 'unknown' means the ack was lost and the
+              // answer may still have landed — but a retry is safe, because the
+              // re-check finds no matching prompt once one has.
+            })) === 'accepted'
+        })
         clearLastNotificationResponse()
         return
       }

@@ -5,6 +5,10 @@ import { Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
 import { ensureNotificationPermissions } from './notification-permissions'
+import { peekLiveHostClient } from '../transport/live-host-clients'
+import { decorateWithPermission } from './permission-notification-decorate'
+import { lookupPendingPermission } from './permission-lookup'
+import { ensurePermissionCategory } from './permission-notification-category'
 
 export type NotificationEvent = {
   type: 'notification'
@@ -128,14 +132,24 @@ function sessionBannerIdentifier(hostId: string, worktreeId: string | undefined)
   return `codeui:${hostId}:${worktreeId ?? 'host'}`
 }
 
-function presentedNotificationContent(event: NotificationEvent, hostId: string) {
-  return {
+async function presentedNotificationContent(event: NotificationEvent, hostId: string) {
+  const content = {
     ...presentDesktopNotification({
       ...event,
       agent: uniqueWorktreeLaunchAgent(event.worktreeId)
     }),
     data: buildLocalNotificationData(event, hostId)
   }
+  // Why here and not at the caller: every path that shows a banner goes through
+  // this, and a permission ask arriving with the previous command's stdout as
+  // its caption was the whole complaint. Returns `content` untouched whenever
+  // there is nothing pending or the host cannot say, so the notification is
+  // never delayed into uselessness by the lookup.
+  return decorateWithPermission(content, event, hostId, {
+    resolveClient: peekLiveHostClient,
+    lookup: lookupPendingPermission,
+    ensureCategory: ensurePermissionCategory
+  })
 }
 
 export async function showLocalNotification(
@@ -159,7 +173,7 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     await Notifications.scheduleNotificationAsync({
-      content: presentedNotificationContent(event, hostId),
+      content: await presentedNotificationContent(event, hostId),
       trigger: notificationTrigger()
     })
     return
@@ -201,7 +215,7 @@ export async function showLocalNotification(
       // Per session, not globally: two projects wanting attention are two
       // different things, and collapsing those would hide one of them.
       identifier: sessionBannerIdentifier(hostId, event.worktreeId),
-      content: presentedNotificationContent(event, hostId),
+      content: await presentedNotificationContent(event, hostId),
       trigger: notificationTrigger()
     })
   })()
