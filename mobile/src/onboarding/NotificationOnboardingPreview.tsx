@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
-import { OrcaLogo } from '../components/OrcaLogo'
+import { AppLogo } from '../components/AppLogo'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotionEnabled } from './use-reduced-motion'
@@ -95,7 +95,7 @@ function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICAT
       style={[styles.card, { backgroundColor: colors.bgPanel, borderColor: colors.border }]}
     >
       <View style={[styles.appIcon, { backgroundColor: colors.bgRaised }]}>
-        <OrcaLogo size={14} />
+        <AppLogo size={14} />
       </View>
       <View style={styles.cardCopy}>
         <View style={styles.cardMeta}>

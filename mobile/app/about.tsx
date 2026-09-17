@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router'
 import { ChevronRight, Globe, RefreshCw, type LucideIcon } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import Constants from 'expo-constants'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { AppLogo } from '../src/components/AppLogo'
 import { AppUpdateDialog } from '../src/app-update/AppUpdateDialog'
 import { useAppUpdateStore } from '../src/app-update/app-update-store'
 import { useTheme } from '../src/theme/theme-context'
@@ -140,7 +140,7 @@ export default function AboutScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={{ alignItems: 'center', paddingVertical: space.xxl, gap: space.sm }}>
-          <OrcaLogo size={48} />
+          <AppLogo size={48} />
           <Txt variant="title" weight="semibold" style={{ marginTop: space.sm }}>
             Code UI
           </Txt>

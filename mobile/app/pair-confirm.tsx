@@ -13,7 +13,7 @@ import { useTheme } from '../src/theme/theme-context'
 import { Button } from '../src/ui/Button'
 import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { Txt } from '../src/ui/Txt'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { AppLogo } from '../src/components/AppLogo'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
   loadMobileOnboardingSteps,
@@ -159,7 +159,7 @@ export default function PairConfirmScreen() {
       >
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <OrcaLogo size={40} />
+            <AppLogo size={40} />
             <Txt variant="title" weight="semibold" align="center">
               Pair with this desktop?
             </Txt>

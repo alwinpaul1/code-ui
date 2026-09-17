@@ -163,6 +163,18 @@ export const darkColors: ThemeColors = {
   alertRowPressed: 'rgba(255, 255, 255, 0.06)'
 }
 
+/** The brand mark's red, the same in BOTH schemes on purpose: it is the app
+ *  icon's colour, not a surface, and the mark is drawn with its knot cut
+ *  through so the canvas shows in the gaps instead of a second tone. It reads
+ *  at 3:1 or better on every standard surface of either scheme (AppLogo.test).
+ *  Sampled from assets/brand/mark-source.webp (241, 25, 36); app.json's
+ *  adaptive-icon background and notification tint carry the same value, pinned
+ *  by app-logo-assets.test.ts. Regenerate the icons with
+ *  scripts/build-brand-assets.py if it ever moves. */
+export const brand = {
+  red: '#F11924'
+} as const
+
 /** Instrument Sans is the only UI face. Weights map to loaded font names, since
  *  React Native on Android picks a family per weight rather than synthesizing.
  *  Pure constants live here so the theme never imports expo-font (test safety). */
