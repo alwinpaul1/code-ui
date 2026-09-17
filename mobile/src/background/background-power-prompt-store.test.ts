@@ -41,26 +41,45 @@ describe('raising the battery prompt from outside the React tree', () => {
 
   it('starts closed', () => {
     mount()
-    expect(latest).toBe(false)
+    expect(latest).toBeNull()
+  })
+
+  /**
+   * Two kinds, because "we are asking" and "that did not work" are different
+   * things to say. Reopening the original ask after a grant silently failed is
+   * what made people report it "appeared for people who allowed too" — the app
+   * looked like it had not noticed.
+   */
+  it('opens the follow-up as its own kind', () => {
+    mount()
+    act(() => openBackgroundPowerPrompt('not-taken'))
+    expect(latest).toBe('not-taken')
+  })
+
+  it('replaces the ask with the follow-up rather than ignoring it', () => {
+    mount()
+    act(() => openBackgroundPowerPrompt('ask'))
+    act(() => openBackgroundPowerPrompt('not-taken'))
+    expect(latest).toBe('not-taken')
   })
 
   it('opens the mounted sheet when the launch effect asks', () => {
     mount()
     act(() => openBackgroundPowerPrompt())
-    expect(latest).toBe(true)
+    expect(latest).toBe('ask')
   })
 
   it('closes again when the reader answers', () => {
     mount()
     act(() => openBackgroundPowerPrompt())
     act(() => closeBackgroundPowerPrompt())
-    expect(latest).toBe(false)
+    expect(latest).toBeNull()
   })
 
   it('stays open rather than reopening when asked twice', () => {
     mount()
     act(() => openBackgroundPowerPrompt())
     act(() => openBackgroundPowerPrompt())
-    expect(latest).toBe(true)
+    expect(latest).toBe('ask')
   })
 })

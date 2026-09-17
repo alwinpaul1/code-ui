@@ -19,6 +19,7 @@ vi.mock('react-native', () => ({
 }))
 
 let syncThrows = false
+const outcomeChecks: number[] = []
 vi.mock('./background-link', () => ({
   syncBackgroundLinkFromPreferences: vi.fn(async () => {
     syncs.push(1)
@@ -26,6 +27,9 @@ vi.mock('./background-link', () => ({
       throw new Error('storage unavailable')
     }
     return true
+  }),
+  reportBackgroundDeliveryPowerOutcome: vi.fn(async () => {
+    outcomeChecks.push(1)
   })
 }))
 
@@ -52,6 +56,23 @@ describe('opening the app restores the link', () => {
     removed.length = 0
     listener = null
     syncThrows = false
+    outcomeChecks.length = 0
+  })
+
+  /**
+   * A return to the foreground is exactly when someone comes back from
+   * Android's exemption screen, and the only moment the app can find out
+   * whether the grant took. Without this, a failed grant looked identical to a
+   * successful one: the sheet closed, nothing changed, and the same ask came
+   * back later as if the app had not been listening.
+   */
+  it('checks whether an exemption request landed, every time the app returns', async () => {
+    startBackgroundLinkHealing()
+    await Promise.resolve()
+    expect(outcomeChecks).toHaveLength(1)
+    listener?.('active')
+    await Promise.resolve()
+    expect(outcomeChecks).toHaveLength(2)
   })
 
   it('syncs once at startup, without waiting for a foreground event', async () => {

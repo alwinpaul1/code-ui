@@ -67,6 +67,22 @@ export const BACKGROUND_POWER_PROMPT = {
   dismiss: 'Not now'
 } as const
 
+/**
+ * Shown when the reader came back from Android's screen and the exemption still
+ * is not granted.
+ *
+ * It names what went wrong rather than repeating the original ask, because
+ * repeating it reads as the app not having noticed. The likely cause is
+ * specific and worth saying: the system opens a LIST on many builds, and the
+ * app has to be found in it and switched — which is not what "Allow" implies.
+ */
+export const BACKGROUND_POWER_NOT_TAKEN_PROMPT = {
+  title: "That didn't go through",
+  body: 'Android still has Code UI on battery optimisation. It often opens a list rather than a switch, so the app has to be found in it and set to Unrestricted. Try again, or do it later from Settings.',
+  confirm: 'Try again',
+  dismiss: 'Later'
+} as const
+
 export const UNRESTRICTED_BATTERY_CAPTION =
   'Android pauses background connections to save power, so notifications can wait until you open the app. Allow unrestricted battery use to keep them instant.'
 

@@ -9,12 +9,15 @@ import {
 } from '@codeui/expo-background-link'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
 import {
+  clearBackgroundPowerRequested,
+  loadBackgroundPowerRequestedAgo,
   loadBackgroundPowerAskedAgo,
   loadBackgroundPowerLastSeen,
   loadPushNotificationsEnabled,
   saveBackgroundPowerAskedNow,
   saveBackgroundPowerLastSeen
 } from '../storage/preferences'
+import { adviseBackgroundPowerRequestOutcome } from './background-power-request-outcome'
 import { adviseBackgroundDeliveryPower } from './background-delivery-power'
 import { openBackgroundPowerPrompt } from './background-power-prompt-store'
 import { subscribeConnectionRevivalTriggers } from '../transport/connection-revival-triggers'
@@ -153,6 +156,41 @@ export async function syncBackgroundLinkFromPreferences(): Promise<boolean> {
  * explain it. An update is a natural moment to ask again. The row remains either
  * way.
  */
+/**
+ * Report whether an exemption request the reader made actually landed.
+ *
+ * Called on every return to the foreground, because that is when they come back
+ * from Android's screen. Without it a failed grant looked identical to a
+ * successful one: the sheet closed, nothing changed, and the same ask returned
+ * later as if the app had not been listening.
+ */
+export async function reportBackgroundDeliveryPowerOutcome(): Promise<void> {
+  if (!isBackgroundDeliveryAvailable()) {
+    return
+  }
+  const requestedAgo = await loadBackgroundPowerRequestedAgo()
+  if (requestedAgo === null) {
+    return
+  }
+  const outcome = adviseBackgroundPowerRequestOutcome({
+    requestedAgo,
+    unrestricted: isBackgroundDeliveryUnrestricted()
+  })
+  if (outcome === 'none') {
+    return
+  }
+  // Cleared either way: the question has been answered, and a marker left
+  // behind would report the same trip again on the next foreground.
+  await clearBackgroundPowerRequested()
+  if (outcome === 'granted') {
+    // Nothing to say. The thing they asked for happened, and the settings row
+    // has already stopped showing.
+    await saveBackgroundPowerLastSeen(true)
+    return
+  }
+  openBackgroundPowerPrompt('not-taken')
+}
+
 export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   if (!isBackgroundDeliveryAvailable()) {
     return

@@ -1,5 +1,8 @@
 import { AppState } from 'react-native'
-import { syncBackgroundLinkFromPreferences } from './background-link'
+import {
+  reportBackgroundDeliveryPowerOutcome,
+  syncBackgroundLinkFromPreferences
+} from './background-link'
 
 /**
  * Re-derive the link's running state at every moment the app is allowed to
@@ -40,4 +43,8 @@ function heal(): void {
   // promise in release and a redbox over the app in development. An unreadable
   // preference costs this attempt, and the next foreground tries again.
   void syncBackgroundLinkFromPreferences().catch(() => undefined)
+  // Why here: a return to the foreground is exactly when someone comes back
+  // from Android's exemption screen, and it is the only moment the app can find
+  // out whether the grant took.
+  void reportBackgroundDeliveryPowerOutcome().catch(() => undefined)
 }

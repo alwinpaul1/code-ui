@@ -118,6 +118,39 @@ export async function saveBackgroundPowerLastSeen(unrestricted: boolean): Promis
   }
 }
 
+// When the system exemption screen was last opened for this install. Read once
+// on the next foreground to find out whether the grant actually took: the
+// screen is often a LIST rather than a dialog, so backing out of it feels like
+// allowing and grants nothing.
+const POWER_REQUESTED_AT_KEY = 'orca:backgroundPowerRequestedAt'
+
+/** Milliseconds since the system screen was opened, or null if it was not. */
+export async function loadBackgroundPowerRequestedAgo(): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem(POWER_REQUESTED_AT_KEY)
+    if (raw === null) {
+      return null
+    }
+    const at = Number(raw)
+    return Number.isFinite(at) ? Date.now() - at : null
+  } catch {
+    // Unknown reads as "no request", so a broken store cannot invent a failure.
+    return null
+  }
+}
+
+export async function saveBackgroundPowerRequestedNow(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(POWER_REQUESTED_AT_KEY, String(Date.now()))
+  } catch {
+    // Best effort: at worst the outcome goes unreported, as it did before.
+  }
+}
+
+export async function clearBackgroundPowerRequested(): Promise<void> {
+  await AsyncStorage.removeItem(POWER_REQUESTED_AT_KEY).catch(() => {})
+}
+
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
 // Why: the mobile terminal fits the desktop's full column count to the phone

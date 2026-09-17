@@ -6,7 +6,9 @@
 // so it arrives in the system's colours whatever theme the reader has chosen.
 import { useSyncExternalStore } from 'react'
 
-let open = false
+export type BackgroundPowerPromptKind = 'ask' | 'not-taken'
+
+let open: BackgroundPowerPromptKind | null = null
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -15,24 +17,24 @@ function emit(): void {
   }
 }
 
-export function openBackgroundPowerPrompt(): void {
-  if (open) {
+export function openBackgroundPowerPrompt(kind: BackgroundPowerPromptKind = 'ask'): void {
+  if (open === kind) {
     return
   }
-  open = true
+  open = kind
   emit()
 }
 
 export function closeBackgroundPowerPrompt(): void {
-  if (!open) {
+  if (open === null) {
     return
   }
-  open = false
+  open = null
   emit()
 }
 
 export function resetBackgroundPowerPromptForTests(): void {
-  open = false
+  open = null
   listeners.clear()
 }
 
@@ -43,10 +45,13 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-export function useBackgroundPowerPromptOpen(): boolean {
+/** Which prompt is showing, or null. Two kinds, because "we are asking" and
+ *  "that did not work" are different messages and one must not be mistaken for
+ *  the other — repeating the ask reads as the app not having noticed. */
+export function useBackgroundPowerPromptOpen(): BackgroundPowerPromptKind | null {
   return useSyncExternalStore(
     subscribe,
     () => open,
-    () => false
+    () => null
   )
 }
