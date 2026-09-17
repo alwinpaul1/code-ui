@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -25,6 +25,38 @@ const receiver = readFileSync(
  * that name every one of these strings in prose, so a bare `includes` would pass
  * on the explanation alone. Each check below is anchored to the syntax around it.
  */
+/**
+ * The copy gradle actually compiles is NOT packages/. pnpm installs a `file:`
+ * dependency as a copy under node_modules/.pnpm, hardlinking the files that
+ * exist at install time — so an edit to an existing file shows up in both, and
+ * a NEW file shows up in neither until `pnpm install` runs again. That is
+ * precisely how 0.7.2 nearly shipped a manifest declaring a receiver whose
+ * class was not in the DEX: the manifest edit propagated, the new .kt did not,
+ * and the app crashed on install with ClassNotFoundException the moment
+ * MY_PACKAGE_REPLACED fired (2026-09-18). The APK-level check that caught it
+ * was the phone.
+ *
+ * So the manifest and the SOURCE TREE GRADLE SEES must agree: every component
+ * the manifest declares in this package must have a source file in the copy
+ * that will be compiled. Reading packages/ alone cannot see this.
+ */
+describe('every native component the manifest declares is in the tree gradle compiles', () => {
+  const compiled = join(__dirname, '../../node_modules/@codeui/expo-background-link/android/src/main')
+  const compiledManifest = readFileSync(join(compiled, 'AndroidManifest.xml'), 'utf8')
+  const declared = [...compiledManifest.matchAll(/android:name="expo\.modules\.backgroundlink\.(\w+)"/g)].map(
+    (m) => m[1]!
+  )
+
+  it('declares at least the receiver and the service, so the check is not vacuous', () => {
+    expect(declared).toEqual(expect.arrayContaining(['BackgroundLinkBootReceiver', 'BackgroundLinkService']))
+  })
+
+  it.each(declared.map((name) => [name]))('%s has a source file where gradle will look', (name) => {
+    const source = join(compiled, 'java/expo/modules/backgroundlink', `${name}.kt`)
+    expect(existsSync(source), `${name} is in the manifest but ${source} does not exist — run pnpm install`).toBe(true)
+  })
+})
+
 describe('the background link comes back on its own', () => {
   it('declares the permission a boot broadcast requires', () => {
     expect(manifest).toMatch(
