@@ -84,7 +84,12 @@ describe('Mobile Tasks refactor parity', () => {
 
   // 35_287 -> 35_291: `raised={selected}` on the GitHub page picker row, four
   // tokens. See the selected-row note above the pins.
-  // 35_275 -> 35_287: two `tapTargetHitSlop(styles.iconButton)` calls in
+  // 35_275 -> 35_287: +12 = SIX tokens each on the TWO calls this family sees.
+  // `grep -c horizontalGap src/tasks/*.tsx` is 2; the other eight uses live
+  // outside src/tasks and cannot move this count. (A reviewer read the +12 as
+  // two tokens across all six files and could not reconcile it, which is the
+  // argument for stating the arithmetic against a command rather than a claim.)
+  // Both calls are `tapTargetHitSlop(styles.iconButton)` in
   // mobile-tasks-screen-chrome gained a `{ horizontalGap: 0 }` argument, six
   // tokens each. The statusBar row sets no gap, so without the cap the Create
   // button's hitSlop covered the right sixth of the Refresh button's drawn

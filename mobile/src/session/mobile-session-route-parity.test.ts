@@ -118,10 +118,14 @@ const HEAD_TIMER_CREATION_SHA256 =
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
   '5f4b8de02c812181dddf7b062ed3146c289b2435f39d297989512fb08d877b57'
-// 2026-09-17 (0.6.7): tap targets. Five session-route controls drawn at 40 dp
-// or less (the header's 32 dp tabs, the dock's 36 dp button, the key strip's
-// 30 dp keys, the ask sheet's 30 dp options, the background-tasks sheet's 40 dp
-// "load more") gained `hitSlop={tapTargetHitSlop(…)}`. That is one more
+// 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
+// strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
+// the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
+// QUESTION TAB STRIP, and the background-tasks sheet's 40 dp "load more". They
+// gained `hitSlop={tapTargetHitSlop(…)}`.
+// (Said "the ask sheet's options"; a review caught it. OptionRow is
+// padding-sized, so the audit never saw it and it got nothing. Check with
+// `grep -c hitSlop src/session/MobileNativeChatAsk.tsx`, which is 1.) That is one more
 // attribute on host records at the same count (99); strings, leaf and style
 // references are untouched and still match their earlier pins.
 // 2026-09-17 (0.6.7, later): the .md reader paints its own page from the live
