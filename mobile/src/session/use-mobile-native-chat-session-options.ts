@@ -23,7 +23,6 @@ import {
   getPendingModelPick,
   MODEL_PICK_GRACE_MS,
   notePendingModelPick,
-  hasSeenLiveModelReport,
   resolveReportedModelSeed,
   type ModelReportSource
 } from './mobile-native-chat-model-report-authority'
@@ -55,10 +54,6 @@ export type MobileNativeChatSessionOptionsController = {
   invokeAction: (id: string) => Promise<boolean>
   /** Track a slash command the user typed themselves (e.g. `/model sonnet`). */
   recordCommand: (command: string) => void
-  /** Whether THIS terminal's agent has ever stated its own model. False means
-   *  the snapshot's model is a tracked pick nobody has confirmed, which is not
-   *  something the header may assert. See session-model-pill.ts. */
-  modelConfirmed: boolean
 }
 
 type PendingOperation = { id: string; token: number }
@@ -544,13 +539,8 @@ export function useMobileNativeChatSessionOptions(args: {
     [agent, bump, catalog, onAgentPicker, scopeKey]
   )
 
-  // Why here and not in the header: this hook is what knows the scope and the
-  // terminal, and the header would have to be handed both just to re-derive it.
-  const modelConfirmed =
-    scopeKey !== null && hasSeenLiveModelReport(scopeKey, terminalHandle)
-
   return useMemo(
-    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand, modelConfirmed }),
-    [snapshot, pendingId, setOption, invokeAction, recordCommand, modelConfirmed]
+    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),
+    [snapshot, pendingId, setOption, invokeAction, recordCommand]
   )
 }

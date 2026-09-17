@@ -27,31 +27,19 @@ import {
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
-import { mobileModelPillLabel } from './mobile-native-chat-session-option-labels'
 import { mobileSessionChatViewToggle } from './mobile-session-view-default'
 import { useTheme } from '../theme/theme-context'
 import { IconButton } from '../ui/IconButton'
 import { Txt } from '../ui/Txt'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { sessionModelPillLabel } from './session-model-pill'
 
-/** The active session's model label, or null when the agent has no model
- *  catalog, the tracked value is still the placeholder (#18568), or nothing has
- *  confirmed the model — see session-model-pill.ts for why the last one is not
- *  a degraded answer. */
+/** The active session's model label: the agent's own word, or null. Reads the
+ *  live pair and not the snapshot — see session-model-pill.ts for the 2026-09-18
+ *  case where every source said Opus and the snapshot said Fable. */
 export function resolveSessionModelLabel(controller: MobileSessionController): string | null {
-  const options = controller.nativeChatController.nativeChatSessionOptions?.controller
-  const model = options?.snapshot.find((descriptor) => descriptor.category === 'model')
-  if (!model) {
-    return null
-  }
-  const label = mobileModelPillLabel(model)
-  if (label === 'Model') {
-    return null
-  }
-  // The pill asserts what the session IS running. Only the agent's own word is
-  // evidence of that; the tracked record is a pick it may never have honoured.
-  return options?.modelConfirmed === true ? label : null
+  return sessionModelPillLabel(controller.nativeChatController.nativeChatLiveModel)
 }
 
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {

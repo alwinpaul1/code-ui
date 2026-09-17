@@ -148,6 +148,11 @@ export type MobileNativeChatController = {
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
+  /** The agent's own word about its model and effort — the status-line badge
+   *  or the beacon — and nothing else. Null until it has spoken. This is what
+   *  the header pill states; see session-model-pill.ts for why not the
+   *  snapshot. */
+  nativeChatLiveModel: { model: string | null; label: string | null; effort: string | null }
   /** Permission mode from the terminal footer, or null when no status line is observed. */
   nativeChatPermissionMode: TerminalPermissionMode | null
   /** Codex collaboration mode (Default / Plan) from its footer, or null. */

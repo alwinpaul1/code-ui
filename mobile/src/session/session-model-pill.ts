@@ -1,36 +1,44 @@
-import { hasSeenLiveModelReport } from './mobile-native-chat-model-report-authority'
-
 /**
- * The label for the header's model pill, or null when nothing has confirmed it.
+ * The header's model pill, stated the way the binary states it.
  *
- * The pill makes a claim about the world — "this session is running X" — and the
- * only evidence for that is the agent saying so: its own OSC beacon, or the badge
- * on the user's status line. The tracked record is NOT evidence. It is a model
- * somebody picked, which the agent may have refused (Claude puts a confirmation
- * in front of a cached-history switch, and dismissing it leaves the model alone)
- * and which outlives the session that picked it, because the record is keyed by
- * scope and a scope outlives its terminal.
+ * Claude Code paints its own `display_name` and effort on its status line —
+ * `[Opus 5 (1M context) xhigh | Max 20x]` — and the phone's screen parser reads
+ * exactly that back into the live pair. The VS Code extension reads the same
+ * fact from the SDK's init message. Both are the agent's own word about itself,
+ * and that is the only thing this pill may show.
  *
- * Why this is not the 2026-09-15 fix again: that one made a live reading outrank
- * a stale record, which is right and stays. It assumed a live reading would
- * eventually arrive. For a hand-started `claude` none ever does — there is no
- * beacon unless the agent was launched with the flags that write one — so the
- * record stood unchallenged for ever. Seen 2026-09-17 as "Fable"/"Fable Medium"
- * on a session whose transcript holds 1479 turns of claude-opus-5 and not one
- * Fable, which is the same symptom and wording as the note that fix left behind.
+ * What it deliberately does NOT read: the session-options snapshot. That value
+ * is the tracked record — a pick, a seed, a remembered value — and every
+ * wrong-model report has come through it. On 2026-09-18 the pill read "Fable
+ * Medium" while the transcript held 1479 turns of claude-opus-5 and not one
+ * Fable, the status line painted Opus, the parser returned `opus`/`xhigh` from
+ * the real screen, and Orca's own record carried no model at all. Every source
+ * was right; the display was wrong; so the fault was in the layer between them,
+ * and the previous fix — a gate on that layer — still let the record's label
+ * through. This one reads past it.
  *
- * Showing nothing is the correct answer here, not a degraded one. CLAUDE.md:
- * prefer refusing over guessing, and when a figure cannot be known, show what is
- * known rather than a number from somewhere else. The picker is unaffected — the
- * user can still choose a model; the app just stops asserting which one is live.
+ * Absent a live pair the pill shows nothing. CLAUDE.md: a figure that cannot be
+ * known is not to be filled in from somewhere else. The picker is untouched — a
+ * model can still be chosen; the app just stops asserting one it has not heard.
  */
-export function sessionModelPillLabel(
-  label: string | null,
-  scopeKey: string | null,
-  terminalHandle: string | null
-): string | null {
-  if (label === null || scopeKey === null) {
+export type LiveModelPair = {
+  model: string | null
+  label?: string | null
+  effort: string | null
+}
+
+function text(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  return trimmed === '' ? null : trimmed
+}
+
+export function sessionModelPillLabel(live: LiveModelPair | null): string | null {
+  // A label with no model behind it is not a statement about this session.
+  const model = text(live?.model)
+  if (model === null) {
     return null
   }
-  return hasSeenLiveModelReport(scopeKey, terminalHandle) ? label : null
+  const name = text(live?.label) ?? model
+  const effort = text(live?.effort)
+  return effort === null ? name : `${name} ${effort}`
 }

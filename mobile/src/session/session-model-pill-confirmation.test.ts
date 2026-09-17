@@ -1,57 +1,57 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  forgetModelReportScope,
-  hasSeenLiveModelReport,
-  noteLiveModelReport
-} from './mobile-native-chat-model-report-authority'
+import { describe, expect, it } from 'vitest'
 import { sessionModelPillLabel } from './session-model-pill'
 
-const SCOPE = 'host-1:wt-1:tab-1'
-const HANDLE = 'term-1'
-
 /**
- * The pill states a fact: "this session is running X". The tracked record is
- * not that fact — it is a model somebody PICKED, which the agent may never have
- * honoured, and which outlives the session that picked it.
+ * The pill states what the binary states. Claude Code paints its own
+ * `display_name` and effort on the status line — `[Opus 5 (1M context) xhigh
+ * | Max 20x]` — and the phone's parser reads exactly that back. That reading is
+ * the agent's own word, the same source the VS Code extension and the binary
+ * itself use, and it is the ONLY thing the pill may show.
  *
- * Observed 2026-09-17 on a session whose transcript is 1479 turns of
- * claude-opus-5 and 234 of claude-opus-4-8, with no Fable anywhere: the pill
- * read "Fable" and the composer "Fable Medium". The same wording appears in
- * this module's own 2026-09-15 note — "seen earlier as 'Fable Medium' on an
- * Opus 5 session" — so that fix made a live reading outrank a stale one without
- * covering the case where there is NO live reading at all.
+ * Why not the snapshot's model, as before: the snapshot's current value is the
+ * tracked RECORD — a pick, a seed, a remembered value — and every wrong-model
+ * report has come through it. On 2026-09-18 the pill read "Fable Medium" while
+ * the transcript held 1479 turns of claude-opus-5 and not one Fable, the status
+ * line painted Opus, the screen parser returned `opus` / `xhigh` from the real
+ * screen, and Orca's record carried no model at all. Every source was right and
+ * the display was wrong, which means the fault is in the layer between them. A
+ * gate on that layer (the previous fix) still let the record's label through.
  *
- * That case is not rare: a hand-started `claude` has no HUD beacon, so nothing
- * ever states its model and the pill shows a leftover pick for ever. CLAUDE.md's
- * rule for this is to refuse rather than guess.
+ * So the pill no longer reads that layer. It reads the live pair and nothing
+ * else. Absent a live pair it shows nothing, which is the project's rule for a
+ * figure that cannot be known.
  */
-describe('the model pill only states what the agent has confirmed', () => {
-  beforeEach(() => {
-    forgetModelReportScope(SCOPE)
+describe('the model pill states the agent’s own word', () => {
+  it('shows the label the status line painted, with its effort', () => {
+    expect(
+      sessionModelPillLabel({ model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' })
+    ).toBe('Opus 5 (1M context) xhigh')
   })
 
-  it('shows nothing when the agent has never stated its model', () => {
-    expect(hasSeenLiveModelReport(SCOPE, HANDLE)).toBe(false)
-    expect(sessionModelPillLabel('Fable', SCOPE, HANDLE)).toBeNull()
+  it('shows the label alone when the agent stated no effort', () => {
+    expect(sessionModelPillLabel({ model: 'opus', label: 'Opus 5', effort: null })).toBe('Opus 5')
   })
 
-  it('shows the label once the agent has stated it', () => {
-    noteLiveModelReport(SCOPE, HANDLE)
-    expect(sessionModelPillLabel('Opus 5 (1M context)', SCOPE, HANDLE)).toBe('Opus 5 (1M context)')
+  // The id is the catalog family; the label is what the agent actually said.
+  // When the agent gave no name, the family is still its own word.
+  it('falls back to the family when the agent gave no name', () => {
+    expect(sessionModelPillLabel({ model: 'opus', label: null, effort: 'high' })).toBe('opus high')
   })
 
-  // A scope outlives its terminal, so a new agent in the same tab must earn its
-  // own confirmation rather than inherit the last one's.
-  it('does not let a new terminal inherit the previous one confirmation', () => {
-    noteLiveModelReport(SCOPE, HANDLE)
-    expect(sessionModelPillLabel('Opus 5', SCOPE, 'term-2')).toBeNull()
+  it('shows nothing when the agent has not spoken', () => {
+    expect(sessionModelPillLabel({ model: null, label: null, effort: null })).toBeNull()
+    expect(sessionModelPillLabel(null)).toBeNull()
   })
 
-  // Degenerate: nothing to show, and no scope at all.
-  it.each([
-    ['no label', null, SCOPE, HANDLE],
-    ['no scope', 'Opus 5', null, HANDLE]
-  ])('shows nothing for %s', (_label, label, scope, handle) => {
-    expect(sessionModelPillLabel(label, scope, handle)).toBeNull()
+  // The case that shipped: a label with no model behind it is not a statement
+  // about this session and must not be drawn as one.
+  it('shows nothing for a label that arrived without a model', () => {
+    expect(sessionModelPillLabel({ model: null, label: 'Fable', effort: 'medium' })).toBeNull()
+  })
+
+  // Degenerate: blank strings from a parser that matched an empty bracket.
+  it('shows nothing for blank fields', () => {
+    expect(sessionModelPillLabel({ model: '', label: '', effort: '' })).toBeNull()
+    expect(sessionModelPillLabel({ model: 'opus', label: '   ', effort: '' })).toBe('opus')
   })
 })

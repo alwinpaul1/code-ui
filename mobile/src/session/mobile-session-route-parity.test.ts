@@ -117,7 +117,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '5f4b8de02c812181dddf7b062ed3146c289b2435f39d297989512fb08d877b57'
+  'add2920fc3fe6c569c90dbcb22a961225f307cc9c8220e32dec4e25863112624'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -590,7 +590,12 @@ describe('mobile session route extraction parity', () => {
     // toggle, so opening a document reads it instead of opening an editor.
     // 656 since 2026-09-15 (later): the hostId search param and the two
     // document statuses the reconnect refetch reads.
-    expect(strings).toHaveLength(656)
+    // 654 since 2026-09-18: the header's model pill stopped reading the
+    // session-options snapshot — its `'model'` category lookup and `'Model'`
+    // placeholder check are gone — and reads the agent's live pair instead.
+    // Check: `git show 17c20ff..HEAD -- MobileSessionHeader.tsx` removes exactly
+    // those two literals.
+    expect(strings).toHaveLength(654)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
