@@ -212,6 +212,26 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(pill('Model').props.accessibilityLabel).toBe('Model, Sonnet 5 High')
   })
 
+  /**
+   * The last surface that trusted the record: the drawer marked the RECORD's
+   * model as selected, so with Opus running and the record saying Fable, the
+   * user opened the picker and saw Fable checked. The agent's word decides the
+   * checked row too; the record only stands in until the agent has spoken.
+   */
+  it('marks the running model as selected in the drawer, not the picked one', async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' }
+    })
+    await act(async () => pill('Model').props.onPress())
+    // A row's label is a Text inside it, not a prop on the Pressable.
+    const checkedText = renderer!.root
+      .findAll((node) => node.props.accessibilityState?.checked === true)
+      .flatMap((row) => row.findAllByType('Text').map((t) => String(t.props.children)))
+      .join(' ')
+    expect(checkedText).toContain('Opus')
+    expect(checkedText).not.toContain('Sonnet')
+  })
+
   it('opens the model sheet and applies a picked model', async () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
     await act(async () => pill('Model').props.onPress())

@@ -52,6 +52,31 @@ export type MobileNativeChatSessionOptionPickersProps = {
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
+/**
+ * The model drawer marks the RUNNING model as selected, not the picked one.
+ *
+ * The descriptor's `currentValue` is the tracked record — a pick, a seed, a
+ * remembered value. With Opus running and the record saying Fable, opening the
+ * picker showed Fable checked (2026-09-18). The agent's own word decides the
+ * checked row; the record stands in only until the agent has spoken.
+ *
+ * Only the model descriptor, and only its `currentValue`: choices, labels and
+ * everything a tap dispatches are untouched. `applyOption` compares the tap
+ * against this same value, so re-picking what is already running is a no-op
+ * and picking the record's stale value dispatches, both of which are right.
+ */
+function withRunningModelSelected(
+  descriptor: SessionOptionDescriptor,
+  modelDescriptorId: string,
+  live: { model: string | null } | undefined
+): SessionOptionDescriptor {
+  const running = live?.model?.trim()
+  if (descriptor.id !== modelDescriptorId || !running || descriptor.kind.type !== 'select') {
+    return descriptor
+  }
+  return { ...descriptor, kind: { ...descriptor.kind, currentValue: running } }
+}
+
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
@@ -196,7 +221,7 @@ export function MobileNativeChatSessionOptionPickers({
                 </View>
               ) : (
                 <DescriptorRows
-                  descriptor={activeDescriptor}
+                  descriptor={withRunningModelSelected(activeDescriptor, model.id, liveModel)}
                   disabled={disabled}
                   grouped
                   onSetOption={(value) => applyOption(activeDescriptor, value)}
