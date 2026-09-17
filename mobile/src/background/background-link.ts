@@ -102,8 +102,13 @@ export function requestBackgroundDeliveryUnrestricted(): boolean {
 /**
  * Apply the user's choice: run (or stop) the foreground service and the
  * watcher behind it. Must be called from the foreground — Android refuses to
- * start a foreground service from the background — which is why the app
- * calls it on launch and on the toggle, never from a background transition.
+ * start a foreground service from the background — which is why it runs on
+ * launch and on the toggle, never from a background transition.
+ *
+ * "On launch" was this comment's claim long before it was true: the toggle was
+ * the ONLY caller, so a killed service stayed dead until somebody found
+ * Settings and flipped the switch twice. background-link-healing.ts is the
+ * launch half, and BackgroundLinkBootReceiver the reboot one.
  */
 export function applyBackgroundDelivery(enabled: boolean): void {
   const on = enabled && isBackgroundDeliveryAvailable()

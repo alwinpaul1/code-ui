@@ -19,6 +19,7 @@ import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
+import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
@@ -70,6 +71,15 @@ function ThemedRoot() {
     // had notifications on before an update never flips the switch that used to
     // be the only thing that asked (2026-09-15).
     void askBackgroundDeliveryPowerOnOpen()
+  }, [])
+
+  useEffect(() => {
+    // Why the app has to do this at all: nothing else restarts the link once
+    // Android has killed the service. The Settings toggle was its only caller,
+    // so the recovery nobody could guess was toggle off, toggle on. Running it
+    // here and on every return to the foreground is the moment a
+    // foreground-service start is actually permitted.
+    return startBackgroundLinkHealing()
   }, [])
 
   useEffect(() => {
