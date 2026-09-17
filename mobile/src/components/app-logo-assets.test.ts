@@ -37,6 +37,12 @@ function plugin(name: string): Record<string, unknown> {
 }
 
 const WHITE = '255,255,255'
+const BLACK = '0,0,0'
+/** The icon's tile. Black by request (2026-09-17), while the SPLASH keeps the
+ *  brand red: one asset is composited over two backgrounds, and black is
+ *  18.58:1 on the light one but 1.20:1 on the dark #1A1917 — tile and knot both
+ *  vanish. Red sits mid-luminance and clears 3:1 on both. */
+const ICON_TILE = '#000000'
 const RED = [1, 3, 5].map((at) => Number.parseInt(brand.red.slice(at, at + 2), 16)).join(',')
 
 /** The one colour of every pixel with any coverage; fails naming the others. */
@@ -68,14 +74,27 @@ describe('the notification icon', () => {
   })
 })
 
+/**
+ * The splash tile is the one asset that must work over TWO backgrounds, so it
+ * did not follow the icon to black. Measured: black is 18.58:1 on the light
+ * splash and 1.20:1 on the dark #1A1917, where the tile and the knot cut out of
+ * it would both disappear. Red sits mid-luminance and clears 3:1 on both.
+ */
+describe('the splash tile is not the icon tile', () => {
+  it('stays the brand red so it reads on both splash backgrounds', () => {
+    const png = asset(expo.plugins.find((p) => p[0] === 'expo-splash-screen')[1].image)
+    expect(onlyOpaqueColour(png)).toBe(RED)
+  })
+})
+
 describe('the launcher icon', () => {
-  it('is an adaptive foreground of the knot alone in white over a red background', () => {
+  it('is an adaptive foreground of the knot alone in white over a black background', () => {
     const { foregroundImage, backgroundColor } = expo.android.adaptiveIcon
     const png = asset(foregroundImage)
     expect([png.width, png.height]).toEqual([1024, 1024])
     expect(onlyVisibleColour(png)).toBe(WHITE)
     expect(alphaRange(png)).toEqual({ min: 0, max: 255 })
-    expect(backgroundColor).toBe(brand.red)
+    expect(backgroundColor).toBe(ICON_TILE)
   })
 
   /**
@@ -89,7 +108,7 @@ describe('the launcher icon', () => {
    * regenerated full-bleed icon would still be 1024, still mostly red and still
    * have white in it, and would pass every other assertion here.
    */
-  it('has a 1024 app icon cut to a squircle, red with a white knot', () => {
+  it('has a 1024 app icon cut to a squircle, black with a white knot', () => {
     const png = asset(expo.icon)
     expect([png.width, png.height]).toEqual([1024, 1024])
     expect(alphaAt(png, 4, 4), 'the corner is cut away').toBe(0)
@@ -104,7 +123,7 @@ describe('the launcher icon', () => {
     expect(alphaAt(png, 512, 2), 'the edge midpoint is solid').toBe(255)
     const colours = visibleColours(png)
     const ranked = [...colours.entries()].sort((a, b) => b[1] - a[1])
-    expect(ranked[0][0]).toBe(RED)
+    expect(ranked[0][0]).toBe(BLACK)
     expect(colours.get(WHITE) ?? 0).toBeGreaterThan(0)
   })
 })

@@ -29,7 +29,7 @@ slightly different angles (52 deg and 50 deg from horizontal).
 Outputs, all overwritten:
   assets/brand/mark.svg          vector master: the tile, viewBox 0 0 741 704
   src/components/app-logo-path.ts the same path for the in-app <AppLogo/>
-  assets/icon.png                1024 red squircle, white knot. Carries its own
+  assets/icon.png                1024 black squircle, white knot. Carries its own
                                  OS mask (iOS squircle, Android legacy) supplies
                                  the corners; a tile carrying its own would show
                                  double corners.
@@ -56,6 +56,12 @@ import tempfile
 
 MOBILE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RED = "#F11924"  # the art's dominant colour, sampled (241, 25, 36)
+# The app icon's tile. Black rather than the brand red, by request 2026-09-17.
+# The SPLASH keeps the red on purpose: it is one asset composited over two
+# backgrounds, and black is 18.58:1 on the light one but 1.20:1 on the dark
+# (#1A1917) — the tile and the knot cut out of it would both disappear. Red sits
+# mid-luminance and clears 3:1 on both (3.79 and 4.10).
+ICON_TILE = "#000000"
 WHITE = "#FFFFFF"
 
 # ---- geometry, in tile units: 741 wide, 704 tall, corner radius 181 ---------
@@ -233,7 +239,7 @@ def main() -> int:
     # apply their own mask, so nothing double-rounds.
     icon_cx, icon_cy = W / 2, H / 2
     squircle = f'<clipPath id="squircle"><path d="{squircle_path(icon_cx, icon_cy, W / 2)}"/></clipPath>'
-    full_bleed = f'<rect x="0" y="{-(W - H) / 2:.2f}" width="{W:.0f}" height="{W:.0f}" fill="{RED}"/>'
+    full_bleed = f'<rect x="0" y="{-(W - H) / 2:.2f}" width="{W:.0f}" height="{W:.0f}" fill="{ICON_TILE}"/>'
     icon_body = (
         f"<defs>{squircle}</defs>"
         f'<g clip-path="url(#squircle)">{full_bleed + knot_svg_body(200, WHITE)}</g>'
