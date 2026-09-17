@@ -60,7 +60,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         <Text style={styles.title}>Tasks</Text>
       </View>
       <TasksButton
-        hitSlop={tapTargetHitSlop(styles.iconButton)}
+        hitSlop={tapTargetHitSlop(styles.iconButton, { horizontalGap: 0 })}
         style={styles.iconButton}
         disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
         onPress={() => {
@@ -78,7 +78,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
       </TasksButton>
       {showHeaderCreateTask ? (
         <TasksButton
-          hitSlop={tapTargetHitSlop(styles.iconButton)}
+          hitSlop={tapTargetHitSlop(styles.iconButton, { horizontalGap: 0 })}
           style={styles.iconButton}
           disabled={!taskUiReady}
           onPress={() => {

@@ -262,7 +262,7 @@ function MobileRichMarkdownEditorInner(
             const Icon = item.icon
             return (
               <Pressable
-                hitSlop={tapTargetHitSlop(styles.toolbarButton)}
+                hitSlop={tapTargetHitSlop(styles.toolbarButton, { horizontalGap: 6 })}
                 key={item.command}
                 disabled={!editable}
                 accessibilityRole="button"

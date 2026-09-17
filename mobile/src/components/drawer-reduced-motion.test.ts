@@ -130,6 +130,23 @@ afterEach(() => {
   renderer = null
 })
 
+/**
+ * Reanimated writes only the keys the worklet returns and never clears one that
+ * disappears (`useAnimatedStyle`'s styleUpdater loops `for (const key in
+ * newValues)`, with no diff against the previous frame). So a mapping that
+ * returns `opacity` under reduced motion and omits it otherwise can strand the
+ * view at whatever opacity it last wrote.
+ *
+ * The path that bites: `useReducedMotion` seeds from a module cache, so a stale
+ * `true` renders the first frame at `opacity: progress.value` around 0; the real
+ * answer arrives milliseconds later as `false`, the key vanishes, and the drawer
+ * sits at zero opacity while fully mounted and interactive under a visible
+ * backdrop. That is the dead, dimmed screen `windowEpoch` exists to prevent.
+ *
+ * Asserting the KEY SET rather than a value is deliberate: the bug is a key that
+ * is absent, and no assertion about opacity's value can see an absence. The
+ * full-motion cases above read `opacity ?? 1`, which passes either way.
+ */
 // The setting was honoured by four files and neither drawer was one of them:
 // with "Remove animations" on, every sheet still slid up from the bottom and
 // every panel still slid in from the right (0.6.6 audit). The gesture code,
@@ -138,6 +155,17 @@ afterEach(() => {
 describe('the bottom sheet under reduced motion', () => {
   const sheet = () =>
     sheetStyle(renderer!.root, (style) => style.borderTopLeftRadius === 24)
+
+  async function sheetKeys(reduced: boolean) {
+    act(() => renderer?.unmount())
+    renderer = null
+    resetReducedMotionForTests()
+    mocks.reduced = reduced
+    await render(
+      createElement(MountedBottomDrawer, { visible: true, onClose: noop, onHidden: noop }, null)
+    )
+    return Object.keys(sheet()).sort()
+  }
 
   it('arrives in place and fades, with no travel', async () => {
     mocks.reduced = true
@@ -165,10 +193,23 @@ describe('the bottom sheet under reduced motion', () => {
     expect(translateOf(sheet(), 'translateY')).toBe(0)
     expect(sheet().opacity).toBe(0)
   })
+
+  it('writes the same style keys in both modes, so none can be left stuck', async () => {
+    expect(await sheetKeys(true)).toEqual(await sheetKeys(false))
+  })
 })
 
 describe('the right panel under reduced motion', () => {
   const panel = () => sheetStyle(renderer!.root, (style) => style.height === '100%')
+
+  async function panelKeys(reduced: boolean) {
+    act(() => renderer?.unmount())
+    renderer = null
+    resetReducedMotionForTests()
+    mocks.reduced = reduced
+    await render(createElement(RightDrawer, { visible: true, onClose: noop }, null))
+    return Object.keys(panel()).sort()
+  }
   // The wrapper unmounts a never-shown panel, so hide it after showing it:
   // progress goes 1 → 0 and the exit callback (never fired by the mock)
   // leaves it mounted at its hidden position.
@@ -202,5 +243,9 @@ describe('the right panel under reduced motion', () => {
     await showThenHide()
     expect(translateOf(panel(), 'translateX')).toBe(0)
     expect(panel().opacity).toBe(0)
+  })
+
+  it('writes the same style keys in both modes, so none can be left stuck', async () => {
+    expect(await panelKeys(true)).toEqual(await panelKeys(false))
   })
 })

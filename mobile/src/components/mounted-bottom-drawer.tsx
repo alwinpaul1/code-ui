@@ -305,8 +305,15 @@ export function MountedBottomDrawer({
     const enterTravel = reduceMotion
       ? 0
       : interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP)
+    // Why `opacity` is ALWAYS returned, even at a constant 1: Reanimated writes
+    // only the keys a worklet returns and never clears one that disappears
+    // (useAnimatedStyle's styleUpdater loops `for (const key in newValues)` with
+    // no diff against the last frame). Returning it conditionally strands the
+    // view at whatever opacity it last wrote — and the stale-cache path does
+    // exactly that, rendering the first frame near 0 and then dropping the key,
+    // leaving a fully interactive drawer invisible under a live backdrop.
     const transform = [{ translateY: enterTravel + translateY.value - keyboardShift }]
-    return reduceMotion ? { opacity: progress.value, transform } : { transform }
+    return { opacity: reduceMotion ? progress.value : 1, transform }
   })
 
   const backdropStyle = useAnimatedStyle(() => {

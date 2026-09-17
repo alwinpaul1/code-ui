@@ -51,7 +51,9 @@ function ViewModeButton({
 }) {
   return (
     <Pressable
-      hitSlop={tapTargetHitSlop(styles.button)}
+      // A segmented control: the buttons abut, so there is no room for
+      // horizontal slop at all. The vertical slop still does the work.
+      hitSlop={tapTargetHitSlop(styles.button, { horizontalGap: 0 })}
       style={({ pressed }) => [
         styles.button,
         selected && styles.buttonSelected,

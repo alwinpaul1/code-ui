@@ -132,7 +132,7 @@ export function QuickCommandRow({
         </View>
       </Pressable>
       <Pressable
-        hitSlop={tapTargetHitSlop(styles.rowAction)}
+        hitSlop={tapTargetHitSlop(styles.rowAction, { horizontalGap: 0 })}
         style={({ pressed }) => [
           styles.rowAction,
           // Why: row already dims when `disabled`; only dim again for empty body.
@@ -152,7 +152,7 @@ export function QuickCommandRow({
         )}
       </Pressable>
       <Pressable
-        hitSlop={tapTargetHitSlop(styles.rowAction)}
+        hitSlop={tapTargetHitSlop(styles.rowAction, { horizontalGap: 0 })}
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onEdit(command)}
@@ -161,7 +161,7 @@ export function QuickCommandRow({
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
       <Pressable
-        hitSlop={tapTargetHitSlop(styles.rowAction)}
+        hitSlop={tapTargetHitSlop(styles.rowAction, { horizontalGap: 0 })}
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onDelete(command)}

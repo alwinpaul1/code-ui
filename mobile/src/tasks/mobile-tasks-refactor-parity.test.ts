@@ -41,7 +41,7 @@ const TAP_TARGET_STATEMENTS = 'd7350b217e5d774c7c2ebea307babb6beb91ebf9ef73cd1d7
 const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
 const TAP_TARGET_SEMANTICS = 'e1610b05ef4dfee1b2685c5a9e6de24e6e9e5f1edccd771b92c0d0be86b5841f'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const TAP_TARGET_RENDER_TREE = '7c1a26543f12792821e60a31136702ceaf4890f4cffeb368c738ef36c203aebb'
+const TAP_TARGET_RENDER_TREE = 'e35bc375a8e8d57261a1c58bf4ac032e8930f9fcc957f96ea1797104fe64b72b'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -72,9 +72,14 @@ describe('Mobile Tasks refactor parity', () => {
     expect(hash(semantics)).toBe(TAP_TARGET_SEMANTICS)
   })
 
+  // 35_275 -> 35_287: two `tapTargetHitSlop(styles.iconButton)` calls in
+  // mobile-tasks-screen-chrome gained a `{ horizontalGap: 0 }` argument, six
+  // tokens each. The statusBar row sets no gap, so without the cap the Create
+  // button's hitSlop covered the right sixth of the Refresh button's drawn
+  // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_275)
+    expect(tokens).toHaveLength(35_287)
     expect(hash(tokens)).toBe(TAP_TARGET_RENDER_TREE)
   })
 

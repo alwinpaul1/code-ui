@@ -60,3 +60,62 @@ describe('tapTargetHitSlop', () => {
     })
   })
 })
+
+/**
+ * A hitSlop is not clipped to the control's own box: Android's
+ * TouchTargetHelper inflates each child's rect by its slop and walks children in
+ * REVERSE draw order, so the later sibling wins any overlap. Where a slop is
+ * wider than the gap to its neighbour, the later control's target covers part of
+ * the earlier control's DRAWN area, and a tap on what the user can see fires the
+ * wrong action. In the browser toolbar that means tapping the right edge of Back
+ * navigates Forward.
+ *
+ * Growing the target is not worth breaking which control it belongs to, so a
+ * stated gap caps the horizontal slop at half of it: two neighbours' targets
+ * meet exactly and neither crosses into the other's pixels.
+ */
+describe('a control with a neighbour beside it', () => {
+  it('never reaches past the halfway point of the gap', () => {
+    // 26 wide wants 9 a side; a 4 dp gap allows 2.
+    expect(tapTargetHitSlop({ width: 26, height: 26 }, { horizontalGap: 4 })).toEqual({
+      top: 9,
+      bottom: 9,
+      left: 2,
+      right: 2
+    })
+  })
+
+  it('takes no horizontal slop at all when the controls abut', () => {
+    expect(tapTargetHitSlop({ width: 32, height: 32 }, { horizontalGap: 0 })).toEqual({
+      top: 6,
+      bottom: 6,
+      left: 0,
+      right: 0
+    })
+  })
+
+  // The vertical axis has no neighbour in a row, so it is never capped: this is
+  // what still buys most of the target back when the sides cannot grow.
+  it('still grows vertically when the sides are capped to nothing', () => {
+    const slop = tapTargetHitSlop({ width: 24, height: 24 }, { horizontalGap: 0 })
+    expect(slop?.top).toBe(10)
+    expect(slop?.left).toBe(0)
+  })
+
+  it('leaves the slop alone when the gap is wider than it needs', () => {
+    expect(tapTargetHitSlop({ width: 26, height: 26 }, { horizontalGap: 40 })).toEqual(
+      tapTargetHitSlop({ width: 26, height: 26 })
+    )
+  })
+
+  // Degenerate: a control already big enough earns nothing, gap or no gap.
+  it('returns nothing for a control that already reaches the minimum', () => {
+    expect(tapTargetHitSlop({ width: 44, height: 44 }, { horizontalGap: 0 })).toBeUndefined()
+  })
+
+  // A capped-to-zero horizontal slop on an already-tall control leaves nothing
+  // to apply, and an all-zero Insets would be a lie the audit could not see.
+  it('returns nothing when the cap removes the only slop there was', () => {
+    expect(tapTargetHitSlop({ width: 32, height: 44 }, { horizontalGap: 0 })).toBeUndefined()
+  })
+})

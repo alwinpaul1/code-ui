@@ -159,13 +159,20 @@ function MountedRightDrawer({
   const drawerStyle = useAnimatedStyle(() => {
     // Why: under reduced motion the panel has no enter travel; `progress`
     // drives its opacity instead, so it fades in place. The drag offset still
-    // applies: that follows the finger. With full motion the object is the
-    // one it always was, with no opacity key at all.
+    // applies: that follows the finger.
+    //
+    // Why `opacity` is ALWAYS returned, even at a constant 1: Reanimated writes
+    // only the keys a worklet returns and never clears one that disappears
+    // (useAnimatedStyle's styleUpdater loops `for (const key in newValues)` with
+    // no diff against the last frame). Returning it conditionally strands the
+    // view at whatever opacity it last wrote — and the stale-cache path does
+    // exactly that, rendering the first frame near 0 and then dropping the key,
+    // leaving a fully interactive panel invisible under a live backdrop.
     const enterTravel = reduceMotion
       ? 0
       : interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP)
     const transform = [{ translateX: enterTravel + translateX.value }]
-    return reduceMotion ? { opacity: progress.value, transform } : { transform }
+    return { opacity: reduceMotion ? progress.value : 1, transform }
   })
 
   const backdropStyle = useAnimatedStyle(() => {

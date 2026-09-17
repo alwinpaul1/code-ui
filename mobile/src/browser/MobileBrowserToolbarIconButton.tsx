@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import type { ReactNode } from 'react'
-import { colors, radii } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 
 type Props = {
   children: ReactNode
@@ -20,7 +20,10 @@ export function MobileBrowserToolbarIconButton({
 }: Props): React.JSX.Element {
   return (
     <Pressable
-      hitSlop={tapTargetHitSlop(styles.button)}
+      // The toolbar sets `gap: spacing.xs`, so the slop stops halfway across it:
+      // without the cap, Forward’s target would cover the right 5 dp of the
+      // Back button a user can see, and tapping Back would navigate forward.
+      hitSlop={tapTargetHitSlop(styles.button, { horizontalGap: spacing.xs })}
       style={({ pressed }) => [
         styles.button,
         style,

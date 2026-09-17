@@ -22,10 +22,27 @@ type Size = {
  * how a flex child is told it may shrink, and a row with no height set is
  * as tall as its content. Only a stated size below the minimum earns slop.
  */
-export function tapTargetHitSlop(size: Size): Insets | undefined {
+type Neighbours = {
+  /**
+   * The gap, in dp, between this control and the one beside it. Pass it
+   * wherever a control has a horizontal neighbour — including a gap of 0.
+   */
+  horizontalGap: number
+}
+
+export function tapTargetHitSlop(size: Size, neighbours?: Neighbours): Insets | undefined {
   const width = size.width || size.minWidth || 0
   const height = size.height || size.minHeight || 0
-  const x = width > 0 && width < MIN_TAP_TARGET ? Math.ceil((MIN_TAP_TARGET - width) / 2) : 0
+  const wanted = width > 0 && width < MIN_TAP_TARGET ? Math.ceil((MIN_TAP_TARGET - width) / 2) : 0
+  // Why half, and why floor: a hitSlop is NOT clipped to the control's box.
+  // Android's TouchTargetHelper inflates every child's rect by its slop and
+  // tests children in reverse draw order, so the later sibling wins an overlap
+  // and its target covers part of the earlier sibling's DRAWN pixels — a tap on
+  // what the user can see fires the wrong control. At half the gap two
+  // neighbours' targets meet exactly and neither crosses. Flooring keeps them
+  // from meeting one pixel late on an odd gap.
+  const x =
+    neighbours === undefined ? wanted : Math.min(wanted, Math.floor(neighbours.horizontalGap / 2))
   const y = height > 0 && height < MIN_TAP_TARGET ? Math.ceil((MIN_TAP_TARGET - height) / 2) : 0
   if (x === 0 && y === 0) {
     return undefined

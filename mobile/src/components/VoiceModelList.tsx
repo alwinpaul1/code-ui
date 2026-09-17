@@ -100,7 +100,7 @@ export function VoiceModelList({
                     </Pressable>
                   )}
                   <Pressable
-                    hitSlop={tapTargetHitSlop(styles.iconButton)}
+                    hitSlop={tapTargetHitSlop(styles.iconButton, { horizontalGap: spacing.xs })}
                     style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                     disabled={anyBusy}
                     onPress={() => onDelete(model)}
@@ -117,7 +117,7 @@ export function VoiceModelList({
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : (
                 <Pressable
-                  hitSlop={tapTargetHitSlop(styles.iconButton)}
+                  hitSlop={tapTargetHitSlop(styles.iconButton, { horizontalGap: spacing.xs })}
                   style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                   disabled={anyBusy}
                   onPress={() => onDownload(model)}
