@@ -161,3 +161,35 @@ describe('an excerpt that begins at the separator row', () => {
     expect(notificationPlainText('| --- | --- |')).toBe('')
   })
 })
+
+/**
+ * Where the table ends. The row run stops at the first line with no pipe, which
+ * is what keeps it from swallowing the prose after a table — and is also why a
+ * pipe-bearing line that follows a table with NO blank line between them is
+ * read as one more row. That is the cost of having no blank line to go on, and
+ * it is pinned here so a future change has to argue with it rather than
+ * discover it.
+ */
+describe('where a table stops', () => {
+  it('drops a separator with prose above it rather than a header', () => {
+    expect(notificationPlainText('Some prose\n\n| --- | --- |')).toBe('Some prose')
+  })
+
+  it('leaves the line above alone when it is prose, not a header', () => {
+    expect(notificationPlainText('Some prose\n--- | ---\ntsc | clean')).toBe(
+      'Some prose\ntsc \u00b7 clean'
+    )
+  })
+
+  it('stops at a blank line, so prose with a pipe keeps it', () => {
+    expect(
+      notificationPlainText('| Check |\n| --- |\n| tsc | clean |\n\nrun a | b to pipe it')
+    ).toBe('Check\ntsc \u00b7 clean\n\nrun a | b to pipe it')
+  })
+
+  it('reads a pipe line that abuts the table as one more row, having nothing else to go on', () => {
+    expect(
+      notificationPlainText('| Check |\n| --- |\n| tsc | clean |\nrun a | b to pipe it')
+    ).toBe('Check\ntsc \u00b7 clean\nrun a \u00b7 b to pipe it')
+  })
+})
