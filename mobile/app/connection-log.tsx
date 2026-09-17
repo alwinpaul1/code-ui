@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { tapTargetHitSlop } from '../src/ui/tap-target'
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -122,7 +123,11 @@ export default function ConnectionLogScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          hitSlop={tapTargetHitSlop(styles.backButton)}
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={styles.heading}>Network diagnostics</Text>

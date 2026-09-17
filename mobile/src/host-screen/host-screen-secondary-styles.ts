@@ -134,6 +134,6 @@ export const hostScreenSecondaryStyles = StyleSheet.create({
   confirmBtnDestructiveText: {
     fontSize: typography.bodySize,
     fontWeight: '600',
-    color: '#fff'
+    color: colors.onStatusRed
   }
 })

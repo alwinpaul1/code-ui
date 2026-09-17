@@ -8,6 +8,7 @@ import {
   nativeChatElapsedSeconds
 } from '../../../src/shared/native-chat-turn-status'
 import { useTheme, type Theme } from '../theme/theme-context'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 
 /** Seconds tick only while a turn is actually counting, so a settled transcript
  *  holds no timers. */
@@ -58,8 +59,11 @@ export function MobileNativeChatTurnStatus({
     : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
 
   const pulse = useRef(new Animated.Value(1)).current
+  const reducedMotion = useReducedMotion()
   useEffect(() => {
-    if (!thinking) {
+    // Not thinking, motion reduced, or not yet known: the label stands at
+    // full opacity. "Thinking" is still the word on the row.
+    if (!thinking || reducedMotion !== false) {
       pulse.setValue(1)
       return
     }
@@ -71,7 +75,7 @@ export function MobileNativeChatTurnStatus({
     )
     animation.start()
     return () => animation.stop()
-  }, [pulse, thinking])
+  }, [pulse, reducedMotion, thinking])
 
   const rowStyle = [styles.row, thinking ? null : styles.rowSettled]
 

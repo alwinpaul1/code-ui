@@ -4,8 +4,9 @@ import {
   editableProjectFields,
   projectFieldValueLabel
 } from './mobile-tasks-legacy-foundation'
-import { View, Text, Pressable, Check, colors, TextInput } from './mobile-tasks-dependencies'
+import { View, Text, Check, colors, TextInput } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -69,7 +70,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   const selected =
                     fieldValue?.kind === 'single-select' && fieldValue.optionId === option.id
                   return (
-                    <Pressable
+                    <TasksButton
                       key={option.id}
                       style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                       disabled={projectMutating}
@@ -85,7 +86,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                         {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                         <Text style={styles.detailChipText}>{option.name}</Text>
                       </View>
-                    </Pressable>
+                    </TasksButton>
                   )
                 })}
               </View>
@@ -99,7 +100,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                     const selected =
                       fieldValue?.kind === 'iteration' && fieldValue.iterationId === iteration.id
                     return (
-                      <Pressable
+                      <TasksRow
                         key={iteration.id}
                         style={styles.actionRow}
                         disabled={projectMutating}
@@ -119,7 +120,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                           </Text>
                         </View>
                         {selected ? <Check size={14} color={colors.textSecondary} /> : null}
-                      </Pressable>
+                      </TasksRow>
                     )
                   })
                 )}
@@ -146,22 +147,22 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                   keyboardType={field.dataType === 'NUMBER' ? 'numeric' : 'default'}
                   autoCapitalize="none"
                 />
-                <Pressable
+                <TasksButton
                   style={styles.inlineSaveButton}
                   disabled={projectMutating}
                   onPress={saveTextField}
                 >
                   <Text style={styles.inlineSaveText}>Save field</Text>
-                </Pressable>
+                </TasksButton>
               </>
             )}
-            <Pressable
+            <TasksButton
               style={styles.inlineSaveButton}
               disabled={projectMutating || currentLabel === 'Empty'}
               onPress={() => void mutateProjectRowField(projectRowItem, field, null)}
             >
               <Text style={styles.inlineSaveText}>Clear field</Text>
-            </Pressable>
+            </TasksButton>
           </View>
         )
       })}

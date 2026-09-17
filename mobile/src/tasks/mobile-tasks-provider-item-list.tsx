@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   View,
   ActivityIndicator,
@@ -19,6 +20,7 @@ import {
   getHostedMergeLabel
 } from './mobile-tasks-dependencies'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import {
   taskRepositoryMeta,
   formatGitHubPRDelta,
@@ -76,7 +78,8 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
       ListFooterComponent={
         provider === 'github' && githubMode === 'items' && githubCanShowPagination ? (
           <View style={styles.paginationFooter}>
-            <Pressable
+            <TasksButton
+              hitSlop={tapTargetHitSlop(styles.paginationButton)}
               accessibilityRole="button"
               accessibilityLabel="Previous page"
               accessibilityState={{
@@ -91,8 +94,8 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               onPress={() => void handleGitHubPageChange(githubCurrentPage - 1)}
             >
               <ChevronLeft size={17} color={colors.textPrimary} />
-            </Pressable>
-            <Pressable
+            </TasksButton>
+            <TasksButton
               accessibilityRole="button"
               accessibilityLabel={
                 githubTotalCount === null
@@ -114,8 +117,9 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                   ? `Page ${githubCurrentPage + 1}`
                   : `Page ${githubCurrentPage + 1} of ${githubTotalPages}`}
               </Text>
-            </Pressable>
-            <Pressable
+            </TasksButton>
+            <TasksButton
+              hitSlop={tapTargetHitSlop(styles.paginationButton)}
               accessibilityRole="button"
               accessibilityLabel="Next page"
               accessibilityState={{
@@ -140,7 +144,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               ) : (
                 <ChevronRight size={17} color={colors.textPrimary} />
               )}
-            </Pressable>
+            </TasksButton>
           </View>
         ) : null
       }

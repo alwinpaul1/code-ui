@@ -38,6 +38,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
@@ -241,7 +242,13 @@ function PulsingText({
   children: React.ReactNode
 }) {
   const pulse = useRef(new Animated.Value(1)).current
+  const reducedMotion = useReducedMotion()
   useEffect(() => {
+    // Motion reduced, or not yet known: the label stands at full opacity.
+    if (reducedMotion !== false) {
+      pulse.setValue(1)
+      return undefined
+    }
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
@@ -250,7 +257,7 @@ function PulsingText({
     )
     animation.start()
     return () => animation.stop()
-  }, [pulse])
+  }, [pulse, reducedMotion])
   return (
     <Animated.Text
       style={[style, { opacity: pulse }]}

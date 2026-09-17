@@ -25,6 +25,7 @@ vi.mock('react-native', () => ({
   }
 }))
 
+import { resetReducedMotionForTests } from '../use-reduced-motion'
 import { ALERT_MOTION_PREFERENCE_WAIT_MS, useAlertMotion } from './use-alert-motion'
 
 let seen: (ReturnType<typeof useAlertMotion>)[] = []
@@ -46,6 +47,9 @@ beforeEach(() => {
   seen = []
   mocks.answer = null
   mocks.listener = null
+  // The shared hook remembers the OS's last answer across mounts; each case
+  // here states its own answer, so none may inherit the previous one's.
+  resetReducedMotionForTests()
 })
 
 afterEach(() => {

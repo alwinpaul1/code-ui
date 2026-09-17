@@ -2,6 +2,11 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const motion = vi.hoisted(() => ({
+  reduced: false,
+  loop: vi.fn((animation: unknown) => animation)
+}))
+
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
@@ -15,7 +20,7 @@ vi.mock('react-native', async () => {
           this.value = next
         }
       },
-      loop: (animation: unknown) => animation,
+      loop: motion.loop,
       sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
@@ -29,6 +34,9 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
+// The row's tests are about the row; the OS setting is stubbed to an answer
+// so the render stays synchronous and the timer count below stays honest.
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => motion.reduced }))
 
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
@@ -48,6 +56,8 @@ describe('the per-turn status row', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-04T00:00:00Z'))
+    motion.reduced = false
+    motion.loop.mockClear()
   })
 
   afterEach(() => {
@@ -122,6 +132,20 @@ describe('the per-turn status row', () => {
   it('holds no interval once the turn has settled', () => {
     render({ startedAt: Date.now(), thinking: false, workedSeconds: 5 })
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('breathes the label while the turn is thinking', () => {
+    render({ startedAt: Date.now(), thinking: true })
+    expect(motion.loop).toHaveBeenCalledOnce()
+  })
+
+  // "Remove animations" on, and "Thinking" kept breathing (0.6.6 audit).
+  // The word is still on the row; it just holds at full opacity.
+  it('holds the label still under reduced motion, even while thinking', () => {
+    motion.reduced = true
+    const tree = render({ startedAt: Date.now(), thinking: true })
+    expect(motion.loop).not.toHaveBeenCalled()
+    expect(labels(tree.root)).toEqual(['Thinking'])
   })
 
   it('announces the live row to assistive tech', () => {

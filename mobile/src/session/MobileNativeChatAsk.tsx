@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { Check } from 'lucide-react-native'
@@ -151,6 +152,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             const active = i === index
             return (
               <Pressable
+                hitSlop={tapTargetHitSlop({ height: 30 })}
                 key={i}
                 style={{
                   flexDirection: 'row',

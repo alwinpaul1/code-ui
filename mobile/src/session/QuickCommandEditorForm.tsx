@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { View, Text, Pressable, TextInput, StyleSheet, Switch } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
@@ -40,6 +41,7 @@ function ActionToggle({
         const selected = value === action
         return (
           <Pressable
+            hitSlop={tapTargetHitSlop(styles.toggleItem)}
             key={action}
             style={({ pressed }) => [
               styles.toggleItem,
@@ -181,6 +183,7 @@ export function QuickCommandEditorForm({
                   const disabled = scopeType === 'repo' && !hasRepoScope
                   return (
                     <Pressable
+                      hitSlop={tapTargetHitSlop(styles.toggleItem)}
                       key={scopeType}
                       disabled={disabled}
                       style={({ pressed }) => [

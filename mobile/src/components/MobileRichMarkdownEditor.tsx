@@ -9,6 +9,7 @@ import {
   type ComponentType,
   type ForwardedRef
 } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import {
   Bold,
@@ -261,6 +262,7 @@ function MobileRichMarkdownEditorInner(
             const Icon = item.icon
             return (
               <Pressable
+                hitSlop={tapTargetHitSlop(styles.toolbarButton)}
                 key={item.command}
                 disabled={!editable}
                 accessibilityRole="button"

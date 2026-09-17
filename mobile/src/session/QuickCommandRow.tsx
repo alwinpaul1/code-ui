@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
@@ -131,6 +132,7 @@ export function QuickCommandRow({
         </View>
       </Pressable>
       <Pressable
+        hitSlop={tapTargetHitSlop(styles.rowAction)}
         style={({ pressed }) => [
           styles.rowAction,
           // Why: row already dims when `disabled`; only dim again for empty body.
@@ -150,6 +152,7 @@ export function QuickCommandRow({
         )}
       </Pressable>
       <Pressable
+        hitSlop={tapTargetHitSlop(styles.rowAction)}
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onEdit(command)}
@@ -158,6 +161,7 @@ export function QuickCommandRow({
         <Pencil size={15} color={colors.textSecondary} />
       </Pressable>
       <Pressable
+        hitSlop={tapTargetHitSlop(styles.rowAction)}
         style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
         disabled={disabled}
         onPress={() => onDelete(command)}

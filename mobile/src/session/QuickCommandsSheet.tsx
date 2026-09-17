@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -158,6 +159,7 @@ export function QuickCommandsSheet({
           <View style={styles.backSpacer} />
         ) : (
           <Pressable
+            hitSlop={tapTargetHitSlop(styles.backButton)}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             onPress={() => setView(view === 'agent' ? 'editor' : 'list')}
             accessibilityLabel="Back"

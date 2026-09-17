@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { tapTargetHitSlop } from '../../../src/ui/tap-target'
 import {
   View,
   Text,
@@ -145,6 +146,7 @@ export default function EditHostScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
         <Pressable
+          hitSlop={tapTargetHitSlop(styles.backButton)}
           style={styles.backButton}
           onPress={() => router.back()}
           accessibilityRole="button"
@@ -154,6 +156,7 @@ export default function EditHostScreen() {
         </Pressable>
         <Text style={styles.heading}>Edit host</Text>
         <Pressable
+          hitSlop={tapTargetHitSlop(styles.saveButton)}
           style={({ pressed }) => [
             styles.saveButton,
             (!canSave || pressed) && styles.saveButtonDisabled

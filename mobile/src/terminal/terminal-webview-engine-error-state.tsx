@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
@@ -84,7 +85,12 @@ export function TerminalWebViewEngineErrorOverlay({
       <Text style={styles.errorDetail} numberOfLines={4}>
         {message}
       </Text>
-      <Pressable accessibilityRole="button" style={styles.reloadButton} onPress={onReload}>
+      <Pressable
+        hitSlop={tapTargetHitSlop(styles.reloadButton)}
+        accessibilityRole="button"
+        style={styles.reloadButton}
+        onPress={onReload}
+      >
         <RefreshCw size={16} color={colors.terminalBg} />
         <Text style={styles.reloadButtonText}>Reload</Text>
       </Pressable>

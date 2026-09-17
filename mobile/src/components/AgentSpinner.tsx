@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Activity } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 
 type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
@@ -28,9 +29,13 @@ export function AgentSpinner({
 }) {
   const spinValue = useRef(new Animated.Value(0)).current
   const monitoring = status === 'working' && workingMode === 'monitoring'
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
-    if (status === 'working' && !monitoring) {
+    // Unknown (null) holds too: a loop that started and then had to be
+    // cancelled is a flash of motion for the one user who asked for none.
+    // The arc still draws, so a working row still reads as working.
+    if (status === 'working' && !monitoring && reducedMotion === false) {
       const animation = Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
@@ -43,7 +48,7 @@ export function AgentSpinner({
       return () => animation.stop()
     }
     spinValue.setValue(0)
-  }, [monitoring, status, spinValue])
+  }, [monitoring, reducedMotion, status, spinValue])
 
   const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
 

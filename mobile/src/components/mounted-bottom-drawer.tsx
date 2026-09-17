@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
 import { useTheme } from '../theme/theme-context'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
@@ -77,6 +78,11 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
+  // Why: read at style time only. `null` (not yet known) runs full motion: the
+  // enter effect below is left exactly as recorded, so nothing here can add a
+  // `withTiming(1)` the window hand-back test counts. In practice the answer
+  // is already cached by the home screen's spinners before any sheet opens.
+  const reduceMotion = useReducedMotion() === true
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
   // transforms below) is unchanged, so phone behavior stays identical.
@@ -290,16 +296,17 @@ export function MountedBottomDrawer({
     // marginBottom (layout). Also subtracting keyboardOffset here would double-
     // count and park the dock under the keys (input hidden).
     const keyboardShift = fillAvailable ? 0 : keyboardOffset.value
-    return {
-      transform: [
-        {
-          translateY:
-            interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
-            translateY.value -
-            keyboardShift
-        }
-      ]
-    }
+    // Why: under reduced motion the sheet has no enter travel; `progress`
+    // drives its opacity instead, so it fades in place. The drag offset and
+    // the keyboard lift still apply: those follow the finger and the keys,
+    // not a transition. Only this mapping changes; the effects, durations
+    // and gestures above are untouched. With full motion the object is the
+    // one it always was, with no opacity key at all.
+    const enterTravel = reduceMotion
+      ? 0
+      : interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP)
+    const transform = [{ translateY: enterTravel + translateY.value - keyboardShift }]
+    return reduceMotion ? { opacity: progress.value, transform } : { transform }
   })
 
   const backdropStyle = useAnimatedStyle(() => {

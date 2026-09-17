@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { tapTargetHitSlop } from '../src/ui/tap-target'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -48,7 +49,11 @@ export default function BrowserSettingsScreen(): React.JSX.Element {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          hitSlop={tapTargetHitSlop(styles.backButton)}
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={styles.heading}>Browser</Text>

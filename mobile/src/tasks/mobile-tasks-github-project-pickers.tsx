@@ -1,11 +1,11 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   BottomDrawer,
   View,
   Text,
   TextInput,
   colors,
-  Pressable,
   AlertTriangle,
   ActivityIndicator,
   githubProjectKey,
@@ -13,6 +13,7 @@ import {
   PickerModal
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
 
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
@@ -76,7 +77,8 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Pressable
+          <TasksButton
+            hitSlop={tapTargetHitSlop(styles.projectPasteButton)}
             style={[styles.inlineSaveButtonCompact, styles.projectPasteButton]}
             disabled={githubProjectPasteBusy || githubProjectPasteInput.trim().length === 0}
             onPress={() => void resolveGitHubProjectFromInput()}
@@ -84,7 +86,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
             <Text style={styles.inlineSaveText}>
               {githubProjectPasteBusy ? 'Adding...' : 'Add'}
             </Text>
-          </Pressable>
+          </TasksButton>
         </View>
         {githubProjectPasteError ? (
           <Text style={styles.detailError}>{githubProjectPasteError}</Text>
@@ -124,7 +126,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
         ) : githubProjects.length === 0 &&
           pinnedGitHubProjects.length === 0 &&
           recentGitHubProjects.length === 0 ? (
-          <Pressable
+          <TasksRow
             style={styles.repoPickerRow}
             onPress={() =>
               void loadGitHubProjects().catch((err) => {
@@ -138,7 +140,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
               <Text style={styles.repoPickerTitle}>No projects loaded</Text>
               <Text style={styles.repoPickerSubtitle}>Tap to retry.</Text>
             </View>
-          </Pressable>
+          </TasksRow>
         ) : (
           <>
             {pinnedGitHubProjects.length > 0 ? (
@@ -151,7 +153,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                   return (
                     <View key={`pinned:${key}`}>
                       {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                      <Pressable
+                      <TasksRow
                         style={styles.repoPickerRow}
                         onPress={() => {
                           setShowGitHubProjectPicker(false)
@@ -166,7 +168,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                             {project.owner} · #{project.number}
                           </Text>
                         </View>
-                        <Pressable
+                        <TasksButton
                           style={styles.inlineSaveButtonCompact}
                           onPress={(event) => {
                             event.stopPropagation()
@@ -179,9 +181,9 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                           }}
                         >
                           <Text style={styles.inlineSaveText}>Remove</Text>
-                        </Pressable>
+                        </TasksButton>
                         {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                      </Pressable>
+                      </TasksRow>
                     </View>
                   )
                 })}
@@ -198,7 +200,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                   return (
                     <View key={`recent:${key}`}>
                       {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                      <Pressable
+                      <TasksRow
                         style={styles.repoPickerRow}
                         onPress={() => {
                           setShowGitHubProjectPicker(false)
@@ -214,7 +216,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                           </Text>
                         </View>
                         {githubProjectSettings.lastViewByProject[key]?.viewId ? (
-                          <Pressable
+                          <TasksButton
                             style={styles.inlineSaveButtonCompact}
                             onPress={(event) => {
                               event.stopPropagation()
@@ -232,10 +234,10 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                             }}
                           >
                             <Text style={styles.inlineSaveText}>Pin</Text>
-                          </Pressable>
+                          </TasksButton>
                         ) : null}
                         {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                      </Pressable>
+                      </TasksRow>
                     </View>
                   )
                 })}
@@ -257,7 +259,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                 return (
                   <View key={project.id}>
                     {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                    <Pressable
+                    <TasksRow
                       style={styles.repoPickerRow}
                       onPress={() => {
                         setShowGitHubProjectPicker(false)
@@ -273,7 +275,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                         </Text>
                       </View>
                       {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                    </Pressable>
+                    </TasksRow>
                   </View>
                 )
               })

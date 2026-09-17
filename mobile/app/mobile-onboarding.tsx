@@ -11,7 +11,7 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
-import { useReducedMotionEnabled } from '../src/onboarding/use-reduced-motion'
+import { useReducedMotion } from '../src/ui/use-reduced-motion'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
@@ -53,7 +53,7 @@ function MobileOnboardingFlow({
   const [error, setError] = useState<string | null>(null)
   const choiceInFlightRef = useRef(false)
   const slideProgress = useRef(new Animated.Value(0)).current
-  const reducedMotionEnabled = useReducedMotionEnabled()
+  const reducedMotionEnabled = useReducedMotion()
 
   // Why: onboarding requires an explicit choice for every planned step; disabling
   // stack gestures alone still leaves Android hardware Back able to skip the flow.

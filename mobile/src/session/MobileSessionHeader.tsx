@@ -1,4 +1,5 @@
 import { View, ScrollView, Pressable } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ChevronLeft,
@@ -239,6 +240,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                 t.type === 'terminal' ? resolveMobileTerminalTabAgentId(t) : null
               return (
                 <Pressable
+                  hitSlop={tapTargetHitSlop({ height: 32 })}
                   key={t.id}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: active }}

@@ -1,7 +1,6 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   ScrollView,
-  Pressable,
   TaskProviderLogo,
   colors,
   Text,
@@ -9,6 +8,7 @@ import {
   GitBranch
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import { getRepoBadgeColor } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'
 import { renderMobileTasksLinearViewControls } from './mobile-tasks-linear-view-controls'
@@ -37,7 +37,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
       style={styles.toolbarScroll}
       contentContainerStyle={styles.toolbar}
     >
-      <Pressable
+      <TasksButton
         style={styles.segmentButton}
         disabled={!taskUiReady}
         onPress={() => {
@@ -49,10 +49,10 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
       >
         <TaskProviderLogo provider={provider} size={14} color={colors.textPrimary} />
         <Text style={styles.segmentButtonText}>{providerLabel}</Text>
-      </Pressable>
+      </TasksButton>
 
       {provider === 'gitlab' || (provider === 'github' && githubMode !== 'project') ? (
-        <Pressable
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -76,14 +76,14 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
             />
           ) : null}
           <Text style={styles.segmentSecondaryText}>{repoPickerLabel}</Text>
-        </Pressable>
+        </TasksButton>
       ) : null}
 
       {renderMobileTasksGitHubViewControls(model)}
 
       {provider === 'gitlab' && (
         <>
-          <Pressable
+          <TasksButton
             style={styles.segmentButton}
             disabled={!taskUiReady}
             onPress={() => {
@@ -96,9 +96,9 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
             <Text style={styles.segmentSecondaryText}>
               {gitlabView === 'project' ? 'Project MRs' : 'My Todos'}
             </Text>
-          </Pressable>
+          </TasksButton>
           {gitlabView === 'project' && (
-            <Pressable
+            <TasksButton
               style={styles.segmentButton}
               disabled={!taskUiReady}
               onPress={() => {
@@ -109,7 +109,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
               }}
             >
               <Text style={styles.segmentSecondaryText}>{gitlabFilterLabel}</Text>
-            </Pressable>
+            </TasksButton>
           )}
         </>
       )}
@@ -117,7 +117,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
       {renderMobileTasksLinearViewControls(model)}
 
       {provider !== 'linear' && !(provider === 'github' && githubMode === 'project') ? (
-        <Pressable
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -129,7 +129,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
         >
           <GitBranch size={14} color={colors.textSecondary} />
           <Text style={styles.segmentSecondaryText}>Sort: {sortLabel}</Text>
-        </Pressable>
+        </TasksButton>
       ) : null}
     </ScrollView>
   )

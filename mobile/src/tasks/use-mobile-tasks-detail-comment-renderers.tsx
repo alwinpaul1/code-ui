@@ -1,4 +1,5 @@
 import type { TaskCreateActionsModel } from './use-mobile-tasks-task-create-actions'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   MobileMarkdown,
   Pressable,
@@ -23,6 +24,7 @@ import {
   renderCommentReactions
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
   const {
@@ -58,6 +60,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
         />
         {hasText ? (
           <Pressable
+            hitSlop={tapTargetHitSlop(styles.commentComposerSend)}
             accessibilityRole="button"
             accessibilityLabel="Send comment"
             style={({ pressed }) => [
@@ -105,7 +108,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
           detailPayload?.provider === 'github' ? (
             <>
               {actionItem.source.type === 'pr' && comment.threadId ? (
-                <Pressable
+                <TasksButton
                   style={styles.inlineSaveButtonCompact}
                   disabled={mutatingStatus}
                   onPress={() => void toggleGitHubReviewThread(actionItem, comment)}
@@ -113,7 +116,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
                   <Text style={styles.inlineSaveText}>
                     {comment.isResolved ? 'Reopen thread' : 'Resolve thread'}
                   </Text>
-                </Pressable>
+                </TasksButton>
               ) : null}
               <TextInput
                 style={[styles.input, styles.replyInput]}
@@ -129,13 +132,13 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
                 multiline
                 textAlignVertical="top"
               />
-              <Pressable
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus || !(itemReplyDrafts[String(comment.id)] ?? '').trim()}
                 onPress={() => void replyToGitHubComment(actionItem, comment)}
               >
                 <Text style={styles.inlineSaveText}>Reply</Text>
-              </Pressable>
+              </TasksButton>
             </>
           ) : null}
         </View>
@@ -152,7 +155,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
 
     if (isCollapsedResolved) {
       return (
-        <Pressable
+        <TasksRow
           key={id}
           style={styles.resolvedCommentSummary}
           onPress={() =>
@@ -167,7 +170,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
             Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {commentAuthor(root)}
           </Text>
           <Text style={styles.detailSectionMeta}>{count > 1 ? `${count} comments` : 'Show'}</Text>
-        </Pressable>
+        </TasksRow>
       )
     }
 

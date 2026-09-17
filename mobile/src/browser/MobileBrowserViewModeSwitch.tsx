@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, View } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
 import { colors, radii } from '../theme/mobile-theme'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
@@ -50,6 +51,7 @@ function ViewModeButton({
 }) {
   return (
     <Pressable
+      hitSlop={tapTargetHitSlop(styles.button)}
       style={({ pressed }) => [
         styles.button,
         selected && styles.buttonSelected,

@@ -8,12 +8,12 @@ import {
   Text,
   ActivityIndicator,
   colors,
-  Pressable,
   Check,
   TextInput,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {
   const {
@@ -64,7 +64,7 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
                 : projectRowItem.content.labels.map((entry) => entry.name)
             ).includes(label)
             return (
-              <Pressable
+              <TasksButton
                 key={label}
                 style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                 disabled={projectMutating}
@@ -79,7 +79,7 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
                   {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                   <Text style={styles.detailChipText}>{label}</Text>
                 </View>
-              </Pressable>
+              </TasksButton>
             )
           })}
         </View>
@@ -144,7 +144,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
                 : projectRowItem.content.assignees.map((assignee) => assignee.login)
             ).includes(user.login)
             return (
-              <Pressable
+              <TasksButton
                 key={user.login}
                 style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                 disabled={projectMutating}
@@ -159,7 +159,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
                   {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                   <Text style={styles.detailChipText}>{user.login}</Text>
                 </View>
-              </Pressable>
+              </TasksButton>
             )
           })}
         </View>
@@ -193,7 +193,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
           placeholder="Title"
           placeholderTextColor={colors.textMuted}
         />
-        <Pressable
+        <TasksButton
           style={styles.inlineSaveButton}
           disabled={projectMutating || projectTitleDraft.trim() === projectRowItem.content.title}
           onPress={() =>
@@ -203,7 +203,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
           }
         >
           <Text style={styles.inlineSaveText}>Save title</Text>
-        </Pressable>
+        </TasksButton>
       </View>
       <View style={styles.detailSection}>
         <Text style={styles.detailSectionTitle}>Description</Text>
@@ -216,7 +216,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
           multiline
           textAlignVertical="top"
         />
-        <Pressable
+        <TasksButton
           style={styles.inlineSaveButton}
           disabled={
             projectMutating ||
@@ -232,7 +232,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
           }
         >
           <Text style={styles.inlineSaveText}>Save description</Text>
-        </Pressable>
+        </TasksButton>
         <MobileMarkdown content={projectBodyDraft} fallback="No description." />
       </View>
     </>

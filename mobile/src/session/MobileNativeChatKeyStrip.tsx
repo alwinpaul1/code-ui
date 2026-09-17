@@ -4,9 +4,18 @@ import type { TerminalAccessoryKey } from '../terminal/terminal-accessory-keys'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import type { TerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { useTheme } from '../theme/theme-context'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Txt } from '../ui/Txt'
 
 const NO_CUSTOM_KEYS: { id: string; label: string; bytes: string }[] = []
+
+/** A key's drawn size. 30 tall keeps the strip one compact row above the
+ *  composer; the hitSlop below grows the TARGET to 44 without growing the
+ *  row (7 dp above and below, 3 dp each side, which is half the 6 dp gap
+ *  between keys, so no two targets overlap). */
+const KEY_HEIGHT = 30
+const KEY_MIN_WIDTH = 38
+const KEY_HIT_SLOP = tapTargetHitSlop({ height: KEY_HEIGHT, minWidth: KEY_MIN_WIDTH })
 
 export type MobileNativeChatKeyStripProps = {
   keys: readonly TerminalAccessoryKey[]
@@ -41,8 +50,8 @@ export function MobileNativeChatKeyStrip({
     return null
   }
   const keyStyle = (pressed: boolean, outlined = false) => ({
-    height: 30,
-    minWidth: 38,
+    height: KEY_HEIGHT,
+    minWidth: KEY_MIN_WIDTH,
     paddingHorizontal: space.sm + 2,
     borderRadius: radius.sm,
     alignItems: 'center' as const,
@@ -75,6 +84,7 @@ export function MobileNativeChatKeyStrip({
           <Pressable
             key={key.id}
             disabled={!enabled}
+            hitSlop={KEY_HIT_SLOP}
             style={({ pressed }) => keyStyle(pressed)}
             accessibilityRole="button"
             accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
@@ -107,6 +117,7 @@ export function MobileNativeChatKeyStrip({
           <Pressable
             key={key.id}
             disabled={!enabled}
+            hitSlop={KEY_HIT_SLOP}
             style={({ pressed }) => keyStyle(pressed, true)}
             accessibilityRole="button"
             accessibilityLabel={`Send ${key.label}`}

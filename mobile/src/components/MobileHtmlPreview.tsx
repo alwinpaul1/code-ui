@@ -61,6 +61,16 @@ export function MobileHtmlPreview({ html, renderSource }: Props) {
   )
 }
 
+/** An HTML document's own default canvas, not a theme colour. The artifact
+ *  assumes a white page, and Android paints an unset page background with
+ *  the WebView's own, so a themed dark background here would put the page's
+ *  default black text on dark. The white shows a beat before the page
+ *  paints in dark mode; the page is white after it paints too, so that beat
+ *  is the page arriving, not a flash of the wrong colour. The real fix, a
+ *  prefers-color-scheme stylesheet injected into the artifact, edits
+ *  agent-authored HTML and is its own pass. */
+const HTML_DOCUMENT_CANVAS = '#ffffff'
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   toolbar: {
@@ -86,5 +96,5 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle
   },
   toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
-  webview: { flex: 1, backgroundColor: '#ffffff' }
+  webview: { flex: 1, backgroundColor: HTML_DOCUMENT_CANVAS }
 })

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
+import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
 const mocks = vi.hoisted(() => {
   const anim = () => ({ start: vi.fn(), stop: vi.fn() })
@@ -58,6 +59,9 @@ describe('NotificationOnboardingPreview', () => {
     mocks.timing.mockClear()
     mocks.loop.mockClear()
     vi.restoreAllMocks()
+    // The shared hook remembers the OS's last answer across mounts; the
+    // "until known" case below must start from nothing.
+    resetReducedMotionForTests()
   })
 
   async function renderPreview(active = true) {

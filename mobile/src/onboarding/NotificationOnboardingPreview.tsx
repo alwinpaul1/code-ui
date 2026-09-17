@@ -3,7 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import { useTheme } from '../theme/theme-context'
-import { useReducedMotionEnabled } from './use-reduced-motion'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 
 const SAMPLE_NOTIFICATIONS = [
   { title: 'Codex finished', body: 'Tests are passing.' },
@@ -23,7 +23,7 @@ type Props = {
 
 /** Decorative banners; the surrounding copy is the accessible explanation. */
 export function NotificationOnboardingPreview({ active }: Props) {
-  const reduceMotion = useReducedMotionEnabled()
+  const reduceMotion = useReducedMotion()
   const first = useRef(new Animated.Value(0)).current
   const second = useRef(new Animated.Value(0)).current
 
