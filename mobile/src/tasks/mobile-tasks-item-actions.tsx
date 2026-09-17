@@ -1,7 +1,6 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
   View,
-  Pressable,
   Plus,
   colors,
   Text,
@@ -13,6 +12,7 @@ import {
   GitBranch
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksRow } from './mobile-tasks-pressables'
 import {
   taskExternalOpenLabel,
   type TaskItem,
@@ -40,7 +40,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
   }
   return (
     <View style={styles.actionGroup}>
-      <Pressable
+      <TasksRow
         style={styles.actionRow}
         disabled={creatingKey === actionItem.key}
         onPress={() => {
@@ -55,21 +55,21 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
         <Text style={styles.actionText}>
           {creatingKey === actionItem.key ? 'Creating...' : 'Create Workspace'}
         </Text>
-      </Pressable>
+      </TasksRow>
 
       <View style={styles.actionSeparator} />
-      <Pressable
+      <TasksRow
         style={styles.actionRow}
         onPress={() => void Linking.openURL(actionItem.source.url)}
       >
         <ExternalLink size={16} color={colors.textPrimary} />
         <Text style={styles.actionText}>{taskExternalOpenLabel(actionItem)}</Text>
-      </Pressable>
+      </TasksRow>
 
       {actionItem.provider === 'linear' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             onPress={() =>
               void copyTextToClipboard(`linear-url:${actionItem.key}`, actionItem.source.url)
@@ -79,14 +79,14 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             <Text style={styles.actionText}>
               {copiedLinkKey === `linear-url:${actionItem.key}` ? 'Copied' : 'Copy Linear link'}
             </Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
 
       {actionItem.provider === 'github' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             onPress={() => void copyTaskLink(`task:${actionItem.key}`, actionItem.source.url)}
           >
@@ -94,14 +94,14 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             <Text style={styles.actionText}>
               {copiedLinkKey === `task:${actionItem.key}` ? 'Copied' : 'Copy GitHub link'}
             </Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
 
       {actionItem.provider === 'github' && actionItem.source.state !== 'merged' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             disabled={mutatingStatus}
             onPress={() => {
@@ -119,7 +119,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               <X size={16} color={colors.textPrimary} />
             )}
             <Text style={styles.actionText}>{taskStatusActionLabel(actionItem)}</Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
 
@@ -128,7 +128,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       actionItem.source.state === 'open' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             disabled={mutatingStatus || isGitHubPrMergeBlocked(actionItem)}
             onPress={() =>
@@ -137,7 +137,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           >
             <GitBranch size={16} color={colors.textPrimary} />
             <Text style={styles.actionText}>Merge pull request</Text>
-          </Pressable>
+          </TasksRow>
           {isGitHubPrMergeBlocked(actionItem) ? (
             <Text style={styles.emptyInlineText}>GitHub reports merge conflicts.</Text>
           ) : null}
@@ -149,7 +149,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       actionItem.source.state !== 'locked' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             disabled={mutatingStatus}
             onPress={() => {
@@ -167,7 +167,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               <X size={16} color={colors.textPrimary} />
             )}
             <Text style={styles.actionText}>{taskStatusActionLabel(actionItem)}</Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
 
@@ -176,7 +176,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       actionItem.source.state === 'opened' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             disabled={mutatingStatus}
             onPress={() =>
@@ -185,14 +185,14 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           >
             <GitBranch size={16} color={colors.textPrimary} />
             <Text style={styles.actionText}>Merge merge request</Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
 
       {actionItem.provider === 'linear' ? (
         <>
           <View style={styles.actionSeparator} />
-          <Pressable
+          <TasksRow
             style={styles.actionRow}
             disabled={mutatingStatus}
             onPress={() => {
@@ -201,7 +201,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           >
             <GitBranch size={16} color={colors.textPrimary} />
             <Text style={styles.actionText}>Change status</Text>
-          </Pressable>
+          </TasksRow>
         </>
       ) : null}
     </View>

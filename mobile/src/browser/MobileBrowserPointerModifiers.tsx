@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export type BrowserPointerModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
@@ -27,6 +28,7 @@ export function MobileBrowserPointerModifiers({
         const selected = selectedModifiers.includes(modifier.id)
         return (
           <Pressable
+            hitSlop={tapTargetHitSlop(styles.keyButton)}
             key={modifier.id}
             style={({ pressed }) => [
               styles.keyButton,

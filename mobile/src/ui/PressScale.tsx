@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
 import { triggerSelection } from '../platform/haptics'
+import { PRESS_IN_SPRING, PRESS_OUT_SPRING } from './press-scale-motion'
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
 
@@ -34,7 +35,7 @@ export function PressScale({
   const handlePressIn = useCallback<NonNullable<PressableProps['onPressIn']>>(
     (event) => {
       if (!disabled) {
-        pressed.value = withSpring(1, { damping: 20, stiffness: 400, mass: 0.6 })
+        pressed.value = withSpring(1, PRESS_IN_SPRING)
         if (haptic) {
           triggerSelection()
         }
@@ -45,7 +46,7 @@ export function PressScale({
   )
   const handlePressOut = useCallback<NonNullable<PressableProps['onPressOut']>>(
     (event) => {
-      pressed.value = withSpring(0, { damping: 16, stiffness: 320, mass: 0.6 })
+      pressed.value = withSpring(0, PRESS_OUT_SPRING)
       onPressOut?.(event)
     },
     [onPressOut, pressed]

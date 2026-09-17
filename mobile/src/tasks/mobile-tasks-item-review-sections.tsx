@@ -10,7 +10,6 @@ import {
 import {
   TextInput,
   colors,
-  Pressable,
   Text,
   MobileMarkdown,
   View,
@@ -18,6 +17,7 @@ import {
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {
@@ -50,7 +50,7 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
         multiline
         textAlignVertical="top"
       />
-      <Pressable
+      <TasksButton
         style={styles.inlineSaveButton}
         disabled={mutatingStatus || itemBodyDraft === detailPayload.body}
         onPress={() => {
@@ -77,7 +77,7 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
         }}
       >
         <Text style={styles.inlineSaveText}>Save description</Text>
-      </Pressable>
+      </TasksButton>
       <MobileMarkdown content={itemBodyDraft} fallback="No description." />
     </>
   ) : (
@@ -154,7 +154,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
           {itemReviewerCandidates.map((user) => {
             const selected = itemSelectedReviewerLogins.has(user.login.trim().toLowerCase())
             return (
-              <Pressable
+              <TasksButton
                 key={user.login}
                 style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                 disabled={mutatingStatus || selected}
@@ -164,7 +164,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
                   {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                   <Text style={styles.detailChipText}>{user.login}</Text>
                 </View>
-              </Pressable>
+              </TasksButton>
             )
           })}
         </View>
@@ -177,13 +177,13 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
         placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
       />
-      <Pressable
+      <TasksButton
         style={styles.inlineSaveButton}
         disabled={mutatingStatus || splitReviewerList(itemReviewersDraft).length === 0}
         onPress={() => void requestGitHubReviewers(actionItem)}
       >
         <Text style={styles.inlineSaveText}>Request review</Text>
-      </Pressable>
+      </TasksButton>
     </View>
   ) : null
 }
@@ -213,7 +213,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
       {detailPayload.files.map((file) =>
         actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
           <View key={file.path} style={styles.fileCard}>
-            <Pressable
+            <TasksRow
               style={styles.fileActionRow}
               disabled={mutatingStatus}
               onPress={() => void toggleGitHubFileExpansion(actionItem, file)}
@@ -227,8 +227,8 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
               <Text style={styles.detailSectionMeta}>
                 {expandedPrFilePath === file.path ? 'Hide' : 'View'}
               </Text>
-            </Pressable>
-            <Pressable
+            </TasksRow>
+            <TasksButton
               style={styles.inlineSaveButtonCompact}
               disabled={mutatingStatus || !detailPayload.pullRequestId}
               onPress={() => void toggleGitHubFileViewed(actionItem, file)}
@@ -236,7 +236,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
               <Text style={styles.inlineSaveText}>
                 {file.viewerViewedState === 'VIEWED' ? 'Mark unviewed' : 'Mark viewed'}
               </Text>
-            </Pressable>
+            </TasksButton>
             {expandedPrFilePath === file.path ? (
               <View style={styles.filePreview}>
                 {prFileLoadingPath === file.path ? (

@@ -20,9 +20,12 @@ import type { MarkdownDocState } from './mobile-session-route-types'
  * preview use — so a fenced block gets its scroller, a mermaid fence gets its
  * diagram, and a file path stays tappable. Edit hands over to the WebView.
  *
- * The toggle is themed. The editor beneath it is still on the static dark
- * palette, so in light mode preview is correct and edit is not; porting that
- * WebView's chrome is its own pass.
+ * The reader paints its own page from the live theme (`surface`), and what
+ * sits directly on that page follows it: the toggle, the loading spinner, a
+ * read error. The pieces that paint their own static-dark fill keep the
+ * static palette on purpose and read as dark islands in light mode: the
+ * Retry button, the floating Copy/Refresh/Discard/Save bar, and the WYSIWYG
+ * editor's WebView chrome. Porting those is its own pass.
  */
 type MarkdownViewMode = 'preview' | 'edit'
 
@@ -53,15 +56,15 @@ export function MarkdownReader({
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
   if (!doc || doc.status === 'loading') {
     return (
-      <View style={styles.markdownState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
+      <View style={[styles.markdownState, modeStyles.surface]}>
+        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
       </View>
     )
   }
   if (doc.status === 'error') {
     return (
-      <View style={styles.markdownState}>
-        <Text style={styles.markdownError}>{doc.message}</Text>
+      <View style={[styles.markdownState, modeStyles.surface]}>
+        <Text style={[styles.markdownError, modeStyles.error]}>{doc.message}</Text>
         <Pressable style={styles.markdownRefreshButton} onPress={onRefresh}>
           <RefreshCw size={14} color={colors.textPrimary} />
           <Text style={styles.markdownRefreshText}>Retry</Text>
@@ -83,7 +86,7 @@ export function MarkdownReader({
   const showFloatingActions = statusText || showRefresh || showCopy || showSave
 
   return (
-    <View style={styles.markdownEditor}>
+    <View style={[styles.markdownEditor, modeStyles.surface]}>
       <View style={modeStyles.bar}>
         {(['preview', 'edit'] as const).map((option) => {
           const selected = mode === option
@@ -190,6 +193,16 @@ export function MarkdownReader({
 
 function markdownModeStyles({ colors, radius, space, type }: Theme) {
   return {
+    /** The reader's own page. The file tab's frame beneath it is on the
+     *  static dark palette, so without this a document opened as a dark
+     *  screen in light mode and the toggle bar sat in a dark gutter. */
+    surface: {
+      backgroundColor: colors.bg
+    },
+    /** A read error, on the reader's page rather than on the dark frame. */
+    error: {
+      color: colors.danger
+    },
     bar: {
       flexDirection: 'row' as const,
       alignSelf: 'flex-start' as const,

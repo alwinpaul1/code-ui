@@ -1,6 +1,8 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { Pressable, Text, View, Linking, ExternalLink, colors } from './mobile-tasks-dependencies'
+import { tapTargetHitSlop } from '../ui/tap-target'
+import { Text, View, Linking, ExternalLink, colors } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksGitHubViewControls(model: ConnectionPresentationModel) {
   const {
@@ -30,7 +32,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
   return (
     provider === 'github' && (
       <>
-        <Pressable
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -41,10 +43,10 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>{githubModeLabel}</Text>
-        </Pressable>
+        </TasksButton>
         {githubMode === 'items' ? (
           <>
-            <Pressable
+            <TasksButton
               style={styles.segmentButton}
               disabled={!taskUiReady}
               onPress={() => {
@@ -55,9 +57,9 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
               }}
             >
               <Text style={styles.segmentSecondaryText}>{githubPresetLabel}</Text>
-            </Pressable>
+            </TasksButton>
             {githubIssueSourceRows.length > 0 ? (
-              <Pressable
+              <TasksButton
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
@@ -68,12 +70,12 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 }}
               >
                 <Text style={styles.segmentSecondaryText}>Source: {githubIssueSourceLabel}</Text>
-              </Pressable>
+              </TasksButton>
             ) : null}
           </>
         ) : (
           <>
-            <Pressable
+            <TasksButton
               style={styles.segmentButton}
               disabled={!taskUiReady}
               onPress={() => {
@@ -84,9 +86,9 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
               }}
             >
               <Text style={styles.segmentSecondaryText}>{activeProjectLabel}</Text>
-            </Pressable>
+            </TasksButton>
             {activeGitHubProjectView ? (
-              <Pressable
+              <TasksButton
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
@@ -97,10 +99,10 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 }}
               >
                 <Text style={styles.segmentSecondaryText}>{activeGitHubProjectView.name}</Text>
-              </Pressable>
+              </TasksButton>
             ) : null}
             {githubProjectTable ? (
-              <Pressable
+              <TasksButton
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
@@ -111,10 +113,10 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 }}
               >
                 <Text style={styles.segmentSecondaryText}>Sort: {githubProjectSortLabel}</Text>
-              </Pressable>
+              </TasksButton>
             ) : null}
             {githubProjectAvailableSummaryFields.length > 0 ? (
-              <Pressable
+              <TasksButton
                 style={styles.segmentButton}
                 disabled={!taskUiReady}
                 onPress={() => {
@@ -125,7 +127,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 }}
               >
                 <Text style={styles.segmentSecondaryText}>Fields: {githubProjectFieldsLabel}</Text>
-              </Pressable>
+              </TasksButton>
             ) : null}
             {githubProjectTable ? (
               <View style={styles.segmentCountPill}>
@@ -133,7 +135,8 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
               </View>
             ) : null}
             {selectedGitHubProjectViewUrl ? (
-              <Pressable
+              <TasksButton
+                hitSlop={tapTargetHitSlop(styles.segmentIconButton)}
                 accessibilityRole="button"
                 accessibilityLabel="Open view in GitHub"
                 style={styles.segmentIconButton}
@@ -146,7 +149,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                 }}
               >
                 <ExternalLink size={14} color={colors.textSecondary} />
-              </Pressable>
+              </TasksButton>
             ) : null}
           </>
         )}

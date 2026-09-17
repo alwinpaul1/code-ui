@@ -8,11 +8,11 @@ import {
   Text,
   TextInput,
   colors,
-  Pressable,
   ActivityIndicator,
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -59,7 +59,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           placeholder="Title"
           placeholderTextColor={colors.textMuted}
         />
-        <Pressable
+        <TasksButton
           style={styles.inlineSaveButton}
           disabled={
             mutatingStatus ||
@@ -87,7 +87,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           }}
         >
           <Text style={styles.inlineSaveText}>Save title</Text>
-        </Pressable>
+        </TasksButton>
       </View>
 
       <View style={styles.detailSection}>
@@ -110,7 +110,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               {[...new Set([...itemAvailableLabels, ...detailPayload.labels])].map((label) => {
                 const selected = detailPayload.labels.includes(label)
                 return (
-                  <Pressable
+                  <TasksButton
                     key={label}
                     style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                     disabled={mutatingStatus}
@@ -125,7 +125,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                       {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                       <Text style={styles.detailChipText}>{label}</Text>
                     </View>
-                  </Pressable>
+                  </TasksButton>
                 )
               })}
             </View>
@@ -148,7 +148,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <Pressable
+            <TasksButton
               style={styles.inlineSaveButton}
               disabled={
                 mutatingStatus ||
@@ -163,7 +163,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               }
             >
               <Text style={styles.inlineSaveText}>Update labels</Text>
-            </Pressable>
+            </TasksButton>
           </>
         )}
       </View>
@@ -199,7 +199,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               ].map((user) => {
                 const selected = detailPayload.assignees.includes(user.login)
                 return (
-                  <Pressable
+                  <TasksButton
                     key={user.login}
                     style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                     disabled={mutatingStatus}
@@ -216,7 +216,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                       {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                       <Text style={styles.detailChipText}>{user.login}</Text>
                     </View>
-                  </Pressable>
+                  </TasksButton>
                 )
               })}
             </View>
@@ -239,7 +239,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
             />
-            <Pressable
+            <TasksButton
               style={styles.inlineSaveButton}
               disabled={
                 mutatingStatus ||
@@ -254,7 +254,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               }
             >
               <Text style={styles.inlineSaveText}>Update assignees</Text>
-            </Pressable>
+            </TasksButton>
           </>
         ) : null}
       </View>

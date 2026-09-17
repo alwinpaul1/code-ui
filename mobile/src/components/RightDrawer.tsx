@@ -21,6 +21,7 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
@@ -91,6 +92,8 @@ function MountedRightDrawer({
   const insets = useSafeAreaInsets()
   const { isWideLayout } = useResponsiveLayout()
   const panelWidth = resolveRightDrawerPanelWidth(screenWidth, isWideLayout, widthPx)
+  // Why: read at style time only; `null` runs full motion. See the bottom sheet.
+  const reduceMotion = useReducedMotion() === true
 
   useEffect(() => {
     if (visible) {
@@ -153,15 +156,17 @@ function MountedRightDrawer({
       }
     })
 
-  const drawerStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP) +
-          translateX.value
-      }
-    ]
-  }))
+  const drawerStyle = useAnimatedStyle(() => {
+    // Why: under reduced motion the panel has no enter travel; `progress`
+    // drives its opacity instead, so it fades in place. The drag offset still
+    // applies: that follows the finger. With full motion the object is the
+    // one it always was, with no opacity key at all.
+    const enterTravel = reduceMotion
+      ? 0
+      : interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP)
+    const transform = [{ translateX: enterTravel + translateX.value }]
+    return reduceMotion ? { opacity: progress.value, transform } : { transform }
+  })
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)

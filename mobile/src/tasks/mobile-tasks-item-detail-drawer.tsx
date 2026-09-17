@@ -1,14 +1,15 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   BottomDrawer,
   View,
   TaskProviderLogo,
   colors,
   Text,
-  Pressable,
   RefreshCw
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import { taskKindLabel } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
 import { renderMobileTasksItemActions } from './mobile-tasks-item-actions'
@@ -29,7 +30,8 @@ export function renderMobileTasksItemDetailDrawer(model: ConnectionPresentationM
               <Text style={styles.sheetTitle} numberOfLines={2}>
                 {actionItem.title}
               </Text>
-              <Pressable
+              <TasksButton
+                hitSlop={tapTargetHitSlop(styles.iconButton)}
                 style={styles.iconButton}
                 disabled={detailLoading}
                 accessibilityLabel="Refresh details"
@@ -39,7 +41,7 @@ export function renderMobileTasksItemDetailDrawer(model: ConnectionPresentationM
                   size={16}
                   color={detailLoading ? colors.textMuted : colors.textSecondary}
                 />
-              </Pressable>
+              </TasksButton>
             </View>
             <Text style={styles.sheetSubtitle}>
               {taskKindLabel(actionItem)} · {actionItem.subtitle}

@@ -8,6 +8,7 @@ import Animated, {
   withRepeat,
   withTiming
 } from 'react-native-reanimated'
+import { useReducedMotion } from './use-reduced-motion'
 
 /** A status dot. `pulse` adds an expanding ring for "working" states so a
  *  glance separates moving from merely alive. */
@@ -21,8 +22,11 @@ export function StatusPulse({
   pulse?: boolean
 }) {
   const progress = useSharedValue(0)
+  const reducedMotion = useReducedMotion()
   useEffect(() => {
-    if (pulse) {
+    // The ring is decoration over a dot that already says "working". With
+    // motion reduced (or not yet known) the dot stands alone.
+    if (pulse && reducedMotion === false) {
       progress.value = 0
       progress.value = withRepeat(
         withTiming(1, { duration: 1400, easing: Easing.out(Easing.quad) }),
@@ -34,7 +38,7 @@ export function StatusPulse({
       progress.value = 0
     }
     return () => cancelAnimation(progress)
-  }, [progress, pulse])
+  }, [progress, pulse, reducedMotion])
   const ringStyle = useAnimatedStyle(() => ({
     opacity: pulse ? 0.55 * (1 - progress.value) : 0,
     transform: [{ scale: 1 + progress.value * 1.6 }]

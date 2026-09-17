@@ -13,6 +13,7 @@ import {
   TaskProviderLogo
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import {
   createLinearTask,
   type TaskItem,
@@ -78,7 +79,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                   {linearIssueSecondaryParts(issue, effectiveLinearDisplayProperties).join(' · ')}
                 </Text>
                 {effectiveLinearDisplayProperties.has('state') ? (
-                  <Pressable
+                  <TasksButton
                     style={[styles.statusPillSelf, styles.linearStatePill]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
@@ -101,7 +102,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                       {issue.state.name}
                     </Text>
                     <ChevronDown size={12} color={colors.textSecondary} />
-                  </Pressable>
+                  </TasksButton>
                 ) : null}
               </Pressable>
             ))}
@@ -166,7 +167,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
             </View>
             <View style={styles.linearListTrailing}>
               {effectiveLinearDisplayProperties.has('state') ? (
-                <Pressable
+                <TasksButton
                   style={[styles.statusPill, styles.linearStatePill]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
@@ -187,7 +188,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                     {issue.state.name}
                   </Text>
                   <ChevronDown size={12} color={colors.textSecondary} />
-                </Pressable>
+                </TasksButton>
               ) : null}
             </View>
           </Pressable>

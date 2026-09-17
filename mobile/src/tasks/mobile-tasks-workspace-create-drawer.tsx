@@ -3,7 +3,6 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
   ChevronDown,
   colors,
   workspaceSshStatusLabel,
@@ -21,6 +20,7 @@ import {
   workspaceAgentIconId
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -69,7 +69,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
           <View style={styles.workspaceCreateForm}>
             <View style={styles.workspaceCreateField}>
               <Text style={styles.workspaceCreateLabel}>Repository</Text>
-              <Pressable
+              <TasksButton
                 style={styles.fieldButton}
                 disabled={!workspaceCreateCanPickRepo}
                 onPress={() => setShowWorkspaceCreateRepoPicker(true)}
@@ -99,7 +99,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                 {workspaceCreateCanPickRepo ? (
                   <ChevronDown size={14} color={colors.textMuted} />
                 ) : null}
-              </Pressable>
+              </TasksButton>
             </View>
 
             {workspaceCreateTargetConnectionId ? (
@@ -126,7 +126,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                       </Text>
                     </View>
                     {workspaceCreateSshStatus === 'connected' ? null : (
-                      <Pressable
+                      <TasksButton
                         style={[
                           styles.inlineSaveButtonCompact,
                           workspaceCreateSshConnectInProgress
@@ -139,7 +139,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                         <Text style={styles.inlineSaveText}>
                           {workspaceCreateSshConnectInProgress ? 'Connecting...' : 'Connect'}
                         </Text>
-                      </Pressable>
+                      </TasksButton>
                     )}
                   </View>
                   {workspaceCreateSshError ? (
@@ -164,7 +164,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
 
             <View style={styles.workspaceCreateField}>
               <Text style={styles.workspaceCreateLabel}>Agent</Text>
-              <Pressable
+              <TasksButton
                 style={[
                   styles.fieldButton,
                   workspaceCreateRequiresSshConnection ? styles.fieldButtonDisabled : undefined
@@ -181,10 +181,10 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                       : workspaceAgentLabel(resolvedWorkspaceAgent)}
                 </Text>
                 <ChevronDown size={14} color={colors.textMuted} />
-              </Pressable>
+              </TasksButton>
             </View>
 
-            <Pressable
+            <TasksRow
               style={styles.workspaceAdvancedToggle}
               onPress={() => setShowWorkspaceAdvanced((current) => !current)}
             >
@@ -194,12 +194,12 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
               ) : (
                 <ChevronDown size={14} color={colors.textSecondary} />
               )}
-            </Pressable>
+            </TasksRow>
 
             {showWorkspaceAdvanced ? (
               <View style={styles.workspaceCreateField}>
                 <Text style={styles.workspaceCreateLabel}>Start from</Text>
-                <Pressable
+                <TasksButton
                   style={styles.fieldButton}
                   onPress={() => {
                     setWorkspaceBaseBranchQuery(workspaceBaseBranch?.refName ?? '')
@@ -211,7 +211,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                     {workspaceBaseBranch?.refName ?? 'Default branch'}
                   </Text>
                   <ChevronDown size={14} color={colors.textMuted} />
-                </Pressable>
+                </TasksButton>
                 {workspaceBaseBranch ? (
                   <Text style={styles.detailMuted} numberOfLines={1}>
                     Create from {workspaceBaseBranch.refName}
@@ -230,7 +230,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
           )}
 
           <View style={styles.workspaceCreateActions}>
-            <Pressable
+            <TasksButton
               style={[
                 styles.createButton,
                 styles.workspaceCreateButton,
@@ -276,7 +276,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                       : 'Create Workspace'}
                 </Text>
               )}
-            </Pressable>
+            </TasksButton>
           </View>
         </View>
       ) : null}

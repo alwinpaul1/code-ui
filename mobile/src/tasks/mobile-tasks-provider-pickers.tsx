@@ -4,7 +4,6 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
   Check,
   colors,
   ScrollView
@@ -21,6 +20,7 @@ import {
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
   const {
@@ -107,7 +107,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
       </View>
 
       <View style={styles.repoPickerGroup}>
-        <Pressable
+        <TasksRow
           style={styles.repoPickerRow}
           onPress={() => {
             const allSelection = new Set<string>()
@@ -120,14 +120,14 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
             <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
           </View>
           {selectedRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
-        </Pressable>
+        </TasksRow>
 
         {hostedRepos.map((repo) => {
           const selected = selectedRepoIds.has(repo.id)
           return (
             <View key={repo.id}>
               <View style={styles.actionSeparator} />
-              <Pressable style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
+              <TasksRow style={styles.repoPickerRow} onPress={() => toggleRepoSelection(repo.id)}>
                 <View
                   style={[
                     styles.pickerRepoDot,
@@ -143,7 +143,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
                   </Text>
                 </View>
                 {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
+              </TasksRow>
             </View>
           )
         })}
@@ -206,7 +206,7 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
                           ? issueSourceSlug(sources.upstreamCandidate)
                           : issueSourceSlug(sources.prs)
                       return (
-                        <Pressable
+                        <TasksButton
                           key={preference}
                           style={[
                             styles.issueSourceSegmentButton,
@@ -226,7 +226,7 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
                           <Text style={styles.issueSourceSlug} numberOfLines={1}>
                             {slug}
                           </Text>
-                        </Pressable>
+                        </TasksButton>
                       )
                     })}
                   </View>
@@ -351,7 +351,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
           const selected = index === githubCurrentPage
           const loaded = index < githubPages.length
           return (
-            <Pressable
+            <TasksRow
               key={`github-page:${index}`}
               style={[styles.pickerRow, selected && styles.pickerRowSelected]}
               disabled={githubPaginationLoading}
@@ -367,7 +367,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
                 </Text>
               </View>
               {selected ? <Check size={16} color={colors.textPrimary} /> : null}
-            </Pressable>
+            </TasksRow>
           )
         })}
       </ScrollView>

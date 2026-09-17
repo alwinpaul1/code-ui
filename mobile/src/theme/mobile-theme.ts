@@ -31,6 +31,12 @@ export const colors = {
   // bg-green-600 "Squash and merge" button (green-600 / white).
   mergeGreen: '#16a34a',
   onMergeGreen: '#ffffff',
+  // Label on a statusRed fill (the host list's Delete confirmation). White,
+  // as the platform draws its own destructive buttons; 3.3:1 on this red,
+  // which clears the 3:1 floor for a bold label and not the 4.5:1 body
+  // target. Ink (#1A1917) would reach 5.4:1 and change what a destructive
+  // button looks like; that is a product call, not a token's.
+  onStatusRed: '#ffffff',
   // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
   statusPurple: '#a78bfa',
   gitDecorationAdded: '#81b88b',

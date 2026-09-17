@@ -4,10 +4,9 @@ import {
   Text,
   ActivityIndicator,
   colors,
-  TaskProviderLogo,
-  Pressable
-} from './mobile-tasks-dependencies'
+  TaskProviderLogo } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
@@ -45,7 +44,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
       <Text style={styles.centeredHint}>
         Browse and start work on your assigned Linear issues directly from Tasks.
       </Text>
-      <Pressable
+      <TasksButton
         style={[styles.targetButton, styles.centerActionButton]}
         disabled={!taskUiReady}
         onPress={() => {
@@ -59,7 +58,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
         }}
       >
         <Text style={styles.targetButtonText}>Connect Linear</Text>
-      </Pressable>
+      </TasksButton>
     </View>
   ) : provider === 'github' && githubMode === 'project' ? (
     renderMobileTasksGitHubProjectList(model)

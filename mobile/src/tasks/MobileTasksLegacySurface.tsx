@@ -3,7 +3,6 @@ import {
   SafeAreaView,
   View,
   Text,
-  Pressable,
   AlertTriangle,
   colors,
   ActionSheetModal,
@@ -11,6 +10,7 @@ import {
   ConfirmModal
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import {
   getHostedReviewMergeMethodLabel,
   getHostedMergeConfirmMessage,
@@ -148,7 +148,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                     {sourceError.message}
                   </Text>
                 </View>
-                <Pressable
+                <TasksButton
                   accessibilityRole="button"
                   accessibilityLabel={`Retry loading issues from ${sourceError.source.owner}/${sourceError.source.repo}`}
                   style={styles.sourceErrorRetry}
@@ -158,7 +158,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
                   <Text style={styles.sourceErrorRetryText}>
                     {isRetrying ? 'Retrying...' : 'Retry'}
                   </Text>
-                </Pressable>
+                </TasksButton>
               </View>
             )
           })

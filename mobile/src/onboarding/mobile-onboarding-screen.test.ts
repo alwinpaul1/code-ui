@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MobileOnboardingScreen from '../../app/mobile-onboarding'
+import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
 const mocks = vi.hoisted(() => ({
   params: { hostId: 'paired-host', steps: 'session-view,notifications' },
@@ -59,6 +60,7 @@ describe('MobileOnboardingScreen', () => {
     mocks.params = { hostId: 'paired-host', steps: 'session-view,notifications' }
     mocks.replace.mockReset()
     mocks.reducedMotionEnabled = false
+    resetReducedMotionForTests()
     mocks.animatedTiming.mockReset().mockReturnValue({
       start: (callback: (result: { finished: boolean }) => void) => callback({ finished: true })
     })

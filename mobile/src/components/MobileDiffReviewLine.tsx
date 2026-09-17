@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { MessageSquare } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
@@ -73,6 +74,7 @@ export function MobileDiffReviewLine({
         <View style={styles.notes}>
           {comments.map((comment) => (
             <Pressable
+              hitSlop={tapTargetHitSlop(styles.noteButton)}
               key={comment.id}
               style={({ pressed }) => [styles.noteButton, pressed && styles.noteButtonPressed]}
               onPress={() => onEditNote(comment)}

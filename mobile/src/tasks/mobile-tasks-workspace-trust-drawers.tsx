@@ -5,13 +5,13 @@ import {
   Text,
   TextInput,
   colors,
-  Pressable,
   ActivityIndicator,
   Check,
   X
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
@@ -80,14 +80,14 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
             </Text>
           </View>
           <View style={styles.drawerActionRow}>
-            <Pressable
+            <TasksButton
               style={styles.secondaryActionButton}
               disabled={workspaceSparseSaving}
               onPress={() => setWorkspaceSparseDraft(null)}
             >
               <Text style={styles.secondaryActionText}>Cancel</Text>
-            </Pressable>
-            <Pressable
+            </TasksButton>
+            <TasksButton
               style={[
                 styles.primaryActionButton,
                 !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined
@@ -99,7 +99,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
                 <ActivityIndicator size="small" color={colors.bgBase} />
               ) : null}
               <Text style={styles.primaryActionText}>Save</Text>
-            </Pressable>
+            </TasksButton>
           </View>
         </View>
       ) : null}
@@ -132,7 +132,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
           </View>
 
           <View style={styles.actionGroup}>
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>
@@ -153,9 +153,9 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
               <Text style={styles.actionText}>
                 {creatingKey === setupPrompt.item.key ? 'Creating...' : 'Run setup and create'}
               </Text>
-            </Pressable>
+            </TasksRow>
             <View style={styles.actionSeparator} />
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>
@@ -174,7 +174,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
             >
               <X size={16} color={colors.textPrimary} />
               <Text style={styles.actionText}>Skip setup and create</Text>
-            </Pressable>
+            </TasksRow>
           </View>
         </View>
       ) : null}
@@ -222,7 +222,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
           </View>
 
           <View style={styles.actionGroup}>
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() =>
@@ -254,9 +254,9 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
             >
               <Check size={16} color={colors.textPrimary} />
               <Text style={styles.actionText}>Run hooks</Text>
-            </Pressable>
+            </TasksRow>
             <View style={styles.actionSeparator} />
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() =>
@@ -288,9 +288,9 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
             >
               <Check size={16} color={colors.textPrimary} />
               <Text style={styles.actionText}>Always trust and run</Text>
-            </Pressable>
+            </TasksRow>
             <View style={styles.actionSeparator} />
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               disabled={creatingKey === orcaYamlTrustPrompt.item.key}
               onPress={() => {
@@ -311,7 +311,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
             >
               <X size={16} color={colors.textPrimary} />
               <Text style={styles.actionText}>Don't run</Text>
-            </Pressable>
+            </TasksRow>
           </View>
         </View>
       ) : null}

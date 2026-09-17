@@ -4,12 +4,12 @@ import {
   ActivityIndicator,
   colors,
   Text,
-  Pressable,
   Linking,
   ExternalLink,
   TextInput
 } from './mobile-tasks-dependencies'
 import { styles, getGitLabPipelineStatusStyle } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   taskKindLabel,
   SHOW_MOBILE_DETAIL_LABEL_CHIPS,
@@ -117,34 +117,34 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
           <View style={styles.detailSectionHeader}>
             <Text style={styles.detailSectionTitle}>Checks</Text>
             <View style={styles.inlineActionRow}>
-              <Pressable
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus}
                 onPress={() => void refreshGitHubChecks(actionItem)}
               >
                 <Text style={styles.inlineSaveText}>Refresh</Text>
-              </Pressable>
-              <Pressable
+              </TasksButton>
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus || !detailPayload.checks.some(isFailedGitHubCheck)}
                 onPress={() => void rerunGitHubChecks(actionItem, true)}
               >
                 <Text style={styles.inlineSaveText}>Rerun failed</Text>
-              </Pressable>
-              <Pressable
+              </TasksButton>
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={mutatingStatus || detailPayload.checks.length === 0}
                 onPress={() => void rerunGitHubChecks(actionItem, false)}
               >
                 <Text style={styles.inlineSaveText}>Rerun all</Text>
-              </Pressable>
+              </TasksButton>
             </View>
           </View>
           {detailPayload.checks.length === 0 ? (
             <Text style={styles.detailMuted}>No checks found.</Text>
           ) : (
             detailPayload.checks.map((check) => (
-              <Pressable
+              <TasksRow
                 key={`${check.name}:${check.status}:${check.url ?? ''}`}
                 style={styles.fileActionRow}
                 disabled={!check.url}
@@ -158,7 +158,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   {check.name} · {check.conclusion ?? check.status}
                 </Text>
                 {check.url ? <ExternalLink size={14} color={colors.textSecondary} /> : null}
-              </Pressable>
+              </TasksRow>
             ))
           )}
         </View>
@@ -185,7 +185,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             detailPayload.pipelineJobs.map((job) => {
               const duration = formatDurationSeconds(job.duration)
               return (
-                <Pressable
+                <TasksRow
                   key={`${job.id ?? job.stage}:${job.name}`}
                   style={styles.fileCard}
                   disabled={!job.webUrl}
@@ -208,7 +208,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   <Text style={styles.detailMuted}>
                     {[job.stage, duration].filter(Boolean).join(' · ')}
                   </Text>
-                </Pressable>
+                </TasksRow>
               )
             })
           )}
@@ -227,7 +227,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             <Text style={styles.detailMuted}>No sub-issues.</Text>
           ) : (
             detailPayload.children.map((child) => (
-              <Pressable
+              <TasksRow
                 key={child.id}
                 style={styles.fileActionRow}
                 disabled={mutatingStatus}
@@ -237,7 +237,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   {child.identifier} · {child.title}
                 </Text>
                 <Text style={styles.detailSectionMeta}>Open</Text>
-              </Pressable>
+              </TasksRow>
             ))
           )}
           <TextInput
@@ -247,13 +247,13 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             placeholder="Sub-issue title"
             placeholderTextColor={colors.textMuted}
           />
-          <Pressable
+          <TasksButton
             style={styles.inlineSaveButton}
             disabled={mutatingStatus || linearSubIssueTitle.trim().length === 0}
             onPress={() => void createLinearSubIssue(actionItem)}
           >
             <Text style={styles.inlineSaveText}>Add sub-issue</Text>
-          </Pressable>
+          </TasksButton>
         </View>
       ) : null}
 

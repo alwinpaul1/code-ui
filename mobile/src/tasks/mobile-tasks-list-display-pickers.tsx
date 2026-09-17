@@ -3,12 +3,12 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
   Check,
   colors,
   PickerModal
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksRow } from './mobile-tasks-pressables'
 import {
   LINEAR_VIEW_OPTIONS,
   LINEAR_GROUP_OPTIONS,
@@ -100,7 +100,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
           return (
             <View key={property.value}>
               {index > 0 ? <View style={styles.actionSeparator} /> : null}
-              <Pressable
+              <TasksRow
                 style={styles.repoPickerRow}
                 onPress={() => {
                   if (property.value === 'team') {
@@ -121,7 +121,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
                   <Text style={styles.repoPickerTitle}>{property.label}</Text>
                 </View>
                 {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
+              </TasksRow>
             </View>
           )
         })}

@@ -24,11 +24,24 @@ const hash = (parts: string[] | string): string =>
 const WORKSPACE_RPC_SCREEN_HOOKS =
   '26ed5700089a9de13ea984274eb10ddea62f72b28135992514e3c16ef8e47e30'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const WORKSPACE_RPC_STATEMENTS = 'c25179660e089fd602b06e8c235e5f92d62e63d6d4add4c33ff89a4b5f9493cc'
-const MAIN_REBASED_DECLARATIONS = '6ad0397123e59fc1047a14049c86ff31d81723673a7a7f5c41677471aec58415'
-const WORKSPACE_RPC_SEMANTICS = '7a00e700fe7293df9b5b68470185197c56a27007d89038a183153b29326113c0'
+// 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
+// `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
+// is now drawn. That is a behaviour change, not a refactor, and the pins below moved with it:
+// statements and declarations rename a tag and swap an import in 29 files at the same counts;
+// `semantics` gains exactly the new module's two `jsx:PressFeedback` signatures and its one
+// `'pressedStyle'` literal (3452 → 3455); the render tree renames the same tags at the same
+// token count. Hooks and the StyleSheets are untouched and still match their earlier pins.
+// mobile-tasks-press-feedback.test.tsx is what guards the rows from here on.
+// 0.6.7 tap targets, the same release: the eight controls drawn at 40 dp or less (the 32 dp back
+// and icon buttons, the 32 × 30 view-link segment, the 44 × 38 pagination pair, the 32 dp comment
+// send button, the 40 dp paste button) gained `hitSlop={tapTargetHitSlop(styles.<key>)}`, which
+// is one more attribute on eight `jsx:` signatures at the same count, one import per file, and
+// 80 more render tokens (35 195 → 35 275). src/ui/tap-target-audit.test.ts guards them from here.
+const TAP_TARGET_STATEMENTS = 'd7350b217e5d774c7c2ebea307babb6beb91ebf9ef73cd1d76f38b8b9ebe8dc8'
+const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
+const TAP_TARGET_SEMANTICS = 'e1610b05ef4dfee1b2685c5a9e6de24e6e9e5f1edccd771b92c0d0be86b5841f'
 const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const PRE_REFACTOR_RENDER_TREE = '2111145136b1e4fbca150d4792d735a90e992488e9934cfc1a8b8f3be981f39f'
+const TAP_TARGET_RENDER_TREE = '7c1a26543f12792821e60a31136702ceaf4890f4cffeb368c738ef36c203aebb'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -44,25 +57,25 @@ describe('Mobile Tasks refactor parity', () => {
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
     expect(statements).toHaveLength(417)
-    expect(hash(statements)).toBe(WORKSPACE_RPC_STATEMENTS)
+    expect(hash(statements)).toBe(TAP_TARGET_STATEMENTS)
   })
 
   it('preserves every moved top-level declaration', () => {
     const declarations = readMobileTasksDeclarationSignatures()
     expect(declarations).toHaveLength(194)
-    expect(hash(declarations)).toBe(MAIN_REBASED_DECLARATIONS)
+    expect(hash(declarations)).toBe(PRESS_FEEDBACK_DECLARATIONS)
   })
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_452)
-    expect(hash(semantics)).toBe(WORKSPACE_RPC_SEMANTICS)
+    expect(semantics.split('\n')).toHaveLength(3_455)
+    expect(hash(semantics)).toBe(TAP_TARGET_SEMANTICS)
   })
 
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_195)
-    expect(hash(tokens)).toBe(PRE_REFACTOR_RENDER_TREE)
+    expect(tokens).toHaveLength(35_275)
+    expect(hash(tokens)).toBe(TAP_TARGET_RENDER_TREE)
   })
 
   it('preserves every StyleSheet property and value', () => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   AppState,
   View,
@@ -285,6 +286,7 @@ export function TerminalShortcutSettings({
                   </Text>
                 </View>
                 <Pressable
+                  hitSlop={tapTargetHitSlop(styles.deleteButton)}
                   style={({ pressed }) => [
                     styles.deleteButton,
                     pressed && styles.deleteButtonPressed

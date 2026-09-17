@@ -12,6 +12,7 @@ import {
   TaskProviderLogo
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   projectGroupMeta,
   formatUpdatedAt,
@@ -45,7 +46,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
   ) : !activeGitHubProject ? (
     <View style={styles.centered}>
       <Text style={styles.emptyText}>Choose a GitHub project</Text>
-      <Pressable
+      <TasksButton
         style={[styles.targetButton, styles.centerActionButton]}
         disabled={!taskUiReady}
         onPress={() => {
@@ -56,7 +57,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
         }}
       >
         <Text style={styles.targetButtonText}>Browse projects</Text>
-      </Pressable>
+      </TasksButton>
     </View>
   ) : githubProjectError ? (
     <View style={styles.centered}>
@@ -81,7 +82,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
       renderItem={({ item: entry }) => {
         if (entry.type === 'group') {
           return (
-            <Pressable
+            <TasksRow
               style={styles.projectGroupHeader}
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
@@ -104,7 +105,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
                 {entry.group.label || 'Items'}
               </Text>
               <Text style={styles.projectGroupMeta}>{projectGroupMeta(entry.group)}</Text>
-            </Pressable>
+            </TasksRow>
           )
         }
         const row = entry.row

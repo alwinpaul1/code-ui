@@ -3,7 +3,6 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
   Linking,
   ExternalLink,
   colors,
@@ -16,6 +15,7 @@ import {
   GitBranch
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   projectRowStatusLabel,
   SHOW_MOBILE_DETAIL_LABEL_CHIPS,
@@ -58,7 +58,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
 
           <View style={styles.actionGroup}>
             {projectRepoNotInOrca.url ? (
-              <Pressable
+              <TasksRow
                 style={styles.actionRow}
                 onPress={() => {
                   if (projectRepoNotInOrca.url) {
@@ -68,10 +68,10 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
               >
                 <ExternalLink size={16} color={colors.textPrimary} />
                 <Text style={styles.actionText}>Open in GitHub</Text>
-              </Pressable>
+              </TasksRow>
             ) : null}
             {projectRepoNotInOrca.url ? <View style={styles.actionSeparator} /> : null}
-            <Pressable
+            <TasksRow
               style={styles.actionRow}
               onPress={() =>
                 void copyTextToClipboard(
@@ -87,7 +87,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
                   ? 'Copied'
                   : 'Copy repository'}
               </Text>
-            </Pressable>
+            </TasksRow>
           </View>
         </View>
       ) : null}
@@ -196,7 +196,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                     {projectIssueTypes.map((issueType) => {
                       const selected = projectRowItem.content.issueType?.id === issueType.id
                       return (
-                        <Pressable
+                        <TasksButton
                           key={issueType.id}
                           style={[
                             styles.detailChip,
@@ -214,17 +214,17 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                             />
                             <Text style={styles.detailChipText}>{issueType.name}</Text>
                           </View>
-                        </Pressable>
+                        </TasksButton>
                       )
                     })}
                     {projectRowItem.content.issueType ? (
-                      <Pressable
+                      <TasksButton
                         style={styles.detailChip}
                         disabled={projectMutating}
                         onPress={() => void mutateProjectRowIssueType(projectRowItem, null)}
                       >
                         <Text style={styles.detailChipText}>Clear type</Text>
-                      </Pressable>
+                      </TasksButton>
                     ) : null}
                   </View>
                 )}
@@ -238,14 +238,14 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
 
           <View style={styles.actionGroup}>
             {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
-              <Pressable
+              <TasksRow
                 style={styles.actionRow}
                 disabled={creatingKey === `github-project:${projectRowItem.id}`}
                 onPress={() => void createWorkspaceFromProjectRow(projectRowItem)}
               >
                 <Plus size={16} color={colors.textPrimary} />
                 <Text style={styles.actionText}>Create Workspace</Text>
-              </Pressable>
+              </TasksRow>
             ) : (
               <Text style={styles.emptyInlineText}>
                 Workspaces can only be created from GitHub issues and pull requests.
@@ -257,7 +257,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                 {canCreateWorkspaceFromProjectRow(projectRowItem) ? (
                   <View style={styles.actionSeparator} />
                 ) : null}
-                <Pressable
+                <TasksRow
                   style={styles.actionRow}
                   onPress={() => {
                     if (projectRowItem.content.url) {
@@ -267,9 +267,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                 >
                   <ExternalLink size={16} color={colors.textPrimary} />
                   <Text style={styles.actionText}>Open in GitHub</Text>
-                </Pressable>
+                </TasksRow>
                 <View style={styles.actionSeparator} />
-                <Pressable
+                <TasksRow
                   style={styles.actionRow}
                   onPress={() =>
                     projectRowItem.content.url
@@ -286,7 +286,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                       ? 'Copied'
                       : 'Copy GitHub link'}
                   </Text>
-                </Pressable>
+                </TasksRow>
               </>
             ) : null}
             {projectRowType(projectRowItem) &&
@@ -294,7 +294,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
             projectRowItem.itemType !== 'DRAFT_ISSUE' ? (
               <>
                 <View style={styles.actionSeparator} />
-                <Pressable
+                <TasksRow
                   style={styles.actionRow}
                   disabled={projectMutating}
                   onPress={() => {
@@ -322,7 +322,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   <Text style={styles.actionText}>
                     {projectRowItem.content.state === 'CLOSED' ? 'Reopen item' : 'Close item'}
                   </Text>
-                </Pressable>
+                </TasksRow>
               </>
             ) : null}
             {projectRowItem.itemType === 'PULL_REQUEST' &&
@@ -330,14 +330,14 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
             projectRowItem.content.state !== 'MERGED' ? (
               <>
                 <View style={styles.actionSeparator} />
-                <Pressable
+                <TasksRow
                   style={styles.actionRow}
                   disabled={projectMutating || !projectRowHostedRepo}
                   onPress={() => setMergeMethodProjectRow(projectRowItem)}
                 >
                   <GitBranch size={16} color={colors.textPrimary} />
                   <Text style={styles.actionText}>Merge pull request</Text>
-                </Pressable>
+                </TasksRow>
                 {!projectRowHostedRepo ? (
                   <Text style={styles.emptyInlineText}>
                     Merge requires this repository in Orca.

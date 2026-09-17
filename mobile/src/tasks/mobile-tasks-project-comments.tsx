@@ -2,13 +2,13 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   View,
   Text,
-  Pressable,
   type ReactNode,
   TextInput,
   colors,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   discussionSummary,
   detailCommentGroupId,
@@ -69,7 +69,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
             isResolvedDetailCommentGroup(group) && !expandedResolvedCommentGroups.has(groupId)
           if (isCollapsedResolved) {
             return (
-              <Pressable
+              <TasksRow
                 key={groupId}
                 style={styles.resolvedCommentSummary}
                 onPress={() =>
@@ -87,7 +87,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                 <Text style={styles.detailSectionMeta}>
                   {count > 1 ? `${count} comments` : 'Show'}
                 </Text>
-              </Pressable>
+              </TasksRow>
             )
           }
 
@@ -126,14 +126,14 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                       textAlignVertical="top"
                     />
                     <View style={styles.inlineActionRow}>
-                      <Pressable
+                      <TasksButton
                         style={styles.inlineSaveButtonCompact}
                         disabled={projectMutating || projectEditingCommentDraft.trim().length === 0}
                         onPress={() => void updateProjectRowComment(projectRowItem, comment)}
                       >
                         <Text style={styles.inlineSaveText}>Save</Text>
-                      </Pressable>
-                      <Pressable
+                      </TasksButton>
+                      <TasksButton
                         style={styles.inlineSaveButtonCompact}
                         disabled={projectMutating}
                         onPress={() => {
@@ -142,7 +142,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                         }}
                       >
                         <Text style={styles.inlineSaveText}>Cancel</Text>
-                      </Pressable>
+                      </TasksButton>
                     </View>
                   </>
                 ) : (
@@ -152,7 +152,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
                       <View style={styles.inlineActionRow}>
                         {projectRowType(projectRowItem) === 'pr' && comment.threadId ? (
-                          <Pressable
+                          <TasksButton
                             style={styles.inlineSaveButtonCompact}
                             disabled={projectMutating}
                             onPress={() =>
@@ -162,7 +162,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                             <Text style={styles.inlineSaveText}>
                               {comment.isResolved ? 'Reopen thread' : 'Resolve thread'}
                             </Text>
-                          </Pressable>
+                          </TasksButton>
                         ) : null}
                         <TextInput
                           style={[styles.input, styles.replyInput]}
@@ -178,14 +178,14 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                           multiline
                           textAlignVertical="top"
                         />
-                        <Pressable
+                        <TasksButton
                           style={styles.inlineSaveButtonCompact}
                           disabled={projectMutating || !(itemReplyDrafts[commentId] ?? '').trim()}
                           onPress={() => void replyToProjectGitHubComment(projectRowItem, comment)}
                         >
                           <Text style={styles.inlineSaveText}>Reply</Text>
-                        </Pressable>
-                        <Pressable
+                        </TasksButton>
+                        <TasksButton
                           style={styles.inlineSaveButtonCompact}
                           disabled={projectMutating}
                           onPress={() => {
@@ -194,14 +194,14 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                           }}
                         >
                           <Text style={styles.inlineSaveText}>Edit</Text>
-                        </Pressable>
-                        <Pressable
+                        </TasksButton>
+                        <TasksButton
                           style={styles.inlineSaveButtonCompact}
                           disabled={projectMutating}
                           onPress={() => void deleteProjectRowComment(projectRowItem, comment)}
                         >
                           <Text style={styles.inlineDeleteText}>Delete</Text>
-                        </Pressable>
+                        </TasksButton>
                       </View>
                     ) : null}
                   </>

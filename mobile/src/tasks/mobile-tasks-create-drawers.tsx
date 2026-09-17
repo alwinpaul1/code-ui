@@ -5,7 +5,6 @@ import {
   TaskProviderLogo,
   colors,
   Text,
-  Pressable,
   ChevronDown,
   TextInput,
   ActivityIndicator,
@@ -15,6 +14,7 @@ import {
   Lock
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import {
   getRepoBadgeColor,
   type RepoSummary,
@@ -69,7 +69,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
         <Text style={styles.fieldLabel}>
           {provider === 'github' || provider === 'gitlab' ? 'Repository' : 'Team'}
         </Text>
-        <Pressable
+        <TasksButton
           style={styles.targetButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -98,7 +98,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             {selectedCreateTargetLabel}
           </Text>
           <ChevronDown size={14} color={colors.textMuted} />
-        </Pressable>
+        </TasksButton>
 
         {provider === 'github' &&
         selectedCreateRepo &&
@@ -119,7 +119,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                     ? issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)
                     : issueSourceSlug(selectedCreateGitHubSources?.prs)
                 return (
-                  <Pressable
+                  <TasksButton
                     key={preference}
                     style={[
                       styles.issueSourceSegmentButton,
@@ -141,7 +141,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
                     <Text style={styles.issueSourceSlug} numberOfLines={1}>
                       {slug}
                     </Text>
-                  </Pressable>
+                  </TasksButton>
                 )
               })}
             </View>
@@ -170,7 +170,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
           textAlignVertical="top"
         />
 
-        <Pressable
+        <TasksButton
           style={[
             styles.createButton,
             (!taskUiReady || !createTitle.trim() || creatingTask) && styles.createButtonDisabled
@@ -183,7 +183,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
           ) : (
             <Text style={styles.createButtonText}>Create Issue</Text>
           )}
-        </Pressable>
+        </TasksButton>
       </View>
     </BottomDrawer>
   )
@@ -277,20 +277,20 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         {linearConnectState === 'error' && linearConnectError ? (
           <Text style={styles.detailError}>{linearConnectError}</Text>
         ) : null}
-        <Pressable
+        <TasksButton
           style={styles.inlineTextLink}
           onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
         >
           <ExternalLink size={13} color={colors.textSecondary} />
           <Text style={styles.inlineTextLinkText}>Linear Settings / Security / New API key</Text>
-        </Pressable>
+        </TasksButton>
         <View style={styles.securityHintRow}>
           <Lock size={13} color={colors.textMuted} />
           <Text style={styles.securityHintText}>
             Your key is encrypted via the host OS keychain and stored locally.
           </Text>
         </View>
-        <Pressable
+        <TasksButton
           style={[
             styles.createButton,
             (!linearApiKeyDraft.trim() || linearConnectState === 'connecting') &&
@@ -304,7 +304,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           ) : (
             <Text style={styles.createButtonText}>Connect</Text>
           )}
-        </Pressable>
+        </TasksButton>
       </View>
     </BottomDrawer>
   )

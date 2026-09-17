@@ -1,6 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { Pressable, Text } from './mobile-tasks-dependencies'
+import { Text } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksLinearViewControls(model: ConnectionPresentationModel) {
   const {
@@ -27,7 +28,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
     linearConnected && (
       <>
         {linearWorkspaces.length > 1 ? (
-          <Pressable
+          <TasksButton
             style={styles.segmentButton}
             disabled={!taskUiReady}
             onPress={() => {
@@ -38,9 +39,9 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             }}
           >
             <Text style={styles.segmentSecondaryText}>{linearWorkspaceLabel}</Text>
-          </Pressable>
+          </TasksButton>
         ) : null}
-        <Pressable
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -51,8 +52,8 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>{linearTeamLabel}</Text>
-        </Pressable>
-        <Pressable
+        </TasksButton>
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -63,8 +64,8 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>{linearFilterLabel}</Text>
-        </Pressable>
-        <Pressable
+        </TasksButton>
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -75,8 +76,8 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>{linearViewLabel}</Text>
-        </Pressable>
-        <Pressable
+        </TasksButton>
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -87,8 +88,8 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>Group: {linearGroupLabel}</Text>
-        </Pressable>
-        <Pressable
+        </TasksButton>
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -99,8 +100,8 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>Order: {linearOrderLabel}</Text>
-        </Pressable>
-        <Pressable
+        </TasksButton>
+        <TasksButton
           style={styles.segmentButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -111,7 +112,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
           }}
         >
           <Text style={styles.segmentSecondaryText}>Display</Text>
-        </Pressable>
+        </TasksButton>
       </>
     )
   )

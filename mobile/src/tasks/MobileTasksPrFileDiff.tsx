@@ -9,12 +9,11 @@ import {
   View,
   MobileSyntaxSegments,
   TextInput,
-  colors,
-  Pressable
-} from './mobile-tasks-dependencies'
+  colors } from './mobile-tasks-dependencies'
 import { MAX_RENDERED_PR_DIFF_LINES } from './mobile-tasks-options'
 import type { GitHubPRFileContents } from './mobile-tasks-provider-detail-types'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 
 export function formatDiffLineNumber(value: number | undefined): string {
   return value === undefined ? '    ' : value.toString().padStart(4, ' ')
@@ -118,13 +117,13 @@ export function GitHubPrFileDiff({
                   multiline
                   textAlignVertical="top"
                 />
-                <Pressable
+                <TasksButton
                   style={styles.inlineSaveButtonCompact}
                   disabled={disabled || !(commentDrafts[draftKey] ?? '').trim()}
                   onPress={() => onSubmitComment(commentLine)}
                 >
                   <Text style={styles.inlineSaveText}>Comment on line {commentLine}</Text>
-                </Pressable>
+                </TasksButton>
               </>
             ) : null}
           </View>

@@ -13,13 +13,13 @@ import {
   Text,
   ActivityIndicator,
   colors,
-  Pressable,
   Check,
   TextInput,
   Linking,
   ExternalLink
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentationModel) {
   const {
@@ -96,7 +96,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
             {projectReviewerCandidates.map((user) => {
               const selected = projectSelectedReviewerLogins.has(user.login.trim().toLowerCase())
               return (
-                <Pressable
+                <TasksButton
                   key={user.login}
                   style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
                   disabled={projectMutating || selected}
@@ -106,7 +106,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                     {selected ? <Check size={12} color={colors.accentBlue} /> : null}
                     <Text style={styles.detailChipText}>{user.login}</Text>
                   </View>
-                </Pressable>
+                </TasksButton>
               )
             })}
           </View>
@@ -119,13 +119,13 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
-        <Pressable
+        <TasksButton
           style={styles.inlineSaveButton}
           disabled={projectMutating || splitReviewerList(projectReviewersDraft).length === 0}
           onPress={() => void requestProjectGitHubReviewers(projectRowItem)}
         >
           <Text style={styles.inlineSaveText}>Request review</Text>
-        </Pressable>
+        </TasksButton>
       </View>
 
       {projectRowType(projectRowItem) === 'pr' ? (
@@ -133,34 +133,34 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           <View style={styles.detailSectionHeader}>
             <Text style={styles.detailSectionTitle}>Checks</Text>
             <View style={styles.inlineActionRow}>
-              <Pressable
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating}
                 onPress={() => void refreshProjectGitHubChecks(projectRowItem)}
               >
                 <Text style={styles.inlineSaveText}>Refresh</Text>
-              </Pressable>
-              <Pressable
+              </TasksButton>
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating || !projectRowDetail.checks.some(isFailedGitHubCheck)}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, true)}
               >
                 <Text style={styles.inlineSaveText}>Rerun failed</Text>
-              </Pressable>
-              <Pressable
+              </TasksButton>
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating || projectRowDetail.checks.length === 0}
                 onPress={() => void rerunProjectGitHubChecks(projectRowItem, false)}
               >
                 <Text style={styles.inlineSaveText}>Rerun all</Text>
-              </Pressable>
+              </TasksButton>
             </View>
           </View>
           {projectRowDetail.checks.length === 0 ? (
             <Text style={styles.detailMuted}>No checks found.</Text>
           ) : (
             projectRowDetail.checks.map((check) => (
-              <Pressable
+              <TasksRow
                 key={`${check.name}:${check.status}:${check.url ?? ''}`}
                 style={styles.fileActionRow}
                 disabled={!check.url}
@@ -174,7 +174,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                   {check.name} · {check.conclusion ?? check.status}
                 </Text>
                 {check.url ? <ExternalLink size={14} color={colors.textSecondary} /> : null}
-              </Pressable>
+              </TasksRow>
             ))
           )}
         </View>
@@ -185,7 +185,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           <Text style={styles.detailSectionTitle}>Changed files</Text>
           {projectRowDetail.files.map((file) => (
             <View key={file.path} style={styles.fileCard}>
-              <Pressable
+              <TasksRow
                 style={styles.fileActionRow}
                 disabled={projectMutating}
                 onPress={() => void toggleProjectGitHubFileExpansion(projectRowItem, file)}
@@ -199,8 +199,8 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 <Text style={styles.detailSectionMeta}>
                   {expandedPrFilePath === file.path ? 'Hide' : 'View'}
                 </Text>
-              </Pressable>
-              <Pressable
+              </TasksRow>
+              <TasksButton
                 style={styles.inlineSaveButtonCompact}
                 disabled={projectMutating || !projectRowDetail.pullRequestId}
                 onPress={() => void toggleProjectGitHubFileViewed(projectRowItem, file)}
@@ -208,7 +208,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 <Text style={styles.inlineSaveText}>
                   {file.viewerViewedState === 'VIEWED' ? 'Mark unviewed' : 'Mark viewed'}
                 </Text>
-              </Pressable>
+              </TasksButton>
               {expandedPrFilePath === file.path ? (
                 <View style={styles.filePreview}>
                   {prFileLoadingPath === file.path ? (

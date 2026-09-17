@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import type { ReactNode } from 'react'
 import { colors, radii } from '../theme/mobile-theme'
 
@@ -19,6 +20,7 @@ export function MobileBrowserToolbarIconButton({
 }: Props): React.JSX.Element {
   return (
     <Pressable
+      hitSlop={tapTargetHitSlop(styles.button)}
       style={({ pressed }) => [
         styles.button,
         style,

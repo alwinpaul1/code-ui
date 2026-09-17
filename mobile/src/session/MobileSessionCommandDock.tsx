@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { View, TextInput, Pressable, Platform } from 'react-native'
 import { ArrowUp } from 'lucide-react-native'
 import {
@@ -231,6 +232,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             onDictationCancel={cancelDictation}
           />
           <Pressable
+            hitSlop={tapTargetHitSlop({ width: 36, height: 36 })}
             style={{
               width: 36,
               height: 36,

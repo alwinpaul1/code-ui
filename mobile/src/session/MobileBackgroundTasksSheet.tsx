@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Pressable, View } from 'react-native'
 import {
   Activity,
@@ -314,6 +315,7 @@ function LoadMoreFinished({ onPress }: { onPress: () => void }) {
   const { colors, radius, space } = useTheme()
   return (
     <Pressable
+      hitSlop={tapTargetHitSlop({ height: 40 })}
       accessibilityRole="button"
       accessibilityLabel="Load more finished tasks"
       onPress={onPress}

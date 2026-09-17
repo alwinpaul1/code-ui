@@ -3,13 +3,13 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
   Check,
   colors,
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksRow } from './mobile-tasks-pressables'
 import {
   GITLAB_VIEW_OPTIONS,
   GITLAB_FILTER_OPTIONS,
@@ -44,7 +44,7 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
             return (
               <View key={field.id}>
                 {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                <Pressable
+                <TasksRow
                   style={styles.repoPickerRow}
                   onPress={() => toggleGitHubProjectFieldVisibility(field.id)}
                 >
@@ -57,7 +57,7 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
                     </Text>
                   </View>
                   {visible ? <Check size={15} color={colors.textPrimary} /> : null}
-                </Pressable>
+                </TasksRow>
               </View>
             )
           })
@@ -202,7 +202,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
         <Text style={styles.sheetSubtitle}>Choose which teams appear in Tasks.</Text>
       </View>
       <View style={styles.repoPickerGroup}>
-        <Pressable
+        <TasksRow
           style={styles.repoPickerRow}
           onPress={() => {
             const next = new Set(linearTeams.map((team) => team.id))
@@ -217,13 +217,13 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
           {selectedLinearTeamIds.size === linearTeams.length ? (
             <Check size={15} color={colors.textPrimary} />
           ) : null}
-        </Pressable>
+        </TasksRow>
         {linearTeams.map((team) => {
           const selected = selectedLinearTeamIds.has(team.id)
           return (
             <View key={team.id}>
               <View style={styles.actionSeparator} />
-              <Pressable
+              <TasksRow
                 style={styles.repoPickerRow}
                 onPress={() => {
                   const next = new Set(selectedLinearTeamIds)
@@ -249,7 +249,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
                   </Text>
                 </View>
                 {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
+              </TasksRow>
             </View>
           )
         })}
@@ -296,7 +296,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
             return (
               <View key={state.id}>
                 {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                <Pressable
+                <TasksRow
                   style={styles.repoPickerRow}
                   disabled={mutatingStatus}
                   onPress={() => {
@@ -323,7 +323,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
                     </Text>
                   </View>
                   {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                </Pressable>
+                </TasksRow>
               </View>
             )
           })

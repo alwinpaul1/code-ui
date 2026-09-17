@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSpinner } from './AgentSpinner'
 import { AgentStateDot } from './AgentStateDot'
+import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
 const DESKTOP_WORKING_COLOR = '#eab308'
 
@@ -19,12 +20,18 @@ const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
   setValue: vi.fn()
 }))
 
+const motion = vi.hoisted(() => ({ reduced: false }))
+
 vi.mock('lucide-react-native', () => ({
   Activity: 'Activity',
   CircleCheck: 'CircleCheck',
   MessageCircleQuestionMark: 'MessageCircleQuestionMark'
 }))
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    addEventListener: () => ({ remove: () => {} }),
+    isReduceMotionEnabled: () => Promise.resolve(motion.reduced)
+  },
   Animated: {
     Value: function Value() {
       return { interpolate: vi.fn(() => 'rotation'), setValue }
@@ -45,6 +52,8 @@ describe('mobile monitoring indicators', () => {
     animationLoop.mockClear()
     animationTiming.mockClear()
     setValue.mockClear()
+    motion.reduced = false
+    resetReducedMotionForTests()
   })
 
   afterEach(() => {
@@ -87,5 +96,31 @@ describe('mobile monitoring indicators', () => {
 
     expect(animationTiming).toHaveBeenCalledOnce()
     expect(animationLoop).toHaveBeenCalledOnce()
+  })
+
+  // "Remove animations" on, and the worktree list's spinners kept turning
+  // (0.6.6 audit: reduced motion was honoured in four files, none of them
+  // here). The glyph stays, so a working row still reads as working; it
+  // just does not move.
+  it('holds the worktree spinner still when the OS reduces motion', async () => {
+    motion.reduced = true
+    await act(async () => {
+      renderer = create(createElement(AgentSpinner, { status: 'working' }))
+    })
+
+    expect(renderer?.root.findByType('AnimatedView')).toBeDefined()
+    expect(animationLoop).not.toHaveBeenCalled()
+    expect(setValue).toHaveBeenCalledWith(0)
+  })
+
+  it('holds the agent spinner still when the OS reduces motion', async () => {
+    motion.reduced = true
+    await act(async () => {
+      renderer = create(createElement(AgentStateDot, { state: 'working' }))
+    })
+
+    expect(renderer?.root.findByType('AnimatedView')).toBeDefined()
+    expect(animationLoop).not.toHaveBeenCalled()
+    expect(setValue).toHaveBeenCalledWith(0)
   })
 })

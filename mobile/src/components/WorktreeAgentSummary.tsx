@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Pressable, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { useTheme } from '../theme/theme-context'
@@ -24,6 +25,7 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
 
   return (
     <Pressable
+      hitSlop={tapTargetHitSlop({ height: 26 })}
       style={({ pressed }) => ({
         minHeight: 26,
         flexDirection: 'row',

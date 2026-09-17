@@ -8,6 +8,11 @@ import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 
+const mocks = vi.hoisted(() => ({
+  reduced: false,
+  loop: vi.fn((animation: unknown) => animation)
+}))
+
 vi.mock('react-native', () => ({
   Animated: {
     Text: 'Text',
@@ -17,7 +22,7 @@ vi.mock('react-native', () => ({
         this.value = next
       }
     },
-    loop: (animation: unknown) => animation,
+    loop: mocks.loop,
     sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
     timing: () => ({ start: vi.fn(), stop: vi.fn() })
   },
@@ -34,6 +39,9 @@ vi.mock('lucide-react-native', () => ({
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
 }))
+// The run's tests are about the run; the OS setting is stubbed to an answer
+// so the render stays synchronous.
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => mocks.reduced }))
 
 // Two names that each carry the character a joined summary uses to separate
 // members. Upstream #19372: `browser.open · tools/read` is unreadable as two
@@ -210,6 +218,26 @@ describe('a tool run while the turn is still working', () => {
     expect(texts(tree)).toContain('Running')
     // The batch sentence is what the live row replaces.
     expect(texts(tree).some((text) => text.startsWith('Ran '))).toBe(false)
+  })
+
+  it('breathes the Running label while a call is live', () => {
+    mocks.loop.mockClear()
+    render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    expect(mocks.loop).toHaveBeenCalledOnce()
+  })
+
+  // "Remove animations" on, and "Running" kept breathing (0.6.6 audit).
+  // The word is still on the row; it just holds at full opacity.
+  it('holds the Running label still under reduced motion', () => {
+    mocks.reduced = true
+    mocks.loop.mockClear()
+    try {
+      const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+      expect(mocks.loop).not.toHaveBeenCalled()
+      expect(texts(tree)).toContain('Running')
+    } finally {
+      mocks.reduced = false
+    }
   })
 
   it('goes back to the batch summary the moment the turn settles', () => {

@@ -5,13 +5,13 @@ import {
   Text,
   TextInput,
   colors,
-  Pressable,
   Check,
   ActivityIndicator,
   Pencil
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-legacy-foundation'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
@@ -49,7 +49,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Pressable
+          <TasksRow
             style={styles.pickerRow}
             onPress={() => {
               clearWorkspaceBaseBranch()
@@ -62,7 +62,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
               <Text style={styles.pickerLabel}>Default branch</Text>
               <Text style={styles.pickerSubtitle}>Use this repository's configured base</Text>
             </View>
-          </Pressable>
+          </TasksRow>
           {workspaceBaseBranchLoading ? (
             <View style={styles.drawerLoadingRow}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -75,7 +75,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
           {workspaceBaseBranchResults.map((branch) => (
             <View key={`${branch.refName}:${branch.localBranchName}`}>
               <View style={styles.groupSeparator} />
-              <Pressable
+              <TasksRow
                 style={styles.pickerRow}
                 onPress={() => {
                   selectWorkspaceBaseBranch(branch)
@@ -96,7 +96,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
                     </Text>
                   ) : null}
                 </View>
-              </Pressable>
+              </TasksRow>
             </View>
           ))}
         </View>
@@ -130,7 +130,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
           <Text style={styles.sheetTitle}>Sparse Checkout</Text>
         </View>
         <View style={styles.detailGroup}>
-          <Pressable
+          <TasksRow
             style={styles.pickerRow}
             onPress={() => {
               setWorkspaceSparsePresetId(null)
@@ -146,12 +146,12 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
               <Text style={styles.pickerLabel}>Full checkout</Text>
               <Text style={styles.pickerSubtitle}>Use the whole repository</Text>
             </View>
-          </Pressable>
+          </TasksRow>
           {workspaceSparsePresets.map((preset) => (
             <View key={preset.id}>
               <View style={styles.groupSeparator} />
               <View style={styles.pickerRowWithAction}>
-                <Pressable
+                <TasksRow
                   style={styles.pickerRowMain}
                   onPress={() => {
                     setWorkspaceSparsePresetId(preset.id)
@@ -171,20 +171,20 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
                       {preset.directories.join(', ')}
                     </Text>
                   </View>
-                </Pressable>
-                <Pressable
+                </TasksRow>
+                <TasksButton
                   style={styles.iconActionButton}
                   accessibilityRole="button"
                   accessibilityLabel={`Edit ${preset.name}`}
                   onPress={() => startEditWorkspaceSparsePreset(preset)}
                 >
                   <Pencil size={15} color={colors.textMuted} />
-                </Pressable>
+                </TasksButton>
               </View>
             </View>
           ))}
         </View>
-        <Pressable
+        <TasksButton
           style={[
             styles.inlineSaveButton,
             !workspaceSparsePresetsLoaded || workspaceSparsePresetsLoading
@@ -195,7 +195,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
           onPress={startNewWorkspaceSparsePreset}
         >
           <Text style={styles.inlineSaveText}>New preset</Text>
-        </Pressable>
+        </TasksButton>
       </View>
     </BottomDrawer>
   )

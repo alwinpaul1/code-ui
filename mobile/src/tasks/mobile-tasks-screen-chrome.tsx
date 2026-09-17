@@ -1,7 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   View,
-  Pressable,
   ChevronLeft,
   colors,
   StatusDot,
@@ -10,6 +10,7 @@ import {
   Plus
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { TasksButton } from './mobile-tasks-pressables'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
 
@@ -51,14 +52,15 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
   } = model
   return (
     <View style={styles.statusBar}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
+      <TasksButton hitSlop={tapTargetHitSlop(styles.backButton)} style={styles.backButton} onPress={() => router.back()}>
         <ChevronLeft size={22} color={colors.textPrimary} />
-      </Pressable>
+      </TasksButton>
       <View style={styles.titleWrap}>
         <StatusDot state={connState} verdict={headerVerdict} />
         <Text style={styles.title}>Tasks</Text>
       </View>
-      <Pressable
+      <TasksButton
+        hitSlop={tapTargetHitSlop(styles.iconButton)}
         style={styles.iconButton}
         disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
         onPress={() => {
@@ -73,9 +75,10 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         }}
       >
         <RefreshCw size={16} color={taskUiReady ? colors.textSecondary : colors.textMuted} />
-      </Pressable>
+      </TasksButton>
       {showHeaderCreateTask ? (
-        <Pressable
+        <TasksButton
+          hitSlop={tapTargetHitSlop(styles.iconButton)}
           style={styles.iconButton}
           disabled={!taskUiReady}
           onPress={() => {
@@ -95,7 +98,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
           }}
         >
           <Plus size={16} color={taskUiReady ? colors.textSecondary : colors.textMuted} />
-        </Pressable>
+        </TasksButton>
       ) : null}
     </View>
   )

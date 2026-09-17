@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 const BROWSER_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape'] as const
@@ -13,6 +14,7 @@ export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.
     <View style={styles.keyRow}>
       {BROWSER_KEYS.map((key) => (
         <Pressable
+          hitSlop={tapTargetHitSlop(styles.keyButton)}
           key={key}
           style={({ pressed }) => [
             styles.keyButton,

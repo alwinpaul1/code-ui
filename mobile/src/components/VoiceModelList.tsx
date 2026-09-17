@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import { Check, Download, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
@@ -99,6 +100,7 @@ export function VoiceModelList({
                     </Pressable>
                   )}
                   <Pressable
+                    hitSlop={tapTargetHitSlop(styles.iconButton)}
                     style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                     disabled={anyBusy}
                     onPress={() => onDelete(model)}
@@ -115,6 +117,7 @@ export function VoiceModelList({
                 <ActivityIndicator size="small" color={colors.textSecondary} />
               ) : (
                 <Pressable
+                  hitSlop={tapTargetHitSlop(styles.iconButton)}
                   style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
                   disabled={anyBusy}
                   onPress={() => onDownload(model)}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Activity, CircleCheck, MessageCircleQuestionMark } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot (Orca 1.4.200,
 // out/renderer/assets/AgentStateDot-*.js): yellow spinner for 'working', the
@@ -41,9 +42,11 @@ export function AgentStateDot({
   const box = { width: size, height: size }
   const icon = size
   const dot = { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3 }
+  const reducedMotion = useReducedMotion()
 
   useEffect(() => {
-    if (state === 'working') {
+    // Unknown (null) holds too; see AgentSpinner. The arc still draws.
+    if (state === 'working' && reducedMotion === false) {
       const animation = Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
@@ -57,7 +60,7 @@ export function AgentStateDot({
     }
     spinValue.setValue(0)
     return undefined
-  }, [state, spinValue])
+  }, [reducedMotion, state, spinValue])
 
   if (state === 'working') {
     const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, radius } from '../theme/tokens'
+import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
 // The update dialog after UIAlertController (via BitChord's
 // UpdateAvailableDialog.kt): a fixed 270 card with a 14 corner, stacked 44
@@ -249,6 +250,9 @@ beforeEach(() => {
   })
   useApkInstallStore.setState({ phase: 'idle', progress: 0, version: null, fileUri: null, error: null })
   mocks.reducedMotion = false
+  // The shared hook remembers the OS's last answer across mounts; each case
+  // here states its own answer, so none may inherit the previous one's.
+  resetReducedMotionForTests()
   mocks.started.length = 0
   mocks.download.calls = 0
   mocks.spring.mockClear()
