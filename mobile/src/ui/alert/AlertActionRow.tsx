@@ -45,7 +45,7 @@ export function AlertActionRow({ label, onPress, preferred = false, destructive 
         alignItems: 'center',
         justifyContent: 'center',
         borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.border,
+        borderTopColor: colors.alertSeparator,
         backgroundColor: pressed ? colors.alertRowPressed : 'transparent'
       })}
     >

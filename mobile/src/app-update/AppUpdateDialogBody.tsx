@@ -1,8 +1,9 @@
 import { useMemo, type ReactNode } from 'react'
-import { ActivityIndicator, Linking, View } from 'react-native'
+import { ActivityIndicator, View } from 'react-native'
 
 import { useTheme } from '../theme/theme-context'
 import { AlertActionRow } from '../ui/alert/AlertActionRow'
+import { AlertSeparator } from '../ui/alert/AlertSeparator'
 import { AlertMessage, AlertScrollRegion, AlertTextBlock, AlertTitle } from '../ui/alert/AlertText'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
@@ -46,7 +47,6 @@ export function AppUpdateDialogBody({
 }) {
   const latestVersion = useAppUpdateStore((s) => s.latestVersion)
   const releaseNotes = useAppUpdateStore((s) => s.releaseNotes)
-  const releaseUrl = useAppUpdateStore((s) => s.releaseUrl)
   const updateUrl = useAppUpdateStore((s) => s.updateUrl)
   const startInstall = useApkInstallStore((s) => s.start)
   const reopenInstaller = useApkInstallStore((s) => s.install)
@@ -94,18 +94,13 @@ export function AppUpdateDialogBody({
             </AlertMessage>
             {notes ? null : <AlertMessage>Fixes and improvements.</AlertMessage>}
           </AlertTextBlock>
+          {notes ? <AlertSeparator /> : null}
           {notes ? <AppUpdateReleaseNotes markdown={notes} /> : null}
           {updateUrl ? (
             <AlertActionRow
               label="Update now"
               preferred
               onPress={() => void startInstall({ url: updateUrl, version })}
-            />
-          ) : null}
-          {releaseUrl ? (
-            <AlertActionRow
-              label="View on GitHub"
-              onPress={() => void Linking.openURL(releaseUrl).catch(() => {})}
             />
           ) : null}
           <AlertActionRow label="Later" onPress={onDismiss} />

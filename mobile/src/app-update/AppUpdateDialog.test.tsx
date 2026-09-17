@@ -588,7 +588,7 @@ describe('each state of the alert', () => {
       kind: 'available',
       arrange: () => showAvailable(),
       title: 'Update available',
-      rows: ['Update now', 'View on GitHub', 'Later'],
+      rows: ['Update now', 'Later'],
       scrimDismisses: true
     },
     {
@@ -717,7 +717,7 @@ describe('a card taller than the screen', () => {
       (node) => node.type === 'ScrollView' && flattenStyle(node.props.style).maxHeight === 220
     )[0]!
     expect(flattenStyle(notes.props.style).flexShrink).toBe(1)
-    for (const label of ['Update now', 'View on GitHub', 'Later']) {
+    for (const label of ['Update now', 'Later']) {
       const row = actionRow(root, label)
       expect(flattenStyle(row.props.style({ pressed: false })).flexShrink).toBe(0)
     }
@@ -746,15 +746,16 @@ describe('a card taller than the screen', () => {
   })
 })
 
+/**
+ * "View on GitHub" was removed from the alert (2026-09-17, by request). The
+ * release page is still reachable from About, which is where a link to a
+ * repository belongs; an update alert asks one question and should offer the
+ * answers to it, not a detour.
+ */
 describe('the release page', () => {
-  it('is one row away, and the alert stays while it opens', async () => {
+  it('is not an action on the update alert', async () => {
     showAvailable()
     const root = (await renderDialog()).root
-    await act(async () => actionRow(root, 'View on GitHub').props.onPress())
-    expect(mocks.openUrl).toHaveBeenCalledWith(
-      'https://github.com/alwinpaul1/code-ui/releases/tag/mobile-android-v0.6.5'
-    )
-    expect(root.findAllByType('Modal')).toHaveLength(1)
-    expect(useAppUpdateStore.getState().status).toBe('available')
+    expect(() => actionRow(root, 'View on GitHub')).toThrow()
   })
 })

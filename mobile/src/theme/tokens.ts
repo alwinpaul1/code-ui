@@ -71,6 +71,11 @@ export type ThemeColors = {
    *  a cut-out. Text contrast is proven against the COMPOSITE of this over
    *  `alertScrim` over `bg` in mobile-theme-contrast.test.ts. */
   alertMaterial: string
+  /** The hairline between an alert's rows. A translucent OVERLAY, not a palette
+   *  colour: the card's material is translucent, so a fixed hex is only correct
+   *  over one backdrop. `border` was used here and measured 1.03:1 against the
+   *  dark material — the rows ran together with no division at all. */
+  alertSeparator: string
   /** An alert action row while the finger is on it: ink at 8% in light,
    *  white at 6% in dark, painted over the material. `bgRaised` is the
    *  pressed-row colour elsewhere, but in dark it IS the material's colour,
@@ -118,6 +123,7 @@ export const lightColors: ThemeColors = {
   shadow: 'rgba(30, 28, 25, 0.18)',
   alertScrim: 'rgba(0, 0, 0, 0.28)',
   alertMaterial: 'rgba(251, 250, 246, 0.94)',
+  alertSeparator: 'rgba(0, 0, 0, 0.14)',
   alertRowPressed: 'rgba(30, 28, 25, 0.08)'
 }
 
@@ -160,6 +166,7 @@ export const darkColors: ThemeColors = {
   shadow: 'rgba(0, 0, 0, 0.5)',
   alertScrim: 'rgba(0, 0, 0, 0.28)',
   alertMaterial: 'rgba(43, 41, 37, 0.94)',
+  alertSeparator: 'rgba(255, 255, 255, 0.14)',
   alertRowPressed: 'rgba(255, 255, 255, 0.06)'
 }
 
