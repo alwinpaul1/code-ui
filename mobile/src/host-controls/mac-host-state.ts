@@ -17,23 +17,33 @@ const MARKER = 'CUIMAC'
 // Verified on macOS 26. `ioreg`'s CGSSessionScreenIsLocked is the lock signal and
 // `output muted` is the speaker flag; both answer in about a second.
 //
-// Display state is NOT asked for. `pmset -g log` was the only source that ever
-// answered it correctly here, and it dumps the entire power log: measured at 28
-// SECONDS on this Mac against a 4-second probe budget, so the whole probe timed
-// out and every row showed as unknown — including lock and mute, which are cheap
-// and were right (2026-09-14). The alternatives lie or are worse: `pmset -g
-// powerstate IODisplayWrangler` fails outright, ioreg's CurrentPowerState tracks
-// system sleep rather than the display, and `log show` took 123 seconds. Two
-// honest answers beat three where one costs the other two.
+// Display state comes from CGDisplayIsAsleep, the CoreGraphics call that owns the
+// answer, reached through JXA because every Mac ships osascript and not every Mac
+// ships python. 70 ms. It read awake / asleep / awake across a real display sleep
+// on 2026-09-18.
+//
+// Why not a power-state proxy: on 2026-09-14 the only source that answered was
+// `pmset -g log`, which dumps the whole power log — 28 SECONDS against a 4-second
+// budget — so the probe timed out and lock and mute, which are cheap and were
+// right, were lost with it. Both display rows showed on every Mac from then on
+// ("Wake display" on a Mac whose display was on). On 2026-09-18 the ioreg
+// candidates were measured across a real sleep: IOMobileFramebuffer reads
+// CurrentPowerState=1 awake AND asleep, and a full device-tree diff showed no
+// display node changing state within four seconds — only the video decoder,
+// camera and Neural Engine, which is background work. A proxy was never going to
+// say it.
 //
 // The `%s` placeholders matter: the shell paints this command line on the screen
 // too, and the format string must not match the marker the parser hunts for.
 export const MAC_HOST_STATE_PROBE_COMMAND =
-  `printf '${MARKER} lock=%s mute=%s\\n' ` +
+  `printf '${MARKER} lock=%s mute=%s display=%s\\n' ` +
   `"$(ioreg -n Root -d1 -a | plutil -p - | grep -c '"CGSSessionScreenIsLocked" => true')" ` +
-  `"$(osascript -e 'output muted of (get volume settings)')"`
+  `"$(osascript -e 'output muted of (get volume settings)')" ` +
+  `"$(osascript -l JavaScript -e 'ObjC.import("CoreGraphics"); $.CGDisplayIsAsleep($.CGMainDisplayID()) ? "off" : "on"')"`
 
-const MARKER_PATTERN = new RegExp(`${MARKER} lock=([01]) mute=(true|false)\\b`)
+// `display` is optional: a line from a build that did not ask, or a Mac where the
+// JXA call printed nothing, is still two honest answers.
+const MARKER_PATTERN = new RegExp(`${MARKER} lock=([01]) mute=(true|false)(?: display=(on|off))?\\b`)
 
 /** The last marker painted on the screen, or unknown. Unknown is a real answer here —
  *  it means "show every row" rather than "assume the Mac is awake". */
@@ -43,8 +53,7 @@ export function parseMacHostState(lines: string[]): MacHostState {
     if (match) {
       return {
         lock: match[1] === '1' ? 'locked' : 'unlocked',
-        // Not asked for; both display rows show, which is the honest answer.
-        display: 'unknown',
+        display: match[3] === 'on' ? 'on' : match[3] === 'off' ? 'off' : 'unknown',
         mute: match[2] === 'true' ? 'muted' : 'unmuted'
       }
     }
