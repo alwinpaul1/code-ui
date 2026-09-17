@@ -18,10 +18,17 @@ let lastKnown: boolean | null = null
 /**
  * The OS's reduce-motion setting: `true`, `false`, or `null` while unknown.
  *
- * Two readings, by what the animation is:
- * - A one-shot entrance (an alert, a drawer, a carousel slide) treats `null`
- *   as "hold": the setting decides the FIRST frame too, and the fallback
- *   below makes sure the hold is short.
+ * Three readings, by what the animation is:
+ * - A one-shot entrance that can afford to wait (the alert) treats `null` as
+ *   "hold": the setting decides the FIRST frame too, and the fallback below
+ *   makes sure the hold is short.
+ * - An entrance that must not wait (both drawers) treats `null` as full motion
+ *   — `useReducedMotion() === true`. Holding there would mean an effect
+ *   dependency on an async answer, and the recorded window hand-back path runs
+ *   through those effects. The cost is that a reduce-motion user whose FIRST
+ *   sheet opens before the OS answers gets one full slide; the cache makes that
+ *   rare, because the home screen's spinners have usually asked already.
+ *   Do not copy the alert's reading into a drawer without reading that path.
  * - A decorative loop (a spinner, a pulse) also holds at rest on `null`;
  *   a loop that started and had to be cancelled would be a flash of motion
  *   for the one user who asked for none.

@@ -119,3 +119,17 @@ describe('a control with a neighbour beside it', () => {
     expect(tapTargetHitSlop({ width: 32, height: 44 }, { horizontalGap: 0 })).toBeUndefined()
   })
 })
+
+// Degenerate: siblings that overlap are a layout bug, and the answer to one is
+// no slop. A negative inset would shrink the control this function exists to
+// grow, and the `x === 0 && y === 0` escape would not catch it.
+describe('a gap that is not a gap', () => {
+  it('never returns a negative inset', () => {
+    const slop = tapTargetHitSlop({ width: 26, height: 26 }, { horizontalGap: -8 })
+    expect(slop).toEqual({ top: 9, bottom: 9, left: 0, right: 0 })
+  })
+
+  it('returns nothing when a negative gap leaves no slop on either axis', () => {
+    expect(tapTargetHitSlop({ width: 26, height: 44 }, { horizontalGap: -8 })).toBeUndefined()
+  })
+})

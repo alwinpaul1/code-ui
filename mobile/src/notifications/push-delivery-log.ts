@@ -98,10 +98,21 @@ export async function recordDeliveredPush(
   }
   const run = writeTail.then(async () => {
     const current = await readFromStore(hostId)
-    if (current.some((existing) => existing.notificationId === entry.notificationId)) {
+    // Why the whole previous counter goes: a notification id is not unique
+    // across desktop restarts — `buildAgentNotificationId` is
+    // `agent:<worktreeId>:<paneKey>:<stateStartedAt>`, so an agent still in the
+    // same state re-issues the same id under the new epoch. Entries from the
+    // dead counter can never match the live buffer anyway, so they only spend
+    // the 256 the desktop accepts. notification-reconnect-catchup.ts drops
+    // `session.seen` on an epoch change for exactly this reason.
+    const live = current.filter((existing) => existing.notificationEpoch === entry.notificationEpoch)
+    // Identity is the TRIPLE the desktop matches on, so dedupe on the id WITHIN
+    // an epoch. Deduping on the id alone drops a genuinely new notification and
+    // leaves the log reporting a dead entry, which is a duplicate banner.
+    if (live.some((existing) => existing.notificationId === entry.notificationId)) {
       return
     }
-    const next = [...current, entry]
+    const next = [...live, entry]
     // Oldest first, so slicing from the end keeps the pushes a catch-up is most
     // likely to still be replaying.
     await writeToStore(hostId, next.slice(-MAX_REPORTED_DELIVERED_PUSHES))

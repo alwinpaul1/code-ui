@@ -41,8 +41,14 @@ export function tapTargetHitSlop(size: Size, neighbours?: Neighbours): Insets | 
   // what the user can see fires the wrong control. At half the gap two
   // neighbours' targets meet exactly and neither crosses. Flooring keeps them
   // from meeting one pixel late on an odd gap.
+  // Clamped at 0: a negative inset SHRINKS the target this function exists to
+  // grow, and `undefined` is returned only when both axes are 0, so a negative
+  // would escape. Overlapping siblings (a negative gap) are a layout bug, and
+  // the honest answer to one is no slop rather than a smaller control.
   const x =
-    neighbours === undefined ? wanted : Math.min(wanted, Math.floor(neighbours.horizontalGap / 2))
+    neighbours === undefined
+      ? wanted
+      : Math.max(0, Math.min(wanted, Math.floor(neighbours.horizontalGap / 2)))
   const y = height > 0 && height < MIN_TAP_TARGET ? Math.ceil((MIN_TAP_TARGET - height) / 2) : 0
   if (x === 0 && y === 0) {
     return undefined

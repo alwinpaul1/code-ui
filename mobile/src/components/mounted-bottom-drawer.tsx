@@ -300,8 +300,7 @@ export function MountedBottomDrawer({
     // drives its opacity instead, so it fades in place. The drag offset and
     // the keyboard lift still apply: those follow the finger and the keys,
     // not a transition. Only this mapping changes; the effects, durations
-    // and gestures above are untouched. With full motion the object is the
-    // one it always was, with no opacity key at all.
+    // and gestures above are untouched.
     const enterTravel = reduceMotion
       ? 0
       : interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP)

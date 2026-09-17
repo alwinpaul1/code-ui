@@ -80,6 +80,54 @@ describe('remembering which notifications arrived by push', () => {
     expect(await loadDeliveredPushes('host-a')).toEqual([])
   })
 
+  /**
+   * A notification id is NOT unique across desktop restarts.
+   * `buildAgentNotificationId` is `agent:<worktreeId>:<paneKey>:<stateStartedAt>`,
+   * so an agent still sitting in the same state re-issues the same id under the
+   * new counter. Deduping on the id alone therefore drops the new push as if it
+   * were the old one — and the log then reports only the DEAD epoch's entry,
+   * which cannot match the desktop's live buffer, so the catch-up replays it and
+   * the reader sees the banner twice. Exactly what the log exists to prevent.
+   *
+   * notification-reconnect-catchup.ts clears `session.seen` on every epoch change
+   * for this same reason; this log needs the equivalent.
+   */
+  it('does not mistake a re-issued id under a new epoch for one it already showed', async () => {
+    await recordDeliveredPush('host-a', {
+      notificationId: 'n-7',
+      notificationEpoch: 'epoch-1',
+      notificationSeq: 3
+    })
+    await recordDeliveredPush('host-a', {
+      notificationId: 'n-7',
+      notificationEpoch: 'epoch-2',
+      notificationSeq: 3
+    })
+    expect(await loadDeliveredPushes('host-a')).toContainEqual({
+      notificationId: 'n-7',
+      notificationEpoch: 'epoch-2',
+      notificationSeq: 3
+    })
+  })
+
+  // The dead counter's entries can never match the live buffer, so keeping them
+  // only spends the 256 the desktop will accept.
+  it('forgets the previous counter once a push arrives under a new one', async () => {
+    await recordDeliveredPush('host-a', {
+      notificationId: 'n-1',
+      notificationEpoch: 'epoch-1',
+      notificationSeq: 1
+    })
+    await recordDeliveredPush('host-a', {
+      notificationId: 'n-2',
+      notificationEpoch: 'epoch-2',
+      notificationSeq: 1
+    })
+    expect(await loadDeliveredPushes('host-a')).toEqual([
+      { notificationId: 'n-2', notificationEpoch: 'epoch-2', notificationSeq: 1 }
+    ])
+  })
+
   it('reports each notification once even if the same push is delivered twice', async () => {
     await recordDeliveredPush('host-a', entry(7))
     await recordDeliveredPush('host-a', entry(7))
