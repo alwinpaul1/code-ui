@@ -10,6 +10,12 @@ export const mobileTasksListStyles = StyleSheet.create({
   taskRowPressed: {
     backgroundColor: colors.bgRaised
   },
+  /** For a row that already RESTS on bgRaised — a selected picker entry. The
+   *  ordinary lift paints the colour such a row is already wearing, so it
+   *  acknowledges nothing; this is the next step up the same ramp. */
+  taskRowPressedOnRaised: {
+    backgroundColor: colors.borderSubtle
+  },
   taskIcon: {
     width: 20,
     paddingTop: 3,

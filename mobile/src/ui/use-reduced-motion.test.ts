@@ -72,6 +72,35 @@ afterEach(() => {
 })
 
 describe('the reduce-motion setting', () => {
+  /**
+   * The cache is what makes a first frame usable, and it is also the one way
+   * the hook can start from a WRONG answer: the OS setting can change while no
+   * consumer is mounted to hear `reduceMotionChanged`, so the next mount seeds
+   * from a value that is now stale.
+   *
+   * This is not hypothetical — it is the trigger for the drawer defect found on
+   * 2026-09-17, where a stale `true` drew the first frame near opacity 0 and the
+   * correction to `false` then dropped the opacity key entirely, stranding an
+   * interactive drawer invisible. The suite had every other transition and not
+   * this one, which is why it shipped.
+   */
+  it('corrects a cached answer that has gone stale since the last mount', async () => {
+    mocks.answer = true
+    await mount()
+    expect(seen.at(-1)).toBe(true)
+    unmount()
+
+    // The user turned the setting off with nothing mounted to hear it.
+    seen = []
+    mocks.answer = false
+    await mount()
+
+    // The first frame trusts the cache, which is the whole point of having one.
+    expect(seen[0]).toBe(true)
+    // And the OS's answer must win, or every later mount stays wrong.
+    expect(seen.at(-1)).toBe(false)
+  })
+
   it('is unknown until the OS has answered', async () => {
     mocks.answer = 'never'
     await mount()

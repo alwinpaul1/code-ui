@@ -32,16 +32,26 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // `'pressedStyle'` literal (3452 → 3455); the render tree renames the same tags at the same
 // token count. Hooks and the StyleSheets are untouched and still match their earlier pins.
 // mobile-tasks-press-feedback.test.tsx is what guards the rows from here on.
-// 0.6.7 tap targets, the same release: the eight controls drawn at 40 dp or less (the 32 dp back
-// and icon buttons, the 32 × 30 view-link segment, the 44 × 38 pagination pair, the 32 dp comment
-// send button, the 40 dp paste button) gained `hitSlop={tapTargetHitSlop(styles.<key>)}`, which
-// is one more attribute on eight `jsx:` signatures at the same count, one import per file, and
-// 80 more render tokens (35 195 → 35 275). src/ui/tap-target-audit.test.ts guards them from here.
+// 0.6.7 tap targets, the same release: the NINE controls drawn at 40 dp or less (the 32 dp back
+// button, three 32 dp icon buttons — two in the status bar and one in the item drawer — the
+// 32 × 30 view-link segment, the 44 × 38 pagination pair, the 32 dp comment send button and the
+// 40 dp paste button) gained `hitSlop={tapTargetHitSlop(styles.<key>)}`, which is one more
+// attribute on nine `jsx:` signatures at the same count, one import per file, and 80 more render
+// tokens (35 195 → 35 275). src/ui/tap-target-audit.test.ts guards them from here.
+// (Said "eight" twice and named only eight, omitting the item-drawer icon button; a review caught
+// the arithmetic. `grep -c tapTargetHitSlop src/tasks/*.tsx` sums to nine.)
+// 0.7.0, from a review of the above: the ONE TasksRow that rests on bgRaised (the selected
+// GitHub page picker row) took the lift in the colour it was already wearing, so the row a user
+// had chosen acknowledged no press while every row around it did — the exact thing this release
+// set out to fix, and invisible because `pickerRowSelected` and `taskRowPressed` are the same
+// token. TasksRow gained a `raised` prop and the StyleSheet a `taskRowPressedOnRaised` key, which
+// moves `semantics` (one more jsx: attribute and the new literal), the StyleSheet pin (one new
+// key) and the render tree (+4). The statements and declarations pins do not move.
 const TAP_TARGET_STATEMENTS = 'd7350b217e5d774c7c2ebea307babb6beb91ebf9ef73cd1d76f38b8b9ebe8dc8'
 const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
-const TAP_TARGET_SEMANTICS = 'e1610b05ef4dfee1b2685c5a9e6de24e6e9e5f1edccd771b92c0d0be86b5841f'
-const PRE_REFACTOR_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
-const TAP_TARGET_RENDER_TREE = 'e35bc375a8e8d57261a1c58bf4ac032e8930f9fcc957f96ea1797104fe64b72b'
+const TAP_TARGET_SEMANTICS = '0da438601c08cbed75ab29836dcae9a099644f8401e2e86a61d3b772cc8080cf'
+const PRE_REFACTOR_STYLES = '02b2a5bb8efde1de40d6549ef97f5ae4ac8288927736dccb028d62fe19de2f2d'
+const TAP_TARGET_RENDER_TREE = 'ee1e8e3181777d7764c0cad5909d60de997f5aa6f05688952285623d6b392ce9'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -72,6 +82,8 @@ describe('Mobile Tasks refactor parity', () => {
     expect(hash(semantics)).toBe(TAP_TARGET_SEMANTICS)
   })
 
+  // 35_287 -> 35_291: `raised={selected}` on the GitHub page picker row, four
+  // tokens. See the selected-row note above the pins.
   // 35_275 -> 35_287: two `tapTargetHitSlop(styles.iconButton)` calls in
   // mobile-tasks-screen-chrome gained a `{ horizontalGap: 0 }` argument, six
   // tokens each. The statusBar row sets no gap, so without the cap the Create
@@ -79,7 +91,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_287)
+    expect(tokens).toHaveLength(35_291)
     expect(hash(tokens)).toBe(TAP_TARGET_RENDER_TREE)
   })
 

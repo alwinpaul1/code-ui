@@ -354,6 +354,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
             <TasksRow
               key={`github-page:${index}`}
               style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+              raised={selected}
               disabled={githubPaginationLoading}
               onPress={() => {
                 setShowGitHubPagePicker(false)

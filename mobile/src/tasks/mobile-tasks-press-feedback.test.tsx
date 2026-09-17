@@ -26,7 +26,9 @@ vi.mock('./mobile-tasks-dependencies', async () => {
 import { colors } from '../theme/mobile-theme'
 import { mobileTasksDetailStyles } from './mobile-tasks-detail-styles'
 import { mobileTasksListStyles } from './mobile-tasks-list-styles'
+import { contrastRatio } from '../test/contrast'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
+import { mobileTasksProjectPickerStyles } from './mobile-tasks-project-picker-styles'
 
 const TASKS_DIR = import.meta.dirname
 
@@ -112,6 +114,22 @@ describe('the two tasks shapes', () => {
     expect(styleAt(row, false).backgroundColor).toBe(resting.backgroundColor)
   })
 
+  /**
+   * The selected row in a picker already rests on `bgRaised`, which is the exact
+   * colour the lift paints. So the one row a user has chosen — the one they are
+   * most likely to press again — acknowledged nothing at all, while every row
+   * around it did. Invisible to every other check, because both sides are the
+   * same token and neither is wrong on its own.
+   */
+  it('lifts a row that already rests at the lift colour to something else', () => {
+    const resting = {
+      ...mobileTasksProjectPickerStyles.pickerRow,
+      ...mobileTasksProjectPickerStyles.pickerRowSelected
+    }
+    const row = createElement(TasksRow, { style: resting, raised: true })
+    expect(styleAt(row, true).backgroundColor).not.toBe(resting.backgroundColor)
+  })
+
   it('TasksButton dims while pressed and is opaque at rest', () => {
     const button = createElement(TasksButton, { style: { padding: 4 } })
     expect(styleAt(button, true).opacity).toBeLessThan(1)
@@ -130,24 +148,3 @@ describe('the two tasks shapes', () => {
   })
 })
 
-function channelLuminance(channel: number): number {
-  const value = channel / 255
-  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
-}
-
-function relativeLuminance(hex: string): number {
-  const red = Number.parseInt(hex.slice(1, 3), 16)
-  const green = Number.parseInt(hex.slice(3, 5), 16)
-  const blue = Number.parseInt(hex.slice(5, 7), 16)
-  return (
-    0.2126 * channelLuminance(red) +
-    0.7152 * channelLuminance(green) +
-    0.0722 * channelLuminance(blue)
-  )
-}
-
-function contrastRatio(foreground: string, background: string): number {
-  const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background))
-  const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background))
-  return (lighter + 0.05) / (darker + 0.05)
-}
