@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { fastestRunMs } from './markdown-parse-cost'
 import { describe, expect, it } from 'vitest'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
@@ -19,20 +20,17 @@ describe('the cost of re-parsing a streaming message', () => {
     expect(document.length).toBeGreaterThan(5_000)
     // Warm the lexer so the first-call cost is not measured as the steady one.
     parseMobileMarkdown(`${document}\n\nwarm`)
-    const started = performance.now()
-    const runs = 20
-    for (let index = 0; index < runs; index += 1) {
-      parseMobileMarkdown(`${document}\n\ntick ${index}`)
-    }
-    const perParse = (performance.now() - started) / runs
+    let tick = 0
+    const perParse = fastestRunMs(() => parseMobileMarkdown(`${document}\n\ntick ${(tick += 1)}`))
     expect(perParse).toBeLessThan(16)
   })
 
   it('parses a message four times that length inside two frames', () => {
     const document = readFileSync(CLAUDE_MD, 'utf8').repeat(4)
     parseMobileMarkdown(`${document}\n\nwarm`)
-    const started = performance.now()
-    parseMobileMarkdown(`${document}\n\nmeasured`)
-    expect(performance.now() - started).toBeLessThan(32)
+    let tick = 0
+    expect(
+      fastestRunMs(() => parseMobileMarkdown(`${document}\n\nmeasured${(tick += 1)}`))
+    ).toBeLessThan(32)
   })
 })

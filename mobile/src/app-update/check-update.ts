@@ -19,7 +19,7 @@ export type UpdateCheckResult =
       latestBuildNumber?: string
       releaseNotes?: string
       updateUrl?: string
-      /** Web page of the release, for "Read the full release notes". */
+      /** Web page of the release, for the dialog's "View on GitHub" row. */
       releaseUrl?: string
     }
   | { status: 'error' }

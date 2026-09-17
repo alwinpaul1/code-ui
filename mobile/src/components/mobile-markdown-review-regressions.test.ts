@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
+import { fastestRunMs } from './markdown-parse-cost'
 
 // Every case here is a defect a review found in the marked migration that the
 // rest of the suite could not see, each reproduced before it was fixed.
@@ -153,8 +154,9 @@ describe('the cost of a long list while it streams', () => {
     const list = (tag: string) =>
       Array.from({ length: 1000 }, (_, index) => `${index + 1}. item ${index} ${tag}`).join('\n')
     parseMobileMarkdown(list('warm'))
-    const started = performance.now()
-    parseMobileMarkdown(list('measured'))
-    expect(performance.now() - started).toBeLessThan(16)
+    // Fastest of several: a shared runner's scheduler, not the parser, failed
+    // this at 16.79 ms and blocked the 0.6.5 release. See markdown-parse-cost.ts.
+    let tick = 0
+    expect(fastestRunMs(() => parseMobileMarkdown(list(`measured${(tick += 1)}`)))).toBeLessThan(16)
   })
 })
