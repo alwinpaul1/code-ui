@@ -1,9 +1,10 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { BellRing, MessageSquare } from 'lucide-react-native'
+import { MessageSquare } from 'lucide-react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { colors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -27,6 +28,9 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  // The shell paints its background from this palette; drawing the page from
+  // the legacy static one left near-white text on the light background.
+  const { colors } = useTheme()
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -38,27 +42,39 @@ export function MobileOnboardingPage({
       accessibilityElementsHidden={!active}
       importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
     >
-      <View style={styles.content}>
-        <View style={styles.iconSurface}>
-          {isSessionView ? (
-            <MessageSquare size={30} color={colors.textPrimary} />
-          ) : (
-            <BellRing size={30} color={colors.textPrimary} />
-          )}
-        </View>
-        <Text style={styles.title}>
-          {isSessionView ? 'How should sessions open?' : 'Stay updated while away'}
+      <View style={[styles.content, !isSessionView && styles.notificationContent]}>
+        {isSessionView ? (
+          <View style={[styles.iconSurface, { backgroundColor: colors.bgRaised }]}>
+            <MessageSquare size={30} color={colors.text} />
+          </View>
+        ) : (
+          <NotificationOnboardingPreview active={active} />
+        )}
+        <Text style={[styles.title, { color: colors.text }]}>
+          {isSessionView ? 'How should sessions open?' : 'Don’t miss when an agent needs you'}
         </Text>
-        <Text style={styles.body}>
+        <Text style={[styles.body, { color: colors.textMuted }]}>
           {isSessionView
             ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
-            : 'Get notified on this device when an agent needs your input or finishes a task.'}
+            : 'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'}
         </Text>
       </View>
 
       <View style={styles.footer}>
+        {/* Why not upstream's wording: upstream delivers through Orca's push
+            service after a 3-minute desktop idle. This fork has no push service
+            — notifications are local ones raised over the desktop connection,
+            which a background service holds open while the app is closed. Saying
+            otherwise would misdescribe the one mechanism this screen exists to
+            explain. */}
+        {!isSessionView ? (
+          <Text style={[styles.disclosure, { color: colors.textMuted }]}>
+            Delivered over your desktop connection, which a background service keeps open while
+            the app is closed. Change this anytime in Settings.
+          </Text>
+        ) : null}
         {error ? (
-          <Text style={styles.error} accessibilityRole="alert">
+          <Text style={[styles.error, { color: colors.danger }]} accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -151,22 +167,33 @@ function ChoiceButton({
   disabled: boolean
   onPress: () => void
 }) {
+  const { colors } = useTheme()
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       style={({ pressed }) => [
-        primary ? styles.primaryButton : styles.secondaryButton,
+        primary
+          ? [styles.primaryButton, { backgroundColor: colors.accent }]
+          : styles.secondaryButton,
         pressed && styles.buttonPressed,
         disabled && styles.buttonDisabled
       ]}
       onPress={onPress}
     >
       {busy ? (
-        <ActivityIndicator color={primary ? colors.bgBase : colors.textSecondary} />
+        <ActivityIndicator color={primary ? colors.onAccent : colors.textSecondary} />
       ) : (
-        <Text style={primary ? styles.primaryButtonText : styles.secondaryButtonText}>{label}</Text>
+        <Text
+          style={
+            primary
+              ? [styles.primaryButtonText, { color: colors.onAccent }]
+              : [styles.secondaryButtonText, { color: colors.textSecondary }]
+          }
+        >
+          {label}
+        </Text>
       )}
     </Pressable>
   )
