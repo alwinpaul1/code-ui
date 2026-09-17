@@ -281,6 +281,7 @@ export function MobileNativeChatOverlay({
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
         queuedMessages={projectedQueue.queue}
         onEditQueue={controller.openNativeChatQueueEditor}
+        onSendQueueNow={controller.sendNativeChatQueueNow}
         queueEditor={controller.nativeChatQueueEditor}
         pending={pendingWithDesktopPrompts}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}

@@ -74,6 +74,7 @@ export function MobileNativeChatView({
   getComposerEditGeneration,
   queuedMessages,
   onEditQueue,
+  onSendQueueNow,
   queueEditor,
   pending,
   imagePreviewsByMessageId,
@@ -340,6 +341,8 @@ export function MobileNativeChatView({
                 hostBackgroundTasks={hostBackgroundTasks}
                 queuedMessages={queuedMessages}
                 onEditQueue={onEditQueue}
+                onSendQueueNow={onSendQueueNow}
+                agentWorking={agentWorking === true}
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
                 onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}

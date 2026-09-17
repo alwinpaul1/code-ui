@@ -179,3 +179,54 @@ it('scrolls a queued message with several images sideways and pages the viewer',
   )
   act(() => renderer!.unmount())
 })
+
+/**
+ * Claude Code 2.1.275 added a send-now key that interrupts the turn and sends
+ * the whole queue. The button that sends it is drawn only in the one state
+ * where the key does what it says — Claude, working, with something queued —
+ * because outside that it is a no-op, or on an older build an unbound
+ * sequence the phone cannot know about.
+ */
+function sendNowButton(renderer: ReturnType<typeof create>) {
+  return renderer.root
+    .findAllByType('Pressable')
+    .find((node) => node.props.accessibilityLabel === 'Send queued messages now')
+}
+
+it('offers Send now while Claude is working with a queue, and sends the key on tap', async () => {
+  const onSendNow = vi.fn().mockResolvedValue(true)
+  const projected = projectMobileChatQueue([], ['first', 'second'])
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, {
+        messages: projected.queue,
+        agent: 'claude',
+        agentWorking: true,
+        onSendNow
+      })
+    )
+  })
+  const button = sendNowButton(renderer!)
+  expect(button).toBeDefined()
+  await act(async () => button!.props.onPress())
+  expect(onSendNow).toHaveBeenCalledTimes(1)
+})
+
+it.each([
+  ['Claude is idle', { agent: 'claude', agentWorking: false }],
+  ['the agent is Codex', { agent: 'codex', agentWorking: true }]
+])('does not offer Send now when %s', async (_label, props) => {
+  const projected = projectMobileChatQueue([], ['first'])
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatQueue, {
+        messages: projected.queue,
+        ...props,
+        onSendNow: vi.fn()
+      })
+    )
+  })
+  expect(sendNowButton(renderer!)).toBeUndefined()
+})

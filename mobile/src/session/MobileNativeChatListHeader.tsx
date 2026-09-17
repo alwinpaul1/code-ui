@@ -22,6 +22,8 @@ export function MobileNativeChatListHeader({
   hostBackgroundTasks,
   queuedMessages,
   onEditQueue,
+  onSendQueueNow,
+  agentWorking = false,
   unanchoredTurnStatus,
   turnActivity,
   onOpenBackgroundTasks
@@ -40,6 +42,8 @@ export function MobileNativeChatListHeader({
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   queuedMessages?: readonly MobileChatQueueEntry[]
   onEditQueue?: (index: number, tapped: string) => Promise<void>
+  onSendQueueNow?: () => Promise<boolean>
+  agentWorking?: boolean
   /** Set only while the live turn has no user message to hang its status under. */
   unanchoredTurnStatus?: NativeChatTurnStatus | null
   turnActivity?: NativeChatTurnActivity | null
@@ -62,7 +66,13 @@ export function MobileNativeChatListHeader({
         />
       ) : null}
       <MobileBackgroundTasksRow runningCount={runningTaskCount} onPress={onOpenBackgroundTasks} />
-      <MobileNativeChatQueue messages={queuedMessages} agent={agent} onEdit={onEditQueue} />
+      <MobileNativeChatQueue
+        messages={queuedMessages}
+        agent={agent}
+        onEdit={onEditQueue}
+        onSendNow={onSendQueueNow}
+        agentWorking={agentWorking}
+      />
     </>
   )
 }

@@ -76,6 +76,7 @@ export type MobileNativeChatViewProps = {
   /** Accepted user echoes awaiting transcript replacement, including image previews. */
   queuedMessages?: readonly MobileChatQueueEntry[]
   onEditQueue?: (index: number, tapped: string) => Promise<void>
+  onSendQueueNow?: () => Promise<boolean>
   queueEditor?: InlineQueueEditor | null
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an

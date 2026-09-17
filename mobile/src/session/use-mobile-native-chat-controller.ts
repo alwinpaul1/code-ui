@@ -494,7 +494,7 @@ export function useMobileNativeChatController(
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
-    openNativeChatQueueEditor: queueEditor.open,
+    openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     beginNativeChatImageSend: clearDraftAtSendStart,

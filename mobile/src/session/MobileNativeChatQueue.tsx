@@ -6,6 +6,8 @@ import { useTheme } from '../theme/theme-context'
 import { openImagePreview } from './image-preview-store'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+import { canSendQueueNow } from './claude-send-queue-now'
+import { tapTargetHitSlop } from '../ui/tap-target'
 
 /** The queue sits in the chat list's header, and FlashList inverts that list on
  *  Android with a 180° rotation of the list and of every cell. A plain
@@ -22,11 +24,16 @@ const QUEUE_FLIP =
 export function MobileNativeChatQueue({
   messages,
   agent,
-  onEdit
+  onEdit,
+  onSendNow,
+  agentWorking = false
 }: {
   messages?: readonly MobileChatQueueEntry[]
   agent?: string | null
   onEdit?: (index: number, tapped: string) => Promise<void>
+  /** Claude's send-now key (2.1.275): interrupt the turn and send the queue. */
+  onSendNow?: () => Promise<boolean>
+  agentWorking?: boolean
 }) {
   const { colors, space, radius } = useTheme()
   const scrollRef = useRef<ScrollView>(null)
@@ -88,6 +95,27 @@ export function MobileNativeChatQueue({
             </Txt>
           </View>
         </View>
+        {onSendNow &&
+        canSendQueueNow({ agent: agent ?? null, working: agentWorking, queued: messages.length }) ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send queued messages now"
+            accessibilityHint="Interrupts the current turn and sends everything queued"
+            hitSlop={tapTargetHitSlop({ height: 32 })}
+            onPress={() => void onSendNow()}
+            style={({ pressed }) => ({
+              minHeight: 32,
+              justifyContent: 'center',
+              paddingHorizontal: space.sm,
+              borderRadius: radius.sm,
+              opacity: pressed ? 0.7 : 1
+            })}
+          >
+            <Txt variant="label" weight="medium" tone="accent">
+              Send now
+            </Txt>
+          </Pressable>
+        ) : null}
       </View>
       <ScrollView
         ref={scrollRef}

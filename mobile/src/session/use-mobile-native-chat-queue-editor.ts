@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createQueueEditorIo } from './mobile-native-chat-queue-editor-io'
+import { sendClaudeQueueNow } from './claude-send-queue-now'
 import {
   clearMobileNativeChatInputResidue,
   markMobileNativeChatInputResidue
@@ -256,8 +257,28 @@ export function useMobileNativeChatQueueEditor(args: {
       setBusy(false)
     }
   }
+  // Claude's send-now key (2.1.275): interrupt the turn, send the whole queue.
+  // Same scope the editor writes with — the terminal the queue is drawn in.
+  const sendNow = async (): Promise<boolean> => {
+    const current = latest.current
+    const handle = current.handleRef.current
+    if (!current.client || !current.enabled || !handle || inFlight.current) {
+      return false
+    }
+    const accepted = await sendClaudeQueueNow({
+      client: current.client,
+      terminal: handle,
+      deviceToken: current.deviceTokenRef.current
+    })
+    if (!accepted) {
+      current.onError('The agent did not take the send-now key. The queue is unchanged.')
+    }
+    return accepted
+  }
+
   return {
     open,
+    sendNow,
     editor: editing
       ? ({
           text: editing.text,

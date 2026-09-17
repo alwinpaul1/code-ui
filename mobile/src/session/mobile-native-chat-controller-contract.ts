@@ -100,6 +100,9 @@ export type MobileNativeChatController = {
   prepareNativeChatImageSend?: () => Promise<void>
   /** Uses the original agent input for desktop and mobile queued messages. */
   openNativeChatQueueEditor?: (index: number, tapped: string) => Promise<void>
+  /** Claude's send-now key (2.1.275): interrupt the turn, send the whole
+   *  queue. Resolves to whether the host accepted the write. */
+  sendNativeChatQueueNow?: () => Promise<boolean>
   nativeChatQueueEditor?: InlineQueueEditor | null
   handleNativeChatStop: () => void
   nativeChatFilePaths: string[]
