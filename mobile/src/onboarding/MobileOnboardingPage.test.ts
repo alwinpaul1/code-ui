@@ -41,6 +41,12 @@ vi.mock('lucide-react-native', () => ({
   MessageSquare: 'MessageSquare'
 }))
 
+// Not a dead mock: the page renders NotificationOnboardingPreview, which imports
+// AppLogo, which imports react-native-svg. Without this the real module loads
+// untransformed and the whole suite fails to parse ("Unexpected token 'typeof'").
+// A direct grep for the import in this component finds nothing, which is how it
+// came to be removed once already.
+vi.mock('../components/AppLogo', () => ({ AppLogo: 'AppLogo' }))
 
 describe('MobileOnboardingPage', () => {
   let renderer: ReactTestRenderer | null = null
