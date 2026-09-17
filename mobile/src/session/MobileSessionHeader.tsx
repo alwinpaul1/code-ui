@@ -36,15 +36,22 @@ import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 /** The active session's model label, or null when the agent has no model
- *  catalog or the tracked value is still the placeholder (#18568). */
+ *  catalog, the tracked value is still the placeholder (#18568), or nothing has
+ *  confirmed the model — see session-model-pill.ts for why the last one is not
+ *  a degraded answer. */
 export function resolveSessionModelLabel(controller: MobileSessionController): string | null {
-  const snapshot = controller.nativeChatController.nativeChatSessionOptions?.controller.snapshot
-  const model = snapshot?.find((descriptor) => descriptor.category === 'model')
+  const options = controller.nativeChatController.nativeChatSessionOptions?.controller
+  const model = options?.snapshot.find((descriptor) => descriptor.category === 'model')
   if (!model) {
     return null
   }
   const label = mobileModelPillLabel(model)
-  return label === 'Model' ? null : label
+  if (label === 'Model') {
+    return null
+  }
+  // The pill asserts what the session IS running. Only the agent's own word is
+  // evidence of that; the tracked record is a pick it may never have honoured.
+  return options?.modelConfirmed === true ? label : null
 }
 
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {

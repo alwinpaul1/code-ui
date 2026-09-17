@@ -136,7 +136,12 @@ export function useMobileNativeChatSessionOptionController(args: {
             pendingId: structuredPendingId,
             setOption: setStructuredOption,
             invokeAction: invokeStructuredAction,
-            recordCommand: () => {}
+            recordCommand: () => {},
+            // True on this lane because the snapshot IS the desktop's own
+            // account of the session, not a pick this app tracked locally. The
+            // confirmation gate exists for the terminal lane, where the model
+            // can only be learned by the agent saying so.
+            modelConfirmed: true
           }
         : null,
     [
