@@ -22,6 +22,40 @@ type Size = {
  * how a flex child is told it may shrink, and a row with no height set is
  * as tall as its content. Only a stated size below the minimum earns slop.
  */
+/**
+ * NOT DONE, and the next person to touch this should do it: make `neighbours`
+ * REQUIRED, with a named `NO_HORIZONTAL_NEIGHBOUR` for genuinely isolated
+ * controls.
+ *
+ * Why the compiler and not an audit test. A 2026-09-17 review parsed every
+ * hitSlop site and tried to resolve its container's gap from the StyleSheets:
+ * 95 sites, 80 with a container in the same file, 53 with a gap it could
+ * actually read. The 42 misses are structural, not fixable by a better regex —
+ * 15 pressables ARE their component's root, so the gap lives in whichever
+ * caller renders them (both browser cases, the two worst found, are these),
+ * others put the gap on `contentContainerStyle`, and others space children by
+ * margins with no gap at all, where "no gap" would read as 0 and flag them
+ * falsely.
+ *
+ * Worse, ~31 gaps in this codebase are arithmetic rather than literals
+ * (`space.xs + 2`, `spacing.sm + 2`). A regex reads `space.xs` and returns 4
+ * where the real gap is 6, so the cap comes out at 2 instead of 3 and silently
+ * NARROWS a target that was already correct. A wrong gap is worse than no gap
+ * because it fails closed in a direction nobody reviews. The key strip's own
+ * gap is one of these.
+ *
+ * A required parameter costs no parsing, covers the cross-file cases tsc does
+ * not care about, is answered by the author who can see the layout rather than
+ * inferred from a file that may not contain it, and fails at the call site
+ * instead of in a list. It is what MobileNativeChatKeyStrip did by hand and
+ * nothing else copied; the difference between a convention and a gate is
+ * whether the compiler asks.
+ *
+ * Left undone on purpose: it means a layout judgement at ~35 call sites, and
+ * making 35 of those in a hurry is exactly how a wrong gap gets in. Six sites
+ * with a measured overlap are capped; 17 more have a horizontal component and
+ * unknown neighbours (run the probe in the commit that added this note).
+ */
 type Neighbours = {
   /**
    * The gap, in dp, between this control and the one beside it. Pass it
