@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { decodeAccountsSnapshot } from '../components/AccountUsage'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
+import { offerPushTokenToHost } from '../notifications/push-offer'
 import { syncAgentHudDesktopLaunchArgs } from '../session/agent-hud-desktop-launch-args'
 import { loadDesktopHudLaunchEnabled } from '../session/desktop-hud-launch-preference'
 import { usePrimeHosts } from '../transport/client-context'
@@ -52,6 +53,10 @@ function wireMobileHomeHostSubscriptions(
         .then((desktopHud) => syncAgentHudDesktopLaunchArgs(entry.client, desktopHud))
         .catch(() => null)
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
+      // Why on every connect rather than once: the desktop keeps a registration
+      // only until it expires, and a host restart drops it entirely. Off by
+      // default, so this is a no-op for anyone who has not asked for it.
+      void offerPushTokenToHost(entry.client, entry.hostId)
       unsubscribeAccounts ??= entry.client.subscribe('accounts.subscribe', null, (payload) => {
         if (!payload || typeof payload !== 'object') {
           return

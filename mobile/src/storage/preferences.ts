@@ -30,6 +30,30 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
 }
 
+const REMOTE_PUSH_KEY = 'orca:remotePushEnabled'
+
+/**
+ * Whether this device offers its push token to the hosts it connects to.
+ *
+ * Default OFF, and deliberately separate from the notifications switch above.
+ * Turning it on sends an FCM token to whatever push gateway the desktop is
+ * built against, which on a stock Orca desktop is not one this fork controls. A
+ * token is not a secret, but leaving the LAN is the user's decision to make,
+ * not an update's. It also cannot work yet: a gateway can only route a token
+ * minted by a Firebase project it holds credentials for.
+ */
+export async function loadRemotePushEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(REMOTE_PUSH_KEY)) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export async function saveRemotePushEnabled(enabled: boolean): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_KEY, String(enabled))
+}
+
 // The app version this install was last asked, on open, for the battery
 // exemption background delivery needs.
 //

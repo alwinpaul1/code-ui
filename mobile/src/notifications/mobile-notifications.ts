@@ -14,6 +14,11 @@ import {
   type NotificationEvent
 } from './local-notification-scheduling'
 import {
+  cachedDeliveredPushes,
+  reportableDeliveredPushes,
+  seedDeliveredPushes
+} from './push-delivery-log'
+import {
   adoptNotificationEpoch,
   catchUpWatermarkSeq,
   enqueueHostDelivery,
@@ -147,12 +152,24 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // Captured before the request: everything at or below it is known delivered, so
     // it is the floor the watermark falls back to if this catch-up never completes.
     const askFrom = catchUpWatermarkSeq(session)
+    // Why: a push shown while the app was dead left no trace the desktop can see,
+    // so without naming those notifications the replay shows every one of them a
+    // second time. Pruned to the ones the seq cut does not already cover.
+    // Read from memory on purpose: awaiting storage here would put the catch-up
+    // behind a read that can hang, and a late catch-up loses notifications while
+    // an unreported push only repeats one.
+    const deliveredPushes = reportableDeliveredPushes(
+      cachedDeliveredPushes(hostId),
+      session.lastDeliveredEpoch,
+      askFrom
+    )
     const missed = await client
       .sendRequest('notifications.getMissedSince', {
         lastSeenSeq: askFrom,
         // Why: sending the epoch lets the desktop reject a watermark from a counter
         // it no longer has and return the whole retained buffer instead of nothing.
-        ...(session.lastDeliveredEpoch != null ? { epoch: session.lastDeliveredEpoch } : {})
+        ...(session.lastDeliveredEpoch != null ? { epoch: session.lastDeliveredEpoch } : {}),
+        ...(deliveredPushes.length > 0 ? { deliveredPushes } : {})
       })
       .then((response) => {
         if (!response.ok) {
@@ -206,6 +223,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   }
 
   seedWatermarkFromStorage(session, hostId)
+  // Warmed here, well before the first 'ready', so the catch-up never waits on it.
+  void seedDeliveredPushes(hostId)
 
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
