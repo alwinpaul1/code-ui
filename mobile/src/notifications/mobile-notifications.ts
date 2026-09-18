@@ -89,7 +89,9 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     const epochAtDelivery = session.lastDeliveredEpoch
     if (type === 'notification') {
-      await showLocalNotification(event as NotificationEvent, hostId)
+      // The link this event came over is the one to ask about it on; see
+      // presentedNotificationContent.
+      await showLocalNotification(event as NotificationEvent, hostId, { client })
     } else {
       await dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }

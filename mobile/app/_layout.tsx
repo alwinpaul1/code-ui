@@ -18,7 +18,7 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
-import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
+import { askBackgroundDeliveryPowerOnOpen, getBackgroundLinkWatcher } from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
 import { answerPermissionFromNotification } from '../src/notifications/permission-notification-response'
 import { lookupPendingPermission } from '../src/notifications/permission-lookup'
@@ -164,7 +164,11 @@ function ThemedRoot() {
         await answerPermissionFromNotification({
           actionIdentifier: response.actionIdentifier,
           data: response.notification.request.content.data,
-          resolveClient: peekLiveHostClient,
+          // The UI's client first; failing that, the link the background
+          // watcher is listening on — which is the one the banner's event came
+          // over when the app was in the background, and the only one there is.
+          resolveClient: (id) =>
+            peekLiveHostClient(id) ?? getBackgroundLinkWatcher().peekClient(id),
           lookup: lookupPendingPermission,
           send: async ({ client, terminal, text }) =>
             (await sendMobileNativeChatPermissionResponse({

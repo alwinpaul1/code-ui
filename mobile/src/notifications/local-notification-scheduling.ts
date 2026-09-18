@@ -6,6 +6,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
 import { ensureNotificationPermissions } from './notification-permissions'
 import { peekLiveHostClient } from '../transport/live-host-clients'
+import type { RpcClient } from '../transport/rpc-client'
 import { decorateWithPermission } from './permission-notification-decorate'
 import { lookupPendingPermission } from './permission-lookup'
 import { ensurePermissionCategory } from './permission-notification-category'
@@ -132,7 +133,14 @@ function sessionBannerIdentifier(hostId: string, worktreeId: string | undefined)
   return `codeui:${hostId}:${worktreeId ?? 'host'}`
 }
 
-async function presentedNotificationContent(event: NotificationEvent, hostId: string) {
+/** The link an event arrived on. Optional because the FCM path has none. */
+export type LocalNotificationLink = { client?: RpcClient | null }
+
+async function presentedNotificationContent(
+  event: NotificationEvent,
+  hostId: string,
+  link: LocalNotificationLink
+) {
   const content = {
     ...presentDesktopNotification({
       ...event,
@@ -145,8 +153,16 @@ async function presentedNotificationContent(event: NotificationEvent, hostId: st
   // its caption was the whole complaint. Returns `content` untouched whenever
   // there is nothing pending or the host cannot say, so the notification is
   // never delayed into uselessness by the lookup.
+  //
+  // Why the event's own client comes first: the lookup used to borrow the UI's
+  // client alone, and with the app in the background the UI's relay is
+  // suspended while the foreground service listens on a client of its own —
+  // one the UI registry never sees. So exactly when a notification matters,
+  // the lookup found no client, gave up, and the banner had no Approve or
+  // Deny (a friend's phone, Windows host, 2026-09-18). The event arrived over
+  // a link; that link is up by definition, and it is the one to ask on.
   return decorateWithPermission(content, event, hostId, {
-    resolveClient: peekLiveHostClient,
+    resolveClient: (id) => link.client ?? peekLiveHostClient(id),
     lookup: lookupPendingPermission,
     ensureCategory: ensurePermissionCategory
   })
@@ -154,7 +170,8 @@ async function presentedNotificationContent(event: NotificationEvent, hostId: st
 
 export async function showLocalNotification(
   event: NotificationEvent,
-  hostId: string
+  hostId: string,
+  link: LocalNotificationLink = {}
 ): Promise<void> {
   const storedKey = event.notificationId
     ? getStoredNotificationKey(hostId, event.notificationId)
@@ -173,7 +190,7 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     await Notifications.scheduleNotificationAsync({
-      content: await presentedNotificationContent(event, hostId),
+      content: await presentedNotificationContent(event, hostId, link),
       trigger: notificationTrigger()
     })
     return
@@ -215,7 +232,7 @@ export async function showLocalNotification(
       // Per session, not globally: two projects wanting attention are two
       // different things, and collapsing those would hide one of them.
       identifier: sessionBannerIdentifier(hostId, event.worktreeId),
-      content: await presentedNotificationContent(event, hostId),
+      content: await presentedNotificationContent(event, hostId, link),
       trigger: notificationTrigger()
     })
   })()

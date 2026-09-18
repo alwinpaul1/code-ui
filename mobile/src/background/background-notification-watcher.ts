@@ -19,6 +19,12 @@ export type BackgroundNotificationWatcher = {
   setEnabled(enabled: boolean): void
   setUiVisible(visible: boolean): void
   isListening(): boolean
+  /** The connected link this watcher listens to a host on, or null. A
+   *  notification's Approve answers over a client, and the tap handler once
+   *  looked only in the UI's registry — empty exactly when the watcher is the
+   *  one listening (app in the background, 2026-09-18). Borrowed or owned,
+   *  it is the link the banner's event came in on. */
+  peekClient(hostId: string): RpcClient | null
   stop(): void
 }
 
@@ -155,6 +161,10 @@ export function createBackgroundNotificationWatcher(
       reconcile()
     },
     isListening: () => links.size > 0,
+    peekClient(hostId) {
+      const link = links.get(hostId)
+      return link && link.client.getState() === 'connected' ? link.client : null
+    },
     stop() {
       enabled = false
       closeAll()

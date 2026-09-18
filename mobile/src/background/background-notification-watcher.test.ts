@@ -83,6 +83,25 @@ describe('background notification watcher', () => {
     expect(subscribe.mock.calls[0]![1]).toBe('h1')
   })
 
+  // A notification's Approve button answers over a client, and the tap handler
+  // used to look only in the UI's registry — empty exactly when the watcher is
+  // the one listening. The watcher lends out the link it is listening on.
+  it('lends out the connected link it is listening on, so a button tap can answer over it', async () => {
+    const { watcher, clients } = harness()
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+    expect(watcher.peekClient('h1')).toBeNull()
+    clients.get('h1')!.setState('connected')
+    expect(watcher.peekClient('h1')).toBe(clients.get('h1'))
+    expect(watcher.peekClient('h2')).toBeNull()
+    expect(watcher.peekClient('nope')).toBeNull()
+
+    watcher.setUiVisible(true)
+    await settle()
+    expect(watcher.peekClient('h1')).toBeNull()
+  })
+
   it('hands the connections back to the UI when it returns, unsubscribing and closing', async () => {
     const { watcher, clients, unsubscribes } = harness()
     watcher.setEnabled(true)
