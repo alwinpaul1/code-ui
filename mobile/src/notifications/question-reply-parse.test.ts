@@ -85,9 +85,13 @@ describe('reading a reply typed into the shade', () => {
       })
     })
 
-    it('refuses a number for a question with no options', () => {
-      const none = ask({ questions: [{ question: 'Name?', multiSelect: false, options: [] }] })
-      expect(parseQuestionReply(none, '1', 'answer').ok).toBe(false)
+    // No numbered options means nothing a number could be confused with.
+    it('takes a number as text for a question with no options', () => {
+      const none = ask({ questions: [{ question: 'Year?', multiSelect: false, options: [] }] })
+      expect(parseQuestionReply(none, '2024', 'answer')).toEqual({
+        ok: true,
+        selections: [{ indices: [], other: '2024' }]
+      })
     })
   })
 
@@ -195,6 +199,26 @@ describe('reading a reply typed into the shade', () => {
       const out = parseQuestionReply(TWO_QUESTIONS, '1; 4', 'answer')
       expect(out.ok).toBe(false)
       expect(!out.ok && out.reason).toMatch(/question 2/i)
+    })
+
+    // A free-text-only question inside a multi-question prompt has no numbered
+    // option a number could be confused with, so "2024" or "10:30" is its
+    // answer, not a pick out of range (review follow-up F8, 2026-09-18).
+    it('takes a number as text for a question that has no options', () => {
+      const withFreeText = ask({
+        questions: [
+          { question: 'Which?', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+          { question: 'Year?', multiSelect: false, options: [] }
+        ]
+      })
+      expect(parseQuestionReply(withFreeText, '1; 2024', 'answer')).toEqual({
+        ok: true,
+        selections: [{ indices: [0] }, { indices: [], other: '2024' }]
+      })
+      expect(parseQuestionReply(withFreeText, '2; 10:30', 'answer')).toEqual({
+        ok: true,
+        selections: [{ indices: [1] }, { indices: [], other: '10:30' }]
+      })
     })
 
     // A single question never splits: a semicolon in its text is just text.

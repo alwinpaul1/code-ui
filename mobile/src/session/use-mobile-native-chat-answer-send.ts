@@ -300,11 +300,11 @@ export function useMobileNativeChatAnswerSend(args: {
           groups.length > 1 &&
           (sawAcceptedGroup || sawUnknownOutcome)
         ) {
-          const at = stepped.kind === 'failed' ? `write ${stepped.step + 1}/${groups.length}` : stepped.kind
-          markMobileNativeChatTerminalHalfStepped(handle, {
-            promptKey,
-            detail: sawUnknownOutcome ? `${at} unknown` : `${at} rejected`
-          })
+          const detail =
+            stepped.kind === 'failed'
+              ? `write ${stepped.step + 1}/${groups.length} ${sawUnknownOutcome ? 'unknown' : 'rejected'}`
+              : `${stepped.kind} after a landed key`
+          markMobileNativeChatTerminalHalfStepped(handle, { promptKey, detail })
         }
         switch (stepped.kind) {
           case 'failed':

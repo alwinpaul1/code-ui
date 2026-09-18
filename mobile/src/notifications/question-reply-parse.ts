@@ -26,9 +26,11 @@ function answerOne(
   if (!/[\p{L}\p{N}]/u.test(trimmed)) {
     return { ok: false, reason: `${label}: empty answer` }
   }
-  if (mode === 'other') {
+  if (mode === 'other' || question.options.length === 0) {
     // The card draws an "Other…" row under every question, for every agent it
-    // can drive, and sends it as an empty pick with the text. Same here.
+    // can drive, and sends it as an empty pick with the text. Same here — and
+    // a question with no options has nothing a number could be confused with,
+    // so "2024" is its answer, not a pick out of range.
     return { ok: true, selection: { indices: [], other: trimmed } }
   }
   if (!NUMBERS_ONLY.test(trimmed)) {
@@ -42,9 +44,6 @@ function answerOne(
     return { ok: true, selection: { indices: [], other: trimmed } }
   }
   const count = question.options.length
-  if (count === 0) {
-    return { ok: false, reason: `${label}: has no numbered options` }
-  }
   const numbers = trimmed.split(',').map((part) => Number.parseInt(part, 10))
   for (const number of numbers) {
     if (!Number.isInteger(number) || number < 1 || number > count) {
