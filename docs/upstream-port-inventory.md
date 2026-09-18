@@ -163,24 +163,38 @@ silently since it landed and re-asked every 3 s.
 - **The probe:** `mobile/src/transport/host-mobile-capabilities.ts` asks each
   gated method once per connection (keyed on `useLastConnectedAt`, like the
   reconnect refetch) with parameters the host must refuse without side effects,
-  and reads the refusal: the gate's own text → hidden; any other refusal or a
-  result → shown; a transport failure → hidden, asked again next connection.
-  The four surfaces above read `useHostMobileCapability(hostId, key)` and offer
-  nothing tappable until it is true; the three editors become viewers with one
-  line, "Read-only from the phone on this Orca version." The feature modules
-  stay — they are correct for a host that allows the call.
+  and reads the refusal: the gate's own text, or a host with no such method →
+  hidden; any other refusal or a result → shown; a transport failure → hidden
+  and logged (`[capabilities] probe failed`), asked again next connection.
+  The verdict is a property of the host, not the socket: a reconnect re-probes
+  in the background while the last answer stands, so nothing blinks off for a
+  round trip (a review of the first cut found it did, and a half-typed rule
+  went with it). The four surfaces read `useHostMobileCapability(hostId, key)`
+  and offer nothing tappable until it is true; the three editors read the
+  tri-state verdict and draw neither Save nor a line until the host has
+  answered, then become viewers with one line, "Read-only from the phone on
+  this Orca version." The feature modules stay — they are correct for a host
+  that allows the call. **The exception is per method, not per surface:**
+  `useProjectConfigFile().save` and `revertDiffCardHunk` still send
+  `files.write` ungated, the gate sits on the buttons, and a new caller of
+  either helper passes the ratchet because the method is already excepted.
 - **The ratchet:** `mobile/src/transport/orca-mobile-rpc-allowlist.test.ts`
   walks every catalogued method literal in `app/` and `src/` and fails on any
   that is neither on the fixture nor an explicit, typed exception (probe-gated,
-  fails-open with a sender that reads the refusal, or provably never sent).
-  A new operation on an unlisted method fails it until it is one of those.
+  fails-open with a sender that reads the refusal, or provably never sent —
+  "provably" meaning every occurrence sits in a position that cannot send: an
+  array element, a type literal, a `case` label; a wrapper call fails the
+  claim, because the send shapes the scan recognises are a floor, not the
+  tree's whole set). A new operation on an unlisted method fails it until it
+  is one of those.
 - **Prior art the map did not read:** the phone already recognised this exact
   refusal in three "old desktop" fallbacks — `files/file-list-fallback.ts`,
   `source-control/mobile-git-status.ts`, `dictation/mobile-dictation-setup.ts`
   — each hand-matching `not available to mobile clients` for a method that was
   off the list on an older desktop. The shape was known; the rule was not
-  written down. `transport/mobile-scope-refusal.ts` is now the one place that
-  reads it.
+  written down. `transport/mobile-scope-refusal.ts` now names it; those three
+  keep their own match because each also folds in `method_not_found` for a
+  desktop that predates the method.
 - **The rule for the next port:** before promising a feature on the strength
   of a catalog row, check the fixture. "In catalog: YES" is necessary, not
   sufficient; the feasibility map's column of that name was written as if it

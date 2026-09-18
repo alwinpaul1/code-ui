@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { Plus, Terminal as TerminalIcon, Trash2 } from 'lucide-react-native'
 import { useHostClient } from '../../transport/client-context'
-import { useHostMobileCapability } from '../../transport/host-mobile-capabilities'
+import { useHostMobileCapabilityVerdict } from '../../transport/host-mobile-capabilities'
 import { useTheme, useThemedStyles, type Theme } from '../../theme/theme-context'
 import { Txt } from '../../ui/Txt'
 import { Button } from '../../ui/Button'
@@ -35,10 +35,12 @@ export function MobileMcpServersPanel({
   name?: string
 }) {
   const { client, state: connState } = useHostClient(hostId)
-  // Whether this host lets a phone call files.write at all. Without it the
-  // screen is a viewer: no add, edit, remove or Save, and one line says so.
-  // Create stays — files.createFile is on the host's mobile list.
-  const canWrite = useHostMobileCapability(hostId, 'files.write')
+  // Whether this host lets a phone call files.write at all. Until it has
+  // answered, neither Save nor the read-only line is drawn; once it refuses
+  // the screen is a viewer — no add, edit, remove or Save — and one line
+  // says so. Create stays — files.createFile is on the host's mobile list.
+  const writeVerdict = useHostMobileCapabilityVerdict(hostId, 'files.write')
+  const canWrite = writeVerdict === 'allowed'
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
     worktreeId,
@@ -196,7 +198,7 @@ export function MobileMcpServersPanel({
                   />
                 </View>
               ) : null}
-              <ProjectConfigReadOnlyNotice />
+              {writeVerdict === 'forbidden' ? <ProjectConfigReadOnlyNotice /> : null}
             </>
           ) : editing ? (
             <McpServerForm form={form} onChange={setForm} onCancel={() => setEditing(null)} onSubmit={submitForm} />

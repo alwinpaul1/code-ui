@@ -65,7 +65,11 @@ type AllowlistException =
   | {
       readonly method: string
       /** The literal names the method without sending it (a params-shape set,
-       *  say). Checked: it must not appear in any send position. */
+       *  say). Checked positively: every occurrence must sit in a position
+       *  that cannot send — an array element (which covers `new Set([...])`),
+       *  a type literal, a `case` label. A call argument, a ternary arm, a
+       *  property value or anything else fails the claim, because the send
+       *  shapes `sent` recognises are a floor, not the tree's whole set. */
       readonly guard: 'never-sent'
       readonly why: string
     }
@@ -157,19 +161,51 @@ function readCatalogMethods(): Set<string> {
   return methods
 }
 
-/** Every catalogued method a file names, and which of those it names in a SEND position. */
+/** A position a string literal cannot be sent from. Deliberately short: the
+ *  never-sent claim is only as safe as this list is small. */
+function isNonSendPosition(node: ts.StringLiteralLike): boolean {
+  const parent: ts.Node | undefined = node.parent
+  if (!parent) {
+    return false
+  }
+  // `['m', …]`, which is also what `new Set(['m'])` holds.
+  if (ts.isArrayLiteralExpression(parent)) {
+    return true
+  }
+  // `type M = 'm'`, `Record<'m', …>`, a union member.
+  if (ts.isLiteralTypeNode(parent)) {
+    return true
+  }
+  // `case 'm':`
+  if (ts.isCaseClause(parent) && parent.expression === node) {
+    return true
+  }
+  return false
+}
+
+/** Every catalogued method a file names, which of those it names in a SEND
+ *  position, and which it names ONLY in positions that cannot send. */
 export function catalogedMethodLiterals(
   path: string,
   source: string,
   catalog: ReadonlySet<string>
-): { named: Set<string>; sent: Set<string>; readsMobileScopeRefusal: boolean } {
+): {
+  named: Set<string>
+  sent: Set<string>
+  onlyInNonSendPositions: Set<string>
+  readsMobileScopeRefusal: boolean
+} {
   const named = new Set<string>()
   const sent = new Set<string>()
+  const inSendablePosition = new Set<string>()
   let importsRefusalReader = false
   let callsRefusalReader = false
   const visit = (node: ts.Node): void => {
     if (ts.isStringLiteralLike(node) && catalog.has(node.text)) {
       named.add(node.text)
+      if (!isNonSendPosition(node)) {
+        inSendablePosition.add(node.text)
+      }
       const parent: ts.Node | undefined = node.parent
       // `client.sendRequest('m', …)`, `client.subscribe('m', …)`
       if (
@@ -225,7 +261,15 @@ export function catalogedMethodLiterals(
     ts.forEachChild(node, visit)
   }
   visit(parse(path, source))
-  return { named, sent, readsMobileScopeRefusal: importsRefusalReader && callsRefusalReader }
+  const onlyInNonSendPositions = new Set(
+    [...named].filter((method) => !inSendablePosition.has(method))
+  )
+  return {
+    named,
+    sent,
+    onlyInNonSendPositions,
+    readsMobileScopeRefusal: importsRefusalReader && callsRefusalReader
+  }
 }
 
 const catalog = readCatalogMethods()
@@ -249,9 +293,14 @@ const observed = new Map(
 
 const namedByMethod = new Map<string, string[]>()
 const sentByMethod = new Map<string, string[]>()
-for (const [file, { named, sent }] of observed) {
+/** Files in which a method sits somewhere a send could come from. */
+const sendableByMethod = new Map<string, string[]>()
+for (const [file, { named, sent, onlyInNonSendPositions }] of observed) {
   for (const method of named) {
     namedByMethod.set(method, [...(namedByMethod.get(method) ?? []), file])
+    if (!onlyInNonSendPositions.has(method)) {
+      sendableByMethod.set(method, [...(sendableByMethod.get(method) ?? []), file])
+    }
   }
   for (const method of sent) {
     sentByMethod.set(method, [...(sentByMethod.get(method) ?? []), file])
@@ -311,6 +360,24 @@ describe('every RPC method the phone can send', () => {
     expect([...ternary.named].sort()).toEqual(['files.write', 'worktree.ps'])
     expect([...ternary.sent]).toEqual([])
     expect([...read("new Set(['files.write'])").sent]).toEqual([])
+    // Review of f877572: `sent` knows three shapes, and the tree sends through
+    // a dozen wrappers it does not (sendGithubPrRead, sendGitRequest,
+    // callAgentSession, …). So "never sent" cannot mean "not in `sent`": a
+    // wrapper call reads as never-sent and stays green while it IS sent. It
+    // means "appears ONLY in a position that cannot send" — an array element,
+    // a type literal, a case label — and anything else fails the claim.
+    const wrapper = read(
+      "sendGithubPrRead(client, 'github.prComments', buildGithubPrParams('github.prComments', w, {}), parse)"
+    )
+    expect([...wrapper.sent]).toEqual([])
+    expect(wrapper.onlyInNonSendPositions.has('github.prComments')).toBe(false)
+    expect(read("const S = new Set<string>(['files.write'])").onlyInNonSendPositions.has('files.write')).toBe(true)
+    expect(read("type M = 'files.write'").onlyInNonSendPositions.has('files.write')).toBe(true)
+    expect(read("switch (m) { case 'files.write': break }").onlyInNonSendPositions.has('files.write')).toBe(true)
+    // One non-send position AND one wrapper call: the claim fails.
+    expect(
+      read("const S = ['files.write']\nsendRaw(c, 'files.write')").onlyInNonSendPositions.has('files.write')
+    ).toBe(false)
     // Prose never counts; an unknown dotted string never counts.
     expect([...read("// calls files.write under the hood").named]).toEqual([])
     expect([...read("await client.sendRequest('no.such', {})").named]).toEqual([])
@@ -379,14 +446,14 @@ describe('every RPC method the phone can send', () => {
     }
   })
 
-  it('checks a never-sent exception against the send positions, so it cannot become a loophole', () => {
+  it('allows a never-sent exception only in positions that cannot send, so it cannot become a loophole', () => {
     for (const exception of EXCEPTIONS) {
       if (exception.guard !== 'never-sent') {
         continue
       }
       expect(
-        sentByMethod.get(exception.method) ?? [],
-        `${exception.method} is claimed never-sent but a send position names it — gate it or allow it.`
+        sendableByMethod.get(exception.method) ?? [],
+        `${exception.method} is claimed never-sent but sits somewhere a send could come from (a call argument, a ternary, a property) — gate it or allow it.`
       ).toEqual([])
     }
   })

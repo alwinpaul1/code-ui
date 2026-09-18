@@ -24,14 +24,18 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 vi.mock('../../components/BottomDrawer', () => ({ BottomDrawer: 'View' }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, filesWrite: true }))
+const fakes = vi.hoisted(() => ({
+  client: null as RpcClient | null,
+  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown'
+}))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
 // The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
 // Faked so this suite tests what the screen does with the answer, not the probe.
 vi.mock('../../transport/host-mobile-capabilities', () => ({
-  useHostMobileCapability: (_hostId: string, key: string) => key === 'files.write' && fakes.filesWrite
+  useHostMobileCapabilityVerdict: (_hostId: string, key: string) =>
+    key === 'files.write' ? fakes.filesWrite : 'unknown'
 }))
 
 import { MobileMcpServersPanel } from './MobileMcpServersPanel'
@@ -81,7 +85,7 @@ const ONE_SERVER = JSON.stringify({ mcpServers: { local: { command: 'npx' } } })
 
 describe('MobileMcpServersPanel', () => {
   beforeEach(() => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
   })
 
   it('offers Create when .mcp.json does not exist yet', async () => {
@@ -122,7 +126,7 @@ describe('MobileMcpServersPanel', () => {
   // files.write from a phone, so Save was offered and every tap was refused.
   describe('on a host whose mobile gate refuses files.write', () => {
     beforeEach(() => {
-      fakes.filesWrite = false
+      fakes.filesWrite = 'forbidden'
     })
 
     it('is a viewer: no Add server, no Save, no Remove, rows not editable, and one line says so', async () => {
@@ -148,8 +152,22 @@ describe('MobileMcpServersPanel', () => {
     })
   })
 
+  // Review of f877572: seeding a host with all-unknown drew the read-only
+  // line for one round trip on a host that allows the write — a lie for
+  // 250 ms. Until the host has answered, neither Save nor the line is drawn.
+  it('draws neither Save nor the read-only line until the host has answered', async () => {
+    fakes.filesWrite = 'unknown'
+    const renderer = await render(mockClient({ '.mcp.json': ONE_SERVER }))
+    const labels = buttonLabels(renderer)
+    expect(labels).not.toContain('Save')
+    expect(labels).not.toContain('Add server')
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    expect(allText(renderer)).toContain('local')
+    act(() => renderer.unmount())
+  })
+
   it('is editable exactly as before once the host is known to let files.write through', async () => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
     const renderer = await render(mockClient({ '.mcp.json': ONE_SERVER }))
     const labels = buttonLabels(renderer)
     expect(labels).toContain('Add server')

@@ -22,14 +22,18 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, filesWrite: true }))
+const fakes = vi.hoisted(() => ({
+  client: null as RpcClient | null,
+  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown'
+}))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
 // The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
 // Faked so this suite tests what the screen does with the answer, not the probe.
 vi.mock('../../transport/host-mobile-capabilities', () => ({
-  useHostMobileCapability: (_hostId: string, key: string) => key === 'files.write' && fakes.filesWrite
+  useHostMobileCapabilityVerdict: (_hostId: string, key: string) =>
+    key === 'files.write' ? fakes.filesWrite : 'unknown'
 }))
 
 import { MobileProjectMemoryPanel } from './MobileProjectMemoryPanel'
@@ -85,14 +89,14 @@ async function openRow(renderer: ReactTestRenderer, relativePath: string): Promi
 
 describe('MobileProjectMemoryPanel', () => {
   beforeEach(() => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
   })
 
   // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every
   // files.write from a phone, so Save was offered and every tap was refused.
   describe('on a host whose mobile gate refuses files.write', () => {
     beforeEach(() => {
-      fakes.filesWrite = false
+      fakes.filesWrite = 'forbidden'
     })
 
     it('opens a file as a viewer: text not editable, no Save, and one line says so', async () => {
@@ -114,8 +118,23 @@ describe('MobileProjectMemoryPanel', () => {
     })
   })
 
+  // Review of f877572: seeding a host with all-unknown drew the read-only
+  // line for one round trip on a host that allows the write — a lie for
+  // 250 ms. Until the host has answered, neither Save nor the line is drawn.
+  it('draws neither Save nor the read-only line until the host has answered', async () => {
+    fakes.filesWrite = 'unknown'
+    const renderer = await render(mockClient({ 'CLAUDE.md': '# hi' }))
+    await openRow(renderer, 'CLAUDE.md')
+    const editor = renderer.root.findAllByType('TextInput' as never)[0]
+    expect(editor?.props.value).toBe('# hi')
+    expect(editor?.props.editable).toBe(false)
+    expect(buttonLabels(renderer)).not.toContain('Save')
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    act(() => renderer.unmount())
+  })
+
   it('is editable exactly as before once the host is known to let files.write through', async () => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
     const renderer = await render(mockClient({ 'CLAUDE.md': '# hi' }))
     await openRow(renderer, 'CLAUDE.md')
     const editor = renderer.root.findAllByType('TextInput' as never)[0]

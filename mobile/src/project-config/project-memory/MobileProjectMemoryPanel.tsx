@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { ChevronRight, FileText } from 'lucide-react-native'
 import { useHostClient } from '../../transport/client-context'
-import { useHostMobileCapability } from '../../transport/host-mobile-capabilities'
+import {
+  useHostMobileCapabilityVerdict,
+  type HostMobileCapabilityVerdict
+} from '../../transport/host-mobile-capabilities'
 import { useTheme, useThemedStyles, type Theme } from '../../theme/theme-context'
 import { Txt } from '../../ui/Txt'
 import { Button } from '../../ui/Button'
@@ -29,10 +32,11 @@ export function MobileProjectMemoryPanel({
   name?: string
 }) {
   const { client } = useHostClient(hostId)
-  // Whether this host lets a phone call files.write at all. Without it the
-  // editor is a viewer: the text is not editable, there is no Save, and one
-  // line says so. Create stays — files.createFile is on the host's mobile list.
-  const canWrite = useHostMobileCapability(hostId, 'files.write')
+  // Whether this host lets a phone call files.write at all. Until it has
+  // answered, the text is not editable and neither Save nor the read-only
+  // line is drawn; once it refuses, the editor is a viewer and one line says
+  // so. Create stays — files.createFile is on the host's mobile list.
+  const writeVerdict = useHostMobileCapabilityVerdict(hostId, 'files.write')
   // Three fixed candidates, three fixed hook calls — not dynamic, so this
   // does not break the rules of hooks. Reading all three up front, off one
   // shared client, is what lets the chooser say which exist before the user
@@ -51,7 +55,7 @@ export function MobileProjectMemoryPanel({
       <ProjectMemoryEditor
         relativePath={selected}
         file={files[selected]}
-        canWrite={canWrite}
+        writeVerdict={writeVerdict}
         onBack={() => setSelected(null)}
       />
     )
@@ -86,15 +90,16 @@ export function MobileProjectMemoryPanel({
 function ProjectMemoryEditor({
   relativePath,
   file,
-  canWrite,
+  writeVerdict,
   onBack
 }: {
   relativePath: ProjectMemoryRelativePath
   file: ReturnType<typeof useProjectConfigFile>
-  canWrite: boolean
+  writeVerdict: HostMobileCapabilityVerdict
   onBack: () => void
 }) {
   const { state, setContent, refresh, save, create } = file
+  const canWrite = writeVerdict === 'allowed'
   const styles = useThemedStyles(memoryStyles)
   const { colors } = useTheme()
   return (
@@ -140,9 +145,9 @@ function ProjectMemoryEditor({
             textAlignVertical="top"
             editable={canWrite && !state.saving}
           />
-          {!canWrite ? (
+          {writeVerdict === 'forbidden' ? (
             <ProjectConfigReadOnlyNotice />
-          ) : (
+          ) : canWrite ? (
             <View style={styles.footer}>
               {state.saveError ? (
                 <Txt tone="danger" variant="caption" style={{ marginBottom: 8 }}>
@@ -157,7 +162,7 @@ function ProjectMemoryEditor({
                 block
               />
             </View>
-          )}
+          ) : null}
         </>
       )}
     </ProjectConfigScreenChrome>

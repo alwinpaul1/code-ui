@@ -23,14 +23,18 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 vi.mock('../../components/BottomDrawer', () => ({ BottomDrawer: 'View' }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, filesWrite: true }))
+const fakes = vi.hoisted(() => ({
+  client: null as RpcClient | null,
+  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown'
+}))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
 // The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
 // Faked so this suite tests what the screen does with the answer, not the probe.
 vi.mock('../../transport/host-mobile-capabilities', () => ({
-  useHostMobileCapability: (_hostId: string, key: string) => key === 'files.write' && fakes.filesWrite
+  useHostMobileCapabilityVerdict: (_hostId: string, key: string) =>
+    key === 'files.write' ? fakes.filesWrite : 'unknown'
 }))
 
 import { MobilePermissionRulesPanel } from './MobilePermissionRulesPanel'
@@ -84,14 +88,14 @@ const ONE_ALLOW_RULE = JSON.stringify({ permissions: { allow: ['Bash(npm run *)'
 
 describe('MobilePermissionRulesPanel', () => {
   beforeEach(() => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
   })
 
   // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every
   // files.write from a phone, so Save was offered and every tap was refused.
   describe('on a host whose mobile gate refuses files.write', () => {
     beforeEach(() => {
-      fakes.filesWrite = false
+      fakes.filesWrite = 'forbidden'
     })
 
     it('is a viewer: no Add rule, no Remove, no Save, and one line says so', async () => {
@@ -115,8 +119,21 @@ describe('MobilePermissionRulesPanel', () => {
     })
   })
 
+  // Review of f877572: seeding a host with all-unknown drew the read-only
+  // line for one round trip on a host that allows the write — a lie for
+  // 250 ms. Until the host has answered, neither Save nor the line is drawn.
+  it('draws neither Save nor the read-only line until the host has answered', async () => {
+    fakes.filesWrite = 'unknown'
+    const renderer = await render(mockClient({ '.claude/settings.json': ONE_ALLOW_RULE }))
+    expect(buttonLabels(renderer)).not.toContain('Save')
+    expect(addRuleRows(renderer)).toHaveLength(0)
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    expect(allText(renderer)).toContain('Bash(npm run *)')
+    act(() => renderer.unmount())
+  })
+
   it('is editable exactly as before once the host is known to let files.write through', async () => {
-    fakes.filesWrite = true
+    fakes.filesWrite = 'allowed'
     const renderer = await render(mockClient({ '.claude/settings.json': ONE_ALLOW_RULE }))
     const text = allText(renderer)
     expect(addRuleRows(renderer)).toHaveLength(3)

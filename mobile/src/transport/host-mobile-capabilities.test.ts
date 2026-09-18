@@ -92,6 +92,16 @@ describe('reading the mobile-scope gate off a reply', () => {
     expect(readHostMobileCapabilityVerdict(OTHER_FORBIDDEN)).toBe('allowed')
   })
 
+  // Review of f877572: the hook promises "lets the phone call it", and a host
+  // that does not register the method at all cannot be called either. No
+  // live path today (rewind is also ANDed with the session's own support,
+  // and every host registers files.write), but the name must not lie.
+  it('reads a host that has no such method as not allowed, not as the gate having passed', () => {
+    expect(readHostMobileCapabilityVerdict(refused('method_not_found', 'Unknown method: files.write'))).toBe(
+      'forbidden'
+    )
+  })
+
   it('reads a bare success as allowed, so a host that skipped its own check still shows the button', () => {
     expect(readHostMobileCapabilityVerdict(accepted({ ok: true }))).toBe('allowed')
   })
@@ -315,6 +325,60 @@ describe('useHostMobileCapability', () => {
     await connect(2_000)
     expect(sendRequest).toHaveBeenCalledTimes(4)
     expect(seen.at(-1)).toBe(true)
+  })
+
+  // 2026-09-18, review of f877572: every reconnect (relay re-dial on app
+  // resume, relay→LAN migration, a socket drop) seeded the new connection's
+  // record with all-unknown, so the hook went true → false → true for one
+  // round trip. The permission-rules screen unmounted its add-rule modal and
+  // lost a half-typed rule, the memory editor flipped `editable` under a
+  // focused TextInput and dropped the keyboard, the chat overlay swapped its
+  // callbacks to undefined and back, and for that RTT the notice said
+  // "Read-only… on this Orca version" on a host that allows the write. The
+  // verdict is a property of the HOST, not the socket.
+  it('keeps the last verdict across a reconnect while the re-probe is in flight', async () => {
+    let hang = false
+    let release!: (reply: RpcResponse) => void
+    const gate = new Promise<RpcResponse>((resolve) => {
+      release = resolve
+    })
+    const { client, sendRequest } = scriptedClient({
+      'files.write': () => (hang ? gate : Promise.resolve(JAILED_PATH)),
+      'agentSession.rewind': () => (hang ? gate : Promise.resolve(NO_SUCH_SESSION))
+    })
+    host.client = client
+    host.lastConnectedAt = 1_000
+    await render('files.write')
+    expect(seen.at(-1)).toBe(true)
+    // The relay re-dials; the second probe hangs.
+    hang = true
+    await connect(2_000)
+    expect(sendRequest).toHaveBeenCalledTimes(4)
+    expect(seen.at(-1)).toBe(true)
+    expect(seen.slice(1)).not.toContain(false)
+    // It lands with the same answer: still true, and nothing blinked.
+    await act(async () => {
+      release(JAILED_PATH)
+      await Promise.resolve()
+    })
+    expect(seen.at(-1)).toBe(true)
+    expect(seen.slice(1)).not.toContain(false)
+  })
+
+  it('a re-probe that answers differently replaces the carried verdict', async () => {
+    let answer: RpcResponse = JAILED_PATH
+    const { client } = scriptedClient({
+      'files.write': async () => answer,
+      'agentSession.rewind': async () => NO_SUCH_SESSION
+    })
+    host.client = client
+    host.lastConnectedAt = 1_000
+    await render('files.write')
+    expect(seen.at(-1)).toBe(true)
+    // The desktop was downgraded, or the phone re-paired to a stricter host.
+    answer = GATE_REFUSES_FILES_WRITE
+    await connect(2_000)
+    expect(seen.at(-1)).toBe(false)
   })
 
   it('does not ask while the host has never connected', async () => {
