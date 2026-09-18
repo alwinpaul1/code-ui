@@ -7,6 +7,11 @@ import {
   clippedByHost
 } from './ask-user-question-fixtures'
 import { lookupPendingPrompt } from './permission-lookup'
+import {
+  markMobileNativeChatTerminalHalfStepped,
+  mobileNativeChatTerminalHalfStep,
+  resetMobileNativeChatTerminalWritesForTests
+} from '../session/mobile-native-chat-terminal-write-lock'
 
 const ESCAPE = String.fromCharCode(27)
 
@@ -340,6 +345,47 @@ describe('finding the permission a notification is about', () => {
         })
       })
       expect((await lookupPendingPrompt(client, 'wt-1'))?.terminal).toBe('agent-2')
+    })
+  })
+
+  /**
+   * A half-written reply marks its terminal so nothing retries into a moved
+   * selector (F4). The mark is for the prompt that was being answered; once
+   * the agent has left waiting/blocked — answered at the desk, timed out —
+   * the selector is gone, and the lookup is the one place that sees the
+   * state, so it lifts the mark.
+   */
+  describe('a terminal left half-stepped', () => {
+    beforeEach(() => resetMobileNativeChatTerminalWritesForTests())
+
+    it('is unmarked once the agent has left waiting', async () => {
+      markMobileNativeChatTerminalHalfStepped('agent-1', { promptKey: 'q', detail: 'write 2/3' })
+      const { client } = makeClient({
+        terminals: TWO_TERMINALS,
+        status: () => ({
+          ok: true,
+          result: {
+            agentStatus: { state: 'working', interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING) }
+          }
+        })
+      })
+      await lookupPendingPrompt(client, 'wt-1')
+      expect(mobileNativeChatTerminalHalfStep('agent-1')).toBeNull()
+    })
+
+    it('stays marked while the agent is still waiting on it', async () => {
+      markMobileNativeChatTerminalHalfStepped('agent-1', { promptKey: 'q', detail: 'write 2/3' })
+      const { client } = makeClient({
+        terminals: TWO_TERMINALS,
+        status: () => ({
+          ok: true,
+          result: {
+            agentStatus: { state: 'waiting', interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING) }
+          }
+        })
+      })
+      await lookupPendingPrompt(client, 'wt-1')
+      expect(mobileNativeChatTerminalHalfStep('agent-1')).not.toBeNull()
     })
   })
 

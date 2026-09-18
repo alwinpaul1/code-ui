@@ -26,6 +26,7 @@ import { startBackgroundLinkHealing } from '../src/background/background-link-he
 import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
 import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
+import { repostBannerWithReplyVerdict } from '../src/notifications/question-reply-verdict'
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
@@ -166,10 +167,11 @@ function ThemedRoot() {
         // opening the app, which is the point: the alternative was unlock,
         // open, find the session, tap. Anything that is not one of ours falls
         // through to the clear below, exactly as before.
-        await answerPromptFromNotification({
+        const userText = response.userText ?? null
+        const outcome = await answerPromptFromNotification({
           actionIdentifier: response.actionIdentifier,
           // What a reply field returned; undefined for a plain button.
-          userText: response.userText ?? null,
+          userText,
           data: response.notification.request.content.data,
           // The UI's client first; failing that, the link the background
           // watcher is listening on — which is the one the banner's event came
@@ -195,6 +197,13 @@ function ThemedRoot() {
           // the shared stepper, under the terminal write lock.
           sendQuestion: sendQuestionAnswerFromNotification
         })
+        // A typed reply leaves Android showing the text with a spinner until
+        // the notification is updated. Sent: the desktop's dismiss clears it
+        // when the agent moves on. Not sent: nothing would, and the user would
+        // never learn why — so the banner is posted again with the reason on top.
+        if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer') {
+          await repostBannerWithReplyVerdict(response, outcome)
+        }
         clearLastNotificationResponse()
         return
       }

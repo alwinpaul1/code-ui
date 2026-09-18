@@ -147,12 +147,28 @@ describe('notification route coordination', () => {
     const notificationEffect = rootLayoutSource.slice(start, end)
     const answered = notificationEffect.indexOf('await answerPromptFromNotification(')
     expect(answered).toBeGreaterThanOrEqual(0)
-    expect(notificationEffect).toContain('userText: response.userText ?? null')
+    expect(notificationEffect).toContain('const userText = response.userText ?? null')
+    expect(notificationEffect).toContain('          userText,')
     // The button branch closes with the clear and a return, before the routing.
     const branchEnd = notificationEffect.indexOf('clearLastNotificationResponse()\n        return\n      }', answered)
     expect(branchEnd).toBeGreaterThan(answered)
     expect(notificationEffect.slice(answered, branchEnd)).not.toContain('openNotificationRoute(')
     expect(notificationEffect).not.toContain('open-app')
+  })
+
+  // A typed reply that was not sent must not leave Android's reply spinner up
+  // with no word: the banner is re-posted with the verdict, on that branch.
+  it('re-posts the banner with the verdict when a typed reply was not sent', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    const answered = notificationEffect.indexOf('const outcome = await answerPromptFromNotification(')
+    expect(answered).toBeGreaterThanOrEqual(0)
+    const repost = notificationEffect.indexOf('await repostBannerWithReplyVerdict(response, outcome)', answered)
+    expect(repost).toBeGreaterThan(answered)
+    expect(notificationEffect.slice(answered, repost)).toContain(
+      "if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer')"
+    )
   })
 })
 

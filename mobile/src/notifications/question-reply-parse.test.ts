@@ -133,6 +133,29 @@ describe('reading a reply typed into the shade', () => {
       expect(parseQuestionReply(FOUR_SINGLE, text, 'answer').ok).toBe(false)
       expect(parseQuestionReply(FOUR_SINGLE, text, 'other').ok).toBe(false)
     })
+
+    /**
+     * Digits spelt some other way — "1 3", "2.", "2)", "#2", "1;3" on a one-
+     * question prompt — are numbers the user meant as picks, not words. Typed
+     * as an Other answer they would reach the agent as the string "1 3"
+     * (review finding F5, 2026-09-18). With no letter in them there is no
+     * sentence to keep, so they are refused, and the reason says the spelling.
+     */
+    it.each(['1 3', '2.', '2)', '#2', '1;3', '1,,2', '1, 3.'])(
+      'refuses the numbers-only spelling %j rather than typing it as text',
+      (text) => {
+        const out = parseQuestionReply(FOUR_MULTI, text, 'answer')
+        expect(out.ok).toBe(false)
+        expect(!out.ok && out.reason).toMatch(/1,3/)
+      }
+    )
+
+    it('still types a numbers-only spelling into the Other field as text', () => {
+      expect(parseQuestionReply(FOUR_MULTI, '1 3', 'other')).toEqual({
+        ok: true,
+        selections: [{ indices: [], other: '1 3' }]
+      })
+    })
   })
 
   describe('several questions', () => {

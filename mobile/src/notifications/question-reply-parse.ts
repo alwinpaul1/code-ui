@@ -26,9 +26,19 @@ function answerOne(
   if (!/[\p{L}\p{N}]/u.test(trimmed)) {
     return { ok: false, reason: `${label}: empty answer` }
   }
-  if (mode === 'other' || !NUMBERS_ONLY.test(trimmed)) {
+  if (mode === 'other') {
     // The card draws an "Other…" row under every question, for every agent it
     // can drive, and sends it as an empty pick with the text. Same here.
+    return { ok: true, selection: { indices: [], other: trimmed } }
+  }
+  if (!NUMBERS_ONLY.test(trimmed)) {
+    // Digits spelt some other way ("1 3", "2.", "#2") are picks the grammar
+    // did not take, not words: with no letter in them there is no sentence to
+    // keep, and typed as text they would reach the agent as "1 3". A sentence
+    // that starts with a number ("2 but only the caches") still reads as one.
+    if (!/\p{L}/u.test(trimmed)) {
+      return { ok: false, reason: `${label}: numbers as 2 or 1,3, or type words` }
+    }
     return { ok: true, selection: { indices: [], other: trimmed } }
   }
   const count = question.options.length

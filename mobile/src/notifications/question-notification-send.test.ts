@@ -383,4 +383,252 @@ describe('writing a question answer from the shade', () => {
       )
     })
   })
+
+  /**
+   * A half-written reply. The row digit landed and the text did not, so the
+   * agent's selector now sits on its open text row — and the prompt is still
+   * pending, still 'waiting', same key, so the stale check lets a second tap
+   * straight through. A from-scratch retry would type the row digit INTO the
+   * text field ("4keep the red"), and for a multi-select it would toggle the
+   * first box back OFF and submit the rest (review finding F4, 2026-09-18).
+   * The terminal has to remember it was left half-stepped, and refuse until
+   * the agent is asking something else.
+   */
+  describe('after a reply was only half written', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    async function settle<T>(promise: Promise<T>): Promise<T> {
+      await vi.runAllTimersAsync()
+      return promise
+    }
+
+    function acceptsThenRejects(acceptedWrites: number) {
+      let calls = 0
+      return makeClient(async () => {
+        calls += 1
+        return calls <= acceptedWrites ? ACCEPTED : { ok: false }
+      })
+    }
+
+    const OTHER = [{ indices: [], other: 'keep the red' }]
+
+    it('refuses to retry an Other answer whose row digit landed, writing nothing', async () => {
+      const first = acceptsThenRejects(1)
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: first.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: OTHER
+          })
+        )
+      ).toBe(false)
+
+      const retry = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: retry.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: OTHER
+          })
+        )
+      ).toBe(false)
+      expect(retry.writes).toEqual([])
+      expect(warn).toHaveBeenLastCalledWith(
+        expect.stringContaining('[question-notification]'),
+        expect.objectContaining({
+          hostId: 'host-1',
+          terminal: 'agent-1',
+          step: 'half-stepped',
+          outcome: expect.stringContaining('2/3')
+        })
+      )
+    })
+
+    it('refuses to retry a multi-select whose first toggles landed', async () => {
+      const first = acceptsThenRejects(2)
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: ask(ASK_USER_QUESTION_CLEANUP),
+          selections: [{ indices: [0, 2] }]
+        })
+      )
+      const retry = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: retry.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: ask(ASK_USER_QUESTION_CLEANUP),
+            selections: [{ indices: [0, 2] }]
+          })
+        )
+      ).toBe(false)
+      expect(retry.writes).toEqual([])
+    })
+
+    // A lost ack on the FIRST step of a multi-step plan is the same hazard:
+    // the digit may have landed. (A one-step plan stays retryable: the
+    // caller's re-check finds no prompt once it has.)
+    it('treats a lost ack inside a multi-step reply as half written', async () => {
+      const first = makeClient(async () => {
+        throw markRpcDeliveryUnknown(new Error('ack lost'))
+      })
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: OTHER
+        })
+      )
+      const retry = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: retry.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: OTHER
+          })
+        )
+      ).toBe(false)
+      expect(retry.writes).toEqual([])
+    })
+
+    it('still retries a one-keystroke pick after a lost ack', async () => {
+      const first = makeClient(async () => {
+        throw markRpcDeliveryUnknown(new Error('ack lost'))
+      })
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: [{ indices: [1] }]
+        })
+      )
+      const retry = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: retry.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: [{ indices: [1] }]
+          })
+        )
+      ).toBe(true)
+      expect(retry.writes).toEqual([{ terminal: 'agent-1', text: '2', enter: false }])
+    })
+
+    // A refusal on the very first write leaves the selector untouched.
+    it('retries freely when nothing at all landed', async () => {
+      const first = makeClient({ ok: false })
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: OTHER
+        })
+      )
+      const retry = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: retry.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: OTHER
+          })
+        )
+      ).toBe(true)
+      expect(retry.writes).toHaveLength(3)
+    })
+
+    // The mark is for THAT prompt on THAT terminal: once the agent is asking
+    // something else, the selector has been redrawn and the shade may write.
+    it('lets a different question through on the same terminal', async () => {
+      const first = acceptsThenRejects(1)
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: OTHER
+        })
+      )
+      const next = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: next.client,
+            terminal: 'agent-1',
+            agent: 'claude',
+            prompt: ask(CODEX_REQUEST_USER_INPUT),
+            selections: [{ indices: [0] }]
+          })
+        )
+      ).toBe(true)
+      expect(next.writes).toEqual([{ terminal: 'agent-1', text: '1', enter: false }])
+    })
+
+    it('keeps the mark to the terminal it was left on', async () => {
+      const first = acceptsThenRejects(1)
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client: first.client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: OTHER
+        })
+      )
+      const other = makeClient()
+      expect(
+        await settle(
+          sendQuestionAnswerFromNotification({
+            hostId: 'host-1',
+            client: other.client,
+            terminal: 'agent-2',
+            agent: 'claude',
+            prompt: WHICH_LOGO,
+            selections: OTHER
+          })
+        )
+      ).toBe(true)
+      expect(other.writes).toHaveLength(3)
+    })
+  })
 })

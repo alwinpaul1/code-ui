@@ -4,6 +4,7 @@ import {
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
+  nativeChatAskDismissKey,
   type AskAnswerSelection,
   type AskPrompt
 } from '../../../src/shared/native-chat-ask'
@@ -16,6 +17,9 @@ import {
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
+  clearMobileNativeChatTerminalHalfStep,
+  markMobileNativeChatTerminalHalfStepped,
+  mobileNativeChatTerminalHalfStep,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
@@ -109,6 +113,21 @@ export function useMobileNativeChatAnswerSend(args: {
         // which is exactly how it was reported (2026-09-15).
         onSendError('Answer not sent — nothing was selected')
         return false
+      }
+      // A half-written answer to THIS prompt — from the notification shade, or
+      // an earlier chain here — left the selector mid-way. A from-scratch plan
+      // would type the row digit into its open text field or toggle a box
+      // back off. The mark beside the write lock is what both surfaces consult
+      // (F4, 2026-09-18); the card's own fence below only sees its own chains.
+      const promptKey = nativeChatAskDismissKey(prompt) ?? ''
+      const halfStep = mobileNativeChatTerminalHalfStep(handle)
+      if (halfStep) {
+        if (halfStep.promptKey === promptKey) {
+          onSendError('Answer partly sent earlier — finish it in the terminal before retrying')
+          return false
+        }
+        // A different prompt: the selector has been redrawn since.
+        clearMobileNativeChatTerminalHalfStep(handle)
       }
       // One composed write sequence per terminal: an answer landing mid-flight
       // in an image paste (or vice versa) would interleave bytes into the PTY.
@@ -274,6 +293,19 @@ export function useMobileNativeChatAnswerSend(args: {
           write: (body, budget) => sendTerminal(body, false, budget),
           wait
         })
+        // Stopped short with a key down (or possibly down): the selector has
+        // moved and the prompt has not. Say so where the shade can see it too.
+        if (
+          stepped.kind !== 'sent' &&
+          groups.length > 1 &&
+          (sawAcceptedGroup || sawUnknownOutcome)
+        ) {
+          const at = stepped.kind === 'failed' ? `write ${stepped.step + 1}/${groups.length}` : stepped.kind
+          markMobileNativeChatTerminalHalfStepped(handle, {
+            promptKey,
+            detail: sawUnknownOutcome ? `${at} unknown` : `${at} rejected`
+          })
+        }
         switch (stepped.kind) {
           case 'failed':
             return fail()

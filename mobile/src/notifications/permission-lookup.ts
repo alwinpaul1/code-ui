@@ -2,6 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { parseAskFromStatus, type AskPrompt } from '../../../src/shared/native-chat-ask'
 import { parseApprovalFromStatus } from '../session/mobile-native-chat-permission'
 import type { MobileChatPermission } from '../session/mobile-native-chat-permission'
+import { clearMobileNativeChatTerminalHalfStep } from '../session/mobile-native-chat-terminal-write-lock'
 import { permissionAgentStatus, permissionTerminalList } from './permission-lookup-operations'
 
 /**
@@ -121,7 +122,15 @@ export async function lookupPendingPrompt(
       const status = permissionAgentStatus.interpret(
         await permissionAgentStatus.request(client, { terminal: terminal.handle })
       )
-      if (status === null || !isPausedOnPrompt(status.state)) {
+      if (status === null) {
+        continue
+      }
+      if (!isPausedOnPrompt(status.state)) {
+        // The agent has left its prompt (answered at the desk, timed out): a
+        // selector a half-written reply left mid-way is gone with it, so the
+        // mark that refuses retries into it is lifted here, the one place that
+        // sees the state (F4).
+        clearMobileNativeChatTerminalHalfStep(terminal.handle)
         continue
       }
       const pending = pendingFromStatus(status.interactivePrompt, terminal.handle, terminal.agent)

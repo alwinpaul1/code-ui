@@ -85,7 +85,7 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
  *  does; it is not a schedule. */
 const ANDROID_CHANNEL_TRIGGER = { channelId: 'orca-desktop' } as const
 
-function notificationTrigger(): { channelId: string } | null {
+export function notificationTrigger(): { channelId: string } | null {
   return Platform.OS === 'android' ? ANDROID_CHANNEL_TRIGGER : null
 }
 

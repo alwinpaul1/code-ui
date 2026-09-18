@@ -37,8 +37,11 @@ export async function ensurePermissionCategory(
   if (actions.length === 0) {
     return null
   }
+  // A reply field's placeholder is in the id too: it is the only place the
+  // field says what to type, and two fields alike in every other way but
+  // that shared one registration, so the second one's hint was the first's.
   const categoryIdentifier = `codeui-permission-${actions
-    .map((a) => `${a.identifier}=${a.textInput ? 'reply:' : ''}${a.label}`)
+    .map((a) => `${a.identifier}=${a.textInput ? `reply(${a.textInput.placeholder}):` : ''}${a.label}`)
     .join('|')}`
   if (registered.has(categoryIdentifier)) {
     return categoryIdentifier

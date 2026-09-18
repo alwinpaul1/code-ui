@@ -29,6 +29,45 @@ export function releaseMobileNativeChatTerminalWrite(terminal: string): void {
 export function resetMobileNativeChatTerminalWritesForTests(): void {
   writeInFlightTerminals.clear()
   burstTerminals.clear()
+  halfSteppedTerminals.clear()
+}
+
+/**
+ * A selector answer that was only partly written: some of its keystroke
+ * groups landed (or may have — a lost ack) and the rest did not. The agent's
+ * selector is then somewhere a from-scratch plan does not expect: on its open
+ * "Type something" row, where the row digit would be typed as text, or with a
+ * multi-select box already toggled, which the same digit would toggle back
+ * OFF. The prompt itself is unchanged and the agent still 'waiting', so no
+ * stale check sees it. The mark is what does.
+ *
+ * Shared between the chat card's hook and the notification shade's sender,
+ * because each can leave a terminal half-stepped and the other cannot see its
+ * state otherwise. Keyed by prompt: once the agent is asking something else
+ * the selector has been redrawn, and the mark no longer applies.
+ */
+export type MobileNativeChatHalfStep = {
+  /** `nativeChatAskDismissKey` of the prompt that was being answered. */
+  promptKey: string
+  /** Where it stopped, for the log line and the refusal: e.g. "write 2/3 rejected". */
+  detail: string
+}
+
+const halfSteppedTerminals = new Map<string, MobileNativeChatHalfStep>()
+
+export function markMobileNativeChatTerminalHalfStepped(
+  terminal: string,
+  mark: MobileNativeChatHalfStep
+): void {
+  halfSteppedTerminals.set(terminal, mark)
+}
+
+export function mobileNativeChatTerminalHalfStep(terminal: string): MobileNativeChatHalfStep | null {
+  return halfSteppedTerminals.get(terminal) ?? null
+}
+
+export function clearMobileNativeChatTerminalHalfStep(terminal: string): void {
+  halfSteppedTerminals.delete(terminal)
 }
 
 /** A burst is the window in which a composed sequence is actually issuing reads

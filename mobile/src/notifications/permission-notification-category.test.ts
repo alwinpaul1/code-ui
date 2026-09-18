@@ -65,6 +65,21 @@ describe('registering a banner’s buttons with the OS', () => {
     ])
   })
 
+  // The placeholder is the only place a reply field says what to type. Two
+  // fields with the same label and identifier but different placeholders
+  // shared one registration, so a two-question prompt's field said "Number(s),
+  // e.g. 2 or 1,3" after a four-option one had registered first (F6).
+  it('keeps two reply fields with different placeholders apart', async () => {
+    const numbers = await ensurePermissionCategory([
+      { identifier: 'question:answer', label: 'Answer', textInput: { placeholder: 'Number(s)' } }
+    ])
+    const perQuestion = await ensurePermissionCategory([
+      { identifier: 'question:answer', label: 'Answer', textInput: { placeholder: 'One per question' } }
+    ])
+    expect(perQuestion).not.toBe(numbers)
+    expect(Notifications.setNotificationCategoryAsync).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps a reply field apart from a plain button with the same label', async () => {
     const plain = await ensurePermissionCategory([{ identifier: 'question:answer', label: 'Answer' }])
     const reply = await ensurePermissionCategory([

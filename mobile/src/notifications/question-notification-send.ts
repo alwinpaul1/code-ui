@@ -2,6 +2,7 @@ import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
   hasAskAnswer,
+  nativeChatAskDismissKey,
   type AskAnswerKeyGroup,
   type AskAnswerSelection,
   type AskPrompt
@@ -18,6 +19,9 @@ import {
 } from '../session/mobile-native-chat-send'
 import {
   acquireMobileNativeChatTerminalWrite,
+  clearMobileNativeChatTerminalHalfStep,
+  markMobileNativeChatTerminalHalfStepped,
+  mobileNativeChatTerminalHalfStep,
   releaseMobileNativeChatTerminalWrite
 } from '../session/mobile-native-chat-terminal-write-lock'
 import type { RpcClient } from '../transport/rpc-client'
@@ -29,7 +33,9 @@ function refused(detail: {
   hostId: string
   terminal: string
   step: string
-  outcome?: MobileNativeChatSendOutcome | 'busy' | 'unsupported-agent' | 'no-answer'
+  /** The write's outcome, or why no write was tried; free text for a
+   *  half-stepped refusal, which quotes the earlier step. */
+  outcome?: string
 }): false {
   console.warn('[question-notification] answer not written', detail)
   return false
@@ -69,10 +75,13 @@ function keysFor(
  * Only 'accepted' counts as sent. For a one-keystroke answer, 'unknown' means
  * the ack was lost and the digit may still have landed — a retry is safe,
  * because the caller re-checks the prompt before every send and finds none
- * once one has. A multi-step answer that fails part-way is a different
- * matter: the selector has moved and a retry from scratch would type the row
- * number into the open text field. The log names the step for exactly that
- * case; the user has to look at the session.
+ * once one has. A multi-step answer that stops part-way is a different
+ * matter: the selector has moved, the prompt has not, and a retry from
+ * scratch would type the row number into the open text field or toggle a box
+ * back off. So the terminal is marked half-stepped for THIS prompt, the mark
+ * is shared with the chat card, and every later tap for the same prompt is
+ * refused until the agent asks something else (or, on the lookup's side,
+ * leaves waiting). The user has to finish it in the session.
  *
  * Never throws. Never writes without the lock.
  */
@@ -92,38 +101,54 @@ export async function sendQuestionAnswerFromNotification(args: {
   if (groups === null) {
     return refused({ hostId, terminal, step: 'build-keys', outcome: 'unsupported-agent' })
   }
+  const promptKey = nativeChatAskDismissKey(args.prompt) ?? ''
+  const halfStep = mobileNativeChatTerminalHalfStep(terminal)
+  if (halfStep) {
+    if (halfStep.promptKey === promptKey) {
+      return refused({ hostId, terminal, step: 'half-stepped', outcome: halfStep.detail })
+    }
+    // A different prompt: the selector has been redrawn since.
+    clearMobileNativeChatTerminalHalfStep(terminal)
+  }
   // A digit landing mid-flight in the card's own paced answer or an image
   // paste would interleave bytes into the PTY.
   if (!acquireMobileNativeChatTerminalWrite(terminal)) {
     return refused({ hostId, terminal, step: 'lock', outcome: 'busy' })
   }
-  let lastOutcome: MobileNativeChatSendOutcome = 'rejected'
+  // A holder, not a `let`: the write closure assigns it, and TypeScript would
+  // otherwise narrow the initial value for the comparison below.
+  const last: { outcome: MobileNativeChatSendOutcome } = { outcome: 'rejected' }
   try {
     const stepped = await stepAskAnswerKeyGroups({
       groups,
       deadline: openMobileNativeChatSendBudget(),
       write: async (body, deadline) => {
-        lastOutcome = await sendMobileNativeChatMessageWithOutcome({
+        last.outcome = await sendMobileNativeChatMessageWithOutcome({
           client,
           terminal,
           text: body,
           enter: false,
           deadline
         })
-        return lastOutcome === 'accepted'
+        return last.outcome === 'accepted'
       },
       wait: (ms) => new Promise((resolve) => setTimeout(() => resolve(true), ms))
     })
     switch (stepped.kind) {
       case 'sent':
         return true
-      case 'failed':
-        return refused({
-          hostId,
-          terminal,
-          step: `write ${stepped.step + 1}/${groups.length}`,
-          outcome: lastOutcome
-        })
+      case 'failed': {
+        const step = `write ${stepped.step + 1}/${groups.length}`
+        // Half written: an earlier group landed, or this one may have (a lost
+        // ack). A one-group plan that was refused outright left nothing behind.
+        if (groups.length > 1 && (stepped.step > 0 || last.outcome === 'unknown')) {
+          markMobileNativeChatTerminalHalfStepped(terminal, {
+            promptKey,
+            detail: `${step} ${last.outcome}`
+          })
+        }
+        return refused({ hostId, terminal, step, outcome: last.outcome })
+      }
       case 'cancelled':
       case 'nothing-to-send':
         return refused({ hostId, terminal, step: stepped.kind })
