@@ -40,9 +40,14 @@ const CODEX_FILE_CHANGE_TITLE = 'Apply file changes?'
 // The host's marker, verbatim. JSON.stringify output never holds a raw newline
 // outside a string, so this cannot match inside an intact payload.
 const ORCA_TRUNCATION_MARKER = /\n\[Orca: output truncated — (\d+) bytes total, digest [0-9a-f]+\]\s*$/
-// Claude's edit inputs open with the path, so a clipped head still names the
-// file when the cut fell past it. JSON's own escaping makes this exact.
-const LEADING_FILE_PATH = /^\{"file_path":"((?:[^"\\]|\\.)*)"/
+// A clipped head still names the file when the cut fell past it. Claude's
+// edit inputs open with `file_path`; Codex's detail is an array whose first
+// change carries `path` after zero or more scalar fields. Both are matched on
+// JSON's own escaping, so the recovered path is exact or absent, never partial.
+const JSON_STRING = '"(?:[^"\\\\]|\\\\.)*"'
+const JSON_SCALAR_FIELD = `${JSON_STRING}:(?:${JSON_STRING}|-?\\d+(?:\\.\\d+)?|true|false|null),`
+const LEADING_FILE_PATH = new RegExp(`^\\{"file_path":(${JSON_STRING})`)
+const LEADING_CODEX_PATH = new RegExp(`^\\[\\{(?:${JSON_SCALAR_FIELD})*"path":(${JSON_STRING})`)
 
 const CODEX_VERB: Record<NativeChatEditFile['changeKind'], string> = {
   added: 'New file',
@@ -61,9 +66,9 @@ function parseJson(text: string): unknown {
 
 function truncatedPreview(detail: string, marker: RegExpMatchArray): ProposedEditPreview {
   const head = detail.slice(0, marker.index)
-  const rawPath = head.match(LEADING_FILE_PATH)?.[1]
+  const literal = head.match(LEADING_FILE_PATH)?.[1] ?? head.match(LEADING_CODEX_PATH)?.[1]
   // Undo JSON's escaping by parsing the string literal on its own.
-  const path = rawPath === undefined ? null : (parseJson(`"${rawPath}"`) as string | undefined)
+  const path = literal === undefined ? null : (parseJson(literal) as string | undefined)
   const totalBytes = Number.parseInt(marker[1] ?? '', 10)
   return {
     kind: 'truncated',
@@ -92,9 +97,10 @@ function claudePreview(tool: string, input: unknown): ProposedEditPreview {
     return { kind: 'none' }
   }
   // A Write is the whole new content and nothing else: the file's current
-  // contents are not on the wire, so it is labelled as what it does, not shown
-  // as a fake full diff.
-  const verb = tool === 'Write' ? 'Replaces file' : 'Proposed edit'
+  // contents are not on the wire, and whether it exists at all is unknown
+  // before approval, so the label says what the tool does and no more.
+  // "Replaces" would claim a file that may not be there.
+  const verb = tool === 'Write' ? 'Writes file' : 'Proposed edit'
   return { kind: 'diff', files: files.map((file) => ({ file, verb })) }
 }
 

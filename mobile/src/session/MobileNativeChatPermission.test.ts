@@ -442,7 +442,7 @@ describe('the proposed change on a permission card', () => {
     expect(texts.some((text) => text.includes('old_string'))).toBe(false)
   })
 
-  it('shows a Write as the whole new content and says it replaces the file', () => {
+  it('shows a Write as the whole new content and says it writes the file', () => {
     // Pre-approval there is no way to read what the file holds now, so a Write
     // is shown as what it will contain, never as a fake full diff.
     const { rows, texts } = render({
@@ -451,8 +451,22 @@ describe('the proposed change on a permission card', () => {
       options: OPTIONS
     })
     expect(rows.map((row) => `${row.marker}${row.text}`)).toEqual(['+# Notes', '+', '+first'])
-    expect(texts).toContain('Replaces file')
+    expect(texts).toContain('Writes file')
     expect(texts).toContain('notes.md')
+  })
+
+  it('leaves a hook-envelope Edit ask as plain text, since its detail is a bare path', () => {
+    // The live-prompt lane builds the same "Allow Edit?" title but its detail
+    // is the hook summary (a path, not JSON). It must fall through to the old
+    // rendering, not a diff of nothing.
+    const { rows, texts } = render({
+      title: 'Allow Edit?',
+      detail: '/w/src/app.ts',
+      options: OPTIONS
+    })
+    expect(rows).toEqual([])
+    expect(texts).toContain('/w/src/app.ts')
+    expect(texts).not.toContain('Proposed edit')
   })
 
   it('keeps the options exactly as given beneath the diff', async () => {

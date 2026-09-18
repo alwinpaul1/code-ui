@@ -52,7 +52,7 @@ describe('reading the proposed change out of a Claude approval', () => {
     }
   })
 
-  it('shows a Write as its whole new content, labelled as replacing the file', () => {
+  it('shows a Write as its whole new content, labelled as writing the file', () => {
     // The old contents are not on the wire and cannot be read before approval
     // without an RPC, so this is never dressed up as a full diff.
     const preview = proposedEditPreview(
@@ -61,7 +61,7 @@ describe('reading the proposed change out of a Claude approval', () => {
     )
     expect(rows(preview)).toEqual(['+# Notes', '+first'])
     if (preview.kind === 'diff') {
-      expect(preview.files[0]?.verb).toBe('Replaces file')
+      expect(preview.files[0]?.verb).toBe('Writes file')
     }
   })
 
@@ -171,6 +171,21 @@ describe('reading the proposed change out of a Codex approval', () => {
       expect(preview.files[0]?.file.lineNumbersKnown).toBe(true)
     }
     expect(rows(preview)).toEqual(['-a', '+b', ' c', '+one', '+two'])
+  })
+
+  it('still names the first file when the host clipped a Codex change list', () => {
+    // Codex's detail is an ARRAY of changes, so the Claude-shaped path regex
+    // cannot see it; the first element's path is still at the head of the
+    // payload and the notice should say which file, not "this change".
+    const detail = clippedLikeOrca(
+      JSON.stringify([
+        { path: 'src/greet.ts', kind: { type: 'update' }, diff: `@@ -1 +1 @@\n-a\n+${'b'.repeat(20_000)}` }
+      ])
+    )
+    expect(proposedEditPreview('Apply file changes?', detail)).toMatchObject({
+      kind: 'truncated',
+      path: 'src/greet.ts'
+    })
   })
 
   it('gives nothing for a command approval on either Codex lane', () => {
