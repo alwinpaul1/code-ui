@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { useAgentHudBeacon } from './agent-hud-beacon'
+import type { AgentHudBeacon } from './agent-hud-beacon'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 
 const NONE: readonly string[] = []
@@ -14,19 +14,34 @@ const NONE: readonly string[] = []
  *  Why the ids are remembered rather than read fresh: the beacon can only name
  *  what is still inside the tail of the transcript it reads, and a busy
  *  session scrolls past that in well under two minutes. See
- *  `mobile-finished-task-id-memory.ts`. Memory is per terminal handle, so
- *  switching tabs never carries one tab's finished ids into another. */
-export function useActiveTabFinishedTaskIds(handle: string | null): readonly string[] {
-  const memory = useRef<{ handle: string | null; ids: readonly string[] }>({
+ *  `mobile-finished-task-id-memory.ts`. Memory is per terminal handle AND
+ *  session, so switching tabs never carries one tab's finished ids into
+ *  another, and a new session in the same terminal starts with none.
+ *
+ *  The beacon comes in from the caller, already gated to the session the tab
+ *  is showing (`agentHudBeaconMatches`): the store is keyed by handle, and a
+ *  handle outlives the process that emitted into it, so reading it here by
+ *  handle fed a dead process's lists to the row (2026-09-18). */
+export function useActiveTabFinishedTaskIds(
+  handle: string | null,
+  sessionId: string | null,
+  beacon: AgentHudBeacon | null
+): readonly string[] {
+  const memory = useRef<{ handle: string | null; sessionId: string | null; ids: readonly string[] }>({
     handle,
+    sessionId,
     ids: NONE
   })
-  const reported = useAgentHudBeacon(handle)?.doneTaskIds ?? NONE
-  if (memory.current.handle !== handle) {
-    memory.current = { handle, ids: NONE }
+  const reported = beacon?.doneTaskIds ?? NONE
+  // A null session id is "not known yet", never "a different session".
+  const sessionChanged =
+    sessionId !== null && memory.current.sessionId !== null && sessionId !== memory.current.sessionId
+  if (memory.current.handle !== handle || sessionChanged) {
+    memory.current = { handle, sessionId, ids: NONE }
   }
   memory.current = {
     handle,
+    sessionId: sessionId ?? memory.current.sessionId,
     ids: rememberFinishedTaskIds(memory.current.ids, reported)
   }
   return memory.current.ids
@@ -49,12 +64,16 @@ export type ActiveTabBackgroundTaskReport = {
   onScreenShellCount?: number | null
 }
 
-/** What the agent has said about its background work, all three halves. */
-export function useActiveTabBackgroundTaskReport(
+/** What the agent has said about its background work, all three halves, from
+ *  the beacon of the session this tab is showing and no other. */
+export function useActiveTabBackgroundTaskReport(args: {
   handle: string | null
-): ActiveTabBackgroundTaskReport {
-  const finishedTaskIds = useActiveTabFinishedTaskIds(handle)
-  const beacon = useAgentHudBeacon(handle)
+  sessionId: string | null
+  /** Already session-gated by the caller; see `useActiveTabFinishedTaskIds`. */
+  beacon: AgentHudBeacon | null
+}): ActiveTabBackgroundTaskReport {
+  const { handle, sessionId, beacon } = args
+  const finishedTaskIds = useActiveTabFinishedTaskIds(handle, sessionId, beacon)
   const runningTaskIds = beacon?.runningTaskIds ?? null
   const runningTaskIdsAt = beacon?.runningTaskIdsAt ?? null
   const launchedTaskIds = beacon?.launchedTaskIds ?? NONE

@@ -108,11 +108,11 @@ export function applyAgentHudBeaconFields(
  *    it does.
  */
 export function agentHudBeaconMatches(
-  beacon: AgentHudBeacon | null,
+  beacon: Pick<AgentHudBeacon, 'agent' | 'sessionId'> | null,
   agent: string | null,
   sessionId: string | null
 ): boolean {
-  if (!beacon || sessionId === null || beacon.sessionId !== sessionId) {
+  if (!beacon || !agentHudBeaconSpeaksFor(beacon, sessionId)) {
     return false
   }
   if (!agent) {
@@ -120,4 +120,13 @@ export function agentHudBeaconMatches(
   }
   // Orca labels an OpenClaude tab 'openclaude'; Claude Code names itself claude.
   return agent === beacon.agent || (agent === 'openclaude' && beacon.agent === 'claude')
+}
+
+/** The session half of `agentHudBeaconMatches`, for readers that have no
+ *  agent name to check (the tab strip's dot). Same three refusals. */
+export function agentHudBeaconSpeaksFor(
+  beacon: Pick<AgentHudBeacon, 'sessionId'>,
+  sessionId: string | null
+): boolean {
+  return sessionId !== null && beacon.sessionId === sessionId
 }

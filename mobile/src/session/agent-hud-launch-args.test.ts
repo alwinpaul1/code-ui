@@ -10,6 +10,8 @@ import {
   buildAgentHudLaunchArgs,
   buildClaudeHudSettingsJson,
   buildCodexHudNotifyOverride,
+  CLAUDE_HUD_HEARTBEAT_SECONDS,
+  CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32,
   CLAUDE_HUD_PROMPT_HOOK_SCRIPT,
   CLAUDE_HUD_STATUSLINE_POWERSHELL,
   CLAUDE_HUD_STATUSLINE_SCRIPT,
@@ -113,7 +115,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     // Empty stdout is the whole point: Claude Code draws no status row for it.
     expect(run.stdout).toBe('')
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -123,7 +125,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     })
     // The percentage is truncated to an integer, not passed through as 64.95.
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
     expect(run.stdout).toBe('')
   })
@@ -155,11 +157,39 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     }
   })
 
+  // Review of 93e3cc5: the phone had assumed Claude Code repaints its status
+  // line several times a second while it works. It does so only while tokens
+  // stream; during a tool call or a subagent run it does not repaint at all,
+  // so a liveness rule timed on working silence blanked a LIVE session's pill
+  // and ring 30 s into any long tool call. Claude Code's `refreshInterval`
+  // (seconds, min 1; 2.1.276 binary) re-runs the command on a timer whatever
+  // the agent is doing — verified live: a beat every 2 s through a 25 s
+  // foreground `python3 time.sleep` and through idle time on both sides. The
+  // beacon declares the beat it was launched with, so the phone knows what
+  // silence means for it.
+  it('makes the beacon a heartbeat: the settings ask for a repaint every few seconds and the beacon says so', () => {
+    const refresh = (platform: NodeJS.Platform) =>
+      (JSON.parse(buildClaudeHudSettingsJson(platform)) as { statusLine: { refreshInterval?: number } })
+        .statusLine.refreshInterval
+    expect(refresh('darwin')).toBe(CLAUDE_HUD_HEARTBEAT_SECONDS)
+    expect(refresh('linux')).toBe(CLAUDE_HUD_HEARTBEAT_SECONDS)
+    expect(CLAUDE_HUD_HEARTBEAT_SECONDS).toBeGreaterThanOrEqual(1)
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
+    expect(run.beacon).toContain(` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS} `)
+    // Windows: a PowerShell process per beat, unmeasured there, and a run
+    // still going when the next trigger fires is cancelled before it writes.
+    // A slower beat, declared on the beacon so the phone sizes its window.
+    expect(refresh('win32')).toBe(CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32)
+    expect(CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32).toBeGreaterThanOrEqual(3 * CLAUDE_HUD_HEARTBEAT_SECONDS)
+    expect(CLAUDE_HUD_STATUSLINE_POWERSHELL).toContain(`hb=${CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32}`)
+    expect(CLAUDE_HUD_STATUSLINE_POWERSHELL).not.toContain(`hb=${CLAUDE_HUD_HEARTBEAT_SECONDS} `)
+  })
+
   it('leaves sid off rather than guessing when the payload names no session', () => {
     const json = JSON.parse(statusJson)
     delete json.session_id
     const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: JSON.stringify(json) })
-    expect(run.beacon).toContain('CUIHUD1 agent=claude hk=1 model=')
+    expect(run.beacon).toContain('CUIHUD1 agent=claude hk=1 hb=5 model=')
     expect(run.beacon).not.toContain('sid=')
   })
 
@@ -251,7 +281,7 @@ describe('a Windows host has no PTY device, so the script writes to the console'
     })
     expect(run.stdout).toBe('')
     expect(readFileSync(console_, 'utf8')).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -632,7 +662,7 @@ describe('finished background tasks ride the Claude beacon', () => {
   })
 
   it('marks a tab launched with the prompt hook, so the phone can say when one is not', () => {
-    expect(CLAUDE_HUD_STATUSLINE_SCRIPT).toContain('CUIHUD1 agent=claude hk=1')
+    expect(CLAUDE_HUD_STATUSLINE_SCRIPT).toContain('CUIHUD1 agent=claude hk=1 hb=5')
   })
 
   it('gives a POSIX host the sh prompt hook, and both hosts the Stop hook', () => {
@@ -811,13 +841,16 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
   run('emits the very same beacon bytes as the sh script, from the same JSON', () => {
     const shell = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
     const ps = runClaudePowerShell({ json: statusJson })
-    expect(ps.beacon).toBe(shell.beacon)
+    // Save for the beat it declares: Windows is launched with a slower one.
+    expect(ps.beacon).toBe(
+      shell.beacon?.replace(` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS} `, ` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32} `)
+    )
     expect(ps.stdout).toBe('')
   })
 
   run('runs as Claude Code would run it: -EncodedCommand, JSON on stdin', () => {
     const ps = runClaudePowerShell({ json: statusJson, encoded: true })
-    expect(ps.beacon).toContain('CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1')
+    expect(ps.beacon).toContain('CUIHUD1 agent=claude hk=1 hb=15 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1')
   })
 
   run('adds the token total and percentage once Claude Code has replied', () => {

@@ -101,7 +101,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-18: askAboutFileLines's own body, same change as above.
 // 2026-09-18 (later): resolveAskAboutScreenTarget's and askAboutTerminalScreen's
 // bodies, same change as HEAD_MAIN_HOOK_SHA256 above.
-const HEAD_CALLBACK_BODY_SHA256 = '344cd64bd29e1336703e2a6816c84fbb73ad7f1d47a8d5ef3a7a2b61beac6601'
+// 2026-09-18 (evening): subscribeToTerminal and unsubscribeTerminal stamp when
+// the phone starts and stops listening on a handle (noteAgentHudBeaconListening),
+// which is what the HUD measures a beacon's silence from.
+const HEAD_CALLBACK_BODY_SHA256 = 'f646b35189ab8ea50b9c3b53e5a25282b6d50249763ef505223c36029eaf61af'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,

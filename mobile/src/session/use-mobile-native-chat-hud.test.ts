@@ -3,9 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
+import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
 import { clearStickyLiveHudForTests } from './use-sticky-live-hud'
 import { parseTerminalHudObservation, type TerminalHudObservation } from './mobile-terminal-hud-parse'
 import {
+  nativeChatHudPhase,
   useMobileNativeChatHud,
   type NativeChatHudPhase,
   type NativeChatLiveHud
@@ -53,23 +55,25 @@ const DESK_SCREEN = [
 ]
 // What the phone still held for that handle: the phone-launched agent's last
 // beacon, Fable 5.1 at medium, the phone's default at the time.
-const STALE_FABLE = `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=${S1} model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64${BEL}`
-const LIVE_OPUS = `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=${S1} model=claude-opus-5 name=Opus%205%20(1M%20context) effort=xhigh used=217000 win=1000000 pct=22${BEL}`
+const STALE_FABLE = `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=${S1} model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64${BEL}`
+const LIVE_OPUS = `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=${S1} model=claude-opus-5 name=Opus%205%20(1M%20context) effort=xhigh used=217000 win=1000000 pct=22${BEL}`
 
 type Probe = {
   agent: string | null
   sessionId: string | null
   phase: NativeChatHudPhase
+  /** `enabled`: chat shown over a connected relay. Off while backgrounded. */
+  listening?: boolean
 }
 /** What the pill and the ring read (`live`), beside the footer state the
  *  other readers take from `observation`. */
 type Read = { live: NativeChatLiveHud; observation: TerminalHudObservation | null }
 let latest: Read | null = null
 const handleRef = { current: HANDLE as string | null }
-function Harness({ agent, sessionId, phase }: Probe) {
+function Harness({ agent, sessionId, phase, listening = true }: Probe) {
   const hud = useMobileNativeChatHud({
     client: {} as RpcClient,
-    enabled: true,
+    enabled: listening,
     handleRef,
     scopeKey: 'scope',
     tabId: 'tab-1',
@@ -83,7 +87,9 @@ function Harness({ agent, sessionId, phase }: Probe) {
 }
 
 let renderer: ReactTestRenderer | null = null
+let lastProbe: Probe | null = null
 function render(probe: Probe): Read {
+  lastProbe = probe
   act(() => {
     if (renderer) {
       renderer.update(createElement(Harness, probe))
@@ -96,12 +102,30 @@ function render(probe: Probe): Read {
   }
   return latest
 }
+/** Re-renders the last probe with the listening flag flipped. */
+function renderListening(listening: boolean): Read {
+  if (!lastProbe) {
+    throw new Error('nothing rendered yet')
+  }
+  return render({ ...lastProbe, listening })
+}
 function pair(read: Read) {
   return { modelId: read.live.model, modelLabel: read.live.label, effort: read.live.effort }
 }
-function beacon(bytes: string) {
+function beacon(bytes: string, handle: string = HANDLE) {
   act(() => {
-    consumeAgentHudBeacons(HANDLE, bytes)
+    consumeAgentHudBeacons(handle, bytes)
+  })
+}
+/** What `subscribeToTerminal` / `unsubscribeTerminal` do for a handle. */
+function listen(handle: string) {
+  act(() => {
+    noteAgentHudBeaconListening(handle, true)
+  })
+}
+function unlisten(handle: string) {
+  act(() => {
+    noteAgentHudBeaconListening(handle, false)
   })
 }
 async function advance(ms: number) {
@@ -118,6 +142,9 @@ describe('the model pill on a terminal whose process changed under it', () => {
     clearStickyLiveHudForTests()
     fakes.screen = null
     latest = null
+    handleRef.current = HANDLE
+    // The active tab's stream is subscribed for as long as the HUD is shown.
+    listen(HANDLE)
   })
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -214,17 +241,29 @@ describe('the model pill on a terminal whose process changed under it', () => {
 
   // Same session id, no status line: the only thing that can tell a
   // hand-continued session from the phone-launched one is that the latter
-  // repaints — and beacons — several times a second while it works.
-  it('drops a beacon that stays silent through 31 s of the agent working, and keeps it through 29 s', async () => {
+  // runs its status-line command — and beacons — every few seconds, on the
+  // `refreshInterval` the phone launched it with, whatever it is doing.
+  it('keeps a beacon that beats every 5 s through five minutes of continuous work', async () => {
+    // Review of 93e3cc5: a long tool call or a subagent run brings no
+    // assistant message for minutes; the pill and ring must not blank.
     beacon(STALE_FABLE)
     fakes.screen = null
-    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
-      'claude-fable-5-1'
-    )
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    for (let t = 0; t < 300_000; t += 5_000) {
+      await advance(5_000)
+      beacon(STALE_FABLE)
+      expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+        'claude-fable-5-1'
+      )
+    }
+  })
+
+  it('drops a heartbeat beacon that stays silent through 31 s of work, and keeps it through 29 s', async () => {
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe('claude-fable-5-1')
     await advance(29_000)
-    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
-      'claude-fable-5-1'
-    )
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe('claude-fable-5-1')
     await advance(2_000)
     expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' }))).toEqual({
       modelId: null,
@@ -234,8 +273,57 @@ describe('the model pill on a terminal whose process changed under it', () => {
     expect(latest?.live.context ?? null).toBeNull()
   })
 
-  it('holds a beacon through five idle minutes', async () => {
+  // Verified live on 2.1.276: a permission prompt, an AskUserQuestion card and
+  // the `/model` picker all unmount the status line, and the timer with it —
+  // 0 beats in 25 s under each. A dialog is where the phone user sits and
+  // reads for minutes; the pill must not blank under them.
+  it('holds a heartbeat beacon for as long as a dialog or a question is up', async () => {
     beacon(STALE_FABLE)
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(10_000)
+    render({ agent: 'claude', sessionId: S1, phase: 'paused' })
+    await advance(600_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'paused' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+  })
+
+  it('holds a heartbeat beacon through five idle minutes, where a picker can have the status line down', async () => {
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'idle' })
+    await advance(300_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'idle' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+    // …and the turn that follows gets a full window of its own.
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(20_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+    await advance(11_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBeNull()
+  })
+
+  it('holds a beacon with no declared beat through five minutes of work with no repaint', async () => {
+    // The reviewer's blocker on 93e3cc5, for an emitter that declares no
+    // beat: Claude Code repaints its status line on a new assistant message,
+    // not during a tool call, so 30 s of working silence proves nothing.
+    beacon(STALE_FABLE.replace(' hb=5', ''))
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(300_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+  })
+
+  it('holds a beacon with no declared beat through five idle minutes', async () => {
+    // An emitter from before the heartbeat existed: silence means nothing for
+    // it, and only a turn end it did not report can retire it.
+    beacon(STALE_FABLE.replace(' hb=5', ''))
     fakes.screen = null
     render({ agent: 'claude', sessionId: S1, phase: 'idle' })
     await advance(300_000)
@@ -244,14 +332,14 @@ describe('the model pill on a terminal whose process changed under it', () => {
     )
   })
 
-  it('starts the silence window again when a fresh beacon lands at 20 s', async () => {
+  it('starts the silence window again when a fresh beat lands at 20 s', async () => {
     beacon(STALE_FABLE)
     fakes.screen = null
     render({ agent: 'claude', sessionId: S1, phase: 'working' })
     await advance(20_000)
     beacon(LIVE_OPUS)
     await advance(25_000)
-    // 45 s in, 25 s since the last beacon: still live, and the fresh figures.
+    // 45 s in, 25 s since the last beat: still live, and the fresh figures.
     expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
       'claude-opus-5'
     )
@@ -269,6 +357,120 @@ describe('the model pill on a terminal whose process changed under it', () => {
     expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
       'claude-opus-5'
     )
+  })
+
+  it('comes back on a beat whose bytes repeat the dead one exactly', async () => {
+    // Mid-turn on an unchanged model, the status line's figures need not move,
+    // so a beat can be byte-identical and the store publishes nothing new;
+    // the arrival alone must revive it.
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(31_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBeNull()
+    beacon(STALE_FABLE)
+    await advance(5_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+  })
+
+  // The phone hears a terminal only while its stream is subscribed, and every
+  // tab switch, app resume, relay reconnect and WebView reload goes through
+  // `subscribeToTerminal`, which stamps the moment listening began. Silence
+  // is measured from that stamp, so the beats that fell into a dead socket,
+  // or into a tab the phone had left, are not silence.
+  it('gives a beacon a full window again when its stream is resubscribed after a background stint', async () => {
+    // Last beat 10 s in; the app backgrounded (timers suspended, socket
+    // dead) and came back five minutes later mid-turn: the process may well
+    // be alive, and the foreground recovery resubscribes the terminal.
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(10_000)
+    renderListening(false)
+    await advance(300_000)
+    listen(HANDLE)
+    expect(pair(renderListening(true)).modelId).toBe('claude-fable-5-1')
+    await advance(20_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+    await advance(11_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBeNull()
+  })
+
+  // Review of the second pass: a tab switch unsubscribes the tab you leave,
+  // so nothing arrives for it while you are away, and its watch went on
+  // counting. Coming back to a live, idle Claude tab after a minute blanked
+  // the pill for 5–10 s (until the next beat and the dead recheck); coming
+  // back to a Codex tab whose turn had ended meanwhile lost its ring 20 s
+  // later, for good, because the turn-end beacon went into the unsubscribed
+  // stream.
+  it('shows a live, working Claude tab at once on return, after a minute on another tab', async () => {
+    const A = 'term_a'
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe('claude-fable-5-1')
+    // Away on tab A for a minute while B works on: B's stream is unsubscribed,
+    // so its beats never reach the phone, and its watch went on counting.
+    unlisten(HANDLE)
+    handleRef.current = A
+    listen(A)
+    render({ agent: 'claude', sessionId: S2, phase: 'idle' })
+    await advance(60_000)
+    // Back to B: resubscribed, and shown at once.
+    unlisten(A)
+    handleRef.current = HANDLE
+    listen(HANDLE)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+    await advance(20_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe(
+      'claude-fable-5-1'
+    )
+  })
+
+  it('does not count a turn that ended while the tab was not on screen', async () => {
+    const A = 'term_a'
+    const CODEX = `${ESC}]7777;CUIHUD1 agent=codex sid=${S1} model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+    beacon(CODEX)
+    fakes.screen = null
+    expect(render({ agent: 'codex', sessionId: S1, phase: 'working' }).live.context?.usedPercent).toBe(9)
+    unlisten(HANDLE)
+    handleRef.current = A
+    listen(A)
+    render({ agent: 'codex', sessionId: S2, phase: 'working' })
+    await advance(120_000)
+    // Back: the turn ended while away; its notify beacon went into the
+    // unsubscribed stream, not into silence.
+    unlisten(A)
+    handleRef.current = HANDLE
+    listen(HANDLE)
+    render({ agent: 'codex', sessionId: S1, phase: 'idle' })
+    await advance(21_000)
+    expect(render({ agent: 'codex', sessionId: S1, phase: 'idle' }).live.context?.usedPercent).toBe(9)
+  })
+
+  it('does not show a written-off beacon again on credit after a tab switch', async () => {
+    const A = 'term_a'
+    beacon(STALE_FABLE)
+    fakes.screen = null
+    render({ agent: 'claude', sessionId: S1, phase: 'working' })
+    await advance(31_000)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBeNull()
+    unlisten(HANDLE)
+    handleRef.current = A
+    listen(A)
+    render({ agent: 'claude', sessionId: S2, phase: 'idle' })
+    unlisten(A)
+    handleRef.current = HANDLE
+    listen(HANDLE)
+    // Still written off: only a beat brings it back.
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBeNull()
+    beacon(LIVE_OPUS)
+    expect(pair(render({ agent: 'claude', sessionId: S1, phase: 'working' })).modelId).toBe('claude-opus-5')
   })
 
   it('does not fall back to the sticky hold once the beacon is dropped', async () => {
@@ -294,6 +496,9 @@ describe('the same rules on the Codex lane', () => {
     clearStickyLiveHudForTests()
     fakes.screen = null
     latest = null
+    handleRef.current = HANDLE
+    // The active tab's stream is subscribed for as long as the HUD is shown.
+    listen(HANDLE)
   })
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -331,5 +536,23 @@ describe('the same rules on the Codex lane', () => {
     render({ agent: 'codex', sessionId: T1, phase: 'idle' })
     await advance(30_000)
     expect(render({ agent: 'codex', sessionId: T1, phase: 'idle' }).live.context).toBeNull()
+  })
+
+  it('keeps a Codex beacon across an interrupted turn, which Codex never reports', async () => {
+    // Codex's notify fires on agent-turn-complete only. Orca marks the `done`
+    // an Escape produces as interrupted; that is not a turn end to wait on.
+    beacon(CODEX_BEACON)
+    render({ agent: 'codex', sessionId: T1, phase: 'working' })
+    await advance(40_000)
+    render({ agent: 'codex', sessionId: T1, phase: 'interrupted' })
+    await advance(120_000)
+    expect(render({ agent: 'codex', sessionId: T1, phase: 'interrupted' }).live.context?.usedPercent).toBe(9)
+  })
+
+  it('reads an interrupted done from the host status as such', () => {
+    expect(nativeChatHudPhase(false, 'done', true)).toBe('interrupted')
+    expect(nativeChatHudPhase(false, 'done', undefined)).toBe('idle')
+    expect(nativeChatHudPhase(true, 'working', undefined)).toBe('working')
+    expect(nativeChatHudPhase(false, 'blocked', undefined)).toBe('paused')
   })
 })

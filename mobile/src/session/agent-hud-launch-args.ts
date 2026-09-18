@@ -81,6 +81,42 @@ const TTY_WRITE = [
 const ENCODE_FN = 'q(){ printf %s "$1" | LC_ALL=C sed -e "s/%/%25/g" -e "s/ /%20/g" -e "s/;/%3B/g"; }'
 
 /**
+ * How often Claude Code re-runs the status-line command on a timer, in
+ * seconds: `statusLine.refreshInterval` (2.1.276 binary: seconds, `min(1)`,
+ * "Re-run the status line command every N seconds in addition to
+ * event-driven updates"; an invalid value is dropped, not fatal).
+ *
+ * Why the phone asks for it: without it the command runs only on an
+ * event — a new assistant message, /compact, a mode change — and NOT while a
+ * tool executes. So a tab that had run a phone-launched agent could not be
+ * told from one running the same session by hand once the agent went quiet,
+ * and a rule that tried (working silence, 93e3cc5) blanked a live session's
+ * pill 30 s into any long tool call. With the timer the beacon is a
+ * heartbeat, and working silence means what it says. Verified live on
+ * 2.1.276: a beat every 2 s through a 25 s foreground `python3 time.sleep`
+ * and through idle time on both sides — but none under a permission prompt,
+ * an AskUserQuestion card or `/model`, which unmount the status line, so the
+ * phone times it only while Orca says the agent is working.
+ *
+ * Why 5 s: the phone writes a beacon off after six missed beats (30 s;
+ * `agent-hud-beacon-liveness.ts`). The command itself costs ~10 ms of CPU a
+ * run with no user status line (measured 2026-09-18, 38 MB transcript); a
+ * user who keeps their own bar pays that bar's cost on the same beat, as
+ * they would with the same setting in their own settings.json. The beacon
+ * carries the value (`hb=`), so the phone knows what beat to expect and sizes
+ * its window from it.
+ *
+ * Why 15 s on Windows: each beat there is a `powershell -EncodedCommand`
+ * process start (Windows PowerShell 5.1), a JSON parse and a transcript
+ * tail, measured on nothing — the path has not run on a Windows machine —
+ * and Claude Code cancels a status-line run that is still going when the
+ * next trigger fires, so a beat slower than the interval would never write.
+ * Three times the room, and a 90 s window on the phone (six beats).
+ */
+export const CLAUDE_HUD_HEARTBEAT_SECONDS = 5
+export const CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32 = 15
+
+/**
  * Claude Code's status-line command.
  *
  * The JSON Claude Code pipes in is a SINGLE line, so anchored `sed` captures
@@ -116,7 +152,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'tb=$(g "\\"cache_creation_input_tokens\\":([0-9]+)")',
   'tc=$(g "\\"cache_read_input_tokens\\":([0-9]+)")',
   'ha=$(g "\\"five_hour\\":\\{\\"used_percentage\\":([0-9.]+)")',
-  'hb=$(g "\\"five_hour\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
+  'hr=$(g "\\"five_hour\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
   'wa=$(g "\\"seven_day\\":\\{\\"used_percentage\\":([0-9.]+)")',
   'wb=$(g "\\"seven_day\\":\\{\\"used_percentage\\":[0-9.]+,\\"resets_at\\":([0-9]+)")',
   'wd=$(g "\\"cwd\\":\\"([^\\"]*)\\"")',
@@ -182,7 +218,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // Code UI must not write), so a tab started before the hook existed can
   // never gain it — the phone says so rather than silently dropping the
   // desktop's messages (2026-09-13).
-  'o="CUIHUD1 agent=claude hk=1"',
+  `o="CUIHUD1 agent=claude hk=1 hb=${CLAUDE_HUD_HEARTBEAT_SECONDS}"`,
   '[ -n "$si" ] && o="$o sid=$(q "$si")"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
@@ -190,7 +226,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   '[ -n "$ta" ] && o="$o used=$((ta+${tb:-0}+${tc:-0}))"',
   '[ -n "$cw" ] && o="$o win=$cw"',
   '[ -n "$pc" ] && o="$o pct=${pc%.*}"',
-  '[ -n "$ha" ] && o="$o h5=${ha%.*}:${hb:-0}"',
+  '[ -n "$ha" ] && o="$o h5=${ha%.*}:${hr:-0}"',
   '[ -n "$wa" ] && o="$o d7=${wa%.*}:${wb:-0}"',
   '[ -n "$dn" ] && o="$o done=${dn%,}"',
   '[ -n "$bg" ] && o="$o bg=${bg%,}"',
@@ -439,7 +475,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   '$j=$null',
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$E={param($s) ([string]$s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
-  '$o="CUIHUD1 agent=claude hk=1"',
+  `$o="CUIHUD1 agent=claude hk=1 hb=${CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32}"`,
   'if($j.session_id){$o=$o+" sid="+(& $E $j.session_id)}',
   'if($j.model.id){$o=$o+" model="+(& $E $j.model.id)}',
   'if($j.model.display_name){$o=$o+" name="+(& $E $j.model.display_name)}',
@@ -649,7 +685,11 @@ export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null 
   return JSON.stringify({
     statusLine: {
       type: 'command',
-      command: hostPlatform === 'win32' ? CLAUDE_HUD_WINDOWS_COMMAND : CLAUDE_HUD_STATUSLINE_SCRIPT
+      command: hostPlatform === 'win32' ? CLAUDE_HUD_WINDOWS_COMMAND : CLAUDE_HUD_STATUSLINE_SCRIPT,
+      // The heartbeat: see CLAUDE_HUD_HEARTBEAT_SECONDS. A user's own bar runs
+      // on the same beat, which is their bar repainting, not a row of ours.
+      refreshInterval:
+        hostPlatform === 'win32' ? CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32 : CLAUDE_HUD_HEARTBEAT_SECONDS
     },
     // Why a hook as well as the status line: the status line says what the
     // agent IS, the Stop hook says what it still has running. Both ride the

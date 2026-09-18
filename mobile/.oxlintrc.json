@@ -223,8 +223,11 @@
           {
             // 2026-09-18: +9 for `sid=` on every emitter (status line, Stop
             // hook, prompt hook, Codex notify; sh and PowerShell), so a beacon
-            // names the session it came from.
-            "max": 311,
+            // names the session it came from. +4 the same day for the
+            // heartbeat: `refreshInterval` on the settings and `hb=` on the
+            // status-line beacon, so silence means something, with a slower
+            // beat for Windows where each run is a PowerShell process.
+            "max": 315,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -241,8 +244,9 @@
           {
             // 2026-09-18: +17 for the session id on a beacon (parse, replace
             // the handle's record when the session changes) and the arrival
-            // clock the liveness rule reads.
-            "max": 322,
+            // clock the liveness rule reads. +3 the same day for the beat a
+            // beacon declares (`hb=`), parsed and kept across a merge.
+            "max": 325,
             "skipBlankLines": true,
             "skipComments": true
           }

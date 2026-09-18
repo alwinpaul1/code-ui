@@ -134,7 +134,14 @@ they write to their own PTY. Launch flags (Claude Code `--settings`, Codex
 OSC, the phone already receives those bytes, and it strips them before xterm
 ever sees them. Claude's command also runs the user's own status line and
 prints its output verbatim, so a user with one keeps exactly their bar, and a
-user without one still gets no row. Windows takes a different route: hook
+user without one still gets no row. The flag also sets
+`statusLine.refreshInterval` (5 s; 15 s on Windows), so Claude re-runs the
+command on a timer while its status line is mounted (not under a dialog or a
+picker), and while it works the beacon is a heartbeat the phone can time
+(2026-09-18: a rule timed on the agent WORKING with no heartbeat behind it
+blanked a live pill 30 s into any tool call, because the status line does not
+repaint during one). A user's own bar repaints on that beat too; that is their
+bar, not a row of ours. Windows takes a different route: hook
 children there sit in a hidden console, so both agents get a PowerShell script
 that attaches to the agent's console via P/Invoke and writes there. It runs
 for real under PowerShell 7 in tests but **has not run on a Windows machine**

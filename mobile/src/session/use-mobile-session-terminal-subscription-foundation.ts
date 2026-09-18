@@ -1,5 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { resetAgentHudBeacons } from './agent-hud-beacon'
+import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -38,6 +39,9 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       subscribingHandlesRef.current.delete(handle)
       leaseOnlyHandlesRef.current.delete(handle)
       terminalDiagnosticsRef.current.terminalUnsubscribed(handle)
+      // From here nothing arrives for this handle; the HUD must not read the
+      // gap as the agent's silence (a tab switched away, a dead socket).
+      noteAgentHudBeaconListening(handle, false)
       subscribeSeqRef.current.set(handle, (subscribeSeqRef.current.get(handle) ?? 0) + 1)
       // Why: reset the high-water mark so a fresh subscription's first scrollback isn't dropped as stale.
       layoutSeqRef.current.delete(handle)

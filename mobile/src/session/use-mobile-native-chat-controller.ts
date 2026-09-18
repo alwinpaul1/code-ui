@@ -145,7 +145,7 @@ export function useMobileNativeChatController(
     beaconPromptReceipts: hudBeacon?.desktopPrompts
   })
 
-  const backgroundTaskReport = useActiveTabBackgroundTaskReport(activeHandle)
+  const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
   const nativeChatAgentWorking = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeChatResolution != null && activeTabAgentWorking
@@ -179,7 +179,7 @@ export function useMobileNativeChatController(
     tabId: activeSessionTabId,
     sessionId: activeChatSessionId,
     agent: activeChatResolution?.agent ?? null,
-    phase: nativeChatHudPhase(nativeChatAgentWorking, nativeChatStatus?.state),
+    phase: nativeChatHudPhase(nativeChatAgentWorking, nativeChatStatus?.state, nativeChatStatus?.interrupted),
     agentStatus: activeSessionTab?.agentStatus ?? null
   })
   // Model and effort as one pair, from one source; see the module's comment.
