@@ -105,6 +105,10 @@ export type MobileNativeChatController = {
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
+  /** Rejects a Claude Code plan review with typed feedback in one tap. TUI
+   *  lane only — undefined in the structured lane, where the comment sheet
+   *  never opens (use-mobile-native-chat-plan-feedback-send.ts). */
+  handleNativeChatRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
   prepareNativeChatImageSend?: () => Promise<void>
   /** Uses the original agent input for desktop and mobile queued messages. */
   openNativeChatQueueEditor?: (index: number, tapped: string) => Promise<void>

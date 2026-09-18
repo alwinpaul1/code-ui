@@ -16,6 +16,7 @@ export type MobileNativeChatPromptCardProps = {
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
 }
 
 /** The pending agent prompt above the composer: a structured AskUserQuestion
@@ -31,7 +32,8 @@ export function MobileNativeChatPromptCard({
   question,
   onAnswerQuestion,
   permission,
-  onRespondPermission
+  onRespondPermission,
+  onRespondPermissionWithComment
 }: MobileNativeChatPromptCardProps) {
   if (ask) {
     return (
@@ -61,6 +63,12 @@ export function MobileNativeChatPromptCard({
         key={mobileChatPermissionKey(permission)}
         permission={permission}
         onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
+        onRespondWithComment={
+          onRespondPermissionWithComment
+            ? async (send, comment) =>
+                (await onRespondPermissionWithComment(send, comment)) ?? false
+            : undefined
+        }
       />
     )
   }

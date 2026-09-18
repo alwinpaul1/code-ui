@@ -3,6 +3,7 @@ import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sh
 
 vi.mock('lucide-react-native', () => ({
   Eraser: vi.fn(),
+  GitBranch: vi.fn(),
   MessageSquare: vi.fn(),
   Monitor: vi.fn(),
   Smartphone: vi.fn(),
@@ -23,16 +24,22 @@ function buildActions(overrides: Partial<SheetArgs> = {}) {
     onToggleDisplayMode: vi.fn(),
     onRename: vi.fn(),
     onClear: vi.fn(),
+    onFork: vi.fn(),
     onClose: vi.fn(),
     onCloseSessionTab: vi.fn(),
     ...overrides
   })
 }
 
-const terminalTab = (id: string, handle: string | null) => ({
+const terminalTab = (
+  id: string,
+  handle: string | null,
+  agentStatus?: { agentType?: string; state?: string }
+) => ({
   type: 'terminal',
   id,
-  terminal: handle
+  terminal: handle,
+  ...(agentStatus ? { agentStatus } : {})
 })
 
 describe('getMobileTerminalActionSheetActions', () => {
@@ -95,5 +102,46 @@ describe('getMobileTerminalActionSheetActions', () => {
     actions.find((action) => action.label === 'Close')?.onPress()
     expect(onClose).toHaveBeenCalledWith(target)
     expect(onCloseSessionTab).not.toHaveBeenCalled()
+  })
+
+  describe('Fork', () => {
+    it('offers it for an idle Claude Code pane', () => {
+      const tab = terminalTab('tab-1::leaf-1', 'terminal-1', { agentType: 'claude', state: 'done' })
+      const actions = buildActions({ target: { handle: 'terminal-1' }, tabs: [tab] })
+      expect(actions.some((action) => action.label === 'Fork')).toBe(true)
+    })
+
+    it('dismisses the sheet and forks the pressed target', () => {
+      const onDismiss = vi.fn()
+      const onFork = vi.fn()
+      const target = { handle: 'terminal-1' }
+      const tab = terminalTab('tab-1::leaf-1', 'terminal-1', { agentType: 'claude', state: 'done' })
+      const actions = buildActions({ target, tabs: [tab], onDismiss, onFork })
+
+      actions.find((action) => action.label === 'Fork')?.onPress()
+      expect(onDismiss).toHaveBeenCalled()
+      expect(onFork).toHaveBeenCalledWith(target)
+    })
+
+    it.each([
+      ['a turn is running', { agentType: 'claude', state: 'working' }],
+      ['a permission prompt is up', { agentType: 'claude', state: 'blocked' }],
+      ['a question prompt is up', { agentType: 'claude', state: 'waiting' }]
+    ])('is left out while %s', (_label, agentStatus) => {
+      const tab = terminalTab('tab-1::leaf-1', 'terminal-1', agentStatus)
+      const actions = buildActions({ target: { handle: 'terminal-1' }, tabs: [tab] })
+      expect(actions.some((action) => action.label === 'Fork')).toBe(false)
+    })
+
+    it('is left out for Codex, which has no /fork', () => {
+      const tab = terminalTab('tab-1::leaf-1', 'terminal-1', { agentType: 'codex', state: 'done' })
+      const actions = buildActions({ target: { handle: 'terminal-1' }, tabs: [tab] })
+      expect(actions.some((action) => action.label === 'Fork')).toBe(false)
+    })
+
+    it('is left out with no matching session tab (identity unknown, not assumed Claude)', () => {
+      const actions = buildActions({ target: { handle: 'terminal-9' }, tabs: [] })
+      expect(actions.some((action) => action.label === 'Fork')).toBe(false)
+    })
   })
 })

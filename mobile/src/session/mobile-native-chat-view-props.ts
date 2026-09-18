@@ -143,6 +143,7 @@ export type MobileNativeChatViewProps = {
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
   /** Drop one message Claude Code has queued behind the running turn. */
   onCancelQueued?: (id: string) => Promise<boolean>
   /** Rewind the conversation to before a sent prompt (structured lane, on a host
