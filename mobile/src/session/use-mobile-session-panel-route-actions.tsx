@@ -5,6 +5,7 @@ import {
   type ActivePanel,
   resolvePanelAction,
   shouldShowSessionHeaderChecksAction,
+  shouldShowProjectConfigActions,
   panelRouteDescriptor
 } from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -165,7 +166,27 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
+  // The three project-config screens (MCP servers, permission rules, project
+  // memory) read and write worktree-relative files — a folder workspace or
+  // the floating terminal-only sentinel has no such worktree, the same gate
+  // agent history already uses for the same reason.
+  const showProjectConfigActions = shouldShowProjectConfigActions({
+    isFolderWorkspaceRoute,
+    isFloatingWorkspaceRoute
+  })
+  const openMcpServers = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/mcp-servers/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const openPermissionRules = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/permission-rules/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const openProjectMemory = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/project-memory/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction || showProjectConfigActions
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
   return {
     createTabAgentActions,
@@ -175,6 +196,10 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showProjectConfigActions,
+    openMcpServers,
+    openPermissionRules,
+    openProjectMemory,
     showHeaderMoreButton,
     createTabBusy
   }

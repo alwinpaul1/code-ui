@@ -91,7 +91,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handlePanelTap,
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
-    showChecksAction
+    showChecksAction,
+    showProjectConfigActions,
+    openMcpServers,
+    openPermissionRules,
+    openProjectMemory
   } = controller
   return (
     <>
@@ -99,8 +103,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showHeaderMoreActions}
         showAgentSessionHistory={showAgentSessionHistoryAction}
         showChecks={showChecksAction}
+        showProjectConfigActions={showProjectConfigActions}
         onOpenAgentSessionHistory={openAgentSessionHistory}
         onOpenChecks={() => handlePanelTap('pr')}
+        onOpenMcpServers={openMcpServers}
+        onOpenPermissionRules={openPermissionRules}
+        onOpenProjectMemory={openProjectMemory}
         onClose={() => setShowHeaderMoreActions(false)}
       />
       <QuickCommandsSheet
