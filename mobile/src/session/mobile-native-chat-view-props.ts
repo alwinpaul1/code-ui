@@ -85,6 +85,9 @@ export type MobileNativeChatViewProps = {
   /** Controlled composer text (owned by the route so dictation can write to it). */
   composerText: string
   onComposerTextChange: (text: string) => void
+  /** Bumped to focus the composer's text field once — after the file reader's
+   *  "Ask about lines" switches the route back to this chat tab, say. */
+  composerFocusRequest?: number
   /** A photo taken with the camera right now. */
   onCaptureImage?: () => void
   onAttachImage?: () => void

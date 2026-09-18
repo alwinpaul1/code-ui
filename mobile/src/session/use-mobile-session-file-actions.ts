@@ -3,6 +3,8 @@ import { Linking } from 'react-native'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
+import { planFileReaderAskAboutLines } from './mobile-file-reader-ask-about-lines-plan'
+import type { FileReaderLineRange } from './mobile-file-reader-line-selection'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
 
@@ -24,7 +26,10 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
-    fetchSessionTabs
+    fetchSessionTabs,
+    nativeChatController,
+    nativeChatTranscriptIsLocalReadable,
+    visitedSessionTabIdsRef
   } = scope
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
@@ -99,6 +104,33 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     },
     [terminalLinkOpenMode, isFloatingWorkspaceRoute]
   )
+  // Alt+K parity: the file reader's "Ask about lines"/"Ask about file" — plan
+  // where it lands (see planFileReaderAskAboutLines for the tab/agent/mention
+  // decision), write the mention into that tab's draft even though it isn't
+  // the active tab yet, then switch to it with the composer focused.
+  const askAboutFileLines = useCallback(
+    (relativePath: string, range: FileReaderLineRange | null) => {
+      const plan = planFileReaderAskAboutLines({
+        relativePath,
+        range,
+        tabs: sessionTabsRef.current,
+        visitHistory: visitedSessionTabIdsRef.current,
+        currentTabId: activeSessionTabIdRef.current,
+        nativeChatTranscriptIsLocalReadable
+      })
+      if (!plan) {
+        nativeChatSendError.show('No chat is open to ask about this file')
+        return
+      }
+      nativeChatController.appendComposerMention(plan.targetTab.id, plan.mention)
+      switchSessionTabRef.current?.(plan.targetTab)
+      if (plan.targetTab.type === 'terminal' && !nativeChatController.isTabChatView(plan.targetTab.id, plan.agent)) {
+        nativeChatController.toggleTabChatView(plan.targetTab.id, plan.agent)
+      }
+      nativeChatController.requestComposerFocus()
+    },
+    [nativeChatController, nativeChatSendError, nativeChatTranscriptIsLocalReadable]
+  )
   return {
     handleFileTap,
     handleNativeChatFileTap,
@@ -106,7 +138,8 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     fileOpenStartActiveTabIdRef,
     handleFileOpenStart,
     handleOpenedFileDiff,
-    handleTerminalOpenUrl
+    handleTerminalOpenUrl,
+    askAboutFileLines
   }
 }
 

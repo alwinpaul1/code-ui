@@ -65,10 +65,14 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = 'f2637e86c7e0dad0d7455958cfa1f94720a5786e9deabed6e47048dd5a989da9'
-const HEAD_HOOK_BINDING_SHA256 = '483065978842b48e76e3b5225145cd22f5e5ccb3549ea1a11db57825cc399af3'
+// 278 since 2026-09-18: use-mobile-session-file-actions.ts (inlined into
+// SessionScreen's expansion) gained askAboutFileLines, a new useCallback for
+// the file reader's "Ask about lines"/"Ask about file".
+const HEAD_MAIN_HOOK_SHA256 = 'd78064216d8b5c1580b23db52c06c5a6c43a8778212ce5f46b9c1c1fe279cb68'
+const HEAD_HOOK_BINDING_SHA256 = '138e4f51e8685a3f402bd1d4c3e648f07c3369e2aa546f3042497276f801f516'
+// 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '6a7e436faf5b6661c09b0339114593c4c1068be2dc1700cdfad61689c307b5e1'
+  'e9b3dbfcbd5758e543f04f4ecad7a6d36680537cc409d1a533e27021db9230d1'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -86,9 +90,14 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // is sent at once instead of paced, and the ghostty pane routes taps to file/URL.
 // 2026-09-11: hardware back moved from the markdown actions to the view switch,
 // where it can return a terminal-mode tab to its chat view before leaving.
-const HEAD_CALLBACK_BODY_SHA256 = '1c186b132e80ecca988437281d723229b14a4334d03a580b8253faeb5d7035ee'
+// 2026-09-18: askAboutFileLines's own body, same change as above.
+const HEAD_CALLBACK_BODY_SHA256 = 'eaf64fb1ff48caf3601e14a33c29626792a808c21885d0f83d75451d23accb7f'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
-const HEAD_CONTENT_HOOK_SHA256 = 'afa08b0da2bac9f30daee744098184f10a3db59755ffb75ef0bcdc4327f85750'
+// 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
+// Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
+// the relativePath-keyed reset effect, and the range/highlight-style memos —
+// four new bindings on top of the prior 17.
+const HEAD_CONTENT_HOOK_SHA256 = 'f31fa6a1723e25916c1fb01a88c4252ef63f607501f0963ac904e75d04b614ce'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -116,8 +125,12 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
+// 656 since 2026-09-18: askAboutFileLines's "No chat is open to ask about
+// this file" refusal toast, plus the 'terminal' literal in its
+// plan.targetTab.type check (only a 'terminal' tab's chat view can be toggled;
+// an 'agent-session' tab's is always on).
 const HEAD_RUNTIME_STRING_SHA256 =
-  'add2920fc3fe6c569c90dbcb22a961225f307cc9c8220e32dec4e25863112624'
+  'c09c8900326864649d937e6319bc49e9d67a4d0c74f93d57d08c600a9f1b4b5a'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -132,7 +145,13 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // theme. Its root and its two state views gained a themed `surface` entry in
 // their style arrays and the read error a themed `error` entry: host records
 // at the same count (99), everything else unchanged.
-const HEAD_HOST_JSX_SHA256 = 'fb967b6abb8acf0ab7d420f3358a3b29dd09c0f9171060539f0c1cad235e00e9'
+// 2026-09-18: FileReader's line-selection mode wires selectable/highlighted/
+// highlightStyle/onLongPress/onPress onto the existing MobileSyntaxLine call
+// inside its FlatList renderItem and adds a sibling conditional (the action
+// bar) beside the FlatList — host record COUNT stays 99 (MobileSyntaxLine and
+// the new MobileSessionFileReaderLineActionBar are custom components, not
+// HOST_COMPONENT_NAMES), but the FlatList/View records' captured shape moved.
+const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7fe05087147871e2'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -142,7 +161,13 @@ const HEAD_HOST_JSX_SHA256 = 'fb967b6abb8acf0ab7d420f3358a3b29dd09c0f9171060539f
 // lent. Exactly one leaf record changed — verified by extracting the reader's
 // JSX records before and after; host and style-reference records are untouched,
 // which is why only this pin moved.
-const HEAD_LEAF_JSX_SHA256 = '0e52eefdf2ba74bf189d26041095ad35d6ec5a1d13d1fb58919ac1e4de8d9e4e'
+// 2026-09-18: the line-selection action bar is one new leaf record (the
+// FileReader-level <MobileSessionFileReaderLineActionBar> call); style
+// references are untouched — its own styling is inline, in its own file.
+// 2026-09-18 (later): MobileSessionActiveContent's <FileReader> call gained
+// the onAskAboutLines prop — same leaf COUNT (72), the existing record's
+// captured shape moved.
+const HEAD_LEAF_JSX_SHA256 = '0224097ccfb87adcf1569b18658c5801cd0a992b86a8ec8630d1363518340c29'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -535,15 +560,15 @@ describe('mobile session route extraction parity', () => {
     )
     // 277 since 2026-09-15: the session tabs re-read a document when the host
     // reconnects — useLocalSearchParams, useLastConnectedAt and the ledger ref.
-    expect(main.hooks).toHaveLength(277)
+    expect(main.hooks).toHaveLength(278)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(78)
+    expect(main.callbacks).toHaveLength(79)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(23)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
-    expect(contentBindings).toHaveLength(17)
+    expect(contentBindings).toHaveLength(21)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
     expect(nestedFunctions).toHaveLength(12)
@@ -595,7 +620,7 @@ describe('mobile session route extraction parity', () => {
     // placeholder check are gone — and reads the agent's live pair instead.
     // Check: `git show 17c20ff..HEAD -- MobileSessionHeader.tsx` removes exactly
     // those two literals.
-    expect(strings).toHaveLength(654)
+    expect(strings).toHaveLength(656)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
@@ -606,7 +631,7 @@ describe('mobile session route extraction parity', () => {
     // 69 since 2026-09-15: the markdown preview's own leaf element.
     // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
     // and the label inside each of the two pressables fold to two leaf records.
-    expect(jsx.leaf).toHaveLength(71)
+    expect(jsx.leaf).toHaveLength(72)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     expect(jsx.styleReferences).toHaveLength(92)

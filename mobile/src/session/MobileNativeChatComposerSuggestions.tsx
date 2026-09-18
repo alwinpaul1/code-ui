@@ -2,6 +2,7 @@ import { FlatList, Pressable, View } from 'react-native'
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { nativeChatSkillCommandName } from './mobile-native-chat-skill-command'
+import { formatNativeChatFileMentionToken } from './mobile-native-chat-file-mention'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 
@@ -34,7 +35,7 @@ export function composerSuggestionInsertText(suggestion: ComposerSuggestion): st
     case 'command':
       return `/${suggestion.command.name}`
     case 'file':
-      return `@${suggestion.path}`
+      return formatNativeChatFileMentionToken(suggestion.path)
     case 'skill':
       return `${suggestion.prefix}${nativeChatSkillCommandName(suggestion.skill)}`
     default: {

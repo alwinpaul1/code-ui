@@ -23,6 +23,7 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
 import { colors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
@@ -33,20 +34,48 @@ import type {
   RenderableDiffLine
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
+import {
+  extendFileReaderLineSelection,
+  fileReaderLineSelectionLabel,
+  fileReaderLineSelectionRange,
+  isFileReaderLineSelected,
+  startFileReaderLineSelection,
+  type FileReaderLineRange,
+  type FileReaderLineSelection
+} from './mobile-file-reader-line-selection'
+import { MobileSessionFileReaderLineActionBar } from './MobileSessionFileReaderLineActionBar'
 
 export function FileReader({
   doc,
   title,
   relativePath,
   language,
-  diffCommentActions
+  diffCommentActions,
+  onAskAboutLines
 }: {
   doc: FileDocState | undefined
   title: string
   relativePath: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  /** Alt+K parity: ask the active chat about the selected lines, or (`range:
+   *  null`) about the whole file. Absent when this file tab has nowhere to
+   *  send it — see askAboutFileLines in use-mobile-session-file-actions.ts —
+   *  and then no long-press/selection UI is wired up at all. */
+  onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
+  const { colors: themeColors } = useTheme()
+  const [lineSelection, setLineSelection] = useState<FileReaderLineSelection>(null)
+  // A freshly opened file starts with nothing selected — otherwise a
+  // selection made on one file would appear to carry over onto the next.
+  useEffect(() => {
+    setLineSelection(null)
+  }, [relativePath])
+  const lineSelectionRangeValue = fileReaderLineSelectionRange(lineSelection)
+  const lineSelectionHighlightStyle = useMemo(
+    () => ({ backgroundColor: themeColors.accentSoft }),
+    [themeColors.accentSoft]
+  )
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
@@ -289,6 +318,10 @@ export function FileReader({
         : [{ text: content, kind: 'plain' as const }]
     const lines = splitSyntaxIntoLines(highlighted)
     const gutterWidth = gutterWidthForLines(lines.length)
+    // An empty file still yields one (empty) line from splitSyntaxIntoLines,
+    // but there is nothing there to ask about — no selection UI at all, so
+    // the action bar can never appear over a blank reader.
+    const canSelectLines = onAskAboutLines != null && content.length > 0
     return (
       <View style={styles.markdownEditor}>
         {/* A list, not a mapped ScrollView: one Text per line mounted the
@@ -303,17 +336,48 @@ export function FileReader({
           initialNumToRender={60}
           windowSize={9}
           removeClippedSubviews
-          renderItem={({ item, index }) => (
-            <MobileSyntaxLine
-              number={index + 1}
-              segments={item}
-              gutterWidth={gutterWidth}
-              gutterDigits={String(lines.length).length}
-              lineStyle={styles.filePreviewText}
-              gutterStyle={styles.filePreviewGutter}
-            />
-          )}
+          renderItem={({ item, index }) => {
+            const lineNumber = index + 1
+            return (
+              <MobileSyntaxLine
+                number={lineNumber}
+                segments={item}
+                gutterWidth={gutterWidth}
+                gutterDigits={String(lines.length).length}
+                lineStyle={styles.filePreviewText}
+                gutterStyle={styles.filePreviewGutter}
+                selectable={canSelectLines ? lineSelection === null : undefined}
+                highlighted={isFileReaderLineSelected(lineSelection, lineNumber)}
+                highlightStyle={lineSelectionHighlightStyle}
+                onLongPress={
+                  canSelectLines
+                    ? () => setLineSelection(startFileReaderLineSelection(lineNumber))
+                    : undefined
+                }
+                onPress={
+                  canSelectLines && lineSelection
+                    ? () => setLineSelection(extendFileReaderLineSelection(lineSelection, lineNumber))
+                    : undefined
+                }
+              />
+            )
+          }}
         />
+        {canSelectLines && lineSelectionRangeValue ? (
+          <MobileSessionFileReaderLineActionBar
+            label={fileReaderLineSelectionLabel(lineSelectionRangeValue)}
+            onAskAboutLines={() => {
+              const range = lineSelectionRangeValue
+              setLineSelection(null)
+              onAskAboutLines?.(range)
+            }}
+            onAskAboutFile={() => {
+              setLineSelection(null)
+              onAskAboutLines?.(null)
+            }}
+            onDismiss={() => setLineSelection(null)}
+          />
+        ) : null}
       </View>
     )
   }

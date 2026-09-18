@@ -78,6 +78,7 @@ export function MobileSessionActiveContent({
     handleTerminalWebReady,
     handleFileTap,
     handleNativeChatFileTap,
+    askAboutFileLines,
     handleTerminalOpenUrl,
     handleTerminalInput,
     handleTerminalQueryReply,
@@ -207,6 +208,7 @@ export function MobileSessionActiveContent({
         title={activeFileTab.title || 'File'}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
+        onAskAboutLines={(range) => askAboutFileLines(activeFileTab.relativePath, range)}
         diffCommentActions={
           activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
             ? {

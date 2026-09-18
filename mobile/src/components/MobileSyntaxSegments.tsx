@@ -10,7 +10,11 @@ export function MobileSyntaxLine({
   gutterDigits = 3,
   lineStyle,
   gutterStyle,
-  selectable = true
+  selectable = true,
+  highlighted = false,
+  highlightStyle,
+  onLongPress,
+  onPress
 }: {
   number: number
   segments: MobileSyntaxSegment[]
@@ -24,9 +28,25 @@ export function MobileSyntaxLine({
   gutterDigits?: number
   lineStyle: TextStyle
   gutterStyle: TextStyle
+  /** True while this line sits inside the file reader's line-selection range
+   *  (Alt+K parity); paints `highlightStyle` behind the row. */
+  highlighted?: boolean
+  highlightStyle?: TextStyle
+  /** Starts/extends a line selection. Left undefined, the line behaves exactly
+   *  as it always has — no touch handling added, `selectable` still governs
+   *  the OS's own copy gesture. Defined, `Text`'s own touch handling takes the
+   *  long-press instead of arming native selection (2026-09-18; unverified on
+   *  a physical device — see MobileSessionFileReader's line-selection notes). */
+  onLongPress?: () => void
+  onPress?: () => void
 }) {
   return (
-    <Text selectable={selectable} style={lineStyle}>
+    <Text
+      selectable={selectable}
+      style={highlighted ? [lineStyle, highlightStyle] : lineStyle}
+      onLongPress={onLongPress}
+      onPress={onPress}
+    >
       <Text selectable={false} style={[gutterStyle, { width: gutterWidth }]}>
         {String(number).padStart(gutterDigits, ' ') + '  '}
       </Text>

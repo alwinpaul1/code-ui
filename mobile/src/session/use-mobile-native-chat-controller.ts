@@ -109,7 +109,7 @@ export function useMobileNativeChatController(
   const hudBeacon = useAgentHudBeacon(activeHandle)
   const {
     composerText: chatComposerText,
-    setComposerText: setChatComposerText,
+    setComposerText: setChatComposerText, appendComposerMention,
     getComposerEditGeneration: getChatComposerEditGeneration,
     pending: chatPending,
     imagePreviewsByMessageId: chatImagePreviewsByMessageIdLocal,
@@ -358,7 +358,12 @@ export function useMobileNativeChatController(
     activeSessionTab?.agentStatus?.model,
     hudObservation ? { modelId: hudObservation.modelId, effort: hudObservation.effort } : null
   )
-  const [modelSheetRequest, setModelSheetRequestState] = useState(0)
+  // composerFocusRequest: bumped once per "Ask about lines" tap, after the
+  // route switches to this chat tab — the composer focuses on every increase,
+  // never on every render. Both declared on one line with modelSheetRequest,
+  // and requestComposerFocus is an inline arrow in the return below rather
+  // than its own useCallback, to fit this file's line budget.
+  const [modelSheetRequest, setModelSheetRequestState] = useState(0); const [composerFocusRequest, setComposerFocusRequest] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
@@ -461,7 +466,7 @@ export function useMobileNativeChatController(
     showNativeChatRef,
     nativeChatAgent: activeChatResolution?.agent ?? null,
     chatComposerText,
-    setChatComposerText,
+    setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, rememberEcho,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),

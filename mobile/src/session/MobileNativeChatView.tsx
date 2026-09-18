@@ -80,6 +80,7 @@ export function MobileNativeChatView({
   imagePreviewsByMessageId,
   composerText,
   onComposerTextChange,
+  composerFocusRequest,
   onCaptureImage, onAttachImage, onPasteImage,
   onAttachFile,
   attachments,
@@ -411,6 +412,7 @@ export function MobileNativeChatView({
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}
+        focusRequest={composerFocusRequest}
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}
         {...{ getSendCompletionGeneration, getComposerEditGeneration }}
