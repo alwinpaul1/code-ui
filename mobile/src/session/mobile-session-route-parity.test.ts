@@ -68,8 +68,11 @@ const HOST_COMPONENT_NAMES = new Set([
 // 278 since 2026-09-18: use-mobile-session-file-actions.ts (inlined into
 // SessionScreen's expansion) gained askAboutFileLines, a new useCallback for
 // the file reader's "Ask about lines"/"Ask about file".
-const HEAD_MAIN_HOOK_SHA256 = 'd78064216d8b5c1580b23db52c06c5a6c43a8778212ce5f46b9c1c1fe279cb68'
-const HEAD_HOOK_BINDING_SHA256 = '138e4f51e8685a3f402bd1d4c3e648f07c3369e2aa546f3042497276f801f516'
+// 279 since 2026-09-18 (later): the file actions bind "Revert this hunk" for
+// the chat's diff cards (useMobileNativeChatHunkRevert), one hook and its
+// binding.
+const HEAD_MAIN_HOOK_SHA256 = '7956c30662da175edd85caf8337aeb277840e668aadc4c097b5c551dc56b946d'
+const HEAD_HOOK_BINDING_SHA256 = '745fd9561742bb32c885eacb07a9bd68f61707fbc4e3a0690c082b232c965e55'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   'e9b3dbfcbd5758e543f04f4ecad7a6d36680537cc409d1a533e27021db9230d1'
@@ -183,7 +186,9 @@ const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7f
 // lengthens that one leaf record's canonicalized `actions=` attribute text —
 // same 73 records, one of them different — since the record is the whole
 // attribute expression, not a per-argument entry.
-const HEAD_LEAF_JSX_SHA256 = '6081dd882fb72b92cf9de5df576450fc29166aafdef4e495abf1fec6dc312941'
+// 2026-09-18 (same day, later): the chat overlay is handed `onRevertHunk`
+// beside `onOpenFile`. Same 73 leaf records; only the overlay's record changed.
+const HEAD_LEAF_JSX_SHA256 = '3a26b36aabe995b9ba548f8ebe4b0918398c1060f686dcf510ab290212c99c50'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -580,7 +585,10 @@ describe('mobile session route extraction parity', () => {
     )
     // 277 since 2026-09-15: the session tabs re-read a document when the host
     // reconnects — useLocalSearchParams, useLastConnectedAt and the ledger ref.
-    expect(main.hooks).toHaveLength(278)
+    // 278 since 2026-09-18: askAboutFileLines (use-mobile-session-file-actions).
+    // 279 since 2026-09-18 (later): useMobileNativeChatHunkRevert, which binds
+    // the diff cards' "Revert this hunk" to this session's client and tab.
+    expect(main.hooks).toHaveLength(279)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(79)

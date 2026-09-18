@@ -18,6 +18,7 @@ import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 const CLIPBOARD_POLL_MS = 3000
 
@@ -32,6 +33,8 @@ type Props = {
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
+  /** Puts one hunk of a landed edit back in the file (the diff card's action). */
+  onRevertHunk?: MobileNativeChatRevertHunk
   /** Native-chat image attachments: picking adds a composer chip, and sending
    *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
@@ -69,6 +72,7 @@ export function MobileNativeChatOverlay({
   controller,
   hasTerminalUnderneath,
   onOpenFile,
+  onRevertHunk,
   images,
   onMicPress,
   onBeforeSend,
@@ -273,6 +277,7 @@ export function MobileNativeChatOverlay({
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onRespondPermissionWithComment={controller.handleNativeChatRespondPermissionWithComment}
         onOpenFile={onOpenFile}
+        onRevertHunk={onRevertHunk}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}

@@ -8,6 +8,7 @@ import { SectionLabel } from '../src/ui/SectionLabel'
 import { Surface } from '../src/ui/Surface'
 import { Txt } from '../src/ui/Txt'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
+import { useMobileChatFocusViewPreference } from '../src/session/use-mobile-chat-focus-view'
 import {
   loadDesktopHudLaunchEnabled,
   saveDesktopHudLaunchEnabled
@@ -23,6 +24,7 @@ export default function NativeChatSettingsScreen() {
 
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
+  const { focusView, setFocusView } = useMobileChatFocusViewPreference()
   const [desktopHud, setDesktopHud] = useState(true)
   useEffect(() => {
     void loadDesktopHudLaunchEnabled().then(setDesktopHud)
@@ -77,6 +79,33 @@ export default function NativeChatSettingsScreen() {
             accessibilityLabel="Open sessions in Chat UI"
             value={chatDefault}
             onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
+            trackColor={{ false: colors.borderStrong, true: colors.accent }}
+            thumbColor={colors.bgPanel}
+          />
+        </Surface>
+        <SectionLabel style={{ marginTop: space.lg }}>Tool activity</SectionLabel>
+        <Surface
+          rounded="lg"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            paddingVertical: space.md,
+            paddingHorizontal: space.lg
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="body" weight="medium">
+              Focus view
+            </Txt>
+            <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+              {focusView ? 'On: tool calls fold to one row per turn' : 'Off'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Focus view"
+            value={focusView}
+            onValueChange={setFocusView}
             trackColor={{ false: colors.borderStrong, true: colors.accent }}
             thumbColor={colors.bgPanel}
           />

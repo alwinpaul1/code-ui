@@ -81,6 +81,7 @@ export function MobileSessionActiveContent({
     handleFileTap,
     handleNativeChatFileTap,
     askAboutFileLines,
+    handleNativeChatRevertHunk,
     handleTerminalOpenUrl,
     handleTerminalInput,
     handleTerminalQueryReply,
@@ -314,6 +315,7 @@ export function MobileSessionActiveContent({
         controller={nativeChatController}
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
         onOpenFile={handleNativeChatFileTap}
+        onRevertHunk={handleNativeChatRevertHunk}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
         onBeforeSend={finishDictationForSend}

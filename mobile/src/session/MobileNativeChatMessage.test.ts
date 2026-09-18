@@ -387,4 +387,65 @@ describe('MobileNativeChatMessage', () => {
       expect(textIn(tree.root).some((text) => text.startsWith('Running'))).toBe(false)
     })
   })
+
+  // Focus view (extension `claudeCode.focusView`): tool activity folds to one
+  // "N tool calls" row per run, and nothing else about the turn moves.
+  describe('Focus view', () => {
+    const settledRun: NativeChatMessage['blocks'] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, state: 'completed' },
+      { type: 'tool-result', output: 'ok' }
+    ]
+    const shape = (tree: ReactTestRenderer): string =>
+      JSON.stringify(tree.toJSON(), (_key, value: unknown) =>
+        typeof value === 'function' ? '[fn]' : value
+      )
+
+    it('folds a bridge-lane run to its count, where today it reads the sentence', () => {
+      const tree = render(toolMessage(settledRun), { activeTurnIsWorking: false, focusView: true })
+      expect(textIn(tree.root)).toContain('1 tool call')
+      expect(textIn(tree.root).some((text) => text.startsWith('Ran '))).toBe(false)
+      expect(textIn(tree.root).join(' ')).not.toContain('pnpm test')
+    })
+
+    it('keeps a settled structured turn behind its caret: no new row appears', () => {
+      const tree = render(toolMessage(settledRun), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        focusView: true
+      })
+      expect(textIn(tree.root).join(' ')).not.toContain('tool call')
+      expect(textIn(tree.root).join(' ')).not.toContain('pnpm test')
+    })
+
+    it('reads the count once the caret discloses that turn', () => {
+      const tree = render(toolMessage(settledRun), {
+        structuredActivityUi: true,
+        activeTurnIsWorking: false,
+        turnExpanded: true,
+        focusView: true
+      })
+      expect(textIn(tree.root)).toContain('1 tool call')
+    })
+
+    it('off is today, on both lanes', () => {
+      for (const structuredActivityUi of [false, true]) {
+        const today = shape(
+          render(toolMessage(settledRun), { structuredActivityUi, activeTurnIsWorking: false, turnExpanded: true })
+        )
+        act(() => renderer?.unmount())
+        renderer = null
+        const off = shape(
+          render(toolMessage(settledRun), {
+            structuredActivityUi,
+            activeTurnIsWorking: false,
+            turnExpanded: true,
+            focusView: false
+          })
+        )
+        act(() => renderer?.unmount())
+        renderer = null
+        expect(off).toBe(today)
+      }
+    })
+  })
 })

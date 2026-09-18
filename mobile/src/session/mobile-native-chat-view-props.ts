@@ -18,6 +18,7 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-data'
+import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
@@ -152,6 +153,8 @@ export type MobileNativeChatViewProps = {
   onRewindToMessage?: (messageId: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
   onOpenFile?: (relativePath: string) => void
+  /** Put one hunk of a landed edit back in the file, from its diff card. */
+  onRevertHunk?: MobileNativeChatRevertHunk
   /** Pixels to lift the composer by when the soft keyboard is open. The route
    *  owns keyboard tracking (the app uses manual lift, not KeyboardAvoidingView). */
   keyboardInset?: number

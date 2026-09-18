@@ -13,6 +13,7 @@ import {
   isEditToolName
 } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 import {
   mobileTaskListPreview,
@@ -119,6 +120,8 @@ function ToolLine({
   defaultExpanded,
   diffLineLimit,
   onOpenFile,
+  onRevertHunk,
+  revertScope,
   styles
 }: {
   pair: ToolPair
@@ -128,6 +131,9 @@ function ToolLine({
   defaultExpanded: boolean
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
+  onRevertHunk?: MobileNativeChatRevertHunk
+  /** This line's place in its message, for the diff card's identity. */
+  revertScope?: string
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -211,6 +217,8 @@ function ToolLine({
               key={`${file.path}:${index}`}
               file={file}
               rowLimit={diffLineLimit}
+              onRevertHunk={onRevertHunk}
+              revertScope={`${revertScope ?? ''}:${index}`}
             />
           ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
@@ -280,6 +288,9 @@ export function ToolRun({
   taskListPredecessors,
   trailing,
   onOpenFile,
+  onRevertHunk,
+  revertScope,
+  focusView = false,
   styles
 }: {
   blocks: NativeChatBlock[]
@@ -296,6 +307,15 @@ export function ToolRun({
   taskListPredecessors?: MobileTaskListPredecessors
   trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
+  /** Put one hunk of a landed edit back, from its diff card. */
+  onRevertHunk?: MobileNativeChatRevertHunk
+  /** This run's place in its message (message id and segment), so each diff
+   *  card under it has an identity beyond its content. */
+  revertScope?: string
+  /** Focus view: the row says only how many calls ran — no sentence, no
+   *  argument, no plan line, no "Running" — until the reader unfolds it. The
+   *  label holds while open too, so a tap does not make the row jump. */
+  focusView?: boolean
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -319,6 +339,7 @@ export function ToolRun({
     }
   }
   callCount ||= pairs.length
+  const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -341,7 +362,7 @@ export function ToolRun({
               numberOfLines={1}
               testID="tool-run-active-label"
             >
-              Running
+              {focusView ? countLabel : 'Running'}
             </PulsingText>
             <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
             {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
@@ -363,9 +384,9 @@ export function ToolRun({
           accessibilityState={{ expanded: open }}
         >
           <Text style={styles.toolRunLabel} numberOfLines={1} testID="tool-run-sentence">
-            {toolRunSentence(blocks) || `${callCount} tool call${callCount === 1 ? '' : 's'}`}
+            {focusView ? countLabel : toolRunSentence(blocks) || countLabel}
           </Text>
-          {planPreview ? (
+          {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>
@@ -393,6 +414,8 @@ export function ToolRun({
             defaultExpanded={expandChildren ?? defaultExpanded}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}
+            onRevertHunk={onRevertHunk}
+            revertScope={`${revertScope ?? ''}:${i}`}
             styles={styles}
           />
         ))}

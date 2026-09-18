@@ -32,6 +32,11 @@ vi.mock('./session/use-mobile-default-session-view-preference', () => ({
   })
 }))
 
+const setFocusView = vi.fn()
+vi.mock('./session/use-mobile-chat-focus-view', () => ({
+  useMobileChatFocusViewPreference: () => ({ focusView: false, setFocusView })
+}))
+
 vi.mock('./session/desktop-hud-launch-preference', () => ({
   loadDesktopHudLaunchEnabled: async () => true,
   saveDesktopHudLaunchEnabled: async () => undefined
@@ -88,5 +93,22 @@ describe('Chat UI settings copy', () => {
     expect(text).not.toMatch(/escape sequence/)
     expect(text).not.toMatch(/long-press away/)
     expect(text).not.toMatch(/launch profile/)
+  })
+
+  // Extension `claudeCode.focusView`, beside the other view option this screen
+  // already holds: one switch, its state read from and written to the same
+  // store as the default session view.
+  it('offers Focus view beside the default view, wired to the preference', async () => {
+    await act(async () => {
+      renderer = create(createElement(NativeChatSettingsScreen))
+      await Promise.resolve()
+    })
+    expect(collectText(renderer!)).toContain('Focus view')
+    const toggle = renderer!.root.find(
+      (node) => node.type === 'Switch' && node.props.accessibilityLabel === 'Focus view'
+    )
+    expect(toggle.props.value).toBe(false)
+    act(() => toggle.props.onValueChange(true))
+    expect(setFocusView).toHaveBeenCalledWith(true)
   })
 })
