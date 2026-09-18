@@ -97,6 +97,19 @@ export const worktreeArchiveWrite = bindDeferredRpcOperation(
   })
 )
 
+/** Marking a row unread, or read again: the host's own isUnread, symmetric
+ *  with isArchived above. Drives the same Bell dot WorktreeListRow already
+ *  draws on `unread` — no second indicator. */
+export const worktreeUnreadWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-unread-or-skip',
+    method: 'worktree.set',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('unread-written')
+  })
+)
+
 /** Deleting a row. Only acceptance is read: a refusal is what puts the row back. */
 export const worktreeRemove = bindDeferredRpcOperation(
   defineRpcOperation({

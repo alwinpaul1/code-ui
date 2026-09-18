@@ -122,6 +122,14 @@ export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
   return w.isPinned || localPins.has(w.worktreeId)
 }
 
+/** "Mark unread" (row #8 of the extension-port map) clears the moment the
+ *  row is opened — reused here rather than left to each caller to remember.
+ *  A row that is already read has nothing to clear, so an open worth no RPC
+ *  at all stays that way (openWorktreeSession only writes when this is true). */
+export function shouldClearUnreadOnOpen(w: Pick<Worktree, 'unread'>): boolean {
+  return w.unread === true
+}
+
 export function buildSections(
   worktrees: Worktree[],
   sortMode: MobileSortMode,

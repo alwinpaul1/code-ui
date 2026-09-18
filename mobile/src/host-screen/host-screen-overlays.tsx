@@ -203,6 +203,16 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                         state.setActionTarget(null)
                       }
                     },
+                    // "Mark unread" (row #8) — the same Bell dot the list
+                    // already draws for new activity; clears itself the
+                    // moment the row is opened (openWorktreeSession).
+                    {
+                      label: actionTarget.unread ? 'Mark Read' : 'Mark Unread',
+                      onPress: () => {
+                        actions.markUnread(actionTarget.worktreeId, !actionTarget.unread)
+                        state.setActionTarget(null)
+                      }
+                    },
                     {
                       label: 'Delete',
                       destructive: true,
