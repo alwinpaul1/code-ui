@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { splitPermissionDetail } from './mobile-permission-detail'
 import { ScrollView, useWindowDimensions, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
@@ -6,6 +6,37 @@ import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
+import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import {
+  foldProposedFiles,
+  proposedEditPreview,
+  type ProposedEditPreview
+} from './mobile-permission-proposed-edit'
+
+/** Rows a proposed change opens with. Past this the user asks for the rest,
+ *  so a 2,000-row write does not mount 2,000 rows into the dock unasked. */
+const PROPOSED_ROWS_FOLDED = 24
+
+function baseName(path: string): string {
+  return path.split(/[\\/]/).at(-1) || path
+}
+
+/** The card's own ceiling is the most a tap can reveal; past it the label
+ *  says so rather than promising "all". */
+function showMoreLabel(totalRows: number): string {
+  return totalRows <= MAX_DIFF_CARD_ROWS
+    ? `Show all ${totalRows} lines`
+    : `Show ${MAX_DIFF_CARD_ROWS} of ${totalRows} lines`
+}
+
+/** One line naming what could not be shown and why, so a card with the raw
+ *  request beneath it is a fallback and not a mystery. */
+function truncatedNotice(preview: Extract<ProposedEditPreview, { kind: 'truncated' }>): string {
+  const target = preview.path ? `The change to ${baseName(preview.path)}` : 'This change'
+  const size =
+    preview.totalBytes === null ? '' : ` (${Math.round(preview.totalBytes / 1024)} KB)`
+  return `${target} is too large to preview here${size}; showing the request as sent.`
+}
 
 // Keep agent-provided choices intact; action surfaces grow with their content.
 function MobileNativeChatPermissionImpl({
@@ -21,10 +52,29 @@ function MobileNativeChatPermissionImpl({
   // the choices keep theirs. Half the window leaves the conversation visible.
   const { height: windowHeight } = useWindowDimensions()
   const readingMaxHeight = Math.max(64, Math.min(132, Math.round(windowHeight * 0.16)))
+  // A diff is read line by line, so it gets more of the window than prose;
+  // the choices below only take what they need, so the conversation stays
+  // visible above.
+  const diffMaxHeight = Math.max(120, Math.round(windowHeight * 0.3))
   // The choices scroll rather than run off the bottom. Capping the reading area
   // alone was not enough: the options are the only thing the user can act on,
   // and a prompt with four long labels still pushed them past the composer.
   const choicesMaxHeight = Math.max(160, Math.round(windowHeight * 0.34))
+  // The SDK lane's detail is the tool input itself; for a file change that is
+  // the diff, shown before the user accepts. Anything else falls through to
+  // the text below. See mobile-permission-proposed-edit.ts.
+  const preview = useMemo(
+    () => proposedEditPreview(permission.title, permission.detail),
+    [permission.title, permission.detail]
+  )
+  const [showAllRows, setShowAllRows] = useState(false)
+  const folded = useMemo(
+    () =>
+      preview.kind === 'diff'
+        ? foldProposedFiles(preview.files, showAllRows ? MAX_DIFF_CARD_ROWS : PROPOSED_ROWS_FOLDED)
+        : null,
+    [preview, showAllRows]
+  )
   // The Claude app offers exactly three: allow once, always for this session,
   // deny. The TUI's "switch to auto mode" is a mode change, not an answer to
   // this prompt. Filtering never leaves nothing to tap: if it would, the agent
@@ -93,7 +143,53 @@ function MobileNativeChatPermissionImpl({
           {permission.title}
         </Txt>
       </View>
-      {description || command ? (
+      {folded ? (
+        <>
+          <ScrollView
+            style={{ maxHeight: diffMaxHeight, flexShrink: 1 }}
+            nestedScrollEnabled
+            contentContainerStyle={{ gap: space.sm }}
+          >
+            {/* The same card as the transcript's, so the change reads the same
+                before it is accepted as after it lands; only the verb differs,
+                because nothing has happened yet. */}
+            {folded.files.map((entry, index) => (
+              <MobileNativeChatDiffCard
+                key={`${entry.file.path}:${index}`}
+                file={entry.file}
+                rowLimit={MAX_DIFF_CARD_ROWS}
+                verb={entry.verb}
+              />
+            ))}
+          </ScrollView>
+          {folded.hiddenRows > 0 && !showAllRows ? (
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel={showMoreLabel(folded.totalRows)}
+              pressedScale={0.98}
+              onPress={() => setShowAllRows(true)}
+              style={{ alignSelf: 'flex-start', paddingVertical: space.xs }}
+            >
+              <Txt variant="caption" weight="semibold" tone="accent">
+                {showMoreLabel(folded.totalRows)}
+              </Txt>
+            </PressScale>
+          ) : folded.hiddenRows > 0 ? (
+            <Txt variant="caption" tone="secondary">
+              {`Showing the first ${MAX_DIFF_CARD_ROWS} of ${folded.totalRows} lines`}
+            </Txt>
+          ) : null}
+        </>
+      ) : null}
+      {preview.kind === 'truncated' ? (
+        // The host clipped the request before it reached the phone. Half a
+        // diff would read as the whole of it, so the raw text stands, with one
+        // line saying why.
+        <Txt variant="caption" tone="secondary">
+          {truncatedNotice(preview)}
+        </Txt>
+      ) : null}
+      {!folded && (description || command) ? (
         <ScrollView
           style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
           nestedScrollEnabled

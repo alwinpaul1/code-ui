@@ -103,7 +103,7 @@ function DiffCardRow({
 /** One edited file: the verb, the file's own name, the change counts, and the
  *  interleaved rows. Disclosure belongs to the tool line above it, so the card
  *  has no second caret of its own — one tap on a phone, not two. */
-function DiffCard({ file, rowLimit = MAX_DIFF_CARD_ROWS }: Props): React.JSX.Element {
+function DiffCard({ file, rowLimit = MAX_DIFF_CARD_ROWS, verb }: Props): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useDiffCardStyles()
   const rows = file.lines.slice(0, rowLimit)
@@ -117,7 +117,7 @@ function DiffCard({ file, rowLimit = MAX_DIFF_CARD_ROWS }: Props): React.JSX.Ele
       <View style={styles.header}>
         <VerbIcon kind={file.changeKind} color={colors.textMuted} />
         <Text testID="diff-card-verb" style={styles.verb}>
-          {VERB_LABEL[file.changeKind]}
+          {verb ?? VERB_LABEL[file.changeKind]}
         </Text>
         {file.oldPath ? (
           <>
@@ -162,6 +162,9 @@ type Props = {
   file: NativeChatEditFile
   /** Rows this card will draw before it reports itself clipped. */
   rowLimit?: number
+  /** Replaces the past-tense verb. The permission card shows an edit that has
+   *  not happened yet, and "Edited file" over it would claim that it had. */
+  verb?: string
 }
 
 export const MobileNativeChatDiffCard = memo(DiffCard)
