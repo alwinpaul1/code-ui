@@ -142,7 +142,11 @@ const HEAD_HOST_JSX_SHA256 = 'fb967b6abb8acf0ab7d420f3358a3b29dd09c0f9171060539f
 // lent. Exactly one leaf record changed — verified by extracting the reader's
 // JSX records before and after; host and style-reference records are untouched,
 // which is why only this pin moved.
-const HEAD_LEAF_JSX_SHA256 = '0e52eefdf2ba74bf189d26041095ad35d6ec5a1d13d1fb58919ac1e4de8d9e4e'
+// 2026-09-18: the subagent transcript viewer. MobileSessionActiveContent mounts
+// one <MobileSubagentTranscriptModal hostId worktreeId/> beside the chat
+// overlay — one new leaf record (71 → 72); strings, host and style-reference
+// records are untouched, so only this pin moved.
+const HEAD_LEAF_JSX_SHA256 = 'ee0efca53626ced15d8246ab99c919cf7755ac1445a969a4b4ee5d59f623a53b'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -606,7 +610,9 @@ describe('mobile session route extraction parity', () => {
     // 69 since 2026-09-15: the markdown preview's own leaf element.
     // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
     // and the label inside each of the two pressables fold to two leaf records.
-    expect(jsx.leaf).toHaveLength(71)
+    // 72 since 2026-09-18: the subagent transcript modal mounted by the
+    // session content.
+    expect(jsx.leaf).toHaveLength(72)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     expect(jsx.styleReferences).toHaveLength(92)

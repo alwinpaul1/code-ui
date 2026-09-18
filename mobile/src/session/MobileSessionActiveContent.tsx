@@ -6,6 +6,7 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
@@ -33,6 +34,7 @@ export function MobileSessionActiveContent({
     backgroundColor: colors.bg
   }
   const {
+    hostId,
     worktreeId,
     insets,
     connState,
@@ -327,6 +329,9 @@ export function MobileSessionActiveContent({
         onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
         onSelectAgentMode={(mode) => void selectAgentMode(mode)}
       />
+      {/* Opened from a subagent row in the background-tasks sheet, through its
+          store; mounted here because this is the screen that knows the host. */}
+      <MobileSubagentTranscriptModal hostId={hostId} worktreeId={worktreeId} />
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
           <Text style={styles.toastText}>{toastMessage}</Text>

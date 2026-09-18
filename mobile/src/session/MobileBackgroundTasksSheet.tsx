@@ -24,6 +24,8 @@ import {
 } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
+import { subagentTranscriptTarget } from './mobile-subagent-transcript'
+import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
@@ -39,6 +41,7 @@ const TICK_MS = 1000
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
+  agent,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
@@ -47,6 +50,9 @@ export function MobileBackgroundTasksSheet({
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
+  /** The tab's agent. Only a Claude subagent row opens a transcript viewer;
+   *  Codex has no subagents, and an unknown agent gets no tap target. */
+  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
@@ -57,6 +63,7 @@ export function MobileBackgroundTasksSheet({
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
       <MobileBackgroundTasksSheetBody
         messages={messages}
+        agent={agent}
         agentStatus={agentStatus ?? null}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
@@ -70,18 +77,27 @@ export function MobileBackgroundTasksSheet({
  *  drawer's gesture/animation stack. */
 export function MobileBackgroundTasksSheetBody({
   messages,
+  agent = null,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask
 }: {
   messages: readonly NativeChatMessage[]
+  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
 }) {
   const { space } = useTheme()
+  // Where the parent transcript is, from the agent's own hook. Null leaves the
+  // host to find a subagent's file by its session key.
+  const parentTranscriptPath = agentStatus?.providerSession?.transcriptPath ?? null
+  const openTranscript = (task: BackgroundTask): (() => void) | undefined => {
+    const target = subagentTranscriptTarget({ agent, task, parentTranscriptPath })
+    return target ? () => openSubagentTranscript(target, task.status === 'running') : undefined
+  }
   const [now, setNow] = useState(() => Date.now())
   const [runningOpen, setRunningOpen] = useState(true)
   const [finishedOpen, setFinishedOpen] = useState(true)
@@ -127,7 +143,12 @@ export function MobileBackgroundTasksSheetBody({
             two kinds as separate labelled groups. */}
         {running.length > 0 ? (
           running.map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} onStop={onStopTask} />
+            <BackgroundTaskCard
+              key={task.id}
+              task={task}
+              onStop={onStopTask}
+              onOpen={openTranscript(task)}
+            />
           ))
         ) : (
           <Txt variant="caption" tone="muted">
@@ -143,7 +164,7 @@ export function MobileBackgroundTasksSheetBody({
           onToggle={() => setFinishedOpen((open) => !open)}
         >
           {finished.slice(0, finishedShown).map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} />
+            <BackgroundTaskCard key={task.id} task={task} onOpen={openTranscript(task)} />
           ))}
           {finished.length > finishedShown ? (
             <LoadMoreFinished onPress={() => setFinishedShown((shown) => shown + FINISHED_PAGE)} />
@@ -192,27 +213,42 @@ function BackgroundTasksSection({
   )
 }
 
+/** One task. A Claude subagent's card is a tap target that opens what the
+ *  agent did (`onOpen`); every other kind is a plain row, because there is
+ *  nothing behind a shell to open. The stop control stays its own button. */
 function BackgroundTaskCard({
   task,
-  onStop
+  onStop,
+  onOpen
 }: {
   task: BackgroundTask
   onStop?: (taskId: string) => void
+  onOpen?: () => void
 }) {
   const { colors, radius, space } = useTheme()
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
+  const frame = (pressed: boolean) => ({
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: space.sm,
+    padding: space.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: pressed ? colors.bgSunken : colors.bgRaised
+  })
+  const Shell = onOpen ? Pressable : View
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: space.sm,
-        padding: space.sm + 2,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.bgRaised
-      }}
+    <Shell
+      {...(onOpen
+        ? {
+            accessibilityRole: 'button' as const,
+            accessibilityLabel: `Open ${task.title}`,
+            accessibilityHint: 'Shows what this agent did',
+            onPress: onOpen,
+            style: ({ pressed }: { pressed: boolean }) => frame(pressed)
+          }
+        : { style: frame(false) })}
     >
       <View
         style={{
@@ -254,7 +290,12 @@ function BackgroundTaskCard({
       {onStop && task.status === 'running' ? (
         <StopTaskButton taskId={task.id} title={task.title} onStop={onStop} />
       ) : null}
-    </View>
+      {onOpen ? (
+        <View style={{ alignSelf: 'center' }}>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </View>
+      ) : null}
+    </Shell>
   )
 }
 
