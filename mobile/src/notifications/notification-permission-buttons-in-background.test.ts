@@ -79,6 +79,7 @@ describe('permission buttons when only the background link is listening', () => 
             ok: true,
             result: {
               agentStatus: {
+                state: 'waiting',
                 interactivePrompt: JSON.stringify({
                   approval: { tool: 'Bash', summary: 'cd /d/APPLY_JOBS && pdfinfo "$f"' }
                 })

@@ -60,6 +60,40 @@ export function notificationCredentialRecoveryRoute(
   return target.credentialRecovery === 'retry' ? '/' : null
 }
 
+/** The shape of a tap this needs: the OS's request identifier and posting
+ *  time, and the desktop's notification id when the banner carried one. */
+export type NotificationTapResponse = {
+  notification: {
+    date: number
+    request: { identifier: string; content: { data?: unknown } }
+  }
+}
+
+/**
+ * What identifies one tap for the dedup in the root layout.
+ *
+ * The dedup exists for one thing: at cold start the same response arrives
+ * twice, once from `getLastNotificationResponse` and once from the listener.
+ * Since 2026-09-15 every banner for a session is posted under ONE request
+ * identifier (`codeui:<host>:<worktree>`), so a key on the identifier alone
+ * turned the dedup into "one navigation per session for the app's life": the
+ * first body tap opened the session, and every later tap on that session's
+ * banner — a new question, a new completion — was swallowed (2026-09-18).
+ *
+ * The desktop's notification id changes with every posting and is already in
+ * the data; the OS's posting time is the fallback for a banner without one.
+ * Both stay equal for the two deliveries of one response.
+ */
+export function notificationTapKey(response: NotificationTapResponse): string {
+  const { request, date } = response.notification
+  const data = request.content.data
+  const notificationId =
+    data != null && typeof data === 'object'
+      ? readNonEmptyString(Reflect.get(Object(data), 'notificationId'))
+      : null
+  return `${request.identifier}@${notificationId ?? `t${date}`}`
+}
+
 export function getNotificationNavigationTarget(
   data: unknown,
   options: NotificationNavigationOptions = {}

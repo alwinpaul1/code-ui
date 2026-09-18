@@ -31,18 +31,28 @@ const AGENT_HEADLINE_LABELS: Readonly<Record<string, string>> = {
 
 const AGENT_HEADLINE_NAMES = 'Claude|OpenClaude|Codex|Grok|OMP|Gemini|Cursor|Aider|Pi|Droid|Hermes|Antigravity|OpenCode'
 
+/** The name a headline uses for an agent the host identified, or null for one
+ *  the shade has no name for. */
+export function agentHeadlineLabel(agent: string | null | undefined): string | null {
+  return agent ? (AGENT_HEADLINE_LABELS[agent] ?? null) : null
+}
+
 /** Desktop titles the event from hook `agentType`. Grok does not write that
  *  hook; the host then says Claude. When the worktree's only launched agent is
  *  known, put that name on the headline. */
 export function headlineWithKnownAgent(headline: string, agent: string | null | undefined): string {
-  if (!agent) {
-    return headline
-  }
-  const label = AGENT_HEADLINE_LABELS[agent] ?? null
+  const label = agentHeadlineLabel(agent)
   if (!label) {
     return headline
   }
   return headline.replace(new RegExp(`^(${AGENT_HEADLINE_NAMES})\\b`, 'i'), label)
+}
+
+/** The "<repo> / <worktree>" the desktop put in front of its title, or null
+ *  when the title has no such prefix. */
+export function desktopNotificationLocation(title: string): string | null {
+  const location = parseDesktopTitle(title)?.location ?? ''
+  return location === '' ? null : location
 }
 
 export function presentDesktopNotification(event: {

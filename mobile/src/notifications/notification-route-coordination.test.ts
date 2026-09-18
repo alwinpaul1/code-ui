@@ -114,6 +114,62 @@ describe('notification route coordination', () => {
     expect(notificationEffect).toContain('openNotificationRoute(target)')
     expect(notificationEffect).not.toContain('router.push(')
   })
+
+  /**
+   * Every banner for a session shares one request identifier, so a dedup keyed
+   * on the identifier alone let exactly one body tap per session through for
+   * the app's life: the first opened the session, every later one — a new
+   * question, a new completion — was swallowed (review finding F3, 2026-09-18).
+   * The dedup has to read the per-posting key, and only on the body-tap path.
+   */
+  it('dedups body taps per posting, not per session banner', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    expect(notificationEffect).toContain('const notificationId = notificationTapKey(response)')
+    expect(notificationEffect).not.toContain(
+      'const notificationId = response.notification.request.identifier'
+    )
+  })
+
+  /**
+   * "user can reply directly from the notification dont open the app"
+   * (2026-09-18). A button's branch ends in the clear and a return — nothing
+   * on it navigates — and what the user typed into a reply field reaches the
+   * answer path.
+   */
+  it('answers a button or a reply in the shade and never navigates for it', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    const answered = notificationEffect.indexOf('await answerPromptFromNotification(')
+    expect(answered).toBeGreaterThanOrEqual(0)
+    expect(notificationEffect).toContain('const userText = response.userText ?? null')
+    expect(notificationEffect).toContain('          userText,')
+    // The button branch closes with the clear and a return, before the routing.
+    const branchEnd = notificationEffect.indexOf('clearLastNotificationResponse()\n        return\n      }', answered)
+    expect(branchEnd).toBeGreaterThan(answered)
+    expect(notificationEffect.slice(answered, branchEnd)).not.toContain('openNotificationRoute(')
+    expect(notificationEffect).not.toContain('open-app')
+  })
+
+  // A typed reply that was not sent must not leave Android's reply spinner up
+  // with no word: the banner is re-posted with the verdict, on that branch.
+  it('re-posts the banner with the verdict when a typed reply was not sent', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    const answered = notificationEffect.indexOf('const outcome = await answerPromptFromNotification(')
+    expect(answered).toBeGreaterThanOrEqual(0)
+    const repost = notificationEffect.indexOf('await repostBannerWithReplyVerdict(response, outcome)', answered)
+    expect(repost).toBeGreaterThan(answered)
+    expect(notificationEffect.slice(answered, repost)).toContain(
+      "if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer')"
+    )
+  })
 })
 
 it('reuses the current workspace screen and targets the notification pane without pushing', () => {

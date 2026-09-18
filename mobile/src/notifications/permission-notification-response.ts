@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { mobileChatPermissionKey } from '../session/mobile-native-chat-permission'
-import type { PendingPermission } from './permission-lookup'
+import type { PendingPrompt } from './permission-lookup'
 
 /** What a permission notification carries so its buttons can be answered. */
 export type PermissionNotificationData = {
@@ -12,13 +12,21 @@ export type PermissionNotificationData = {
   sends: Record<string, string>
 }
 
-export type PermissionAnswerOutcome =
+/** How a tap on a prompt banner's button ended. Shared by the permission and
+ *  the question paths; only a question has a reply field to refuse. */
+export type PromptAnswerOutcome =
   | 'sent'
+  /** Not one of our buttons (the body, or a stranger's data): nothing to do here. */
   | 'not-an-answer'
+  /** Our reply field, but the text could not be read as an answer to the live
+   *  prompt. Nothing written; the reason is logged and the banner stays up. */
+  | 'refused'
   | 'unroutable'
   | 'offline'
   | 'stale'
   | 'failed'
+
+export type PermissionAnswerOutcome = Exclude<PromptAnswerOutcome, 'refused'>
 
 function readData(value: unknown): PermissionNotificationData | null {
   if (value == null || typeof value !== 'object') {
@@ -63,7 +71,7 @@ export async function answerPermissionFromNotification(args: {
   actionIdentifier: string
   data: unknown
   resolveClient: (hostId: string) => RpcClient | null
-  lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPermission | null>
+  lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPrompt | null>
   send: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
 }): Promise<PermissionAnswerOutcome> {
   try {
@@ -85,7 +93,13 @@ export async function answerPermissionFromNotification(args: {
       return 'offline'
     }
     const pending = await args.lookup(client, data.worktreeId)
-    if (!pending || mobileChatPermissionKey(pending.permission) !== data.permissionKey) {
+    // A question arriving where the permission was is the same hazard as a
+    // different permission: the stored digit would pick one of its options.
+    if (
+      !pending ||
+      pending.kind !== 'permission' ||
+      mobileChatPermissionKey(pending.permission) !== data.permissionKey
+    ) {
       return 'stale'
     }
     // Why the option must still be on offer: an agent can re-ask the same

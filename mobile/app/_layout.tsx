@@ -6,7 +6,10 @@ import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
 import { RpcClientProvider } from '../src/transport/client-context'
-import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
+import {
+  getNotificationNavigationTarget,
+  notificationTapKey
+} from '../src/notifications/notification-routing'
 import { isAppUpdateNotification } from '../src/app-update/update-notification'
 import {
   useOpenAppUpdateNotification,
@@ -20,8 +23,10 @@ import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 import { askBackgroundDeliveryPowerOnOpen, getBackgroundLinkWatcher } from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
-import { answerPermissionFromNotification } from '../src/notifications/permission-notification-response'
-import { lookupPendingPermission } from '../src/notifications/permission-lookup'
+import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
+import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
+import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
+import { repostBannerWithReplyVerdict } from '../src/notifications/question-reply-verdict'
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
@@ -157,20 +162,24 @@ function ThemedRoot() {
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        // An Approve/Deny button on a permission banner. It answers WITHOUT
-        // opening the app, which is the point: the alternative was unlock, open,
-        // find the session, tap. Anything that is not one of ours falls through
-        // to the clear below, exactly as before.
-        await answerPermissionFromNotification({
+        // An Approve/Deny button on a permission banner, a choice on a
+        // question banner, or a reply typed into one. It answers WITHOUT
+        // opening the app, which is the point: the alternative was unlock,
+        // open, find the session, tap. Anything that is not one of ours falls
+        // through to the clear below, exactly as before.
+        const userText = response.userText ?? null
+        const outcome = await answerPromptFromNotification({
           actionIdentifier: response.actionIdentifier,
+          // What a reply field returned; undefined for a plain button.
+          userText,
           data: response.notification.request.content.data,
           // The UI's client first; failing that, the link the background
           // watcher is listening on — which is the one the banner's event came
           // over when the app was in the background, and the only one there is.
           resolveClient: (id) =>
             peekLiveHostClient(id) ?? getBackgroundLinkWatcher().peekClient(id),
-          lookup: lookupPendingPermission,
-          send: async ({ client, terminal, text }) =>
+          lookup: lookupPendingPrompt,
+          sendPermission: async ({ client, terminal, text }) =>
             (await sendMobileNativeChatPermissionResponse({
               client,
               terminal,
@@ -182,13 +191,27 @@ function ThemedRoot() {
               // Only 'accepted' counts. 'unknown' means the ack was lost and the
               // answer may still have landed — but a retry is safe, because the
               // re-check finds no matching prompt once one has.
-            })) === 'accepted'
+            })) === 'accepted',
+          // Same road as the chat card's answer: option numbers and typed
+          // text as keystrokes, built by the shared key builders and paced by
+          // the shared stepper, under the terminal write lock.
+          sendQuestion: sendQuestionAnswerFromNotification
         })
+        // A typed reply leaves Android showing the text with a spinner until
+        // the notification is updated. Sent: the desktop's dismiss clears it
+        // when the agent moves on. Not sent: nothing would, and the user would
+        // never learn why — so the banner is posted again with the reason on top.
+        if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer') {
+          await repostBannerWithReplyVerdict(response, outcome)
+        }
         clearLastNotificationResponse()
         return
       }
 
-      const notificationId = response.notification.request.identifier
+      // Keyed per POSTING, not per banner: a session's banners all share one
+      // request identifier, and keying on that alone let one body tap per
+      // session per app life through (2026-09-18).
+      const notificationId = notificationTapKey(response)
       if (handledNotificationIdsRef.current.has(notificationId)) {
         return
       }

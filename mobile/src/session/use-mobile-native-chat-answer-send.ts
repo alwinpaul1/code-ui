@@ -4,11 +4,12 @@ import {
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
+  nativeChatAskDismissKey,
   type AskAnswerSelection,
   type AskPrompt
 } from '../../../src/shared/native-chat-ask'
 import type { RpcClient } from '../transport/rpc-client'
-import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
+import { stepAskAnswerKeyGroups } from './mobile-native-chat-answer-stepping'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome
@@ -16,6 +17,9 @@ import {
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
+  clearMobileNativeChatTerminalHalfStep,
+  markMobileNativeChatTerminalHalfStepped,
+  mobileNativeChatTerminalHalfStep,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import {
@@ -32,13 +36,6 @@ export type MobileNativeChatAnswerSend = {
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   /** Drop any in-flight per-keystroke writes (call on Stop). */
   cancelPending: () => void
-}
-
-// A free-text answer is written as raw keystrokes into Claude's "Type something"
-// input (terminal.send has no paste framing), so an embedded newline would
-// submit it early — collapse line breaks to spaces.
-function sanitizeAskFreeText(text: string): string {
-  return text.replace(/[\r\n]+/g, ' ')
 }
 
 /**
@@ -117,6 +114,21 @@ export function useMobileNativeChatAnswerSend(args: {
         onSendError('Answer not sent — nothing was selected')
         return false
       }
+      // A half-written answer to THIS prompt — from the notification shade, or
+      // an earlier chain here — left the selector mid-way. A from-scratch plan
+      // would type the row digit into its open text field or toggle a box
+      // back off. The mark beside the write lock is what both surfaces consult
+      // (F4, 2026-09-18); the card's own fence below only sees its own chains.
+      const promptKey = nativeChatAskDismissKey(prompt) ?? ''
+      const halfStep = mobileNativeChatTerminalHalfStep(handle)
+      if (halfStep) {
+        if (halfStep.promptKey === promptKey) {
+          onSendError('Answer partly sent earlier — finish it in the terminal before retrying')
+          return false
+        }
+        // A different prompt: the selector has been redrawn since.
+        clearMobileNativeChatTerminalHalfStep(handle)
+      }
       // One composed write sequence per terminal: an answer landing mid-flight
       // in an image paste (or vice versa) would interleave bytes into the PTY.
       // A superseding answer shares the cancelled chain's hold on this terminal
@@ -162,8 +174,12 @@ export function useMobileNativeChatAnswerSend(args: {
         // group, which let an N-group selector hold the card for N × the send timeout.
         // It bounds transport time only: each deliberate pacing wait is credited back
         // below, so a long multi-question answer still gets a full budget to write in.
-        let deadline = openMobileNativeChatSendBudget()
-        const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
+        const deadline = openMobileNativeChatSendBudget()
+        const sendTerminal = async (
+          body: string,
+          enter: boolean,
+          budget: number
+        ): Promise<boolean> => {
           const activeRoute = activeRouteRef.current
           if (
             !activeRoute.enabled ||
@@ -179,7 +195,7 @@ export function useMobileNativeChatAnswerSend(args: {
             terminal: handle,
             text: body,
             enter,
-            deadline,
+            deadline: budget,
             ...(deviceTokenRef.current
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
               : {})
@@ -259,32 +275,51 @@ export function useMobileNativeChatAnswerSend(args: {
           // successor's fence. Test the turn slot, not the generation counter —
           // Stop, ask-cancel and a dropped lease all bump the generation with no
           // successor, and there a landed answer IS a success.
-          const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
+          const sent =
+            (await sendTerminal(formatAskAnswer(prompt, selections), true, deadline)) || fail()
           return sent && writeTurnsRef.current.get(handle) === turn
         }
         const groups =
           resolveNativeChatTranscriptAgent(agentRef.current) === 'codex'
             ? buildCodexAskAnswerKeys(prompt, selections)
             : buildAskAnswerKeys(prompt, selections)
-        for (let index = 0; index < groups.length; index += 1) {
-          if (generationRef.current !== generation) {
-            return false
-          }
-          const group = groups[index]!
-          const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
-          if (!(await sendTerminal(body, false))) {
+        // The stepping (order, pacing, budget credit) is shared with the
+        // notification shade's sender; only the transport and the cancellation
+        // are this hook's.
+        const stepped = await stepAskAnswerKeyGroups({
+          groups,
+          deadline,
+          cancelled: () => generationRef.current !== generation,
+          write: (body, budget) => sendTerminal(body, false, budget),
+          wait
+        })
+        // Stopped short with a key down (or possibly down): the selector has
+        // moved and the prompt has not. Say so where the shade can see it too.
+        if (
+          stepped.kind !== 'sent' &&
+          groups.length > 1 &&
+          (sawAcceptedGroup || sawUnknownOutcome)
+        ) {
+          const at = stepped.kind === 'failed' ? `write ${stepped.step + 1}/${groups.length}` : stepped.kind
+          markMobileNativeChatTerminalHalfStepped(handle, {
+            promptKey,
+            detail: sawUnknownOutcome ? `${at} unknown` : `${at} rejected`
+          })
+        }
+        switch (stepped.kind) {
+          case 'failed':
             return fail()
-          }
-          if (index < groups.length - 1) {
-            if (!(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
-              return false
-            }
-            // Pacing is deliberate, not transport latency — don't charge it to the budget.
-            deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS
+          case 'cancelled':
+          case 'nothing-to-send':
+            return false
+          case 'sent':
+            // Taken over on the last key: same as above, the successor owns the surface.
+            return writeTurnsRef.current.get(handle) === turn
+          default: {
+            const exhaustive: never = stepped
+            return exhaustive
           }
         }
-        // Taken over on the last key: same as above, the successor owns the surface.
-        return groups.length > 0 && writeTurnsRef.current.get(handle) === turn
       } finally {
         // Any accepted key changed the live selector, so a queued replacement
         // cannot safely apply its from-scratch key plan to that new position.
