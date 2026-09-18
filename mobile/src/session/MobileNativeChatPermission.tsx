@@ -5,15 +5,24 @@ import { ShieldQuestion } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
+import { TextInputModal } from '../components/TextInputModal'
+import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 // Keep agent-provided choices intact; action surfaces grow with their content.
 function MobileNativeChatPermissionImpl({
   permission,
-  onRespond
+  onRespond,
+  onRespondWithComment
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  /** Rejects a Claude Code plan review with typed feedback in one tap
+   *  (option select + comment, sequenced by the caller). Only offered when
+   *  set: the structured (native chat) lane has no verified way to carry
+   *  this, so it passes nothing and the option falls back to a plain,
+   *  comment-less reject — see claude-plan-permission.ts. */
+  onRespondWithComment?: (send: string, comment: string) => Promise<boolean>
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
   // The card sits in the dock, which the chat list clears; a tall one would push
@@ -37,6 +46,7 @@ function MobileNativeChatPermissionImpl({
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
   const submittingRef = useRef(false)
+  const [commentTarget, setCommentTarget] = useState<{ send: string; index: number } | null>(null)
   // A `$ ` line is the older shape; the structured lane hands over the TUI's
   // whole prompt body, which needs splitting. See mobile-permission-detail.ts.
   const commandStart = permission.detail?.search(/^\$ /m) ?? -1
@@ -54,7 +64,7 @@ function MobileNativeChatPermissionImpl({
       : splitPermissionDetail(permission.detail, permission.command)
   const description = split.description ?? undefined
   const command = split.command ?? undefined
-  const respond = async (send: string, index: number): Promise<void> => {
+  const respond = async (send: string, index: number, comment?: string): Promise<void> => {
     if (submittingRef.current) {
       return
     }
@@ -62,7 +72,7 @@ function MobileNativeChatPermissionImpl({
     setSubmittingIndex(index)
     let sent = false
     try {
-      sent = await onRespond(send)
+      sent = comment !== undefined ? await onRespondWithComment!(send, comment) : await onRespond(send)
       setAccepted(sent)
     } catch {
       setAccepted(false)
@@ -140,6 +150,9 @@ function MobileNativeChatPermissionImpl({
           const rememberedScope = option.label.match(
             /^Yes, and don['’]t ask again for:?\s+(.+)$/is
           )?.[1]
+          // Only when the caller wired a way to carry it — see the prop doc.
+          const opensCommentSheet =
+            onRespondWithComment != null && isClaudePlanFeedbackOptionLabel(option.label)
           const shortLabel =
             rememberedPrefix || rememberedScope
               ? 'Always allow for this session'
@@ -147,7 +160,9 @@ function MobileNativeChatPermissionImpl({
                 ? 'Allow once'
                 : /^No$/i.test(option.label)
                   ? 'Deny'
-                  : option.label
+                  : opensCommentSheet
+                    ? 'Send back'
+                    : option.label
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
               {submittingIndex === index ? (
@@ -161,7 +176,11 @@ function MobileNativeChatPermissionImpl({
                 accessibilityState={{ disabled: submitting, busy: submittingIndex === index }}
                 pressedScale={0.98}
                 disabled={submitting}
-                onPress={() => void respond(option.send, index)}
+                onPress={() =>
+                  opensCommentSheet
+                    ? setCommentTarget({ send: option.send, index })
+                    : void respond(option.send, index)
+                }
                 style={{
                   minHeight: 48,
                   paddingHorizontal: space.md,
@@ -188,6 +207,24 @@ function MobileNativeChatPermissionImpl({
           )
         })}
       </ScrollView>
+      {/* A true native Modal (mounted-bottom-drawer.tsx) — nesting it here
+          costs nothing layout-wise and keeps its open/close state scoped to
+          this one card. */}
+      <TextInputModal
+        visible={commentTarget != null}
+        title="Tell Claude what to change"
+        placeholder="What should Claude do differently?"
+        submitLabel="Send back"
+        allowEmpty
+        onCancel={() => setCommentTarget(null)}
+        onSubmit={(comment) => {
+          const target = commentTarget
+          setCommentTarget(null)
+          if (target) {
+            void respond(target.send, target.index, comment)
+          }
+        }}
+      />
     </View>
   )
 }

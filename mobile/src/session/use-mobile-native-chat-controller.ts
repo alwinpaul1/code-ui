@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
+import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
@@ -436,6 +437,16 @@ export function useMobileNativeChatController(
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
   const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+  const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
+    client,
+    enabled: inputSendable,
+    structured: activeChatStructured,
+    handleRef: activeHandleRef,
+    deviceTokenRef,
+    onSendError,
+    onResponseAccepted: refreshTerminalHud,
+    onAccepted: onSendResolved
+  })
   const queueEditor = useMobileNativeChatQueueEditor({
     agent: activeChatAgent,
     tabId: activeSessionTabId,
@@ -494,6 +505,7 @@ export function useMobileNativeChatController(
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
+    handleNativeChatRespondPermissionWithComment: respondWithComment,
     openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,

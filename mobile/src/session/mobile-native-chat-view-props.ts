@@ -140,6 +140,7 @@ export type MobileNativeChatViewProps = {
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
+  onRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
   /** Drop one message Claude Code has queued behind the running turn. */
   onCancelQueued?: (id: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */

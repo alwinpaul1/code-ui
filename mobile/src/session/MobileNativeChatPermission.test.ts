@@ -15,6 +15,7 @@ vi.mock('react-native', () => ({
 }))
 
 vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion' }))
+vi.mock('../components/TextInputModal', () => ({ TextInputModal: 'TextInputModal' }))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -314,5 +315,131 @@ describe('MobileNativeChatPermission', () => {
       )
     })
     expect(renderer!.root.findAllByType('Pressable')).toHaveLength(1)
+  })
+
+  describe('plan review feedback', () => {
+    // Real captured options, Claude Code 2.1.276 (claude-plan-permission.test.ts).
+    const planOptions = [
+      { label: 'Yes, and use auto mode', send: '1' },
+      { label: 'Yes, manually approve edits', send: '2' },
+      { label: 'Tell Claude what to change', send: '3' }
+    ]
+
+    it('opens a comment sheet instead of sending immediately', async () => {
+      const onRespond = vi.fn(async () => true)
+      const onRespondWithComment = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Ready to code?', options: planOptions },
+            onRespond,
+            onRespondWithComment
+          })
+        )
+      })
+      const buttons = renderer!.root.findAllByType('Pressable')
+      expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual([
+        'Yes, and use auto mode',
+        'Yes, manually approve edits',
+        'Tell Claude what to change'
+      ])
+      const sendBack = renderer!.root
+        .findAllByType('Text')
+        .find((text) => text.props.children === 'Send back')
+      expect(sendBack).toBeDefined()
+      await act(async () => buttons[2]!.props.onPress())
+      expect(onRespond).not.toHaveBeenCalled()
+      expect(onRespondWithComment).not.toHaveBeenCalled()
+      expect(renderer!.root.findByType('TextInputModal').props.visible).toBe(true)
+    })
+
+    it('submits the typed comment through onRespondWithComment, never onRespond', async () => {
+      const onRespond = vi.fn(async () => true)
+      const onRespondWithComment = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Ready to code?', options: planOptions },
+            onRespond,
+            onRespondWithComment
+          })
+        )
+      })
+      const button = renderer!.root
+        .findAllByType('Pressable')
+        .find((candidate) => candidate.props.accessibilityLabel === 'Tell Claude what to change')
+      await act(async () => button!.props.onPress())
+      const sheet = renderer!.root.findByType('TextInputModal')
+      await act(async () => sheet.props.onSubmit('Use two sentences instead.'))
+      expect(onRespondWithComment).toHaveBeenCalledExactlyOnceWith('3', 'Use two sentences instead.')
+      expect(onRespond).not.toHaveBeenCalled()
+      expect(renderer!.root.findByType('TextInputModal').props.visible).toBe(false)
+    })
+
+    it('sends a plain reject (empty comment) rather than refusing to submit', async () => {
+      const onRespondWithComment = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Ready to code?', options: planOptions },
+            onRespond: vi.fn(async () => true),
+            onRespondWithComment
+          })
+        )
+      })
+      const button = renderer!.root
+        .findAllByType('Pressable')
+        .find((candidate) => candidate.props.accessibilityLabel === 'Tell Claude what to change')
+      await act(async () => button!.props.onPress())
+      const sheet = renderer!.root.findByType('TextInputModal')
+      expect(sheet.props.allowEmpty).toBe(true)
+      await act(async () => sheet.props.onSubmit(''))
+      expect(onRespondWithComment).toHaveBeenCalledExactlyOnceWith('3', '')
+    })
+
+    it('cancels without sending anything', async () => {
+      const onRespond = vi.fn(async () => true)
+      const onRespondWithComment = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Ready to code?', options: planOptions },
+            onRespond,
+            onRespondWithComment
+          })
+        )
+      })
+      const button = renderer!.root
+        .findAllByType('Pressable')
+        .find((candidate) => candidate.props.accessibilityLabel === 'Tell Claude what to change')
+      await act(async () => button!.props.onPress())
+      const sheet = renderer!.root.findByType('TextInputModal')
+      await act(async () => sheet.props.onCancel())
+      expect(onRespond).not.toHaveBeenCalled()
+      expect(onRespondWithComment).not.toHaveBeenCalled()
+      expect(renderer!.root.findByType('TextInputModal').props.visible).toBe(false)
+    })
+
+    it('falls back to a direct reject when the caller wires no comment path (structured lane)', async () => {
+      const onRespond = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(MobileNativeChatPermission, {
+            permission: { title: 'Ready to code?', options: planOptions },
+            onRespond
+          })
+        )
+      })
+      const button = renderer!.root
+        .findAllByType('Pressable')
+        .find((candidate) => candidate.props.accessibilityLabel === 'Tell Claude what to change')
+      // No "Send back" affordance without a way to carry the comment.
+      expect(
+        renderer!.root.findAllByType('Text').some((text) => text.props.children === 'Send back')
+      ).toBe(false)
+      await act(async () => button!.props.onPress())
+      expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')
+      expect(renderer!.root.findByType('TextInputModal').props.visible).toBe(false)
+    })
   })
 })
