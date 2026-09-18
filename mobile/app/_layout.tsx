@@ -20,8 +20,9 @@ import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
 import { askBackgroundDeliveryPowerOnOpen, getBackgroundLinkWatcher } from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
-import { answerPermissionFromNotification } from '../src/notifications/permission-notification-response'
-import { lookupPendingPermission } from '../src/notifications/permission-lookup'
+import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
+import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
+import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
@@ -157,11 +158,12 @@ function ThemedRoot() {
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        // An Approve/Deny button on a permission banner. It answers WITHOUT
-        // opening the app, which is the point: the alternative was unlock, open,
-        // find the session, tap. Anything that is not one of ours falls through
-        // to the clear below, exactly as before.
-        await answerPermissionFromNotification({
+        // An Approve/Deny button on a permission banner, or a choice on a
+        // question banner. It answers WITHOUT opening the app, which is the
+        // point: the alternative was unlock, open, find the session, tap.
+        // Anything that is not one of ours falls through to the clear below,
+        // exactly as before.
+        const outcome = await answerPromptFromNotification({
           actionIdentifier: response.actionIdentifier,
           data: response.notification.request.content.data,
           // The UI's client first; failing that, the link the background
@@ -169,8 +171,8 @@ function ThemedRoot() {
           // over when the app was in the background, and the only one there is.
           resolveClient: (id) =>
             peekLiveHostClient(id) ?? getBackgroundLinkWatcher().peekClient(id),
-          lookup: lookupPendingPermission,
-          send: async ({ client, terminal, text }) =>
+          lookup: lookupPendingPrompt,
+          sendPermission: async ({ client, terminal, text }) =>
             (await sendMobileNativeChatPermissionResponse({
               client,
               terminal,
@@ -182,10 +184,19 @@ function ThemedRoot() {
               // Only 'accepted' counts. 'unknown' means the ack was lost and the
               // answer may still have landed — but a retry is safe, because the
               // re-check finds no matching prompt once one has.
-            })) === 'accepted'
+            })) === 'accepted',
+          // Same road as the chat card's answer: the option's number, no
+          // Enter, built by the shared key builder and paced by the shared
+          // stepper, under the terminal write lock.
+          sendQuestion: sendQuestionAnswerFromNotification
         })
-        clearLastNotificationResponse()
-        return
+        // The one button that opens the app: a question the shade cannot hold.
+        // It lands where a body tap lands, on the session's chat, so it takes
+        // the navigation path below instead of stopping here.
+        if (outcome !== 'open-app') {
+          clearLastNotificationResponse()
+          return
+        }
       }
 
       const notificationId = response.notification.request.identifier

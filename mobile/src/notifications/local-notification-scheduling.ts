@@ -7,8 +7,8 @@ import { buildLocalNotificationData, type DesktopNotificationSource } from './no
 import { ensureNotificationPermissions } from './notification-permissions'
 import { peekLiveHostClient } from '../transport/live-host-clients'
 import type { RpcClient } from '../transport/rpc-client'
-import { decorateWithPermission } from './permission-notification-decorate'
-import { lookupPendingPermission } from './permission-lookup'
+import { decorateWithPrompt } from './permission-notification-decorate'
+import { lookupPendingPrompt } from './permission-lookup'
 import { ensurePermissionCategory } from './permission-notification-category'
 
 export type NotificationEvent = {
@@ -150,9 +150,10 @@ async function presentedNotificationContent(
   }
   // Why here and not at the caller: every path that shows a banner goes through
   // this, and a permission ask arriving with the previous command's stdout as
-  // its caption was the whole complaint. Returns `content` untouched whenever
-  // there is nothing pending or the host cannot say, so the notification is
-  // never delayed into uselessness by the lookup.
+  // its caption — or a question arriving as "Using AskUserQuestion" — was the
+  // whole complaint. Returns `content` untouched whenever there is nothing
+  // pending or the host cannot say, so the notification is never delayed into
+  // uselessness by the lookup.
   //
   // Why the event's own client comes first: the lookup used to borrow the UI's
   // client alone, and with the app in the background the UI's relay is
@@ -161,9 +162,9 @@ async function presentedNotificationContent(
   // the lookup found no client, gave up, and the banner had no Approve or
   // Deny (a friend's phone, Windows host, 2026-09-18). The event arrived over
   // a link; that link is up by definition, and it is the one to ask on.
-  return decorateWithPermission(content, event, hostId, {
+  return decorateWithPrompt(content, event, hostId, {
     resolveClient: (id) => link.client ?? peekLiveHostClient(id),
-    lookup: lookupPendingPermission,
+    lookup: lookupPendingPrompt,
     ensureCategory: ensurePermissionCategory
   })
 }

@@ -114,6 +114,31 @@ describe('notification route coordination', () => {
     expect(notificationEffect).toContain('openNotificationRoute(target)')
     expect(notificationEffect).not.toContain('router.push(')
   })
+
+  /**
+   * A question the shade cannot hold gets one "Answer" button whose job is to
+   * open the app on the session. Its tap arrives as a non-default action, so
+   * it enters the answer branch — and that branch used to end in an
+   * unconditional return, which would have swallowed the navigation and left
+   * the user on whatever screen the app was last on. The verdict has to reach
+   * the same routing a body tap takes.
+   */
+  it('lets the Answer button on a question fall through to the session route', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    const answered = notificationEffect.indexOf('const outcome = await answerPromptFromNotification(')
+    expect(answered).toBeGreaterThanOrEqual(0)
+    // The early return is guarded on the verdict, and the route comes after it.
+    const guard = notificationEffect.indexOf("if (outcome !== 'open-app') {", answered)
+    expect(guard).toBeGreaterThan(answered)
+    expect(notificationEffect.indexOf('openNotificationRoute(target)', guard)).toBeGreaterThan(guard)
+    // And the question path writes through the shade's sender, not a bare send.
+    expect(notificationEffect).toContain('sendQuestion: sendQuestionAnswerFromNotification')
+  })
 })
 
 it('reuses the current workspace screen and targets the notification pane without pushing', () => {
