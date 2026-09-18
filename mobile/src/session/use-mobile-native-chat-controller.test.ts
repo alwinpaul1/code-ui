@@ -137,8 +137,12 @@ vi.mock('./use-mobile-native-chat-answer-send', () => ({
     return { answerAsk: vi.fn(), cancelPending: vi.fn() }
   }
 }))
+const permissionSendArgs: { cardPermission?: unknown }[] = []
 vi.mock('./mobile-native-chat-permission-send', () => ({
-  useMobileNativeChatPermissionSend: () => vi.fn()
+  useMobileNativeChatPermissionSend: (args: { cardPermission?: unknown }) => {
+    permissionSendArgs.push(args)
+    return vi.fn()
+  }
 }))
 vi.mock('./use-mobile-native-chat-stop', () => ({
   useMobileNativeChatStop: () => vi.fn()
@@ -566,6 +570,28 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       chatActive: true,
       transcriptLoading: false
     })
+  })
+
+  it('hands the permission send the plan-review card it renders, so a tap can be checked against it', () => {
+    // The screen parser cannot see a plan review; the card comes from the
+    // agent's status. Without this the send path has no way to know the tap
+    // is a plan approval and skips its look at the highlighted row.
+    const planReview = {
+      title: 'Permission requested',
+      detail: 'Claude has written up a plan and is ready to execute. Would you like to proceed?',
+      options: [
+        { label: 'Yes, and use auto mode', send: '1' },
+        { label: 'Yes, manually approve edits', send: '2' },
+        { label: 'Tell Claude what to change', send: '3' }
+      ]
+    }
+    promptsState.permission = planReview
+    try {
+      render(chatTab)
+      expect(permissionSendArgs.at(-1)?.cardPermission).toEqual(planReview)
+    } finally {
+      promptsState.permission = null
+    }
   })
 
   it('forwards the raw draft with chatActive false when the tab shows the terminal', () => {

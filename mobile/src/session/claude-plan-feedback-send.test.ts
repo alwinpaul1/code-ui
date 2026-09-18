@@ -87,6 +87,32 @@ describe('rejecting a Claude Code plan review with typed feedback', () => {
     })
   })
 
+  it('does not take an earlier prompt that began "3." for the highlighted row', async () => {
+    // Claude Code paints an accepted prompt as "❯ <text>", so a user who
+    // numbered their own message leaves a "❯ 3. …" row on screen above the
+    // review. The review's row is the last one painted; only it decides.
+    const promptAboveReview = [
+      '❯ 3. Then wire the button up',
+      '',
+      ...STILL_ON_OPTION_1_SCREEN
+    ]
+    const { client, calls } = fakeClient((method) => {
+      if (method === 'terminal.read') {
+        return { ok: true, result: { terminal: { lines: promptAboveReview, source: 'screen' } } }
+      }
+      return { ok: true, result: { send: { accepted: true } } }
+    })
+    const outcome = await sendClaudePlanFeedback({
+      client,
+      terminal: 'term-1',
+      deviceToken: null,
+      optionSend: '3',
+      comment: 'Use two sentences instead.'
+    })
+    expect(outcome).toEqual({ kind: 'refused', message: CLAUDE_PLAN_FEEDBACK_REFUSAL_MESSAGE })
+    expect(calls).toHaveLength(2)
+  })
+
   it('refuses rather than type over a screen that never shows the option highlighted', async () => {
     const { client, calls } = fakeClient((method) => {
       if (method === 'terminal.read') {
