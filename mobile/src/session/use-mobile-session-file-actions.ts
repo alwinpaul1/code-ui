@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { Linking } from 'react-native'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
+import { useMobileNativeChatHunkRevert } from './use-mobile-native-chat-hunk-revert'
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -43,6 +44,15 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
     scheduleDelayedAction,
     reportChatTapFailure: nativeChatSendError.show
+  })
+  // "Revert this hunk" on a landed-edit card: the same worktree and chat
+  // provenance a tapped path resolves with, so the two cannot disagree about
+  // which file a card names.
+  const handleNativeChatRevertHunk = useMobileNativeChatHunkRevert({
+    client,
+    worktreeId,
+    nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+    getActiveSessionTabId: () => activeSessionTabIdRef.current
   })
 
   const handleOpenedFileDiffActivationSeqRef = useRef(0)
@@ -102,6 +112,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   return {
     handleFileTap,
     handleNativeChatFileTap,
+    handleNativeChatRevertHunk,
     handleOpenedFileDiffActivationSeqRef,
     fileOpenStartActiveTabIdRef,
     handleFileOpenStart,

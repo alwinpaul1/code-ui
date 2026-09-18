@@ -118,6 +118,7 @@ export function MobileNativeChatView({
   onRespondPermission,
   onCancelQueued,
   onOpenFile,
+  onRevertHunk,
   keyboardInset = 0,
   keyStrip
 }: MobileNativeChatViewProps): React.JSX.Element {
@@ -235,6 +236,7 @@ export function MobileNativeChatView({
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
+        onRevertHunk={onRevertHunk}
         onCancelQueued={
           agentWorking && onCancelQueued && item.id.startsWith('pending-')
             ? () => void onCancelQueued(item.id)
@@ -258,6 +260,7 @@ export function MobileNativeChatView({
       fontScale,
       onScrollToMessage,
       onOpenFile,
+      onRevertHunk,
       agentWorking,
       onCancelQueued,
       structuredActivityUi,

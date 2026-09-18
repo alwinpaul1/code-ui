@@ -26,6 +26,7 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
+import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import {
   isRenderableNativeChatNotice,
@@ -161,6 +162,7 @@ function MobileNativeChatMessageImpl({
   messageIndex,
   onScrollToMessage,
   onOpenFile,
+  onRevertHunk,
   onCancelQueued,
   turnStatus,
   turnExpanded,
@@ -185,6 +187,8 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  /** Put one hunk of a landed edit back, from its diff card. */
+  onRevertHunk?: MobileNativeChatRevertHunk
   /** This turn's status row, rendered under a user message (desktop parity). */
   turnStatus?: NativeChatTurnStatus | null
   /** Whether the turn caret has disclosed this turn's activity. */
@@ -374,6 +378,8 @@ function MobileNativeChatMessageImpl({
                 // them — otherwise every run would grow its own copy.
                 trailing={segmentIndex === lastToolSegment ? controls : undefined}
                 onOpenFile={onOpenFile}
+                onRevertHunk={onRevertHunk}
+                revertScope={`${message.id}:${segmentIndex}`}
                 styles={styles}
               />
             ) : null

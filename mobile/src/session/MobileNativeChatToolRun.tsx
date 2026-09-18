@@ -13,6 +13,7 @@ import {
   isEditToolName
 } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 import {
   mobileTaskListPreview,
@@ -119,6 +120,8 @@ function ToolLine({
   defaultExpanded,
   diffLineLimit,
   onOpenFile,
+  onRevertHunk,
+  revertScope,
   styles
 }: {
   pair: ToolPair
@@ -128,6 +131,9 @@ function ToolLine({
   defaultExpanded: boolean
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
+  onRevertHunk?: MobileNativeChatRevertHunk
+  /** This line's place in its message, for the diff card's identity. */
+  revertScope?: string
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -211,6 +217,8 @@ function ToolLine({
               key={`${file.path}:${index}`}
               file={file}
               rowLimit={diffLineLimit}
+              onRevertHunk={onRevertHunk}
+              revertScope={`${revertScope ?? ''}:${index}`}
             />
           ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
@@ -280,6 +288,8 @@ export function ToolRun({
   taskListPredecessors,
   trailing,
   onOpenFile,
+  onRevertHunk,
+  revertScope,
   styles
 }: {
   blocks: NativeChatBlock[]
@@ -296,6 +306,11 @@ export function ToolRun({
   taskListPredecessors?: MobileTaskListPredecessors
   trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
+  /** Put one hunk of a landed edit back, from its diff card. */
+  onRevertHunk?: MobileNativeChatRevertHunk
+  /** This run's place in its message (message id and segment), so each diff
+   *  card under it has an identity beyond its content. */
+  revertScope?: string
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -393,6 +408,8 @@ export function ToolRun({
             defaultExpanded={expandChildren ?? defaultExpanded}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}
+            onRevertHunk={onRevertHunk}
+            revertScope={`${revertScope ?? ''}:${i}`}
             styles={styles}
           />
         ))}

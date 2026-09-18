@@ -113,6 +113,39 @@ export function makeDiffCardStyles(theme: Theme) {
       fontSize: MONO_SIZE,
       lineHeight: MONO_SIZE + 5,
       textAlign: 'center'
+    },
+    // "Revert this hunk" under a hunk of a landed edit, plus the one line it
+    // leaves behind when it cannot: on the raised surface so it reads as a
+    // control between rows, not as a row.
+    hunkAction: {
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: space.sm,
+      paddingVertical: space.xs,
+      gap: 2
+    },
+    hunkActionButton: {
+      alignSelf: 'flex-start',
+      paddingVertical: 2
+    },
+    hunkActionLabel: {
+      color: colors.accentText,
+      fontFamily: fonts.medium,
+      fontSize: MONO_SIZE
+    },
+    hunkActionDone: {
+      color: colors.textMuted,
+      fontFamily: fonts.medium,
+      fontSize: MONO_SIZE
+    },
+    hunkActionNote: {
+      color: colors.textSecondary,
+      fontFamily: fonts.regular,
+      fontSize: MONO_SIZE
+    },
+    hunkActionError: {
+      color: colors.danger,
+      fontFamily: fonts.regular,
+      fontSize: MONO_SIZE
     }
   })
 }

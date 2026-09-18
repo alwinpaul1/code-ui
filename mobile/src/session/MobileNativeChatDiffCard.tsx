@@ -7,8 +7,8 @@
 // snippet-relative number reads as a position in the file, and it would be
 // wrong.
 
-import { memo } from 'react'
-import { Text, View } from 'react-native'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
 import { FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
 import {
   unifiedLineNumber,
@@ -16,6 +16,13 @@ import {
   type NativeChatEditLine
 } from '../../../src/shared/native-chat-edit-model'
 import { useTheme } from '../theme/theme-context'
+import { editCardHunks, hunkRevertPrecheck } from './mobile-diff-hunk-revert'
+import {
+  hunkRevertMarkKey,
+  isHunkMarkedReverted,
+  markHunkReverted
+} from './mobile-diff-hunk-revert-marks'
+import type { HunkRevertOutcome } from './mobile-diff-hunk-revert-request'
 import { useDiffCardStyles, type DiffCardStyles } from './mobile-native-chat-diff-card-styles'
 
 /** A phone renders every row it is given, so the card takes its own ceiling
@@ -100,14 +107,148 @@ function DiffCardRow({
   )
 }
 
+/** What one hunk's action is showing. `offered` may carry the one line the
+ *  last attempt left behind; `reverted` is final and never offers again. */
+type HunkActionState =
+  | { phase: 'offered'; note?: { text: string; tone: 'note' | 'error' } }
+  | { phase: 'busy' }
+  | { phase: 'reverted' }
+
+const OFFERED: HunkActionState = { phase: 'offered' }
+const REVERTED: HunkActionState = { phase: 'reverted' }
+
+/** "Revert this hunk" under a hunk, or "Reverted" once it has been, plus the
+ *  one line a refusal or a rejected write leaves behind. */
+function HunkActionRow({
+  state,
+  onPress,
+  styles
+}: {
+  state: HunkActionState
+  onPress: () => void
+  styles: DiffCardStyles
+}): React.JSX.Element {
+  const busy = state.phase === 'busy'
+  return (
+    <View style={styles.hunkAction} testID="diff-card-hunk-action">
+      {state.phase === 'reverted' ? (
+        <Text style={styles.hunkActionDone}>Reverted</Text>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.hunkActionButton, pressed && { opacity: 0.6 }]}
+          onPress={onPress}
+          disabled={busy}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Revert this hunk"
+          accessibilityState={{ disabled: busy, busy }}
+        >
+          <Text style={styles.hunkActionLabel}>{busy ? 'Reverting…' : 'Revert this hunk'}</Text>
+        </Pressable>
+      )}
+      {state.phase === 'offered' && state.note ? (
+        <Text
+          style={state.note.tone === 'error' ? styles.hunkActionError : styles.hunkActionNote}
+          accessibilityLiveRegion="polite"
+        >
+          {state.note.text}
+        </Text>
+      ) : null}
+    </View>
+  )
+}
+
 /** One edited file: the verb, the file's own name, the change counts, and the
  *  interleaved rows. Disclosure belongs to the tool line above it, so the card
  *  has no second caret of its own — one tap on a phone, not two. */
-function DiffCard({ file, rowLimit = MAX_DIFF_CARD_ROWS, verb }: Props): React.JSX.Element {
+function DiffCard({
+  file,
+  rowLimit = MAX_DIFF_CARD_ROWS,
+  verb,
+  onRevertHunk,
+  revertScope = ''
+}: Props): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useDiffCardStyles()
   const rows = file.lines.slice(0, rowLimit)
   const clipped = file.truncated || rows.length < file.lines.length
+  // Per-hunk action state, keyed by what the hunk is rather than by its index,
+  // so a re-render with a re-derived `file` keeps it. A hunk already put back
+  // is read from the shared marks, which outlive this mount.
+  const [actionStates, setActionStates] = useState<ReadonlyMap<string, HunkActionState>>(
+    () => new Map()
+  )
+  const mountedRef = useRef(true)
+  // The hunks with a write in flight. A ref, not state: two taps in one tick
+  // would both read the render's map before either could set it busy.
+  const inFlightRef = useRef(new Set<string>())
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+  // Which drawn row each offered action hangs under: the hunk's last row, and
+  // only when the whole hunk is drawn — a revert of rows the reader cannot see
+  // is not a revert they asked for.
+  const actionsByRow = useMemo(() => {
+    const byRow = new Map<number, { hunkIndex: number; key: string }>()
+    if (!onRevertHunk) {
+      return byRow
+    }
+    const hunks = editCardHunks(file)
+    for (const hunk of hunks) {
+      if (hunk.endIndex < rows.length && hunkRevertPrecheck(file, hunk.index, hunks).ok) {
+        byRow.set(hunk.endIndex, {
+          hunkIndex: hunk.index,
+          key: hunkRevertMarkKey(revertScope, file, hunk)
+        })
+      }
+    }
+    return byRow
+  }, [file, onRevertHunk, revertScope, rows.length])
+
+  const setHunkState = (key: string, state: HunkActionState): void => {
+    if (!mountedRef.current) {
+      return
+    }
+    setActionStates((current) => new Map(current).set(key, state))
+  }
+
+  const revert = async (hunkIndex: number, key: string): Promise<void> => {
+    if (!onRevertHunk || inFlightRef.current.has(key)) {
+      return
+    }
+    inFlightRef.current.add(key)
+    setHunkState(key, { phase: 'busy' })
+    let outcome: HunkRevertOutcome
+    try {
+      outcome = await onRevertHunk(file, hunkIndex, revertScope)
+    } catch (error) {
+      outcome = {
+        status: 'failed',
+        message: error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      inFlightRef.current.delete(key)
+    }
+    switch (outcome.status) {
+      case 'reverted':
+        markHunkReverted(key)
+        setHunkState(key, REVERTED)
+        return
+      case 'refused':
+        setHunkState(key, { phase: 'offered', note: { text: outcome.message, tone: 'note' } })
+        return
+      case 'failed':
+        setHunkState(key, { phase: 'offered', note: { text: outcome.message, tone: 'error' } })
+        return
+      default: {
+        const never: never = outcome
+        throw new Error(`unhandled revert outcome ${String(never)}`)
+      }
+    }
+  }
   const widest = file.lineNumbersKnown
     ? rows.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
     : 0
@@ -144,14 +285,33 @@ function DiffCard({ file, rowLimit = MAX_DIFF_CARD_ROWS, verb }: Props): React.J
       </View>
       {rows.length > 0 ? (
         <View style={styles.body}>
-          {rows.map((line, index) => (
-            <DiffCardRow
-              key={`${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${index}`}
-              line={line}
-              gutterWidth={gutterWidth}
-              styles={styles}
-            />
-          ))}
+          {rows.map((line, index) => {
+            const action = actionsByRow.get(index)
+            const row = (
+              <DiffCardRow
+                key={`${line.kind}:${line.oldLineNumber}:${line.newLineNumber}:${index}`}
+                line={line}
+                gutterWidth={gutterWidth}
+                styles={styles}
+              />
+            )
+            if (!action) {
+              return row
+            }
+            const state =
+              actionStates.get(action.key) ??
+              (isHunkMarkedReverted(action.key) ? REVERTED : OFFERED)
+            return (
+              <View key={`hunk:${action.key}`}>
+                {row}
+                <HunkActionRow
+                  state={state}
+                  onPress={() => void revert(action.hunkIndex, action.key)}
+                  styles={styles}
+                />
+              </View>
+            )
+          })}
         </View>
       ) : null}
     </View>
@@ -165,6 +325,16 @@ type Props = {
   /** Replaces the past-tense verb. The permission card shows an edit that has
    *  not happened yet, and "Edited file" over it would claim that it had. */
   verb?: string
+  /** Puts one hunk of a LANDED edit back in the file. Absent on a card that
+   *  shows a proposal (the permission card), where there is nothing to undo. */
+  onRevertHunk?: (
+    file: NativeChatEditFile,
+    hunkIndex: number,
+    cardScope: string
+  ) => Promise<HunkRevertOutcome>
+  /** Which card this is, beyond its content: the message it came from and its
+   *  place in it. A later message re-applying the same edit is another card. */
+  revertScope?: string
 }
 
 export const MobileNativeChatDiffCard = memo(DiffCard)

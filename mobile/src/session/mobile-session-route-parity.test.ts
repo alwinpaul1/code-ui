@@ -65,8 +65,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // Pins re-baselined 2026-09-05 for the Code UI fork after the themed session
 // chrome (header, dock, accessory strip, active content) landed. Values below
 // are the current extraction facts; a future drift here is a real change.
-const HEAD_MAIN_HOOK_SHA256 = 'f2637e86c7e0dad0d7455958cfa1f94720a5786e9deabed6e47048dd5a989da9'
-const HEAD_HOOK_BINDING_SHA256 = '483065978842b48e76e3b5225145cd22f5e5ccb3549ea1a11db57825cc399af3'
+// 2026-09-18 (later): the file actions bind "Revert this hunk" for the chat's
+// diff cards (useMobileNativeChatHunkRevert), one hook and its binding.
+const HEAD_MAIN_HOOK_SHA256 = '3379da9abc343419aa1bb3aa22b0ea61a9ff8be1013518e364bdb9661b9dcf7a'
+const HEAD_HOOK_BINDING_SHA256 = '888bfc8d88bf2352eafaf52545fc45bfceebf77e517d6e0696131a919dd3b1fb'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '6a7e436faf5b6661c09b0339114593c4c1068be2dc1700cdfad61689c307b5e1'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
@@ -142,7 +144,9 @@ const HEAD_HOST_JSX_SHA256 = 'fb967b6abb8acf0ab7d420f3358a3b29dd09c0f9171060539f
 // lent. Exactly one leaf record changed — verified by extracting the reader's
 // JSX records before and after; host and style-reference records are untouched,
 // which is why only this pin moved.
-const HEAD_LEAF_JSX_SHA256 = '0e52eefdf2ba74bf189d26041095ad35d6ec5a1d13d1fb58919ac1e4de8d9e4e'
+// 2026-09-18 (later): the chat overlay is handed `onRevertHunk` beside
+// `onOpenFile`. Same 71 leaf records; only the overlay's record changed.
+const HEAD_LEAF_JSX_SHA256 = '743ca7677e6ec811efb26c9cd2cdb49da3a0688b196d4c3f0944ef8e949eecc3'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -535,7 +539,9 @@ describe('mobile session route extraction parity', () => {
     )
     // 277 since 2026-09-15: the session tabs re-read a document when the host
     // reconnects — useLocalSearchParams, useLastConnectedAt and the ledger ref.
-    expect(main.hooks).toHaveLength(277)
+    // 278 since 2026-09-18 (later): useMobileNativeChatHunkRevert, which binds
+    // the diff cards' "Revert this hunk" to this session's client and tab.
+    expect(main.hooks).toHaveLength(278)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(78)
