@@ -72,6 +72,14 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             <Text style={styles.filterRowText}>Hide default branch</Text>
             {state.filters.hideDefaultBranch && <Check size={14} color={colors.textPrimary} />}
           </Pressable>
+          <View style={styles.filterSeparator} />
+          {/* "Archived" (row #6 of the extension-port map): shows ONLY archived
+              rows so one can be found and un-archived. Phone-local — see
+              toggleShowArchived's own comment for why it isn't synced. */}
+          <Pressable style={styles.filterRow} onPress={settings.toggleShowArchived}>
+            <Text style={styles.filterRowText}>Show archived</Text>
+            {state.filters.showArchived && <Check size={14} color={colors.textPrimary} />}
+          </Pressable>
         </View>
 
         {controller.sectionsResult.uniqueRepos.length > 1 && (
@@ -182,6 +190,26 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       label: isWorktreePinned(actionTarget, state.pinnedIds) ? 'Unpin' : 'Pin',
                       onPress: () => {
                         actions.togglePin(actionTarget.worktreeId)
+                        state.setActionTarget(null)
+                      }
+                    },
+                    // "Archive" (row #6 of the extension-port map) — leaves the
+                    // list without deleting; find it again under the "Show
+                    // archived" filter above to bring it back.
+                    {
+                      label: actionTarget.isArchived ? 'Unarchive' : 'Archive',
+                      onPress: () => {
+                        actions.toggleArchive(actionTarget.worktreeId)
+                        state.setActionTarget(null)
+                      }
+                    },
+                    // "Mark unread" (row #8) — the same Bell dot the list
+                    // already draws for new activity; clears itself the
+                    // moment the row is opened (openWorktreeSession).
+                    {
+                      label: actionTarget.unread ? 'Mark Read' : 'Mark Unread',
+                      onPress: () => {
+                        actions.markUnread(actionTarget.worktreeId, !actionTarget.unread)
                         state.setActionTarget(null)
                       }
                     },

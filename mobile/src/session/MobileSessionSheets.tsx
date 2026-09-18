@@ -82,6 +82,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleCloseTerminal,
     handleForkClaudeSession,
     handleCloseSessionTab,
+    resolveAskAboutScreenTarget,
+    askAboutTerminalScreen,
     bulkCloseActions,
     closeWithBulkActions,
     createTabAgentActions,
@@ -202,6 +204,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onFork: (target) => void handleForkClaudeSession(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
+          resolveAskAboutScreenTarget,
+          onAskAboutScreen: (target) => void askAboutTerminalScreen(target),
           bulkCloseActions
         })}
         onClose={() => setActionTarget(null)}

@@ -144,4 +144,39 @@ describe('getMobileTerminalActionSheetActions', () => {
       expect(actions.some((action) => action.label === 'Fork')).toBe(false)
     })
   })
+
+  describe('Ask about this screen', () => {
+    it('is offered when a chat target resolves, and dismisses before firing', () => {
+      const onDismiss = vi.fn()
+      const onAskAboutScreen = vi.fn()
+      const target = { handle: 'terminal-1' }
+      const actions = buildActions({
+        target,
+        onDismiss,
+        onAskAboutScreen,
+        resolveAskAboutScreenTarget: () => ({ targetTab: { id: 'chat' }, agent: 'claude' })
+      })
+
+      const entry = actions.find((action) => action.label === 'Ask about this screen')
+      expect(entry).toBeDefined()
+      entry?.onPress()
+      expect(onDismiss).toHaveBeenCalled()
+      expect(onAskAboutScreen).toHaveBeenCalledWith(target)
+    })
+
+    it('is left off the menu when resolution finds nowhere for the text to land', () => {
+      const actions = buildActions({
+        onAskAboutScreen: vi.fn(),
+        resolveAskAboutScreenTarget: () => null
+      })
+      expect(actions.some((action) => action.label === 'Ask about this screen')).toBe(false)
+    })
+
+    it('is left off the menu when the caller does not support it at all', () => {
+      // No resolveAskAboutScreenTarget/onAskAboutScreen passed — same as
+      // buildActions()'s defaults, which is the pre-feature shape.
+      const actions = buildActions()
+      expect(actions.some((action) => action.label === 'Ask about this screen')).toBe(false)
+    })
+  })
 })

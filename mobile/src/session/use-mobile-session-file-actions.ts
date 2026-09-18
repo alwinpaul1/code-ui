@@ -5,6 +5,10 @@ import { useMobileNativeChatHunkRevert } from './use-mobile-native-chat-hunk-rev
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
 import { planFileReaderAskAboutLines } from './mobile-file-reader-ask-about-lines-plan'
+import { planTerminalAskAboutScreen } from './mobile-terminal-ask-about-screen-plan'
+import { buildTerminalScreenFenceBlock } from './mobile-terminal-ask-about-screen'
+import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
+import type { ChatTargetTab } from './mobile-chat-target-tab'
 import type { FileReaderLineRange } from './mobile-file-reader-line-selection'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTerminalSendActionsModel } from './use-mobile-session-terminal-send-actions'
@@ -141,6 +145,62 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     },
     [nativeChatController, nativeChatSendError, nativeChatTranscriptIsLocalReadable]
   )
+
+  // "Ask about this screen" (session menu, TUI-lane terminal tabs; VS Code
+  // 2.1.275's "Send terminal output to Claude" parity). Where the text lands
+  // is decided synchronously (planTerminalAskAboutScreen, no RPC) so the
+  // session menu can omit the entry when there is nowhere for it to go; only
+  // the screen read itself is async.
+  const resolveAskAboutScreenTarget = useCallback(
+    (terminalTabId: string | null | undefined): ChatTargetTab | null =>
+      planTerminalAskAboutScreen({
+        tabs: sessionTabsRef.current,
+        visitHistory: visitedSessionTabIdsRef.current,
+        terminalTabId: terminalTabId ?? null,
+        nativeChatTranscriptIsLocalReadable
+      }),
+    [nativeChatTranscriptIsLocalReadable]
+  )
+  const askAboutTerminalScreen = useCallback(
+    async (target: { handle: string }) => {
+      if (!client) {
+        return
+      }
+      const sourceTab = sessionTabsRef.current.find(
+        (tab) => tab.type === 'terminal' && tab.terminal === target.handle
+      )
+      const plan = resolveAskAboutScreenTarget(sourceTab?.id ?? null)
+      if (!plan) {
+        nativeChatSendError.show('No chat is open to ask about this screen')
+        return
+      }
+      let lines: string[] | null = null
+      try {
+        lines = terminalScreenLinesRead.interpret(
+          await terminalScreenLinesRead.request(client, { terminal: target.handle, screen: true })
+        )
+      } catch {
+        lines = null
+      }
+      // An empty (or blank end to end) screen: nothing to append, no error —
+      // there is genuinely nothing wrong, just nothing to ask about yet.
+      const block = buildTerminalScreenFenceBlock(lines ?? [])
+      if (!block) {
+        return
+      }
+      nativeChatController.appendComposerMention(plan.targetTab.id, block)
+      switchSessionTabRef.current?.(plan.targetTab)
+      if (
+        plan.targetTab.type === 'terminal' &&
+        !nativeChatController.isTabChatView(plan.targetTab.id, plan.agent)
+      ) {
+        nativeChatController.toggleTabChatView(plan.targetTab.id, plan.agent)
+      }
+      nativeChatController.requestComposerFocus()
+    },
+    [client, nativeChatController, nativeChatSendError, resolveAskAboutScreenTarget]
+  )
+
   return {
     handleFileTap,
     handleNativeChatFileTap,
@@ -150,7 +210,9 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     handleFileOpenStart,
     handleOpenedFileDiff,
     handleTerminalOpenUrl,
-    askAboutFileLines
+    askAboutFileLines,
+    resolveAskAboutScreenTarget,
+    askAboutTerminalScreen
   }
 }
 

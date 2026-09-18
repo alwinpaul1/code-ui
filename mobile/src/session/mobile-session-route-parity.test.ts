@@ -71,11 +71,16 @@ const HOST_COMPONENT_NAMES = new Set([
 // 279 since 2026-09-18 (later): the file actions bind "Revert this hunk" for
 // the chat's diff cards (useMobileNativeChatHunkRevert), one hook and its
 // binding.
-const HEAD_MAIN_HOOK_SHA256 = '7956c30662da175edd85caf8337aeb277840e668aadc4c097b5c551dc56b946d'
-const HEAD_HOOK_BINDING_SHA256 = '745fd9561742bb32c885eacb07a9bd68f61707fbc4e3a0690c082b232c965e55'
+// 281 since 2026-09-18 (later still): the same file gained two more —
+// resolveAskAboutScreenTarget and askAboutTerminalScreen, the terminal's
+// "Ask about this screen" (VS Code 2.1.275's "Send terminal output to
+// Claude" parity).
+const HEAD_MAIN_HOOK_SHA256 = 'e8683f2696debd3ae8b8506be7e30f5477509aa5110a71b6d49e16593b33c1be'
+const HEAD_HOOK_BINDING_SHA256 = '787a3a06788141d54258ddc18a1dfcf38c81d9c84bf547afc72384a2df1e6d32'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
+// 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'e9b3dbfcbd5758e543f04f4ecad7a6d36680537cc409d1a533e27021db9230d1'
+  '95698646714e4a98e552e350ceb2cdbc5d16f625c9310535baf10fc1f6967877'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -94,7 +99,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-11: hardware back moved from the markdown actions to the view switch,
 // where it can return a terminal-mode tab to its chat view before leaving.
 // 2026-09-18: askAboutFileLines's own body, same change as above.
-const HEAD_CALLBACK_BODY_SHA256 = 'eaf64fb1ff48caf3601e14a33c29626792a808c21885d0f83d75451d23accb7f'
+// 2026-09-18 (later): resolveAskAboutScreenTarget's and askAboutTerminalScreen's
+// bodies, same change as HEAD_MAIN_HOOK_SHA256 above.
+const HEAD_CALLBACK_BODY_SHA256 = '344cd64bd29e1336703e2a6816c84fbb73ad7f1d47a8d5ef3a7a2b61beac6601'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -139,8 +146,15 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // ("Forking from the latest message" / "Couldn't fork the session"). Its
 // action-sheet label and hint live in mobile-terminal-action-sheet-actions.ts,
 // outside this family, so they don't move this pin.
+// 661 since 2026-09-18 (later still): askAboutTerminalScreen's "No chat is
+// open to ask about this screen" refusal toast, plus two more 'terminal'
+// literal occurrences — the sourceTab lookup's tab.type check, and its own
+// plan.targetTab.type check mirroring askAboutFileLines's above (the 'terminal'
+// LENGTH counted here is per occurrence, not per distinct string). "Ask about
+// this screen"'s own label lives in mobile-terminal-action-sheet-actions.ts,
+// outside this family, same as Fork's.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a108965fbdc34e4c48bdf45e39c7fe2197227339c9485ffbaeaefcf9531eb50e'
+  '0417a51de947e10df1cc10d2148d482d012e518057f824f00e7d6711708af517'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -188,7 +202,10 @@ const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7f
 // attribute expression, not a per-argument entry.
 // 2026-09-18 (same day, later): the chat overlay is handed `onRevertHunk`
 // beside `onOpenFile`. Same 73 leaf records; only the overlay's record changed.
-const HEAD_LEAF_JSX_SHA256 = '3a26b36aabe995b9ba548f8ebe4b0918398c1060f686dcf510ab290212c99c50'
+// 2026-09-18 (same day, later still): the sheets' action call gained two more
+// arguments (resolveAskAboutScreenTarget, onAskAboutScreen) — same 73 records,
+// that one leaf's captured shape moved again.
+const HEAD_LEAF_JSX_SHA256 = '78c33db9a75dbe5641a0bdaccce453c1ff7566822a8caf7f956e5791f1168061'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -588,10 +605,12 @@ describe('mobile session route extraction parity', () => {
     // 278 since 2026-09-18: askAboutFileLines (use-mobile-session-file-actions).
     // 279 since 2026-09-18 (later): useMobileNativeChatHunkRevert, which binds
     // the diff cards' "Revert this hunk" to this session's client and tab.
-    expect(main.hooks).toHaveLength(279)
+    // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
+    // askAboutTerminalScreen, the terminal's "Ask about this screen".
+    expect(main.hooks).toHaveLength(281)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(79)
+    expect(main.callbacks).toHaveLength(81)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(23)
@@ -653,7 +672,7 @@ describe('mobile session route extraction parity', () => {
     // dropped the count to 654.
     // 658 since 2026-09-18 (later still): handleForkClaudeSession's two toast
     // strings ("Forking from the latest message" / "Couldn't fork the session").
-    expect(strings).toHaveLength(658)
+    expect(strings).toHaveLength(661)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

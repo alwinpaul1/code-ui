@@ -92,7 +92,9 @@ export function filterWorktrees(
   filters: FilterState,
   search: string
 ): Worktree[] {
-  let result = worktrees.filter((w) => !w.isArchived)
+  let result = filters.showArchived
+    ? worktrees.filter((w) => w.isArchived === true)
+    : worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
     result = result.filter(
       (w) => isSleepingSweepExempt(w, filters.alwaysShowDefaultBranch) || isWorktreeActive(w)
@@ -118,6 +120,14 @@ export function filterWorktrees(
 
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
   return w.isPinned || localPins.has(w.worktreeId)
+}
+
+/** "Mark unread" (row #8 of the extension-port map) clears the moment the
+ *  row is opened — reused here rather than left to each caller to remember.
+ *  A row that is already read has nothing to clear, so an open worth no RPC
+ *  at all stays that way (openWorktreeSession only writes when this is true). */
+export function shouldClearUnreadOnOpen(w: Pick<Worktree, 'unread'>): boolean {
+  return w.unread === true
 }
 
 export function buildSections(

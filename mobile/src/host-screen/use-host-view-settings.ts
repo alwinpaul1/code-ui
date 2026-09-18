@@ -57,12 +57,21 @@ export function useHostViewSettings(args: {
     setSortMode(next.sortMode)
     setWorkspaceStatuses(next.workspaceStatuses)
     setCollapsedGroups(new Set(next.collapsedGroups))
-    setFilters({
+    // Why a functional update: showArchived is phone-local (see toggleShowArchived
+    // below) and MobileViewState carries no field for it — a desktop resync (on
+    // connect, or after any other filter changes) must not silently turn it back
+    // off underneath whoever is browsing the Archived filter right now. The key
+    // is omitted rather than set to `undefined` when there is nothing to carry
+    // forward, so a scope that never touched it keeps an identical filters shape.
+    setFilters((prevFilters) => ({
       filterRepoIds: new Set(next.filterRepoIds),
       hideSleeping: next.hideSleeping,
       hideDefaultBranch: next.hideDefaultBranch,
-      alwaysShowDefaultBranch: next.alwaysShowDefaultBranch
-    })
+      alwaysShowDefaultBranch: next.alwaysShowDefaultBranch,
+      ...(prevFilters.showArchived !== undefined
+        ? { showArchived: prevFilters.showArchived }
+        : {})
+    }))
   }, [])
 
   // Apply the change locally, then patch the desktop's shared store (ui.set) so both apps stay in sync.
@@ -129,6 +138,13 @@ export function useHostViewSettings(args: {
     persistViewSettings({ hideDefaultBranch: !viewStateRef.current.hideDefaultBranch })
   }, [persistViewSettings])
 
+  // Phone-local, not persistViewSettings: MobileViewState/ui.set carry no
+  // field for it (see applyViewState's comment above), so it stays out of
+  // the desktop-synced store the other filters share.
+  const toggleShowArchived = useCallback(() => {
+    setFilters((prev) => ({ ...prev, showArchived: !prev.showArchived }))
+  }, [])
+
   const toggleRepoFilter = useCallback(
     (repoId: string) => {
       const next = new Set(viewStateRef.current.filterRepoIds)
@@ -144,6 +160,7 @@ export function useHostViewSettings(args: {
 
   const clearFilters = useCallback(() => {
     persistViewSettings({ hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] })
+    setFilters((prev) => ({ ...prev, showArchived: false }))
   }, [persistViewSettings])
 
   const activeFilterCount = useMemo(() => {
@@ -152,6 +169,9 @@ export function useHostViewSettings(args: {
       count++
     }
     if (filters.hideDefaultBranch) {
+      count++
+    }
+    if (filters.showArchived) {
       count++
     }
     count += filters.filterRepoIds.size
@@ -193,6 +213,7 @@ export function useHostViewSettings(args: {
     toggleHideDefaultBranch,
     toggleHideSleeping,
     toggleRepoFilter,
+    toggleShowArchived,
     toggleWorktreeLineage
   }
 }

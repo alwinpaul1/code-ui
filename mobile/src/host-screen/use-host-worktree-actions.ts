@@ -10,8 +10,18 @@ import type { ConnectionState } from '../transport/types'
 import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
 import { leaveHostRoute } from '../host-route-exit'
 import { getWorktreeRowIdentity, removeWorktreeRow } from '../worktree/worktree-host-row-identity'
-import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
-import { worktreeActivate, worktreePinWrite, worktreeRemove } from './host-screen-operations'
+import {
+  isWorktreePinned,
+  shouldClearUnreadOnOpen,
+  type Worktree
+} from '../worktree/workspace-list-sections'
+import {
+  worktreeActivate,
+  worktreeArchiveWrite,
+  worktreePinWrite,
+  worktreeRemove,
+  worktreeUnreadWrite
+} from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
 export function useHostWorktreeActions(args: {
@@ -113,6 +123,53 @@ export function useHostWorktreeActions(args: {
     [client, worktrees, pinnedIds, updateLocalPins]
   )
 
+  // Archiving a row (VS Code's "archive a session" parity): the host's own
+  // isArchived, the same field filterWorktrees already hides on — this
+  // updates the local list optimistically, the same trade togglePin above
+  // makes, then writes it. Allowed on the active session: nothing here
+  // touches routing, so the open session screen is unaffected either way.
+  const toggleArchive = useCallback(
+    (worktreeId: string) => {
+      const worktree = worktrees.find((w) => w.worktreeId === worktreeId)
+      const newArchived = !(worktree?.isArchived ?? false)
+
+      setWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isArchived: newArchived } : w))
+      )
+      setLastKnownWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isArchived: newArchived } : w))
+      )
+
+      if (client) {
+        worktreeArchiveWrite
+          .request(client, { worktree: `id:${worktreeId}`, isArchived: newArchived })
+          .catch(() => {})
+      }
+    },
+    [client, worktrees]
+  )
+
+  // "Mark unread"/"Mark read" (row #8): the same Bell dot WorktreeListRow
+  // already draws on `unread` — writing isUnread is all this needs. Cleared
+  // automatically on open; see openWorktreeSession below.
+  const markUnread = useCallback(
+    (worktreeId: string, unread: boolean) => {
+      setWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, unread } : w))
+      )
+      setLastKnownWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, unread } : w))
+      )
+
+      if (client) {
+        worktreeUnreadWrite
+          .request(client, { worktree: `id:${worktreeId}`, isUnread: unread })
+          .catch(() => {})
+      }
+    },
+    [client]
+  )
+
   const handleDeleteWorktree = useCallback(
     async (item: Worktree) => {
       if (!client) {
@@ -176,6 +233,11 @@ export function useHostWorktreeActions(args: {
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
       setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+      // "Cleared when the session is opened" (row #8) — only when there was
+      // something to clear; an already-read row costs this open no RPC.
+      if (shouldClearUnreadOnOpen(item)) {
+        markUnread(item.worktreeId, false)
+      }
       if (client && connState === 'connected') {
         void worktreeActivate
           .request(client, {
@@ -188,7 +250,7 @@ export function useHostWorktreeActions(args: {
       const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
       navigateFromHostList(target)
     },
-    [client, connState, hostId, navigateFromHostList]
+    [client, connState, hostId, markUnread, navigateFromHostList]
   )
 
   const openFloatingWorkspace = useCallback(() => {
@@ -205,7 +267,9 @@ export function useHostWorktreeActions(args: {
     openFloatingWorkspace,
     openNewWorktreeModal,
     openWorktreeSession,
+    markUnread,
     setShowNewWorktreeVisible,
+    toggleArchive,
     togglePin
   }
 }

@@ -1,4 +1,4 @@
-import { Eraser, GitBranch, Monitor, Smartphone } from 'lucide-react-native'
+import { Eraser, GitBranch, MessageSquare, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { canForkClaudeSession } from './claude-fork-session'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -37,6 +37,16 @@ export function getMobileTerminalActionSheetActions<
   onClose: (target: Target) => void
   /** Preferred path runs host teardown and records the local tombstone. */
   onCloseSessionTab: (tab: Tab) => void
+  // --- "Ask about this screen" (row #60 of the extension-port map) — kept to
+  // just these two optional args so a concurrent edit to this file's other
+  // actions doesn't collide with it. Both absent means the caller doesn't
+  // support it yet, not that the target lacks a chat: omitted entirely then,
+  // same as no menu entry existing.
+  /** Synchronous target resolution (no RPC) — whether there is anywhere for
+   *  the screen text to land, so the entry can be left off the menu instead
+   *  of pressed into a dead end. */
+  resolveAskAboutScreenTarget?: (tabId: string | null | undefined) => unknown | null
+  onAskAboutScreen?: (target: Target) => void
   /** Appended after Close; receives the pressed tab's id so the session route's
    *  bulk-close builder can resolve the anchor itself. */
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
@@ -71,6 +81,20 @@ export function getMobileTerminalActionSheetActions<
         args.onRename(target)
       }
     },
+    // --- "Ask about this screen" (row #60) — see the args block above for why
+    // this stays a self-contained addition.
+    ...(args.onAskAboutScreen && args.resolveAskAboutScreenTarget?.(sessionTab?.id)
+      ? [
+          {
+            label: 'Ask about this screen',
+            icon: MessageSquare,
+            onPress: () => {
+              args.onDismiss()
+              args.onAskAboutScreen?.(target)
+            }
+          }
+        ]
+      : []),
     ...(canForkClaudeSession({
       agent: terminalTabAgentId(sessionTab),
       status: sessionTab?.agentStatus?.state ?? null
