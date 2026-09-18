@@ -5,6 +5,7 @@ import {
   resolvePanelAction,
   panelRouteDescriptor,
   shouldShowSessionHeaderChecksAction,
+  shouldShowProjectConfigActions,
   type ActivePanel
 } from './session-panel-host'
 
@@ -116,6 +117,26 @@ describe('shouldShowSessionHeaderChecksAction', () => {
         repoContextLoaded: true,
         hostedChecksSupported: true
       })
+    ).toBe(false)
+  })
+})
+
+describe('shouldShowProjectConfigActions', () => {
+  it('shows MCP Servers / Permission Rules / Project Memory on an ordinary worktree tab', () => {
+    expect(
+      shouldShowProjectConfigActions({ isFolderWorkspaceRoute: false, isFloatingWorkspaceRoute: false })
+    ).toBe(true)
+  })
+
+  it('hides them on a folder workspace tab, which has no worktree to read/write against', () => {
+    expect(
+      shouldShowProjectConfigActions({ isFolderWorkspaceRoute: true, isFloatingWorkspaceRoute: false })
+    ).toBe(false)
+  })
+
+  it('hides them on the floating terminal-only sentinel, which is also worktree-less', () => {
+    expect(
+      shouldShowProjectConfigActions({ isFolderWorkspaceRoute: false, isFloatingWorkspaceRoute: true })
     ).toBe(false)
   })
 })

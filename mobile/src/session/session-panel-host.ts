@@ -30,6 +30,17 @@ export function shouldShowSessionHeaderChecksAction(args: {
   return !args.isFolderWorkspaceRoute && args.repoContextLoaded && args.hostedChecksSupported
 }
 
+/** The three project-config screens (MCP servers, permission rules, project
+ *  memory) read and write worktree-relative files, so they need a worktree —
+ *  same gate as the agent-history action, extracted so it is unit-testable
+ *  on its own instead of only through the header's full wiring. */
+export function shouldShowProjectConfigActions(args: {
+  isFolderWorkspaceRoute: boolean
+  isFloatingWorkspaceRoute: boolean
+}): boolean {
+  return !args.isFolderWorkspaceRoute && !args.isFloatingWorkspaceRoute
+}
+
 export function canDockSessionPanel(args: {
   isWideLayout: boolean
   availableWidth: number

@@ -136,8 +136,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // ("Forking from the latest message" / "Couldn't fork the session"). Its
 // action-sheet label and hint live in mobile-terminal-action-sheet-actions.ts,
 // outside this family, so they don't move this pin.
+// 673 since 2026-09-18 (newest): the three new session-menu entries in
+// MobileSessionHeaderMoreActionsSheet.tsx — "MCP Servers", "Permission
+// Rules" and "Project Memory" — each with a hint string naming its file and
+// "project scope only".
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a108965fbdc34e4c48bdf45e39c7fe2197227339c9485ffbaeaefcf9531eb50e'
+  'f70f5c25817cbec718014844326b5ba889f99595a59f7288a68cbaabf44582d3'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -183,7 +187,11 @@ const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7f
 // lengthens that one leaf record's canonicalized `actions=` attribute text —
 // same 73 records, one of them different — since the record is the whole
 // attribute expression, not a per-argument entry.
-const HEAD_LEAF_JSX_SHA256 = '6081dd882fb72b92cf9de5df576450fc29166aafdef4e495abf1fec6dc312941'
+// 2026-09-18 (newest), same shape again: MobileSessionHeaderMoreActionsSheet's
+// <ActionSheetModal actions={[…]} /> is the one leaf record that moved — its
+// `actions=` array literal gained the three new project-config entries (MCP
+// Servers / Permission Rules / Project Memory). Still 73 records.
+const HEAD_LEAF_JSX_SHA256 = '6ccb4a02eb0ca29c37d4d9a38a0eba12df4e985ce8959d01f8397b10f873c3a0'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -192,7 +200,11 @@ const HEAD_STYLE_REFERENCE_SHA256 =
 // new one.
 const HEAD_IDENTITY_FIELD_SHA256 =
   '93970ef0061d184c87ea4ae96f7017d7477235f2fb0a686534d84ff7bb0e7d74'
-const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
+// 9 since 2026-09-18 (newest): useMobileSessionPanelRouteActions gained
+// openMcpServers/openPermissionRules/openProjectMemory — three router.push
+// navigators for the new project-config screens (MCP servers, permission
+// rules, project memory), each session-menu entries alongside Agent History.
+const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
 const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
@@ -617,7 +629,9 @@ describe('mobile session route extraction parity', () => {
     const compatibility = readCompatibilityFacts(definitions)
     expect(compatibility.identityFields).toHaveLength(16)
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
-    expect(compatibility.navigation).toHaveLength(6)
+    // 9 since 2026-09-18: the three new session-menu router.push navigators —
+    // see HEAD_NAVIGATION_SHA256.
+    expect(compatibility.navigation).toHaveLength(9)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
     expect(compatibility.capabilities).toHaveLength(5)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
@@ -645,7 +659,9 @@ describe('mobile session route extraction parity', () => {
     // dropped the count to 654.
     // 658 since 2026-09-18 (later still): handleForkClaudeSession's two toast
     // strings ("Forking from the latest message" / "Couldn't fork the session").
-    expect(strings).toHaveLength(658)
+    // 673 since 2026-09-18 (newest): the three new session-menu entries —
+    // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
+    expect(strings).toHaveLength(673)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
