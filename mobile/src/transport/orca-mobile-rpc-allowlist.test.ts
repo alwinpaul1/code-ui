@@ -66,10 +66,11 @@ type AllowlistException =
       readonly method: string
       /** The literal names the method without sending it (a params-shape set,
        *  say). Checked positively: every occurrence must sit in a position
-       *  that cannot send — an array element (which covers `new Set([...])`),
-       *  a type literal, a `case` label. A call argument, a ternary arm, a
-       *  property value or anything else fails the claim, because the send
-       *  shapes `sent` recognises are a floor, not the tree's whole set. */
+       *  that cannot send — an array element (which covers `new Set([...])`,
+       *  but not an array passed straight to a call), a type literal, a
+       *  `case` label. A call argument, a ternary arm, a property value or
+       *  anything else fails the claim, because the send shapes `sent`
+       *  recognises are a floor, not the tree's whole set. */
       readonly guard: 'never-sent'
       readonly why: string
     }
@@ -168,9 +169,12 @@ function isNonSendPosition(node: ts.StringLiteralLike): boolean {
   if (!parent) {
     return false
   }
-  // `['m', …]`, which is also what `new Set(['m'])` holds.
+  // `['m', …]`, which is also what `new Set(['m'])` holds — but not an array
+  // handed straight to a plain call: `sendMany(c, ['m'], p)` is an argument.
+  // (`new Set([...])` is a NewExpression, not a CallExpression, so it stays.)
   if (ts.isArrayLiteralExpression(parent)) {
-    return true
+    const holder: ts.Node | undefined = parent.parent
+    return !(holder && ts.isCallExpression(holder) && holder.arguments.includes(parent))
   }
   // `type M = 'm'`, `Record<'m', …>`, a union member.
   if (ts.isLiteralTypeNode(parent)) {
@@ -378,6 +382,10 @@ describe('every RPC method the phone can send', () => {
     expect(
       read("const S = ['files.write']\nsendRaw(c, 'files.write')").onlyInNonSendPositions.has('files.write')
     ).toBe(false)
+    // Reviewer note on be55f38: an array handed straight to a call is an
+    // argument, not a table — `sendMany(c, ['m'], p)` sends.
+    expect(read("sendMany(c, ['files.write'], p)").onlyInNonSendPositions.has('files.write')).toBe(false)
+    expect(read("const S = new Set(['files.write'])").onlyInNonSendPositions.has('files.write')).toBe(true)
     // Prose never counts; an unknown dotted string never counts.
     expect([...read("// calls files.write under the hood").named]).toEqual([])
     expect([...read("await client.sendRequest('no.such', {})").named]).toEqual([])

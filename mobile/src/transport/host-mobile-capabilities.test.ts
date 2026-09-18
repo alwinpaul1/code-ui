@@ -365,6 +365,33 @@ describe('useHostMobileCapability', () => {
     expect(seen.slice(1)).not.toContain(false)
   })
 
+  // Reviewer note on be55f38: a lost re-probe carries no information about
+  // the host, so it must not replace a settled verdict — that hid the
+  // controls until the next reconnect after one timeout on a healthy link.
+  it('a re-probe the transport loses keeps the carried verdict, per method', async () => {
+    let lose = false
+    const { client } = scriptedClient({
+      'files.write': async () => {
+        if (lose) {
+          throw new Error('Request timed out: files.write')
+        }
+        return JAILED_PATH
+      },
+      'agentSession.rewind': async () => NO_SUCH_SESSION
+    })
+    host.client = client
+    host.lastConnectedAt = 1_000
+    await render('files.write')
+    expect(seen.at(-1)).toBe(true)
+    lose = true
+    await connect(2_000)
+    expect(seen.at(-1)).toBe(true)
+    expect(peekHostMobileCapabilities('h1')).toEqual({
+      'files.write': 'allowed',
+      'agentSession.rewind': 'allowed'
+    })
+  })
+
   it('a re-probe that answers differently replaces the carried verdict', async () => {
     let answer: RpcResponse = JAILED_PATH
     const { client } = scriptedClient({
