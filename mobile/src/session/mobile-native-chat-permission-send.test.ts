@@ -177,3 +177,122 @@ describe('useMobileNativeChatPermissionSend', () => {
     releaseMobileNativeChatTerminalWrite('terminal')
   })
 })
+
+/**
+ * Claude Code 2.1.276, `claude --permission-mode plan`, tmux capture on
+ * 2026-09-18. The ExitPlanMode review exactly as painted, highlight on row 1.
+ */
+const PLAN_REVIEW_SCREEN = [
+  '  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '   Claude has written up a plan and is ready to execute. Would you like to proceed?',
+  '',
+  '   ❯ 1. Yes, and use auto mode',
+  '     2. Yes, manually approve edits',
+  '     3. Tell Claude what to change',
+  '        shift+tab to approve with this feedback',
+  '',
+  '   ctrl+g to edit in VS Code · ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md'
+]
+
+/** The same build's Bash dialog, captured in the same session two tool calls
+ *  later, highlight on row 1. Option 2 wraps onto a continuation line. */
+const BASH_DIALOG_SCREEN = [
+  '────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  ' Bash command',
+  ' Tip: auto mode handles these prompts for you — choose "switch to auto mode" below',
+  '',
+  '   echo world >> note.txt && cat note.txt',
+  '   Append "world" to note.txt and show the result',
+  '',
+  ' Do you want to proceed?',
+  ' ❯ 1. Yes',
+  '   2. Yes, and always allow access to /private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Code-UI/5d877e39-1867-424',
+  '      f-86b5-c080713c1563/scratchpad/plan-accept-repro from this project',
+  '   3. Yes, and switch to auto mode · auto mode handles these prompts for you',
+  '   4. No',
+  '',
+  ' Esc to cancel · Tab to amend'
+]
+
+describe('plan-review approvals on Claude Code 2.1.276', () => {
+  // The bare digit approved the plan on the real screen, the same way the
+  // Bash dialog's digit does. Sending "2" with the highlight on row 1 replaced
+  // the review with
+  //
+  //   ⏺ User approved Claude's plan
+  //   ⎿  Plan saved to: ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md · /plan to edit
+  //   ⏸ manual mode on · ← for agents
+  //
+  // and "1" with the highlight on row 2 flipped the footer to
+  // "⏵⏵ auto mode on" and ran the plan's Bash without a prompt. Only the
+  // feedback row (3) is different: its digit moves the highlight and waits
+  // for typing, which claude-plan-feedback-send.ts handles on its own path.
+  // So the approval rows must stay a bare digit: a Return appended after a
+  // digit that already submitted lands in the composer of an agent that is
+  // now working, and submits whatever is drafted there.
+  it.each(['1', '2'])(
+    'approves a plan review with the bare digit %s, no Return appended',
+    async (digit) => {
+      const sendRequest = vi.fn().mockResolvedValue({
+        ok: true,
+        result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
+      })
+      // The screen parser knows only the Bash dialog, so the controller hands
+      // this path no screen-derived card for a plan review and there is no
+      // recheck read before the write. Pinned here because the write count
+      // below depends on it.
+      expect(claudePermissionFromScreen(PLAN_REVIEW_SCREEN)).toBeNull()
+
+      await expect(
+        sendMobileNativeChatPermissionResponse({
+          client: { sendRequest } as unknown as RpcClient,
+          terminal: 'terminal',
+          deviceToken: 'phone',
+          text: digit,
+          expectedTerminalAgent: 'claude',
+          expectedCodexPermission: claudePermissionFromScreen(PLAN_REVIEW_SCREEN)
+        })
+      ).resolves.toBe('accepted')
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      expect(sendRequest).toHaveBeenCalledWith(
+        'terminal.send',
+        {
+          terminal: 'terminal',
+          text: digit,
+          enter: false,
+          client: { id: 'phone', type: 'mobile' }
+        },
+        { timeoutMs: MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, budgetSpansConnect: true }
+      )
+    }
+  )
+
+  it("declines the same build's Bash dialog with the bare digit 4 after rechecking the screen", async () => {
+    // "4" alone on the real screen ended the turn ("Interrupted · What should
+    // Claude do instead?"); the dialog had no Return to wait for.
+    const expected = claudePermissionFromScreen(BASH_DIALOG_SCREEN)
+    expect(expected?.options.map((option) => option.send)).toEqual(['1', '2', '3', '4'])
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: { terminal: { lines: BASH_DIALOG_SCREEN } } })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
+      })
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: '4',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: expected
+      })
+    ).resolves.toBe('accepted')
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
+    expect(sendRequest.mock.calls[1]?.[0]).toBe('terminal.send')
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '4', enter: false })
+  })
+})
