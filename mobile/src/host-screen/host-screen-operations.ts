@@ -67,9 +67,9 @@ export const hostViewSettingsWrite = bindDeferredRpcOperation(
 )
 
 /**
- * The host list's three row mutations.
+ * The host list's row mutations.
  *
- * All three skip on refusal, which is not the policy `worktree.set-review-link` uses on the same
+ * All skip on refusal, which is not the policy `worktree.set-review-link` uses on the same
  * method in source-control: a review link throws so the composer can report it, where a pin write
  * is optimistic and its `.catch` already swallowed everything. Two policies, both named.
  */
@@ -80,6 +80,20 @@ export const worktreePinWrite = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcUncheckedPayloadReader('pin-written')
+  })
+)
+
+/** Archiving a row (VS Code's "archive a session" parity): the host's own
+ *  isArchived, same as filterWorktrees already reads and hides on — this
+ *  writes the field the read side has honored all along. Optimistic, same
+ *  shape as the pin write above. */
+export const worktreeArchiveWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-archived-or-skip',
+    method: 'worktree.set',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('archive-written')
   })
 )
 

@@ -63,6 +63,10 @@ describe('filterWorktrees', () => {
     ).toEqual([visible])
   })
 
+  // The "Archived" filter (showArchived) has its own test file —
+  // workspace-list-sections-archive.test.ts — split out to keep this file
+  // under its max-lines budget.
+
   it('uses host sidebar activity for sleeping filtering when available', () => {
     const visible = worktree({
       worktreeId: 'visible',

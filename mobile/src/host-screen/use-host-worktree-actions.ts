@@ -11,7 +11,12 @@ import { setHostRouteNewWorktreeVisible } from '../host-route-action-state'
 import { leaveHostRoute } from '../host-route-exit'
 import { getWorktreeRowIdentity, removeWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
-import { worktreeActivate, worktreePinWrite, worktreeRemove } from './host-screen-operations'
+import {
+  worktreeActivate,
+  worktreeArchiveWrite,
+  worktreePinWrite,
+  worktreeRemove
+} from './host-screen-operations'
 import type { HostScreenState } from './use-host-screen-state'
 
 export function useHostWorktreeActions(args: {
@@ -113,6 +118,32 @@ export function useHostWorktreeActions(args: {
     [client, worktrees, pinnedIds, updateLocalPins]
   )
 
+  // Archiving a row (VS Code's "archive a session" parity): the host's own
+  // isArchived, the same field filterWorktrees already hides on — this
+  // updates the local list optimistically, the same trade togglePin above
+  // makes, then writes it. Allowed on the active session: nothing here
+  // touches routing, so the open session screen is unaffected either way.
+  const toggleArchive = useCallback(
+    (worktreeId: string) => {
+      const worktree = worktrees.find((w) => w.worktreeId === worktreeId)
+      const newArchived = !(worktree?.isArchived ?? false)
+
+      setWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isArchived: newArchived } : w))
+      )
+      setLastKnownWorktrees((prev) =>
+        prev.map((w) => (w.worktreeId === worktreeId ? { ...w, isArchived: newArchived } : w))
+      )
+
+      if (client) {
+        worktreeArchiveWrite
+          .request(client, { worktree: `id:${worktreeId}`, isArchived: newArchived })
+          .catch(() => {})
+      }
+    },
+    [client, worktrees]
+  )
+
   const handleDeleteWorktree = useCallback(
     async (item: Worktree) => {
       if (!client) {
@@ -206,6 +237,7 @@ export function useHostWorktreeActions(args: {
     openNewWorktreeModal,
     openWorktreeSession,
     setShowNewWorktreeVisible,
+    toggleArchive,
     togglePin
   }
 }

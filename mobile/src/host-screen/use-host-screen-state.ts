@@ -49,7 +49,8 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     filterRepoIds: new Set(),
     hideSleeping: false,
     hideDefaultBranch: false,
-    alwaysShowDefaultBranch: true
+    alwaysShowDefaultBranch: true,
+    showArchived: false
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(

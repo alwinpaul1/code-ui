@@ -60,6 +60,11 @@ export type FilterState = {
   hideDefaultBranch: boolean
   /** Absent means on: #8873's exemption must fail open on older host payloads. */
   alwaysShowDefaultBranch?: boolean
+  /** Absent/false means the ordinary list (archived rows hidden, unchanged
+   *  default). True flips to showing ONLY archived rows, so a row can be
+   *  found and un-archived. Phone-local view state, not synced through
+   *  useHostViewSettings's shared desktop store the other filters use. */
+  showArchived?: boolean
 }
 
 export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }

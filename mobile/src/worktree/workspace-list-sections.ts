@@ -92,7 +92,9 @@ export function filterWorktrees(
   filters: FilterState,
   search: string
 ): Worktree[] {
-  let result = worktrees.filter((w) => !w.isArchived)
+  let result = filters.showArchived
+    ? worktrees.filter((w) => w.isArchived === true)
+    : worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
     result = result.filter(
       (w) => isSleepingSweepExempt(w, filters.alwaysShowDefaultBranch) || isWorktreeActive(w)
