@@ -35,6 +35,11 @@ type Props = {
   onOpenFile: (pathText: string) => void
   /** Puts one hunk of a landed edit back in the file (the diff card's action). */
   onRevertHunk?: MobileNativeChatRevertHunk
+  /** Whether THIS host lets a phone call `agentSession.rewind` at all — the
+   *  mobile-scope dispatch gate's answer (host-mobile-capabilities.ts), which
+   *  is separate from whether the session itself can be rewound. Both must
+   *  hold before "Rewind to here" is offered. */
+  hostAllowsRewind: boolean
   /** Native-chat image attachments: picking adds a composer chip, and sending
    *  rides the pending images along with the message text (desktop parity). */
   images: MobileNativeChatImageAttachments
@@ -73,6 +78,7 @@ export function MobileNativeChatOverlay({
   hasTerminalUnderneath,
   onOpenFile,
   onRevertHunk,
+  hostAllowsRewind,
   images,
   onMicPress,
   onBeforeSend,
@@ -322,9 +328,12 @@ export function MobileNativeChatOverlay({
         sessionCommands={controller.nativeChatCommandSurface?.sessionCommands}
         conversationCommands={controller.nativeChatCommandSurface?.conversationCommands}
         // Only the structured lane has a command surface, and only a host that
-        // said it will rewind THIS session gets the affordance. The PTY lane
+        // said it will rewind THIS session gets the affordance — and only when
+        // the host's mobile gate lets the call through at all (Orca 1.4.205
+        // refuses agentSession.rewind from a phone outright). The PTY lane
         // keeps the typed `/rewind`, which is the one that can restore files.
         onRewindToMessage={
+          hostAllowsRewind &&
           controller.nativeChatCommandSurface?.rewindSupport?.supported === true
             ? controller.nativeChatCommandSurface.rewindToItem
             : undefined

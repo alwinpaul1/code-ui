@@ -56,6 +56,8 @@ type Tick = {
   viewResolved?: boolean
   /** The structured lane's command surface; absent on the PTY lane. */
   commandSurface?: MobileNativeChatController['nativeChatCommandSurface']
+  /** The host's mobile gate lets a phone call agentSession.rewind (default: yes). */
+  hostAllowsRewind?: boolean
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -80,6 +82,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     controller,
     // These cases model a terminal tab, which always has a pane underneath.
     hasTerminalUnderneath: true,
+    hostAllowsRewind: tick.hostAllowsRewind ?? true,
     images: {} as never,
     onMicPress: vi.fn(),
     micActive: false,
@@ -411,10 +414,11 @@ describe('handing the chat list a way to rewind', () => {
   })
 
   async function rewindProp(
-    commandSurface: MobileNativeChatController['nativeChatCommandSurface']
+    commandSurface: MobileNativeChatController['nativeChatCommandSurface'],
+    hostAllowsRewind?: boolean
   ): Promise<unknown> {
     await act(async () => {
-      renderer = create(overlayElement({ commandSurface }))
+      renderer = create(overlayElement({ commandSurface, hostAllowsRewind }))
     })
     return renderer!.root.findAllByType('ChatView' as never)[0]?.props.onRewindToMessage
   }
@@ -445,5 +449,18 @@ describe('handing the chat list a way to rewind', () => {
 
   it('offers nothing on the PTY lane, which keeps the typed /rewind', async () => {
     expect(await rewindProp(undefined)).toBeUndefined()
+  })
+
+  // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses
+  // agentSession.rewind from a phone outright, whatever the session says, so
+  // "Rewind to here" was offered and every tap got "not available to mobile
+  // clients". The session's own answer is necessary, not sufficient.
+  it('offers nothing on a host whose mobile gate refuses agentSession.rewind, even for a session that can rewind', async () => {
+    expect(await rewindProp(surface({ supported: true }), false)).toBeUndefined()
+  })
+
+  it('offers it, exactly as before, once the gate is known to let the call through', async () => {
+    const claude = surface({ supported: true })
+    expect(await rewindProp(claude, true)).toBe(claude.rewindToItem)
   })
 })

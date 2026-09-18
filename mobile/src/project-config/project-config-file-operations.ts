@@ -14,13 +14,13 @@ import { fileTabTextRead } from '../files/mobile-file-tab-doc-operations'
  * exercises that exact call shape.
  *
  * `projectConfigFileWrite` (`files.write`) is defined and typed like any
- * other operation, but the host will refuse every call it ever makes: the
- * mobile-scope RPC allowlist in Orca's runtime does not include `files.write`
- * (confirmed against the 1.4.205 bundle — see project-config-file-error.ts).
- * It stays a real, typed operation rather than being left out, because the
- * refusal itself is the tested behaviour: a screen's Save button must call
- * the real method and show the real, always-identical rejection, not a
- * client-side stub pretending to try.
+ * other operation, but Orca 1.4.205's mobile-scope RPC allowlist does not
+ * include `files.write` (confirmed against the bundle — see
+ * project-config-file-error.ts), so the three screens ask the host first
+ * (`useHostMobileCapability(hostId, 'files.write')`, transport/
+ * host-mobile-capabilities.ts) and show no Save until it says the call gets
+ * through. The operation stays real and typed for the host that allows it;
+ * the probe is what makes the button appear there.
  */
 export const projectConfigFileWrite = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -32,9 +32,10 @@ export const projectConfigFileWrite = bindDeferredRpcOperation(
   })
 )
 
-/** Creates an empty file at a relative path. Also mobile-scope-allowed — this
- *  one the host does accept — but see project-config-file-error.ts: nothing
- *  can add content to it afterward, since `files.write` is blocked. */
+/** Creates an empty file at a relative path. Mobile-scope-allowed — this one
+ *  the 1.4.205 host does accept — so the create flow stays even where the
+ *  screen is read-only; on such a host nothing can add content to the file
+ *  afterward from the phone, and the screen says so. */
 export const projectConfigFileCreate = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'project-config.create-file',

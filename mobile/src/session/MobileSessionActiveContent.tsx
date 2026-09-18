@@ -7,6 +7,7 @@ import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
+import { useHostMobileCapability } from '../transport/host-mobile-capabilities'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
@@ -25,6 +26,9 @@ export function MobileSessionActiveContent({
 }) {
   const terminalEngine = useTerminalEngine()
   const { colors, space } = useTheme()
+  // The host's mobile-scope RPC gate, probed once per connection: "Rewind to
+  // here" is offered only on a host that lets a phone call agentSession.rewind.
+  const hostAllowsRewind = useHostMobileCapability(controller.hostId, 'agentSession.rewind')
   const centered = {
     flex: 1,
     alignItems: 'center' as const,
@@ -316,6 +320,7 @@ export function MobileSessionActiveContent({
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
         onOpenFile={handleNativeChatFileTap}
         onRevertHunk={handleNativeChatRevertHunk}
+        hostAllowsRewind={hostAllowsRewind}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
         onBeforeSend={finishDictationForSend}

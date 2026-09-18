@@ -61,7 +61,7 @@ before the port; **skip** with a reason; **in flight** an agent is on it now;
 | 9a5679748 #20125 | surface host create warnings and terminal-create errors | mostly verbatim. `use-mobile-session-terminal-create-actions.ts` was hand-merged — this fork's structured-provider fallback and HUD launch config sit above the two failure branches, which themselves matched upstream, so only those were replaced. `onCreated`'s two signatures were hand-widened (upstream's context differed). The session screen here already reads a `warning` search param through `use-mobile-session-foundation.ts`, so the chain completes. Both route-parity hashes re-pinned, the same two upstream refreshed |
 | 58ff95bec #19960 | name the RPC acceptance policies its call sites hand-rolled | applied verbatim across all nine files; they matched upstream. `rpc-acceptance-policies.ts` is new here and each policy preserves one call site's acceptance exactly — the predicates did not agree with each other before |
 | f7d521601 #19055 | provider activity in chat turn tails | the wire already carried `activity`; the reducer and coalescer now keep it, and the live turn status row shows the host copy instead of a generic Working |
-| c84007c54 #19961 | a shared params catalog generated from the host registry | **done, mobile and shared only.** Taken: `mobile/src/transport/rpc-params-contract.ts` (type-only door) and its boundary test, plus `src/shared/rpc-contract/` vendored whole (84 files) and the 8 shared files the catalog imports that this fork lacked (`mobile-push-contract.ts`, the six `orchestration-fleet-*`, `worker-terminal-host-scope.ts`). All 92 pinned in `UPSTREAM.txt`. **Not taken:** the generator (`config/scripts/generate-rpc-params-catalog.mjs`), its parse-parity gate in `.github/workflows/pr.yml`, `.gitattributes`, root `.oxlintrc.json`, `package.json` and the ~90 `src/main/runtime/rpc/methods/` files whose schemas were moved out — all host and CI machinery this fork does not vendor. The catalog is vendored as generated; the generator was not run |
+| c84007c54 #19961 | a shared params catalog generated from the host registry | **done, mobile and shared only.** Taken: `mobile/src/transport/rpc-params-contract.ts` (type-only door) and its boundary test, plus `src/shared/rpc-contract/` vendored whole (84 files) and the 8 shared files the catalog imports that this fork lacked (`mobile-push-contract.ts`, the six `orchestration-fleet-*`, `worker-terminal-host-scope.ts`). All 92 pinned in `UPSTREAM.txt`. **Not taken:** the generator (`config/scripts/generate-rpc-params-catalog.mjs`), its parse-parity gate in `.github/workflows/pr.yml`, `.gitattributes`, root `.oxlintrc.json`, `package.json` and the ~90 `src/main/runtime/rpc/methods/` files whose schemas were moved out — all host and CI machinery this fork does not vendor. The catalog is vendored as generated; the generator was not run. **2026-09-18:** the catalog lists what the desktop registers, not what a mobile-scope token may call — see "Catalogued ≠ reachable" below before reading a row here as reachable |
 | eedd35645 #20018 | typed RPC operations, and the raw request port fenced behind an inventory | **done.** All 15 mobile files applied verbatim; `rpc-client.ts` hand-merged (its two hunks matched upstream). `rpc-params-catalog.generated.ts` and the new `rpc-send-params.ts` re-vendored at this commit. The port inventory was **regenerated for this fork** rather than taken: upstream lists its own 153 files, this fork has 170 (161 pending, 9 owners) — same ratchet, same AST counter, our call sites. To re-derive the list, run `rawRequestPortReferences` from `unvalidated-rpc-request-port-boundary.test.ts` over `app/` and `src/`; the test itself reports every drift. One local change: `rpc-params-contract-type-only-boundary.test.ts` does its file sweep at module scope, the way the sibling boundary test already does — parsing this fork's 1243 files took over vitest's 5s per-test budget under the full suite. Cast fence unmodified |
 | b0070e372 #20499 | migrate settings reads to RpcOperation | **done.** 9 of the 10 call-site and test files were byte-identical to upstream's parent and were applied verbatim, `mobile-tasks-refactor-parity.test.ts` included — its refreshed hashes pass here unchanged, so this fork's tasks screen still matches upstream's on every hooked declaration. `mobile-new-tab-agent-loader.ts` was hand-merged: it carries the local folder-workspace hunk (Orca #16215) above the settings read. Port inventory regenerated: 168 files, the 7 migrated call sites each down one |
 | ecd7b19ad #19929 | pass agent-implemented slash commands through to the agent | **done.** This fork did NOT already do it: `native-chat-agent-profiles.ts` and `structured-agent-session-composer.ts` were byte-identical to upstream's parent, so a Claude structured chat answered "/init is not available in chat sessions" for a command Claude does run, and Codex's `/goal` was typable but never offered. Both shared files re-vendored whole at `ecd7b19ad`, with `native-chat-agent-profiles.test.ts` — which this fork vendors but never collects, vitest's root being `mobile/`. `use-mobile-structured-native-chat-send-bridge.ts` took the patch verbatim through `git apply --3way`, and its new upstream test came with it. Upstream's `MobileNativeChatComposer.tsx` hunk has no counterpart here: this fork's composer builds the `/` menu through `mobile-native-chat-session-catalog.ts`, so the `agent` argument was threaded there instead. The controller's bridge call gained `agent`; upstream's `legacyNativeChatQuestion` rename was skipped as lint-budget churn on a file that has diverged. Because the shared tests never run here, both behaviours are re-pinned where the gate does run them — `/init` and `/goal` reach the agent (`mobile-structured-composer-command.test.ts`), Codex's fallback menu offers `/goal` (`mobile-native-chat-session-catalog.test.ts`), and a both-agents guard keeps `/clear` host-claimed |
@@ -114,7 +114,7 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | 39cbc68f1 #19040 | desktop launch routing. Its shared half (`resolveStructuredLaunchSeedOptions`, and the `agent-session-record.ts` line) is already vendored at 546fd9b21 / f1d854502; the phone builds its own create params and has no persisted launch seed |
 | cb7f7dd11 #18756 | host-side fallback that retitles a structured tab for a client which does NOT advertise `agent-session.structured.v1`. Code UI advertises it, so it never sees the row. Its `protocol-version.ts` half is already vendored at d07c47593 |
 | 6494f2a4f #18933 | resume from the desktop's Agent Session History panel, which this app does not have. The `reveal` capability and `isAgentSessionWireRefusalCode` are already vendored at d07c47593 / f1d854502 |
-| ce4a3a418 #19235 | the rewind backend, by its own commit title. **Consumed, not vendored** (2026-09-18): the phone now calls `agentSession.rewind` from `mobile/src/session/mobile-structured-agent-rewind.ts` ("Rewind to here" on a sent prompt, structured lane only, conversation only — the host wraps no file restore). The reply type, the `rewind` field on `agentSession.options` and the `agent_session_rewind:<reason>` refusal shape are copied from upstream's `agent-session-rewind.ts` / `structured-rewind-refusal.ts` into that file and pinned by its test, because `agent-session-wire.ts` cannot be re-vendored past f1d854502 (see LOCAL-FILES.md). Verified against the desktop's own bundle: Orca 1.4.205 carries the method, the `agent-session.rewind.v1` capability and those strings |
+| ce4a3a418 #19235 | the rewind backend, by its own commit title. **Consumed, not vendored** (2026-09-18): the phone now calls `agentSession.rewind` from `mobile/src/session/mobile-structured-agent-rewind.ts` ("Rewind to here" on a sent prompt, structured lane only, conversation only — the host wraps no file restore). The reply type, the `rewind` field on `agentSession.options` and the `agent_session_rewind:<reason>` refusal shape are copied from upstream's `agent-session-rewind.ts` / `structured-rewind-refusal.ts` into that file and pinned by its test, because `agent-session-wire.ts` cannot be re-vendored past f1d854502 (see LOCAL-FILES.md). Verified against the desktop's own bundle: Orca 1.4.205 carries the method, the `agent-session.rewind.v1` capability and those strings. **Same day, later:** carrying it is not the same as letting a phone call it — 1.4.205's mobile-scope allowlist refuses `agentSession.rewind`, so the control is now probe-gated (see "Catalogued ≠ reachable" below) and does not appear on that host |
 | 20eea184c #19130 | the link-action popover. Entirely desktop renderer: the popover component, `http-link-destinations.ts` and the chat link owner all live under `src/renderer/`, and the one `src/shared/` line is a doc-comment on `terminalLinkActionPopoverEnabled` — a setting `mobile/` never imports. The phone has no link-routing preference and no popover; giving it one is a Code UI product decision, not a port |
 | 0252fe5c3 #18773 | Codex subagent activity. Upstream designed this so a client without a roster renderer needs nothing: the host freezes a plain-text twin (`Ran 3 subagents (1 failed)`) into the journal beside the block, and `native-chat-subagent-summary.ts` says in its own header that mobile shows exactly that sentence. So the phone already reads a new host correctly. The producer is ~1,400 lines of `src/main/codex/` this fork does not vendor, and `worker-transcript-text.ts` belongs to the orchestration-worker feature already skipped above. **Residual:** without #18773's `native-chat-tool-fold.ts` hunk, a roster row landing mid-turn ends the tool run it sits inside, so one run draws as two. Cosmetic, and the fix is that hunk plus the `subagent-group` block type |
 | d15a6df22 #19230 (`update_plan` icon, in effect) | the one-line `native-chat-tool-icon.ts` map entry is vendored so the pin moves, but it draws nothing here. Mobile imports only `isShellActivityToolCall` from that file and picks between a terminal and a wrench; it never calls `nativeChatToolCategory` or `nativeChatToolRunIconName`, and the new entry does not change `isShellActivityToolCall`. The checklist's own `list-checks` glyph comes from the mobile component, not from the category map |
@@ -134,7 +134,78 @@ SQLite. That is host storage; confirm nothing on the phone depends on the old
 shape before touching it. The #19822 verdict lives in
 `scratchpad/19822-assessment.md`; its working-state half is already ported.
 
+## Catalogued ≠ reachable: the mobile-scope RPC allowlist (2026-09-18)
+
+**The RPC catalog says which methods the desktop registers. It says nothing
+about which of them a phone may call.** Orca's WebSocket dispatch checks every
+request from a `mobile`-scope device token — the only kind the phone ever
+holds — against a hardcoded allowlist before dispatch (`if (u.scope ===
+'mobile' && !iRa.has(s.method))` in the 1.4.205 bundle) and refuses the rest
+with `{ code: 'forbidden', message: "Method '<m>' is not available to mobile
+clients" }`. Nothing in `src/shared/rpc-contract/` records this, tsc cannot see
+it, and there is no RPC that lists it. The only way to learn a host's answer is
+to call.
+
+That is how two of the day's ports and three editors shipped dead controls:
+`files.write` ("Revert this hunk", and Save on MCP Servers / Permission Rules
+/ Project Memory) and `agentSession.rewind` ("Rewind to here") are both
+catalogued and neither is on the list, so every tap got the refusal. A third,
+`skills.discover` (the `/` menu's installed-skills read), had been refused
+silently since it landed and re-asked every 3 s.
+
+- **The list, as read from the installed bundle:**
+  `mobile/src/transport/fixtures/orca-mobile-rpc-allowlist-1.4.205.json` (289
+  names, version in the file name; a newer Orca means a new fixture under its
+  own name, never an edit to this one). `files.read`, `files.createFile`,
+  `files.resolveTerminalPath`, `terminal.*`, `nativeChat.*`, `worktree.set` and
+  the `agentSession.*` mutations the chat already uses are on it. The fixture
+  also carries two `aiVault.search*` methods the vendored catalog predates.
+- **The probe:** `mobile/src/transport/host-mobile-capabilities.ts` asks each
+  gated method once per connection (keyed on `useLastConnectedAt`, like the
+  reconnect refetch) with parameters the host must refuse without side effects,
+  and reads the refusal: the gate's own text, or a host with no such method →
+  hidden; any other refusal or a result → shown; a transport failure → hidden
+  and logged (`[capabilities] probe failed`), asked again next connection.
+  The verdict is a property of the host, not the socket: a reconnect re-probes
+  in the background while the last answer stands, so nothing blinks off for a
+  round trip (a review of the first cut found it did, and a half-typed rule
+  went with it). The four surfaces read `useHostMobileCapability(hostId, key)`
+  and offer nothing tappable until it is true; the three editors read the
+  tri-state verdict and draw neither Save nor a line until the host has
+  answered, then become viewers with one line, "Read-only from the phone on
+  this Orca version." The feature modules stay — they are correct for a host
+  that allows the call. **The exception is per method, not per surface:**
+  `useProjectConfigFile().save` and `revertDiffCardHunk` still send
+  `files.write` ungated, the gate sits on the buttons, and a new caller of
+  either helper passes the ratchet because the method is already excepted.
+- **The ratchet:** `mobile/src/transport/orca-mobile-rpc-allowlist.test.ts`
+  walks every catalogued method literal in `app/` and `src/` and fails on any
+  that is neither on the fixture nor an explicit, typed exception (probe-gated,
+  fails-open with a sender that reads the refusal, or provably never sent —
+  "provably" meaning every occurrence sits in a position that cannot send: an
+  array element, a type literal, a `case` label; a wrapper call fails the
+  claim, because the send shapes the scan recognises are a floor, not the
+  tree's whole set). A new operation on an unlisted method fails it until it
+  is one of those.
+- **Prior art the map did not read:** the phone already recognised this exact
+  refusal in three "old desktop" fallbacks — `files/file-list-fallback.ts`,
+  `source-control/mobile-git-status.ts`, `dictation/mobile-dictation-setup.ts`
+  — each hand-matching `not available to mobile clients` for a method that was
+  off the list on an older desktop. The shape was known; the rule was not
+  written down. `transport/mobile-scope-refusal.ts` now names it; those three
+  keep their own match because each also folds in `method_not_found` for a
+  desktop that predates the method.
+- **The rule for the next port:** before promising a feature on the strength
+  of a catalog row, check the fixture. "In catalog: YES" is necessary, not
+  sufficient; the feasibility map's column of that name was written as if it
+  were sufficient, and it was corrected the same day.
+
 ## Known gaps left behind
+
+- `skills.discover` is refused for every phone on Orca 1.4.205, so the `/`
+  menu never lists the user's own skills there. The phone now asks once per
+  client and stops (it used to re-ask every 3 s); the list is empty, not
+  wrong. Nothing on the phone can change the host's answer.
 
 - The background-task roster has **not been watched arriving from a live host**.
   The contract and the projection are tested; no real desktop has published one

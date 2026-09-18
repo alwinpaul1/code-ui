@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -23,12 +23,22 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 vi.mock('../../components/BottomDrawer', () => ({ BottomDrawer: 'View' }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null }))
+const fakes = vi.hoisted(() => ({
+  client: null as RpcClient | null,
+  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown'
+}))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
+// The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
+// Faked so this suite tests what the screen does with the answer, not the probe.
+vi.mock('../../transport/host-mobile-capabilities', () => ({
+  useHostMobileCapabilityVerdict: (_hostId: string, key: string) =>
+    key === 'files.write' ? fakes.filesWrite : 'unknown'
+}))
 
 import { MobilePermissionRulesPanel } from './MobilePermissionRulesPanel'
+import { PROJECT_CONFIG_READ_ONLY_NOTICE } from '../ProjectConfigReadOnlyNotice'
 
 function mockClient(reads: Record<string, unknown>): RpcClient {
   const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
@@ -61,7 +71,80 @@ function allText(renderer: ReactTestRenderer): string[] {
   return renderer.root.findAllByType('Text' as never).map((node) => String(node.props.children))
 }
 
+function buttonLabels(renderer: ReactTestRenderer): string[] {
+  return renderer.root
+    .findAll((node) => node.props?.accessibilityRole === 'button')
+    .map((node) => String(node.props.accessibilityLabel))
+}
+
+/** The tappable "Add rule" row under each category (not the add modal's title). */
+function addRuleRows(renderer: ReactTestRenderer) {
+  return renderer.root
+    .findAllByType('Pressable' as never)
+    .filter((node) => node.findAllByType('Text' as never).some((t) => t.props.children === 'Add rule'))
+}
+
+const ONE_ALLOW_RULE = JSON.stringify({ permissions: { allow: ['Bash(npm run *)'] } })
+
 describe('MobilePermissionRulesPanel', () => {
+  beforeEach(() => {
+    fakes.filesWrite = 'allowed'
+  })
+
+  // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every
+  // files.write from a phone, so Save was offered and every tap was refused.
+  describe('on a host whose mobile gate refuses files.write', () => {
+    beforeEach(() => {
+      fakes.filesWrite = 'forbidden'
+    })
+
+    it('is a viewer: no Add rule, no Remove, no Save, and one line says so', async () => {
+      const renderer = await render(mockClient({ '.claude/settings.json': ONE_ALLOW_RULE }))
+      const text = allText(renderer)
+      expect(addRuleRows(renderer)).toHaveLength(0)
+      expect(buttonLabels(renderer)).not.toContain('Save')
+      expect(
+        renderer.root.findAll((node) => node.props?.accessibilityLabel === 'Remove Bash(npm run *)')
+      ).toHaveLength(0)
+      expect(text.filter((t) => t === PROJECT_CONFIG_READ_ONLY_NOTICE)).toHaveLength(1)
+      // The rule itself is still listed: read-only, not empty.
+      expect(text).toContain('Bash(npm run *)')
+      act(() => renderer.unmount())
+    })
+
+    it('still offers Create for a missing settings file, which files.createFile allows', async () => {
+      const renderer = await render(mockClient({}))
+      expect(buttonLabels(renderer)).toContain('Create')
+      act(() => renderer.unmount())
+    })
+  })
+
+  // Review of f877572: seeding a host with all-unknown drew the read-only
+  // line for one round trip on a host that allows the write — a lie for
+  // 250 ms. Until the host has answered, neither Save nor the line is drawn.
+  it('draws neither Save nor the read-only line until the host has answered', async () => {
+    fakes.filesWrite = 'unknown'
+    const renderer = await render(mockClient({ '.claude/settings.json': ONE_ALLOW_RULE }))
+    expect(buttonLabels(renderer)).not.toContain('Save')
+    expect(addRuleRows(renderer)).toHaveLength(0)
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    expect(allText(renderer)).toContain('Bash(npm run *)')
+    act(() => renderer.unmount())
+  })
+
+  it('is editable exactly as before once the host is known to let files.write through', async () => {
+    fakes.filesWrite = 'allowed'
+    const renderer = await render(mockClient({ '.claude/settings.json': ONE_ALLOW_RULE }))
+    const text = allText(renderer)
+    expect(addRuleRows(renderer)).toHaveLength(3)
+    expect(buttonLabels(renderer)).toContain('Save')
+    expect(
+      renderer.root.findAll((node) => node.props?.accessibilityLabel === 'Remove Bash(npm run *)')
+    ).toHaveLength(1)
+    expect(text).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    act(() => renderer.unmount())
+  })
+
   it('states whether an edit applies live or needs a restart, not assuming either', async () => {
     const renderer = await render(mockClient({ '.claude/settings.json': '{}' }))
     expect(

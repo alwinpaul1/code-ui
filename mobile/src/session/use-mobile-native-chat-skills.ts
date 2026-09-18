@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../src/shared/skills'
+import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
 import type { RpcClient } from '../transport/rpc-client'
 
 /** Re-scan when the `/` menu opens and the last scan is older than this, so a
@@ -16,7 +17,13 @@ const SKILLS_STALE_MS = 3_000
  * Desktop already scans every agent's skill roots for its picker via
  * `skills.discover`; mobile asks the same host the first time the composer
  * opens a slash menu and caches the answer per worktree. A host too old to
- * know the method simply leaves the list empty.
+ * know the method simply leaves the list empty — and so does a host whose
+ * mobile-scope dispatch gate refuses it (Orca 1.4.205 does; see
+ * transport/mobile-scope-refusal.ts). Both refusals latch: without the
+ * latch the gate's refusal was re-asked every 3 s for as long as the menu
+ * kept opening, and could never answer differently on that connection. This
+ * is a read that fails open to an empty list, not an affordance that fails on
+ * tap, which is why it is not probe-gated (orca-mobile-rpc-allowlist.test.ts).
  */
 export function useMobileNativeChatSkills(args: {
   client: Pick<RpcClient, 'sendRequest'> | null
@@ -57,7 +64,7 @@ export function useMobileNativeChatSkills(args: {
           return
         }
         if (!response.ok) {
-          if (response.error.code === 'method_not_found') {
+          if (response.error.code === 'method_not_found' || isMobileScopeRefusal(response)) {
             unsupportedRef.current = true
           }
           return

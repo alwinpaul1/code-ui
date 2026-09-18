@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { Plus, Terminal as TerminalIcon, Trash2 } from 'lucide-react-native'
 import { useHostClient } from '../../transport/client-context'
+import { useHostMobileCapabilityVerdict } from '../../transport/host-mobile-capabilities'
 import { useTheme, useThemedStyles, type Theme } from '../../theme/theme-context'
 import { Txt } from '../../ui/Txt'
 import { Button } from '../../ui/Button'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import { ProjectConfigScreenChrome } from '../ProjectConfigScreenChrome'
+import { ProjectConfigReadOnlyNotice } from '../ProjectConfigReadOnlyNotice'
 import { useProjectConfigFile } from '../use-project-config-file'
 import { MCP_CONFIG_RELATIVE_PATH } from '../project-config-paths'
 import { maskedMcpServerEnvLines, parseMcpConfig, serializeMcpConfig, type McpServerEntry } from './mcp-config-parse'
@@ -33,6 +35,12 @@ export function MobileMcpServersPanel({
   name?: string
 }) {
   const { client, state: connState } = useHostClient(hostId)
+  // Whether this host lets a phone call files.write at all. Until it has
+  // answered, neither Save nor the read-only line is drawn; once it refuses
+  // the screen is a viewer — no add, edit, remove or Save — and one line
+  // says so. Create stays — files.createFile is on the host's mobile list.
+  const writeVerdict = useHostMobileCapabilityVerdict(hostId, 'files.write')
+  const canWrite = writeVerdict === 'allowed'
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
     worktreeId,
@@ -149,6 +157,7 @@ export function MobileMcpServersPanel({
                 <Pressable
                   key={entry.name}
                   style={styles.row}
+                  disabled={!canWrite}
                   onPress={() => {
                     setForm(mcpServerFormForEntry(entry))
                     setEditing({ mode: 'edit', index })
@@ -165,15 +174,33 @@ export function MobileMcpServersPanel({
                       </Txt>
                     ))}
                   </View>
-                  <Pressable accessibilityLabel={`Remove ${entry.name}`} onPress={() => setRemoveIndex(index)} hitSlop={8}>
-                    <Trash2 size={16} color={colors.danger} />
-                  </Pressable>
+                  {canWrite ? (
+                    <Pressable accessibilityLabel={`Remove ${entry.name}`} onPress={() => setRemoveIndex(index)} hitSlop={8}>
+                      <Trash2 size={16} color={colors.danger} />
+                    </Pressable>
+                  ) : null}
                 </Pressable>
               ))
             )}
           </ScrollView>
 
-          {editing ? (
+          {!canWrite ? (
+            <>
+              {showStatusButton && statusCandidate ? (
+                <View style={styles.footer}>
+                  <Button
+                    label="Show status"
+                    icon={TerminalIcon}
+                    variant="secondary"
+                    onPress={() =>
+                      void openMcpStatusOverlay({ client: client!, terminal: statusCandidate.terminal, deviceToken: null })
+                    }
+                  />
+                </View>
+              ) : null}
+              {writeVerdict === 'forbidden' ? <ProjectConfigReadOnlyNotice /> : null}
+            </>
+          ) : editing ? (
             <McpServerForm form={form} onChange={setForm} onCancel={() => setEditing(null)} onSubmit={submitForm} />
           ) : (
             <View style={styles.footer}>
