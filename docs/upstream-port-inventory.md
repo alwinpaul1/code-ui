@@ -164,8 +164,9 @@ silently since it landed and re-asked every 3 s.
   gated method once per connection (keyed on `useLastConnectedAt`, like the
   reconnect refetch) with parameters the host must refuse without side effects,
   and reads the refusal: the gate's own text, or a host with no such method →
-  hidden; any other refusal or a result → shown; a transport failure → hidden
-  and logged (`[capabilities] probe failed`), asked again next connection.
+  hidden; any other refusal or a result → shown; a transport failure → logged
+  (`[capabilities] probe failed`), the last settled answer kept if there is
+  one, asked again next connection.
   The verdict is a property of the host, not the socket: a reconnect re-probes
   in the background while the last answer stands, so nothing blinks off for a
   round trip (a review of the first cut found it did, and a half-typed rule
@@ -183,10 +184,10 @@ silently since it landed and re-asked every 3 s.
   that is neither on the fixture nor an explicit, typed exception (probe-gated,
   fails-open with a sender that reads the refusal, or provably never sent —
   "provably" meaning every occurrence sits in a position that cannot send: an
-  array element, a type literal, a `case` label; a wrapper call fails the
-  claim, because the send shapes the scan recognises are a floor, not the
-  tree's whole set). A new operation on an unlisted method fails it until it
-  is one of those.
+  array element that is not itself a call argument, a type literal, a `case`
+  label; a wrapper call fails the claim, because the send shapes the scan
+  recognises are a floor, not the tree's whole set). A new operation on an
+  unlisted method fails it until it is one of those.
 - **Prior art the map did not read:** the phone already recognised this exact
   refusal in three "old desktop" fallbacks — `files/file-list-fallback.ts`,
   `source-control/mobile-git-status.ts`, `dictation/mobile-dictation-setup.ts`

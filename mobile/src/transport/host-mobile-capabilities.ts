@@ -36,7 +36,8 @@ import type { RpcResponse } from './types'
  *   - the gate's own refusal, or a host
  *     that has no such method            → 'forbidden'  (hide the affordance)
  *   - any OTHER refusal, or a result    → 'allowed'    (the gate let it through)
- *   - the transport failed or timed out → 'unknown'    (hide; ask again next connection)
+ *   - the transport failed or timed out → 'unknown'    (keep the last settled answer,
+ *                                                        if any; ask again next connection)
  *
  * "Once per connection" is keyed on `lastConnectedAt`, the way
  * stale-after-reconnect.ts keys its refetch: a render never re-probes, a new
@@ -133,6 +134,21 @@ type HostRecord = {
   verdicts: HostMobileCapabilityVerdicts
 }
 
+/** Per key: a lost probe carries no information about the host, so it never
+ *  replaces a verdict the host actually gave; only a settled answer does. */
+function mergeVerdicts(
+  carried: HostMobileCapabilityVerdicts,
+  fresh: HostMobileCapabilityVerdicts
+): HostMobileCapabilityVerdicts {
+  return {
+    'files.write': fresh['files.write'] === 'unknown' ? carried['files.write'] : fresh['files.write'],
+    'agentSession.rewind':
+      fresh['agentSession.rewind'] === 'unknown'
+        ? carried['agentSession.rewind']
+        : fresh['agentSession.rewind']
+  }
+}
+
 const records = new Map<string, HostRecord>()
 const listeners = new Map<string, Set<() => void>>()
 
@@ -189,7 +205,7 @@ export function ensureHostMobileCapabilitiesProbed(
       if (!current || current.connectedAt !== connectedAt) {
         return
       }
-      records.set(hostId, { connectedAt, verdicts })
+      records.set(hostId, { connectedAt, verdicts: mergeVerdicts(current.verdicts, verdicts) })
       notify(hostId)
     },
     (error: unknown) => {
@@ -211,11 +227,12 @@ export function resetHostMobileCapabilitiesForTests(): void {
 
 /**
  * The host's answer for `key`, and the probe that fetches it. 'unknown' until
- * the first probe on this host has settled, and after one the transport lost
- * (logged) until the next connection re-asks. A surface with a line to draw
- * either way — the project-config screens' "Read-only from the phone…" —
- * reads this, so that it draws nothing rather than a guess while the answer
- * is still on its way: a false read-only line for one round trip is a lie.
+ * a probe on this host has settled that key; a probe the transport loses is
+ * logged and changes nothing (the last settled answer stands, and the next
+ * connection re-asks). A surface with a line to draw either way — the
+ * project-config screens' "Read-only from the phone…" — reads this, so that
+ * it draws nothing rather than a guess while the answer is still on its way:
+ * a false read-only line for one round trip is a lie.
  */
 export function useHostMobileCapabilityVerdict(
   hostId: string,
