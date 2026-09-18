@@ -287,6 +287,7 @@ export function MobileNativeChatOverlay({
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}
+        composerFocusRequest={controller.composerFocusRequest}
         onCaptureImage={() => void images.attachImage('camera')}
         onAttachImage={() => void images.attachImage('library')}
         onPasteImage={clipboardImage ? () => void images.attachImage('clipboard') : undefined}

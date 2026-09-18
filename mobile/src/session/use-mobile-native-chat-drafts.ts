@@ -31,6 +31,7 @@ import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
+import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -73,6 +74,9 @@ export function useMobileNativeChatDrafts(args: {
 }): {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
+  /** Appends a mention to any tab's draft, active or not — see
+   *  appendComposerMentionWith for why. */
+  appendComposerMention: (tabId: string, mention: string) => void
   getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
   /** Phone-local previews rebound to the transcript message that replaced the
@@ -164,6 +168,8 @@ export function useMobileNativeChatDrafts(args: {
     },
     [draftKey]
   )
+  // One line: this file is at its max-lines budget; see appendComposerMentionWith for the actual logic.
+  const appendComposerMention = useCallback((tabId: string, mention: string) => appendComposerMentionWith({ hostId, worktreeId, setDrafts, draftEditGenerationsRef }, tabId, mention), [hostId, worktreeId])
   const captureSendOrigin = useCallback(
     (text: string) => {
       if (!draftKey) {
@@ -376,6 +382,7 @@ export function useMobileNativeChatDrafts(args: {
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
+    appendComposerMention,
     getComposerEditGeneration: draftEditGenerationsRef.current.readComposer,
     pending,
     imagePreviewsByMessageId: pendingKey

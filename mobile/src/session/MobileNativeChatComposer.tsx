@@ -40,6 +40,9 @@ type Props = {
   /** Controlled composer text — owned by the parent so dictation can write to it. */
   value: string
   onChangeText: (text: string) => void
+  /** Bumped (any increase over 0) to focus the text field once — the file
+   *  reader's "Ask about lines" after switching back to this chat tab. */
+  focusRequest?: number
   onSend: (text: string) => Promise<boolean>
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
@@ -104,6 +107,7 @@ type Props = {
 export function MobileNativeChatComposer({
   value,
   onChangeText,
+  focusRequest,
   onSend,
   sendSurfaceId,
   getSendCompletionGeneration,
@@ -145,6 +149,18 @@ export function MobileNativeChatComposer({
   const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
     null
   )
+  const textInputRef = useRef<TextInput>(null)
+  // Only on an actual increase, never on a re-render at the same value — a
+  // route revisit that leaves focusRequest untouched must not steal the
+  // keyboard back from whatever the user is doing now.
+  const lastFocusRequestRef = useRef(focusRequest ?? 0)
+  useEffect(() => {
+    const requested = focusRequest ?? 0
+    if (requested > lastFocusRequestRef.current) {
+      textInputRef.current?.focus()
+    }
+    lastFocusRequestRef.current = requested
+  }, [focusRequest])
   const sendingRef = useRef(false)
   const mountedRef = useRef(true)
   const sendSurfaceIdRef = useRef(sendSurfaceId)
@@ -293,6 +309,7 @@ export function MobileNativeChatComposer({
             onRemoveAttachment={onRemoveAttachment}
           />
           <TextInput
+            ref={textInputRef}
             style={{
               width: '100%',
               maxHeight: 150,

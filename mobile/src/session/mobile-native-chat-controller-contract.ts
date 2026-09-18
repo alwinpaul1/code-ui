@@ -48,6 +48,13 @@ export type MobileNativeChatController = {
   nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
+  /** Appends a mention to any tab's draft, active or not — the file reader's
+   *  "Ask about lines" writes into the chat tab it is switching back to. */
+  appendComposerMention: (tabId: string, mention: string) => void
+  /** Bumped once per composer-focus request; the composer focuses its text
+   *  field on every increase (mirrors the model sheet's openRequest). */
+  composerFocusRequest: number
+  requestComposerFocus: () => void
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   /** Keep a witnessed desktop message with the phone's own sends; see mobile-native-chat-remember-echo.ts. */
