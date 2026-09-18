@@ -15,16 +15,20 @@ type Observation = {
 
 let latest: StickyLiveHud = { label: null,
       model: null, effort: null, context: null }
+const S1 = '77954fea-1013-4225-b187-a8b3162a04ce'
+const S2 = '8b19cb22-996c-40e5-a887-a5323a9845e1'
 function Probe({
   observation,
   tabId,
-  handle
+  handle,
+  sessionId
 }: {
   observation: Observation
   tabId: string | null
   handle: string | null
+  sessionId: string | null
 }) {
-  latest = useStickyLiveHud(observation, tabId, handle)
+  latest = useStickyLiveHud(observation, tabId, handle, sessionId)
   return null
 }
 
@@ -39,17 +43,55 @@ describe('the model and effort the badge last stated', () => {
   function render(
     observation: Observation,
     tabId: string | null = 'tab-1',
-    handle: string | null = 'term_a'
+    handle: string | null = 'term_a',
+    sessionId: string | null = S1
   ) {
     act(() => {
       if (renderer) {
-        renderer.update(createElement(Probe, { observation, tabId, handle }))
+        renderer.update(createElement(Probe, { observation, tabId, handle, sessionId }))
       } else {
-        renderer = create(createElement(Probe, { observation, tabId, handle }))
+        renderer = create(createElement(Probe, { observation, tabId, handle, sessionId }))
       }
     })
     return latest
   }
+
+  // 2026-09-18: the hold was keyed by tab and terminal, and both survive the
+  // process changing underneath them. A phone-launched agent's last badge was
+  // still held when a `claude` typed by hand into the same terminal took over
+  // — same tab, same handle, a different session — and on a host with no
+  // status line nothing ever came to replace it. The figures belong to one
+  // SESSION of one process; a new session under the same handle starts empty.
+  it('drops the figures when a different session takes over the same terminal', () => {
+    const context = { usedPercent: 64, usedLabel: '650k', windowLabel: '1.0M' }
+    render({ modelId: 'fable', effort: 'medium', context }, 'tab-1', 'term_a', S1)
+    expect(render(null, 'tab-1', 'term_a', S2)).toEqual({
+      label: null,
+      model: null,
+      effort: null,
+      context: null
+    })
+  })
+
+  it('keeps the figures while the session id is momentarily unknown, and when it comes back', () => {
+    // `activeChatSessionId` dips to null while a tab resolves; that is "not
+    // known yet", never "a different session".
+    render({ modelId: 'opus', effort: 'xhigh' }, 'tab-1', 'term_a', S1)
+    expect(render(null, 'tab-1', 'term_a', null)).toMatchObject({ model: 'opus', effort: 'xhigh' })
+    expect(render(null, 'tab-1', 'term_a', S1)).toMatchObject({ model: 'opus', effort: 'xhigh' })
+  })
+
+  it('does not let the old session\'s figures come back once the new one has started', () => {
+    render({ modelId: 'fable', effort: 'medium' }, 'tab-1', 'term_a', S1)
+    render(null, 'tab-1', 'term_a', S2)
+    // The id dips to null again on the NEW session: the last known is S2.
+    expect(render(null, 'tab-1', 'term_a', null)).toEqual({
+      label: null,
+      model: null,
+      effort: null,
+      context: null
+    })
+  })
 
   // 2026-09-14, from the phone: the pill flipped between "Opus xhigh" (what
   // the badge said) and "Fable Medium" (the launch record) as screen reads

@@ -23,6 +23,7 @@ const { readWarmStartBeacons, rememberWarmStartBeacon, WARM_START_BEACON_CAP } =
 function beacon(modelId: string): AgentHudBeacon {
   return {
     agent: 'claude',
+    sessionId: '77954fea-1013-4225-b187-a8b3162a04ce',
     modelId,
     modelLabel: modelId,
     effort: 'xhigh',
@@ -35,6 +36,33 @@ function beacon(modelId: string): AgentHudBeacon {
     receivedAt: 1
   }
 }
+
+// 2026-09-18: a stored beacon carried nothing that tied it to the process
+// that emitted it, so a hand-started `claude -c` in a terminal that had once
+// run a phone-launched agent inherited that agent's model across every app
+// restart. Every record written before the session id existed is one of
+// those, on every phone, and is discarded on the first launch of this build.
+describe('records from before the beacon named its session', () => {
+  beforeEach(() => store.clear())
+
+  it('are not read back from the key the old build wrote', async () => {
+    store.set(
+      'codeui:agent-hud-beacons',
+      JSON.stringify({ 'terminal-1': { ...beacon('fable'), sessionId: undefined } })
+    )
+    await expect(readWarmStartBeacons()).resolves.toEqual({})
+  })
+
+  it('are dropped even if one reaches the new key without a session id', async () => {
+    const { sessionId: _dropped, ...unsigned } = beacon('fable')
+    void _dropped
+    await rememberWarmStartBeacon('terminal-1', unsigned as AgentHudBeacon)
+    await rememberWarmStartBeacon('terminal-2', beacon('opus'))
+    const restored = await readWarmStartBeacons()
+    expect(restored['terminal-1']).toBeUndefined()
+    expect(restored['terminal-2']?.modelId).toBe('opus')
+  })
+})
 
 describe('what the HUD shows before the agent has repainted', () => {
   beforeEach(() => store.clear())
@@ -81,7 +109,7 @@ describe('what the HUD shows before the agent has repainted', () => {
   })
 
   it('reports nothing rather than throwing when the stored value is unreadable', async () => {
-    store.set('codeui:agent-hud-beacons', '{not json')
+    store.set('codeui:agent-hud-beacons.v2', '{not json')
 
     await expect(readWarmStartBeacons()).resolves.toEqual({})
   })
@@ -102,6 +130,16 @@ describe('restoring the HUD on a cold start', () => {
 
     expect(getAgentHudBeacon('terminal-1')?.modelId).toBe('opus')
     resetAgentHudBeacons()
+  })
+
+  it('counts as never having arrived this run, so a dead process cannot pass for a painting one', async () => {
+    const beaconStore = await import('./agent-hud-beacon')
+    beaconStore.resetAgentHudBeacons()
+    await rememberWarmStartBeacon('terminal-1', beacon('opus'))
+    await beaconStore.hydrateAgentHudBeacons()
+    expect(beaconStore.getAgentHudBeacon('terminal-1')?.modelId).toBe('opus')
+    expect(beaconStore.getAgentHudBeaconArrivedAt('terminal-1')).toBeNull()
+    beaconStore.resetAgentHudBeacons()
   })
 
   it('never overwrites a reading already held for that tab', async () => {

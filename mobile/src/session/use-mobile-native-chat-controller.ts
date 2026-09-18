@@ -27,8 +27,7 @@ import type {
 } from './mobile-native-chat-controller-contract'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
-import { useMobileNativeChatHud } from './use-mobile-native-chat-hud'
-import { useStickyLiveHud } from './use-sticky-live-hud'
+import { nativeChatHudPhase, useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { reportedModelPair } from './mobile-chat-reported-model'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import {
@@ -37,6 +36,7 @@ import {
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useAgentHudBeacon } from './agent-hud-beacon'
+import { agentHudBeaconMatches } from './hud-beacon-fields'
 const NO_DESKTOP_PROMPTS: { nonce: string; text: string }[] = []
 
 
@@ -107,7 +107,13 @@ export function useMobileNativeChatController(
       connState,
       onSendError
     })
-  const hudBeacon = useAgentHudBeacon(activeHandle)
+  const handleBeacon = useAgentHudBeacon(activeHandle)
+  // Only the beacon of the session this tab is showing: a beacon is keyed by
+  // terminal handle, and a handle outlives the process that emitted into it,
+  // so a hand-started session in a reused terminal would otherwise echo the
+  // previous session's desktop prompts (2026-09-18). `null` while the tab
+  // does not yet know its session.
+  const hudBeacon = agentHudBeaconMatches(handleBeacon, activeChatResolution?.agent ?? null, activeChatSessionId) ? handleBeacon : null
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -155,6 +161,10 @@ export function useMobileNativeChatController(
   )
   const {
     observation: hudObservation,
+    // The screen's last pair and context, held per tab, terminal and session,
+    // with the beacon merged in only for the session on screen and only while
+    // its process still paints: the live pair, or nothing.
+    live: liveHud,
     refresh: refreshTerminalHud,
     dialogOptions: terminalDialogOptions,
     terminalPermission,
@@ -166,25 +176,18 @@ export function useMobileNativeChatController(
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
     handleRef: activeHandleRef,
     scopeKey: showNativeChat ? streamScopeKey : null,
+    tabId: activeSessionTabId,
+    sessionId: activeChatSessionId,
     agent: activeChatResolution?.agent ?? null,
-    active:
-      nativeChatAgentWorking ||
-      nativeChatStatus?.state === 'blocked' ||
-      nativeChatStatus?.state === 'waiting',
+    phase: nativeChatHudPhase(nativeChatAgentWorking, nativeChatStatus?.state),
     agentStatus: activeSessionTab?.agentStatus ?? null
   })
-  // The agent's footer counts its shells live; fold that into the beacon-built
-  // report so the pill and sheet can use it as a floor when the beacon's
-  // transcript tail lags on a huge session.
-  // The handle as well as the tab: the beacon these figures come from is read
-  // per handle, so a tab that keeps its id and gets a new terminal must drop
-  // the old agent's model rather than go on stating it. The STATE handle, not
-  // the ref — a ref read at render time is the impurity
-  // `active-handle-render-purity.test.ts` pins against.
-  const liveHud = useStickyLiveHud(hudObservation, activeSessionTabId, activeHandle)
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
   const isCodexChat = activeChatResolution?.agent === 'codex'
+  // The agent's footer counts its shells live; fold that into the beacon-built
+  // report so the pill and sheet can use it as a floor when the beacon's
+  // transcript tail lags on a huge session.
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
   const backgroundTaskReportWithScreen = useMemo(
     () => ({ ...backgroundTaskReport, onScreenShellCount }),

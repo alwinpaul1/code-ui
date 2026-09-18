@@ -19,6 +19,7 @@ export function sameIds(a: readonly string[] | null, b: readonly string[] | null
 export function unchangedBeacon(a: AgentHudBeacon, b: AgentHudBeacon): boolean {
   return (
     a.agent === b.agent &&
+    a.sessionId === b.sessionId &&
     a.modelId === b.modelId &&
     a.modelLabel === b.modelLabel &&
     a.effort === b.effort &&

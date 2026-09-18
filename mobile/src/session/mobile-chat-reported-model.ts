@@ -17,10 +17,12 @@ export type ReportedModelPair = {
  * The model the chat pill states, and the effort that belongs TO IT.
  *
  * The two travel together or not at all. They come from two sources that must
- * never be mixed: what the agent has said about itself this session (the OSC
- * beacon, or the badge on a user's own status line, held by `useStickyLiveHud`),
- * and the host's `agentStatus` record, which is what the session was LAUNCHED
- * as and does not follow a `/model` typed into the agent.
+ * never be mixed: what the agent has said about itself this session (the badge
+ * on a user's own status line, held across empty reads by `useStickyLiveHud`,
+ * or the OSC beacon — believed only for the session on screen and only while
+ * its process still paints, see `use-mobile-native-chat-hud.ts`), and the
+ * host's `agentStatus` record, which is what the session was LAUNCHED as and
+ * does not follow a `/model` typed into the agent.
  *
  * Taking the model from one and the effort from the other is how the pill came
  * to state a pair that never existed — "Opus Medium" on a session running Opus

@@ -6,6 +6,7 @@ import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
 function beacon(fields: Partial<AgentHudBeacon>): AgentHudBeacon {
   return {
     agent: 'claude',
+    sessionId: '77954fea-1013-4225-b187-a8b3162a04ce',
     modelId: null,
     modelLabel: null,
     effort: null,
@@ -17,10 +18,21 @@ function beacon(fields: Partial<AgentHudBeacon>): AgentHudBeacon {
   } as AgentHudBeacon
 }
 
+// A user's own status line, read off the screen.
 const RUNNING_OPUS: TerminalHudObservation = {
   modelLabel: 'Opus 4.8.5',
   modelId: 'opus',
   effort: 'xhigh',
+  context: null,
+  permissionMode: 'default'
+}
+
+// A host with no status line: the screen names no model, and the host's
+// agent-status merge has left its launch-time effort on the base.
+const NO_MODEL: TerminalHudObservation = {
+  modelLabel: '',
+  modelId: null,
+  effort: 'medium',
   context: null,
   permissionMode: 'default'
 }
@@ -32,27 +44,39 @@ const RUNNING_OPUS: TerminalHudObservation = {
 // id beside the new name. The pill then stated a pair that never existed, which
 // is the same defect that produced "Opus Medium" on an Opus xhigh session.
 describe('the model id and the name it is shown under', () => {
-  it('never keeps the old id beside a new name', () => {
+  // 2026-09-18: the badge on screen is the present, so it owns all three
+  // halves at once — id, name and effort — and a beacon naming another model
+  // is describing something no longer on screen.
+  it('takes id, name and effort together from a badge that names a model', () => {
     const merged = applyAgentHudBeaconFields(
       RUNNING_OPUS,
+      beacon({ modelId: 'claude-sonnet-5', modelLabel: 'Sonnet 5', effort: 'high' })
+    )
+    expect(merged).toMatchObject({ modelId: 'opus', modelLabel: 'Opus 4.8.5', effort: 'xhigh' })
+  })
+
+  it('never keeps a stale id beside a new name', () => {
+    const merged = applyAgentHudBeaconFields(
+      NO_MODEL,
       beacon({ modelLabel: 'Sonnet 4.5', effort: 'high' })
     )
     expect(merged?.modelLabel).toBe('Sonnet 4.5')
-    expect(merged?.modelId).not.toBe('opus')
+    expect(merged?.modelId).toBeNull()
+    expect(merged?.effort).toBe('high')
   })
 
-  it('never keeps the old name beside a new id', () => {
+  it('never keeps a stale name beside a new id', () => {
     const merged = applyAgentHudBeaconFields(
-      RUNNING_OPUS,
+      NO_MODEL,
       beacon({ modelId: 'claude-sonnet-5', effort: 'high' })
     )
     expect(merged?.modelId).toBe('claude-sonnet-5')
-    expect(merged?.modelLabel).not.toBe('Opus 4.8.5')
+    expect(merged?.modelLabel).toBe('claude-sonnet-5')
   })
 
   it('takes both from the beacon when it states both', () => {
     const merged = applyAgentHudBeaconFields(
-      RUNNING_OPUS,
+      NO_MODEL,
       beacon({ modelId: 'claude-sonnet-5', modelLabel: 'Sonnet 5', effort: 'high' })
     )
     expect(merged).toMatchObject({
@@ -69,6 +93,11 @@ describe('the model id and the name it is shown under', () => {
       modelId: 'opus',
       modelLabel: 'Opus 4.8.5',
       effort: 'xhigh'
+    })
+    expect(applyAgentHudBeaconFields(NO_MODEL, beacon({ usedTokens: 10 }))).toMatchObject({
+      modelId: null,
+      modelLabel: '',
+      effort: 'medium'
     })
   })
 
