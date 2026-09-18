@@ -25,10 +25,16 @@ import {
   type StructuredAgentSessionMutate
 } from './mobile-structured-agent-session-rpc'
 import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
+import {
+  parseStructuredRewindSupport,
+  type StructuredRewindSupport
+} from './mobile-structured-agent-rewind'
 
 type StructuredOptionsController = {
   optionPickerRequest: { id: string; sequence: number } | null
   conversationCommands: readonly AgentSessionConversationCommand[]
+  /** Whether the host will rewind this session; null until it has said, and on a host that never says. */
+  rewindSupport: StructuredRewindSupport | null
   optionSnapshot: SessionOptionDescriptor[]
   optionSurface: SessionOptionsSurface
   pendingOptionId: string | null
@@ -56,6 +62,7 @@ export function useMobileStructuredAgentOptions(args: {
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
+    rewind: StructuredRewindSupport | null
   } | null>(null)
   const optionCatalog = useMemo(
     () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
@@ -76,7 +83,13 @@ export function useMobileStructuredAgentOptions(args: {
     void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', { sessionId })
       .then((result) => {
         if (!stale) {
-          setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
+          setConversationSupport({
+            sessionId,
+            commands: result.conversationCommands ?? [],
+            // Not on the vendored options type: upstream added `rewind` with the
+            // backend (#19235), and this fork reads it defensively instead.
+            rewind: parseStructuredRewindSupport(result)
+          })
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -186,6 +199,7 @@ export function useMobileStructuredAgentOptions(args: {
     optionPickerRequest,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
+    rewindSupport: conversationSupport?.sessionId === sessionId ? conversationSupport.rewind : null,
     optionSnapshot,
     optionSurface,
     pendingOptionId: optionState.pendingId,

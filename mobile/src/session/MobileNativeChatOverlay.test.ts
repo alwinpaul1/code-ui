@@ -54,6 +54,8 @@ type Tick = {
   eligible?: boolean
   /** The view-mode store has been read for this scope. */
   viewResolved?: boolean
+  /** The structured lane's command surface; absent on the PTY lane. */
+  commandSurface?: MobileNativeChatController['nativeChatCommandSurface']
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -71,7 +73,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     chatPending: [],
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
-    setChatComposerText: vi.fn()
+    setChatComposerText: vi.fn(),
+    nativeChatCommandSurface: tick.commandSurface
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,
@@ -393,4 +396,54 @@ it('offers the paste row only once the clipboard actually holds an image', async
   })
   expect(typeof pasteProp()).toBe('function')
   act(() => renderer!.unmount())
+})
+
+// The host decides per session whether it will rewind (`agentSession.options`
+// reports it; a Codex session on legacy history says `history-not-paginated`,
+// and a host that predates the backend says nothing). The affordance follows
+// that answer exactly: the row is offered only when the host said yes.
+describe('handing the chat list a way to rewind', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  async function rewindProp(
+    commandSurface: MobileNativeChatController['nativeChatCommandSurface']
+  ): Promise<unknown> {
+    await act(async () => {
+      renderer = create(overlayElement({ commandSurface }))
+    })
+    return renderer!.root.findAllByType('ChatView' as never)[0]?.props.onRewindToMessage
+  }
+
+  const surface = (
+    rewindSupport: NonNullable<MobileNativeChatController['nativeChatCommandSurface']>['rewindSupport']
+  ) => ({
+    sessionCommands: undefined,
+    conversationCommands: [],
+    rewindSupport,
+    rewindToItem: vi.fn(async () => true)
+  })
+
+  it('offers it when the host said this session can rewind', async () => {
+    const claude = surface({ supported: true })
+    expect(await rewindProp(claude)).toBe(claude.rewindToItem)
+  })
+
+  it('offers nothing for a Codex session the host cannot page', async () => {
+    expect(
+      await rewindProp(surface({ supported: false, reason: 'history-not-paginated' }))
+    ).toBeUndefined()
+  })
+
+  it('offers nothing while the host has not said, or never will', async () => {
+    expect(await rewindProp(surface(null))).toBeUndefined()
+  })
+
+  it('offers nothing on the PTY lane, which keeps the typed /rewind', async () => {
+    expect(await rewindProp(undefined)).toBeUndefined()
+  })
 })

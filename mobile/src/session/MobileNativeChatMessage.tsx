@@ -6,7 +6,8 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
-  Sparkles
+  Sparkles,
+  Undo2
 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
@@ -162,6 +163,7 @@ function MobileNativeChatMessageImpl({
   onScrollToMessage,
   onOpenFile,
   onCancelQueued,
+  onRewindToHere,
   turnStatus,
   turnExpanded,
   turnKey,
@@ -178,6 +180,10 @@ function MobileNativeChatMessageImpl({
   toolsExpanded?: boolean
   /** Present while this optimistic echo is still queued behind a running turn. */
   onCancelQueued?: () => void
+  /** Rewind the conversation to before this sent prompt. The lane passes it
+   *  only for a journalled user message on a host that will rewind; the row
+   *  never decides that for itself. Conversation only, never files. */
+  onRewindToHere?: (messageId: string) => void
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   /** This message's index in the list, paired with onScrollToMessage. */
@@ -296,6 +302,20 @@ function MobileNativeChatMessageImpl({
   const sentPromptControls =
     isUser && !onCancelQueued && promptControlsShown ? (
       <View style={styles.controlsRow}>
+        {onRewindToHere ? (
+          <Pressable
+            style={({ pressed }) => [styles.rewindControl, pressed && styles.controlPressed]}
+            onPress={() => onRewindToHere(message.id)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Rewind to here"
+          >
+            <Undo2 size={14} color={colors.userBubbleText} strokeWidth={2} />
+            <Txt variant="caption" weight="semibold" style={{ color: colors.userBubbleText }}>
+              Rewind to here
+            </Txt>
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
           onPress={handleCopy}

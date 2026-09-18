@@ -145,6 +145,10 @@ export type MobileNativeChatViewProps = {
   onRespondPermission?: (send: string) => Promise<boolean>
   /** Drop one message Claude Code has queued behind the running turn. */
   onCancelQueued?: (id: string) => Promise<boolean>
+  /** Rewind the conversation to before a sent prompt (structured lane, on a host
+   *  that will). Conversation only: files on the desktop stay as they are.
+   *  Resolves true when the host accepted; refusals are already on the banner. */
+  onRewindToMessage?: (messageId: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
   onOpenFile?: (relativePath: string) => void
   /** Pixels to lift the composer by when the soft keyboard is open. The route

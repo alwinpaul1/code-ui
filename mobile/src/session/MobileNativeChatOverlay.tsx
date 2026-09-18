@@ -315,6 +315,14 @@ export function MobileNativeChatOverlay({
         skills={controller.nativeChatSkills}
         sessionCommands={controller.nativeChatCommandSurface?.sessionCommands}
         conversationCommands={controller.nativeChatCommandSurface?.conversationCommands}
+        // Only the structured lane has a command surface, and only a host that
+        // said it will rewind THIS session gets the affordance. The PTY lane
+        // keeps the typed `/rewind`, which is the one that can restore files.
+        onRewindToMessage={
+          controller.nativeChatCommandSurface?.rewindSupport?.supported === true
+            ? controller.nativeChatCommandSurface.rewindToItem
+            : undefined
+        }
         onNeedSkills={controller.loadNativeChatSkills}
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}

@@ -27,6 +27,7 @@ import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
+import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
@@ -118,6 +119,7 @@ export function MobileNativeChatView({
   permission,
   onRespondPermission,
   onCancelQueued,
+  onRewindToMessage,
   onOpenFile,
   keyboardInset = 0,
   keyStrip
@@ -185,6 +187,9 @@ export function MobileNativeChatView({
     onLoadEarlier
   })
   const { dockHeight, onDockLayout } = useChatDock(pinToTail)
+  const { rewindable, request: requestRewind, sheet: rewindSheet } = useMobileNativeChatRewind({
+    messages, folded, onRewindToMessage, composerText, onComposerTextChange
+  })
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -241,6 +246,7 @@ export function MobileNativeChatView({
             ? () => void onCancelQueued(item.id)
             : undefined
         }
+        onRewindToHere={rewindable.has(item.id) ? requestRewind : undefined}
         structuredActivityUi={structuredActivityUi}
         turnActivity={turnActivity}
         onToggleTurn={turns.onToggleTurn}
@@ -261,6 +267,8 @@ export function MobileNativeChatView({
       onOpenFile,
       agentWorking,
       onCancelQueued,
+      rewindable,
+      requestRewind,
       structuredActivityUi,
       turnActivity,
       turns,
@@ -380,6 +388,7 @@ export function MobileNativeChatView({
         onClose={() => setBackgroundTasksOpen(false)}
       />
       <MobileNativeChatQueueEditor editor={queueEditor} />
+      {rewindSheet}
       <View
         style={[styles.dock, { paddingBottom: bottomPad }]}
         onLayout={onDockLayout}

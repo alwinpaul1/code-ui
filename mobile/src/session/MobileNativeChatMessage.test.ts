@@ -3,6 +3,8 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors } from '../theme/tokens'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -40,6 +42,7 @@ vi.mock('lucide-react-native', () => ({
   Sparkles: 'Sparkles',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
+  Undo2: 'Undo2',
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
@@ -132,6 +135,70 @@ describe('MobileNativeChatMessage', () => {
     })
     expect(queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })).toHaveLength(0)
     expect(queued.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
+  })
+
+  // The VS Code extension puts "Rewind to here" on every user message; on the
+  // phone it sits beside Copy in the disclosed controls of a sent prompt, and
+  // only when the lane hands the row a way to rewind (the structured lane,
+  // on a host that said it will). The row itself never decides that.
+  it('offers Rewind to here on a sent prompt only when the lane can rewind, and hands back the message id', () => {
+    const onRewindToHere = vi.fn()
+    const sent = render(userMessage([{ type: 'text', text: 'record' }]), { onRewindToHere })
+    expect(sent.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
+    act(() => {
+      sent.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
+    })
+    const control = sent.root.findByProps({ accessibilityLabel: 'Rewind to here' })
+    act(() => control.props.onPress())
+    expect(onRewindToHere).toHaveBeenCalledWith('u1')
+    act(() => sent.unmount())
+
+    const withoutLane = render(userMessage([{ type: 'text', text: 'record' }]))
+    act(() => {
+      withoutLane.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
+    })
+    expect(withoutLane.root.findAllByProps({ accessibilityLabel: 'Copy prompt' }).length).toBeGreaterThan(0)
+    expect(withoutLane.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
+  })
+
+  it.each([
+    ['light', lightColors, darkColors],
+    ['dark', darkColors, lightColors]
+  ] as const)('draws Rewind to here in the %s bubble ink, not a fixed colour', (preference, colors, other) => {
+    act(() => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: preference },
+          createElement(MobileNativeChatMessage, {
+            message: userMessage([{ type: 'text', text: 'record' }]),
+            onRewindToHere: vi.fn()
+          })
+        )
+      )
+    })
+    act(() => {
+      renderer!.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
+    })
+    const control = renderer!.root.findByProps({ accessibilityLabel: 'Rewind to here' })
+    const label = control.findAllByType('Text' as never).find((node) => node.children.includes('Rewind to here'))
+    const style = Object.assign({}, ...([] as unknown[]).concat(label?.props.style).flat(Infinity).filter(Boolean))
+    expect(style.color).toBe(colors.userBubbleText)
+    expect(style.color).not.toBe(other.userBubbleText)
+    expect(control.findByType('Undo2' as never).props.color).toBe(colors.userBubbleText)
+  })
+
+  it('never offers Rewind to here on an agent reply or a queued echo, even when the lane can rewind', () => {
+    const onRewindToHere = vi.fn()
+    const reply = render(toolMessage([{ type: 'text', text: 'done' }]), { onRewindToHere })
+    expect(reply.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
+    act(() => reply.unmount())
+
+    const queued = render(userMessage([{ type: 'text', text: 'record' }]), {
+      onRewindToHere,
+      onCancelQueued: vi.fn()
+    })
+    expect(queued.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
   })
 
   it('renders a loadable preview URI as an image thumbnail', () => {
