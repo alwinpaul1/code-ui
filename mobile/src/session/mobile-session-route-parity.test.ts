@@ -185,7 +185,10 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // bar) beside the FlatList — host record COUNT stays 99 (MobileSyntaxLine and
 // the new MobileSessionFileReaderLineActionBar are custom components, not
 // HOST_COMPONENT_NAMES), but the FlatList/View records' captured shape moved.
-const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7fe05087147871e2'
+// 2026-09-18 (evening): the header's model pill View gained flexShrink/minWidth
+// so a long live label truncates instead of running under the terminal icon.
+// Same host record COUNT (99); that one View's captured style moved.
+const HEAD_HOST_JSX_SHA256 = '0c4421215989bca29fa7fa74f22ff9bf9f3880372f5e5e039281676940068cb8'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.

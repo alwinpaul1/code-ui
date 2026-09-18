@@ -147,6 +147,12 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
               <View
                 accessibilityLabel={`Model ${modelLabel}`}
                 style={{
+                  // A flex child shrinks only when told to. Without these a
+                  // long live label ("Opus 5 (1M context) xhigh") pushed the
+                  // row under the terminal icon instead of truncating
+                  // (2026-09-18, screenshot).
+                  flexShrink: 1,
+                  minWidth: 0,
                   paddingHorizontal: 6,
                   paddingVertical: 1,
                   borderRadius: radius.xs,
