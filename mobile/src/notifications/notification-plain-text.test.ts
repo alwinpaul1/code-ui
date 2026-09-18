@@ -193,3 +193,60 @@ describe('where a table stops', () => {
     ).toBe('Check\ntsc \u00b7 clean\nrun a \u00b7 b to pipe it')
   })
 })
+
+// Seen on the Galaxy S23 (2026-09-18, 12:04): "main is merged into the PR and
+// everything is verified locally. | | | |---|---| | Backend | 7365 passed / 0
+// failed (up from 7294 — the extra 71 are #972's pricing tests) | | …". The
+// desktop collapses every run of whitespace in a body to one space
+// (`replace(/\s+/g, ' ')` in Orca 1.4.205's notification composer), so a
+// table that was four lines arrives as ONE, and the line-based reader above
+// saw no separator line and left every pipe standing.
+describe('a table the desktop flattened onto one line', () => {
+  const body =
+    '`main` is merged into the PR and everything is verified locally. | | | |---|---| ' +
+    "| Backend | **7365 passed / 0 failed** (up from 7294 — the extra 71 are #972's pricing tests) | " +
+    '| Frontend | **412 passed / 0 failed** |'
+
+  it('leaves no pipes in the shade', () => {
+    expect(notificationPlainText(body)).not.toContain('|')
+  })
+
+  it('puts the prose on its own line and each row on its own line', () => {
+    const lines = notificationPlainText(body).split('\n')
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toMatch(/is merged into the PR and everything is verified locally\.$/)
+    expect(lines[1]).toMatch(/^Backend · /)
+    expect(lines[1]).toContain("(up from 7294 — the extra 71 are #972's pricing tests)")
+    expect(lines[2]).toMatch(/^Frontend · /)
+  })
+
+  it('drops a header whose cells are all empty', () => {
+    expect(notificationPlainText(body)).not.toMatch(/\n\s*·|·\s*\n/)
+  })
+
+  it('keeps a header with words in it as the first row', () => {
+    const lines = notificationPlainText(
+      'Results: | Suite | Result | |---|---| | tsc | clean | | tests | 6620 |'
+    ).split('\n')
+    expect(lines).toEqual(['Results:', 'Suite · Result', 'tsc · clean', 'tests · 6620'])
+  })
+
+  it('keeps prose that follows the last row', () => {
+    const lines = notificationPlainText('|---|---| | a | b | Then I stopped.').split('\n')
+    expect(lines).toEqual(['a · b', 'Then I stopped.'])
+  })
+
+  it('reads a one-column table', () => {
+    expect(notificationPlainText('|---| | only | | one |')).toBe('only\none')
+  })
+
+  it('leaves a shell pipe in prose alone', () => {
+    expect(notificationPlainText('ran ls | wc -l and got 3')).toBe('ran ls | wc -l and got 3')
+  })
+
+  // A dash is an ordinary cell ("no change"); only a run of three or more is
+  // the delimiter agents write. Reflowing this row would have cut it in two.
+  it('leaves a row whose cell is a single dash as one row', () => {
+    expect(notificationPlainText('| tsc | - |')).toBe('tsc \u00b7 -')
+  })
+})

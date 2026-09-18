@@ -9,7 +9,10 @@
  * their visible text, and blank-line runs collapse.
  */
 export function notificationPlainText(markdown: string): string {
-  const raw = markdown.replace(/\r\n?/g, '\n').split('\n')
+  const raw = markdown
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .flatMap((line) => reflowInlineTable(line))
   const lines = raw
     .map((line) =>
       line
@@ -52,6 +55,81 @@ export function notificationPlainText(markdown: string): string {
     )
     .join('\n')
     .trim()
+}
+
+/**
+ * A table the desktop squashed onto one line, put back on its lines.
+ *
+ * The body of a notification is not the agent's text: Orca's composer runs
+ * `replace(/\s+/g, ' ')` over it (1.4.205), so every newline is a space by the
+ * time it reaches the phone. A four-line table arrives as
+ * `| | | |---|---| | Backend | 7365 passed | | Frontend | 412 passed |`, one
+ * line, and the line-based reader below found no separator LINE and left
+ * every pipe standing (Galaxy S23, 2026-09-18).
+ *
+ * The delimiter run (three dashes or more per cell) is still unmistakable
+ * mid-line, and it states the column
+ * count. Cells are then dealt out N at a time: the header is the N cells that
+ * end just before the delimiter, each body row is N cells after it, and rows
+ * are separated by the blank segment a closing pipe and the next opening pipe
+ * leave between them. Whatever is left in front is prose, and so is anything
+ * after the last complete row that has no pipes of its own. Each row comes
+ * back as its own `| a | b |` line for the reader below, which is how a
+ * multi-line table has always been read; nothing here formats.
+ */
+function reflowInlineTable(line: string): string[] {
+  // Three dashes or more: a lone `-` is a cell that says "none", and reflowing
+  // `| tsc | - |` around it would cut a row in two.
+  const delimiter = /\|(\s*:?-{3,}:?\s*\|)+/.exec(line)
+  if (!delimiter || delimiter.index === undefined) {
+    return [line]
+  }
+  const columns = delimiter[0].split('|').length - 2
+  const before = line.slice(0, delimiter.index)
+  const after = line.slice(delimiter.index + delimiter[0].length)
+  // A separator that is the whole line, or one with only pipes around it, is
+  // the multi-line case the reader below already handles.
+  if (before.trim() === '' && after.trim() === '') {
+    return [line]
+  }
+  const out: string[] = []
+  // The header: the N cells whose closing pipe is the last thing before the
+  // delimiter. Fewer segments than that, or a non-blank tail, and there is no
+  // header, only prose.
+  const head = before.split('|')
+  let prose = before
+  if (head.length >= columns + 2 && head[head.length - 1]!.trim() === '') {
+    const cells = head.slice(-(columns + 1), -1)
+    prose = head.slice(0, -(columns + 1)).join('|')
+    if (cells.some((cell) => cell.trim() !== '')) {
+      out.push(`|${cells.join('|')}|`)
+    }
+  }
+  if (prose.trim() !== '') {
+    out.unshift(prose.trim())
+  }
+  out.push(delimiter[0].trim())
+  // Body rows: after the delimiter's closing pipe comes a blank segment, then
+  // N cells, then the blank the next row's opening pipe leaves, and so on.
+  const tail = after.split('|')
+  let at = 0
+  while (at < tail.length) {
+    const boundary = tail[at]!
+    if (boundary.trim() !== '') {
+      break
+    }
+    const cells = tail.slice(at + 1, at + 1 + columns)
+    if (cells.length < columns) {
+      break
+    }
+    out.push(`|${cells.join('|')}|`)
+    at += 1 + columns
+  }
+  const rest = tail.slice(at).join('|').trim()
+  if (rest !== '') {
+    out.push(rest)
+  }
+  return out
 }
 
 /** A GFM delimiter row, with or without the optional outer pipes. */
