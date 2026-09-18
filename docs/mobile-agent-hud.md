@@ -1,7 +1,8 @@
 # The chat HUD, with nothing set up on the host
 
 Verified against Orca 1.4.197, Claude Code 2.1.266 and codex-cli 0.153.4 on
-macOS. The Windows path is written but unrun; see below.
+macOS; the heartbeat (`refreshInterval`) and the session id against Claude
+Code 2.1.276. The Windows path is written but unrun; see below.
 
 **The rule this is built to:** a Code UI user sets up nothing on their desktop.
 No status line, no plugin, no config, no Orca change — and no code written to
@@ -24,8 +25,8 @@ command of ours. That command is where the whole design lives.
 
 | | Claude Code | Codex |
 |---|---|---|
-| flag | `--settings '{"statusLine":{"type":"command","command":"…"}}'` (same on every platform) | POSIX: `-c 'notify=["sh","-c","eval \"$(printf %s <base64> \| base64 -d)\"","cuihud"]'`; Windows: `-c 'notify=["powershell","-NoProfile","-NonInteractive","-Command","…"]'` |
-| when it runs | every repaint, with the agent's state on stdin | after each turn, with one JSON argument |
+| flag | `--settings '{"statusLine":{"type":"command","command":"…","refreshInterval":5}}'` (same on every platform; 15 on Windows) | POSIX: `-c 'notify=["sh","-c","eval \"$(printf %s <base64> \| base64 -d)\"","cuihud"]'`; Windows: `-c 'notify=["powershell","-NoProfile","-NonInteractive","-Command","…"]'` |
+| when it runs | every repaint and every 5 s (15 s on Windows), with the agent's state on stdin | after each turn, with one JSON argument |
 | what the agent draws for it | **nothing**, when the command prints nothing (verified) | nothing; Codex has no UI for notify |
 | where the figures come from | the JSON on stdin | the rollout Codex writes for itself |
 
@@ -65,7 +66,7 @@ exact bytes.
 One `printf`, one write, well under 1 KB:
 
 ```
-ESC ] 7777 ; CUIHUD1 agent=claude hk=1 sid=<session id> model=<id> name=<display name>
+ESC ] 7777 ; CUIHUD1 agent=claude hk=1 hb=5 sid=<session id> model=<id> name=<display name>
              effort=<level> used=<tokens> win=<window> pct=<int>
              h5=<int>:<epoch> d7=<int>:<epoch> BEL
 ```
@@ -105,15 +106,49 @@ take from a beacon (`hud-beacon-fields.ts`, `agent-hud-beacon-liveness.ts`,
   the rest. A live beacon and the badge describe the same repaint and cannot
   disagree beyond the instant after `/model`; when they do, the beacon is
   describing something no longer on screen.
-- **Silence.** A phone-launched Claude repaints its status line several times a
-  second while it works, re-emitting the beacon each time; both agents beacon
-  at every turn end (Codex only there). So a beacon that stays silent through
-  30 s of the agent WORKING (Claude), or through 20 s after a turn has ended
-  (both), is from a process that is no longer painting, and its model, effort
-  and context are dropped. Idle time and time blocked on a dialog do not
-  count; a warm-start record counts as never having arrived this run. The
-  sticky hold (`use-sticky-live-hud.ts`) keeps only what the SCREEN said, so a
-  dropped beacon cannot survive through it.
+- **Silence.** The phone launches Claude with `statusLine.refreshInterval`
+  (seconds; 2.1.276 binary: `min(1)`, "re-run the status line command every N
+  seconds in addition to event-driven updates") — 5 s on POSIX, 15 s on
+  Windows, where each run is a PowerShell process and is unmeasured — so the
+  beacon is a heartbeat, and it declares its beat (`hb=`). Verified live on
+  2.1.276: a beat every 2 s through a 25 s foreground tool call and through
+  idle time at the prompt. But the status line is unmounted, and the timer
+  with it, under every full-screen picker and dialog — `/model`, a permission
+  prompt, an AskUserQuestion card: 0 beats in 25 s under each, same probe —
+  and a dialog is where the phone user sits and reads for minutes. So silence
+  counts only while Orca says the agent is `working`, the window starts
+  afresh with each working stretch, and a beacon that declares a beat and
+  falls silent through max(30 s, six beats) of work is from a process no
+  longer running the command: its model, effort and context are dropped.
+
+  A beacon that declares NO beat — Codex, whose notify runs only at a turn's
+  end; a Claude from a build before the field — can only be caught at a turn
+  end it did not report: 20 s after the pane goes idle with no beacon
+  (allowing one that landed up to 10 s before the flip). That rule applies to
+  every beacon. A dialog and an interrupted turn (Orca's `interrupted` on the
+  `done`, not sticky, so a bare re-send of the same `done` is not a turn end
+  either) are not turn ends; the next turn starting forgets the deadline.
+
+  The phone hears a terminal only while its stream is subscribed, and it
+  unsubscribes the tab it leaves. Every tab switch, foreground recovery, relay
+  reconnect and WebView reload goes through `subscribeToTerminal`, which
+  stamps the moment listening began (`noteAgentHudBeaconListening`); silence
+  is measured from the latest of the last arrival, the working stretch and
+  that stamp, and a fresh stamp forgets a pending turn end. So a warm-start
+  record, a background stint, a tab switched back and a chat/terminal flip
+  (which resubscribes the same tab as a lease-only stream and back) all get a
+  full window. That is safe because a write-off is sticky until a beat newer
+  than it: a turn end or a resubscribe does not show a dead record again on
+  credit. The sticky hold (`use-sticky-live-hud.ts`) keeps only what the
+  SCREEN said, so a dropped beacon cannot survive through it.
+
+  Why not "30 s of the agent working" without a heartbeat (the first cut,
+  93e3cc5): Claude Code re-runs its status line on an event — a new assistant
+  message, `/compact`, a mode change — and NOT while a tool executes, so that
+  rule blanked a live session's pill and ring 30 s into any long tool call or
+  subagent run. The heartbeat costs ~10 ms of CPU per beat with no user status
+  line (38 MB transcript, 2026-09-18); a user's own bar runs on the same beat,
+  which is their bar repainting, not a row of ours.
 
 This matters because `claude -c`/`--resume` keep the session id: the session
 rule alone cannot tell a hand-continued session from the phone-launched one it

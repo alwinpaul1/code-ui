@@ -240,11 +240,32 @@ describe('a beacon names the session it came from', () => {
   })
 })
 
-// The phone-launched agent repaints its status line several times a second
-// while it works, and every repaint re-emits the beacon. So "when did a beacon
-// last ARRIVE" is what tells a painting process from a dead one; the
-// beacon's own `receivedAt` is not it, because a repeat that says nothing new
-// is deliberately not republished.
+// A phone-launched Claude runs its status-line command on a timer (the
+// `refreshInterval` the phone launches it with), so its beacon is a heartbeat
+// and the beacon says so. Silence then means something for it, and nothing
+// for a beacon that declares no beat (Codex, which beacons only at a turn's
+// end; an emitter from before the field existed).
+describe('the beat a beacon declares', () => {
+  it('reads the heartbeat off the payload, and reports none when absent', () => {
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude hk=1 hb=5 sid=s model=m')?.heartbeatSeconds).toBe(5)
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude hk=1 sid=s model=m')?.heartbeatSeconds).toBeNull()
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=codex sid=s model=m')?.heartbeatSeconds).toBeNull()
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude hb=0')?.heartbeatSeconds).toBeNull()
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude hb=x')?.heartbeatSeconds).toBeNull()
+  })
+
+  it('keeps the declared beat across a Stop-hook beacon, which carries none', () => {
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=s model=m\x07')
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude sid=s run=b1\x07')
+    expect(getAgentHudBeacon('h')?.heartbeatSeconds).toBe(5)
+  })
+})
+
+// The phone-launched Claude runs its status-line command every few seconds,
+// and every run re-emits the beacon. So "when did a beacon last ARRIVE" is
+// what tells a running process from a dead one; the beacon's own `receivedAt`
+// is not it, because a repeat that says nothing new is deliberately not
+// republished.
 describe('when a beacon last arrived on a handle', () => {
   it('is unknown until one arrives this run', () => {
     expect(getAgentHudBeaconArrivedAt('h')).toBeNull()

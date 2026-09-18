@@ -15,13 +15,21 @@ import { useStickyLiveHud } from './use-sticky-live-hud'
 export type NativeChatHudPhase = BeaconPhase
 
 /** What the agent is doing, for the poll cadence and the beacon's clock.
- *  `paused` — a dialog or a question up — polls like working but is not the
- *  agent painting; see `agent-hud-beacon-liveness.ts`. */
+ *  `paused` — a dialog or a question up — polls like working but is not a
+ *  turn end; nor is `interrupted`, a `done` Orca marks as a cancellation,
+ *  which the agent reports no turn end for. See `agent-hud-beacon-liveness.ts`. */
 export function nativeChatHudPhase(
   working: boolean,
-  state: AgentStatusEntry['state'] | null | undefined
+  state: AgentStatusEntry['state'] | null | undefined,
+  interrupted: boolean | null | undefined
 ): NativeChatHudPhase {
-  return working ? 'working' : state === 'blocked' || state === 'waiting' ? 'paused' : 'idle'
+  if (working) {
+    return 'working'
+  }
+  if (state === 'blocked' || state === 'waiting') {
+    return 'paused'
+  }
+  return state === 'done' && interrupted === true ? 'interrupted' : 'idle'
 }
 
 /** The pair and context the HUD states, or nothing — see the hook. */
@@ -41,10 +49,13 @@ export type NativeChatLiveHud = {
  *  - the agent's own state, on the invisible OSC 7777 beacon it writes to its
  *    PTY when the phone launched it (`agent-hud-beacon.ts`): the context, and
  *    the model and effort where the screen names none. Believed only for the
- *    session the tab is showing, and only while its process is still
- *    painting — a beacon is keyed by terminal handle, and a handle outlives
- *    the process that emitted into it (2026-09-18: "Fable 5.1 medium" on a
- *    hand-started `claude -c` painting Opus).
+ *    session the tab is showing, and only while its process still speaks —
+ *    a beacon is keyed by terminal handle, and a handle outlives the process
+ *    that emitted into it (2026-09-18: "Fable 5.1 medium" on a hand-started
+ *    `claude -c` painting Opus). A phone-launched Claude beacons on a timer
+ *    while it works, so working silence is death; Codex beacons only at a
+ *    turn's end, so only a turn end it did not report is
+ *    (`agent-hud-beacon-liveness.ts`).
  *  - a newer host's `agentStatus` fields, when it forwards them.
  *  - the host's `accounts.subscribe` for the rate-limit windows.
  *
@@ -81,14 +92,14 @@ export function useMobileNativeChatHud(args: {
     handleRef: args.handleRef,
     handleKey: args.scopeKey,
     agent: args.agent,
-    active: args.phase !== 'idle'
+    active: args.phase === 'working' || args.phase === 'paused'
   })
   const accounts = useHostAccountsSnapshot(args.client, args.enabled)
   // Read at render: a new beacon re-renders through the store, and a handle
   // swap re-renders through `scopeKey`, so the ref is never read stale here.
   const handle = args.handleRef.current
   const beacon = useAgentHudBeacon(handle)
-  const painting = useAgentHudBeaconLiveness({ handle, agent: args.agent, phase: args.phase, beacon })
+  const painting = useAgentHudBeaconLiveness({ handle, listening: args.enabled, phase: args.phase, beacon })
   const liveBeacon =
     painting && agentHudBeaconMatches(beacon, args.agent, args.sessionId) ? beacon : null
   const hostFields = hudFieldsFromAgentStatus(args.agentStatus)

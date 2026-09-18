@@ -352,7 +352,9 @@ function TabActivityBadge({
 }) {
   const { isDark } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
-  const activity = sessionTabActivity(status, beacon, active)
+  // The tab's own session, whatever view it is in: the beacon may only retire
+  // the dot for the session the host says this pane is running.
+  const activity = sessionTabActivity(status, beacon, active, status?.providerSession?.id ?? null)
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)

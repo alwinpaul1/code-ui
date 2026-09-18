@@ -10,8 +10,9 @@ export function sameIds(a: readonly string[] | null, b: readonly string[] | null
 /**
  * Whether two readings of a tab say the same thing.
  *
- * Claude repaints its status line several times a second, and each repaint
- * used to publish a new object and wake every reader — one of which recounts
+ * Claude re-runs its status line on every streamed message and, on the
+ * phone's launch flag, every 5 s besides; each run used to publish a new
+ * object and wake every reader — one of which recounts
  * the background tasks over the whole transcript (2026-09-13). `receivedAt`
  * and the timestamps are left out on purpose: a repaint that repeats itself
  * is not a change.

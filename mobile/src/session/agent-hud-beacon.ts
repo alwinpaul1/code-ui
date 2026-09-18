@@ -52,6 +52,13 @@ export type AgentHudBeacon = {
    *  pill said Fable on an Opus session. Readers believe a beacon only for the
    *  session the tab is showing (`agentHudBeaconMatches`). */
   sessionId: string | null
+  /** The beat this beacon promises, in seconds: the `refreshInterval` the
+   *  phone launched Claude Code with, which re-runs the status-line command
+   *  on a timer while its status line is mounted (idle, working, tool call;
+   *  not under a dialog or picker). Null from an emitter that
+   *  declares none (Codex, or a build before the field), for which silence
+   *  means nothing. Read by `agent-hud-beacon-liveness.ts`. */
+  heartbeatSeconds: number | null
   modelId: string | null
   modelLabel: string | null
   effort: string | null
@@ -163,6 +170,8 @@ export function parseAgentHudBeaconPayload(
   return {
     agent,
     sessionId: sid !== undefined && SESSION_ID.test(sid) ? sid : null,
+    // `hb=0` is no beat, not a beat of zero.
+    heartbeatSeconds: toInt(values.get('hb')) || null,
     modelId: values.get('model') ?? null,
     modelLabel: values.get('name') ?? null,
     effort: values.get('effort') ?? null,
@@ -245,6 +254,7 @@ function publish(handle: string, payload: string): void {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
         sessionId: beacon.sessionId ?? previous.sessionId,
+        heartbeatSeconds: beacon.heartbeatSeconds ?? previous.heartbeatSeconds,
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
         // Restamped only when the list moved: see `unchangedBeacon`.
         runningTaskIdsAt: restamp(beacon, previous),
