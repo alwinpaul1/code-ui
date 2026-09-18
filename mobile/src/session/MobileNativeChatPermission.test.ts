@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { darkColors, lightColors } from '../theme/tokens'
+import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 
 vi.mock('react-native', () => ({
@@ -9,12 +11,18 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
   View: 'View',
+  useColorScheme: () => 'light',
   // The card sizes its reading area against the window so a long prompt cannot
   // push the choices off a short screen.
   useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
 
-vi.mock('lucide-react-native', () => ({ ShieldQuestion: 'ShieldQuestion' }))
+vi.mock('lucide-react-native', () => ({
+  FileMinus2: 'FileMinus2',
+  FilePen: 'FilePen',
+  FilePlus2: 'FilePlus2',
+  ShieldQuestion: 'ShieldQuestion'
+}))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -314,5 +322,222 @@ describe('MobileNativeChatPermission', () => {
       )
     })
     expect(renderer!.root.findAllByType('Pressable')).toHaveLength(1)
+  })
+})
+
+/**
+ * Feasibility map row #35: the VS Code extension shows the diff BEFORE the user
+ * accepts an Edit. On the phone the same approval arrived as one JSON slab —
+ * `{"file_path":"…","old_string":"…","new_string":"…"}` — rendered as prose,
+ * and the diff only appeared after the edit had been applied.
+ *
+ * The SDK lane's `detail` is the tool input, stringified by the host: Orca
+ * 1.4.205 `out/main/index.js` builds the approval item as
+ * `detail: JSON.stringify(input)` through a 16 KiB head bound
+ * (`inlineHeadBytes: 16*1024`), and appends
+ * `\n[Orca: output truncated — N bytes total, digest …]` when it clipped.
+ */
+describe('the proposed change on a permission card', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const ORCA_INLINE_HEAD_BYTES = 16 * 1024
+
+  /** The host's own clipping, byte for byte: a UTF-8 head plus its marker. */
+  function clippedLikeOrca(json: string): string {
+    const bytes = Buffer.from(json, 'utf8')
+    const head = bytes.subarray(0, ORCA_INLINE_HEAD_BYTES).toString('utf8')
+    return `${head}\n[Orca: output truncated — ${bytes.byteLength} bytes total, digest 0123456789ab]`
+  }
+
+  const EDIT_INPUT = {
+    file_path: '/w/src/app.ts',
+    old_string: 'const a = 1\nconst b = 2\nconst c = 3',
+    new_string: 'const a = 1\nconst b = 9\nconst c = 3',
+    replace_all: false
+  }
+
+  const OPTIONS = [
+    { label: 'Yes', send: '1' },
+    { label: "Yes, and don't ask again for: /w/src/app.ts", send: '2' },
+    { label: 'No', send: '3' }
+  ]
+
+  type Rendered = {
+    rows: { marker: string; text: string; background: string | undefined }[]
+    texts: string[]
+    buttons: string[]
+  }
+
+  function styleValue(style: unknown, key: string): string | undefined {
+    const entries = Array.isArray(style) ? style.flat(3) : [style]
+    let found: string | undefined
+    for (const entry of entries) {
+      const value = (entry as Record<string, unknown> | null | undefined)?.[key]
+      if (typeof value === 'string') {
+        found = value
+      }
+    }
+    return found
+  }
+
+  function read(tree: ReactTestRenderer): Rendered {
+    const texts = tree.root
+      .findAllByType('Text')
+      .map((node) => node.props.children)
+      .filter((value): value is string => typeof value === 'string')
+    const markers = tree.root.findAll((node) => node.props?.testID === 'diff-card-marker')
+    const bodies = tree.root.findAll((node) => node.props?.testID === 'diff-card-text')
+    const rows = markers.map((marker, index) => ({
+      marker: String(marker.props.children),
+      text: String(bodies[index]?.props.children ?? ''),
+      background: styleValue(marker.parent?.props.style, 'backgroundColor')
+    }))
+    const buttons = tree.root
+      .findAllByType('Pressable')
+      .map((button) => String(button.props.accessibilityLabel))
+    return { rows, texts, buttons }
+  }
+
+  function render(
+    permission: { title: string; detail?: string; options: { label: string; send: string }[] },
+    scheme: 'light' | 'dark' = 'light'
+  ): Rendered {
+    act(() => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: scheme },
+          createElement(MobileNativeChatPermission, {
+            permission,
+            onRespond: vi.fn(async () => true)
+          })
+        )
+      )
+    })
+    return read(renderer!)
+  }
+
+  it('shows the proposed change as a diff before the user accepts an Edit', () => {
+    const { rows, texts } = render({
+      title: 'Allow Edit?',
+      detail: JSON.stringify(EDIT_INPUT),
+      options: OPTIONS
+    })
+    expect(rows.map((row) => `${row.marker}${row.text}`)).toEqual([
+      ' const a = 1',
+      '-const b = 2',
+      '+const b = 9',
+      ' const c = 3'
+    ])
+    expect(texts).toContain('app.ts')
+    // The edit has not happened: the header must not say it has.
+    expect(texts).toContain('Proposed edit')
+    expect(texts).not.toContain('Edited file')
+    // And the JSON slab is gone from the card.
+    expect(texts.some((text) => text.includes('old_string'))).toBe(false)
+  })
+
+  it('shows a Write as the whole new content and says it replaces the file', () => {
+    // Pre-approval there is no way to read what the file holds now, so a Write
+    // is shown as what it will contain, never as a fake full diff.
+    const { rows, texts } = render({
+      title: 'Allow Write?',
+      detail: JSON.stringify({ file_path: '/w/notes.md', content: '# Notes\n\nfirst\n' }),
+      options: OPTIONS
+    })
+    expect(rows.map((row) => `${row.marker}${row.text}`)).toEqual(['+# Notes', '+', '+first'])
+    expect(texts).toContain('Replaces file')
+    expect(texts).toContain('notes.md')
+  })
+
+  it('keeps the options exactly as given beneath the diff', async () => {
+    const onRespond = vi.fn(async () => true)
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: {
+            title: 'Allow Edit?',
+            detail: JSON.stringify(EDIT_INPUT),
+            options: OPTIONS
+          },
+          onRespond
+        })
+      )
+    })
+    const buttons = renderer!.root.findAllByType('Pressable')
+    expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual(
+      OPTIONS.map((option) => option.label)
+    )
+    await act(async () => buttons[2].props.onPress())
+    expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')
+  })
+
+  it('falls back to the text detail, and says why, when the host clipped the payload', () => {
+    // A partial diff is worse than none: it would show half an edit as the
+    // whole of it. The clipped JSON does not parse, so the card refuses.
+    const big = {
+      file_path: '/w/src/generated.ts',
+      old_string: 'x'.repeat(10_000),
+      new_string: 'y'.repeat(10_000)
+    }
+    const detail = clippedLikeOrca(JSON.stringify(big))
+    const { rows, texts } = render({ title: 'Allow Edit?', detail, options: OPTIONS })
+    expect(rows).toEqual([])
+    const notice = texts.find((text) => /too large to preview/i.test(text))
+    expect(notice).toBeDefined()
+    // What IS known is said: the file, and how big the request was.
+    expect(notice).toContain('generated.ts')
+    expect(notice).toMatch(/20\s?KB/)
+    // Today's text detail remains beneath it.
+    expect(texts.some((text) => text.startsWith('{"file_path"'))).toBe(true)
+  })
+
+  it('draws no diff for a Bash ask, whose detail is JSON too', () => {
+    const { rows, texts } = render({
+      title: 'Allow Bash?',
+      detail: JSON.stringify({ command: 'pnpm test', description: 'Run the suite' }),
+      options: OPTIONS
+    })
+    expect(rows).toEqual([])
+    expect(texts.some((text) => text.includes('pnpm test'))).toBe(true)
+  })
+
+  it('tints the proposed rows for the theme in use, in light and in dark', () => {
+    const permission = { title: 'Allow Edit?', detail: JSON.stringify(EDIT_INPUT), options: OPTIONS }
+    const light = render(permission)
+    const lightAdd = light.rows.find((row) => row.marker === '+')?.background
+    act(() => renderer?.unmount())
+    renderer = null
+    const dark = render(permission, 'dark')
+    const darkAdd = dark.rows.find((row) => row.marker === '+')?.background
+    expect(lightAdd).toBe(lightColors.diffAddBg)
+    expect(darkAdd).toBe(darkColors.diffAddBg)
+    expect(lightAdd).not.toBe(darkAdd)
+  })
+
+  it('folds a long proposed change and shows all of it on request', async () => {
+    const content = Array.from({ length: 80 }, (_, index) => `line ${index + 1}`).join('\n')
+    const { rows, buttons } = render({
+      title: 'Allow Write?',
+      detail: JSON.stringify({ file_path: '/w/long.txt', content }),
+      options: OPTIONS
+    })
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.length).toBeLessThan(80)
+    const showAll = renderer!.root
+      .findAllByType('Pressable')
+      .find((button) => /show all 80 lines/i.test(String(button.props.accessibilityLabel)))
+    expect(showAll).toBeDefined()
+    // The choices are still exactly the agent's, before and after.
+    expect(buttons.filter((label) => OPTIONS.some((option) => option.label === label))).toHaveLength(
+      3
+    )
+    await act(async () => showAll!.props.onPress())
+    expect(read(renderer!).rows).toHaveLength(80)
   })
 })
