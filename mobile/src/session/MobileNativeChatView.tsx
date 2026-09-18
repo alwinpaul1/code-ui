@@ -13,6 +13,7 @@ import {
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { useMobileChatFocusView } from './use-mobile-chat-focus-view'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
 import {
   chatListDrawDistanceDp,
@@ -127,6 +128,9 @@ export function MobileNativeChatView({
   const insets = useSafeAreaInsets()
   const drawDistance = chatListDrawDistanceDp(useWindowDimensions().height)
   const [toolsExpanded, setToolsExpanded] = useState(false)
+  // Focus view is a device preference (Settings → Chat UI); the store notifies,
+  // so a toggle made while this chat was open lands on its rows at once.
+  const focusView = useMobileChatFocusView()
   const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
@@ -237,6 +241,7 @@ export function MobileNativeChatView({
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
         onRevertHunk={onRevertHunk}
+        focusView={focusView}
         onCancelQueued={
           agentWorking && onCancelQueued && item.id.startsWith('pending-')
             ? () => void onCancelQueued(item.id)
@@ -261,6 +266,7 @@ export function MobileNativeChatView({
       onScrollToMessage,
       onOpenFile,
       onRevertHunk,
+      focusView,
       agentWorking,
       onCancelQueued,
       structuredActivityUi,

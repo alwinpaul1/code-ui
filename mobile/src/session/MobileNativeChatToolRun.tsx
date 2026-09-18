@@ -290,6 +290,7 @@ export function ToolRun({
   onOpenFile,
   onRevertHunk,
   revertScope,
+  focusView = false,
   styles
 }: {
   blocks: NativeChatBlock[]
@@ -311,6 +312,10 @@ export function ToolRun({
   /** This run's place in its message (message id and segment), so each diff
    *  card under it has an identity beyond its content. */
   revertScope?: string
+  /** Focus view: the row says only how many calls ran — no sentence, no
+   *  argument, no plan line, no "Running" — until the reader unfolds it. The
+   *  label holds while open too, so a tap does not make the row jump. */
+  focusView?: boolean
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -334,6 +339,7 @@ export function ToolRun({
     }
   }
   callCount ||= pairs.length
+  const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -356,7 +362,7 @@ export function ToolRun({
               numberOfLines={1}
               testID="tool-run-active-label"
             >
-              Running
+              {focusView ? countLabel : 'Running'}
             </PulsingText>
             <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
             {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
@@ -378,9 +384,9 @@ export function ToolRun({
           accessibilityState={{ expanded: open }}
         >
           <Text style={styles.toolRunLabel} numberOfLines={1} testID="tool-run-sentence">
-            {toolRunSentence(blocks) || `${callCount} tool call${callCount === 1 ? '' : 's'}`}
+            {focusView ? countLabel : toolRunSentence(blocks) || countLabel}
           </Text>
-          {planPreview ? (
+          {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>

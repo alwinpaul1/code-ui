@@ -2,6 +2,10 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  resetSessionViewPreferenceMemoryForTests,
+  saveChatFocusView
+} from '../storage/session-view-preferences'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
@@ -590,6 +594,35 @@ describe('MobileNativeChatView', () => {
         pending: [{ id: 'pending-1', text: 'When I close the app' }]
       })
       expect(rowProps('a1').interim).toBe(true)
+    })
+
+    // Focus view (extension `claudeCode.focusView`) is a device preference the
+    // Settings screen toggles; the chat that obeys it is this list, and a chat
+    // left open must follow the switch when the user comes back to it.
+    describe('Focus view', () => {
+      beforeEach(() => resetSessionViewPreferenceMemoryForTests())
+      afterEach(() => resetSessionViewPreferenceMemoryForTests())
+
+      it('is off for every row by default', async () => {
+        const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+        await render({ messages: folded, folded })
+        expect(rowProps('u1').focusView).toBe(false)
+        expect(rowProps('a1').focusView).toBe(false)
+      })
+
+      it('reaches every row, and follows a Settings toggle without a remount', async () => {
+        const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+        await act(async () => {
+          await saveChatFocusView(true)
+        })
+        await render({ messages: folded, folded })
+        expect(rowProps('u1').focusView).toBe(true)
+        expect(rowProps('a1').focusView).toBe(true)
+        await act(async () => {
+          await saveChatFocusView(false)
+        })
+        expect(rowProps('a1').focusView).toBe(false)
+      })
     })
 
     it('gives the live user turn a status row and drops the three-dot indicator', async () => {

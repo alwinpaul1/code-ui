@@ -163,6 +163,7 @@ function MobileNativeChatMessageImpl({
   onScrollToMessage,
   onOpenFile,
   onRevertHunk,
+  focusView = false,
   onCancelQueued,
   turnStatus,
   turnExpanded,
@@ -189,6 +190,8 @@ function MobileNativeChatMessageImpl({
   onOpenFile?: (relativePath: string) => void
   /** Put one hunk of a landed edit back, from its diff card. */
   onRevertHunk?: MobileNativeChatRevertHunk
+  /** Focus view: each run of tool calls folds to its call count. */
+  focusView?: boolean
   /** This turn's status row, rendered under a user message (desktop parity). */
   turnStatus?: NativeChatTurnStatus | null
   /** Whether the turn caret has disclosed this turn's activity. */
@@ -366,7 +369,8 @@ function MobileNativeChatMessageImpl({
               <ToolRun
                 // Why: a global toggle intentionally resets all per-run/per-line
                 // overrides in one remount, avoiding an effect-driven second render.
-                key={`t${segmentIndex}:${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
+                // Focus view is such a toggle: switching it folds every run back.
+                key={`t${segmentIndex}:${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}:${focusView ? 'focus' : 'full'}`}
                 blocks={segment.blocks}
                 defaultExpanded={turnExpanded || toolsExpanded}
                 expandChildren={turnExpanded ? false : toolsExpanded}
@@ -380,6 +384,7 @@ function MobileNativeChatMessageImpl({
                 onOpenFile={onOpenFile}
                 onRevertHunk={onRevertHunk}
                 revertScope={`${message.id}:${segmentIndex}`}
+                focusView={focusView}
                 styles={styles}
               />
             ) : null

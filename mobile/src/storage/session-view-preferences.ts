@@ -5,6 +5,7 @@ export type MobileSessionView = 'terminal' | 'chat'
 
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
+const CHAT_FOCUS_VIEW_KEY = 'orca:chatFocusView'
 
 // Why (Code UI): sessions open in the chat-style layer by default — that is the
 // whole point of this app (a Claude-app view over the terminal). Chat-ineligible
@@ -14,6 +15,11 @@ export const DEFAULT_SESSION_VIEW: MobileSessionView = 'chat'
 
 let defaultViewWriteBarrier: Promise<void> | null = null
 const overrideUpdateBarriers = new Map<string, Promise<void>>()
+
+/** Focus view (the extension's `claudeCode.focusView`): every run of tool
+ *  calls folds to one "N tool calls" row, so only the conversation shows. Off
+ *  is today's chat exactly. */
+export const DEFAULT_CHAT_FOCUS_VIEW = false
 
 function sessionViewOverridesKey(hostId: string, worktreeId: string): string {
   return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
@@ -42,6 +48,80 @@ const overridesMemory = new Map<string, Map<string, MobileSessionView>>()
 // to have no overrides — answering "loaded, empty" lets the default view apply
 // on the first frame instead of the terminal fallback.
 let allScopesHydrated = false
+let focusViewMemory: boolean | null = null
+let focusViewWriteBarrier: Promise<void> | null = null
+// Why: a read that was already past the barrier when a save landed comes back
+// with what storage held BEFORE the save. Counting saves lets that read see it
+// was overtaken and keep its hands off the fresher memory.
+let focusViewSaveGeneration = 0
+// Why subscribers: the toggle lives on the Settings screen and the chat that
+// obeys it is a different route. A chat left open must follow the switch when
+// the user comes back, without a remount or a focus effect of its own.
+const focusViewListeners = new Set<() => void>()
+
+function readFocusViewWord(raw: string | null): boolean | null {
+  return raw === 'on' ? true : raw === 'off' ? false : null
+}
+
+function setFocusViewMemory(value: boolean): void {
+  if (focusViewMemory === value) {
+    return
+  }
+  focusViewMemory = value
+  for (const listener of focusViewListeners) {
+    listener()
+  }
+}
+
+/** The last loaded or saved Focus view value, or null before the first read. */
+export function peekChatFocusView(): boolean | null {
+  return focusViewMemory
+}
+
+export function subscribeChatFocusView(listener: () => void): () => void {
+  focusViewListeners.add(listener)
+  return () => {
+    focusViewListeners.delete(listener)
+  }
+}
+
+/** Reads the stored value into memory. Storage trouble reads as the default,
+ *  which is off: a chat that cannot know is a chat as it was. */
+export async function loadChatFocusView(): Promise<boolean> {
+  await focusViewWriteBarrier
+  const generation = focusViewSaveGeneration
+  let raw: string | null = null
+  try {
+    raw = await AsyncStorage.getItem(CHAT_FOCUS_VIEW_KEY)
+  } catch {
+    raw = null
+  }
+  if (generation !== focusViewSaveGeneration && focusViewMemory !== null) {
+    // Overtaken by a save: the value read is older than what memory holds.
+    return focusViewMemory
+  }
+  const value = readFocusViewWord(raw) ?? DEFAULT_CHAT_FOCUS_VIEW
+  setFocusViewMemory(value)
+  return value
+}
+
+export function saveChatFocusView(enabled: boolean): Promise<void> {
+  focusViewSaveGeneration += 1
+  setFocusViewMemory(enabled)
+  // Same shape as the default view's writes: one barrier, so a remounted
+  // Settings screen cannot let an older write land after a newer choice.
+  const write = (focusViewWriteBarrier ?? Promise.resolve()).then(() =>
+    AsyncStorage.setItem(CHAT_FOCUS_VIEW_KEY, enabled ? 'on' : 'off')
+  )
+  const barrier = write.catch(() => undefined)
+  focusViewWriteBarrier = barrier
+  void barrier.then(() => {
+    if (focusViewWriteBarrier === barrier) {
+      focusViewWriteBarrier = null
+    }
+  })
+  return write
+}
 
 /** The last loaded or saved device default, or null before the first read. */
 export function peekDefaultSessionView(): MobileSessionView | null {
@@ -69,11 +149,21 @@ export async function hydrateSessionViewPreferences(): Promise<void> {
   try {
     const keys = await AsyncStorage.getAllKeys()
     const overrideKeys = keys.filter((key) => key.startsWith(NATIVE_CHAT_TABS_PREFIX))
-    const rows = await AsyncStorage.multiGet([DEFAULT_SESSION_VIEW_KEY, ...overrideKeys])
+    const rows = await AsyncStorage.multiGet([
+      DEFAULT_SESSION_VIEW_KEY,
+      CHAT_FOCUS_VIEW_KEY,
+      ...overrideKeys
+    ])
     for (const [key, raw] of rows) {
       if (key === DEFAULT_SESSION_VIEW_KEY) {
         if (defaultViewMemory === null) {
           defaultViewMemory = raw === 'chat' || raw === 'terminal' ? raw : DEFAULT_SESSION_VIEW
+        }
+        continue
+      }
+      if (key === CHAT_FOCUS_VIEW_KEY) {
+        if (focusViewMemory === null) {
+          setFocusViewMemory(readFocusViewWord(raw) ?? DEFAULT_CHAT_FOCUS_VIEW)
         }
         continue
       }
@@ -106,6 +196,10 @@ export function resetSessionViewPreferenceMemoryForTests(): void {
   defaultViewMemory = null
   overridesMemory.clear()
   allScopesHydrated = false
+  focusViewMemory = null
+  focusViewWriteBarrier = null
+  focusViewSaveGeneration = 0
+  focusViewListeners.clear()
 }
 
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {
