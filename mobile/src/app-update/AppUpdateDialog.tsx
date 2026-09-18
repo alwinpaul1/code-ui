@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Modal, Pressable, View } from 'react-native'
 
 import { useTheme } from '../theme/theme-context'
@@ -9,7 +9,8 @@ import { useApkInstallStore } from './apk-install-store'
 import { useDialogState } from './app-update-dialog-state'
 import {
   claimAppUpdateDialogPresenter,
-  releaseAppUpdateDialogPresenter
+  releaseAppUpdateDialogPresenter,
+  useAppUpdateDialogPresenting
 } from './app-update-dialog-presenter'
 import { deferDialogDismiss } from './app-update-dismiss-defer'
 import {
@@ -39,12 +40,13 @@ export function AppUpdateDialog() {
   // screens alive, so without a single presenter one store change opens two
   // modals and dismissing the front one leaves the second over the list.
   const owner = useRef({}).current
-  const [presenting, setPresenting] = useState(() => claimAppUpdateDialogPresenter(owner))
+  // Subscribed, not read once: the copy that loses the claim to a screen pushed
+  // on top has to stop presenting, or two modals open — see the presenter module.
   useEffect(() => {
-    // Re-claim on mount: the previous holder may have unmounted since render.
-    setPresenting(claimAppUpdateDialogPresenter(owner))
+    claimAppUpdateDialogPresenter(owner)
     return () => releaseAppUpdateDialogPresenter(owner)
   }, [owner])
+  const presenting = useAppUpdateDialogPresenting(owner)
 
   const state = useDialogState()
   const visible = presenting && state.kind !== 'hidden'
