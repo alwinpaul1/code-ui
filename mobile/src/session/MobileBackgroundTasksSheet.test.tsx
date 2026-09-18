@@ -7,6 +7,7 @@ import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
+import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -439,5 +440,209 @@ describe('a structured tab reading its background tasks from the host', () => {
     expect(dark.colors).toContain(darkColors.danger)
     expect(dark.colors).not.toContain(lightColors.text)
     expect(light.colors).not.toContain(darkColors.text)
+  })
+})
+
+// ─── Tapping a subagent opens what it did ────────────────────────────────────
+// The Agent tool's result carries `agentId: <id>`, and Claude Code writes that
+// subagent's transcript as `<parent dir>/<parentSessionId>/subagents/agent-<id>.jsonl`
+// (verified on this machine 2026-09-18, Claude Code 2.1.275). The row hands the
+// viewer that file plus the one session key the host can match to it alone.
+
+const PARENT_TRANSCRIPT =
+  '/Users/me/.claude/projects/-Users-me-Desktop-Project/5d877e39-1867-424f-86b5-c080713c1563.jsonl'
+
+/** A transcript with one running subagent (from a real Agent launch record). */
+function withSubagent(): NativeChatMessage[] {
+  return [
+    {
+      id: 'a9',
+      role: 'assistant',
+      timestamp: T0,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          input: { description: 'Audit the release notes', subagent_type: 'Explore', prompt: '…' }
+        }
+      ]
+    },
+    {
+      id: 'r9',
+      role: 'user',
+      timestamp: T0 + 10,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'tool-result',
+          output:
+            'Async agent launched successfully.\nagentId: a7139263d97426e10 (internal ID - do not mention to user. Only use for AgentOutputTool calls)\noutput_file: /private/tmp/claude-501/tasks/a7139263d97426e10.output'
+        }
+      ]
+    }
+  ]
+}
+
+describe('tapping a subagent on the roster', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    resetSubagentTranscriptForTests()
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+    resetSubagentTranscriptForTests()
+  })
+
+  async function renderWith(
+    props: Partial<Parameters<typeof MobileBackgroundTasksSheetBody>[0]>
+  ): Promise<Rendered> {
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileBackgroundTasksSheetBody, { messages: withSubagent(), ...props })
+        )
+      )
+    })
+    return readTree(renderer!)
+  }
+
+  function openLabels(): string[] {
+    return renderer!.root
+      .findAllByType('Pressable')
+      .map((node) => String(node.props.accessibilityLabel ?? ''))
+      .filter((label) => label.startsWith('Open '))
+  }
+
+  it("opens the subagent's own transcript, beside the parent's, when its row is tapped", async () => {
+    await renderWith({
+      agent: 'claude',
+      agentStatus: {
+        state: 'working',
+        // The host still tracks it, so the row is a running one.
+        subagents: [{ id: 'a7139263d97426e10', state: 'working', startedAt: T0 }],
+        providerSession: {
+          key: 'claude',
+          id: '5d877e39-1867-424f-86b5-c080713c1563',
+          transcriptPath: PARENT_TRANSCRIPT
+        }
+      }
+    })
+    await press(renderer!, 'Open Audit the release notes')
+    expect(peekSubagentTranscript()).toEqual({
+      running: true,
+      target: {
+        agent: 'claude',
+        agentId: 'a7139263d97426e10',
+        sessionId: 'agent-a7139263d97426e10',
+        transcriptPath:
+          '/Users/me/.claude/projects/-Users-me-Desktop-Project/5d877e39-1867-424f-86b5-c080713c1563/subagents/agent-a7139263d97426e10.jsonl',
+        title: 'Audit the release notes'
+      }
+    })
+  })
+
+  it('still opens it by session key alone when the desktop has not said where the parent transcript is', async () => {
+    await renderWith({ agent: 'claude', agentStatus: { state: 'working' } })
+    await press(renderer!, 'Open Audit the release notes')
+    expect(peekSubagentTranscript()?.target).toMatchObject({
+      sessionId: 'agent-a7139263d97426e10',
+      transcriptPath: null
+    })
+  })
+
+  it('draws the tappable card from whichever theme is on, pressed or not', async () => {
+    const cardStyle = (pressed: boolean) => {
+      const card = renderer!.root
+        .findAllByType('Pressable')
+        .find((node) => node.props.accessibilityLabel === 'Open Audit the release notes')
+      return card!.props.style({ pressed })
+    }
+    await renderWith({ agent: 'claude' })
+    expect(cardStyle(false).backgroundColor).toBe(lightColors.bgRaised)
+    expect(cardStyle(true).backgroundColor).toBe(lightColors.bgSunken)
+    expect(cardStyle(false).borderColor).toBe(lightColors.border)
+    act(() => renderer?.unmount())
+    renderer = null
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'dark' },
+          createElement(MobileBackgroundTasksSheetBody, { messages: withSubagent(), agent: 'claude' })
+        )
+      )
+    })
+    expect(cardStyle(false).backgroundColor).toBe(darkColors.bgRaised)
+    expect(cardStyle(true).backgroundColor).toBe(darkColors.bgSunken)
+    expect(cardStyle(false).borderColor).toBe(darkColors.border)
+  })
+
+  // The stop control sits inside the card that is now itself a Pressable. On
+  // the phone RN's responder gives the inner pressable the tap; the test
+  // renderer has no responder system, so what this can check is that the two
+  // handlers are separate and Stop's does not also open the viewer.
+  it('keeps Stop its own tap: stopping an agent does not open its transcript', async () => {
+    const stopped: string[] = []
+    await renderWith({
+      agent: 'claude',
+      hostBackgroundTasks: {
+        state: 'monitoring',
+        supportsTaskStop: true,
+        tasks: [
+          { id: 'a7139263d97426e10', kind: 'agent', description: 'Audit the release notes', state: 'working' }
+        ]
+      },
+      onStopTask: (taskId) => stopped.push(taskId)
+    })
+    expect(openLabels()).toEqual(['Open Audit the release notes'])
+    await press(renderer!, 'Stop Audit the release notes')
+    expect(stopped).toEqual(['a7139263d97426e10'])
+    expect(peekSubagentTranscript()).toBeNull()
+  })
+
+  it('gives a Codex tab no tap target: Codex has no subagents', async () => {
+    await renderWith({ agent: 'codex' })
+    expect(openLabels()).toEqual([])
+    expect(peekSubagentTranscript()).toBeNull()
+  })
+
+  it('gives a tab whose agent is unknown no tap target either', async () => {
+    await renderWith({})
+    expect(openLabels()).toEqual([])
+  })
+
+  it('gives shells no tap target, only agents', async () => {
+    await renderWith({ agent: 'claude', messages: messages() })
+    expect(openLabels()).toEqual([])
+  })
+
+  it("opens a subagent from the host's own roster on the structured lane too, and a finished one as finished", async () => {
+    await renderWith({
+      agent: 'claude',
+      hostBackgroundTasks: {
+        state: 'monitoring',
+        tasks: [
+          { id: 'a7139263d97426e10', kind: 'agent', description: 'Audit the release notes', state: 'working' }
+        ],
+        settledTasks: [
+          { id: 'b8240374e08537f21', kind: 'agent', description: 'Sweep the tests', state: 'done' }
+        ]
+      }
+    })
+    expect(openLabels()).toEqual(['Open Audit the release notes', 'Open Sweep the tests'])
+    await press(renderer!, 'Open Sweep the tests')
+    expect(peekSubagentTranscript()).toMatchObject({
+      running: false,
+      target: { sessionId: 'agent-b8240374e08537f21', transcriptPath: null }
+    })
   })
 })

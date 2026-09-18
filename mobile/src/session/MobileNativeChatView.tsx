@@ -372,6 +372,7 @@ export function MobileNativeChatView({
       <MobileBackgroundTasksSheet
         visible={backgroundTasksOpen}
         messages={messages}
+        agent={agent}
         agentStatus={agentStatus ?? null}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}

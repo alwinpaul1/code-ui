@@ -50,7 +50,9 @@ import {
  * for this pane (an older host, or hooks not attached): trust the transcript.
  */
 export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'> &
-  Partial<Pick<AgentStatusEntry, 'stateStartedAt' | 'workingMode'>>
+  // `providerSession` is read only for its transcript path, which says where
+  // a subagent's own transcript sits (`mobile-subagent-transcript.ts`).
+  Partial<Pick<AgentStatusEntry, 'stateStartedAt' | 'workingMode' | 'providerSession'>>
 
 export type BackgroundTaskDeriveOptions = {
   /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`).
