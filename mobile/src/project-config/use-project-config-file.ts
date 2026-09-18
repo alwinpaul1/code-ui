@@ -14,10 +14,10 @@ import { classifyProjectConfigFileError, describeProjectConfigFileError } from '
  * plain text for the third) — this hook only knows it is reading and
  * writing one worktree-relative text file.
  *
- * `saveError` never discards `content`: a refused write (see
- * project-config-file-operations.ts — every `files.write` this app sends is
- * refused by the host today) leaves the draft exactly as the user left it,
- * with the refusal shown alongside it.
+ * `saveError` never discards `content`: a refused write leaves the draft
+ * exactly as the user left it, with the refusal shown alongside it. (On a
+ * host whose mobile gate refuses `files.write` — Orca 1.4.205 — the screens
+ * never offer Save at all; see project-config-file-operations.ts.)
  */
 export type ProjectConfigFileState =
   | { status: 'loading' }

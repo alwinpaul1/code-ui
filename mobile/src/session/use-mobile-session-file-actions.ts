@@ -56,9 +56,11 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   })
   // "Revert this hunk" on a landed-edit card: the same worktree and chat
   // provenance a tapped path resolves with, so the two cannot disagree about
-  // which file a card names.
+  // which file a card names. Undefined until this host is known to let a
+  // phone call files.write.
   const handleNativeChatRevertHunk = useMobileNativeChatHunkRevert({
     client,
+    hostId,
     worktreeId,
     nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
     getActiveSessionTabId: () => activeSessionTabIdRef.current

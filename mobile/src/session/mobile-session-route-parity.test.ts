@@ -157,8 +157,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // MobileSessionHeaderMoreActionsSheet.tsx — "MCP Servers", "Permission
 // Rules" and "Project Memory" — each with a hint string naming its file and
 // "project scope only" (+15 on top of the 661 above).
+// 677 since 2026-09-18 (later): MobileSessionActiveContent asks the host's
+// mobile RPC gate about 'agentSession.rewind' (useHostMobileCapability) —
+// one new literal, the capability key.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'fe30d33b46be3b7f60b7ea17aeb4af5691c135b8ebe4f4e937349d2cd491c2c2'
+  'd2df254a87794f558fd660ad077308920e01bfbdb6f2aff64655d441db29e4a5'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -213,7 +216,11 @@ const HEAD_HOST_JSX_SHA256 = '12922f5e94e0aedb1bec67746bb8510ad4919ef7facfe2da7f
 // <ActionSheetModal actions={[…]} /> is the one leaf record that moved — its
 // `actions=` array literal gained the three new project-config entries (MCP
 // Servers / Permission Rules / Project Memory). Still 73 records.
-const HEAD_LEAF_JSX_SHA256 = 'caee24e7c9c245d55c294765cd2f8d165bf0963c261746022112c7f0af4ac41d'
+// 2026-09-18 (later): the chat overlay is handed `hostAllowsRewind` beside
+// `onRevertHunk` — the mobile RPC gate's answer for agentSession.rewind, ANDed
+// with the session's own rewindSupport inside the overlay. Same 73 records;
+// only the overlay's record changed. Host and style references untouched.
+const HEAD_LEAF_JSX_SHA256 = 'b8250259712d51a638be3aa1956b09c4d8b7e2e1bd2003a7802efe94f5a095a8'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -688,7 +695,9 @@ describe('mobile session route extraction parity', () => {
     // strings ("Forking from the latest message" / "Couldn't fork the session").
     // 676 since 2026-09-18 (newest): the three new session-menu entries —
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
-    expect(strings).toHaveLength(676)
+    // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
+    // MobileSessionActiveContent asks the mobile RPC gate about.
+    expect(strings).toHaveLength(677)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

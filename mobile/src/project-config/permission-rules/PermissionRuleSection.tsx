@@ -17,11 +17,14 @@ const CATEGORY_LABEL: Record<PermissionRuleCategory, string> = {
 export function PermissionRuleSection({
   category,
   rules,
+  readOnly = false,
   onAdd,
   onRemove
 }: {
   category: PermissionRuleCategory
   rules: string[]
+  /** A viewer only: no remove on a row and no "Add rule" row. */
+  readOnly?: boolean
   onAdd: () => void
   onRemove: (rule: string) => void
 }) {
@@ -42,18 +45,22 @@ export function PermissionRuleSection({
             <Txt variant="mono" style={{ flex: 1 }} numberOfLines={2}>
               {rule}
             </Txt>
-            <Pressable accessibilityLabel={`Remove ${rule}`} onPress={() => onRemove(rule)} hitSlop={8}>
-              <Trash2 size={15} color={colors.danger} />
-            </Pressable>
+            {readOnly ? null : (
+              <Pressable accessibilityLabel={`Remove ${rule}`} onPress={() => onRemove(rule)} hitSlop={8}>
+                <Trash2 size={15} color={colors.danger} />
+              </Pressable>
+            )}
           </View>
         ))
       )}
-      <Pressable style={styles.addRow} onPress={onAdd}>
-        <Plus size={14} color={colors.accentText} />
-        <Txt variant="caption" tone="accent">
-          Add rule
-        </Txt>
-      </Pressable>
+      {readOnly ? null : (
+        <Pressable style={styles.addRow} onPress={onAdd}>
+          <Plus size={14} color={colors.accentText} />
+          <Txt variant="caption" tone="accent">
+            Add rule
+          </Txt>
+        </Pressable>
+      )}
     </View>
   )
 }

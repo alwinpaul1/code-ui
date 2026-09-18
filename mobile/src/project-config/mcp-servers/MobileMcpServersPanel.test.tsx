@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -24,12 +24,18 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 vi.mock('../../components/BottomDrawer', () => ({ BottomDrawer: 'View' }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null }))
+const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, filesWrite: true }))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
+// The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
+// Faked so this suite tests what the screen does with the answer, not the probe.
+vi.mock('../../transport/host-mobile-capabilities', () => ({
+  useHostMobileCapability: (_hostId: string, key: string) => key === 'files.write' && fakes.filesWrite
+}))
 
 import { MobileMcpServersPanel } from './MobileMcpServersPanel'
+import { PROJECT_CONFIG_READ_ONLY_NOTICE } from '../ProjectConfigReadOnlyNotice'
 
 function mockClient(reads: Record<string, unknown>): RpcClient {
   const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
@@ -65,7 +71,19 @@ function allText(renderer: ReactTestRenderer): string[] {
   return renderer.root.findAllByType('Text' as never).map((node) => String(node.props.children))
 }
 
+function buttonLabels(renderer: ReactTestRenderer): string[] {
+  return renderer.root
+    .findAll((node) => node.props?.accessibilityRole === 'button')
+    .map((node) => String(node.props.accessibilityLabel))
+}
+
+const ONE_SERVER = JSON.stringify({ mcpServers: { local: { command: 'npx' } } })
+
 describe('MobileMcpServersPanel', () => {
+  beforeEach(() => {
+    fakes.filesWrite = true
+  })
+
   it('offers Create when .mcp.json does not exist yet', async () => {
     const renderer = await render(mockClient({}))
     expect(allText(renderer)).toContain('No .mcp.json in this worktree yet.')
@@ -97,6 +115,47 @@ describe('MobileMcpServersPanel', () => {
     const renderer = await render(mockClient({ '.mcp.json': '{\n  "mcpServers": {\n' }))
     const text = allText(renderer).join(' ')
     expect(text).toMatch(/Line \d+:/)
+    act(() => renderer.unmount())
+  })
+
+  // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every
+  // files.write from a phone, so Save was offered and every tap was refused.
+  describe('on a host whose mobile gate refuses files.write', () => {
+    beforeEach(() => {
+      fakes.filesWrite = false
+    })
+
+    it('is a viewer: no Add server, no Save, no Remove, rows not editable, and one line says so', async () => {
+      const renderer = await render(mockClient({ '.mcp.json': ONE_SERVER }))
+      const labels = buttonLabels(renderer)
+      expect(labels).not.toContain('Add server')
+      expect(labels).not.toContain('Save')
+      expect(renderer.root.findAll((node) => node.props?.accessibilityLabel === 'Remove local')).toHaveLength(0)
+      const row = renderer.root
+        .findAllByType('Pressable' as never)
+        .find((node) => node.findAllByType('Text' as never).some((t) => t.props.children === 'local'))
+      expect(row?.props.disabled).toBe(true)
+      expect(allText(renderer).filter((t) => t === PROJECT_CONFIG_READ_ONLY_NOTICE)).toHaveLength(1)
+      // The server itself is still shown: read-only, not empty.
+      expect(allText(renderer)).toContain('local')
+      act(() => renderer.unmount())
+    })
+
+    it('still offers Create for a missing .mcp.json, which files.createFile allows', async () => {
+      const renderer = await render(mockClient({}))
+      expect(buttonLabels(renderer)).toContain('Create .mcp.json')
+      act(() => renderer.unmount())
+    })
+  })
+
+  it('is editable exactly as before once the host is known to let files.write through', async () => {
+    fakes.filesWrite = true
+    const renderer = await render(mockClient({ '.mcp.json': ONE_SERVER }))
+    const labels = buttonLabels(renderer)
+    expect(labels).toContain('Add server')
+    expect(labels).toContain('Save')
+    expect(renderer.root.findAll((node) => node.props?.accessibilityLabel === 'Remove local')).toHaveLength(1)
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
     act(() => renderer.unmount())
   })
 

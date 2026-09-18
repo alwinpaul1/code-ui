@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native'
 import { useHostClient } from '../../transport/client-context'
+import { useHostMobileCapability } from '../../transport/host-mobile-capabilities'
 import { useTheme, useThemedStyles, type Theme } from '../../theme/theme-context'
 import { Txt } from '../../ui/Txt'
 import { Button } from '../../ui/Button'
 import { TextInputModal } from '../../components/TextInputModal'
 import { ProjectConfigScreenChrome } from '../ProjectConfigScreenChrome'
+import { ProjectConfigReadOnlyNotice } from '../ProjectConfigReadOnlyNotice'
 import { useProjectConfigFile } from '../use-project-config-file'
 import { PERMISSION_SETTINGS_RELATIVE_PATH, type PermissionRuleDestination } from '../project-config-paths'
 import {
@@ -40,9 +42,10 @@ const DESTINATIONS: { value: PermissionRuleDestination; label: string }[] = [
  *     needs `/hooks` or a restart before its rules apply, even once it can
  *     be written.
  *
- * Since `files.write` is refused for every mobile client today (see
- * project-config-file-error.ts), this note describes what WOULD happen once
- * a save lands, not what just happened — worded that way on screen.
+ * On a host whose mobile gate refuses `files.write` (Orca 1.4.205; see
+ * project-config-file-error.ts) the screen is read-only and no save can
+ * land, so this note describes what WOULD happen on a host that allows it —
+ * worded that way on screen.
  */
 const LIVE_EFFECT_NOTE =
   'Claude Code re-reads an existing settings file live. A file that did not exist yet when the session started needs /hooks or a restart before its rules apply.'
@@ -57,6 +60,10 @@ export function MobilePermissionRulesPanel({
   name?: string
 }) {
   const { client } = useHostClient(hostId)
+  // Whether this host lets a phone call files.write at all. Without it the
+  // screen is a viewer: no add, remove or Save, and one line says so. Create
+  // stays — files.createFile is on the host's mobile list.
+  const canWrite = useHostMobileCapability(hostId, 'files.write')
   const [destination, setDestination] = useState<PermissionRuleDestination>('project')
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
@@ -155,41 +162,48 @@ export function MobilePermissionRulesPanel({
                 key={category}
                 category={category}
                 rules={parsed.rules[category]}
+                readOnly={!canWrite}
                 onAdd={() => setAddingTo(category)}
                 onRemove={(rule) => removeRule(category, rule)}
               />
             ))}
           </ScrollView>
-          <View style={styles.footer}>
-            {state.saveError ? (
-              <Txt tone="danger" variant="caption" style={{ marginBottom: 8 }}>
-                {state.saveError}
-              </Txt>
-            ) : null}
-            <Button
-              label={state.saving ? 'Saving…' : 'Save'}
-              onPress={() => void save()}
-              disabled={!state.isDirty || state.saving}
-              loading={state.saving}
-              block
-            />
-          </View>
+          {!canWrite ? (
+            <ProjectConfigReadOnlyNotice />
+          ) : (
+            <View style={styles.footer}>
+              {state.saveError ? (
+                <Txt tone="danger" variant="caption" style={{ marginBottom: 8 }}>
+                  {state.saveError}
+                </Txt>
+              ) : null}
+              <Button
+                label={state.saving ? 'Saving…' : 'Save'}
+                onPress={() => void save()}
+                disabled={!state.isDirty || state.saving}
+                loading={state.saving}
+                block
+              />
+            </View>
+          )}
         </>
       )}
 
-      <TextInputModal
-        visible={addingTo !== null}
-        title={addingTo ? `Add an ${addingTo} rule` : 'Add rule'}
-        message="e.g. Bash(npm run *), Edit, Read(./src/**)"
-        placeholder="Bash(npm run *)"
-        onSubmit={(value) => {
-          if (addingTo) {
-            addRule(addingTo, value)
-          }
-          setAddingTo(null)
-        }}
-        onCancel={() => setAddingTo(null)}
-      />
+      {canWrite ? (
+        <TextInputModal
+          visible={addingTo !== null}
+          title={addingTo ? `Add an ${addingTo} rule` : 'Add rule'}
+          message="e.g. Bash(npm run *), Edit, Read(./src/**)"
+          placeholder="Bash(npm run *)"
+          onSubmit={(value) => {
+            if (addingTo) {
+              addRule(addingTo, value)
+            }
+            setAddingTo(null)
+          }}
+          onCancel={() => setAddingTo(null)}
+        />
+      ) : null}
     </ProjectConfigScreenChrome>
   )
 }

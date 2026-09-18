@@ -15,11 +15,15 @@
  *     allowlist) rejects with `{code:'forbidden', message:"Method '<name>' is
  *     not available to mobile clients"}` for any method not on the list.
  *     `files.write` is NOT on that list — only `files.read`, `files.createFile`
- *     and a handful of others are. So every `files.write` this app ever sends
- *     is refused by the host, always, for every project-config screen. This
- *     is not a bug in this repo: it is a real gap in Orca's mobile RPC
- *     surface (the same shape as `orca-mobile-rpc-settings-whitelist.md`'s
- *     keep-awake keys) and the fix is upstream, not here.
+ *     and a handful of others are (the whole list is recorded in
+ *     transport/fixtures/orca-mobile-rpc-allowlist-1.4.205.json). So the three
+ *     screens ask the host first (transport/host-mobile-capabilities.ts) and
+ *     offer no Save on a host that refuses. The `write-blocked` branch below
+ *     stays for the write that is refused anyway — a host that changed its
+ *     answer mid-session — and for a create the gate refuses. This is not a
+ *     bug in this repo: it is a real gap in Orca's mobile RPC surface (the
+ *     same shape as `orca-mobile-rpc-settings-whitelist.md`'s keep-awake
+ *     keys) and the fix is upstream, not here.
  *   - a missing file surfaces Node's own `ENOENT: no such file or directory,
  *     open '<path>'` from the underlying `fs` read.
  */

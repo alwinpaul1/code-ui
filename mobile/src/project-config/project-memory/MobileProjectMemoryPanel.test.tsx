@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -22,12 +22,18 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: () => false, replace: vi.fn() }) }))
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null }))
+const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, filesWrite: true }))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
+// The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
+// Faked so this suite tests what the screen does with the answer, not the probe.
+vi.mock('../../transport/host-mobile-capabilities', () => ({
+  useHostMobileCapability: (_hostId: string, key: string) => key === 'files.write' && fakes.filesWrite
+}))
 
 import { MobileProjectMemoryPanel } from './MobileProjectMemoryPanel'
+import { PROJECT_CONFIG_READ_ONLY_NOTICE } from '../ProjectConfigReadOnlyNotice'
 
 function mockClient(reads: Record<string, unknown>): RpcClient {
   const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
@@ -61,7 +67,64 @@ function allText(renderer: ReactTestRenderer): string[] {
   return renderer.root.findAllByType('Text' as never).map((node) => String(node.props.children))
 }
 
+function buttonLabels(renderer: ReactTestRenderer): string[] {
+  return renderer.root
+    .findAll((node) => node.props?.accessibilityRole === 'button')
+    .map((node) => String(node.props.accessibilityLabel))
+}
+
+async function openRow(renderer: ReactTestRenderer, relativePath: string): Promise<void> {
+  const row = renderer.root
+    .findAllByType('Pressable' as never)
+    .find((node) => node.findAllByType('Text' as never).some((t) => t.props.children === relativePath))
+  await act(async () => {
+    row!.props.onPress()
+    await Promise.resolve()
+  })
+}
+
 describe('MobileProjectMemoryPanel', () => {
+  beforeEach(() => {
+    fakes.filesWrite = true
+  })
+
+  // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every
+  // files.write from a phone, so Save was offered and every tap was refused.
+  describe('on a host whose mobile gate refuses files.write', () => {
+    beforeEach(() => {
+      fakes.filesWrite = false
+    })
+
+    it('opens a file as a viewer: text not editable, no Save, and one line says so', async () => {
+      const renderer = await render(mockClient({ 'CLAUDE.md': '# hi' }))
+      await openRow(renderer, 'CLAUDE.md')
+      const editor = renderer.root.findAllByType('TextInput' as never)[0]
+      expect(editor?.props.value).toBe('# hi')
+      expect(editor?.props.editable).toBe(false)
+      expect(buttonLabels(renderer)).not.toContain('Save')
+      expect(allText(renderer).filter((t) => t === PROJECT_CONFIG_READ_ONLY_NOTICE)).toHaveLength(1)
+      act(() => renderer.unmount())
+    })
+
+    it('still offers Create for a missing file, which files.createFile allows', async () => {
+      const renderer = await render(mockClient({}))
+      await openRow(renderer, 'CLAUDE.md')
+      expect(buttonLabels(renderer)).toContain('Create')
+      act(() => renderer.unmount())
+    })
+  })
+
+  it('is editable exactly as before once the host is known to let files.write through', async () => {
+    fakes.filesWrite = true
+    const renderer = await render(mockClient({ 'CLAUDE.md': '# hi' }))
+    await openRow(renderer, 'CLAUDE.md')
+    const editor = renderer.root.findAllByType('TextInput' as never)[0]
+    expect(editor?.props.editable).toBe(true)
+    expect(buttonLabels(renderer)).toContain('Save')
+    expect(allText(renderer)).not.toContain(PROJECT_CONFIG_READ_ONLY_NOTICE)
+    act(() => renderer.unmount())
+  })
+
   it('lists all three candidates, whichever exist', async () => {
     const renderer = await render(mockClient({ 'CLAUDE.md': '# hi' }))
     const text = allText(renderer)
