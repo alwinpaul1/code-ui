@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { codexPermissionFromScreen } from './codex-terminal-permission'
 import {
   sendMobileNativeChatPermissionResponse,
   useMobileNativeChatPermissionSend
@@ -176,6 +177,41 @@ describe('useMobileNativeChatPermissionSend', () => {
     expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
     releaseMobileNativeChatTerminalWrite('terminal')
   })
+
+  it('tells the user what the terminal is waiting for instead of a dead "not sent"', async () => {
+    const onSendError = vi.fn()
+    const onResponseAccepted = vi.fn()
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValue(screenReply(PLAN_REVIEW_DIGIT_TYPED_AS_FEEDBACK_SCREEN))
+    function Harness(): null {
+      respond = useMobileNativeChatPermissionSend({
+        client: { sendRequest } as unknown as RpcClient,
+        enabled: true,
+        handleRef: { current: 'terminal' },
+        deviceTokenRef: { current: null },
+        onSendError,
+        onResponseAccepted,
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: null,
+        cardPermission: PLAN_REVIEW_CARD
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+
+    await act(async () => {
+      await expect(respond?.('1')).resolves.toBe(false)
+    })
+    expect(onSendError).toHaveBeenCalledWith(FEEDBACK_ROW_MESSAGE)
+    expect(onResponseAccepted).not.toHaveBeenCalled()
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual(['terminal.read'])
+    // The refusal released the terminal for the comment send it points to.
+    expect(acquireMobileNativeChatTerminalWrite('terminal')).toBe(true)
+    releaseMobileNativeChatTerminalWrite('terminal')
+  })
 })
 
 /**
@@ -214,6 +250,78 @@ const BASH_DIALOG_SCREEN = [
   ' Esc to cancel · Tab to amend'
 ]
 
+/** The plan-review card as the phone renders it: the screen parser cannot
+ *  see this dialog, so its options come from the agent's own status text
+ *  (MobileNativeChatPermission.test.ts renders exactly this shape). */
+const PLAN_REVIEW_CARD = {
+  title: 'Permission requested',
+  detail: 'Claude has written up a plan and is ready to execute. Would you like to proceed?',
+  options: [
+    { label: 'Yes, and use auto mode', send: '1' },
+    { label: 'Yes, manually approve edits', send: '2' },
+    { label: 'Tell Claude what to change', send: '3' }
+  ]
+}
+
+/** Same session, after a bare "3": the highlight moved to the feedback row
+ *  and the review stayed up. This is the state a refused comment send can
+ *  leave the desktop in. */
+const PLAN_REVIEW_FEEDBACK_ROW_HIGHLIGHTED_SCREEN = [
+  '  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '   Ready to code?',
+  '',
+  "   Here is Claude's plan:",
+  '  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+  '   Print hello to stdout with echo hello.',
+  '  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+  '',
+  '  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '   Claude has written up a plan and is ready to execute. Would you like to proceed?',
+  '',
+  '     1. Yes, and use auto mode',
+  '     2. Yes, manually approve edits',
+  '   ❯ 3. Tell Claude what to change',
+  '        shift+tab to approve with this feedback',
+  '',
+  '   ctrl+g to edit in VS Code · ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md'
+]
+
+/** Same session, one keystroke later: a bare "1" sent while row 3 was
+ *  highlighted was typed INTO the feedback field, not taken as a choice. The
+ *  label is gone, so nothing on this row says "Tell Claude what to change"
+ *  any more; only the card knows that row 3 is the feedback row. */
+const PLAN_REVIEW_DIGIT_TYPED_AS_FEEDBACK_SCREEN = [
+  '  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '   Ready to code?',
+  '',
+  "   Here is Claude's plan:",
+  '  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+  '   Print hello to stdout with echo hello.',
+  '  ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌',
+  '',
+  '  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────',
+  '   Claude has written up a plan and is ready to execute. Would you like to proceed?',
+  '',
+  '     1. Yes, and use auto mode',
+  '     2. Yes, manually approve edits',
+  '   ❯ 3. 1',
+  '        shift+tab to approve with this feedback',
+  '',
+  '   ctrl+g to edit in VS Code · ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md'
+]
+
+const FEEDBACK_ROW_MESSAGE =
+  'The terminal is waiting for typed feedback. Press Up in the terminal, or send your comment from here.'
+
+function screenReply(lines: readonly string[], source: string = 'screen') {
+  return { ok: true, result: { terminal: { lines, source } } }
+}
+
+const SEND_ACCEPTED = {
+  ok: true,
+  result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
+}
+
 describe('plan-review approvals on Claude Code 2.1.276', () => {
   // The bare digit approved the plan on the real screen, the same way the
   // Bash dialog's digit does. Sending "2" with the highlight on row 1 replaced
@@ -231,16 +339,16 @@ describe('plan-review approvals on Claude Code 2.1.276', () => {
   // digit that already submitted lands in the composer of an agent that is
   // now working, and submits whatever is drafted there.
   it.each(['1', '2'])(
-    'approves a plan review with the bare digit %s, no Return appended',
+    'approves a plan review with the bare digit %s after one look at the screen, no Return appended',
     async (digit) => {
-      const sendRequest = vi.fn().mockResolvedValue({
-        ok: true,
-        result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
-      })
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce(screenReply(PLAN_REVIEW_SCREEN))
+        .mockResolvedValueOnce(SEND_ACCEPTED)
       // The screen parser knows only the Bash dialog, so the controller hands
-      // this path no screen-derived card for a plan review and there is no
-      // recheck read before the write. Pinned here because the write count
-      // below depends on it.
+      // this path no screen-derived card for a plan review and the Bash-style
+      // recheck does not run. Pinned here because the call count below
+      // depends on it.
       expect(claudePermissionFromScreen(PLAN_REVIEW_SCREEN)).toBeNull()
 
       await expect(
@@ -250,11 +358,13 @@ describe('plan-review approvals on Claude Code 2.1.276', () => {
           deviceToken: 'phone',
           text: digit,
           expectedTerminalAgent: 'claude',
-          expectedCodexPermission: claudePermissionFromScreen(PLAN_REVIEW_SCREEN)
+          expectedCodexPermission: claudePermissionFromScreen(PLAN_REVIEW_SCREEN),
+          cardPermission: PLAN_REVIEW_CARD
         })
       ).resolves.toBe('accepted')
-      expect(sendRequest).toHaveBeenCalledTimes(1)
-      expect(sendRequest).toHaveBeenCalledWith(
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
+      expect(sendRequest).toHaveBeenLastCalledWith(
         'terminal.send',
         {
           terminal: 'terminal',
@@ -266,6 +376,122 @@ describe('plan-review approvals on Claude Code 2.1.276', () => {
       )
     }
   )
+
+  it.each([
+    ['a digit already landed in the feedback field', PLAN_REVIEW_DIGIT_TYPED_AS_FEEDBACK_SCREEN],
+    ['the highlight sits on "Tell Claude what to change"', PLAN_REVIEW_FEEDBACK_ROW_HIGHLIGHTED_SCREEN]
+  ])('refuses the approval tap while %s, and writes nothing', async (_state, screen) => {
+    const sendRequest = vi.fn().mockResolvedValue(screenReply(screen))
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: '1',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: null,
+        cardPermission: PLAN_REVIEW_CARD
+      })
+    ).resolves.toEqual({ kind: 'refused', message: FEEDBACK_ROW_MESSAGE })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
+  })
+
+  it.each([
+    ['the host declines the read', { ok: false, error: { message: 'no such terminal' } }],
+    ['the read answers with stream scrollback, not the live frame', screenReply(PLAN_REVIEW_SCREEN, 'stream')],
+    ['the screen shows no highlighted option at all', screenReply([])],
+    ['the review has already left the screen', screenReply(['❯ ', '  ⏸ plan mode on (shift+tab to cycle)'])]
+  ])('does not write a plan approval blind when %s', async (_why, reply) => {
+    const sendRequest = vi.fn().mockResolvedValue(reply)
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: '2',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: null,
+        cardPermission: PLAN_REVIEW_CARD
+      })
+    ).resolves.toBe('rejected')
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[0]).toBe('terminal.read')
+  })
+
+  it('reports a plan approval as rejected, not thrown, when the read itself throws', async () => {
+    const sendRequest = vi.fn().mockRejectedValue(new Error('Connection closed'))
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: '2',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: null,
+        cardPermission: PLAN_REVIEW_CARD
+      })
+    ).resolves.toBe('rejected')
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a Bash card on its single recheck: no plan read is added', async () => {
+    const card = claudePermissionFromScreen(BASH_DIALOG_SCREEN)
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(screenReply(BASH_DIALOG_SCREEN))
+      .mockResolvedValueOnce(SEND_ACCEPTED)
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: '1',
+        expectedTerminalAgent: 'claude',
+        expectedCodexPermission: card,
+        cardPermission: card
+      })
+    ).resolves.toBe('accepted')
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual(['terminal.read', 'terminal.send'])
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '1', enter: false })
+  })
+
+  it('leaves a Codex card untouched: its recheck, its shortcut, nothing more', async () => {
+    const codexScreen = [
+      'Would you like to run the following command?',
+      '',
+      '  $ pnpm exec vitest run',
+      '',
+      '› 1. Yes, proceed (y)',
+      '  2. No, and tell Codex what to do differently (esc)',
+      '',
+      'Press enter to confirm or esc to cancel'
+    ]
+    const card = codexPermissionFromScreen(codexScreen)
+    expect(card).not.toBeNull()
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce(screenReply(codexScreen))
+      .mockResolvedValueOnce(SEND_ACCEPTED)
+
+    await expect(
+      sendMobileNativeChatPermissionResponse({
+        client: { sendRequest } as unknown as RpcClient,
+        terminal: 'terminal',
+        deviceToken: 'phone',
+        text: 'y',
+        expectedTerminalAgent: 'codex',
+        expectedCodexPermission: card,
+        cardPermission: card
+      })
+    ).resolves.toBe('accepted')
+    expect(sendRequest.mock.calls.map((call) => call[0])).toEqual(['terminal.read', 'terminal.send'])
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: 'y', enter: false })
+  })
 
   it("declines the same build's Bash dialog with the bare digit 4 after rechecking the screen", async () => {
     // "4" alone on the real screen ended the turn ("Interrupted · What should

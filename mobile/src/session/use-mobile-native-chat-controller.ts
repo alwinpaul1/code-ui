@@ -207,6 +207,12 @@ export function useMobileNativeChatController(
     reportedNativeChatPermission,
     permissionDismissed
   )
+  // The card as rendered: what a tap answers, and what the send path reads
+  // to tell a plan review (known only from its option labels) from a Bash one.
+  const legacyRenderedPermission = withTerminalDialogOptions(
+    legacyNativeChatPermission,
+    terminalDialogOptions
+  )
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
     nativeChatSession.status === 'ready' ||
@@ -283,6 +289,7 @@ export function useMobileNativeChatController(
     onSendError,
     expectedCodexPermission: terminalPermission,
     expectedTerminalAgent: activeChatResolution?.agent,
+    cardPermission: legacyRenderedPermission,
     onResponseAccepted: refreshTerminalHud
   })
 
@@ -502,7 +509,7 @@ export function useMobileNativeChatController(
     nativeChatStreamScopeKey: streamScopeKey,
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission
-      : withTerminalDialogOptions(legacyNativeChatPermission, terminalDialogOptions),
+      : legacyRenderedPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,

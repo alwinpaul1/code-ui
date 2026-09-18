@@ -10,8 +10,19 @@ export type ClaudePlanFeedbackOutcome =
 export const CLAUDE_PLAN_FEEDBACK_REFUSAL_MESSAGE =
   "Couldn't hand the comment over — type it in the terminal"
 
-function highlightedOptionLine(digit: string): RegExp {
-  return new RegExp(`^\\s*[❯›>]\\s*${digit}[.)]\\s`)
+const HIGHLIGHTED_OPTION_LINE = /^\s*[❯›>]\s*(\d)[.)]\s/
+
+/**
+ * The digit of the numbered option the `❯` sits on, or null when no row is
+ * highlighted. The LAST such row on the frame: a dialog is painted at the
+ * bottom, under any earlier prompt the user began with "3." that is still
+ * on screen. Only the marker and the digit are read, never the label, so
+ * this still answers on a feedback row whose label has been typed over
+ * (`❯ 3. 1`, see fact 4 below).
+ */
+export function highlightedPlanOptionDigit(lines: readonly string[]): string | null {
+  const row = lines.findLast((line) => HIGHLIGHTED_OPTION_LINE.test(line))
+  return row == null ? null : (HIGHLIGHTED_OPTION_LINE.exec(row)?.[1] ?? null)
 }
 
 /**
@@ -48,10 +59,14 @@ function highlightedOptionLine(digit: string): RegExp {
  *     highlight on row 3, sending "1" painted "❯ 3. 1" and left the review
  *     up; Backspace restored the label, and the Up arrow moved the highlight
  *     back. So a `refused` outcome from step 2 below can leave the desktop's
- *     highlight on the feedback row, where the card's plain approval tap
- *     would be swallowed as a typed digit. The refusal message sends the
- *     user to the terminal for that reason, and no recovery keys are sent:
- *     which row is highlighted is exactly what that step failed to learn.
+ *     highlight on the feedback row. When it does, that is the review's
+ *     ordinary "type your comment" state, and nothing here undoes it: no
+ *     recovery keys are sent, because which row is highlighted is exactly
+ *     what that step failed to learn, and a blind Up or Backspace into a
+ *     screen this code could not read is a guess. The card's plain approval
+ *     taps cover the other side — mobile-native-chat-permission-send.ts
+ *     looks at the screen first and refuses a digit while the `❯` sits on
+ *     this row, naming the Up key and the comment sheet as the ways out.
  */
 export async function sendClaudePlanFeedback(args: {
   client: RpcClient
@@ -111,7 +126,7 @@ export async function sendClaudePlanFeedback(args: {
     const confirmed =
       screen != null &&
       screen.isScreen &&
-      screen.lines.some((line) => highlightedOptionLine(args.optionSend).test(line))
+      highlightedPlanOptionDigit(screen.lines) === args.optionSend
     if (!confirmed) {
       return { kind: 'refused', message: CLAUDE_PLAN_FEEDBACK_REFUSAL_MESSAGE }
     }

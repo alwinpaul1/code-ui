@@ -136,7 +136,12 @@
             // — the plan-review comment sheet's TUI-lane wiring, via
             // useMobileNativeChatPlanFeedbackRespond (the actual send logic
             // lives in its own file, not here).
-            "max": 474,
+            // 2026-09-18: +5 for legacyRenderedPermission — the card as
+            // rendered, computed once and handed to the permission send hook
+            // as cardPermission, so a plan-review approval tap can be checked
+            // against the highlighted row (the check itself lives in
+            // mobile-native-chat-permission-send.ts).
+            "max": 479,
             "skipBlankLines": true,
             "skipComments": true
           }
