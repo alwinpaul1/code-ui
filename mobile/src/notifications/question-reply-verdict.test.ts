@@ -5,7 +5,10 @@ import { repostBannerWithReplyVerdict, replyVerdictLine } from './question-reply
 
 vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: vi.fn(async () => 'scheduled-2'),
-  dismissNotificationAsync: vi.fn(async () => undefined)
+  dismissNotificationAsync: vi.fn(async () => undefined),
+  getPresentedNotificationsAsync: vi.fn(async () => [
+    { request: { identifier: 'codeui:host-1:wt-1' } }
+  ])
 }))
 vi.mock('react-native', () => ({
   Platform: { OS: 'android', Version: 34 }
@@ -43,6 +46,9 @@ describe('re-posting a banner after a reply that was not sent', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     Object.assign(Platform, { OS: 'android', Version: 34 })
+    vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
+      { request: { identifier: 'codeui:host-1:wt-1' } }
+    ] as never)
   })
 
   it('replaces the banner under the same identifier with the verdict on top', async () => {
@@ -88,6 +94,26 @@ describe('re-posting a banner after a reply that was not sent', () => {
       `${replyVerdictLine('stale')}\n` +
         'Which of these should I delete?\n1 Tier 1 caches · 2 Unreal Engine\nPick any that apply'
     )
+  })
+
+  /**
+   * The reply field can be open while the desktop's dismiss lands (the agent
+   * was answered at the desk); the reply then submits, ends 'stale', and a
+   * re-post would bring back a banner the desktop had just cleared, with
+   * nothing to clear it again (review follow-up F9). A banner the OS is no
+   * longer showing is left gone.
+   */
+  it('does not bring back a banner the OS is no longer showing', async () => {
+    vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([] as never)
+    await repostBannerWithReplyVerdict(BANNER, 'stale')
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled()
+    expect(Notifications.dismissNotificationAsync).not.toHaveBeenCalled()
+  })
+
+  it('re-posts when the OS cannot say what it is showing', async () => {
+    vi.mocked(Notifications.getPresentedNotificationsAsync).mockRejectedValue(new Error('no'))
+    await repostBannerWithReplyVerdict(BANNER, 'refused')
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1)
   })
 
   it('does not throw when the OS refuses either call', async () => {

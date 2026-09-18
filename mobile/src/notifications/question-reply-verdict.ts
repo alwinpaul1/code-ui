@@ -27,6 +27,15 @@ export function replyVerdictLine(outcome: ReplyVerdict): string {
   }
 }
 
+async function stillShown(identifier: string): Promise<boolean> {
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync()
+    return presented.some((item) => item.request?.identifier === identifier)
+  } catch {
+    return true
+  }
+}
+
 function withoutVerdict(body: string): string {
   return body.startsWith(VERDICT_MARK) ? body.slice(body.indexOf('\n') + 1) : body
 }
@@ -66,6 +75,15 @@ export async function repostBannerWithReplyVerdict(
   const { identifier, content } = response.notification.request
   const body = withoutVerdict(content.body ?? '')
   try {
+    // The reply field can be open while the desktop's dismiss lands (the
+    // agent was answered at the desk); the reply then ends 'stale', and a
+    // re-post would bring back a banner the desktop had just cleared, with
+    // nothing to clear it again. A banner the OS no longer shows stays gone.
+    // When the OS cannot say, the re-post goes ahead: a spinning banner with
+    // no word is the worse of the two.
+    if (!(await stillShown(identifier))) {
+      return
+    }
     await Notifications.dismissNotificationAsync(identifier).catch(() => undefined)
     await Notifications.scheduleNotificationAsync({
       identifier,
