@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { dispatchStructuredTurnCancel } from './mobile-structured-agent-cancel'
+import { useMobileStructuredRewind } from './mobile-structured-agent-rewind'
 import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -105,6 +106,7 @@ export function useMobileStructuredAgentSession(args: {
     optionSnapshot,
     optionSurface,
     pendingOptionId,
+    rewindSupport,
     setStructuredOption
   } = useMobileStructuredAgentOptions({
     agent,
@@ -233,6 +235,12 @@ export function useMobileStructuredAgentSession(args: {
     })
   }, [client, enabled, onSendError, sessionId, sessionKey])
 
+  // Conversation only: the host wraps no file restore (see the dispatcher's header).
+  const rewindToItem = useMobileStructuredRewind({
+    client, sessionId, enabled, sessionKey, stateRef,
+    operationIds: operationIdsRef.current, onError: onSendError
+  })
+
   const stopBackgroundTask = useCallback(
     async (taskId: string): Promise<boolean> => {
       // The host reads `turnId: 'background-tasks'` as the scope marker, not as
@@ -300,6 +308,8 @@ export function useMobileStructuredAgentSession(args: {
     sessionCommands: state.commands ?? undefined,
     backgroundTasks: state.backgroundTasks,
     stopBackgroundTask,
+    rewindSupport,
+    rewindToItem,
     respondPermission,
     respondQuestion,
     setStructuredOption,

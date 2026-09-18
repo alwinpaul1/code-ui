@@ -65,6 +65,9 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./MobileBackgroundTasksSheet', () => ({
   MobileBackgroundTasksSheet: 'BackgroundTasksSheet'
 }))
+// The Rewind confirm sheet reaches the same drawer; its rows are covered in
+// MobileNativeChatView-rewind.test.ts.
+vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))

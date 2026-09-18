@@ -54,6 +54,15 @@ export function makeChatMessageStyles(theme: Theme) {
     controlButton: {
       padding: 4
     },
+    // "Rewind to here": icon plus a word, since an undo arrow alone does not
+    // say what it undoes. Sits left of Copy in the sent prompt's controls.
+    rewindControl: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      padding: 4,
+      marginRight: space.xs
+    },
     controlPressed: {
       opacity: 0.5
     },

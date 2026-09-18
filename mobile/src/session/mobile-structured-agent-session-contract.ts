@@ -43,6 +43,11 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   /** Asks the host to stop one named background task. Only offered where the
    *  roster says `supportsTaskStop`. */
   stopBackgroundTask: (taskId: string) => Promise<boolean>
+  /** Rewinds the conversation to before this user message, dropping it and everything
+   *  after it. Conversation only: files on the desktop stay as they are. Offered
+   *  only where `rewindSupport` says the host will do it. Resolves true when the
+   *  host accepted; every other outcome is already reported through `onSendError`. */
+  rewindToItem: (itemId: string) => Promise<boolean>
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
 }

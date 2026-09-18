@@ -15,6 +15,7 @@ import type {
   AgentSessionSlashCommand
 } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
+import type { StructuredRewindSupport } from './mobile-structured-agent-rewind'
 import type {
   AskAnswerSelection,
   AskPrompt,
@@ -117,6 +118,10 @@ export type MobileNativeChatController = {
   nativeChatCommandSurface?: {
     sessionCommands: readonly AgentSessionSlashCommand[] | undefined
     conversationCommands: readonly AgentSessionConversationCommand[]
+    /** Whether the host will rewind this session; null until it has said. */
+    rewindSupport: StructuredRewindSupport | null
+    /** Rewinds the conversation (never files) to before a journalled user message. */
+    rewindToItem: (itemId: string) => Promise<boolean>
   }
   loadNativeChatSkills: () => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
