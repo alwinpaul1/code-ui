@@ -1,9 +1,18 @@
-import { Eraser, Monitor, Smartphone } from 'lucide-react-native'
+import { Eraser, GitBranch, Monitor, Smartphone } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
+import { canForkClaudeSession } from './claude-fork-session'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { getMobileNativeChatToggleActions } from './mobile-native-chat-toggle-action'
 
 type TerminalTab = MobileNativeChatTab & { id: string; terminal: string | null }
+
+/** Same agent-identity precedence as the tab icon (mobile-terminal-tab-agent.ts):
+ *  the live hook wins, falling back to what Orca launched. Neither field being
+ *  present yet reads as "unknown", not "claude" — refuse rather than guess. */
+function terminalTabAgentId(tab: TerminalTab | undefined): string | null {
+  const hookAgentType = tab?.agentStatus?.agentType?.trim()
+  return (hookAgentType && hookAgentType !== 'unknown' ? hookAgentType : null) ?? tab?.launchAgent ?? null
+}
 
 /** Builds the terminal long-press menu without adding another action block to the
  *  already dense session route. Native chat stays first as the view switch. */
@@ -21,6 +30,9 @@ export function getMobileTerminalActionSheetActions<
   onToggleDisplayMode: (handle: string) => void
   onRename: (target: Target) => void
   onClear: (target: Target) => void
+  /** Types `/fork` and submits it. Only offered for an idle Claude Code pane —
+   *  see claude-fork-session.ts for why. */
+  onFork: (target: Target) => void
   /** Fallback for a live handle with no matching session tab. */
   onClose: (target: Target) => void
   /** Preferred path runs host teardown and records the local tombstone. */
@@ -59,6 +71,22 @@ export function getMobileTerminalActionSheetActions<
         args.onRename(target)
       }
     },
+    ...(canForkClaudeSession({
+      agent: terminalTabAgentId(sessionTab),
+      status: sessionTab?.agentStatus?.state ?? null
+    })
+      ? [
+          {
+            label: 'Fork',
+            icon: GitBranch,
+            hint: 'Forks from the latest message',
+            onPress: () => {
+              args.onDismiss()
+              args.onFork(target)
+            }
+          }
+        ]
+      : []),
     {
       label: 'Clear Terminal',
       icon: Eraser,

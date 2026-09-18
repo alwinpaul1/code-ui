@@ -107,8 +107,11 @@ const HEAD_CONTENT_HOOK_SHA256 = 'afa08b0da2bac9f30daee744098184f10a3db59755ffb7
 // 2026-09-10: the split-leaf close stopped repeating — the repeat loop in
 // handleCloseSessionTab became a single await, because a second terminal.close
 // on the dead handle made the host close the whole tab. Same one function.
+// 2026-09-18: handleForkClaudeSession joins handleClearTerminal inside
+// useMobileSessionTerminalInput — the session menu's Fork action types
+// Claude's own `/fork` command and submits it.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'f3cb400980a0946ad191313cbc78ca9a6826e8f95bdde149b0d3933f01f3bf4c'
+  '48b0504dc330d10f4c8b38bf164f24e620df21cebdcf8dc8a4ebd68fc592eb19'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -116,8 +119,12 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
+// 656 since 2026-09-18: handleForkClaudeSession's two toast strings
+// ("Forking from the latest message" / "Couldn't fork the session"). Its
+// action-sheet label and hint live in mobile-terminal-action-sheet-actions.ts,
+// outside this family, so they don't move this pin.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'add2920fc3fe6c569c90dbcb22a961225f307cc9c8220e32dec4e25863112624'
+  'cb884e63cab0ff542ff90f78cf31cb9424ecfed8466e249d9d573cd388b789f0'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -142,11 +149,20 @@ const HEAD_HOST_JSX_SHA256 = 'fb967b6abb8acf0ab7d420f3358a3b29dd09c0f9171060539f
 // lent. Exactly one leaf record changed — verified by extracting the reader's
 // JSX records before and after; host and style-reference records are untouched,
 // which is why only this pin moved.
-const HEAD_LEAF_JSX_SHA256 = '0e52eefdf2ba74bf189d26041095ad35d6ec5a1d13d1fb58919ac1e4de8d9e4e'
+// 2026-09-18: MobileSessionSheets' terminal ActionSheetModal gained one more
+// getMobileTerminalActionSheetActions() argument (`onFork`), which lengthens
+// that one leaf record's canonicalized `actions=` attribute text — same 71
+// records, one of them different — since the record is the whole attribute
+// expression, not a per-argument entry.
+const HEAD_LEAF_JSX_SHA256 = 'aca72b4971e32e57dc98004d45ec52f0775f066440b718e07fa66bb2e094511e'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
+// 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
+// read joins the same-shaped reads terminal.send already made elsewhere in the
+// family — one more occurrence of an existing identity-field pattern, not a
+// new one.
 const HEAD_IDENTITY_FIELD_SHA256 =
-  '56470d1fc5a5cce89bc14d6a5a3cc55a6b70923445ad6288e8f11047a56efad8'
+  '93970ef0061d184c87ea4ae96f7017d7477235f2fb0a686534d84ff7bb0e7d74'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
 const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
 
@@ -546,7 +562,7 @@ describe('mobile session route extraction parity', () => {
     expect(contentBindings).toHaveLength(17)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
-    expect(nestedFunctions).toHaveLength(12)
+    expect(nestedFunctions).toHaveLength(13)
     expect(hash(nestedFunctions)).toBe(HEAD_NESTED_FUNCTION_SHA256)
   })
 
@@ -570,7 +586,7 @@ describe('mobile session route extraction parity', () => {
     )
     expect(hash(native.cleanups)).toBe(HEAD_TIMER_CLEANUP_SHA256)
     const compatibility = readCompatibilityFacts(definitions)
-    expect(compatibility.identityFields).toHaveLength(15)
+    expect(compatibility.identityFields).toHaveLength(16)
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     expect(compatibility.navigation).toHaveLength(6)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
@@ -595,7 +611,11 @@ describe('mobile session route extraction parity', () => {
     // placeholder check are gone — and reads the agent's live pair instead.
     // Check: `git show 17c20ff..HEAD -- MobileSessionHeader.tsx` removes exactly
     // those two literals.
-    expect(strings).toHaveLength(654)
+    // 656 since 2026-09-18 (later): back to 656, but for an unrelated reason —
+    // handleForkClaudeSession's two toast strings ("Forking from the latest
+    // message" / "Couldn't fork the session"), landing the same day as the
+    // model-pill removal above dropped the count to 654.
+    expect(strings).toHaveLength(656)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

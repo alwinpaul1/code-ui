@@ -80,6 +80,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleBrowserNavigationCommand,
     handleRenameTerminal,
     handleCloseTerminal,
+    handleForkClaudeSession,
     handleCloseSessionTab,
     bulkCloseActions,
     closeWithBulkActions,
@@ -198,6 +199,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           onToggleDisplayMode: (handle) => void toggleDisplayMode(handle),
           onRename: setRenameTarget,
           onClear: (target) => void handleClearTerminal(target),
+          onFork: (target) => void handleForkClaudeSession(target),
           onClose: (target) => void handleCloseTerminal(target),
           onCloseSessionTab: (tab) => void handleCloseSessionTab(tab),
           bulkCloseActions

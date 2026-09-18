@@ -8,6 +8,7 @@ import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
+import { forkClaudeSession } from './claude-fork-session'
 import {
   isMouseClickSequence,
   splitTerminalGestureInputSequences,
@@ -231,13 +232,29 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       showToast("Couldn't clear terminal", 1500)
     }
   }
+
+  async function handleForkClaudeSession(target: Terminal) {
+    if (!client) {
+      return
+    }
+    const forked = await forkClaudeSession({
+      client,
+      terminal: target.handle,
+      deviceToken: deviceTokenRef.current
+    })
+    showToast(
+      forked ? 'Forking from the latest message' : "Couldn't fork the session",
+      forked ? 1600 : 1500
+    )
+  }
   return {
     toggleLiveInput,
     flushTerminalGestureInput,
     enqueueTerminalGestureInput,
     handleTerminalInput,
     handleTerminalQueryReply,
-    handleClearTerminal
+    handleClearTerminal,
+    handleForkClaudeSession
   }
 }
 
