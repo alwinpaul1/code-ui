@@ -113,7 +113,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     // Empty stdout is the whole point: Claude Code draws no status row for it.
     expect(run.stdout).toBe('')
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -123,7 +123,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     })
     // The percentage is truncated to an integer, not passed through as 64.95.
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
     expect(run.stdout).toBe('')
   })
@@ -134,6 +134,33 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
       expect(run.beacon).toContain('model=claude-fable-5-1')
       expect(run.beacon).toContain('effort=medium')
     }
+  })
+
+  // 2026-09-18: the phone said "Fable 5.1 medium" for a hand-started `claude
+  // -c` painting Opus, because the beacon of the phone-launched agent that had
+  // run in that terminal before was still keyed to the handle and named no
+  // session. Claude Code puts `session_id` at the top of the same JSON it
+  // pipes to this command; the beacon now carries it, so the phone can tell
+  // whose beacon it is holding.
+  it('names the session the beacon came from, so a later process in the same terminal cannot inherit it', () => {
+    for (const shell of SHELLS) {
+      const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
+        input: statusJson.replace(
+          '"session_id":"00000000-0000-4000-8000-000000000000"',
+          '"session_id":"77954fea-1013-4225-b187-a8b3162a04ce"'
+        ),
+        shell
+      })
+      expect(run.beacon).toContain(' sid=77954fea-1013-4225-b187-a8b3162a04ce ')
+    }
+  })
+
+  it('leaves sid off rather than guessing when the payload names no session', () => {
+    const json = JSON.parse(statusJson)
+    delete json.session_id
+    const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: JSON.stringify(json) })
+    expect(run.beacon).toContain('CUIHUD1 agent=claude hk=1 model=')
+    expect(run.beacon).not.toContain('sid=')
   })
 
   it("keeps a user's own status line exactly as it was", () => {
@@ -224,7 +251,7 @@ describe('a Windows host has no PTY device, so the script writes to the console'
     })
     expect(run.stdout).toBe('')
     expect(readFileSync(console_, 'utf8')).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
     )
   })
 
@@ -301,7 +328,7 @@ describe("the phone reads Codex's own rollout without drawing a row", () => {
     expect(run.stdout).toBe('')
     // 22147 is the LAST token_count in the fixture, not the first (21364).
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=codex model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=codex sid=${threadId} model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
     )
   })
 
@@ -321,7 +348,7 @@ describe("the phone reads Codex's own rollout without drawing a row", () => {
       args: ['cuihud', JSON.stringify({ 'thread-id': 'no-such-thread' })],
       env: { CODEX_HOME: codexHome() }
     })
-    expect(run.beacon).toBe(`${ESC}]7777;CUIHUD1 agent=codex${BEL}`)
+    expect(run.beacon).toBe(`${ESC}]7777;CUIHUD1 agent=codex sid=no-such-thread${BEL}`)
   })
 
   it("still runs the user's own notify command", () => {
@@ -690,7 +717,7 @@ describe('the Codex notify script under a real PowerShell', () => {
       JSON.stringify({ type: 'agent-turn-complete', 'thread-id': threadId, cwd: '/tmp' })
     )
     expect(out).toBe(
-      `${ESC}]7777;CUIHUD1 agent=codex model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+      `${ESC}]7777;CUIHUD1 agent=codex sid=${threadId} model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
     )
   })
 
@@ -699,7 +726,7 @@ describe('the Codex notify script under a real PowerShell', () => {
     // figures rather than another session's.
     const { home } = codexHomeWithRollout()
     const out = runPowerShell(home, JSON.stringify({ 'thread-id': 'no-such-thread-0000' }))
-    expect(out).toBe(`${ESC}]7777;CUIHUD1 agent=codex${BEL}`)
+    expect(out).toBe(`${ESC}]7777;CUIHUD1 agent=codex sid=no-such-thread-0000${BEL}`)
   })
 
   run('falls back to the newest rollout when the argument names no thread', () => {
@@ -790,7 +817,7 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
 
   run('runs as Claude Code would run it: -EncodedCommand, JSON on stdin', () => {
     const ps = runClaudePowerShell({ json: statusJson, encoded: true })
-    expect(ps.beacon).toContain('CUIHUD1 agent=claude hk=1 model=claude-fable-5-1')
+    expect(ps.beacon).toContain('CUIHUD1 agent=claude hk=1 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1')
   })
 
   run('adds the token total and percentage once Claude Code has replied', () => {
@@ -896,10 +923,13 @@ describe('the Windows command line has a ceiling, and the flags must stay under 
    *  are base64 of UTF-16LE (`-EncodedCommand`), which costs ~2.67 command-line
    *  chars per source char, so a hook that looks small on disk is not.
    *
-   *  Measured 2026-09-16 against Claude Code 2.1.273: claude/win32 is 30,061
+   *  Measured 2026-09-16 against Claude Code 2.1.273: claude/win32 was 30,061
    *  chars, i.e. ~2,700 of headroom before the binary path, `--model`,
    *  `--resume` and the host's own quoting are added. A third hook event would
-   *  add ~8,466 encoded chars and put it ~5,800 OVER the cap.
+   *  add ~8,466 encoded chars and put it ~5,800 OVER the cap. 2026-09-18: the
+   *  `sid=` field on all three PowerShell scripts took it to 30,557, so about
+   *  200 chars of the reserve below are all that is left; the next field on
+   *  this flag has to pay for itself.
    *
    *  Why a bound and not a golden: the exact number moves whenever a script is
    *  edited, and pinning it would only teach the next person to bump it. The

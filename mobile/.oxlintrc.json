@@ -211,7 +211,10 @@
         "max-lines": [
           "error",
           {
-            "max": 302,
+            // 2026-09-18: +9 for `sid=` on every emitter (status line, Stop
+            // hook, prompt hook, Codex notify; sh and PowerShell), so a beacon
+            // names the session it came from.
+            "max": 311,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -226,7 +229,10 @@
         "max-lines": [
           "error",
           {
-            "max": 305,
+            // 2026-09-18: +17 for the session id on a beacon (parse, replace
+            // the handle's record when the session changes) and the arrival
+            // clock the liveness rule reads.
+            "max": 322,
             "skipBlankLines": true,
             "skipComments": true
           }

@@ -65,8 +65,9 @@ exact bytes.
 One `printf`, one write, well under 1 KB:
 
 ```
-ESC ] 7777 ; CUIHUD1 agent=claude model=<id> name=<display name> effort=<level>
-             used=<tokens> win=<window> pct=<int> h5=<int>:<epoch> d7=<int>:<epoch> BEL
+ESC ] 7777 ; CUIHUD1 agent=claude hk=1 sid=<session id> model=<id> name=<display name>
+             effort=<level> used=<tokens> win=<window> pct=<int>
+             h5=<int>:<epoch> d7=<int>:<epoch> BEL
 ```
 
 Space-separated `key=value`; values percent-encode `%`, space and `;`. A key
@@ -74,6 +75,49 @@ whose figure the agent did not state is simply absent — nothing is guessed at,
 and a beacon with tokens but no window leaves the phone's context ring alone
 rather than inventing a denominator. OSC 7777 is private, so terminals draw
 nothing for it.
+
+`sid` names the session the beacon speaks for: Claude Code's `session_id`
+(the same field its hooks report, and the same id `--resume`/`-c` keep —
+verified on 2.1.276), Codex's thread id (the notify argument's `thread-id`,
+which is also what Orca's Codex hook reports as `session_id` and what `codex
+resume` takes). Every emitter carries it: the status line, the Stop hook, the
+prompt hook and the Codex notify, on sh and on PowerShell alike.
+
+### A beacon is believed only for its own process
+
+The store is keyed by terminal handle, and a handle outlives the process that
+emitted into it. On 2026-09-18 the phone read "Fable 5.1 medium" for a
+terminal whose process was a hand-started `claude -c` painting
+`[Opus 5 (1M context) xhigh | Max 20x]`: the phone-launched agent that had run
+there before had left its last beacon, the hand-started one emits none, and
+nothing tied the record to a process. Three rules now decide what a reader may
+take from a beacon (`hud-beacon-fields.ts`, `agent-hud-beacon-liveness.ts`,
+`use-mobile-native-chat-hud.ts`):
+
+- **Session.** A beacon is used only when its `sid` equals the session the tab
+  is showing (`agentStatus.providerSession.id`). Another session, no `sid`
+  (an older emitter, an older record), or a tab that does not yet know its
+  session: the beacon is held but not used, and the HUD shows nothing rather
+  than a figure from a process that may be gone. The warm-start storage key was
+  bumped so every record written before `sid` existed is dropped.
+- **Screen.** A badge on the user's own status line (or Codex's footer) that
+  names a model owns the model+effort pair; the beacon supplies the context and
+  the rest. A live beacon and the badge describe the same repaint and cannot
+  disagree beyond the instant after `/model`; when they do, the beacon is
+  describing something no longer on screen.
+- **Silence.** A phone-launched Claude repaints its status line several times a
+  second while it works, re-emitting the beacon each time; both agents beacon
+  at every turn end (Codex only there). So a beacon that stays silent through
+  30 s of the agent WORKING (Claude), or through 20 s after a turn has ended
+  (both), is from a process that is no longer painting, and its model, effort
+  and context are dropped. Idle time and time blocked on a dialog do not
+  count; a warm-start record counts as never having arrived this run. The
+  sticky hold (`use-sticky-live-hud.ts`) keeps only what the SCREEN said, so a
+  dropped beacon cannot survive through it.
+
+This matters because `claude -c`/`--resume` keep the session id: the session
+rule alone cannot tell a hand-continued session from the phone-launched one it
+continues. The screen rule and the silence rule are what separate them.
 
 ### The phone side
 
@@ -84,9 +128,10 @@ our bytes removed — so xterm never sees it either. Another program's OSC (a
 window title, an OSC 8 hyperlink) passes through untouched.
 
 `hud-beacon-fields.ts` merges it into the HUD above the host's `agentStatus`
-fields and above the screen reading: the beacon is what the agent said about
-itself, on the turn it said it. The screen still owns the permission and
-collaboration modes, which no beacon carries.
+fields, and above the screen reading for the context: the beacon is what the
+agent said about itself, on the turn it said it. A badge on screen that names
+a model owns the model+effort pair (see below). The screen still owns the
+permission and collaboration modes, which no beacon carries.
 
 ### Chat mode had to change
 

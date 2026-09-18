@@ -32,9 +32,16 @@ const STICKY_LIVE_HUD_CAP = 32
  *  reported and fixed in 0.5.99, so it must not come back by this door. */
 const lastHandleByTab = new Map<string, string>()
 
+/** The last session each tab+terminal was known to be showing, for the same
+ *  reason: `activeChatSessionId` is derived from the host's provider-session
+ *  row and dips to null while a tab resolves. Null is "not known yet", never
+ *  "a different session". */
+const lastSessionByScope = new Map<string, string>()
+
 export function clearStickyLiveHudForTests(): void {
   heldByScope.clear()
   lastHandleByTab.clear()
+  lastSessionByScope.clear()
 }
 
 export type StickyLiveHud = {
@@ -45,16 +52,20 @@ export type StickyLiveHud = {
 }
 
 /**
- * The last model, effort and context the LIVE HUD stated, held per tab across
- * observations that come back empty.
+ * The last model, effort and context the SCREEN stated, held per tab, terminal
+ * and session across screen reads that come back empty.
  *
- * The figures reach the HUD two ways, and this holds whichever arrived: the
- * agent's own OSC beacon, which the phone's injected status-line command emits
- * on every repaint and which needs no bar on the host at all; and, for a user
- * who does keep their own status line, the `[Model effort]` badge read off the
- * screen. Neither is guaranteed on any given tick — a screen read can come back
- * empty, and a beacon can be missed — and the pill's only fallback is the
- * launch-time `agentStatus.model`.
+ * Only the screen: the `[Model effort]` badge on a user's own status line, or
+ * Codex's footer. The agent's OSC beacon is the other live source, and it is
+ * NOT held here — the beacon store already keeps the last beacon per handle,
+ * and it is that store, not this hold, that decides when a beacon has died
+ * with its process (`agent-hud-beacon-liveness.ts`). Holding beacon figures
+ * here as well would have kept a dead process's model on the pill after the
+ * store had let it go. `useMobileNativeChatHud` applies this hold to the raw
+ * screen reading BEFORE merging the beacon in, so nothing from a beacon can
+ * enter it. The pill's only other candidate, the launch-time
+ * `agentStatus.model`, is not a model source at all
+ * (`mobile-chat-reported-model.ts`).
  *
  * Why it matters: on a session whose `terminal.read` lags (a 301 MB transcript,
  * 2026-09-14) the observation alternated between real figures and nothing, so
@@ -64,15 +75,17 @@ export type StickyLiveHud = {
  * better evidence than the launch record for as long as this tab is open, so an
  * empty observation keeps it rather than falling back.
  *
- * Reset when the tab OR its terminal changes: these figures belong to one
- * agent process, and the handle is what identifies it. Keying on the tab alone
- * was wrong because the beacon they come from is read per handle
- * (`useAgentHudBeacon(handleRef.current)`) — so a tab that kept its id and got
- * a new terminal went on stating the previous agent's model, and where the
- * replacement was hand-started, and therefore emits no beacon at all, it stated
- * it indefinitely. A handle moves under a tab on a PTY restart, on a reconnect,
- * and in `use-mobile-session-close-actions.ts:86`, which hands the active
- * handle to a replacement terminal without touching the tab id.
+ * Reset when the tab, its terminal OR its session changes: these figures
+ * belong to one session of one agent process. Keying on the tab alone was
+ * wrong because a tab that kept its id and got a new terminal went on stating
+ * the previous agent's model (a PTY restart, a reconnect, and
+ * `use-mobile-session-close-actions.ts:86`, which hands the active handle to a
+ * replacement terminal without touching the tab id). Keying on tab and handle
+ * was still wrong because the PROCESS changes under a handle too: on
+ * 2026-09-18 a `claude` typed by hand into a terminal that had run a
+ * phone-launched agent kept that agent's held figures, and on a host with no
+ * status line nothing ever came to replace them. The session id is what
+ * separates the two, and a new session under the same handle starts empty.
  */
 export function useStickyLiveHud(
   observation: {
@@ -85,7 +98,8 @@ export function useStickyLiveHud(
     context?: TerminalHudContextWindow | null
   } | null,
   tabId: string | null,
-  handle: string | null
+  handle: string | null,
+  sessionId: string | null
 ): StickyLiveHud {
   const tab = tabId ?? ''
   if (handle) {
@@ -93,7 +107,13 @@ export function useStickyLiveHud(
   }
   // A null handle is "not known yet", never "a different terminal".
   const known = handle ?? lastHandleByTab.get(tab) ?? ''
-  const key = `${tab}\u0000${known}`
+  const scope = `${tab}\u0000${known}`
+  if (sessionId) {
+    lastSessionByScope.set(scope, sessionId)
+  }
+  // Likewise a null session id; see `lastSessionByScope`.
+  const session = sessionId ?? lastSessionByScope.get(scope) ?? ''
+  const key = `${scope}\u0000${session}`
   const held = heldByScope.get(key) ?? { model: null, label: null, effort: null, context: null }
   // Delete-then-set on every READ, so the scope being looked at becomes the
   // most recent and eviction only ever sheds the oldest UNTOUCHED one. Setting

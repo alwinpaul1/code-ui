@@ -40,6 +40,38 @@ describe('what the agent itself says is still running', () => {
     expect(written).toContain('run=b0q56d8gf')
   })
 
+  // 2026-09-18: a beacon keyed only by terminal handle outlived its process.
+  // The Stop payload names its session at the top (captured 2.1.267 above),
+  // and the phone matches the beacon to the tab's session before believing
+  // its running-task list.
+  it('names the session it speaks for, from the payload Claude Code pipes in', () => {
+    const tty = join(process.env.TMPDIR ?? '/tmp', `cuihud-stop-sid-${process.pid}.txt`)
+    execFileSync('sh', ['-c', `: > ${tty}`])
+
+    const written = runStopHook(PAYLOAD, tty)
+
+    expect(written).toContain('CUIHUD1 agent=claude sid=77954fea-1013-4225-b187-a8b3162a04ce run=b0q56d8gf')
+  })
+
+  it('does not read a session id out of the assistant message text', () => {
+    // `last_assistant_message` is a JSON string, so a quoted key inside it is
+    // escaped and must not match; only the payload's own field may.
+    const tty = join(process.env.TMPDIR ?? '/tmp', `cuihud-stop-sid-quoted-${process.pid}.txt`)
+    execFileSync('sh', ['-c', `: > ${tty}`])
+
+    const written = runStopHook(
+      JSON.stringify({
+        session_id: 'aaaaaaaa-0000-4000-8000-000000000000',
+        last_assistant_message: 'the payload looked like {"session_id":"bbbbbbbb-0000-4000-8000-000000000000"}',
+        background_tasks: []
+      }),
+      tty
+    )
+
+    expect(written).toContain('sid=aaaaaaaa-0000-4000-8000-000000000000')
+    expect(written).not.toContain('bbbbbbbb')
+  })
+
   it('says the set is empty rather than saying nothing, so the phone can clear the row', () => {
     // An absent field means "no answer"; an empty one means "nothing running".
     // Without the difference a finished last task would look unreported.

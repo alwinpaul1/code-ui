@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { restamp, unchangedBeacon } from './agent-hud-beacon-identity'
+import { resetBeaconWatches } from './agent-hud-beacon-liveness'
 import {
   readWarmStartBeacons,
   rememberWarmStartBeacon
@@ -43,6 +44,14 @@ export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchor
 
 export type AgentHudBeacon = {
   agent: string
+  /** The session this beacon speaks for: Claude Code's `session_id`, Codex's
+   *  thread id. Null from an emitter that sent none. The store is keyed by
+   *  terminal handle, and a handle outlives the process that emitted into it
+   *  — on 2026-09-18 a hand-started `claude -c` inherited the last beacon of
+   *  the phone-launched agent that had run in its terminal before, and the
+   *  pill said Fable on an Opus session. Readers believe a beacon only for the
+   *  session the tab is showing (`agentHudBeaconMatches`). */
+  sessionId: string | null
   modelId: string | null
   modelLabel: string | null
   effort: string | null
@@ -79,6 +88,16 @@ export type AgentHudBeacon = {
 const beacons = new Map<string, AgentHudBeacon>()
 const carries = new Map<string, string>()
 const listeners = new Set<() => void>()
+/** When a beacon last ARRIVED on each handle, this run (phone clock, epoch
+ *  ms). Not the beacon's `receivedAt`: a repeat that says nothing new is
+ *  deliberately not republished, but it still proves the process is painting,
+ *  which is what `agent-hud-beacon-liveness.ts` needs to know. A warm-start
+ *  record never arrived this run and has no entry. */
+const arrivals = new Map<string, number>()
+
+/** A session id is a uuid (Claude Code) or a ULID-shaped thread id (Codex);
+ *  anything outside this shape is not one and is refused rather than compared. */
+const SESSION_ID = /^[A-Za-z0-9._-]{4,128}$/
 
 function decodeValue(value: string): string {
   return value
@@ -140,8 +159,10 @@ export function parseAgentHudBeaconPayload(
   if (weekly) {
     limits.push(weekly)
   }
+  const sid = values.get('sid')
   return {
     agent,
+    sessionId: sid !== undefined && SESSION_ID.test(sid) ? sid : null,
     modelId: values.get('model') ?? null,
     modelLabel: values.get('name') ?? null,
     effort: values.get('effort') ?? null,
@@ -181,7 +202,7 @@ function splitPrefixLength(text: string): number {
 /** What the warm start actually needs; a repainting agent must not write to
  *  disk on every frame just because its token count moved. */
 function beaconIdentity(beacon: AgentHudBeacon): string {
-  return `${beacon.agent}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}`
+  return `${beacon.agent}\u0000${beacon.sessionId ?? ''}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}`
 }
 
 const WARM_START_REWRITE_MS = 30_000
@@ -197,20 +218,33 @@ function storeForWarmStart(handle: string, beacon: AgentHudBeacon): void {
   void rememberWarmStartBeacon(handle, beacon)
 }
 
+/** Whether `next` comes from a different session than the one `previous`
+ *  spoke for: a new process on the same terminal, or a `/clear` or `/resume`
+ *  inside the old one. Nothing the previous session said applies to it. A
+ *  beacon naming no session (a Codex notify whose argument named no thread)
+ *  is taken to be the same process and merged as before. */
+function sessionChanged(previous: AgentHudBeacon, next: AgentHudBeacon): boolean {
+  return next.sessionId !== null && previous.sessionId !== null && next.sessionId !== previous.sessionId
+}
+
 function publish(handle: string, payload: string): void {
   const beacon = parseAgentHudBeaconPayload(payload)
   if (!beacon) {
     return
   }
+  // Every arrival, repeats included: the process is painting.
+  arrivals.set(handle, beacon.receivedAt)
   // Why merge: two beacons describe one tab. The status line says what the
   // agent IS (model, effort, context) on every repaint; the Stop hook says
   // what it still has RUNNING, and carries none of the rest. Replacing
   // wholesale would blank the HUD every time a turn ended.
-  const previous = beacons.get(handle)
+  const held = beacons.get(handle)
+  const previous = held && !sessionChanged(held, beacon) ? held : undefined
   const merged: AgentHudBeacon = previous
     ? {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
+        sessionId: beacon.sessionId ?? previous.sessionId,
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
         // Restamped only when the list moved: see `unchangedBeacon`.
         runningTaskIdsAt: restamp(beacon, previous),
@@ -241,6 +275,9 @@ function publish(handle: string, payload: string): void {
  * between opening the app and the agent's next status-line repaint. A live
  * beacon always wins; this only fills a hole that would otherwise be filled by
  * a staler source. See `agent-hud-beacon-warm-start.ts`.
+ *
+ * A restored record is NOT an arrival: nothing has been heard from the
+ * process this run, and the liveness rule counts from that.
  */
 export async function hydrateAgentHudBeacons(): Promise<void> {
   const stored = await readWarmStartBeacons()
@@ -304,12 +341,23 @@ export function getAgentHudBeacon(handle: string | null): AgentHudBeacon | null 
   return handle ? (beacons.get(handle) ?? null) : null
 }
 
+/** When a beacon last arrived on this handle THIS RUN (phone clock, epoch
+ *  ms), or null: none has, which is also what a warm-start record reads as.
+ *  Read from a timer or effect, never subscribed to — it moves on every
+ *  repaint, and waking every reader for a repeat is the cost `unchangedBeacon`
+ *  exists to avoid. */
+export function getAgentHudBeaconArrivedAt(handle: string | null): number | null {
+  return handle ? (arrivals.get(handle) ?? null) : null
+}
+
 /** Dropped with the rest of the terminal cache when the session's handles go
  *  away; a beacon outlives a mere unsubscribe, because the last thing the
  *  agent said about itself is still true while its tab is open. */
 export function resetAgentHudBeacons(): void {
   beacons.clear()
   carries.clear()
+  arrivals.clear()
+  resetBeaconWatches()
 }
 
 function subscribe(listener: () => void): () => void {

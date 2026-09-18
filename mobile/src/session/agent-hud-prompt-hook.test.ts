@@ -56,6 +56,19 @@ describe('the desktop prompt hook', () => {
     expect(runHook({ session_id: 'x' })).toBe('')
   })
 
+  // 2026-09-18: desktop prompts are held per terminal handle, and a handle
+  // outlives the process that emitted into it, so a hand-started session in a
+  // reused terminal would have echoed the previous session's prompts. The
+  // hook's payload names its session; the beacon carries it ahead of `up=`.
+  it('names the session the prompt was typed into, so another session on the same terminal cannot inherit it', () => {
+    const out = runHook({
+      session_id: '77954fea-1013-4225-b187-a8b3162a04ce',
+      prompt: 'continue'
+    })
+    expect(out).toContain('CUIHUD1 agent=claude sid=77954fea-1013-4225-b187-a8b3162a04ce up=')
+    expect(promptOf(out)).toBe('continue')
+  })
+
   // 2026-09-14, from the phone against the Claude app: a prompt queued while
   // a turn ran landed several turns too LOW on the phone. Its echo anchored to
   // the tail at beacon ARRIVAL, and on a lagging link that was long after the

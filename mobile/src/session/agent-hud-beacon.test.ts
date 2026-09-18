@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   appendDesktopPrompt,
   consumeAgentHudBeacons,
   getAgentHudBeacon,
+  getAgentHudBeaconArrivedAt,
   parseAgentHudBeaconPayload,
   resetAgentHudBeacons
 } from './agent-hud-beacon'
@@ -173,6 +174,106 @@ describe('finished task ids on the beacon', () => {
     consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=claude run=b2\x07')
     expect(getAgentHudBeacon('h')?.launchedTaskIds).toEqual(['b1', 'b2'])
     expect(getAgentHudBeacon('h')?.runningTaskIds).toEqual(['b2'])
+  })
+})
+
+// 2026-09-18: the phone read "Fable 5.1 medium" for a terminal whose process
+// was a hand-started `claude -c` painting "[Opus 5 (1M context) xhigh]". The
+// beacon store is keyed by terminal handle, and a handle outlives the process
+// that emitted into it, so a beacon must say which session it came from.
+describe('a beacon names the session it came from', () => {
+  const S1 = '77954fea-1013-4225-b187-a8b3162a04ce'
+  const S2 = '8b19cb22-996c-40e5-a887-a5323a9845e1'
+
+  it('reads the session id off the payload', () => {
+    expect(parseAgentHudBeaconPayload(`CUIHUD1 agent=claude sid=${S1} model=m`)?.sessionId).toBe(S1)
+    // Codex names its thread; the same field carries it.
+    expect(
+      parseAgentHudBeaconPayload('CUIHUD1 agent=codex sid=01a08736-aaaa-bbbb-cccc-000000000001')
+        ?.sessionId
+    ).toBe('01a08736-aaaa-bbbb-cccc-000000000001')
+  })
+
+  it('reports no session for an emitter that sends none, or one it cannot trust', () => {
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude model=m')?.sessionId).toBeNull()
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude sid=')?.sessionId).toBeNull()
+    // An id is `[A-Za-z0-9._-]`; anything else is not one and is refused.
+    expect(parseAgentHudBeaconPayload('CUIHUD1 agent=claude sid=not%20an%20id')?.sessionId).toBeNull()
+  })
+
+  it('replaces everything held for a handle when a beacon from another session arrives', () => {
+    // The first process left prompts, running tasks and a model behind. The
+    // next session on the same terminal must not inherit any of it.
+    consumeAgentHudBeacons(
+      'h',
+      `\x1b]7777;CUIHUD1 agent=claude sid=${S1} model=claude-fable-5-1 name=Fable%205.1 effort=medium up=41:old%20prompt bg=b1 run=b1\x07`
+    )
+    expect(getAgentHudBeacon('h')?.desktopPrompts).toHaveLength(1)
+    consumeAgentHudBeacons('h', `\x1b]7777;CUIHUD1 agent=claude sid=${S2} model=claude-opus-5 name=Opus%205 effort=xhigh\x07`)
+    expect(getAgentHudBeacon('h')).toMatchObject({
+      sessionId: S2,
+      modelId: 'claude-opus-5',
+      effort: 'xhigh',
+      desktopPrompts: [],
+      desktopPrompt: null,
+      runningTaskIds: null,
+      launchedTaskIds: []
+    })
+  })
+
+  it('merges as before within one session, the Stop hook included', () => {
+    consumeAgentHudBeacons('h', `\x1b]7777;CUIHUD1 agent=claude sid=${S1} model=claude-opus-5 effort=xhigh\x07`)
+    consumeAgentHudBeacons('h', `\x1b]7777;CUIHUD1 agent=claude sid=${S1} run=b7\x07`)
+    expect(getAgentHudBeacon('h')).toMatchObject({
+      sessionId: S1,
+      modelId: 'claude-opus-5',
+      effort: 'xhigh',
+      runningTaskIds: ['b7']
+    })
+  })
+
+  it('keeps the session a beacon without one merges into', () => {
+    // A Codex notify whose argument named no thread, from the same process.
+    consumeAgentHudBeacons('h', `\x1b]7777;CUIHUD1 agent=codex sid=${S1} model=gpt-6-astra\x07`)
+    consumeAgentHudBeacons('h', '\x1b]7777;CUIHUD1 agent=codex\x07')
+    expect(getAgentHudBeacon('h')?.sessionId).toBe(S1)
+  })
+})
+
+// The phone-launched agent repaints its status line several times a second
+// while it works, and every repaint re-emits the beacon. So "when did a beacon
+// last ARRIVE" is what tells a painting process from a dead one; the
+// beacon's own `receivedAt` is not it, because a repeat that says nothing new
+// is deliberately not republished.
+describe('when a beacon last arrived on a handle', () => {
+  it('is unknown until one arrives this run', () => {
+    expect(getAgentHudBeaconArrivedAt('h')).toBeNull()
+  })
+
+  it('moves on every arrival, a byte-identical repeat included', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000_000)
+      const payload = '\x1b]7777;CUIHUD1 agent=claude sid=s model=m\x07'
+      consumeAgentHudBeacons('h', payload)
+      expect(getAgentHudBeaconArrivedAt('h')).toBe(1_000_000)
+      const held = getAgentHudBeacon('h')
+      vi.setSystemTime(1_005_000)
+      consumeAgentHudBeacons('h', payload)
+      // Readers keep the same object (nothing new was said)…
+      expect(getAgentHudBeacon('h')).toBe(held)
+      // …but the arrival clock still moved.
+      expect(getAgentHudBeaconArrivedAt('h')).toBe(1_005_000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('is per handle, and forgotten with the rest of the store', () => {
+    consumeAgentHudBeacons('h1', '\x1b]7777;CUIHUD1 agent=claude sid=s model=m\x07')
+    expect(getAgentHudBeaconArrivedAt('h2')).toBeNull()
+    resetAgentHudBeacons()
+    expect(getAgentHudBeaconArrivedAt('h1')).toBeNull()
   })
 })
 

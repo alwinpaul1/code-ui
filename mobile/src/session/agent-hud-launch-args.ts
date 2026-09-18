@@ -99,6 +99,14 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   'i=$(cat)',
   'g(){ printf %s "$i" | sed -nE "s/.*$1.*/\\1/p"; }',
   ENCODE_FN,
+  // `sid`: the session this beacon speaks for. A beacon is keyed by terminal
+  // handle on the phone, and a handle outlives the process that emitted into
+  // it — on 2026-09-18 a hand-started `claude -c` in a terminal that had run a
+  // phone-launched agent inherited that agent's last beacon, and the pill said
+  // Fable on an Opus session. The quote before `session_id` keeps
+  // `caller_session_id` from matching; a copy quoted inside a JSON string is
+  // escaped (`\"session_id\":`) and cannot match either.
+  'si=$(g "\\"session_id\\":\\"([^\\"]*)\\"")',
   'mi=$(g "\\"model\\":\\{\\"id\\":\\"([^\\"]*)\\"")',
   'mn=$(g "\\"display_name\\":\\"([^\\"]*)\\"")',
   'ef=$(g "\\"effort\\":\\{\\"level\\":\\"([^\\"]*)\\"")',
@@ -175,6 +183,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // never gain it — the phone says so rather than silently dropping the
   // desktop's messages (2026-09-13).
   'o="CUIHUD1 agent=claude hk=1"',
+  '[ -n "$si" ] && o="$o sid=$(q "$si")"',
   '[ -n "$mi" ] && o="$o model=$(q "$mi")"',
   '[ -n "$mn" ] && o="$o name=$(q "$mn")"',
   '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
@@ -243,6 +252,10 @@ export const CODEX_HUD_NOTIFY_SCRIPT = [
   'if [ -n "$rf" ]; then md=$(sed -nE "/\\"type\\":\\"turn_context\\"/s/.*\\"model\\":\\"([^\\"]*)\\".*/\\1/p" "$rf" | tail -n 1); ef=$(sed -nE "/\\"type\\":\\"turn_context\\"/s/.*\\"effort\\":\\"([^\\"]*)\\".*/\\1/p" "$rf" | tail -n 1); tk=$(tail -n 400 "$rf" | sed -nE "s/.*\\"last_token_usage\\":\\{[^}]*\\"total_tokens\\":([0-9]+).*/\\1/p" | tail -n 1); cw=$(tail -n 400 "$rf" | sed -nE "s/.*\\"model_context_window\\":([0-9]+).*/\\1/p" | tail -n 1); fi',
   ENCODE_FN,
   'o="CUIHUD1 agent=codex"',
+  // The thread id is the session the phone tracks for this tab (Orca's Codex
+  // hook reports the same id as `session_id`, and `codex resume <id>` takes
+  // it), so the phone can tell whose beacon it is holding.
+  '[ -n "$ti" ] && o="$o sid=$(q "$ti")"',
   '[ -n "$md" ] && o="$o model=$(q "$md")"',
   '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
   '[ -n "$tk" ] && o="$o used=$tk"',
@@ -364,6 +377,8 @@ export const CODEX_HUD_NOTIFY_POWERSHELL = [
   'if($t){$g="sessions/*/*/*/rollout-*-"+$t+".jsonl"}',
   '$f=Get-ChildItem -Path (Join-Path $h $g) | Sort-Object LastWriteTime | Select-Object -Last 1',
   '$o="CUIHUD1 agent=codex"',
+  // `$t` is already `[0-9A-Za-z-]`, so it needs no encoding.
+  'if($t){$o=$o+" sid="+$t}',
   'if($f){$L=Get-Content -LiteralPath $f.FullName -Tail 400',
   '$c=$L | Where-Object {$_ -match ($q+"type"+$q+":"+$q+"turn_context"+$q)} | Select-Object -Last 1',
   'if($c -match ($q+"model"+$q+":"+$q+"([^"+$q+"]*)"+$q)){$o=$o+" model="+(& $E $Matches[1])}',
@@ -425,6 +440,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$E={param($s) ([string]$s -replace "%","%25" -replace " ","%20" -replace ";","%3B")}',
   '$o="CUIHUD1 agent=claude hk=1"',
+  'if($j.session_id){$o=$o+" sid="+(& $E $j.session_id)}',
   'if($j.model.id){$o=$o+" model="+(& $E $j.model.id)}',
   'if($j.model.display_name){$o=$o+" name="+(& $E $j.model.display_name)}',
   'if($j.effort.level){$o=$o+" effort="+(& $E $j.effort.level)}',
@@ -499,7 +515,10 @@ export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive
 export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   'i=$(cat 2>/dev/null || true)',
   'rn=$(printf %s "$i" | tr "{" "\\n" | grep -v "\\"type\\"[[:space:]]*:[[:space:]]*\\"in_process_teammate\\"" 2>/dev/null | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
-  'o="CUIHUD1 agent=claude run=${rn%,}"',
+  // `sid`: the session this list belongs to; see the status line. Only an id's
+  // own characters, so a stray quote or space can never break the grammar.
+  'si=$(printf %s "$i" | sed -nE "s/.*\\"session_id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9._-]+)\\".*/\\\\1/p" | head -n 1)',
+  'o="CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}"',
   ...TTY_WRITE
 ].join('; ')
 
@@ -552,7 +571,10 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // backslashes, which Git Bash cannot open; slashes work on every platform.
   '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
   '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | grep -v -E "\\"(tool_use|tool_result|thinking)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
-  'o="CUIHUD1 agent=claude up=$$:$(q "$pr")$ct${at:+ at=$at}"',
+  // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
+  // session in the same terminal does not echo it (see the status line).
+  'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
+  'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct${at:+ at=$at}"',
   '[ -z "$pr" ] && exit 0',
   ...TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,
@@ -583,7 +605,12 @@ export const CLAUDE_HUD_PROMPT_HOOK_POWERSHELL = [
   // `at=<uuid>`: the last user/assistant row at submit time, as the sh hook
   // captures it, so the phone anchors a queued prompt where the record sits.
   'if($j -and $j.transcript_path -and (Test-Path -LiteralPath $j.transcript_path)){ $tl=@(Get-Content -LiteralPath $j.transcript_path -Tail 4000 | Where-Object {$_ -match \'"type":"(user|assistant)"\'}); if($tl.Count -gt 0){ $m=[regex]::Match($tl[-1], \'"uuid":"([0-9a-fA-F-]+)"\'); if($m.Success){ $at=$m.Groups[1].Value } } }',
-  '$o="CUIHUD1 agent=claude up=" + $PID + ":" + $pr + $ct',
+  // `sid`: the session, as the sh hook sends it. No shape guard here on
+  // purpose: every source char costs ~2.7 on the Windows command line, which
+  // is nearly at its ceiling, and the phone refuses an id outside
+  // `[A-Za-z0-9._-]` (`agent-hud-beacon.ts`).
+  '$sid=""; if($j.session_id){$sid=" sid="+$j.session_id}',
+  '$o="CUIHUD1 agent=claude" + $sid + " up=" + $PID + ":" + $pr + $ct',
   'if($at){ $o=$o + " at=" + $at }',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   // The console writer above defines `W`; a call to a name it never
@@ -608,7 +635,8 @@ export const CLAUDE_HUD_STOP_HOOK_POWERSHELL = [
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$ids=@()',
   'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" -and $_.type -ne "in_process_teammate" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
-  '$o="CUIHUD1 agent=claude run=" + ($ids -join ",")',
+  '$sid=""; if($j.session_id){$sid=" sid="+$j.session_id}',
+  '$o="CUIHUD1 agent=claude" + $sid + " run=" + ($ids -join ",")',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),
   'W $o'
 ].join('\n')
