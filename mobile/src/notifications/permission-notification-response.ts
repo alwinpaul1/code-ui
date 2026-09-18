@@ -13,19 +13,20 @@ export type PermissionNotificationData = {
 }
 
 /** How a tap on a prompt banner's button ended. Shared by the permission and
- *  the question paths; only a question has an 'open-app' route. */
+ *  the question paths; only a question has a reply field to refuse. */
 export type PromptAnswerOutcome =
   | 'sent'
   /** Not one of our buttons (the body, or a stranger's data): nothing to do here. */
   | 'not-an-answer'
-  /** Our button, but its job is to bring the app up on the session, not to write. */
-  | 'open-app'
+  /** Our reply field, but the text could not be read as an answer to the live
+   *  prompt. Nothing written; the reason is logged and the banner stays up. */
+  | 'refused'
   | 'unroutable'
   | 'offline'
   | 'stale'
   | 'failed'
 
-export type PermissionAnswerOutcome = Exclude<PromptAnswerOutcome, 'open-app'>
+export type PermissionAnswerOutcome = Exclude<PromptAnswerOutcome, 'refused'>
 
 function readData(value: unknown): PermissionNotificationData | null {
   if (value == null || typeof value !== 'object') {

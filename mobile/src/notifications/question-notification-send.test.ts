@@ -8,6 +8,8 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from '../session/mobile-native-chat-terminal-write-lock'
 import {
+  ASK_USER_QUESTION_CLEANUP,
+  ASK_USER_QUESTION_STACK_AND_LOOK,
   ASK_USER_QUESTION_WHICH_LOGO,
   CODEX_REQUEST_USER_INPUT
 } from './ask-user-question-fixtures'
@@ -68,7 +70,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 1
+      selections: [{ indices: [1] }]
     })
     expect(sent).toBe(true)
     expect(writes).toEqual([{ terminal: 'agent-1', text: '2', enter: false }])
@@ -82,7 +84,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'codex-1',
       agent: 'codex',
       prompt: ask(CODEX_REQUEST_USER_INPUT),
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(sent).toBe(true)
     expect(writes).toEqual([{ terminal: 'codex-1', text: '1', enter: false }])
@@ -96,7 +98,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'openclaude',
       prompt: WHICH_LOGO,
-      optionIndex: 2
+      selections: [{ indices: [2] }]
     })
     expect(writes).toEqual([{ terminal: 'agent-1', text: '3', enter: false }])
   })
@@ -113,7 +115,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex
+      selections: [{ indices: [optionIndex] }]
     })
     expect(writes).toEqual([{ terminal: 'agent-1', text: digit, enter: false }])
   })
@@ -133,7 +135,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'grok-1',
       agent: 'grok',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(sent).toBe(false)
     expect(writes).toEqual([])
@@ -154,7 +156,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(sent).toBe(false)
     expect(writes).toEqual([])
@@ -172,7 +174,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(isMobileNativeChatTerminalWriteInFlight('agent-1')).toBe(false)
 
@@ -183,7 +185,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(isMobileNativeChatTerminalWriteInFlight('agent-1')).toBe(false)
   })
@@ -201,7 +203,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(sent).toBe(false)
     expect(warn).toHaveBeenCalledWith(
@@ -228,7 +230,7 @@ describe('writing a question answer from the shade', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: WHICH_LOGO,
-      optionIndex: 0
+      selections: [{ indices: [0] }]
     })
     expect(sent).toBe(false)
     expect(warn).toHaveBeenCalledWith(
@@ -248,8 +250,137 @@ describe('writing a question answer from the shade', () => {
         terminal: 'agent-1',
         agent: 'claude',
         prompt: WHICH_LOGO,
-        optionIndex: 0
+        selections: [{ indices: [0] }]
       })
     ).resolves.toBe(false)
+  })
+
+  /**
+   * A typed reply is several keystrokes: the "Type something" row's number,
+   * the text, Enter — and for a multi-select, one digit per pick then the
+   * step to Submit. They go through the shared stepper a step apart, exactly
+   * as the card writes them. Fake timers stand in for the pacing.
+   */
+  describe('a typed reply', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    async function settle<T>(promise: Promise<T>): Promise<T> {
+      await vi.runAllTimersAsync()
+      return promise
+    }
+
+    it("writes an Other answer as the free-text row's number, the text, then Enter", async () => {
+      const { client, writes } = makeClient()
+      const sent = await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: [{ indices: [], other: 'none of these, keep the red' }]
+        })
+      )
+      expect(sent).toBe(true)
+      expect(writes).toEqual([
+        { terminal: 'agent-1', text: '4', enter: false },
+        { terminal: 'agent-1', text: 'none of these, keep the red', enter: false },
+        { terminal: 'agent-1', text: '\r', enter: false }
+      ])
+    })
+
+    // The text is typed as raw keystrokes into the selector's input; a line
+    // break there would submit early. Same sanitizer as the card.
+    it('collapses line breaks in the typed text', async () => {
+      const { client, writes } = makeClient()
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: [{ indices: [], other: 'first line\r\nsecond line' }]
+        })
+      )
+      expect(writes[1]).toEqual({ terminal: 'agent-1', text: 'first line second line', enter: false })
+    })
+
+    it('toggles each picked number of a multi-select, then steps to Submit and confirms', async () => {
+      const { client, writes } = makeClient()
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: ask(ASK_USER_QUESTION_CLEANUP),
+          selections: [{ indices: [0, 2] }]
+        })
+      )
+      expect(writes.map((w) => (w as { text: string }).text)).toEqual(['1', '3', '\x1b[C', '\r'])
+    })
+
+    it('answers two questions in order and confirms once', async () => {
+      const { client, writes } = makeClient()
+      await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: ask(ASK_USER_QUESTION_STACK_AND_LOOK),
+          selections: [{ indices: [1] }, { indices: [2] }]
+        })
+      )
+      expect(writes.map((w) => (w as { text: string }).text)).toEqual(['2', '3', '\r'])
+    })
+
+    it('writes nothing for a selection with no answer in it', async () => {
+      const { client, writes } = makeClient()
+      const sent = await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: [{ indices: [] }]
+        })
+      )
+      expect(sent).toBe(false)
+      expect(writes).toEqual([])
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('[question-notification]'),
+        expect.objectContaining({ hostId: 'host-1', terminal: 'agent-1', step: 'build-keys' })
+      )
+    })
+
+    // Failure mid-sequence: the row number landed, the text did not. The log
+    // says which step, because a retry from scratch would type the row number
+    // into the now-open text field.
+    it('names the step that failed in a multi-step reply', async () => {
+      let calls = 0
+      const { client } = makeClient(async () => {
+        calls += 1
+        return calls === 1 ? ACCEPTED : { ok: false }
+      })
+      const sent = await settle(
+        sendQuestionAnswerFromNotification({
+          hostId: 'host-1',
+          client,
+          terminal: 'agent-1',
+          agent: 'claude',
+          prompt: WHICH_LOGO,
+          selections: [{ indices: [], other: 'keep the red' }]
+        })
+      )
+      expect(sent).toBe(false)
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('[question-notification]'),
+        expect.objectContaining({ step: 'write 2/3', outcome: 'rejected' })
+      )
+    })
   })
 })

@@ -41,18 +41,29 @@ const terminalsReader: RpcCompatibleReader<unknown, 'terminals', PermissionLooku
   return { compatible: true, variant: 'terminals', value, salvage: { droppedPaths: [], droppedCount: 0 } }
 }
 
-/** The agent's live `interactivePrompt`: the approval envelope for a
- *  permission, or the question tool's raw input for a question. */
-const promptReader: RpcCompatibleReader<unknown, 'interactive-prompt', string | null> = (raw) => {
+/** The agent's status row, reduced to the two fields a prompt lookup reads. */
+export type PermissionLookupStatus = {
+  /** The approval envelope for a permission, or the question tool's raw input
+   *  for a question. STICKY: the host keeps it after the prompt is answered. */
+  interactivePrompt: string | null
+  /** 'waiting' | 'blocked' | 'working' | 'done' | … — what says whether the
+   *  prompt above is still being asked. Null when the row does not say. */
+  state: string | null
+}
+
+const promptReader: RpcCompatibleReader<unknown, 'agent-status', PermissionLookupStatus> = (
+  raw
+) => {
   const box = raw == null ? {} : Object(raw)
   const status: unknown = Reflect.get(box, 'agentStatus')
-  const prompt = status != null && typeof status === 'object'
-    ? Reflect.get(Object(status), 'interactivePrompt')
-    : undefined
+  const row = status != null && typeof status === 'object' ? Object(status) : null
   return {
     compatible: true,
-    variant: 'interactive-prompt',
-    value: typeof prompt === 'string' && prompt.length > 0 ? prompt : null,
+    variant: 'agent-status',
+    value: {
+      interactivePrompt: row ? readString(row, 'interactivePrompt') : null,
+      state: row ? readString(row, 'state') : null
+    },
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
 }

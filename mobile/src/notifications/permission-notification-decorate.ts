@@ -74,7 +74,7 @@ function questionDecoration(
       picks[action.identifier] = action.pick
       actions.push({ identifier: action.identifier, label: action.label })
     } else {
-      actions.push({ identifier: action.identifier, label: action.label, opensApp: true })
+      actions.push({ identifier: action.identifier, label: action.label, textInput: action.textInput })
     }
   }
   return {

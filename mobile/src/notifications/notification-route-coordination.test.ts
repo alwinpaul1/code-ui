@@ -116,28 +116,43 @@ describe('notification route coordination', () => {
   })
 
   /**
-   * A question the shade cannot hold gets one "Answer" button whose job is to
-   * open the app on the session. Its tap arrives as a non-default action, so
-   * it enters the answer branch — and that branch used to end in an
-   * unconditional return, which would have swallowed the navigation and left
-   * the user on whatever screen the app was last on. The verdict has to reach
-   * the same routing a body tap takes.
+   * Every banner for a session shares one request identifier, so a dedup keyed
+   * on the identifier alone let exactly one body tap per session through for
+   * the app's life: the first opened the session, every later one — a new
+   * question, a new completion — was swallowed (review finding F3, 2026-09-18).
+   * The dedup has to read the per-posting key, and only on the body-tap path.
    */
-  it('lets the Answer button on a question fall through to the session route', () => {
+  it('dedups body taps per posting, not per session banner', () => {
     const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
     const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
 
     const notificationEffect = rootLayoutSource.slice(start, end)
-    const answered = notificationEffect.indexOf('const outcome = await answerPromptFromNotification(')
+    expect(notificationEffect).toContain('const notificationId = notificationTapKey(response)')
+    expect(notificationEffect).not.toContain(
+      'const notificationId = response.notification.request.identifier'
+    )
+  })
+
+  /**
+   * "user can reply directly from the notification dont open the app"
+   * (2026-09-18). A button's branch ends in the clear and a return — nothing
+   * on it navigates — and what the user typed into a reply field reaches the
+   * answer path.
+   */
+  it('answers a button or a reply in the shade and never navigates for it', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    const notificationEffect = rootLayoutSource.slice(start, end)
+    const answered = notificationEffect.indexOf('await answerPromptFromNotification(')
     expect(answered).toBeGreaterThanOrEqual(0)
-    // The early return is guarded on the verdict, and the route comes after it.
-    const guard = notificationEffect.indexOf("if (outcome !== 'open-app') {", answered)
-    expect(guard).toBeGreaterThan(answered)
-    expect(notificationEffect.indexOf('openNotificationRoute(target)', guard)).toBeGreaterThan(guard)
-    // And the question path writes through the shade's sender, not a bare send.
-    expect(notificationEffect).toContain('sendQuestion: sendQuestionAnswerFromNotification')
+    expect(notificationEffect).toContain('userText: response.userText ?? null')
+    // The button branch closes with the clear and a return, before the routing.
+    const branchEnd = notificationEffect.indexOf('clearLastNotificationResponse()\n        return\n      }', answered)
+    expect(branchEnd).toBeGreaterThan(answered)
+    expect(notificationEffect.slice(answered, branchEnd)).not.toContain('openNotificationRoute(')
+    expect(notificationEffect).not.toContain('open-app')
   })
 })
 

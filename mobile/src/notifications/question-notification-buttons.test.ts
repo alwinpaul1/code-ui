@@ -7,6 +7,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 import {
   ASK_USER_QUESTION_CLEANUP,
   ASK_USER_QUESTION_CONTEXT_RING,
+  ASK_USER_QUESTION_STACK_AND_LOOK,
   ASK_USER_QUESTION_WHICH_LOGO,
   CODEX_REQUEST_USER_INPUT,
   clippedByHost
@@ -60,7 +61,7 @@ function questionEvent(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function hostClient(args: { agent: string; interactivePrompt: string }): {
+function hostClient(args: { agent: string; interactivePrompt: string; state?: string }): {
   client: RpcClient
   deliver: (event: unknown) => void
 } {
@@ -81,7 +82,9 @@ function hostClient(args: { agent: string; interactivePrompt: string }): {
       if (method === 'terminal.agentStatus') {
         return {
           ok: true,
-          result: { agentStatus: { interactivePrompt: args.interactivePrompt } }
+          result: {
+            agentStatus: { state: args.state ?? 'waiting', interactivePrompt: args.interactivePrompt }
+          }
         }
       }
       return { ok: true, result: {} }
@@ -121,7 +124,7 @@ describe('a question in the shade', () => {
     } as never)
   })
 
-  it('says the question and offers its choices as buttons that do not open the app', async () => {
+  it('says the question and offers its choices as buttons, plus an Other field, none opening the app', async () => {
     const { client, deliver } = hostClient({
       agent: 'claude',
       interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING)
@@ -147,6 +150,12 @@ describe('a question in the shade', () => {
       {
         identifier: 'question:1',
         buttonTitle: 'Skip it for Codex',
+        options: { opensAppToForeground: false }
+      },
+      {
+        identifier: 'question:other',
+        buttonTitle: 'Other…',
+        textInput: { submitButtonTitle: 'Send', placeholder: 'Type your answer' },
         options: { opensAppToForeground: false }
       }
     ])
@@ -175,9 +184,9 @@ describe('a question in the shade', () => {
     ])
   })
 
-  // A multi-select cannot be answered by one tap. The one button brings the
-  // app up on the session, and is the only button here allowed to.
-  it('offers one Answer button that opens the app when the choices do not fit', async () => {
+  // A multi-select cannot be answered by one tap. The one reply field takes
+  // the numbers, or words, typed in the shade; nothing opens the app.
+  it('offers one Answer reply field when the choices do not fit the buttons', async () => {
     const { client, deliver } = hostClient({
       agent: 'claude',
       interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CLEANUP)
@@ -189,11 +198,53 @@ describe('a question in the shade', () => {
     const content = scheduled()
     expect(content.title).toBe('Cleanup · NexOS / main')
     const category = registeredCategory()
-    expect(category.identifier).toBe('codeui-permission-Answer→app')
     expect(category.actions).toEqual([
-      { identifier: 'question:answer', buttonTitle: 'Answer', options: { opensAppToForeground: true } }
+      {
+        identifier: 'question:answer',
+        buttonTitle: 'Answer',
+        textInput: {
+          submitButtonTitle: 'Send',
+          placeholder: 'Number(s), e.g. 2 or 1,3, or type your answer'
+        },
+        options: { opensAppToForeground: false }
+      }
     ])
     expect(content.data).toEqual(expect.objectContaining({ picks: {} }))
+  })
+
+  it('never registers an action that opens the app, whatever the prompt', async () => {
+    const { client, deliver } = hostClient({
+      agent: 'claude',
+      interactivePrompt: JSON.stringify(ASK_USER_QUESTION_STACK_AND_LOOK)
+    })
+    subscribeToDesktopNotifications(client, 'host-1')
+    deliver(questionEvent())
+    await flush()
+    for (const action of registeredCategory().actions) {
+      expect(action.options?.opensAppToForeground).toBe(false)
+    }
+  })
+
+  /**
+   * The host keeps the prompt on the status row after it is answered. An
+   * event that arrives while the agent is already working again (the desk
+   * answered before the phone looked) must not grow buttons for a question
+   * nobody is asking.
+   */
+  it("keeps the desktop's banner when the agent has already moved on", async () => {
+    const { client, deliver } = hostClient({
+      agent: 'claude',
+      interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING),
+      state: 'working'
+    })
+    subscribeToDesktopNotifications(client, 'host-1')
+    deliver(questionEvent())
+    await flush()
+
+    const content = scheduled()
+    expect(content.title).toBe('❓ Claude needs input · NexOS / main')
+    expect(content).not.toHaveProperty('categoryIdentifier')
+    expect(Notifications.setNotificationCategoryAsync).not.toHaveBeenCalled()
   })
 
   it("does the same for Codex's request_user_input, naming Codex", async () => {
@@ -211,7 +262,13 @@ describe('a question in the shade', () => {
     expect(content.title).toBe('Codex has a question · NexOS / main')
     expect(content.body).toBe('Which color do you prefer: red or blue?\n1 Blue')
     expect(registeredCategory().actions).toEqual([
-      { identifier: 'question:0', buttonTitle: 'Blue', options: { opensAppToForeground: false } }
+      { identifier: 'question:0', buttonTitle: 'Blue', options: { opensAppToForeground: false } },
+      {
+        identifier: 'question:other',
+        buttonTitle: 'Other…',
+        textInput: { submitButtonTitle: 'Send', placeholder: 'Type your answer' },
+        options: { opensAppToForeground: false }
+      }
     ])
   })
 

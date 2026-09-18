@@ -54,18 +54,24 @@ const QUESTION_DATA = {
 const client = { getState: () => 'connected' } as unknown as RpcClient
 
 /**
- * One tap handler for both banner kinds. The data says which it is; each path
- * keeps its own guard, and the Answer route comes back as a verdict the
- * caller turns into navigation rather than a write.
+ * One tap handler for both banner kinds. The data says which it is, each path
+ * keeps its own guard, and a reply typed into the shade reaches the question
+ * path with its text. Nothing here navigates.
  */
 describe('answering whichever prompt a banner was about', () => {
   const sendPermission = vi.fn(async () => true)
   const sendQuestion = vi.fn(async () => true)
   let log: ReturnType<typeof vi.spyOn>
 
-  function run(actionIdentifier: string, data: unknown, pending: PendingPrompt | null) {
+  function run(
+    actionIdentifier: string,
+    data: unknown,
+    pending: PendingPrompt | null,
+    userText: string | null = null
+  ) {
     return answerPromptFromNotification({
       actionIdentifier,
+      userText,
       data,
       resolveClient: () => client,
       lookup: async () => pending,
@@ -98,15 +104,28 @@ describe('answering whichever prompt a banner was about', () => {
       terminal: 'agent-1',
       agent: 'claude',
       prompt: QUESTION.prompt,
-      optionIndex: 1
+      selections: [{ indices: [1] }]
     })
     expect(sendPermission).not.toHaveBeenCalled()
   })
 
-  it('says to open the app for the Answer button, sending nothing', async () => {
-    expect(await run('question:answer', QUESTION_DATA, QUESTION)).toBe('open-app')
+  it('routes a typed reply to the question sender with what was typed', async () => {
+    expect(await run('question:other', QUESTION_DATA, QUESTION, 'keep everything')).toBe('sent')
+    expect(sendQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ selections: [{ indices: [], other: 'keep everything' }] })
+    )
     expect(sendPermission).not.toHaveBeenCalled()
+  })
+
+  it('refuses a reply it cannot read, sending nothing and leaving a line', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(await run('question:other', QUESTION_DATA, QUESTION, '   ')).toBe('refused')
     expect(sendQuestion).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining('[prompt-notification]'),
+      expect.objectContaining({ outcome: 'refused', actionIdentifier: 'question:other' })
+    )
+    warn.mockRestore()
   })
 
   // Android delivers its DEFAULT identifier for a body tap, on either kind.

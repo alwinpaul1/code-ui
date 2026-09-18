@@ -61,7 +61,7 @@ describe('finding the permission a notification is about', () => {
       terminals: TWO_TERMINALS,
       status: (handle) =>
         handle === 'agent-1'
-          ? { ok: true, result: { agentStatus: { interactivePrompt: approval('Bash', 'Recompile page 2') } } }
+          ? { ok: true, result: { agentStatus: { state: 'waiting', interactivePrompt: approval('Bash', 'Recompile page 2') } } }
           : { ok: true, result: { agentStatus: {} } }
     })
     expect(await lookupPendingPrompt(client, 'wt-1')).toEqual({
@@ -89,7 +89,7 @@ describe('finding the permission a notification is about', () => {
   it('stops at the first terminal that is actually waiting', async () => {
     const { client, calls } = makeClient({
       terminals: TWO_TERMINALS,
-      status: () => ({ ok: true, result: { agentStatus: { interactivePrompt: approval('Edit') } } })
+      status: () => ({ ok: true, result: { agentStatus: { state: 'waiting', interactivePrompt: approval('Edit') } } })
     })
     await lookupPendingPrompt(client, 'wt-1')
     expect(calls.filter((c) => c.method === 'terminal.agentStatus')).toHaveLength(1)
@@ -119,11 +119,11 @@ describe('finding the permission a notification is about', () => {
     ['nothing is waiting', { terminals: TWO_TERMINALS }],
     ['the prompt is neither an approval nor a question', {
       terminals: TWO_TERMINALS,
-      status: () => ({ ok: true, result: { agentStatus: { interactivePrompt: '{"question":{}}' } } }) as Reply
+      status: () => ({ ok: true, result: { agentStatus: { state: 'waiting', interactivePrompt: '{"question":{}}' } } }) as Reply
     }],
     ['the question has no questions in it', {
       terminals: TWO_TERMINALS,
-      status: () => ({ ok: true, result: { agentStatus: { interactivePrompt: '{"questions":[]}' } } }) as Reply
+      status: () => ({ ok: true, result: { agentStatus: { state: 'waiting', interactivePrompt: '{"questions":[]}' } } }) as Reply
     }],
     // The host clips `interactivePrompt` at 16,000 characters (Orca 1.4.205's
     // status sanitizer: `interactivePrompt: i.i(t.interactivePrompt, 16e3)`), so a
@@ -136,6 +136,7 @@ describe('finding the permission a notification is about', () => {
         ok: true,
         result: {
           agentStatus: {
+            state: 'waiting',
             interactivePrompt: clippedByHost(JSON.stringify(ASK_USER_QUESTION_WHICH_LOGO))
           }
         }
@@ -143,7 +144,7 @@ describe('finding the permission a notification is about', () => {
     }],
     ['the prompt is malformed', {
       terminals: TWO_TERMINALS,
-      status: () => ({ ok: true, result: { agentStatus: { interactivePrompt: '{not json' } } }) as Reply
+      status: () => ({ ok: true, result: { agentStatus: { state: 'waiting', interactivePrompt: '{not json' } } }) as Reply
     }]
   ])('returns nothing when %s', async (_label, replies) => {
     const { client } = makeClient(replies as Parameters<typeof makeClient>[0])
@@ -167,6 +168,7 @@ describe('finding the permission a notification is about', () => {
                 ok: true,
                 result: {
                   agentStatus: {
+                    state: 'waiting',
                     interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING)
                   }
                 }
@@ -215,7 +217,7 @@ describe('finding the permission a notification is about', () => {
         status: () => ({
           ok: true,
           result: {
-            agentStatus: { interactivePrompt: JSON.stringify(CODEX_REQUEST_USER_INPUT) }
+            agentStatus: { state: 'waiting', interactivePrompt: JSON.stringify(CODEX_REQUEST_USER_INPUT) }
           }
         })
       })
@@ -242,7 +244,7 @@ describe('finding the permission a notification is about', () => {
         status: () => ({
           ok: true,
           result: {
-            agentStatus: { interactivePrompt: JSON.stringify(ASK_USER_QUESTION_WHICH_LOGO) }
+            agentStatus: { state: 'waiting', interactivePrompt: JSON.stringify(ASK_USER_QUESTION_WHICH_LOGO) }
           }
         })
       })
@@ -270,6 +272,74 @@ describe('finding the permission a notification is about', () => {
         })
       })
       expect(await lookupPendingPrompt(client, 'wt-1')).toBeNull()
+    })
+  })
+
+  /**
+   * The host keeps `interactivePrompt` STICKY after the prompt is answered: the
+   * approval envelope and the question both outlive their answer on the status
+   * row (STA-3144), which is why the chat card only surfaces them while the
+   * agent is waiting or blocked (use-mobile-native-chat-prompts.ts). A lookup
+   * that read the prompt alone found one minutes after the desk had answered,
+   * and a button tapped then would have written a digit into a live composer
+   * to ride along with the next real message (review finding F2, 2026-09-18).
+   *
+   * Not verified on a live host: every terminal to hand was hand-started with
+   * no agentStatus at all. The gate is on the card's evidence.
+   */
+  describe('a prompt that outlived its answer', () => {
+    function withState(state: string | undefined, interactivePrompt: string) {
+      return makeClient({
+        terminals: TWO_TERMINALS,
+        status: () => ({
+          ok: true,
+          result: {
+            agentStatus: { ...(state === undefined ? {} : { state }), interactivePrompt }
+          }
+        })
+      })
+    }
+
+    it.each(['working', 'done', 'idle'])(
+      'finds no question while the agent is %s, whatever the status row still says',
+      async (state) => {
+        const { client } = withState(state, JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING))
+        expect(await lookupPendingPrompt(client, 'wt-1')).toBeNull()
+      }
+    )
+
+    it.each(['working', 'done'])('finds no permission while the agent is %s either', async (state) => {
+      const { client } = withState(state, approval('Bash', 'rm -rf build'))
+      expect(await lookupPendingPrompt(client, 'wt-1')).toBeNull()
+    })
+
+    it('finds the prompt while the agent is blocked, as it does while waiting', async () => {
+      const { client } = withState('blocked', JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING))
+      expect((await lookupPendingPrompt(client, 'wt-1'))?.kind).toBe('question')
+    })
+
+    // A status row with no state is not one the host emits; refuse over guess.
+    it('finds nothing when the status row does not say what state the agent is in', async () => {
+      const { client } = withState(undefined, JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING))
+      expect(await lookupPendingPrompt(client, 'wt-1')).toBeNull()
+    })
+
+    // Two agents in one worktree: the one that already answered must not
+    // shadow the one still asking.
+    it('walks past a terminal whose prompt is stale to one that is still waiting', async () => {
+      const { client } = makeClient({
+        terminals: TWO_TERMINALS,
+        status: (handle) => ({
+          ok: true,
+          result: {
+            agentStatus: {
+              state: handle === 'agent-1' ? 'working' : 'waiting',
+              interactivePrompt: JSON.stringify(ASK_USER_QUESTION_CONTEXT_RING)
+            }
+          }
+        })
+      })
+      expect((await lookupPendingPrompt(client, 'wt-1'))?.terminal).toBe('agent-2')
     })
   })
 

@@ -31,6 +31,16 @@ const MAX_TERMINALS_QUERIED = 4
  * request_user_input. Each is parsed by the parser the chat card already uses
  * for it; nothing here reads the JSON itself.
  *
+ * The prompt is STICKY: the host keeps `interactivePrompt` on the status row
+ * after the prompt has been answered (STA-3144), so the row alone cannot say
+ * whether the agent is still asking. The chat card surfaces it only while the
+ * agent's state is 'waiting' or 'blocked' (use-mobile-native-chat-prompts.ts),
+ * and so does this — a button tapped minutes after the desk answered would
+ * otherwise write a digit into a live composer, to ride along with the next
+ * real message. A row with no state is refused, not guessed. (Not verified on
+ * a live host: every terminal to hand was hand-started with no agentStatus at
+ * all. The gate is on the card's evidence.)
+ *
  * Asking is safe at this moment specifically: the notification arrived over the
  * link, so the link is up by definition.
  *
@@ -58,6 +68,12 @@ export type PendingQuestion = {
 }
 
 export type PendingPrompt = PendingPermission | PendingQuestion
+
+/** The two states in which a prompt on the status row is still being asked —
+ *  the same pair the chat card gates on. */
+function isPausedOnPrompt(state: string | null): boolean {
+  return state === 'waiting' || state === 'blocked'
+}
 
 function pendingFromStatus(
   interactivePrompt: string | null,
@@ -105,7 +121,10 @@ export async function lookupPendingPrompt(
       const status = permissionAgentStatus.interpret(
         await permissionAgentStatus.request(client, { terminal: terminal.handle })
       )
-      const pending = pendingFromStatus(status, terminal.handle, terminal.agent)
+      if (status === null || !isPausedOnPrompt(status.state)) {
+        continue
+      }
+      const pending = pendingFromStatus(status.interactivePrompt, terminal.handle, terminal.agent)
       if (pending) {
         return pending
       }

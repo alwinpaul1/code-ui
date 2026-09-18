@@ -1,8 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { parseAskFromStatus, type AskPrompt } from '../../../src/shared/native-chat-ask'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  parseAskFromStatus,
+  type AskAnswerSelection,
+  type AskPrompt
+} from '../../../src/shared/native-chat-ask'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  ASK_USER_QUESTION_CLEANUP,
   ASK_USER_QUESTION_CONTEXT_RING,
+  ASK_USER_QUESTION_STACK_AND_LOOK,
   ASK_USER_QUESTION_WHICH_LOGO,
   CODEX_REQUEST_USER_INPUT
 } from './ask-user-question-fixtures'
@@ -37,17 +43,23 @@ const DATA = {
 
 let state = 'connected'
 const client = { getState: () => state } as unknown as RpcClient
-const sent: { terminal: string; agent: string; optionIndex: number; prompt: AskPrompt }[] = []
+const sent: {
+  terminal: string
+  agent: string
+  selections: AskAnswerSelection[]
+  prompt: AskPrompt
+}[] = []
 const lookups = vi.fn(async (): Promise<PendingPrompt | null> => CONTEXT_RING)
 
 function run(overrides: Partial<Parameters<typeof answerQuestionFromNotification>[0]> = {}) {
   return answerQuestionFromNotification({
     actionIdentifier: 'question:1',
+    userText: null,
     data: DATA,
     resolveClient: () => client,
     lookup: lookups,
-    send: async ({ terminal, agent, optionIndex, prompt }) => {
-      sent.push({ terminal, agent, optionIndex, prompt })
+    send: async ({ terminal, agent, selections, prompt }) => {
+      sent.push({ terminal, agent, selections, prompt })
       return true
     },
     ...overrides
@@ -64,17 +76,29 @@ function run(overrides: Partial<Parameters<typeof answerQuestionFromNotification
  * one the banner was built from, and a mismatch sends nothing.
  */
 describe('answering a question from the shade', () => {
+  let warn: ReturnType<typeof vi.spyOn>
+
   beforeEach(() => {
     sent.length = 0
     state = 'connected'
     lookups.mockReset()
     lookups.mockResolvedValue(CONTEXT_RING)
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
   })
 
   it('picks the option the button stands for, on the terminal that is waiting', async () => {
     expect(await run()).toBe('sent')
     expect(sent).toEqual([
-      { terminal: 'agent-1', agent: 'claude', optionIndex: 1, prompt: CONTEXT_RING.prompt }
+      {
+        terminal: 'agent-1',
+        agent: 'claude',
+        selections: [{ indices: [1] }],
+        prompt: CONTEXT_RING.prompt
+      }
     ])
   })
 
@@ -104,15 +128,124 @@ describe('answering a question from the shade', () => {
       }
     })
     expect(outcome).toBe('sent')
-    expect(sent).toEqual([{ terminal: 'codex-1', agent: 'codex', optionIndex: 0, prompt: codex.prompt }])
+    expect(sent).toEqual([
+      { terminal: 'codex-1', agent: 'codex', selections: [{ indices: [0] }], prompt: codex.prompt }
+    ])
   })
 
-  // The Answer button's whole job is to bring the app up on the session. It
-  // must not look anything up or write anything: the card does the answering.
-  it('opens the app for the Answer button without touching the host', async () => {
-    expect(await run({ actionIdentifier: 'question:answer' })).toBe('open-app')
-    expect(sent).toEqual([])
-    expect(lookups).not.toHaveBeenCalled()
+  /**
+   * A reply typed into the shade. "user can reply directly from the
+   * notification dont open the app" (2026-09-18). The text is read against
+   * the prompt that is pending NOW, after the same stale check a button gets,
+   * and what it means is the parser's call (question-reply-parse.ts).
+   */
+  describe('a typed reply', () => {
+    const FOUR: PendingPrompt = {
+      ...CONTEXT_RING,
+      prompt: ask({ questions: [{ ...ASK_USER_QUESTION_CLEANUP.questions[0]!, multiSelect: false }] })
+    }
+    const FOUR_DATA = {
+      ...DATA,
+      questionKey: `question:${JSON.stringify(FOUR.prompt.questions)}`,
+      picks: {}
+    }
+
+    it('sends an Other reply as the free-text answer, built the way the card builds one', async () => {
+      const outcome = await run({ actionIdentifier: 'question:other', userText: 'keep everything' })
+      expect(outcome).toBe('sent')
+      expect(sent[0]!.selections).toEqual([{ indices: [], other: 'keep everything' }])
+      expect(sent[0]!.prompt).toBe(CONTEXT_RING.prompt)
+    })
+
+    it('sends a number typed into Answer as that option', async () => {
+      lookups.mockResolvedValue(FOUR)
+      const outcome = await run({
+        actionIdentifier: 'question:answer',
+        userText: '2',
+        data: FOUR_DATA
+      })
+      expect(outcome).toBe('sent')
+      expect(sent[0]!.selections).toEqual([{ indices: [1] }])
+    })
+
+    it('sends one answer per question for a multi-question prompt', async () => {
+      const two: PendingPrompt = { ...CONTEXT_RING, prompt: ask(ASK_USER_QUESTION_STACK_AND_LOOK) }
+      lookups.mockResolvedValue(two)
+      const outcome = await run({
+        actionIdentifier: 'question:answer',
+        userText: '2; something else',
+        data: { ...DATA, questionKey: `question:${JSON.stringify(two.prompt.questions)}`, picks: {} }
+      })
+      expect(outcome).toBe('sent')
+      expect(sent[0]!.selections).toEqual([{ indices: [1] }, { indices: [], other: 'something else' }])
+    })
+
+    // Refusals write nothing and say why, with the host and terminal, because
+    // the shade shows the user nothing and the banner simply stays up.
+    it('refuses a number past the options, and says so', async () => {
+      lookups.mockResolvedValue(FOUR)
+      const outcome = await run({
+        actionIdentifier: 'question:answer',
+        userText: '7',
+        data: FOUR_DATA
+      })
+      expect(outcome).toBe('refused')
+      expect(sent).toEqual([])
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('[question-notification]'),
+        expect.objectContaining({
+          hostId: 'host-1',
+          terminal: 'agent-1',
+          reason: expect.stringContaining('7')
+        })
+      )
+    })
+
+    it('refuses fewer answers than questions', async () => {
+      const two: PendingPrompt = { ...CONTEXT_RING, prompt: ask(ASK_USER_QUESTION_STACK_AND_LOOK) }
+      lookups.mockResolvedValue(two)
+      const outcome = await run({
+        actionIdentifier: 'question:answer',
+        userText: '2',
+        data: { ...DATA, questionKey: `question:${JSON.stringify(two.prompt.questions)}`, picks: {} }
+      })
+      expect(outcome).toBe('refused')
+      expect(sent).toEqual([])
+    })
+
+    it.each([
+      ['no text at all', null],
+      ['empty text', ''],
+      ['only spaces', '   ']
+    ])('refuses a reply with %s', async (_label, userText) => {
+      expect(await run({ actionIdentifier: 'question:other', userText })).toBe('refused')
+      expect(sent).toEqual([])
+      expect(warn).toHaveBeenCalled()
+    })
+
+    // The stale check comes BEFORE the text is read: a reply written against a
+    // question that has changed would answer the new one with the old words.
+    it('sends nothing when the question changed before the reply arrived', async () => {
+      lookups.mockResolvedValue({ ...CONTEXT_RING, prompt: ask(ASK_USER_QUESTION_WHICH_LOGO) })
+      expect(await run({ actionIdentifier: 'question:other', userText: 'keep everything' })).toBe(
+        'stale'
+      )
+      expect(sent).toEqual([])
+    })
+
+    it('sends nothing when nothing is waiting any more', async () => {
+      lookups.mockResolvedValue(null)
+      expect(await run({ actionIdentifier: 'question:answer', userText: '2' })).toBe('stale')
+      expect(sent).toEqual([])
+    })
+
+    // A reply field on a banner is ours only when the banner is: a stranger's
+    // data with our identifier is not an answer.
+    it('is not an answer when the data is not a question banner', async () => {
+      expect(
+        await run({ actionIdentifier: 'question:other', userText: 'x', data: { hello: 'world' } })
+      ).toBe('not-an-answer')
+    })
   })
 
   it('sends nothing when the agent has moved on to a different question', async () => {
@@ -160,12 +293,16 @@ describe('answering a question from the shade', () => {
 
   // Degenerate: a pick past the options the live prompt has. The key check
   // makes this unreachable through our own banners; a hand-made payload is
-  // still refused rather than turned into a digit.
+  // still refused rather than turned into a digit, and the refusal is logged.
   it('sends nothing for a pick the live question does not have', async () => {
     expect(
       await run({ actionIdentifier: 'question:5', data: { ...DATA, picks: { 'question:5': 5 } } })
-    ).toBe('stale')
+    ).toBe('refused')
     expect(sent).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[question-notification]'),
+      expect.objectContaining({ terminal: 'agent-1', reason: expect.stringContaining('5') })
+    )
   })
 
   // Android delivers its DEFAULT identifier when the body is tapped rather than

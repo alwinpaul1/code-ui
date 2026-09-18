@@ -9,7 +9,11 @@ import {
 } from './ask-user-question-fixtures'
 import { styleText } from './notification-plain-text'
 import {
+  ANSWER_PLACEHOLDER_NUMBERS,
+  ANSWER_PLACEHOLDER_PER_QUESTION,
+  OTHER_PLACEHOLDER,
   QUESTION_ANSWER_ACTION,
+  QUESTION_OTHER_ACTION,
   questionNotificationContent
 } from './question-notification-content'
 
@@ -39,21 +43,30 @@ describe('turning a question into what the shade shows', () => {
     )
   })
 
-  it('offers one button per choice, in order, each knowing which option it picks', () => {
+  // The user answers from the shade and never opens the app: a button per
+  // choice, and a reply field for the "Other…" row the agent's selector draws
+  // under every question. The typed text is the free-text answer.
+  it('offers one button per choice, in order, and an Other reply field', () => {
     const content = questionNotificationContent(prompt(ASK_USER_QUESTION_CONTEXT_RING), AT)
     expect(content.actions).toEqual([
       { identifier: 'question:0', label: 'Tap to refresh', pick: 0 },
-      { identifier: 'question:1', label: 'Skip it for Codex', pick: 1 }
+      { identifier: 'question:1', label: 'Skip it for Codex', pick: 1 },
+      { identifier: QUESTION_OTHER_ACTION, label: 'Other…', textInput: { placeholder: OTHER_PLACEHOLDER } }
     ])
   })
 
-  // Claude's TUI draws an "Other" free-text row under every question. It is
-  // the selector's own, not an option, and the shade has no text field: three
-  // options are three buttons, never four.
-  it('does not invent a button for the free-text row', () => {
+  // Android draws at most three actions on a notification and drops the rest
+  // without a word. Three choices fill it: the buttons stay (one tap each,
+  // the likelier need) and the Other field is the one that gives way.
+  it('keeps three choice buttons and gives up the Other field when they fill the shade', () => {
     const content = questionNotificationContent(prompt(ASK_USER_QUESTION_WHICH_LOGO), AT)
     expect(content.actions).toHaveLength(3)
-    expect(content.actions.map((a) => a.label)).not.toContain('Other')
+    expect(content.actions.map((a) => a.label)).toEqual([
+      'The app icon',
+      'The agent session c…',
+      'The notification ic…'
+    ])
+    expect(content.actions.some((a) => 'textInput' in a)).toBe(false)
   })
 
   // Android clips a long action title without an ellipsis, so the cut is made
@@ -99,38 +112,58 @@ describe('turning a question into what the shade shows', () => {
       questions: [{ ...ASK_USER_QUESTION_CLEANUP.questions[0]!, multiSelect: false }]
     }
 
+    // One reply field takes option numbers or words, and the placeholder says
+    // so. Nothing opens the app.
     it.each([
       ['four options', FOUR_OPTIONS],
-      ['a multi-select', ASK_USER_QUESTION_CLEANUP],
-      ['two questions', ASK_USER_QUESTION_STACK_AND_LOOK]
-    ])('offers a single Answer button that opens the app for %s', (_label, input) => {
+      ['a multi-select', ASK_USER_QUESTION_CLEANUP]
+    ])('offers a single Answer reply field that takes numbers or words for %s', (_label, input) => {
       const content = questionNotificationContent(prompt(input), AT)
       expect(content.actions).toEqual([
-        { identifier: QUESTION_ANSWER_ACTION, label: 'Answer', opensApp: true }
+        {
+          identifier: QUESTION_ANSWER_ACTION,
+          label: 'Answer',
+          textInput: { placeholder: ANSWER_PLACEHOLDER_NUMBERS }
+        }
+      ])
+      expect(ANSWER_PLACEHOLDER_NUMBERS).toBe('Number(s), e.g. 2 or 1,3, or type your answer')
+    })
+
+    it('offers one reply field for several questions, asking for one answer each', () => {
+      const content = questionNotificationContent(prompt(ASK_USER_QUESTION_STACK_AND_LOOK), AT)
+      expect(content.actions).toEqual([
+        {
+          identifier: QUESTION_ANSWER_ACTION,
+          label: 'Answer',
+          textInput: { placeholder: ANSWER_PLACEHOLDER_PER_QUESTION }
+        }
       ])
     })
 
     // Grok and OMP answer by pasted label plus Enter after a composer clear,
     // which is only safe behind the card's stale-input heal. The shade has
-    // none, so their question opens the app rather than offering a digit that
-    // would be wrong for them.
-    it('offers only the Answer route for an agent whose selector the shade cannot drive', () => {
+    // none, so their question is captioned and offers nothing to press: a
+    // digit would be wrong for them, and opening the app is not on offer.
+    it('offers no action at all for an agent whose selector the shade cannot drive', () => {
       const content = questionNotificationContent(prompt(ASK_USER_QUESTION_CONTEXT_RING), {
         agent: 'grok',
         location: 'NexOS / main'
       })
-      expect(content.actions).toEqual([
-        { identifier: QUESTION_ANSWER_ACTION, label: 'Answer', opensApp: true }
-      ])
+      expect(content.actions).toEqual([])
+      expect(content.title).toBe('Context ring · NexOS / main')
     })
 
-    it('still says the first question and its choices, and how many more there are', () => {
+    // Every question has to be readable from the shade, since the reply
+    // answers all of them at once; and the body says the format.
+    it('says every question with its choices, and how to reply to them all', () => {
       const content = questionNotificationContent(prompt(ASK_USER_QUESTION_STACK_AND_LOOK), AT)
       expect(content.title).toBe('Stack · NexOS / main')
       expect(content.body).toBe(
-        "How should the new Android app be built on top of Orca's relay?\n" +
+        "Q1 How should the new Android app be built on top of Orca's relay?\n" +
           '1 Fork Orca mobile (Expo/RN) (Recommended) · 2 Web app + Capacitor with real beUI · 3 Native Kotlin/Compose\n' +
-          '+1 more question'
+          'Q2 Which visual direction for the UI layer?\n' +
+          "1 Claude app: warm cream/ink, serif headings (Recommended) · 2 Codex app: neutral white/black, sans-serif · 3 Keep Orca's graphite dark palette\n" +
+          'Reply with one answer per question, separated by ;'
       )
     })
 
@@ -144,22 +177,45 @@ describe('turning a question into what the shade shows', () => {
     })
   })
 
-  // Degenerate: one option is one button (the free-text row is still not one).
-  it('offers one button for a one-option question', () => {
+  // Degenerate: one option is one button, plus the Other field.
+  it('offers one button and the Other field for a one-option question', () => {
     const content = questionNotificationContent(prompt(CODEX_REQUEST_USER_INPUT), {
       agent: 'codex',
       location: 'NexOS / main'
     })
-    expect(content.actions).toEqual([{ identifier: 'question:0', label: 'Blue', pick: 0 }])
+    expect(content.actions).toEqual([
+      { identifier: 'question:0', label: 'Blue', pick: 0 },
+      { identifier: QUESTION_OTHER_ACTION, label: 'Other…', textInput: { placeholder: OTHER_PLACEHOLDER } }
+    ])
   })
 
-  it('offers only the Answer route for a question with no options at all', () => {
+  // The vendored parser accepts `label: ''`; a button with no title would
+  // register a category id with a hole in it and draw nothing to press.
+  it('falls back to the Answer field when an option has no label to put on a button', () => {
+    const content = questionNotificationContent(
+      {
+        questions: [
+          { question: 'Which?', multiSelect: false, options: [{ label: '' }, { label: 'Yes' }] }
+        ]
+      },
+      AT
+    )
+    expect(content.actions).toEqual([
+      {
+        identifier: QUESTION_ANSWER_ACTION,
+        label: 'Answer',
+        textInput: { placeholder: ANSWER_PLACEHOLDER_NUMBERS }
+      }
+    ])
+  })
+
+  it('offers only a free-text reply for a question with no options at all', () => {
     const content = questionNotificationContent(
       { questions: [{ question: 'What should it be called?', multiSelect: false, options: [] }] },
       AT
     )
     expect(content.actions).toEqual([
-      { identifier: QUESTION_ANSWER_ACTION, label: 'Answer', opensApp: true }
+      { identifier: QUESTION_OTHER_ACTION, label: 'Other…', textInput: { placeholder: OTHER_PLACEHOLDER } }
     ])
     expect(content.body).toBe('What should it be called?')
   })

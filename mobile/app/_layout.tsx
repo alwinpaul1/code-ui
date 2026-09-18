@@ -6,7 +6,10 @@ import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
 import { RpcClientProvider } from '../src/transport/client-context'
-import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
+import {
+  getNotificationNavigationTarget,
+  notificationTapKey
+} from '../src/notifications/notification-routing'
 import { isAppUpdateNotification } from '../src/app-update/update-notification'
 import {
   useOpenAppUpdateNotification,
@@ -158,13 +161,15 @@ function ThemedRoot() {
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
-        // An Approve/Deny button on a permission banner, or a choice on a
-        // question banner. It answers WITHOUT opening the app, which is the
-        // point: the alternative was unlock, open, find the session, tap.
-        // Anything that is not one of ours falls through to the clear below,
-        // exactly as before.
-        const outcome = await answerPromptFromNotification({
+        // An Approve/Deny button on a permission banner, a choice on a
+        // question banner, or a reply typed into one. It answers WITHOUT
+        // opening the app, which is the point: the alternative was unlock,
+        // open, find the session, tap. Anything that is not one of ours falls
+        // through to the clear below, exactly as before.
+        await answerPromptFromNotification({
           actionIdentifier: response.actionIdentifier,
+          // What a reply field returned; undefined for a plain button.
+          userText: response.userText ?? null,
           data: response.notification.request.content.data,
           // The UI's client first; failing that, the link the background
           // watcher is listening on — which is the one the banner's event came
@@ -185,21 +190,19 @@ function ThemedRoot() {
               // answer may still have landed — but a retry is safe, because the
               // re-check finds no matching prompt once one has.
             })) === 'accepted',
-          // Same road as the chat card's answer: the option's number, no
-          // Enter, built by the shared key builder and paced by the shared
-          // stepper, under the terminal write lock.
+          // Same road as the chat card's answer: option numbers and typed
+          // text as keystrokes, built by the shared key builders and paced by
+          // the shared stepper, under the terminal write lock.
           sendQuestion: sendQuestionAnswerFromNotification
         })
-        // The one button that opens the app: a question the shade cannot hold.
-        // It lands where a body tap lands, on the session's chat, so it takes
-        // the navigation path below instead of stopping here.
-        if (outcome !== 'open-app') {
-          clearLastNotificationResponse()
-          return
-        }
+        clearLastNotificationResponse()
+        return
       }
 
-      const notificationId = response.notification.request.identifier
+      // Keyed per POSTING, not per banner: a session's banners all share one
+      // request identifier, and keying on that alone let one body tap per
+      // session per app life through (2026-09-18).
+      const notificationId = notificationTapKey(response)
       if (handledNotificationIdsRef.current.has(notificationId)) {
         return
       }
