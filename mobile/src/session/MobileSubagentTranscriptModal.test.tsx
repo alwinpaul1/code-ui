@@ -10,7 +10,15 @@ import type { SubagentTranscriptRequest } from './subagent-transcript-store'
 
 const fakes = vi.hoisted(() => ({
   client: null as RpcClient | null,
-  lastConnectedAt: 1000 as number | null
+  lastConnectedAt: 1000 as number | null,
+  /** The blur half of the screen's focus effect, captured so a test can blur. */
+  blur: null as (() => void) | null
+}))
+
+vi.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    fakes.blur = effect() ?? null
+  }
 }))
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
@@ -81,7 +89,12 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: () => fakes.lastConnectedAt
 }))
 
-import { MobileSubagentTranscriptScreen } from './MobileSubagentTranscriptModal'
+import { MobileSubagentTranscriptModal, MobileSubagentTranscriptScreen } from './MobileSubagentTranscriptModal'
+import {
+  openSubagentTranscript,
+  peekSubagentTranscript,
+  resetSubagentTranscriptForTests
+} from './subagent-transcript-store'
 
 const SUBAGENT =
   '/Users/me/.claude/projects/-Users-me-Desktop-Project/5d877e39-1867-424f-86b5-c080713c1563/subagents/agent-a68211cb9358e29c3.jsonl'
@@ -287,6 +300,50 @@ describe('the subagent transcript viewer', () => {
     await mount()
     await press(renderer!, 'Back to background tasks')
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  // An RN Modal is a native overlay the screen's focus does not gate. Push a
+  // second session screen (the notification route can, across hosts) and a
+  // viewer left open would keep its subscription and paint over the new
+  // screen. Losing focus closes it; so does leaving the screen for good.
+  it('closes when the session screen loses focus, so it cannot paint over the next screen', async () => {
+    resetSubagentTranscriptForTests()
+    fakes.blur = null
+    openSubagentTranscript(request().target, true)
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileSubagentTranscriptModal, { hostId: 'host-a', worktreeId: 'wt-a' })
+        )
+      )
+    })
+    expect(renderer!.root.findAllByType('Modal')).toHaveLength(1)
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    expect(fakes.blur).not.toBeNull()
+    await act(async () => {
+      fakes.blur?.()
+    })
+    expect(peekSubagentTranscript()).toBeNull()
+    expect(renderer!.root.findAllByType('Modal')).toHaveLength(0)
+  })
+
+  it('does not reopen on the next screen after the one it was opened on unmounts', async () => {
+    resetSubagentTranscriptForTests()
+    openSubagentTranscript(request().target, true)
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileSubagentTranscriptModal, { hostId: 'host-a', worktreeId: 'wt-a' })
+        )
+      )
+    })
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(peekSubagentTranscript()).toBeNull()
   })
 
   it('paints from the theme in dark mode too, not a hardcoded palette', async () => {

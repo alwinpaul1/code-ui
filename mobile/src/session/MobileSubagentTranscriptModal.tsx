@@ -1,4 +1,5 @@
 import { FlashList } from '@shopify/flash-list'
+import { useFocusEffect } from 'expo-router'
 import { Diamond } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo } from 'react'
 import { ActivityIndicator, Modal, View } from 'react-native'
@@ -43,7 +44,12 @@ export function MobileSubagentTranscriptModal({
   worktreeId: string | null
 }): React.JSX.Element | null {
   const request = useSubagentTranscriptRequest()
-  // A viewer opened on one session screen must not reappear on the next.
+  // A native Modal is an overlay the screen's focus does not gate: push a
+  // second session screen (the notification route can, across hosts) and a
+  // viewer left open would keep its subscription and paint over the new
+  // screen. Losing focus closes it, and so does leaving the screen for good,
+  // so a viewer opened on one session screen never reappears on the next.
+  useFocusEffect(useCallback(() => closeSubagentTranscript, []))
   useEffect(() => closeSubagentTranscript, [])
   if (!request) {
     return null

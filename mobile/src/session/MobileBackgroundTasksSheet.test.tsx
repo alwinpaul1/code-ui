@@ -586,6 +586,29 @@ describe('tapping a subagent on the roster', () => {
     expect(cardStyle(false).borderColor).toBe(darkColors.border)
   })
 
+  // The stop control sits inside the card that is now itself a Pressable. On
+  // the phone RN's responder gives the inner pressable the tap; the test
+  // renderer has no responder system, so what this can check is that the two
+  // handlers are separate and Stop's does not also open the viewer.
+  it('keeps Stop its own tap: stopping an agent does not open its transcript', async () => {
+    const stopped: string[] = []
+    await renderWith({
+      agent: 'claude',
+      hostBackgroundTasks: {
+        state: 'monitoring',
+        supportsTaskStop: true,
+        tasks: [
+          { id: 'a7139263d97426e10', kind: 'agent', description: 'Audit the release notes', state: 'working' }
+        ]
+      },
+      onStopTask: (taskId) => stopped.push(taskId)
+    })
+    expect(openLabels()).toEqual(['Open Audit the release notes'])
+    await press(renderer!, 'Stop Audit the release notes')
+    expect(stopped).toEqual(['a7139263d97426e10'])
+    expect(peekSubagentTranscript()).toBeNull()
+  })
+
   it('gives a Codex tab no tap target: Codex has no subagents', async () => {
     await renderWith({ agent: 'codex' })
     expect(openLabels()).toEqual([])
