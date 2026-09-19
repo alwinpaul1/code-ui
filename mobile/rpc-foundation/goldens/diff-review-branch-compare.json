@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "b7579013e65f0f5fe503c10cf2294cb9d4ac1938108275de001db6e02cf2cc21",
   "platform": "darwin",
@@ -13,9 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1bf084a7263a": {
+    "200c85aa119b": {
       "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 2
     },
     "229fc359ecb7": {
       "status": "fulfilled",
@@ -27,26 +28,6 @@
           "$rpc": "null"
         }
       }
-    },
-    "25793d7c00a5": {
-      "name": "repo.list#2",
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "31bd76fdf517": {
-      "name": "worktree.show#2",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "4337656f224b": {
-      "name": "git.branchCompare#2",
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
-    },
-    "54ee9546dc6f": {
-      "name": "git.branchCompare#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}"
-    },
-    "594101d24d72": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "632a4405f3fe": {
       "name": "repo.list#2",
@@ -157,6 +138,16 @@
         }
       }
     },
+    "74dba677d335": {
+      "name": "git.branchCompare#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 3
+    },
+    "768c9c0dbef7": {
+      "name": "repo.list#2",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 5
+    },
     "78b49c8df1cc": {
       "name": "git.branchCompare#1",
       "args": [
@@ -228,6 +219,11 @@
         }
       }
     },
+    "8bee98be77d2": {
+      "name": "worktree.show#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}",
+      "sent": 5
+    },
     "9f5d0ac26269": {
       "branchCompare": {
         "result": {
@@ -246,6 +242,16 @@
       },
       "diff": "unloaded",
       "snapshot": "unloaded"
+    },
+    "ad49fec56c14": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
+      "sent": 2
+    },
+    "be3553f1a790": {
+      "name": "git.branchCompare#2",
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"baseRef\":\"origin/main\"}}",
+      "sent": 6
     },
     "eb882796a820": {
       "name": "repo.list#1",
@@ -303,7 +309,7 @@
         "id": "unavailable",
         "observation": {
           "sender": ["67a8e862c3ba", "eb882796a820", "78b49c8df1cc"],
-          "payloads": ["1bf084a7263a", "594101d24d72", "54ee9546dc6f"],
+          "payloads": ["200c85aa119b", "ad49fec56c14", "74dba677d335"],
           "settlements": {
             "unavailable": "ef9013648cfb"
           },
@@ -323,12 +329,12 @@
             "6e017fb85c11"
           ],
           "payloads": [
-            "1bf084a7263a",
-            "594101d24d72",
-            "54ee9546dc6f",
-            "31bd76fdf517",
-            "25793d7c00a5",
-            "4337656f224b"
+            "200c85aa119b",
+            "ad49fec56c14",
+            "74dba677d335",
+            "8bee98be77d2",
+            "768c9c0dbef7",
+            "be3553f1a790"
           ],
           "settlements": {
             "unavailable": "ef9013648cfb",

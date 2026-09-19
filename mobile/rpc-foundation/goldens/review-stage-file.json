@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
   "scenarioSha256": "793e954960d371c6477d4cd3d70a5215c0bd90764684eafdb1e1a2e09790cc86",
   "platform": "darwin",
@@ -48,6 +48,11 @@
         "$rpc": "null"
       }
     },
+    "3594dacbf114": {
+      "name": "git.stage#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}",
+      "sent": 1
+    },
     "51406f060db7": {
       "name": "git.stage#1",
       "args": [
@@ -87,10 +92,6 @@
       "value": {},
       "sent": 1
     },
-    "e1156e5340fe": {
-      "name": "git.stage#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.stage\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"src/app.ts\"}}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -107,7 +108,7 @@
         "id": "staged",
         "observation": {
           "sender": ["51406f060db7"],
-          "payloads": ["e1156e5340fe"],
+          "payloads": ["3594dacbf114"],
           "settlements": {
             "stage": "eb79a9b3682a"
           },

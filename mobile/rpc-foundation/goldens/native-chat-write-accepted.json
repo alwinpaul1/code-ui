@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "93103673809aacd36b5eda751cee4bc360c69840bc0782cda4e63e9e929e5ac8",
   "platform": "darwin",
@@ -15,10 +15,6 @@
   "values": {
     "46771288e046": {
       "body": "accepted"
-    },
-    "6bb5bb25e4d4": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "7291a73df186": {
       "status": "fulfilled",
@@ -67,6 +63,11 @@
           }
         }
       }
+    },
+    "f61b028e9602": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -76,7 +77,7 @@
         "id": "accepted",
         "observation": {
           "sender": ["c7c300e28254"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "7291a73df186"
           },

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "8f68885d57a9aa76d80ba0ee29a95bdbaa98cef29c79c68ce75d67202cde7bfe",
   "scenarioSha256": "cb696d402b8af2b9a54d4d6f9d85abfc12280e73b360196e55ec25530e610eee",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02a9b21b0da8": {
-      "name": "gitlab.addMRComment#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}"
-    },
     "1792a570e51c": {
       "name": "detailPayload",
       "value": {
@@ -138,6 +134,11 @@
       "value": true,
       "sent": 0
     },
+    "e13ed6b2ab74": {
+      "name": "gitlab.addMRComment#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.addMRComment\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":7,\"body\":\"a comment\",\"projectRef\":\"group/project\"}}",
+      "sent": 1
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -159,7 +160,7 @@
         "id": "comment-settled",
         "observation": {
           "sender": ["c6b7aaa4bd08"],
-          "payloads": ["02a9b21b0da8"],
+          "payloads": ["e13ed6b2ab74"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "comment-0": "eb79a9b3682a"

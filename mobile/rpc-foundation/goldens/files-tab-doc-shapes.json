@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "b636221f719dae19a3af6772b687b0bcb300c9910645d23e98c309578ec1c5c5",
   "platform": "darwin",
@@ -13,10 +13,6 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02ea3f503180": {
-      "name": "files.read#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
-    },
     "323bf6059754": {
       "name": "files.readPreview#1",
       "args": [
@@ -53,6 +49,16 @@
         }
       }
     },
+    "3be6ef0e9bd8": {
+      "name": "files.readPreview#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}",
+      "sent": 2
+    },
+    "3d04ed6e70c6": {
+      "name": "files.read#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}",
+      "sent": 1
+    },
     "3f8bf3069e3d": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -64,10 +70,6 @@
         "status": "ready",
         "truncated": false
       }
-    },
-    "5c610ebe58ed": {
-      "name": "files.readPreview#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}"
     },
     "9babe9503a83": {
       "name": "files.read#1",
@@ -104,6 +106,11 @@
           }
         }
       }
+    },
+    "b185e249da6e": {
+      "name": "git.diff#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"docs/readme.md\",\"staged\":true}}",
+      "sent": 3
     },
     "c0cc242093ec": {
       "diff": {
@@ -183,10 +190,6 @@
         "status": "ready"
       }
     },
-    "fad4ca11a316": {
-      "name": "git.diff#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"docs/readme.md\",\"staged\":true}}"
-    },
     "ffe1c534d459": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -217,7 +220,7 @@
         "id": "settled",
         "observation": {
           "sender": ["9babe9503a83", "323bf6059754", "c8fbe8972330"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "payloads": ["3d04ed6e70c6", "3be6ef0e9bd8", "b185e249da6e"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",

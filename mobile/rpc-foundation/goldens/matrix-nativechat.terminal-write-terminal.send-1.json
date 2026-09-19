@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
   "scenarioSha256": "8640cdb62cf6ac5ec5b7c516808437504ab6a9ebef1c1ebee86165edd6ee757f",
   "platform": "darwin",
@@ -218,10 +218,6 @@
           }
         }
       }
-    },
-    "6bb5bb25e4d4": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "6decb41791d9": {
       "name": "terminal.send#1",
@@ -485,6 +481,11 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": "unknown"
+    },
+    "f61b028e9602": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     }
   },
   "recording": {
@@ -494,7 +495,7 @@
         "id": "native-chat-write-accepted.normal:accepted",
         "observation": {
           "sender": ["c7c300e28254"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "7291a73df186"
           },
@@ -506,7 +507,7 @@
         "id": "native-chat-write-accepted.result-absent:accepted",
         "observation": {
           "sender": ["5506ce9fc47a"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -518,7 +519,7 @@
         "id": "native-chat-write-accepted.result-null:accepted",
         "observation": {
           "sender": ["66db9c7b8675"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -530,7 +531,7 @@
         "id": "native-chat-write-accepted.inner-ok-missing:accepted",
         "observation": {
           "sender": ["6decb41791d9"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -542,7 +543,7 @@
         "id": "native-chat-write-accepted.inner-false-string-error:accepted",
         "observation": {
           "sender": ["14a6ba9e9dc8"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -554,7 +555,7 @@
         "id": "native-chat-write-accepted.inner-false-object-error:accepted",
         "observation": {
           "sender": ["b95efad2c5d7"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -566,7 +567,7 @@
         "id": "native-chat-write-accepted.outer-refused:accepted",
         "observation": {
           "sender": ["b7728627ecad"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -578,7 +579,7 @@
         "id": "native-chat-write-accepted.outer-refused-no-message:accepted",
         "observation": {
           "sender": ["4b95872cc64f"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -590,7 +591,7 @@
         "id": "native-chat-write-accepted.method-not-found:accepted",
         "observation": {
           "sender": ["9117084b9a95"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "9bd3ea1ff2bb"
           },
@@ -602,7 +603,7 @@
         "id": "native-chat-write-accepted.transport-rejection:accepted",
         "observation": {
           "sender": ["905b5deb0588"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "ed1d171deda5"
           },
@@ -614,7 +615,7 @@
         "id": "native-chat-write-accepted.transport-rejection-no-message:accepted",
         "observation": {
           "sender": ["4c1c30022324"],
-          "payloads": ["6bb5bb25e4d4"],
+          "payloads": ["f61b028e9602"],
           "settlements": {
             "body": "ed1d171deda5"
           },

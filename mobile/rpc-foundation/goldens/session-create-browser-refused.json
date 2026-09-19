@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
   "scenarioSha256": "59b5f0aac2f8c1aab5fc3a457fb69e1a2f46cc88c617c25e638175acb7f7c0cb",
   "platform": "darwin",
@@ -19,9 +19,10 @@
       "settledAt": 0,
       "value": false
     },
-    "bb05a6069ebb": {
+    "b0f36384bc0f": {
       "name": "browser.tabCreate#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.tabCreate\",\"params\":{\"worktree\":\"id:workspace-1\",\"url\":\"https://example.com/\",\"activate\":true}}",
+      "sent": 1
     },
     "c0b693ccb37f": {
       "name": "toast",
@@ -82,7 +83,7 @@
         "id": "refused",
         "observation": {
           "sender": ["e9f47954fab6"],
-          "payloads": ["bb05a6069ebb"],
+          "payloads": ["b0f36384bc0f"],
           "settlements": {
             "browser": "7ed3d39f0607"
           },

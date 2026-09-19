@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "a8016eb61915cf80a3bdeb622ee67d35be8b4b9862a75e4ef2e8f4ff8e93e7f2",
   "scenarioSha256": "6c71b0f217a464dffbc6f5736605b840edac74ebaf0664edc0ab85984bb64328",
   "platform": "darwin",
@@ -21,10 +21,6 @@
         "itemKey": "branch:src/app.ts",
         "kind": "binary"
       }
-    },
-    "37ae1f091153": {
-      "name": "git.branchDiff#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}"
     },
     "38fb361f406c": {
       "status": "rejected",
@@ -43,6 +39,11 @@
         "kind": "binary"
       },
       "snapshot": "unloaded"
+    },
+    "67cae2e16a3b": {
+      "name": "git.branchDiff#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchDiff\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"filePath\":\"src/app.ts\",\"compare\":{\"baseRef\":\"origin/main\",\"baseOid\":\"base-oid\",\"headOid\":\"head-oid\",\"mergeBase\":\"merge-base\"}}}",
+      "sent": 1
     },
     "ce89618d90b4": {
       "name": "git.branchDiff#1",
@@ -92,7 +93,7 @@
         "id": "branch",
         "observation": {
           "sender": ["ce89618d90b4"],
-          "payloads": ["37ae1f091153"],
+          "payloads": ["67cae2e16a3b"],
           "settlements": {
             "branch": "365c17523d76"
           },
@@ -104,7 +105,7 @@
         "id": "no-compare",
         "observation": {
           "sender": ["ce89618d90b4"],
-          "payloads": ["37ae1f091153"],
+          "payloads": ["67cae2e16a3b"],
           "settlements": {
             "branch": "365c17523d76",
             "no-compare": "38fb361f406c"

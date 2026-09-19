@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "bba1a28ff3cd9eb563581a01c5fa6f2b6783a8107c372343ce87ca144fd3b2e7",
+  "recorderSha256": "d39689c18456301e7003b41d9316da6a605f4b771189fdeada1ced772ff91cb0",
   "adapterSha256": "c6d4f0a13aee6a580997a1c99f35ffbae9b8ac02b1a30d61cbc8391429453467",
   "scenarioSha256": "a8c91b2c7a2a4f85a0d2d599ae1a3cf1174653aae34a0e0fe20d3c640a485e14",
   "platform": "darwin",
@@ -13,9 +13,10 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "0a0137383ed3": {
+    "03f8dcaf51c7": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
+      "sent": 1
     },
     "0f86dd69448c": {
       "name": "terminal.send#1",
@@ -474,7 +475,7 @@
         "id": "terminal-raw-input-accepted.normal:accepted",
         "observation": {
           "sender": ["4dbb5ea36ed2"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "84e5ca07cb7a"
           },
@@ -486,7 +487,7 @@
         "id": "terminal-raw-input-accepted.result-absent:accepted",
         "observation": {
           "sender": ["6f81ca41dbcf"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -498,7 +499,7 @@
         "id": "terminal-raw-input-accepted.result-null:accepted",
         "observation": {
           "sender": ["80e6ae38e612"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -510,7 +511,7 @@
         "id": "terminal-raw-input-accepted.inner-ok-missing:accepted",
         "observation": {
           "sender": ["a944d85eac60"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -522,7 +523,7 @@
         "id": "terminal-raw-input-accepted.inner-false-string-error:accepted",
         "observation": {
           "sender": ["2638782fdff1"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -534,7 +535,7 @@
         "id": "terminal-raw-input-accepted.inner-false-object-error:accepted",
         "observation": {
           "sender": ["de23a95594f0"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -546,7 +547,7 @@
         "id": "terminal-raw-input-accepted.outer-refused:accepted",
         "observation": {
           "sender": ["7b6ba38169d9"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -558,7 +559,7 @@
         "id": "terminal-raw-input-accepted.outer-refused-no-message:accepted",
         "observation": {
           "sender": ["0f86dd69448c"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -570,7 +571,7 @@
         "id": "terminal-raw-input-accepted.method-not-found:accepted",
         "observation": {
           "sender": ["6d223e9c6727"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -582,7 +583,7 @@
         "id": "terminal-raw-input-accepted.transport-rejection:accepted",
         "observation": {
           "sender": ["d156eef40d6a"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
@@ -594,7 +595,7 @@
         "id": "terminal-raw-input-accepted.transport-rejection-no-message:accepted",
         "observation": {
           "sender": ["8e79300038ac"],
-          "payloads": ["0a0137383ed3"],
+          "payloads": ["03f8dcaf51c7"],
           "settlements": {
             "send": "7ed3d39f0607"
           },
