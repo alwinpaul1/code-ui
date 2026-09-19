@@ -15,11 +15,9 @@
  *
  * A merge is the one case where a line goes up without a migration undoing itself: main can land an
  * operation the branch never saw. Raise the line then, and name the PR that brought it, so the next
- * reader can tell an import from a regression. #20954 brought three
- * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`), which are
- * still here. Step 6's second migration brought two more — `created-terminal-tab` and
- * `terminal-display-mode-set`, both in a session file — and they are not here, because this branch
- * migrates that domain: the merge converted both rather than raising a line it had just deleted.
+ * reader can tell an import from a regression. Of the three #20954 brought,
+ * `native-chat-session-page` is still here; `notification-stream-closed` and
+ * `terminal-buffer-cleared` were converted by the notifications/terminal batch.
  *
  * A file leaves the list by deletion, not by reaching zero: an entry asserts the file still holds
  * at least one unchecked reader, so a `readers: 0` line is itself a failure. Migrating a domain
@@ -46,7 +44,7 @@ export type UncheckedRpcReaderEntry = {
 /**
  * Files holding at least one unchecked reader, grouped by the feature area that owns them.
  *
- * The reason is shared by every line and is stated once here instead of 25 times: the reply has no
+ * The reason is shared by every line and is stated once here instead of 16 times: the reply has no
  * schema, so the operation declares what the payload is by assertion. Writing one schema per
  * consumed member — required exactly where the consumer reads it unguarded, optional everywhere
  * else, never `.strict()` — turns the assertion into a check and deletes the line.
@@ -54,12 +52,6 @@ export type UncheckedRpcReaderEntry = {
 export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   // agent-history
   { file: 'src/agent-history/mobile-agent-history-operations.ts', readers: 6 },
-  // browser
-  { file: 'src/browser/mobile-browser-command-operations.ts', readers: 1 },
-  // components
-  { file: 'src/components/codex-reset-credit-capability-operations.ts', readers: 1 },
-  { file: 'src/components/codex-reset-credit-consume-operations.ts', readers: 1 },
-  { file: 'src/components/new-workspace-operations.ts', readers: 2 },
   // dictation
   { file: 'src/dictation/mobile-dictation-operations.ts', readers: 8 },
   // files
@@ -67,8 +59,6 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/files/mobile-file-ownership-operations.ts', readers: 2 },
   { file: 'src/files/mobile-file-preview-operations.ts', readers: 6 },
   { file: 'src/files/mobile-file-tab-doc-operations.ts', readers: 3 },
-  // home
-  { file: 'src/home/mobile-home-host-operations.ts', readers: 2 },
   // host-screen (CODE UI: 10, two more than upstream — its pinned-in-groups view-settings pair)
   { file: 'src/host-screen/host-screen-operations.ts', readers: 10 },
   // project-config (CODE UI)
@@ -83,13 +73,7 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/tasks/mobile-task-source-search-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-workspace-create-operations.ts', readers: 4 },
   { file: 'src/tasks/mobile-workspace-source-operations.ts', readers: 7 },
-  // terminal (CODE UI: 3, no worker-takeover reader here)
-  { file: 'src/terminal/mobile-terminal-operations.ts', readers: 3 },
   // transport
   // (CODE UI) the host's mobile RPC capability gate
-  { file: 'src/transport/host-mobile-capability-operations.ts', readers: 2 },
-  { file: 'src/transport/host-status-probe-operations.ts', readers: 1 },
-  { file: 'src/transport/mobile-relay-pairing-operations.ts', readers: 2 },
-  // worktree
-  { file: 'src/worktree/worktree-catalog-operations.ts', readers: 2 }
+  { file: 'src/transport/host-mobile-capability-operations.ts', readers: 2 }
 ]

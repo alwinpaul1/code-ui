@@ -1,25 +1,15 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcReadUnchecked, rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
-import { isTerminalSendResultAccepted } from './terminal-send-rpc-response'
-import type { TerminalViewportUpdateOutcome } from './terminal-viewport-refit-state'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  terminalSendAcceptedSchema,
+  terminalViewportUpdatedSchema,
+  terminalWriteUnreadReplySchema
+} from './terminal-reply-schema'
 
 // Terminal input, the in-place viewport update and the buffer clear. The `subscribe` and
 // `sendUnsubscribe` ports these files also reach are a separate boundary and are untouched.
 // CODE UI: upstream also declares the orchestration worker-takeover report here; this fork has no
 // orchestration worker feature and its sends report nothing, so that operation is not carried.
-
-/**
- * Whether the runtime took the bytes, which is the whole of what a terminal send means to mobile:
- * a refusal, a non-object result and an unaccepted one are all "not delivered". `object-result-or-
- * null` is what makes those three the same answer, because it is the only policy that turns a
- * result the reader cannot read into null rather than a throw.
- */
-const terminalSendAcceptanceReader: RpcCompatibleReader<
-  Record<string, unknown>,
-  'terminal-send-accepted',
-  boolean
-> = (raw) => rpcReadUnchecked('terminal-send-accepted', isTerminalSendResultAccepted(raw))
 
 /**
  * Five call sites send terminal input this way and all agree on acceptance, differing only in the
@@ -35,19 +25,9 @@ export const terminalInputSend = bindDeferredRpcOperation(
     method: 'terminal.send',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: terminalSendAcceptanceReader
+    read: rpcResultVariant('terminal-send-accepted', terminalSendAcceptedSchema)
   })
 )
-
-const terminalViewportUpdateReader: RpcCompatibleReader<
-  Record<string, unknown>,
-  'terminal-viewport-updated',
-  TerminalViewportUpdateOutcome
-> = (raw) =>
-  rpcReadUnchecked('terminal-viewport-updated', {
-    updated: raw.updated === true,
-    applied: raw.applied === true
-  })
 
 /**
  * The refit's in-place viewport update. Its capability verdict still comes off the raw reply: the
@@ -59,7 +39,7 @@ export const terminalViewportUpdate = bindDeferredRpcOperation(
     method: 'terminal.updateViewport',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: terminalViewportUpdateReader
+    read: rpcResultVariant('terminal-viewport-updated', terminalViewportUpdatedSchema)
   })
 )
 
@@ -75,6 +55,6 @@ export const terminalBufferClear = bindDeferredRpcOperation(
     method: 'terminal.clearBuffer',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('terminal-buffer-cleared')
+    read: rpcResultVariant('terminal-buffer-cleared', terminalWriteUnreadReplySchema)
   })
 )
