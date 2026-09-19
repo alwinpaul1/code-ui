@@ -75,8 +75,11 @@ const HOST_COMPONENT_NAMES = new Set([
 // resolveAskAboutScreenTarget and askAboutTerminalScreen, the terminal's
 // "Ask about this screen" (VS Code 2.1.275's "Send terminal output to
 // Claude" parity).
-const HEAD_MAIN_HOOK_SHA256 = 'e8683f2696debd3ae8b8506be7e30f5477509aa5110a71b6d49e16593b33c1be'
-const HEAD_HOOK_BINDING_SHA256 = '787a3a06788141d54258ddc18a1dfcf38c81d9c84bf547afc72384a2df1e6d32'
+// 282 since 2026-09-19 (upstream #20069): useMobileSessionFoundation binds
+// useHostProtocolGates for hostCapabilities, which the create action reads to
+// decide whether it may paint a created tab's placement itself.
+const HEAD_MAIN_HOOK_SHA256 = 'fa902ad516ec0e243c8e3d0eb8132a2295c0e703b280e9994036fcc99a01a400'
+const HEAD_HOOK_BINDING_SHA256 = '37f37b23e3b348d868dd806a144ae7cf2b62366bb768ebe789930d9c08b48e80'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -137,8 +140,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // 2026-09-18: handleForkClaudeSession joins handleClearTerminal inside
 // useMobileSessionTerminalInput — the session menu's Fork action types
 // Claude's own `/fork` command and submits it.
+// 2026-09-19 (upstream #20069): handleCreateTerminal captures one afterTabId
+// for both the request and the optimistic paint, places the created tab with
+// the shared placeCreatedSessionTab, and paints nothing at all against a host
+// without session-tabs.split-group-placement.v1 (its snapshot places it).
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '48b0504dc330d10f4c8b38bf164f24e620df21cebdcf8dc8a4ebd68fc592eb19'
+  'b014e15d80d68923e7a6b4c4181a68eae50766a54079637546ea7e869d5f2ee8'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -642,7 +649,8 @@ describe('mobile session route extraction parity', () => {
     // the diff cards' "Revert this hunk" to this session's client and tab.
     // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
-    expect(main.hooks).toHaveLength(281)
+    // 282 since 2026-09-19: useHostProtocolGates in the foundation (#20069).
+    expect(main.hooks).toHaveLength(282)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)

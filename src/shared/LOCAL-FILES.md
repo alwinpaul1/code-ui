@@ -80,7 +80,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
-  from 1ae7aa8bb. The file otherwise sits at its d07c47593 pin: upstream later added
+  from 1ae7aa8bb, and `SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY` (the
+  constant and its `RUNTIME_CAPABILITIES` entry) from 5287c5cdb (#20069). The file
+  otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.
