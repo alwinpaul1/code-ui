@@ -240,15 +240,12 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       | DismissNotificationEvent
       | SubscribeResult
       | { type: 'end' }
+    // No dispose-before-ready arm: every transport detaches this listener inside
+    // `unsubscribeStream()`, so a callback that runs at all runs before disposal.
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
       const isReconnect = session.connectedBefore
       session.connectedBefore = true
-      if (disposed) {
-        unsubscribeServer(subscriptionId)
-        unsubscribeStream()
-        return
-      }
       const readyEpoch = (event as SubscribeResult).epoch
       // Why (#8591) the await: on a cold app open the persisted read is still in
       // flight, so deciding here would see watermarkLoaded false and skip catch-up —
