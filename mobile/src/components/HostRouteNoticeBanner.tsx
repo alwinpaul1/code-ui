@@ -4,13 +4,20 @@ import { useTheme } from '../theme/theme-context'
 import { IconButton } from '../ui/IconButton'
 import { Txt } from '../ui/Txt'
 
-// Informational, not an error: the host is healthy and the user's target simply went away,
-// so this stays neutral rather than borrowing the auth-failed red.
+/**
+ * One dismissible line above the list, in two tones.
+ *
+ * `notice` is the default and stays neutral: the host is healthy and the user's target simply
+ * went away. `failure` is for an action that did not happen, which the list has to say without
+ * taking the screen: color is for state, so it is one red rule and nothing else.
+ */
 export function HostRouteNoticeBanner({
   message,
+  tone = 'notice',
   onDismiss
 }: {
   message: string
+  tone?: 'notice' | 'failure'
   onDismiss: () => void
 }) {
   const { colors, space } = useTheme()
@@ -25,7 +32,7 @@ export function HostRouteNoticeBanner({
         paddingLeft: space.lg,
         paddingRight: space.xs,
         borderBottomWidth: 1,
-        borderBottomColor: colors.border
+        borderBottomColor: tone === 'failure' ? colors.danger : colors.border
       }}
     >
       <Txt variant="label" tone="secondary" style={{ flex: 1 }}>

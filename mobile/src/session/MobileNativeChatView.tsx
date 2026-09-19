@@ -60,6 +60,8 @@ export function MobileNativeChatView({
   structuredActivityUi = false,
   turnActivity = null,
   turnThinking = false,
+  workingStartedAt,
+  settledTurns,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
@@ -114,6 +116,7 @@ export function MobileNativeChatView({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   question,
   onAnswerQuestion,
   permission,
@@ -214,7 +217,10 @@ export function MobileNativeChatView({
     messages: data,
     enabled: structuredActivityUi,
     isWorking: agentWorking === true,
+    workingStartedAt,
+    settledTurns,
     thinking: turnThinking,
+    awaitingInput: structuredActivityUi && (ask != null || permission != null || question != null),
     scopeKey: sendSurfaceId
   })
 
@@ -410,7 +416,7 @@ export function MobileNativeChatView({
           clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
         ask={ask} askKey={askKey} onDismissAsk={onDismissAsk}
-        onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk}
+        onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission, onRespondPermissionWithComment }}
       />

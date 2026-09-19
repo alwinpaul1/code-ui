@@ -61,11 +61,18 @@ describe('isStructuredAgentSessionThinking', () => {
 
   it('does not read a completed turn as reasoning during the next pending dispatch', () => {
     const completedTurn = item('turn-1', 1, {
-      kind: 'status',
-      text: 'Worked',
-      turnLifecycle: { turnId: 'turn-1', state: 'completed' }
+      kind: 'turn',
+      turnId: 'turn-1',
+      state: 'completed'
     })
     expect(isStructuredAgentSessionThinking([completedTurn, reasoning(2)])).toBe(false)
+  })
+
+  it('stops at a typed turn item, the carrier this host writes', () => {
+    const typedTurn = (sequence: number, turnId: string): AgentJournalRenderItem =>
+      item(`turn-${turnId}`, sequence, { kind: 'turn', turnId, state: 'running' })
+    expect(isStructuredAgentSessionThinking([typedTurn(1, 'turn-1'), reasoning(2)])).toBe(true)
+    expect(isStructuredAgentSessionThinking([reasoning(1), typedTurn(2, 'turn-2')])).toBe(false)
   })
 
   it('lets an unmarked status stay transparent to the latest reasoning state', () => {

@@ -1,6 +1,12 @@
+import { z } from 'zod'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
+  agentLaunchCreateReceiptSchema,
   worktreeCreateReceiptSchema,
   worktreeHostedBaseSchema
 } from './workspace-create-reply-schema'
@@ -8,8 +14,9 @@ import { taskRuntimeStatusSchema } from './task-runtime-reply-schema'
 
 // Creating a workspace from a task. Checked against workspace-create-reply-schema.ts; the
 // create-time status probe reads through the Tasks screen's own status schema, because the two
-// operations differ in acceptance and not in what the host sends. (Upstream also declares the
-// agent.launch create pair here; that route is Orca #19849/#20999's and is not in this fork yet.)
+// operations differ in acceptance and not in what the host sends. The replay-required launch keeps
+// the shared `isAgentLaunchResult` guard it shipped with rather than the receipt schema beside it:
+// a replayed receipt is the host's own record, so it is held to the full shared contract.
 
 /**
  * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
@@ -24,6 +31,31 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('created-worktree', worktreeCreateReceiptSchema)
+  })
+)
+
+/**
+ * agent.launch carrying a create payload: the host settles whether the agent lands in a structured
+ * session or a terminal. Same reply discipline as worktreeCreateRun, and for the same reason — the
+ * two share one clientMutationId, so the retry loop must see an unlost reply either way.
+ */
+export const agentLaunchRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch',
+    method: 'agent.launch',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', agentLaunchCreateReceiptSchema)
+  })
+)
+
+export const agentLaunchReplayRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch-replay',
+    method: 'agent.launchReplay',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', z.custom<AgentLaunchResult>(isAgentLaunchResult))
   })
 )
 

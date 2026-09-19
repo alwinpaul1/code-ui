@@ -2,8 +2,15 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
+import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+
+// Re-exported so the live-turn readers' existing consumers keep one import site.
+export {
+  activeStructuredAgentSessionToolCall,
+  activeStructuredAgentSessionTurnId
+} from './structured-agent-session-live-turn'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -101,7 +108,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
       blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
     }
   }
-  if (body.turnLifecycle) {
+  // A turn record is timing, not content; a kind this build does not know is
+  // never painted as text either, so a newer host can add kinds freely.
+  if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
   return {
@@ -127,10 +136,14 @@ const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | n
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
-  return items.flatMap((item) => {
+  const messages: NativeChatMessage[] = []
+  items.forEach((item) => {
     const projected = projectStructuredItemToNativeChat(item)
-    return projected ? [projected] : []
+    if (projected) {
+      messages.push(projected)
+    }
   })
+  return messages
 }
 
 export function projectStructuredItemToNativeChat(
@@ -155,17 +168,6 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-export function activeStructuredAgentSessionTurnId(
-  items: readonly AgentJournalRenderItem[]
-): string | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (body?.kind === 'status' && body.turnLifecycle) {
-      return body.turnLifecycle.state === 'running' ? body.turnLifecycle.turnId : null
-    }
-  }
-  return null
-}
 
 export function hasPersistedStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
@@ -184,10 +186,9 @@ export function hasPersistedStructuredAgentSessionTurn(
  * on that echo to call a session working leaves the whole gap reading idle in the chat and in
  * every session list, so the send itself is the evidence.
  *
- * `unknown` still counts: it only means the ack budget elapsed, which happens on 30% of Claude
- * sends whose turn then arrives anyway, and delivery confidence is a separate question from
- * whether work is owed. A recovered `unknown` does not — that one outlived the host generation
- * that sent it, so there is nothing still running to report.
+ * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
+ * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
+ * there is nothing still running to report.
  */
 export function hasUnansweredStructuredAgentSessionDispatch(
   submissions: readonly AgentJournalSubmission[],

@@ -4,8 +4,8 @@
   "namedDeltas": [],
   "runnerVersion": 1,
   "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
-  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
+  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "f0cc9511c5e878b6dd78e2911b5c14351b41b7bb944e5e03c2fa1ddbcdc7ea10",
   "scenarioSha256": "da78ad25ea15e1c714f0147d34207529362743a56a519153f36b09345dee0ebc",
   "platform": "darwin",
@@ -153,7 +153,7 @@
         "$rpc": "undefined"
       }
     },
-    "f30a8fc69921": {
+    "ec798d1a5c28": {
       "activeHandle": "terminal-1",
       "activeSessionTabId": "tab-1",
       "createError": "",
@@ -161,7 +161,7 @@
       "initializedHandles": [],
       "pendingActiveSessionTabId": "tab-1",
       "pendingActiveTerminalHandle": "terminal-1",
-      "sessionTabs": ["tab-1"],
+      "sessionTabs": [],
       "terminals": ["terminal-1"]
     },
     "fb6329365e0b": {
@@ -197,7 +197,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "ec798d1a5c28",
           "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "8b5144e3301d"]
         }
       },
@@ -210,7 +210,7 @@
             "mount": "eb79a9b3682a",
             "create": "eb79a9b3682a"
           },
-          "state": "f30a8fc69921",
+          "state": "ec798d1a5c28",
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",

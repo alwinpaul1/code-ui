@@ -36,11 +36,7 @@ import {
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useAgentHudBeacon } from './agent-hud-beacon'
-import {
-  useTranscriptTail,
-  useTranscriptTailPrompts,
-  useTranscriptTailQueue
-} from './transcript-tail/use-transcript-tail'
+import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 
 
@@ -65,6 +61,7 @@ export function useMobileNativeChatController(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    agentSessionPromptCancelSupported = null,
     onSendError,
     onSendResolved
   } = args
@@ -107,21 +104,12 @@ export function useMobileNativeChatController(
       transcriptPath: activeChatResolution?.transcriptPath ?? null,
       sessionId: activeChatSessionId,
       sourceIdentity,
+      callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
+      promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
-  // The agent's own transcript, tailed on the host: what a hand-started
-  // session never beacons — a message from the desktop or the Claude app
-  // mid-turn, and the queue (2026-09-19).
-  const transcriptTail = useTranscriptTail({
-    client,
-    hostId,
-    worktreeId,
-    transcriptPath: activeChatResolution?.transcriptPath ?? null,
-    sessionId: activeChatSessionId,
-    enabled: showNativeChat && !activeChatStructured && connState === 'connected' && activeChatResolution?.agent === 'claude'
-  })
   const handleBeacon = useAgentHudBeacon(activeHandle)
   // Only the beacon of the session this tab is showing: a beacon is keyed by
   // terminal handle, and a handle outlives the process that emitted into it,
@@ -129,7 +117,15 @@ export function useMobileNativeChatController(
   // previous session's desktop prompts (2026-09-18). `null` while the tab
   // does not yet know its session.
   const hudBeacon = agentHudBeaconMatches(handleBeacon, activeChatResolution?.agent ?? null, activeChatSessionId) ? handleBeacon : null
-  const tailPrompts = useTranscriptTailPrompts(transcriptTail, hudBeacon?.desktopPrompts)
+  // What a hand-started session never beacons — a message from the desktop
+  // or the Claude app, mid-turn or not — Orca's own hooks put on the tab
+  // status as `agentStatus.prompt`, and the phone reads it there
+  // (agent-status-prompts.ts, 2026-09-19).
+  const tailPrompts = useAgentStatusPrompts(
+    showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
+    nativeChatStatus,
+    hudBeacon?.desktopPrompts
+  )
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -162,13 +158,12 @@ export function useMobileNativeChatController(
   })
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
-  const nativeChatAgentWorking = activeChatStructured
-    ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
+  const nativeChatAgentWorking =
+    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   const nativeChatStreamingText = useThrottledLatestValue(
     activeChatStructured
       ? undefined
@@ -492,7 +487,10 @@ export function useMobileNativeChatController(
     onError: onSendError
   })
 
-  const tailQueue = useTranscriptTailQueue(transcriptTail, visibleQueuedMessages)
+  const structuredCancelPrompt = useNativeChatAcceptedAction(
+    activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
+    onSendResolved
+  )
 
   return {
     isTabChatView,
@@ -508,7 +506,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, rememberEcho,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : tailQueue,
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews
@@ -517,6 +515,8 @@ export function useMobileNativeChatController(
     nativeChatStructured: activeChatStructured,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,
     nativeChatTurnThinking: activeChatStructured ? structuredNativeChat.turnThinking : false,
+    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
+    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatAgentWorking,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
@@ -537,6 +537,9 @@ export function useMobileNativeChatController(
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
+    // Heuristic/legacy cards have no durable prompt identity, so keep their
+    // cancel affordance absent instead of exposing a dead action.
+    handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
     handleNativeChatRespondPermission: respond,
     handleNativeChatRespondPermissionWithComment: respondWithComment,
     openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,

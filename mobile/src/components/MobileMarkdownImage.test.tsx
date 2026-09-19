@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 import { peekImagePreview, resetImagePreviewForTests } from '../session/image-preview-store'
@@ -98,19 +98,22 @@ describe('a figure in a markdown document', () => {
     expect(r.root.findAll((node) => node.props.testID === 'markdown-image')).toHaveLength(0)
   })
 
-  it('sits inside the selectable prose run when drawn, so a selection can cross it', async () => {
-    // 2026-09-19, "the same copying issue is for md file previews too": a
-    // drawn figure was its own View between two Texts, and the thesis
-    // write-up has a figure per section, so no selection could leave one.
+  it('is a block of its own between the prose runs when drawn, not a view inside one', async () => {
+    // 2026-09-19: a drawn figure was put INSIDE the run as an inline view so
+    // a selection could cross it, and the phone drew it over the heading
+    // above and the prose below ("one of the images is overlapping with
+    // text"). Android does not re-lay an inline view that grows after the
+    // run's first layout, so the figure is a block again and a selection
+    // stops at it; the prose on either side is still two selectable runs.
     const xml = '<svg viewBox="0 0 800 400"></svg>'
-    await render(async () => ({ kind: 'svg', xml }))
+    const r = await render(async () => ({ kind: 'svg', xml }))
     layout(360)
-    const run = selectableRun()
-    const inOrder = (node: ReactTestInstance): string =>
-      node.children.map((child) => (typeof child === 'string' ? child : inOrder(child))).join('')
-    expect(run.findAll((node) => node.props.testID === 'markdown-image')).toHaveLength(1)
-    expect(inOrder(run)).toContain('4. CKA, the new score')
-    expect(inOrder(run)).toContain('Take the trained model.')
+    const runs = r.root.findAllByType('Text' as never).filter((node) => node.props.selectable === true)
+    expect(runs).toHaveLength(2)
+    for (const run of runs) {
+      expect(run.findAll((node) => node.props.testID === 'markdown-image')).toHaveLength(0)
+    }
+    expect(r.root.findAll((node) => node.props.testID === 'markdown-image')).toHaveLength(1)
   })
 
   it('opens the full-screen viewer on the figure itself when tapped', async () => {

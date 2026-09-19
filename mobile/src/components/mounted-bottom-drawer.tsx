@@ -313,12 +313,15 @@ export function MountedBottomDrawer({
     // leaving a fully interactive drawer invisible under a live backdrop.
     const transform = [{ translateY: enterTravel + translateY.value - keyboardShift }]
     return { opacity: reduceMotion ? progress.value : 1, transform }
-  })
+    // The dependency array names every shared value the updater reads: the web bundle is built
+    // without Reanimated's Babel plugin, so `__closure` is never written and this list is what the
+    // mapper listens to (reanimated-web-mapper-deps.test.ts).
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable, reduceMotion])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateY])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -401,6 +404,8 @@ export function MountedBottomDrawer({
           <Animated.View
             // Why: remount per window hand-back — see the windowEpoch effect.
             key={windowEpoch}
+            // The sheet names itself so a check can find it without reading its styling.
+            testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,

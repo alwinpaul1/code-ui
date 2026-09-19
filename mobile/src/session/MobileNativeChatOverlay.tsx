@@ -13,7 +13,7 @@ import { witnessesToRemember } from './mobile-native-chat-witness-memory'
 import {
   pendingTextsStillDrawn,
   pendingWithoutTranscriptTwins
-} from './transcript-tail/transcript-tail-own-sends'
+} from './desktop-prompt-own-sends'
 import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
@@ -160,7 +160,7 @@ export function MobileNativeChatOverlay({
   // pending echo, so anything matching one is left out (2026-09-13).
   // …except a send the transcript itself has a record of: that record says
   // where the message was taken, the phone's echo only guessed, so the echo
-  // steps aside for it (2026-09-19, see transcript-tail-own-sends.ts).
+  // steps aside for it (2026-09-19, see desktop-prompt-own-sends.ts).
   const unlandedPrompts = useMemo(
     () =>
       withoutLandedDesktopPrompts(
@@ -268,6 +268,8 @@ export function MobileNativeChatOverlay({
         structuredActivityUi={controller.nativeChatStructured}
         turnActivity={controller.nativeChatTurnActivity}
         turnThinking={controller.nativeChatTurnThinking}
+        workingStartedAt={controller.nativeChatWorkingStartedAt}
+        settledTurns={controller.nativeChatSettledTurns}
         agentStatus={controller.nativeChatAgentStatus}
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
@@ -283,6 +285,7 @@ export function MobileNativeChatOverlay({
         onDismissAsk={controller.dismissNativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}
+        onCancelPrompt={controller.handleNativeChatCancelPrompt}
         question={controller.nativeChatQuestion}
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
         permission={controller.nativeChatPermission}

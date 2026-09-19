@@ -5,6 +5,7 @@ import { forwardMigrationDialState, endMigrationDialForwarding } from './migrati
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
@@ -53,9 +54,10 @@ export type StableLogicalRpcClient = RpcClient & {
   // Latched when the desktop has repeatedly refused this device's relay credential.
   setPairingRejected(rejected: boolean): void
   isPairingRejected(): boolean
-  // Latched when the relay named the desktop's own sign-out as the reason it is absent.
-  setHostSignedOut(signedOut: boolean): void
-  isHostSignedOut(): boolean
+  // Latched by the relay's own verdict: the cell's close reason outright, or
+  // consecutive identical dial failures naming the desktop's state.
+  setRelayHostReachability(reachability: RelayHostReachability): void
+  getRelayHostReachability(): RelayHostReachability
   // Recovery attempts share this signal so status-only changes rerender.
   onConnectionPathChange(listener: () => void): () => void
   getGeneration(): number
@@ -100,13 +102,11 @@ export function createStableLogicalRpcClient(
           .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
           .then(
             (response) => {
-              if (closed) {
-                reject(new Error('Client closed'))
-              } else if (requestGeneration !== generation) {
-                reject(new LogicalClientCutoverError())
-              } else {
-                resolve(response)
-              }
+              // A correlated response is definitive even if close/cutover won the
+              // callback race after the physical promise had already settled
+              // (Orca #20133). The error arm below keeps this fork's cutover wrap:
+              // a rejection is the only evidence of whether the frame was written.
+              resolve(response)
             },
             (error: unknown) => {
               // Why: the retiring physical session settles this, so keep its error as the
@@ -285,8 +285,9 @@ export function createStableLogicalRpcClient(
     setRecoveryAttempt: (attempt) => connectionPath.setRecoveryAttempt(attempt),
     setPairingRejected: (rejected) => connectionPath.setPairingRejected(rejected),
     isPairingRejected: () => connectionPath.isPairingRejected(),
-    setHostSignedOut: (signedOut) => connectionPath.setHostSignedOut(signedOut),
-    isHostSignedOut: () => connectionPath.isHostSignedOut(),
+    setRelayHostReachability: (reachability) =>
+      connectionPath.setRelayHostReachability(reachability),
+    getRelayHostReachability: () => connectionPath.getRelayHostReachability(),
     onConnectionPathChange: (listener) => connectionPath.subscribe(listener),
     getGeneration: () => generation
   }

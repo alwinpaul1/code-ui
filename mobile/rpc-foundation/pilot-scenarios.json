@@ -5933,6 +5933,64 @@
       ]
     },
     {
+      "id": "tw-create-retry-agent-launched",
+      "operation": "tasks.worktree-create-retry",
+      "version": 1,
+      "family": "worktree.agent-launch-create",
+      "sites": [
+        "mobile/src/tasks/worktree-create-retry.ts",
+        "mobile/src/tasks/agent-launch-worktree-create.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agentLaunch": true
+          }
+        },
+        {
+          "checkpoint": "sent"
+        },
+        {
+          "complete": "agent.launch#1",
+          "params": {
+            "agent": "codex",
+            "target": {
+              "kind": "create-worktree",
+              "create": {
+                "repo": "id:repo-1",
+                "name": "kestrel",
+                "clientMutationId": "mutation-1"
+              }
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "outcome": {
+                "kind": "structured",
+                "sessionId": "sess-1",
+                "handle": "t-1"
+              },
+              "worktreeId": "repo-1::/w",
+              "warning": "  startup terminal failed  ",
+              "receipt": {
+                "mode": "structured",
+                "preferred": "structured",
+                "reason": "user_default",
+                "detail": "Structured session created."
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "launched"
+        }
+      ]
+    },
+    {
       "id": "tw-capabilities-advertised",
       "operation": "tasks.worktree-capabilities",
       "version": 1,
@@ -19307,6 +19365,20 @@
           "id": "mount"
         },
         {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
+        },
+        {
           "action": "copy",
           "id": "copy",
           "args": {
@@ -19358,6 +19430,20 @@
           "id": "mount"
         },
         {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
+        },
+        {
           "action": "copy",
           "id": "copy",
           "args": {
@@ -19404,6 +19490,20 @@
         {
           "action": "mount",
           "id": "mount"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "terminalCopyTrimsGutter": true
+              }
+            }
+          }
         },
         {
           "action": "connection",
@@ -22288,6 +22388,333 @@
         },
         {
           "checkpoint": "served"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-manifest-read",
+      "operation": "mobileWeb.bundle-manifest",
+      "version": 1,
+      "family": "mobileWeb.bundle-manifest",
+      "sites": ["mobile/src/transport/mobile-web-bundle-operations.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "read",
+          "id": "read"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "result": {
+              "manifest": {
+                "schemaVersion": 1,
+                "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+                "desktopVersion": "1.4.201",
+                "minCompatibleRuntimeProtocolVersion": 2,
+                "runtimeProtocolVersion": 2,
+                "entrypoint": "index.html",
+                "totalBytes": 37,
+                "assets": [
+                  {
+                    "path": "assets/app.js",
+                    "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+                    "byteLength": 11,
+                    "contentType": "text/javascript; charset=utf-8"
+                  },
+                  {
+                    "path": "index.html",
+                    "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+                    "byteLength": 26,
+                    "contentType": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "chunkBytes": 16
+            }
+          }
+        },
+        {
+          "checkpoint": "manifest-read"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-fetch-paged",
+      "operation": "mobileWeb.bundle-fetch",
+      "version": 1,
+      "family": "mobileWeb.bundle-fetch",
+      "sites": [
+        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "result": {
+              "manifest": {
+                "schemaVersion": 1,
+                "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+                "desktopVersion": "1.4.201",
+                "minCompatibleRuntimeProtocolVersion": 2,
+                "runtimeProtocolVersion": 2,
+                "entrypoint": "index.html",
+                "totalBytes": 37,
+                "assets": [
+                  {
+                    "path": "assets/app.js",
+                    "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+                    "byteLength": 11,
+                    "contentType": "text/javascript; charset=utf-8"
+                  },
+                  {
+                    "path": "index.html",
+                    "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+                    "byteLength": 26,
+                    "contentType": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "chunkBytes": 16
+            }
+          }
+        },
+        {
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#1",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          }
+        },
+        {
+          "bind": "index-head",
+          "request": "mobileWeb.bundle.chunk#2",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          }
+        },
+        {
+          "complete": "app-js",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "assets/app.js",
+              "offset": 0,
+              "assetByteLength": 11,
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+              "dataBase64": "b3JjYS5ib290KCk=",
+              "eof": true
+            }
+          }
+        },
+        {
+          "complete": "index-head",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "index.html",
+              "offset": 0,
+              "assetByteLength": 26,
+              "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+              "dataBase64": "PCFkb2N0eXBlIGh0bWw+PA==",
+              "eof": false
+            }
+          }
+        },
+        {
+          "bind": "index-tail",
+          "request": "mobileWeb.bundle.chunk#3",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 16
+          }
+        },
+        {
+          "complete": "index-tail",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "index.html",
+              "offset": 16,
+              "assetByteLength": 26,
+              "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+              "dataBase64": "cD5vcmNhPC9wPg==",
+              "eof": true
+            }
+          }
+        },
+        {
+          "checkpoint": "bundle-fetched"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-unavailable",
+      "operation": "mobileWeb.bundle-fetch",
+      "version": 1,
+      "family": "mobileWeb.bundle-fetch",
+      "sites": [
+        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "invalid_argument",
+              "message": "mobile_web_bundle_unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "bundle-unavailable"
+        }
+      ]
+    },
+    {
+      "id": "mobile-web-bundle-build-changed",
+      "operation": "mobileWeb.bundle-fetch",
+      "version": 1,
+      "family": "mobileWeb.bundle-fetch",
+      "sites": [
+        "mobile/src/transport/mobile-web-bundle-fetch.ts",
+        "mobile/src/diagnostics/use-mobile-web-bundle-probe.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "mobileWeb.bundle.manifest#1",
+          "params": null,
+          "reply": {
+            "ok": true,
+            "result": {
+              "manifest": {
+                "schemaVersion": 1,
+                "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+                "desktopVersion": "1.4.201",
+                "minCompatibleRuntimeProtocolVersion": 2,
+                "runtimeProtocolVersion": 2,
+                "entrypoint": "index.html",
+                "totalBytes": 37,
+                "assets": [
+                  {
+                    "path": "assets/app.js",
+                    "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+                    "byteLength": 11,
+                    "contentType": "text/javascript; charset=utf-8"
+                  },
+                  {
+                    "path": "index.html",
+                    "sha256": "483f915496f213c851665840f49b69e05b7a6bf70ec9d6939a831b15d298f31e",
+                    "byteLength": 26,
+                    "contentType": "text/html; charset=utf-8"
+                  }
+                ]
+              },
+              "chunkBytes": 16
+            }
+          }
+        },
+        {
+          "bind": "app-js",
+          "request": "mobileWeb.bundle.chunk#1",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          }
+        },
+        {
+          "bind": "index-head",
+          "request": "mobileWeb.bundle.chunk#2",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          }
+        },
+        {
+          "complete": "app-js",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "assets/app.js",
+            "offset": 0
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+              "path": "assets/app.js",
+              "offset": 0,
+              "assetByteLength": 11,
+              "sha256": "e99170780c392398db81fbb3dcaebc1a2c8264d4d8a9cd5932887e9c7206dc3d",
+              "dataBase64": "b3JjYS5ib290KCk=",
+              "eof": true
+            }
+          }
+        },
+        {
+          "complete": "index-head",
+          "params": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "path": "index.html",
+            "offset": 0
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "invalid_argument",
+              "message": "mobile_web_bundle_build_changed"
+            }
+          }
+        },
+        {
+          "checkpoint": "bundle-build-changed"
         }
       ]
     }

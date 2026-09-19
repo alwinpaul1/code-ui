@@ -110,8 +110,8 @@ export const OPERATION_MUTATIONS = {
   // Reads the overrides one level above the settings envelope.
   'bot-overrides-envelope': {
     file: 'settings-read-operations.ts',
-    before: "settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')",
-    after: "raw == null ? undefined : Reflect.get(Object(raw), 'prBotAuthorOverrides')"
+    before: "settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')",
+    after: "raw == null ? undefined : settingsField(raw, 'prBotAuthorOverrides')"
   },
   // Publishes the settings envelope instead of the accepted operation value.
   'workspace-context-envelope': {
@@ -305,6 +305,14 @@ export const OPERATION_MUTATIONS = {
     file: 'use-mobile-tasks-workspace-create-actions.tsx',
     before: 'latestRuntimeTaskSettings = (settingsResult.value ?? {}) as RuntimeTaskSettings',
     after: 'latestRuntimeTaskSettings = (settingsReply.result ?? {}) as RuntimeTaskSettings'
+  },
+  // Writes every chunk of an asset at offset 0, so a multi-chunk asset reassembles as its last
+  // chunk over a zero-filled buffer. The length still matches the manifest; only the sha256 check
+  // and the decoded bytes in the projection say the bundle is wrong.
+  'mobile-web-bundle-chunk-placement': {
+    file: 'mobile-web-bundle-fetch.ts',
+    before: 'whole.set(bytes, offset)',
+    after: 'whole.set(bytes, 0)'
   }
 } as const satisfies Record<string, Omit<OperationMutation, 'name'>>
 

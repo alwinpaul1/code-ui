@@ -28,6 +28,7 @@ import {
 } from './MobileNativeChatToolAnnotations'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
   createToolInputDisplay,
@@ -340,6 +341,14 @@ export function ToolRun({
   }
   callCount ||= pairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
+  // A collapsed run that contained failures says so (Orca #21151): a quiet
+  // `N failed` in the header's muted type, counted over every call, not the
+  // latest. Text only — a tool error is routine work, so no danger tint. This
+  // fork's header never drew a completion mark, so there was no false one to
+  // withhold; the count is the half of the fix the phone can show.
+  const { failedCallCount } = nativeChatToolRunOutcome(blocks, {
+    activeTurnIsWorking: activeCall !== null
+  })
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -389,6 +398,16 @@ export function ToolRun({
           {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
+            </Text>
+          ) : null}
+          {failedCallCount > 0 ? (
+            <Text
+              testID="tool-run-failed-count"
+              accessibilityLabel={`Failed tool calls: ${failedCallCount}`}
+              style={styles.toolRunMemberArg}
+              numberOfLines={1}
+            >
+              {`${failedCallCount} failed`}
             </Text>
           ) : null}
           {open ? (

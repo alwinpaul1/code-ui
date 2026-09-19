@@ -4,8 +4,8 @@
   "namedDeltas": [],
   "runnerVersion": 1,
   "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
-  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
+  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "9d79bcfd6957d11d5ce8c3296f1038a3cfab81eedad7f990b44071104dfd0f91",
   "platform": "darwin",
@@ -13,6 +13,18 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "120979f40a68": {
+      "capabilities": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
     "216adda2100c": {
       "name": "status.get#1",
       "ordinal": 1,
@@ -51,22 +63,12 @@
         }
       }
     },
-    "62aaf19f0b16": {
-      "capabilities": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
-    "b33d34bddc4e": {
+    "3a7704ccec26": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
+        "agentLaunch": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -91,9 +93,9 @@
           "sender": ["216adda2100c"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "b33d34bddc4e"
+            "probe": "3a7704ccec26"
           },
-          "state": "62aaf19f0b16",
+          "state": "120979f40a68",
           "effects": []
         }
       }

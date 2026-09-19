@@ -132,7 +132,7 @@ describe('the `/` catalog a structured session reports', () => {
     expect(cleared.commands).toBeNull()
   })
 
-  it('survives a tail refresh of the same epoch', () => {
+  it('survives a history read of the same epoch', () => {
     const state = seeded()
     const commands = [{ name: 'loaded', kind: 'skill' as const }]
     const withCatalog = reduceStructuredAgentSession(state, {
@@ -151,7 +151,7 @@ describe('the `/` catalog a structured session reports', () => {
       }
     })
     const refreshed = reduceStructuredAgentSession(withCatalog, {
-      type: 'tail-page',
+      type: 'history-page',
       page: hydrationPage([item('one', 1), item('two', 2), item('three', 3)])
     })
     expect(refreshed.commands).toEqual(commands)

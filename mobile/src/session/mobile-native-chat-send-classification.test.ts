@@ -1,7 +1,30 @@
 import { describe, expect, it } from 'vitest'
+import { chatCommandOpensOverlay } from './mobile-chat-command-overlay'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 
 describe('classifyMobileNativeChatSend', () => {
+  it('recognizes OMP selectors and context commands without claiming generic help', () => {
+    expect(classifyMobileNativeChatSend('omp', '/switch')).toBe('command')
+    expect(classifyMobileNativeChatSend('omp', '/compact focus on tests')).toBe('command')
+    expect(classifyMobileNativeChatSend('omp', '/help')).toBe('unknown-token')
+    expect(classifyMobileNativeChatSend('omp', '/smol')).toBe('unknown-token')
+  })
+
+  // Code UI: an OMP command upstream describes as "in Terminal" opens a
+  // selector the chat cannot drive, so the phone shows the terminal for it,
+  // the way the Codex catalog's flagged entries already do; the rest answer in
+  // the transcript and keep the chat.
+  it('shows the terminal for the OMP commands that open a selector there, and keeps chat for the rest', () => {
+    for (const command of ['/model', '/switch', '/resume', '/fork', '/branch', '/tree', '/git', '/settings', '/extensions', '/hotkeys']) {
+      expect(chatCommandOpensOverlay('omp', command), command).toBe(true)
+    }
+    for (const command of ['/plan', '/compact focus on tests', '/clear', '/new', '/context', '/usage', '/fast', '/export']) {
+      expect(chatCommandOpensOverlay('omp', command), command).toBe(false)
+    }
+    // Unknown to the catalog: the terminal is the safe answer.
+    expect(chatCommandOpensOverlay('omp', '/help')).toBe(true)
+  })
+
   it('classifies catalog commands per agent', () => {
     expect(classifyMobileNativeChatSend('claude', '/clear')).toBe('command')
     expect(classifyMobileNativeChatSend('claude', '/compact')).toBe('command')

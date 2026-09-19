@@ -159,6 +159,12 @@ export function makeMarkdownStyles(theme: Theme) {
       color: colors.textMuted,
       marginTop: space.xs
     },
+    /** A drawn figure, a block of its own between prose runs; see
+     *  MobileMarkdown for why it is not inside the run. */
+    figure: {
+      width: '100%',
+      marginVertical: space.sm
+    },
     /** The image link's path, as a span inside the prose run (the link is
      *  what an image is until the host hands the file over, or for good when
      *  it will not; see MobileMarkdownImage). */

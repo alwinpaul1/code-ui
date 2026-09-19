@@ -168,9 +168,13 @@ export function ZoomableImage({
 
   const gesture = Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap))
 
-  const transform = useAnimatedStyle(() => ({
-    transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }]
-  }))
+  const transform = useAnimatedStyle(
+    () => ({
+      transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }]
+    }),
+    // Named so the mapper has inputs where no Babel closure is written (the web bundle).
+    [tx, ty, scale]
+  )
 
   return (
     <GestureDetector gesture={gesture}>

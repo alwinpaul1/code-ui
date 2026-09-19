@@ -1,13 +1,15 @@
 // The pill and choice-row primitives the session-option card is built from, kept
 // beside it so the card file stays about layout and apply wiring.
 
-import { Pressable, View } from 'react-native'
+import { Pressable, Switch, View } from 'react-native'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionValue
+import {
+  sessionOptionValueMarker,
+  type SessionOptionDescriptor,
+  type SessionOptionValueMarker,
+  type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
 /** Muted one-liner above a group — dispatch state, or why a row is locked. */
@@ -182,6 +184,66 @@ function ChoiceRow({
   )
 }
 
+/** A binary option as one switch that owns its label (Orca #20506), instead of
+ *  On/Off radio rows under a header repeating the name. The value always
+ *  renders; the marker is what keeps an unpicked one from reading as confirmed,
+ *  since a switch cannot say "nobody said". Colours come from the theme, so the
+ *  track reads in both modes. */
+function ToggleRow({
+  label,
+  checked,
+  marker,
+  disabled,
+  grouped,
+  onToggle
+}: {
+  label: string
+  checked: boolean
+  /** Where the rendered value came from, or null once something picked it. */
+  marker: SessionOptionValueMarker | null
+  disabled: boolean
+  grouped: boolean
+  onToggle: (next: boolean) => void
+}): React.JSX.Element {
+  const { colors, radius, space } = useTheme()
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        gap: space.sm + 2,
+        padding: space.md,
+        minHeight: 46,
+        alignItems: 'center',
+        borderRadius: grouped ? 0 : radius.md,
+        backgroundColor: grouped ? 'transparent' : colors.bgRaised,
+        borderWidth: grouped ? 0 : 1,
+        borderColor: colors.border,
+        marginBottom: grouped ? 0 : space.xs,
+        opacity: disabled ? 0.5 : 1
+      }}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt variant="body" weight="medium" numberOfLines={1}>
+          {label}
+        </Txt>
+      </View>
+      {marker ? (
+        <Txt variant="caption" tone="muted">
+          {marker === 'default' ? 'Default' : 'Not reported'}
+        </Txt>
+      ) : null}
+      <Switch
+        accessibilityLabel={label}
+        value={checked}
+        onValueChange={onToggle}
+        disabled={disabled}
+        trackColor={{ false: colors.borderStrong, true: colors.accent }}
+        thumbColor={colors.bgPanel}
+      />
+    </View>
+  )
+}
+
 function ActionRow({
   label,
   disabled,
@@ -291,31 +353,19 @@ export function DescriptorRows({
       />
     )
   }
-  // Unknown booleans leave both radios unselected instead of inventing truth.
+  // One switch, not an On/Off pair: the option is binary. The value always
+  // renders; the marker is what keeps an unpicked one from reading as confirmed,
+  // since the switch itself cannot say "nobody said".
   if (descriptor.kind.type === 'boolean') {
-    const current = descriptor.kind.currentValue
     return (
-      <>
-        {current === undefined ? (
-          <SessionOptionCaption>Current value unknown — pick On or Off</SessionOptionCaption>
-        ) : null}
-        <ChoiceRow
-          label="On"
-          selected={current === true}
-          disabled={locked}
-          grouped={grouped}
-          divided={grouped}
-          onPress={() => onSetOption(true)}
-        />
-        <ChoiceRow
-          label="Off"
-          selected={current === false}
-          disabled={locked}
-          grouped={grouped}
-          divided={false}
-          onPress={() => onSetOption(false)}
-        />
-      </>
+      <ToggleRow
+        label={descriptor.label}
+        checked={descriptor.kind.currentValue}
+        marker={sessionOptionValueMarker(descriptor)}
+        disabled={locked}
+        grouped={grouped}
+        onToggle={(next) => onSetOption(next)}
+      />
     )
   }
   const { currentValue, choices } = descriptor.kind

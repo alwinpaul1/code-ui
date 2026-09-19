@@ -1,0 +1,171 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { describe, expect, it, vi } from 'vitest'
+import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
+import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
+import {
+  readNewWorktreeRuntimeCapabilities,
+  type NewWorktreeRuntimeCapabilities
+} from '../tasks/worktree-create-capability'
+import { supportsMobileQuickCommands } from '../terminal/quick-commands'
+import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
+import type { RpcClient } from './rpc-client'
+import { startRuntimeCapabilityProbe } from './runtime-capability-probe'
+import type { RpcResponse } from './types'
+
+/*
+ * CODE UI (2026-09-19): ported from Orca #21376 (b90837ee4). Upstream's copy also drives the
+ * three status.get readers of `host-status-probe-operations.ts` (`readHostStatusGates`,
+ * `readProbedHostCapabilities`, `hostAnsweredStatusProbe`), which arrive with Orca #20667 and
+ * #21176 (Group D of the 2026-09-19 backlog) and do not exist here yet. This fork's transport
+ * probe is still `startRuntimeCapabilityProbe`, so that is the reader driven in their place;
+ * when #20667/#21176 land, bring this file to upstream's form (its readers are a superset).
+ */
+
+const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
+vi.mock('./host-app-version-store', () => ({
+  normalizeHostAppVersion: (value: unknown) => (typeof value === 'string' ? value : null),
+  recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
+}))
+
+/**
+ * What a desktop that ships a mobile web bundle now answers. The new name sits among real ones
+ * rather than alone, so a reader that keeps only the head or the tail of the list cannot look
+ * unchanged by accident, and the rest are there to make every derived state below non-trivial.
+ */
+const ADVERTISED_CAPABILITIES = [
+  'files.pathsExist',
+  MOBILE_AI_VAULT_CAPABILITY,
+  'mobile.tasks.v1',
+  MOBILE_WEB_BUNDLE_CAPABILITY,
+  'worktree.create-idempotency.v1',
+  'terminal.quick-commands.v1'
+] as const
+
+/** The old desktop is DERIVED, never written down: one string removed from what the new one sends. */
+const OLD_DESKTOP_CAPABILITIES = ADVERTISED_CAPABILITIES.filter(
+  (capability) => capability !== MOBILE_WEB_BUNDLE_CAPABILITY
+)
+
+function statusReply(capabilities: readonly string[]): RpcResponse {
+  return {
+    id: 'status-1',
+    ok: true,
+    result: {
+      appVersion: '1.4.200',
+      protocolVersion: 3,
+      minCompatibleMobileVersion: 2,
+      floatingWorkspaceEnabled: true,
+      capabilities: [...capabilities]
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  }
+}
+
+/** Answers every method with the one status reply, which is all any reader under test asks for. */
+function clientAnswering(reply: RpcResponse): RpcClient {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every reader below reaches this client through sendRequest alone; the rest of RpcClient is streaming and lifecycle none of them touch.
+  return { sendRequest: vi.fn().mockResolvedValue(reply) } as unknown as RpcClient
+}
+
+async function renderGates(client: RpcClient): Promise<HostStatusGates> {
+  // Held on an object rather than in `let`s: both are written from inside a callback, where
+  // narrowing would read them back as their initializer.
+  const mount: { renderer?: ReactTestRenderer; gates?: HostStatusGates } = {}
+  function Probe(): null {
+    mount.gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+    return null
+  }
+  try {
+    await act(async () => {
+      mount.renderer = create(createElement(Probe))
+      await Promise.resolve()
+    })
+  } finally {
+    mount.renderer?.unmount()
+  }
+  if (!mount.gates) {
+    throw new Error('the gate hook never rendered')
+  }
+  return mount.gates
+}
+
+/** The transport probe publishes through a callback; one settled call is the whole observation. */
+async function probeCapabilities(client: RpcClient): Promise<readonly string[] | null> {
+  const seen: { capabilities?: readonly string[] } = {}
+  const stop = startRuntimeCapabilityProbe(client, (capabilities) => {
+    seen.capabilities = capabilities
+  })
+  try {
+    await Promise.resolve()
+    await Promise.resolve()
+  } finally {
+    stop()
+  }
+  return seen.capabilities ?? null
+}
+
+type ClientVisibleOutcome = {
+  gates: HostStatusGates
+  probedCapabilities: readonly string[] | null
+  quickCommandsSupported: boolean
+  worktreeCreateSupport: NewWorktreeRuntimeCapabilities
+}
+
+/** Every released path that reads status.get, plus the states derived from what it published. */
+async function readEverything(capabilities: readonly string[]): Promise<ClientVisibleOutcome> {
+  const reply = statusReply(capabilities)
+  const client = clientAnswering(reply)
+  const gates = await renderGates(client)
+  return {
+    gates,
+    probedCapabilities: await probeCapabilities(client),
+    quickCommandsSupported: supportsMobileQuickCommands(gates.hostCapabilities),
+    worktreeCreateSupport: await readNewWorktreeRuntimeCapabilities(client)
+  }
+}
+
+function withoutBundleCapability(values: readonly string[]): string[] {
+  return values.filter((capability) => capability !== MOBILE_WEB_BUNDLE_CAPABILITY)
+}
+
+/** The outcome with the one new string removed wherever it surfaced, and nothing else touched. */
+function asIfNeverAdvertised(outcome: ClientVisibleOutcome): ClientVisibleOutcome {
+  return {
+    ...outcome,
+    gates: {
+      ...outcome.gates,
+      hostCapabilities: withoutBundleCapability(outcome.gates.hostCapabilities)
+    },
+    probedCapabilities: outcome.probedCapabilities
+      ? withoutBundleCapability(outcome.probedCapabilities)
+      : outcome.probedCapabilities
+  }
+}
+
+describe('mobileWeb.bundle.v1 on a released client', () => {
+  /**
+   * The Phase A promise: a desktop that starts advertising the bundle changes nothing a shipped
+   * phone can observe. Both sides of the comparison come from the same list, so nothing here
+   * records "what the old client had" and can rot out of step with it.
+   *
+   * A closed enum or an exhaustive switch over capabilities would land on the presence assertions
+   * first: the strict schema drops a whole salvaged field rather than one entry, so the advertised
+   * read would publish nothing and the equality below would fail with it.
+   */
+  it('changes nothing a released client reads apart from the capability string itself', async () => {
+    const advertised = await readEverything(ADVERTISED_CAPABILITIES)
+    const oldDesktop = await readEverything(OLD_DESKTOP_CAPABILITIES)
+
+    // Preconditions: without these the comparison could hold because nothing was read at all.
+    expect(advertised.gates.hostCapabilities).toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
+    expect(advertised.probedCapabilities).toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
+    expect(advertised.quickCommandsSupported).toBe(true)
+    expect(advertised.worktreeCreateSupport.tasksSupported).toBe(true)
+    expect(advertised.worktreeCreateSupport.worktreeCreateIdempotency).not.toBe(false)
+    expect(oldDesktop.gates.hostCapabilities).not.toContain(MOBILE_WEB_BUNDLE_CAPABILITY)
+
+    expect(asIfNeverAdvertised(advertised)).toEqual(oldDesktop)
+  })
+})

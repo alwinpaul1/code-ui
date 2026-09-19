@@ -12,6 +12,8 @@ export type SlashCommandSuggestion = {
   name: string
   /** Optional one-line description for the suggestion row. */
   description?: string
+  /** Provider-authored argument sketch, e.g. `<objective>`. */
+  argumentHint?: string
   /** The command opens a TUI overlay (picker, prompt, wizard) that only the
    *  terminal view can show or drive; text-only commands leave this unset. */
   opensOverlay?: true
@@ -187,10 +189,53 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'quit', description: 'Exit Codex', opensOverlay: true }
 ]
 
+// OMP built-in registry (Orca #20672, f1a901e97, hand-applied); interactive
+// commands still execute in its terminal. CODE UI: the entries upstream
+// describes as "in Terminal" carry `opensOverlay` here, so the phone shows the
+// terminal for a selector the chat cannot drive — the same flag this fork's
+// Codex catalog uses. See LOCAL-FILES.md.
+const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Open the model selector in Terminal', opensOverlay: true },
+  {
+    name: 'switch',
+    description: 'Open the temporary model selector in Terminal',
+    opensOverlay: true
+  },
+  { name: 'plan', description: 'Toggle plan mode' },
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'clear', description: 'Clear context while keeping the session' },
+  { name: 'new', description: 'Start a new session' },
+  {
+    name: 'resume',
+    description: 'Resume a session; without arguments, choose in Terminal',
+    opensOverlay: true
+  },
+  { name: 'fork', description: 'Fork from a previous message in Terminal', opensOverlay: true },
+  { name: 'branch', description: 'Rewind to a previous message in Terminal', opensOverlay: true },
+  { name: 'tree', description: 'Browse the session tree in Terminal', opensOverlay: true },
+  { name: 'session', description: 'Show session information and controls' },
+  { name: 'rename', description: 'Rename the session' },
+  { name: 'context', description: 'Show estimated context usage' },
+  { name: 'usage', description: 'Show provider usage and limits' },
+  { name: 'fast', description: 'Toggle priority service tier' },
+  { name: 'tools', description: 'Show tools visible to the agent' },
+  { name: 'jobs', description: 'Show background jobs' },
+  { name: 'git', description: 'Open the Git viewer in Terminal', opensOverlay: true },
+  { name: 'export', description: 'Export the session to HTML' },
+  { name: 'settings', description: 'Open settings in Terminal', opensOverlay: true },
+  {
+    name: 'extensions',
+    description: 'Open the extension dashboard in Terminal',
+    opensOverlay: true
+  },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal', opensOverlay: true }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  omp: OMP_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the
@@ -200,9 +245,10 @@ export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSu
 }
 
 /** The command rows for a session that reports its own `/` surface. The report
- *  is the authority on WHICH commands exist; the curated catalog above is kept
- *  only as the description source for the names both know about. Skills are
- *  excluded — they render in the picker's own skills group. */
+ *  is the authority on WHICH commands exist and, when it carries one, on how a
+ *  command is described; the curated catalog above only covers the names whose
+ *  report is text-free. Skills are excluded — they render in the picker's own
+ *  skills group. (Orca #19928, hand-applied; see LOCAL-FILES.md.) */
 export function sessionSlashCommandSuggestions(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[]
@@ -213,10 +259,11 @@ export function sessionSlashCommandSuggestions(
   return reported
     .filter((entry) => entry.kind === 'command')
     .map((entry) => {
-      const description = described.get(entry.name)
+      const description = entry.description ?? described.get(entry.name)
       return {
         name: entry.name,
         ...(description ? { description } : {}),
+        ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
         ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
       }
     })

@@ -45,7 +45,8 @@ const mutants: Record<string, Mutation> = {
   'terminal-worktree-connection-resolved': 'worktree-connection-first-repo',
   'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state',
   'tk-item-detail-metadata': 'assignable-user-avatar-null-collapse',
-  'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader'
+  'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
+  'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2
@@ -76,31 +77,36 @@ function visibleState(recording: Recording): RecordedValue {
   return recording.checkpoints.at(-1)!.observation.state
 }
 
+// Pair pilots with their pinned mutant/reference up front so each loop below defines exactly one test.
+const pilots = pilotGoldens(input.scenarios)
+const mutantPilots = pilots.flatMap((pilot) => {
+  const mutation = mutants[pilot.id]
+  return mutation ? [{ ...pilot, mutation }] : []
+})
+const referencePilots = pilots.flatMap((pilot) => {
+  const reference = referenceStates[pilot.id]
+  return reference ? [{ ...pilot, reference }] : []
+})
+
 describe('RPC main recording mutants', () => {
-  for (const pilot of pilotGoldens(input.scenarios)) {
-    const { id, scenario } = pilot
-    const mutation = mutants[id]
-    if (mutation) {
-      it(`${id}: kills ${mutation}`, async () => {
-        const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
-          device: scenario,
-          mutation: operationMutation(mutation)
-        })
-        const result = await runRecordingMutant(
-          scenario,
-          adapters[scenario.operation],
-          vitestRecordingScheduler(),
-          readGolden(goldens, id).recording,
-          visibleState
-        )
-        assertMutationApplied()
-        expect(result.verdict).toBe('killed')
+  for (const { id, scenario, mutation } of mutantPilots) {
+    it(`${id}: kills ${mutation}`, async () => {
+      const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
+        device: scenario,
+        mutation: operationMutation(mutation)
       })
-    }
-    const reference = referenceStates[id]
-    if (!reference) {
-      continue
-    }
+      const result = await runRecordingMutant(
+        scenario,
+        adapters[scenario.operation],
+        vitestRecordingScheduler(),
+        readGolden(goldens, id).recording,
+        visibleState
+      )
+      assertMutationApplied()
+      expect(result.verdict).toBe('killed')
+    })
+  }
+  for (const { id, scenario, reference } of referencePilots) {
     it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(`${id}: rejects bcba08b3e4`, async () => {
       const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
         device: scenario,

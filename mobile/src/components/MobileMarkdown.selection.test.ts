@@ -182,6 +182,39 @@ describe('agent prose the reader wants to copy', () => {
     expect(flat).toMatch(/▎ The row it writes is pinned by a test using the real transcript row\./)
   })
 
+  it('starts a new run at a heading once the run behind it is long, and not before', () => {
+    // Device 2026-09-19, three screenshots of thesis_explained.md: with
+    // lists, quotes and figures inside the run, the whole document became
+    // one Text and Android drew every code chip in it a line off, over the
+    // prose. Cut into sections (a build that broke runs at every heading)
+    // the chips sat where they belong. A short section still joins the next
+    // one, so the earlier report — a selection stopping dead before
+    // "## 4. CKA" — stays fixed.
+    const paragraph = (n: number) => `${'word '.repeat(120)}${n}.`
+    const long = ['## One', '', paragraph(1), '', paragraph(2), '', paragraph(3), '', paragraph(4), '', paragraph(5), '', paragraph(6)]
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: [...long, '', '## Two', '', 'short section', '', '## Three', '', 'after a short one'].join('\n')
+        })
+      )
+    })
+    const runs = renderer!.root
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.selectable === true)
+    const inOrder = (node: ReactTestInstance): string =>
+      node.children
+        .map((child) => (typeof child === 'string' ? child : inOrder(child)))
+        .join('')
+    expect(runs).toHaveLength(2)
+    // The long section is its own run; the two short ones share the next.
+    expect(inOrder(runs[0]!)).toContain('One')
+    expect(inOrder(runs[0]!)).not.toContain('Two')
+    expect(inOrder(runs[1]!)).toContain('Two')
+    expect(inOrder(runs[1]!)).toContain('Three')
+    expect(inOrder(runs[1]!)).toContain('after a short one')
+  })
+
   it('lets the reader select a heading, a quote, a fence, a table cell and a list item', () => {
     const { selectable } = textsBySelectability()
     expect(selectable).toContain('What changed')

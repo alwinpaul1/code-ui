@@ -4,9 +4,18 @@ import { extname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+  MOBILE_WEB_BUNDLE_MANIFEST_METHOD
+} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import {
   HOST_MOBILE_CAPABILITY_KEYS,
   type HostMobileCapabilityKey
 } from './host-mobile-capability-operations'
+import * as protocolVersion from '../../../src/shared/protocol-version'
+import {
+  isAgentLaunchReplayUnsupportedRefusal,
+  isAgentLaunchUnsupportedRefusal
+} from '../tasks/agent-launch-worktree-create'
 
 /**
  * Ratchet: every RPC method the phone can send is either on the host's
@@ -64,6 +73,22 @@ type AllowlistException =
     }
   | {
       readonly method: string
+      /** Sent only to a host whose `status.get` advertised a runtime capability
+       *  the fixture's host does not have, and its sender downgrades to the
+       *  older method on the gate's refusal, so a host that is skewed the
+       *  other way (advertises, then refuses) still completes the call.
+       *  Checked on the real pieces: the file that reads the capability names
+       *  the constant, and the reader really accepts the gate's refusal. */
+      readonly guard: 'capability'
+      readonly capability: string
+      /** The file that reads the capability off `status.get`. */
+      readonly gatedIn: string
+      /** The refusal reader the sender downgrades on. */
+      readonly downgradesOn: (error: { code?: string; message?: string }) => boolean
+      readonly why: string
+    }
+  | {
+      readonly method: string
       /** The literal names the method without sending it (a params-shape set,
        *  say). Checked positively: every occurrence must sit in a position
        *  that cannot send — an array element (which covers `new Set([...])`,
@@ -94,9 +119,60 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     why: 'The `/` menu\'s installed-skills read. A refusal leaves the list empty, which is what an old host already did; use-mobile-native-chat-skills.ts latches the gate\'s refusal so it is asked once per client, not every 3 s.'
   },
   {
+    method: 'agent.launch',
+    guard: 'capability',
+    capability: protocolVersion.AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    gatedIn: 'src/tasks/worktree-create-capability.ts',
+    downgradesOn: isAgentLaunchUnsupportedRefusal,
+    why: 'A workspace create with an agent (upstream #19850). createWorktreeWithNameRetry sends it only when readNewWorktreeRuntimeCapabilities saw the agent.launch capability (v2 since #20999) on status.get — the 1.4.205 bundle neither advertises nor registers it — and on the gate\'s refusal re-sends the same candidate as worktree.create.'
+  },
+  {
+    method: 'agent.launchReplay',
+    guard: 'capability',
+    capability: protocolVersion.AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+    gatedIn: 'src/tasks/worktree-create-capability.ts',
+    downgradesOn: isAgentLaunchReplayUnsupportedRefusal,
+    why: 'The ledger-backed create (upstream #21137): sent, with a durable operationId, only when the probe also saw agent.launch.replay-required.v1. On the gate\'s refusal the same candidate is re-sent unnamed through worktree.create.'
+  },
+  {
     method: 'github.prComments',
     guard: 'never-sent',
     why: 'Named in github-pr-rpc.ts\'s METHODS_ACCEPTING_PR_REPO param-shape set only; no caller sends it.'
+  }
+]
+
+/**
+ * A method the tree sends by a CONSTANT imported from `src/shared`, never by a string literal
+ * under `app/` or `src/`, so the literal scan below cannot see it (2026-09-19, Orca #21374: the
+ * desktop-served mobile web bundle names its two methods through `bundle-rpc-contract.ts`).
+ * Each entry is checked three ways so it cannot rot: the spelled method must equal the imported
+ * constant, the named sender must bind that identifier to a `method:` field, and the fixture must
+ * still refuse the method — a re-captured fixture that allows it deletes the entry, and a literal
+ * that appears in the tree hands the method to the scan above and deletes it too.
+ */
+type ConstantNamedSend = {
+  readonly method: string
+  readonly constant: string
+  readonly identifier: string
+  readonly sender: string
+  /** How a host that refuses it is kept from ever being asked. */
+  readonly why: string
+}
+
+const CONSTANT_NAMED_SENDS: readonly ConstantNamedSend[] = [
+  {
+    method: 'mobileWeb.bundle.manifest',
+    constant: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+    identifier: 'MOBILE_WEB_BUNDLE_MANIFEST_METHOD',
+    sender: 'src/transport/mobile-web-bundle-operations.ts',
+    why: 'Every product sender is the hybrid web shell, which walls on the `mobileWeb.bundle.v1` status.get capability (Orca #21376) before it reads; a host on this fixture never advertises it. The one ungated sender is the Troubleshoot bundle probe row, mounted only under `__DEV__`.'
+  },
+  {
+    method: 'mobileWeb.bundle.chunk',
+    constant: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+    identifier: 'MOBILE_WEB_BUNDLE_CHUNK_METHOD',
+    sender: 'src/transport/mobile-web-bundle-operations.ts',
+    why: 'Paged only after a manifest read succeeded, so it inherits the manifest read\'s gate above.'
   }
 ]
 
@@ -332,15 +408,12 @@ describe('the recorded mobile-scope allowlist', () => {
   })
 
   it('agrees with the catalog on spelling, except for what the vendored catalog is too old to know', () => {
-    // The installed desktop is newer than the catalog this fork vendors: on
-    // 2026-09-18 it allowed two aiVault search methods the catalog has no row
-    // for. Nothing on the phone can send them (tsc would refuse the name), so
-    // they are pinned here rather than hidden; re-vendoring the catalog past
-    // them shrinks this list, and a typo in a re-captured fixture grows it.
-    expect(fixture.methods.filter((method) => !catalog.has(method))).toEqual([
-      'aiVault.searchSessions',
-      'aiVault.searchStatus'
-    ])
+    // 2026-09-19: the catalog caught up (#20277, #20886 ported the
+    // rpc-params-catalog.generated.ts hunks that add aiVault.searchSessions,
+    // aiVault.searchStatus and aiVault.setSearchEnabled), so this gap is
+    // empty again. A typo in a re-captured fixture, or the installed desktop
+    // moving ahead of the vendored catalog again, would grow it.
+    expect(fixture.methods.filter((method) => !catalog.has(method))).toEqual([])
   })
 
   it('does not carry the two methods that were caught missing, or the ratchet would be vacuous', () => {
@@ -454,6 +527,43 @@ describe('every RPC method the phone can send', () => {
     }
   })
 
+  it('sends a capability-gated exception only behind a status.get capability, and downgrades on the gate’s refusal', () => {
+    for (const exception of EXCEPTIONS) {
+      if (exception.guard !== 'capability') {
+        continue
+      }
+      // The gate reads the constant, not a copied string: a renamed capability
+      // then fails here instead of silently never matching.
+      const constant = Object.entries(protocolVersion).find(
+        ([, value]) => value === exception.capability
+      )?.[0]
+      expect(constant, `${exception.capability} is not a protocol-version export`).toBeDefined()
+      const gate = readFileSync(join(mobileRoot, exception.gatedIn), 'utf8')
+      expect(
+        gate,
+        `${exception.gatedIn} does not read ${constant} off the host's capabilities`
+      ).toMatch(new RegExp(`capabilities\\.includes\\(${constant}\\)`))
+      // The gate's own refusal, verbatim from the 1.4.205 bundle, and a host
+      // that predates the method: both must read as "use the older method".
+      expect(
+        exception.downgradesOn({
+          code: 'forbidden',
+          message: `Method '${exception.method}' is not available to mobile clients`
+        })
+      ).toBe(true)
+      expect(exception.downgradesOn({ code: 'method_not_found', message: 'Unknown method' })).toBe(
+        true
+      )
+      // And a refusal of the create itself is not a reason to downgrade.
+      expect(exception.downgradesOn({ code: 'invalid_argument', message: 'Missing repo' })).toBe(
+        false
+      )
+      expect(sentByMethod.get(exception.method) ?? [], `nothing sends ${exception.method}`).not.toEqual(
+        []
+      )
+    }
+  })
+
   it('allows a never-sent exception only in positions that cannot send, so it cannot become a loophole', () => {
     for (const exception of EXCEPTIONS) {
       if (exception.guard !== 'never-sent') {
@@ -463,6 +573,28 @@ describe('every RPC method the phone can send', () => {
         sendableByMethod.get(exception.method) ?? [],
         `${exception.method} is claimed never-sent but sits somewhere a send could come from (a call argument, a ternary, a property) — gate it or allow it.`
       ).toEqual([])
+    }
+  })
+
+  it('names each constant-named send once, by a constant a real sender binds, for a method the host still refuses', () => {
+    const methods = CONSTANT_NAMED_SENDS.map((entry) => entry.method)
+    expect(methods.filter((method, index) => methods.indexOf(method) !== index)).toEqual([])
+    for (const entry of CONSTANT_NAMED_SENDS) {
+      expect(entry.constant, `${entry.identifier} no longer spells ${entry.method}`).toBe(entry.method)
+      expect(catalog.has(entry.method), `${entry.method} is not in the vendored catalog`).toBe(true)
+      expect(
+        allowlist.has(entry.method),
+        `The fixture now allows ${entry.method} — delete its constant-named entry.`
+      ).toBe(false)
+      expect(
+        namedByMethod.has(entry.method),
+        `The tree now names ${entry.method} by literal — delete its constant-named entry; the scan above owns it.`
+      ).toBe(false)
+      const source = readFileSync(join(mobileRoot, entry.sender), 'utf8')
+      expect(
+        source.includes(`method: ${entry.identifier}`),
+        `${entry.sender} no longer binds ${entry.identifier} to a method field`
+      ).toBe(true)
     }
   })
 

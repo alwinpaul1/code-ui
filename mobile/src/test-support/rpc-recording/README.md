@@ -378,11 +378,13 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 368 manifest scenarios against frozen goldens and fails on any divergence: 727 goldens
-over 888 tests, all inside `pnpm --dir mobile test`. Counts quoted further down are measurements of
-the change they describe and are not restatements of this one. For a migration it answers one
-question — does the rewritten call site produce the same sender calls, settlements, state and
-effects as main did?
+It replays 385 manifest scenarios against frozen goldens and fails on any divergence: 759 goldens
+over 1710 tests in the recorder's and the bridged-parity suites, all inside `pnpm --dir mobile test`
+(counted 2026-09-19 on the merged tree, after Group D's migration waves and Orca #21374's two
+`mobileWeb.bundle` families both landed; the 78 / 153 / 210 this paragraph used to quote were the
+#20544 corpus). Counts quoted further down are measurements of the change they describe and are not
+restatements of this one. For a migration it answers one question — does the rewritten call site
+produce the same sender calls, settlements, state and effects as main did?
 
 It is not a substitute for reading the diff. Five facts bound it, all learned the hard way:
 

@@ -1,46 +1,109 @@
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Platform, Pressable, Text, View } from 'react-native'
 import { router } from 'expo-router'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { useThemedStyles, type Theme } from '../theme/theme-context'
 import type { CompatVerdict } from '../transport/protocol-compat'
+import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
 
+/** Every wall this screen renders: the protocol one and the bundle one. Both are terminal — there
+ *  is no native workspace to fall back to, so the only way out is updating one of the two apps. */
+export type BlockedVerdict =
+  | Extract<CompatVerdict, { kind: 'blocked' }>
+  | Extract<MobileWebBundleCompatVerdict, { kind: 'blocked' }>
+
 type Props = {
-  verdict: Extract<CompatVerdict, { kind: 'blocked' }>
+  verdict: BlockedVerdict
+}
+
+const DESKTOP_TOO_OLD_BODY =
+  'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+
+/** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
+ *  older than this host's client floor, so a download fixes it and an app update does not. */
+type BlockRemedy = 'update-mobile' | 'update-desktop' | 'refresh-bundle'
+
+function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
+  switch (verdict.reason) {
+    case 'mobile-too-old':
+    case 'bundle-shell-too-old':
+      return 'update-mobile'
+    case 'desktop-too-old':
+    case 'bundle-unavailable':
+      return 'update-desktop'
+    case 'bundle-incompatible':
+      return verdict.side === 'desktop' ? 'update-desktop' : 'refresh-bundle'
+  }
+}
+
+function blockTitle(remedy: BlockRemedy): string {
+  switch (remedy) {
+    case 'update-mobile':
+      return 'Update Orca Mobile'
+    case 'update-desktop':
+      return 'Update Orca on your computer'
+    case 'refresh-bundle':
+      return 'Refresh the mobile workspace'
+  }
+}
+
+function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: string): string {
+  if (remedy === 'refresh-bundle') {
+    return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
+  }
+  if (verdict.reason === 'mobile-too-old') {
+    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+  }
+  if (verdict.reason === 'bundle-unavailable') {
+    return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
+  }
+  if (remedy === 'update-mobile') {
+    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+  }
+  return DESKTOP_TOO_OLD_BODY
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
-  const isMobileTooOld = verdict.reason === 'mobile-too-old'
+  // Code UI: painted from the live theme, never the legacy static palette, so the wall reads in
+  // light and in dark (it shipped dark-only until 2026-09-19).
+  const styles = useThemedStyles(blockScreenStyles)
+  const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
     Platform.OS === 'ios'
       ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
       : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
-  const primaryAction = isMobileTooOld
-    ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
-    : { label: 'Open GitHub Releases', url: RELEASES_URL }
+  // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
+  const primaryAction =
+    remedy === 'refresh-bundle'
+      ? null
+      : remedy === 'update-mobile'
+        ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
+        : { label: 'Open GitHub Releases', url: RELEASES_URL }
 
-  const title = isMobileTooOld ? 'Update Orca Mobile' : 'Update Orca on your computer'
-  const body = isMobileTooOld
-    ? `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${mobileUpdateTarget.storeName}, then try this host again.`
-    : 'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+  const title = blockTitle(remedy)
+  const body = blockBody(verdict, remedy, mobileUpdateTarget.storeName)
   const recoveryNote =
-    'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
+    remedy === 'refresh-bundle'
+      ? 'If this message stays, remove this host and pair it again.'
+      : 'Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.'
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
-        <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
-          onPress={() => {
-            void Linking.openURL(primaryAction.url)
-          }}
-        >
-          <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
-        </Pressable>
+        {primaryAction ? (
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            onPress={() => {
+              void Linking.openURL(primaryAction.url)
+            }}
+          >
+            <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
@@ -57,62 +120,64 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  body: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  secondaryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  recoveryNote: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 17,
-    marginTop: spacing.md
-  },
-  pressed: {
-    opacity: 0.7
+function blockScreenStyles({ colors, space, radius, type }: Theme) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      justifyContent: 'center' as const,
+      paddingHorizontal: space.lg
+    },
+    card: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radius.md,
+      padding: space.lg,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    title: {
+      fontSize: type.heading.size,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginBottom: space.sm
+    },
+    body: {
+      fontSize: type.body.size,
+      color: colors.textSecondary,
+      lineHeight: type.body.lineHeight,
+      marginBottom: space.lg
+    },
+    primaryButton: {
+      backgroundColor: colors.text,
+      paddingVertical: space.sm + 2,
+      borderRadius: radius.xs,
+      alignItems: 'center' as const,
+      marginBottom: space.sm
+    },
+    primaryButtonText: {
+      fontSize: type.body.size,
+      fontWeight: '600' as const,
+      color: colors.textInverse
+    },
+    secondaryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: space.sm + 2,
+      borderRadius: radius.xs,
+      alignItems: 'center' as const
+    },
+    secondaryButtonText: {
+      fontSize: type.body.size,
+      fontWeight: '600' as const,
+      color: colors.text
+    },
+    recoveryNote: {
+      fontSize: type.caption.size,
+      color: colors.textMuted,
+      lineHeight: type.caption.lineHeight + 1,
+      marginTop: space.md
+    },
+    pressed: {
+      opacity: 0.7
+    }
   }
-})
+}

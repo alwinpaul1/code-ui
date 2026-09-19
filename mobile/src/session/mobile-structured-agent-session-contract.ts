@@ -9,12 +9,17 @@ import type { NativeChatTurnActivity } from './mobile-native-chat-turn-activity'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
-export type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
+export type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
+  id?: string
+  contentFingerprint?: string
+}
 
 /** What `useMobileStructuredAgentSession` hands the controller. Its own file so
  *  the hook stays under its line cap. */
-export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
+export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
   session: MobileNativeChatSession
   isWorking: boolean
   /** Whether there is a turn to interrupt. A journalled send reads as working
@@ -50,4 +55,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   rewindToItem: (itemId: string) => Promise<boolean>
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
+  /** Cancels the pending approval/question by its item identity where the host
+   *  advertises `agent-session.prompt-cancel.v1`; otherwise the turn stop
+   *  (Orca #20601). Without an argument it names the pending prompt itself. */
+  cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
 }

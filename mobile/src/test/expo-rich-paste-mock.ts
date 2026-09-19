@@ -2,7 +2,7 @@
 // at import time, which the Node test runtime cannot load. Component tests
 // get this no-op instead; use-rich-paste-input.test.ts mocks the real shape.
 export const isRichPasteSupported = false
-export function attachRichPaste(): boolean {
+export async function attachRichPaste(): Promise<boolean> {
   return false
 }
 export function detachRichPaste(): void {}

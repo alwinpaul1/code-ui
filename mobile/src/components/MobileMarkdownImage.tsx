@@ -11,6 +11,30 @@ import {
 
 type Loaded = { source: MarkdownImageSource; aspectRatio: number }
 
+/** What each url resolved to, per resolver (a document's figures) and for
+ *  remote urls, so a remount draws the picture on its first render. Why:
+ *  the run around a figure is remounted once the figure has its size (see
+ *  MobileMarkdown), and a remount that started over from the link would lay
+ *  the run out without the figure again, then grow it, which is the very
+ *  layout the remount exists to avoid. Bounded by a document's figures. */
+const loadedByResolver = new WeakMap<MarkdownImageResolver, Map<string, Loaded>>()
+const loadedRemote = new Map<string, Loaded>()
+
+function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): Map<string, Loaded> | null {
+  if (isRemoteImageUrl(url)) {
+    return loadedRemote
+  }
+  if (!resolve) {
+    return null
+  }
+  let cache = loadedByResolver.get(resolve)
+  if (!cache) {
+    cache = new Map()
+    loadedByResolver.set(resolve, cache)
+  }
+  return cache
+}
+
 /**
  * An image block of a markdown document, drawn as the image, inside the
  * document's selectable prose run.
@@ -22,13 +46,11 @@ type Loaded = { source: MarkdownImageSource; aspectRatio: number }
  * the document's width at its own aspect ratio (a bitmap's from Image, an
  * SVG's from its viewBox), so a figure is never cropped or stretched.
  *
- * Why it sits INSIDE the run, as an inline view with a size of its own: a
- * figure that was its own View split the prose into two Texts, and Android
- * lets a selection cross an inline view but never a second Text. A thesis
- * write-up with a figure per section could be copied one section at a time
- * (2026-09-19, "the same copying issue is for md file previews too"). The
- * width comes from the document, measured once, because an inline view
- * cannot ask for a percentage of a Text.
+ * The width comes from the document, measured once. The picture is a block
+ * of its own between prose runs, not an inline view inside one: inline was
+ * tried, so a selection could cross a figure, and Android drew a figure that
+ * loaded after the run's first layout over the text around it (device
+ * 2026-09-19). The link fallback still sits inside the run as a span.
  *
  * Tapping a drawn figure opens the full-screen viewer, where it can be
  * pinched to read the labels in it (2026-09-19).
@@ -49,11 +71,22 @@ export function MobileMarkdownImage({
   onOpen: () => void
   styles: { link: TextStyle; imageCaptionInline: TextStyle }
 }) {
-  const [loaded, setLoaded] = useState<Loaded | null | undefined>(undefined)
+  const [loaded, setLoaded] = useState<Loaded | null | undefined>(() =>
+    loadedCache(resolve, url)?.get(url)
+  )
   useEffect(() => {
     let cancelled = false
+    const cache = loadedCache(resolve, url)
+    const known = cache?.get(url)
+    if (known) {
+      setLoaded(known)
+      return
+    }
     setLoaded(undefined)
     const settle = (value: Loaded | null) => {
+      if (value) {
+        cache?.set(url, value)
+      }
       if (!cancelled) {
         setLoaded(value)
       }
