@@ -31,7 +31,14 @@ const hash = (parts: string[] | string): string =>
 // byte-identical. The hooks hash is upstream's own PROVIDER_RPC_SCREEN_HOOKS value, since the
 // migrated hooks are byte-identical to upstream's; the statement and semantics hashes are this
 // fork's because its tap-target and press-feedback hunks sit in the same readers.
-const PROVIDER_RPC_SCREEN_HOOKS = '7af4478d440cd913770b8a2d5e96c33aaf956192d2a820787af0727a0f33c018'
+// 2026-09-19, Orca #20919 ported: the screen-holdout migration takes the last two sends out of
+// this family — the filter sheet's linear.selectWorkspace and the screen-root hook's repo.list.
+// Hook, statement, declaration, render and style counts are all unchanged, and `semantics` is a
+// pure deletion of four lines, none in — two `rpc:` call signatures and the two method literals
+// they carried (3301 → 3297, checked by diffing the reader's output against the pre-port tree).
+// The render-token hash moves because the picker's handler now names an operation instead of the
+// client. The hooks hash is again upstream's own value (SCREEN_RPC_SCREEN_HOOKS there).
+const PROVIDER_RPC_SCREEN_HOOKS = '1b455d87ed00a1e70a5b3cac0110272e818da9a0d245e9043fc9d2649587831f'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 // 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
 // `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
@@ -56,14 +63,14 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // token. TasksRow gained a `raised` prop and the StyleSheet a `taskRowPressedOnRaised` key, which
 // moves `semantics` (one more jsx: attribute and the new literal), the StyleSheet pin (one new
 // key) and the render tree (+4). The statements and declarations pins do not move.
-const PROVIDER_RPC_STATEMENTS = '2aaf39554c761d1d73728b401449053b405eb7142f78dcd51a693ba68259ba8d'
+const PROVIDER_RPC_STATEMENTS = 'fc447bdcda0fe41986e5f2ab072bf09a7cbebf4e1bcafda90f2b2b7f6a965b97'
 const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
-const PROVIDER_RPC_SEMANTICS = '1b1be26096a48f59297a3056a1cae803e7faf6661655432959af120fe6b71a8e'
+const PROVIDER_RPC_SEMANTICS = '86f9000106fc8c11337a9b131f3036ac3808739858191d5ca98a881f64db6aca'
 const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
-const TAP_TARGET_RENDER_TREE = 'ee1e8e3181777d7764c0cad5909d60de997f5aa6f05688952285623d6b392ce9'
+const TAP_TARGET_RENDER_TREE = '7916ba63543b7c9f5e559000c2cd3699cdbfa1f2fbaad3ffff53a67c67322ec5'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -90,7 +97,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_301)
+    expect(semantics.split('\n')).toHaveLength(3_297)
     expect(hash(semantics)).toBe(PROVIDER_RPC_SEMANTICS)
   })
 
