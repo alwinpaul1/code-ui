@@ -154,12 +154,12 @@ src/shared/rpc-contract/worktree-create-params.ts: c84007c54
 src/shared/rpc-contract/worktree-params.ts: c84007c54
 src/shared/rpc-contract/worktree-visibility-defaults-params.ts: c84007c54
 
-The desktop-served mobile web bundle contract (OTA phase A, Orca #21325 + #21348), vendored whole.
-The five files are byte-identical at 9641a1b54 and at origin/main (ea02d9070) except where noted.
+The desktop-served mobile web bundle contract (OTA phase A, Orca #21325 + #21348; the manifest's
+`routes` from phase C, #21502), vendored whole.
 src/shared/mobile-web-bundle/bundle-rpc-contract.ts: 9641a1b54
-src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: 9641a1b54
-src/shared/mobile-web-bundle/manifest-contract.ts: 9641a1b54
-src/shared/mobile-web-bundle/manifest-contract.test.ts: 9641a1b54
+src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: ac4dc6599
+src/shared/mobile-web-bundle/manifest-contract.ts: ac4dc6599
+src/shared/mobile-web-bundle/manifest-contract.test.ts: ac4dc6599
 src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts: 9641a1b54
 src/shared/zod-salvage.ts: 9641a1b54 (re-vendored for `hostUnionArms`, which bundle-rpc-contract.ts imports; purely additive over the base — `openEnum` from #20950 and `hostUnionArms` from #21269/#21298 — and identical to origin/main)
 
