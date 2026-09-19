@@ -6,7 +6,7 @@
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
   "recorderSha256": "958e2d46022bf1cb6fd73ff784d7b455f25940c6633b2c8f942236167582d0cf",
-  "adapterSha256": "6119d409e1958877e4a04b3901f94a3609ac0420f5ca02af20eb8dae5cbf3408",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
   "scenarioSha256": "95ca47f382997c412da974e564a46b1ae0c20d6e0f3ca14258d33c8d8b51a160",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -112,12 +112,19 @@
       "admitted": "unadmitted",
       "fetched": "unfetched"
     },
-    "2d40d1d38104": {
-      "name": "unhandled-rejection",
+    "3ef9b57ea9ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
       "value": {
-        "category": "Error",
-        "isRpcDeliveryUnknown": false,
-        "message": "Unsupported observation: function"
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "invalid"
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
       }
     },
     "4262ba495b1b": {
@@ -257,6 +264,29 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "9948855e8b8d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "response",
+        "pending": {
+          "admission": {
+            "kind": "full",
+            "snapshotId": "snapshot-1",
+            "worktrees": [
+              {
+                "displayName": "One",
+                "repo": "Repo",
+                "worktreeId": "w-1"
+              }
+            ]
+          },
+          "client": "logical-client",
+          "hostId": "host-1"
+        }
+      }
     },
     "a0fab6bf1fb0": {
       "name": "worktree.ps#1",
@@ -584,10 +614,10 @@
           "sender": ["227f9e3de4fa"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "9948855e8b8d"
           },
           "state": "ab1a9ba6301c",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
@@ -596,10 +626,10 @@
           "sender": ["ad584cc963bb"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "3ef9b57ea9ad"
           },
           "state": "50c4271e912d",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
@@ -608,10 +638,10 @@
           "sender": ["b670d230caf2"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "3ef9b57ea9ad"
           },
           "state": "50c4271e912d",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
@@ -620,10 +650,10 @@
           "sender": ["4262ba495b1b"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "3ef9b57ea9ad"
           },
           "state": "50c4271e912d",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
@@ -632,10 +662,10 @@
           "sender": ["5a288976750e"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "3ef9b57ea9ad"
           },
           "state": "50c4271e912d",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
@@ -644,10 +674,10 @@
           "sender": ["f5d207eddd1d"],
           "payloads": ["a87f1f91dc98"],
           "settlements": {
-            "fetch": "9270aeb7d9c6"
+            "fetch": "3ef9b57ea9ad"
           },
           "state": "50c4271e912d",
-          "effects": ["2d40d1d38104"]
+          "effects": []
         }
       },
       {
