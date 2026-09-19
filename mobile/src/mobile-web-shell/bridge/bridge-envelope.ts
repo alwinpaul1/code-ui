@@ -52,8 +52,16 @@ export const BRIDGE_CONNECTION_STATES = [
 /** Closed against `BrowserScreencastFormat`; the pin lives in this module's test. */
 export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
 
-/** Closed against `ForegroundNudgeReason`; the pin lives in this module's test. */
-export const BRIDGE_FOREGROUND_NUDGE_REASONS = ['focus', 'app-resume', 'network-change'] as const
+/** Closed against `ForegroundNudgeReason`; the pin lives in this module's test.
+ *  CODE UI: `'user-send'` is this fork's own fourth arm (0.2.92 — a send on a cooled-down relay
+ *  re-dials), so the list closes over the fork's union. Upstream's page never sends it; this
+ *  fork's shell accepts it and its native client already understands it. */
+export const BRIDGE_FOREGROUND_NUDGE_REASONS = [
+  'focus',
+  'app-resume',
+  'network-change',
+  'user-send'
+] as const
 
 /**
  * What the page's synchronous `RpcClient` getters read. It travels whole rather than as deltas so a
