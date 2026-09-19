@@ -13,15 +13,17 @@ import type {
   RecordingScheduler,
   MountedOperation
 } from './recording-scenario'
-import { ScriptedRpcTransport } from './scripted-rpc-transport'
+import { ScriptedRpcTransport, type ScriptedClientWrapper } from './scripted-rpc-transport'
 
 export async function runRecording(
   scenario: RecordingScenario,
   mount: MountAdapter,
-  scheduler: RecordingScheduler
+  scheduler: RecordingScheduler,
+  /** A transport to record through instead of straight at the scripted one; see its type. */
+  wrapClient?: ScriptedClientWrapper
 ): Promise<Recording> {
   scheduler.start()
-  const transport = new ScriptedRpcTransport(scheduler.elapsed)
+  const transport = new ScriptedRpcTransport(scheduler.elapsed, undefined, wrapClient)
   const effects: { name: string; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
