@@ -1,7 +1,8 @@
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
 import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
-import { Linking, ScrollView, Text, View } from 'react-native'
+import { ScrollView, Text, View } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import {
   MARKDOWN_BASE_SIZE,
@@ -71,7 +72,9 @@ const QUOTE_BAR = '▎ '
 function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
   const route = routeMarkdownHref(href)
   if (route.kind === 'web') {
-    void Linking.openURL(route.url).catch(() => {})
+    // The seam, not react-native's `Linking`: this module is in the tasks page closure, and inside
+    // the shell's WebView `openURL` resolves without opening anything.
+    openExternalLink(route.url)
     return
   }
   if (route.kind === 'file' && onOpenFile) {
