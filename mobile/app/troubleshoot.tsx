@@ -27,6 +27,7 @@ import {
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
+import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
 
 // Same guard as mobile-terminal-diagnostics.ts: `__DEV__` is undefined outside the React Native runtime. The import
 // above is static, so a release bundle still carries the row's graph and evaluates its hoisted
@@ -229,7 +230,12 @@ export default function TroubleshootScreen() {
           <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
 
-        {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
+        {isDevelopmentBuild ? (
+          <>
+            <MobileWebBundleProbeRow />
+            <MobileWebShellDevRow />
+          </>
+        ) : null}
 
         {checks.length > 0 && (
           <View style={styles.section}>
