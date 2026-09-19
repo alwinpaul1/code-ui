@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors, type ThemePreference } from '../theme/tokens'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
@@ -16,7 +18,8 @@ vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
-  View: 'View'
+  View: 'View',
+  useColorScheme: () => 'light'
 }))
 
 vi.mock('expo-router', () => ({
@@ -30,6 +33,20 @@ let renderer: ReactTestRenderer | null = null
 function render(verdict: BlockedVerdict): string {
   act(() => {
     renderer = create(createElement(ProtocolBlockScreen, { verdict }))
+  })
+  return JSON.stringify(renderer?.toJSON())
+}
+
+/** Code UI: the wall under one appearance setting, so both can be pinned. */
+function renderThemed(preference: ThemePreference, verdict: BlockedVerdict): string {
+  act(() => {
+    renderer = create(
+      createElement(
+        ThemeProvider,
+        { initialPreference: preference },
+        createElement(ProtocolBlockScreen, { verdict })
+      )
+    )
   })
   return JSON.stringify(renderer?.toJSON())
 }
@@ -164,5 +181,35 @@ describe('ProtocolBlockScreen', () => {
     expect(output).toContain('Already updated? Go back to Hosts and refresh the connection.')
     // The presence precondition for the absence asserted on the refresh wall above.
     expect(pressableCount()).toBe(2)
+  })
+})
+
+// Code UI (2026-09-19): the wall painted from the legacy static palette until this test, which
+// passed every check while rendering dark on a light phone. Both schemes are required states.
+describe('ProtocolBlockScreen follows the appearance setting', () => {
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const verdict: BlockedVerdict = {
+    kind: 'blocked',
+    reason: 'desktop-too-old',
+    desktopVersion: 1,
+    requiredDesktopVersion: 99
+  }
+
+  it('paints the light canvas and text in light', () => {
+    const light = renderThemed('light', verdict)
+    expect(light).toContain(lightColors.bg)
+    expect(light).toContain(lightColors.text)
+    expect(light).not.toContain(darkColors.bg)
+  })
+
+  it('paints the dark canvas and text in dark', () => {
+    const dark = renderThemed('dark', verdict)
+    expect(dark).toContain(darkColors.bg)
+    expect(dark).toContain(darkColors.text)
+    expect(dark).not.toContain(lightColors.bg)
   })
 })

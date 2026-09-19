@@ -1,6 +1,6 @@
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Platform, Pressable, Text, View } from 'react-native'
 import { router } from 'expo-router'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { useThemedStyles, type Theme } from '../theme/theme-context'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 
@@ -65,6 +65,9 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: stri
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
+  // Code UI: painted from the live theme, never the legacy static palette, so the wall reads in
+  // light and in dark (it shipped dark-only until 2026-09-19).
+  const styles = useThemedStyles(blockScreenStyles)
   const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
@@ -117,62 +120,64 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  body: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  secondaryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  recoveryNote: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 17,
-    marginTop: spacing.md
-  },
-  pressed: {
-    opacity: 0.7
+function blockScreenStyles({ colors, space, radius, type }: Theme) {
+  return {
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      justifyContent: 'center' as const,
+      paddingHorizontal: space.lg
+    },
+    card: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radius.md,
+      padding: space.lg,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    title: {
+      fontSize: type.heading.size,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginBottom: space.sm
+    },
+    body: {
+      fontSize: type.body.size,
+      color: colors.textSecondary,
+      lineHeight: type.body.lineHeight,
+      marginBottom: space.lg
+    },
+    primaryButton: {
+      backgroundColor: colors.text,
+      paddingVertical: space.sm + 2,
+      borderRadius: radius.xs,
+      alignItems: 'center' as const,
+      marginBottom: space.sm
+    },
+    primaryButtonText: {
+      fontSize: type.body.size,
+      fontWeight: '600' as const,
+      color: colors.textInverse
+    },
+    secondaryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: space.sm + 2,
+      borderRadius: radius.xs,
+      alignItems: 'center' as const
+    },
+    secondaryButtonText: {
+      fontSize: type.body.size,
+      fontWeight: '600' as const,
+      color: colors.text
+    },
+    recoveryNote: {
+      fontSize: type.caption.size,
+      color: colors.textMuted,
+      lineHeight: type.caption.lineHeight + 1,
+      marginTop: space.md
+    },
+    pressed: {
+      opacity: 0.7
+    }
   }
-})
+}
