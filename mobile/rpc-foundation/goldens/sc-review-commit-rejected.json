@@ -3,9 +3,9 @@
   "family": "git.review-preparation",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "de079de9cc21bfb40da6e1431273b10c3e2a5b5402b91b2b8a85c8d7ac41bc97",
   "platform": "darwin",
@@ -13,8 +13,30 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "01bab795ab1e": {
+    "342343f97688": {
       "name": "git.commit#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
+    },
+    "465d78c22406": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "connection lost",
+        "ok": false
+      }
+    },
+    "7c923ba16626": {
+      "committed": {
+        "error": "connection lost",
+        "ok": false
+      },
+      "status": "unread"
+    },
+    "b5383f4d86af": {
+      "name": "git.commit#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -44,26 +66,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "465d78c22406": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "error": "connection lost",
-        "ok": false
-      }
-    },
-    "7c923ba16626": {
-      "committed": {
-        "error": "connection lost",
-        "ok": false
-      },
-      "status": "unread"
-    },
-    "e9c816eee026": {
-      "name": "git.commit#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.commit\",\"params\":{\"worktree\":\"id:repo42::/p\",\"message\":\"recorded message\"}}"
     }
   },
   "recording": {
@@ -72,8 +74,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["01bab795ab1e"],
-          "payloads": ["e9c816eee026"],
+          "sender": ["b5383f4d86af"],
+          "payloads": ["342343f97688"],
           "settlements": {
             "commit": "465d78c22406"
           },

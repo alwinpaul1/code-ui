@@ -118,20 +118,56 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
+// 2026-09-19 (Orca #20891 ported): body text, not behaviour. Five callbacks
+// send through declared operations instead of client.sendRequest — the
+// terminal-list refresh, the markdown tab read and save, and the diff-comment
+// load and persist — and the refusal try/catch in the diff-comment persist is
+// an interpretOrThrowRefusalMessage call. Same 81 callbacks, same identities;
+// the goldens under mobile/rpc-foundation pin the behaviour and did not move.
+// 2026-09-19 (Orca #20915 ported): two more — the live keystroke send
+// (sendLiveTerminalInput) and the accessory's connection lookup
+// (getActiveWorktreeConnectionId) name terminal.input-send and the new-tab
+// repo.list reader. Same 81 callbacks.
+// 2026-09-19 (Orca #20954 ported): the diff-comment load's worktree.show
+// reader is renamed (sessionWorktreeRecordRead) and the gesture flush
+// (flushTerminalGestureInput) names terminal.input-send. Same 81 callbacks.
+// 2026-09-19 (Orca #21083 ported): setDisplayMode's send became
+// terminalDisplayModeSet; this fork's queued, viewport-measuring shape is
+// unchanged and it still returns the accepted verdict the floor release
+// retries on. Same 81 callbacks.
+// 2026-09-19 (Orca #21089 ported): the reply casts the checked readers made
+// unnecessary — the markdown tab doc (readMarkdownTab, saveMarkdownTab) and
+// the worktree record's diffComments (loadDiffComments) are typed by their
+// schemas now. Same 81 callbacks.
+// 2026-09-19 (Orca #21269 ported): the markdown disk fallback's
+// `{ content, truncated, byteLength }` cast is retired — the preview reader
+// checks the content and salvages the flag, so readMarkdownTab reads
+// `fallback.value` directly. Same 81 callbacks.
 // 2026-09-19 (perf-group port, #20545): the Copy button's handler now trims
 // the agent gutter through stripTerminalSelectionGutter when the mirrored
 // desktop setting is on.
 // 2026-09-19 (later): the transcript tail is gone — the tab status carries
 // the prompts — so both sites now only drop and close a "Code UI · transcript"
 // leftover by title (isTranscriptTailLeftover, closeTranscriptTailLeftovers).
-const HEAD_CALLBACK_BODY_SHA256 = '32cb43409c5e36b97f3bb17ff12fd55ee573213e10ef1b73702e409368a3447b'
+// Re-pinned on the group D merge, 2026-09-19: main's hash (32cb4340) carried
+// the gutter trim and the leftover close, ours (6f303025) the operation sends
+// and the retired casts; the merged tree carries both (the terminal-list
+// refresh reads through sessionTerminalListRead AND closes the leftover), and
+// this is what the test printed for it.
+const HEAD_CALLBACK_BODY_SHA256 = 'd5de393d05cb313ba56b0a14559263c68400789a4125eabf67fac2ad8ac32c80'
+// 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
+// sends became host-screen's worktreeActivate, and the sleeping-agent check
+// reads that operation's verdict instead of the reply envelope. Same 23
+// effects.
 // 2026-09-19 (Orca #21503 port): the last-visited-worktree effect's bare store
 // write became writeLastVisitedWorktree, the one writer of that key, so the
 // hybrid shell's page mirror sees it as it is written rather than one `init` later.
 // Re-pinned on the group E merge, 2026-09-19: main's hash (da074a63) carried
 // the perf-group effects, ours (0a93fb85) carried this one; the merged tree
 // carries both, and this is what the test printed for it.
-const HEAD_EFFECT_SHA256 = '6121e237b5248bc985b57d2288f4bc96c8c35371ac3bd740317ef9d6a35ce67f'
+// Re-pinned again on the group D merge, 2026-09-19: main's (6121e237) carried
+// #21503's writer, ours (d5529ed9) #21083's worktreeActivate; both now.
+const HEAD_EFFECT_SHA256 = '40d89fcb986ddfa89b65c3302c8f936f38fd608678d035071725beabbecbc987'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -159,12 +195,30 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // 2026-09-18: handleForkClaudeSession joins handleClearTerminal inside
 // useMobileSessionTerminalInput — the session menu's Fork action types
 // Claude's own `/fork` command and submits it.
+// 2026-09-19 (Orca #20891 ported): six nested functions send through declared
+// operations — the markdown note and browser creates, the browser navigation
+// command, and the terminal rename, terminal close and session-tab close (the
+// last two keep this fork's early-return and close-plan shape). Count still 13.
+// 2026-09-19 (Orca #20915 ported): handleSend, the composed draft send, names
+// terminal.input-send. Count still 13.
+// 2026-09-19 (Orca #20954 ported): handleClearTerminal names
+// terminal.clear-buffer-or-skip. Count still 13.
+// 2026-09-19 (Orca #21083 ported): handleCreateTerminal names
+// sessionTabCreateTerminal, and its `response.ok` branch became that
+// operation's own throw-the-host-message acceptance; this fork's HUD launch
+// config still rides the create. Count still 13.
+// 2026-09-19 (Orca #21089 ported): handleCreateBrowser's
+// `{ browserPageId?: string }` cast is carried by its schema now. Count
+// still 13.
 // 2026-09-19 (upstream #20069): handleCreateTerminal captures one afterTabId
 // for both the request and the optimistic paint, places the created tab with
 // the shared placeCreatedSessionTab, and paints nothing at all against a host
 // without session-tabs.split-group-placement.v1 (its snapshot places it).
+// Re-pinned on the group D merge, 2026-09-19: main's (b014e15d) carried
+// #20069's placement, ours (ccff5b6c) the operation sends; handleCreateTerminal
+// now does both — sessionTabCreateTerminal, then the guarded placement.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'b014e15d80d68923e7a6b4c4181a68eae50766a54079637546ea7e869d5f2ee8'
+  '8d1508016ebbb37ef43c81c543a0bd7d51cc0ed82c30b07eaf7f7f08a2f625ef'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -194,9 +248,33 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 677 since 2026-09-18 (later): MobileSessionActiveContent asks the host's
 // mobile RPC gate about 'agentSession.rewind' (useHostMobileCapability) —
 // one new literal, the capability key.
+// 671 since 2026-09-19 (Orca #20891 ported): twelve method literals left the
+// family for the operation modules (browser.tabCreate, files.createFile,
+// files.open, files.read, markdown.readTab, markdown.saveTab,
+// session.tabs.close, terminal.close, terminal.list, terminal.rename,
+// worktree.set, worktree.show) and six arrived with the migrated files — the
+// browser navigation command's three 'browser.back'/'forward'/'reload' arms
+// and three '' fallbacks. Checked by diffing the reader's output against the
+// pre-port tree; upstream's own count moved by the same six.
+// 668 since 2026-09-19 (Orca #20915 ported): the three method literals that
+// became operation definitions — one repo.list and two terminal.send — and
+// nothing else, the same three upstream lost (540 → 537 there).
+// 666 since 2026-09-19 (Orca #20954 ported): terminal.send and
+// terminal.clearBuffer are fixed at their operations' definitions instead of
+// spelled in the gesture flush and the menu's clear — the same two upstream
+// lost.
+// 662 since 2026-09-19 (Orca #21083 ported): worktree.activate twice,
+// session.tabs.createTerminal and terminal.setDisplayMode are fixed at their
+// operations' definitions — the same four upstream lost (535 → 531 there).
 // 678 since 2026-09-19 (later): the 'terminal' literal in applySessionTabs' leftover filter.
+// 663 on the group D merge, 2026-09-19: main's 678 less the fifteen method
+// literals the operation modules took (671 → 662 above, counted from 677),
+// plus main's one leftover-filter literal. Re-pinned from the test's output.
+// 664 since 2026-09-19 (Orca e7da72c3d ported, merged after group D): the
+// 'agentStatus' key useMobileSessionAttachments reads the tab's agent through,
+// so an image pastes as the agent's own attachment form or as an @file mention.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '055e02f1f0b9f35f24c25073d4c56626fc226fa6b17972e2279e98ed604c72c2'
+  '9a56fab725a1a6d9ba0e1a7ecec7654977c398e822b02c2a540e104624602a6a'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -749,10 +827,11 @@ describe('mobile session route extraction parity', () => {
     // MobileSessionActiveContent asks the mobile RPC gate about.
     // 678 since 2026-09-19 (later): the 'terminal' tab-type literal in
     // applySessionTabs' leftover filter (see HEAD_CALLBACK_BODY_SHA256).
-    // 679 since 2026-09-19 (upstream e7da72c3d): the 'agentStatus' key
+    // 663 on the group D merge: see HEAD_RUNTIME_STRING_SHA256.
+    // 664 since 2026-09-19 (upstream e7da72c3d): the 'agentStatus' key
     // useMobileSessionAttachments reads the tab's agent through, so an image
     // pastes as the agent's own attachment form or as an @file mention.
-    expect(strings).toHaveLength(679)
+    expect(strings).toHaveLength(664)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

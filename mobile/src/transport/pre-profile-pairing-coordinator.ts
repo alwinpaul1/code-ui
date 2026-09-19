@@ -1,15 +1,16 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  MobileRelayEndpoint
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
-import { requireRpcResultOrThrowCodedError } from './rpc-acceptance-policies'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -217,7 +218,7 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
-  const provision = await winner.client.sendRequest('pairing.provisionRelay', {
+  const provision = await relayCredentialProvision.request(winner.client, {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
@@ -232,16 +233,11 @@ async function runPairing(
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
   }
-  const installed = DeviceCredentialInstalledSchema.parse(
-    requireRpcResultOrThrowCodedError(provision)
-  )
-  const endpoints = PairingGetEndpointsResultSchema.parse(
-    requireRpcResultOrThrowCodedError(
-      await winner.client.sendRequest('pairing.getEndpoints', {
-        installReqId: journal.metadata.installReqId
-      })
-    )
-  )
+  const installed = relayCredentialProvision.interpret(provision)
+  const endpointsReply = await relayPairingEndpointsRead.request(winner.client, {
+    installReqId: journal.metadata.installReqId
+  })
+  const endpoints = relayPairingEndpointsRead.interpret(endpointsReply)
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
     throw new Error('desktop returned no relay endpoint after credential install')

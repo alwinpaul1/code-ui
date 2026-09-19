@@ -1,5 +1,6 @@
 import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import { useCallback, type RefObject } from 'react'
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
@@ -161,7 +162,7 @@ export function useMobileTerminalPaste({
       ) {
         return
       }
-      await currentClient.sendRequest('terminal.send', {
+      await terminalInputSend.request(currentClient, {
         terminal: targetHandle,
         text: payload,
         enter: false,

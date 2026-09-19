@@ -26,13 +26,14 @@ function asPinned(): Map<string, PageClosureObservation> {
 }
 
 describe('the C5 page closure', () => {
-  // Code UI: 17 families / 89 goldens over this fork's corpus (upstream's census is 27 / 134; the
-  // ten families it has and this fork does not are named in the two pins' own comments).
-  it('is the census the design named: 17 families, 89 goldens', () => {
+  // Code UI: 25 families / 125 goldens over this fork's corpus since the Group D merge of
+  // 2026-09-19 (17 / 89 before it; upstream's census is 27 / 134, and the two families it has
+  // and this fork does not are named in the C1 pin's own comment).
+  it('is the census the design named: 25 families, 125 goldens', () => {
     const goldens = Object.values(C5_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C5_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 17,
-      goldens: 89
+      families: 25,
+      goldens: 125
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })
@@ -47,11 +48,14 @@ describe('the C5 page closure', () => {
    * become `result-absent-settlement`. The counts are what showed it.
    */
   it('pins how many goldens land in each class, which a per-id walk cannot see move', () => {
-    // Code UI: this fork's totals; upstream's are 72 / 50 / 7 / 3 / 2 over 134.
+    // Code UI: this fork's totals (2026-09-19, Group D merge); upstream's are 72 / 50 / 7 / 3 / 2
+    // over 134.
     expect(pageClosureTotals(C5_PAGE_CLOSURE)).toEqual({
-      identical: 47,
-      'result-absent-settlement': 35,
-      'params-undefined': 7
+      identical: 66,
+      'result-absent-settlement': 47,
+      'params-undefined': 7,
+      'result-absent-stream-release': 3,
+      'write-ordinal': 2
     })
   })
 
@@ -62,14 +66,20 @@ describe('the C5 page closure', () => {
     for (const [family, pinned] of Object.entries(C1_PAGE_CLOSURE)) {
       expect(C5_PAGE_CLOSURE[family], family).toEqual(pinned)
     }
-    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(16)
+    expect(Object.keys(C1_PAGE_CLOSURE).length).toBe(20)
   })
 
-  // Code UI: upstream adds five (four `aiVault.*` recorder families this fork does not carry yet,
-  // plus this one); here the agent-history page reaches exactly one family C1 does not.
-  it('adds one family and nothing else: the resume metadata read', () => {
+  // Code UI: the four `aiVault.*` recorder families arrived with Group D (Orca #20702), so the
+  // five are upstream's five since the 2026-09-19 merge.
+  it('adds five families and nothing else, all of them AI Vault', () => {
     const added = Object.keys(C5_PAGE_CLOSURE).filter((family) => !(family in C1_PAGE_CLOSURE))
-    expect(added.sort()).toEqual(['settings.resume-metadata'])
+    expect(added.sort()).toEqual([
+      'aiVault.history',
+      'aiVault.history-screen',
+      'aiVault.resume-launch',
+      'aiVault.resume-preparation',
+      'settings.resume-metadata'
+    ])
   })
 
   it('has a byte-identical golden in every family it adds, unlike C2 s five', () => {
@@ -108,8 +118,9 @@ describe('the C5 page closure', () => {
 
   it('excludes a closure golden only into a class that has a reason', () => {
     const exclusions = pageClosureExclusions(C5_PAGE_CLOSURE)
-    // Code UI: 42 over this fork's corpus, where upstream's line reads 62.
-    expect(exclusions.length).toBe(42)
+    // Code UI: 59 over this fork's corpus (2026-09-19, Group D merge), where upstream's line
+    // reads 62.
+    expect(exclusions.length).toBe(59)
     expect(exclusions.filter(([, name]) => BRIDGED_PARITY_EXCLUSIONS[name] === undefined)).toEqual(
       []
     )

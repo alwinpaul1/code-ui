@@ -1,0 +1,619 @@
+{
+  "operation": "terminal.accessory-raw-send",
+  "family": "terminal.raw-input",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
+  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "c6d4f0a13aee6a580997a1c99f35ffbae9b8ac02b1a30d61cbc8391429453467",
+  "scenarioSha256": "a8c91b2c7a2a4f85a0d2d599ae1a3cf1174653aae34a0e0fe20d3c640a485e14",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "11a49f853eb8": {
+      "accepted": true
+    },
+    "156c7440873c": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "19ea208dd914": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "1eb6f8a79c12": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3e83e206433b": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "49c62bc1232e": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "57431c60d7f8": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "5b40eb0575f8": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "727ebf3d264d": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "84e5ca07cb7a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": true
+    },
+    "864d3fb81a3f": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "af6c09771771": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "b41bc69ec943": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "df5624c0a923": {
+      "name": "terminal.send#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "ls"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "f043bb99cc1d": {
+      "accepted": false
+    }
+  },
+  "recording": {
+    "scenario": "matrix-terminal.raw-input-terminal.send-1",
+    "checkpoints": [
+      {
+        "id": "terminal-raw-input-accepted.normal:accepted",
+        "observation": {
+          "sender": ["49c62bc1232e"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "84e5ca07cb7a"
+          },
+          "state": "11a49f853eb8",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.result-absent:accepted",
+        "observation": {
+          "sender": ["af6c09771771"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.result-null:accepted",
+        "observation": {
+          "sender": ["b41bc69ec943"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.inner-ok-missing:accepted",
+        "observation": {
+          "sender": ["57431c60d7f8"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.inner-false-string-error:accepted",
+        "observation": {
+          "sender": ["df5624c0a923"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.inner-false-object-error:accepted",
+        "observation": {
+          "sender": ["19ea208dd914"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.outer-refused:accepted",
+        "observation": {
+          "sender": ["1eb6f8a79c12"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.outer-refused-no-message:accepted",
+        "observation": {
+          "sender": ["156c7440873c"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.method-not-found:accepted",
+        "observation": {
+          "sender": ["3e83e206433b"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.transport-rejection:accepted",
+        "observation": {
+          "sender": ["5b40eb0575f8"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      },
+      {
+        "id": "terminal-raw-input-accepted.transport-rejection-no-message:accepted",
+        "observation": {
+          "sender": ["864d3fb81a3f"],
+          "payloads": ["727ebf3d264d"],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

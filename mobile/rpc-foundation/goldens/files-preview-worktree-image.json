@@ -3,9 +3,9 @@
   "family": "files.preview-load",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "0ffaffb472b663e08a42317d799a2a000211dda5b127fb21cc64f04f73800130",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3acec737cb08": {
+    "70f782fa6ef2": {
       "name": "files.readPreview#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}"
     },
     "7659b8b575da": {
@@ -24,18 +25,9 @@
         "status": "ready"
       }
     },
-    "eee847a9d90d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "dataUri": "data:image/png;base64,aGk=",
-        "kind": "image",
-        "status": "ready"
-      }
-    },
-    "f6564bdb4e19": {
+    "a568af21f540": {
       "name": "files.readPreview#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -70,6 +62,16 @@
           }
         }
       }
+    },
+    "eee847a9d90d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      }
     }
   },
   "recording": {
@@ -78,8 +80,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["f6564bdb4e19"],
-          "payloads": ["3acec737cb08"],
+          "sender": ["a568af21f540"],
+          "payloads": ["70f782fa6ef2"],
           "settlements": {
             "load": "eee847a9d90d"
           },

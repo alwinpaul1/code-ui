@@ -117,7 +117,7 @@ export type MobileNativeChatViewProps = {
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   agentMode?: TerminalAgentMode | null
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
-  dictationMode?: 'toggle' | 'hold'
+  dictationMode?: string
   onMicPressIn?: () => void
   onMicPressOut?: () => void
   inputLockReason?: MobileNativeChatInputLockReason | null

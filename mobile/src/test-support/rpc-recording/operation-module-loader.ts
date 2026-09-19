@@ -1,10 +1,9 @@
 import { compileFunction } from 'node:vm'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import * as React from 'react'
-import { sha256 } from '@noble/hashes/sha256'
 import ts from 'typescript'
-import * as zod from 'zod'
+import { nativeMountingSubstitutes } from './native-mounting-substitutes'
+import { observeSalvagedReads } from './salvage-observation'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -24,30 +23,16 @@ export type OperationExposure = readonly [suffix: string, source: string]
 // reads as a definite failure inside the mounted operation. Same reason React is shared.
 const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
 
-/**
- * The non-relative imports a mounted operation may resolve, and what it gets: the real library in
- * every case, because each is pure. `zod` is what the checked reply readers parse with — and a
- * checked reader builds its schema at module load (`z.custom(...)` in
- * mobile-workspace-create-operations.ts since #21137), so a refusing proxy would fail the mount
- * before any request is sent — and `@noble/hashes/sha256` is the same pure-JS digest the bundle
- * fetch would run on a device
- * (Orca #21374). Everything else non-relative stays a refusing proxy, which is what keeps an
- * adapter from silently mounting a device API. (Code UI, 2026-09-19: the two-entry form of
- * upstream's `native-mounting-substitutes.ts`, which arrives whole with Orca #20667.)
- */
-const NATIVE_MOUNTING_SUBSTITUTES: ReadonlyMap<string, unknown> = new Map<string, unknown>([
-  ['react', React],
-  ['zod', zod],
-  ['@noble/hashes/sha256', { sha256 }]
-])
-
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
 export function operationModuleLoader(
   root: string,
   mutation?: OperationMutation,
-  exposures: readonly OperationExposure[] = []
+  exposures: readonly OperationExposure[] = [],
+  /** What this recording declared about its device, overlaid on the refusing defaults. */
+  declared: ReadonlyMap<string, unknown> = new Map()
 ) {
   const cache = new Map<string, OperationModule>()
+  const natives = new Map([...nativeMountingSubstitutes(), ...declared])
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
   function pathFor(base: string): string {
@@ -60,7 +45,7 @@ export function operationModuleLoader(
     return file
   }
   function imported(base: string, name: string): unknown {
-    const native = NATIVE_MOUNTING_SUBSTITUTES.get(name)
+    const native = natives.get(name)
     if (native !== undefined) {
       return native
     }
@@ -71,8 +56,15 @@ export function operationModuleLoader(
       return new Proxy(
         {},
         {
-          get: () => {
-            throw new Error(`Unspecified native mounting dependency: ${name}`)
+          // Answering `__esModule` binds this trap as the module itself in every import form; the
+          // rule is in the `__esModule` paragraph of `native-module-traps.ts`. The refusal then
+          // lands on the first member the emit reads, which for a default import is `.default`
+          // rather than whichever member the product went on to touch.
+          get: (_target, key) => {
+            if (key === '__esModule') {
+              return true
+            }
+            throw new Error(`Unspecified native mounting dependency: ${name}.${String(key)}`)
           }
         }
       )
@@ -151,12 +143,15 @@ export function operationModuleLoader(
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
         target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.React
+        // Product sources use the automatic runtime and never import React, so a classic
+        // `React.createElement` emit throws `React is not defined` on the first screen render.
+        jsx: ts.JsxEmit.ReactJSX
       }
     }).outputText
     const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
     const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
     evaluate((name: string) => imported(file, name), exports)
+    observeSalvagedReads(file, exports)
     return exports
   }
   return {

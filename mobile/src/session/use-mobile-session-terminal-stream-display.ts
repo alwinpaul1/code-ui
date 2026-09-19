@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { terminalDisplayModeSet } from './mobile-session-write-operations'
 import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 
@@ -62,7 +63,10 @@ export function useMobileSessionTerminalStreamDisplay(
             if (next === 'auto' && !viewportRef.current) {
               await measureViewportOnce(handle)
             }
-            const response = await client.sendRequest('terminal.setDisplayMode', {
+            // The reply body is unread — the server resizes and reports it on the existing
+            // subscription — but CODE UI's floor release retries until the host accepts, so the
+            // verdict is what this returns.
+            const response = await terminalDisplayModeSet.request(client, {
               terminal: handle,
               mode: next,
               // Why: presence-lock take-floor — requesting 'auto' is the explicit "drive at phone dims" gesture.
@@ -72,7 +76,7 @@ export function useMobileSessionTerminalStreamDisplay(
               // Why: late-bind viewport for terminals subscribed before measurement, or auto toggles no-op on a null stored viewport.
               ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
             })
-            return response.ok
+            return terminalDisplayModeSet.interpret(response).accepted
           } catch {
             // Mode change failed — server state unchanged, UI stays in sync.
             return false

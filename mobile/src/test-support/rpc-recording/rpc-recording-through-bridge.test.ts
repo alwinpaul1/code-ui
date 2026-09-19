@@ -49,10 +49,12 @@ import { vitestRecordingScheduler } from './vitest-recording-scheduler'
  * transport, and compared body for body against the committed file.
  *
  * CODE UI: the counts quoted in this header are upstream's, measured over its 787-golden corpus;
- * this fork's own measurement (264 goldens, no `write-ordinal` or stream classes because the
- * recorder here has no subscription lane yet) is the pin in `BRIDGED_PARITY_BASELINE`, and the
- * closures pinned golden by golden in `c1-page-closure.ts` and `c5-page-closure.ts` are this
- * fork's route trees'.
+ * this fork's own measurement is the pin in `BRIDGED_PARITY_BASELINE` (759 goldens since the
+ * Group D merge of 2026-09-19: 384 identical and 327 / 1 / 6 / 33 / 8 in the same five classes,
+ * the recorder now having its subscription lane), and the closures pinned golden by golden in
+ * `c1-page-closure.ts` and `c5-page-closure.ts` are this fork's route trees'. The replay mounts a
+ * scenario's declared device store the way the native run does (Orca #20884), which is what the
+ * five goldens that read one need to send at all.
  *
  * The claim it is built to certify is the one C1 needs before a screen moves to the web: a screen
  * driven through `BridgeRpcClient` observes what it observes on the native client, down to the
@@ -200,8 +202,7 @@ async function replay(
   const named = scenarios.length > 1
   try {
     for (const scenario of scenarios) {
-      // Code UI: no declared-device overlay here — that is Orca #20884's (Group D) mount option.
-      const { adapters } = pilotMountAdapters(root)
+      const { adapters } = pilotMountAdapters(root, { device: scenario })
       const recording = await runRecording(
         scenario,
         adapters[scenario.operation],

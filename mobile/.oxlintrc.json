@@ -387,6 +387,26 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/transport/mobile-relay-reconnect-controller.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +1. Upstream's file sits exactly at the 300-line
+            // default; this fork's `user-send` manual retry (2026-09-10) split
+            // the disconnected-on-resume expression over two lines, and the
+            // `ScheduleTimer` type import from upstream #21416 is the line
+            // that tips it over.
+            "max": 301,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
     }
   ]
 }

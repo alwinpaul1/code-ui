@@ -31,13 +31,18 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   // (the value-import closure of `app/h/_layout.tsx` and `app/h/[hostId]/index.web.tsx` — the web
   // sibling, since the native file mounts the shell and would pull the two `mobileWeb.*` families
   // in — with `.web.*` resolution, matched against each scenario's sites) and pinned from a
-  // measured bridged run over
-  // this fork's 264-golden corpus: 16 families, 79 goldens, 42 byte-identical, 30
-  // `result-absent-settlement`, 7 `params-undefined`. Upstream's table has six more families —
-  // `host-worktree-refresh`, `transport.capability-probe`, `transport.host-status-gates`,
-  // `notifications.push-registration`, `components.new-workspace-repositories`,
-  // `worktree.agent-launch-create` — whose recorder families arrive with Groups B and D of the
-  // 2026-09-19 backlog; they join this pin when their goldens exist here.
+  // measured bridged run. First over this fork's 264-golden corpus: 16 families, 79 goldens, 42
+  // byte-identical, 30 `result-absent-settlement`, 7 `params-undefined`.
+  // Re-derived on the Group D merge (2026-09-19, later) over the 759-golden corpus: 20 families,
+  // 94 goldens, 48 byte-identical, 34 `result-absent-settlement`, 7 `params-undefined`, 3
+  // `result-absent-stream-release`, 2 `write-ordinal`. The four families that joined are the ones
+  // Group D's recorder brought — `host-worktree-refresh`, `transport.host-status-gates`,
+  // `components.new-workspace-repositories`, `worktree.agent-launch-create` (the last with main's
+  // agent.launch create route, Orca #19849) — and two goldens joined existing families
+  // (`settings-repo-metadata-icons`, `worktree-catalog-snapshot-unreadable`). Upstream's table has
+  // two more: `notifications.push-registration` (no push feature here) and
+  // `transport.capability-probe`, which reaches upstream's closure only through its push modules
+  // and so is outside this fork's.
   'settings.repo-metadata': {
     'matrix-settings.repo-metadata-host.platform-1': 'result-absent-settlement',
     'matrix-settings.repo-metadata-repo.list-1': 'result-absent-settlement',
@@ -46,6 +51,7 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
     'schedules-settings-repo-metadata-fulfilled': 'identical',
     'settings-repo-cache-expiry': 'identical',
     'settings-repo-metadata-fulfilled': 'identical',
+    'settings-repo-metadata-icons': 'identical',
     'settings-repo-metadata-refuse-after-data': 'identical',
     'settings-repo-metadata-refused': 'identical',
     'settings-repo-metadata-single-host': 'identical',
@@ -143,10 +149,32 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'worktree.catalog-snapshot': {
     'matrix-worktree.catalog-snapshot-worktree.ps-1': 'result-absent-settlement',
-    'worktree-catalog-snapshot': 'identical'
+    'worktree-catalog-snapshot': 'identical',
+    'worktree-catalog-snapshot-unreadable': 'result-absent-settlement'
   },
   'worktree.retired-names': {
     'matrix-worktree.retired-names-worktree.listretirednames-1': 'result-absent-settlement',
     'worktree-retired-names': 'identical'
+  },
+  'worktree.agent-launch-create': {
+    'matrix-worktree.agent-launch-create-agent.launch-1': 'result-absent-settlement',
+    'tw-create-retry-agent-launched': 'identical'
+  },
+  'transport.host-status-gates': {
+    'matrix-transport.host-status-gates-status.get-1': 'result-absent-settlement',
+    'transport-host-status-gates-drop-keeps-capabilities': 'identical',
+    'transport-host-status-gates-ready': 'identical',
+    'transport-host-status-gates-refused-degrades': 'identical'
+  },
+  'components.new-workspace-repositories': {
+    'matrix-components.new-workspace-repositories-repo.list-1': 'result-absent-settlement',
+    'new-workspace-repositories-fulfilled': 'identical'
+  },
+  'host-worktree-refresh': {
+    'host-worktree-refresh-stream': 'write-ordinal',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1': 'write-ordinal'
   }
 }

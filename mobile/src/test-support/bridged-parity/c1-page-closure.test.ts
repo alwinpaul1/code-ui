@@ -24,13 +24,14 @@ function asPinned(): Map<string, PageClosureObservation> {
 }
 
 describe('the C1 page closure', () => {
-  // Code UI: 16 families / 79 goldens over this fork's corpus (upstream's census is 22 / 103; the
-  // six families it has and this fork does not are named in the pin's own comment).
-  it('is the census the design named: 16 families, 79 goldens', () => {
+  // Code UI: 20 families / 94 goldens over this fork's corpus since the Group D merge of
+  // 2026-09-19 (16 / 79 before it; upstream's census is 22 / 103, and the two families it has
+  // and this fork does not are named in the pin's own comment).
+  it('is the census the design named: 20 families, 94 goldens', () => {
     const goldens = Object.values(C1_PAGE_CLOSURE).flatMap((family) => Object.keys(family))
     expect({ families: Object.keys(C1_PAGE_CLOSURE).length, goldens: goldens.length }).toEqual({
-      families: 16,
-      goldens: 79
+      families: 20,
+      goldens: 94
     })
     expect(new Set(goldens).size).toBe(goldens.length)
   })

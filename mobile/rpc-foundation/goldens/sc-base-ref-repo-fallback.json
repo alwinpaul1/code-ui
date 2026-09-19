@@ -3,9 +3,9 @@
   "family": "git.base-ref-chain",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "97a8b8f5b9a7c7467745666becee07f5dfc57fb283d4e80dcbe7941509177598",
   "platform": "darwin",
@@ -13,18 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "594101d24d72": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "74dda17aff6f": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": "origin/rel"
-    },
-    "b2161cb8d5b5": {
+    "0fa683226c0a": {
       "name": "worktree.show#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -57,15 +48,28 @@
         }
       }
     },
-    "cec763c8abc6": {
-      "name": "worktree.show#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    "74dda17aff6f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "origin/rel"
+    },
+    "d64700b9de3b": {
+      "name": "repo.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
     "dc11f1ff4a3d": {
       "baseRef": "origin/rel"
     },
-    "f6f2870a1e9d": {
+    "dfcd2e1792cb": {
+      "name": "worktree.show#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "dff5c38c64e4": {
       "name": "repo.list#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -109,8 +113,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["b2161cb8d5b5", "f6f2870a1e9d"],
-          "payloads": ["cec763c8abc6", "594101d24d72"],
+          "sender": ["0fa683226c0a", "dff5c38c64e4"],
+          "payloads": ["dfcd2e1792cb", "d64700b9de3b"],
           "settlements": {
             "resolve": "74dda17aff6f"
           },

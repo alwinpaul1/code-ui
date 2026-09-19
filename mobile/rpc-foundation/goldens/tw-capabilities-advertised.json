@@ -3,10 +3,10 @@
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "9d79bcfd6957d11d5ce8c3296f1038a3cfab81eedad7f990b44071104dfd0f91",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -25,27 +25,9 @@
         }
       }
     },
-    "1e5b32902af7": {
+    "216adda2100c": {
       "name": "status.get#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "3a7704ccec26": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "agentLaunch": false,
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 45000
-        }
-      }
-    },
-    "5242fad3532f": {
-      "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -80,6 +62,26 @@
           }
         }
       }
+    },
+    "3a7704ccec26": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 45000
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -88,8 +90,8 @@
       {
         "id": "probed",
         "observation": {
-          "sender": ["5242fad3532f"],
-          "payloads": ["1e5b32902af7"],
+          "sender": ["216adda2100c"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
             "probe": "3a7704ccec26"
           },

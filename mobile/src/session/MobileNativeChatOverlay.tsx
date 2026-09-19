@@ -55,7 +55,7 @@ type Props = {
   /** Steps the terminal to a permission mode (the mode sheet's pick). */
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
-  dictationMode: 'toggle' | 'hold'
+  dictationMode: string | undefined
   onMicPressIn: () => void
   onMicPressOut: () => void
   inputLockReason: MobileNativeChatInputLockReason | null

@@ -3,9 +3,9 @@
   "family": "mobileWeb.bundle-manifest",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
   "scenarioSha256": "5e9f4e6878be3f534288a90f7ccabc9cfe4e968aa29da372a98c3064d8e4d89e",
   "platform": "darwin",
@@ -13,8 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "15e50441468d": {
+    "23871e324a00": {
       "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -69,6 +70,11 @@
         }
       }
     },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
     "9ca9b2d0fc07": {
       "outcome": {
         "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
@@ -107,10 +113,6 @@
           "totalBytes": 37
         }
       }
-    },
-    "ebbd26fd91a8": {
-      "name": "mobileWeb.bundle.manifest#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
     }
   },
   "recording": {
@@ -119,8 +121,8 @@
       {
         "id": "manifest-read",
         "observation": {
-          "sender": ["15e50441468d"],
-          "payloads": ["ebbd26fd91a8"],
+          "sender": ["23871e324a00"],
+          "payloads": ["775bfa42070b"],
           "settlements": {
             "read": "9d87b3b6bd74"
           },

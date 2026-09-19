@@ -30,18 +30,18 @@ export type RpcClient = UnvalidatedRpcRequestPort & {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   getLastInboundAt?: () => number | null
-  /**
-   * The logical authority epoch, advanced by `StableLogicalRpcClient.migrateTo`. Read-only and
-   * optional so a holder of a bare `RpcClient` can scope cached work to it without every
-   * implementation growing a counter it does not have.
-   */
-  getGeneration?: () => number
   /** A liveness probe is out and unanswered; the header must not claim connected. */
   isLivenessProbing?: () => boolean
   onLivenessProbingChange?: (listener: (probing: boolean) => void) => () => void
   /** Foregrounded, the liveness leash is shorter: a dead socket is noticed in
    *  seconds, not the 38 s the background economy tolerates. */
   setLivenessForeground?: (foreground: boolean) => void
+  /**
+   * The logical authority epoch, advanced by `StableLogicalRpcClient.migrateTo`. Read-only and
+   * optional so a holder of a bare `RpcClient` can scope cached work to it without every
+   * implementation growing a counter it does not have.
+   */
+  getGeneration?: () => number
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   /**

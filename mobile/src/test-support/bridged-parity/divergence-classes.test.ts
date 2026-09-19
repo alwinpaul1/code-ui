@@ -197,11 +197,11 @@ describe('what the pin still admits', () => {
     // shape anywhere — so a real refusal in a stream golden lands in an excluded class. Let one
     // golden leave as it arrives and the count, the sum and the `identical` pin all hold.
     expect(bridgedParityMembershipDrift(asPinned())).toEqual([])
-    // Code UI: upstream trades a `write-ordinal` member; that class is empty over this corpus, so
-    // the trade is made in the one class this fork names.
-    const pinned = BRIDGED_PARITY_MEMBERS['params-undefined'] ?? []
+    // Code UI, 2026-09-19: the trade is made in `write-ordinal` again, as upstream makes it — the
+    // class was empty here until the Group D merge brought the subscription lane.
+    const pinned = BRIDGED_PARITY_MEMBERS['write-ordinal'] ?? []
     const traded = asPinned()
-    traded.set('params-undefined', [...pinned.slice(1), 'matrix-regressed-golden-1-1'])
+    traded.set('write-ordinal', [...pinned.slice(1), 'matrix-regressed-golden-1-1'])
     const drift = bridgedParityMembershipDrift(traded)
     expect(drift.length).toBe(1)
     expect(drift[0]).toContain('matrix-regressed-golden-1-1')
@@ -252,8 +252,9 @@ describe('what the pin still admits', () => {
     expect(drift.join('\n')).toContain(
       `identical: pinned ${tally.identical}, ran ${moved.identical}`
     )
-    // Code UI: 111 over this fork's corpus, where upstream's line reads 341.
-    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 111, ran 110')
+    // Code UI: 327 over this fork's corpus (2026-09-19, Group D merge), where upstream's line
+    // reads 341.
+    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 327, ran 326')
   })
 
   it('goes red on a class that grew and on the corpus losing a golden', () => {

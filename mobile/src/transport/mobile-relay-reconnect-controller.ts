@@ -12,6 +12,7 @@ import type { RelayHostReachability } from './relay-host-reachability'
 import { RelayRecoveryEvidence, type RelayRecoveryReporter } from './relay-recovery-evidence'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 import type { ConnectionState, ForegroundNudgeReason } from './types'
 
 type RelayCredentialLease = { expiresAt: number; version: number }
@@ -19,7 +20,7 @@ type RelayCredentialLease = { expiresAt: number; version: number }
 export type RelayReconnectDependencies = {
   now: () => number
   randomBytes: (length: number) => Uint8Array
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 

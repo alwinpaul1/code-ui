@@ -3,18 +3,31 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "a99bb80a5826af1df8d74114fcc5654aa42c9208747b512cea9bd5ca65b64ccb",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "3b42c7d5a39b": {
+    "06b14e4985de": {
       "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "aa5c4cf32f96": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -46,17 +59,6 @@
         }
       }
     },
-    "3f946ad0279c": {
-      "outcome": "uncreated"
-    },
-    "43a221c63628": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -82,8 +84,8 @@
       {
         "id": "waiting-for-reconnect",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["43a221c63628"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "9270aeb7d9c6",
             "drop": "eb79a9b3682a"
@@ -95,8 +97,8 @@
       {
         "id": "replay-window-abandoned",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["43a221c63628"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "f0d75436c3f2",
             "drop": "eb79a9b3682a"

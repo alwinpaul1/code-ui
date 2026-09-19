@@ -3,9 +3,9 @@
   "family": "files.tab-doc",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
   "scenarioSha256": "c4db2424b8a35fd97b3fea00b4dd91a3c8d50c6fb73795811ef5402e3d14f8df",
   "platform": "darwin",
@@ -13,47 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02ea3f503180": {
-      "name": "files.read#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
-    },
-    "0aa81de503dc": {
+    "05ed9af7a4f4": {
       "name": "git.diff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "docs/readme.md",
-            "staged": true,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "0ddde941c38a": {
-      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -88,209 +50,9 @@
         }
       }
     },
-    "0fa28155e34e": {
+    "096b0c48dd10": {
       "name": "git.diff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "docs/readme.md",
-            "staged": true,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "323bf6059754": {
-      "name": "files.readPreview#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "files.readPreview"
-        },
-        {
-          "name": "params",
-          "value": {
-            "relativePath": "docs/logo.png",
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "content": "aGk=",
-            "isImage": true,
-            "mimeType": "image/png"
-          }
-        }
-      }
-    },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "3a9e5c87d18b": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'kind')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "3eca7222b2d0": {
-      "name": "git.diff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "docs/readme.md",
-            "staged": true,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "3f8bf3069e3d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "byteLength": 8,
-        "content": "# readme",
-        "kind": "markdown",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "514342d80a4a": {
-      "image": {
-        "dataUri": "data:image/png;base64,aGk=",
-        "kind": "image",
-        "status": "ready"
-      },
-      "text": {
-        "byteLength": 8,
-        "content": "# readme",
-        "kind": "markdown",
-        "status": "ready",
-        "truncated": false
-      }
-    },
-    "5225d2d0d430": {
-      "name": "git.diff#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "git.diff"
-        },
-        {
-          "name": "params",
-          "value": {
-            "filePath": "docs/readme.md",
-            "staged": true,
-            "worktree": "id:workspace-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "559c313a79f9": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'kind')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "5c610ebe58ed": {
-      "name": "files.readPreview#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}"
-    },
-    "6f5e5f7888b7": {
-      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -319,14 +81,16 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "kind": "text",
+            "modifiedContent": "b\n",
+            "originalContent": "a\n"
           }
         }
       }
     },
-    "9babe9503a83": {
+    "1cf4496bc8c0": {
       "name": "files.read#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -361,8 +125,173 @@
         }
       }
     },
-    "9cf9915b1ff3": {
+    "1f1a0d8f6723": {
+      "name": "files.readPreview#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.readPreview\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/logo.png\"}}"
+    },
+    "2c374ec9bbd8": {
       "name": "git.diff#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "docs/readme.md",
+            "staged": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "3f8bf3069e3d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "514342d80a4a": {
+      "image": {
+        "dataUri": "data:image/png;base64,aGk=",
+        "kind": "image",
+        "status": "ready"
+      },
+      "text": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "6b721f327587": {
+      "name": "git.diff#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "docs/readme.md",
+            "staged": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "8423ff93fda2": {
+      "name": "files.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
+    },
+    "8692c1e96521": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "RpcIncompatibleReplyError",
+        "message": "The host sent a reply this app could not read (git.diff)",
+        "isRpcDeliveryUnknown": false,
+        "code": "incompatible_reply"
+      }
+    },
+    "96b863d005b1": {
+      "name": "files.readPreview#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readPreview"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/logo.png",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "content": "aGk=",
+            "isImage": true,
+            "mimeType": "image/png"
+          }
+        }
+      }
+    },
+    "9ae75eb007dd": {
+      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -389,7 +318,7 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
         }
       }
@@ -404,8 +333,9 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "af88d9765fd0": {
+    "b1ee02279043": {
       "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -434,7 +364,10 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "refused"
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
           }
         }
       }
@@ -480,16 +413,6 @@
         "truncated": false
       }
     },
-    "c38abcaf69dd": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "binary_file",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "c7584e82c72f": {
       "status": "rejected",
       "startedAt": 0,
@@ -500,8 +423,14 @@
         "isRpcDeliveryUnknown": true
       }
     },
-    "c8fbe8972330": {
+    "ca069263339b": {
       "name": "git.diff#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"docs/readme.md\",\"staged\":true}}"
+    },
+    "cb8d010cfdf0": {
+      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -530,15 +459,86 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "kind": "text",
-            "modifiedContent": "b\n",
-            "originalContent": "a\n"
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "e56bb4eec9ad": {
+    "cc0a7a7e3572": {
       "name": "git.diff#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "docs/readme.md",
+            "staged": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d64fc7efe785": {
+      "name": "git.diff#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.diff"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filePath": "docs/readme.md",
+            "staged": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "df4fd008761f": {
+      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -565,7 +565,10 @@
         "settledAt": 0,
         "value": {
           "id": "frame-3",
-          "ok": true
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
         }
       }
     },
@@ -579,22 +582,9 @@
         "status": "ready"
       }
     },
-    "f3b516f62081": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "fad4ca11a316": {
+    "f2def165f6eb": {
       "name": "git.diff#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"git.diff\",\"params\":{\"worktree\":\"id:workspace-1\",\"filePath\":\"docs/readme.md\",\"staged\":true}}"
-    },
-    "fdb82a72967a": {
-      "name": "git.diff#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -623,12 +613,19 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
+            "error": "refused"
           }
         }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
       }
     },
     "ffe1c534d459": {
@@ -660,8 +657,8 @@
       {
         "id": "files-tab-doc-shapes.normal:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "c8fbe8972330"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "096b0c48dd10"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
@@ -674,12 +671,12 @@
       {
         "id": "files-tab-doc-shapes.result-absent:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "e56bb4eec9ad"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "6b721f327587"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
-            "diff": "3a9e5c87d18b"
+            "diff": "8692c1e96521"
           },
           "state": "514342d80a4a",
           "effects": []
@@ -688,12 +685,12 @@
       {
         "id": "files-tab-doc-shapes.result-null:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "0aa81de503dc"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "df4fd008761f"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
-            "diff": "559c313a79f9"
+            "diff": "8692c1e96521"
           },
           "state": "514342d80a4a",
           "effects": []
@@ -702,12 +699,12 @@
       {
         "id": "files-tab-doc-shapes.inner-ok-missing:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "af88d9765fd0"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "f2def165f6eb"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
-            "diff": "c38abcaf69dd"
+            "diff": "8692c1e96521"
           },
           "state": "514342d80a4a",
           "effects": []
@@ -716,12 +713,12 @@
       {
         "id": "files-tab-doc-shapes.inner-false-string-error:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "6f5e5f7888b7"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "cb8d010cfdf0"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
-            "diff": "c38abcaf69dd"
+            "diff": "8692c1e96521"
           },
           "state": "514342d80a4a",
           "effects": []
@@ -730,12 +727,12 @@
       {
         "id": "files-tab-doc-shapes.inner-false-object-error:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "fdb82a72967a"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "b1ee02279043"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
-            "diff": "c38abcaf69dd"
+            "diff": "8692c1e96521"
           },
           "state": "514342d80a4a",
           "effects": []
@@ -744,8 +741,8 @@
       {
         "id": "files-tab-doc-shapes.outer-refused:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "0fa28155e34e"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "2c374ec9bbd8"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
@@ -758,8 +755,8 @@
       {
         "id": "files-tab-doc-shapes.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "3eca7222b2d0"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "d64fc7efe785"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
@@ -772,8 +769,8 @@
       {
         "id": "files-tab-doc-shapes.method-not-found:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "0ddde941c38a"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "05ed9af7a4f4"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
@@ -786,8 +783,8 @@
       {
         "id": "files-tab-doc-shapes.transport-rejection:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "9cf9915b1ff3"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "cc0a7a7e3572"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",
@@ -800,8 +797,8 @@
       {
         "id": "files-tab-doc-shapes.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["9babe9503a83", "323bf6059754", "5225d2d0d430"],
-          "payloads": ["02ea3f503180", "5c610ebe58ed", "fad4ca11a316"],
+          "sender": ["1cf4496bc8c0", "96b863d005b1", "9ae75eb007dd"],
+          "payloads": ["8423ff93fda2", "1f1a0d8f6723", "ca069263339b"],
           "settlements": {
             "text": "3f8bf3069e3d",
             "image": "eee847a9d90d",

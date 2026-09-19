@@ -1,0 +1,43 @@
+{
+  "operation": "terminal.query-reply",
+  "family": "terminal.query-reply",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
+  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "c6d4f0a13aee6a580997a1c99f35ffbae9b8ac02b1a30d61cbc8391429453467",
+  "scenarioSha256": "ad03596f31eeccc5e9eb7e5061b1af705f9af249f76377c8f5ce1a9db257770f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "f043bb99cc1d": {
+      "accepted": false
+    }
+  },
+  "recording": {
+    "scenario": "terminal-query-reply-unsubscribed",
+    "checkpoints": [
+      {
+        "id": "dropped",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "send": "7ed3d39f0607"
+          },
+          "state": "f043bb99cc1d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

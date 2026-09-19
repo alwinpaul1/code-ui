@@ -1,12 +1,12 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { agentImagePasteWrites } from '../../../src/shared/agent-image-paste'
 import { buildMobileImagePastePayload } from './mobile-clipboard-image'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   openMobileNativeChatSendBudget
 } from './mobile-native-chat-send'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { splitAgentTuiClearWrites } from './agent-tui-clear-write-chunks'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
+import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
 // Give the agent TUI a beat to register each bracketed image paste before the
 // message text + Enter arrive, so the image attaches instead of being treated as
@@ -22,7 +22,7 @@ type MobileTerminalClient = { id: string; type: 'mobile' }
 
 type PasteImagesArgs = {
   readonly agent?: string | null
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileNativeChatRpcSender
   readonly terminal: string
   readonly deviceToken: string | null
   readonly imagePaths: readonly string[]
@@ -77,8 +77,8 @@ export async function pasteMobileNativeChatImagePaths({
     if (remainingMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
       return false
     }
-    const response = await client.sendRequest(
-      'terminal.send',
+    const response = await nativeChatTerminalWrite.request(
+      client,
       {
         terminal,
         text,
@@ -89,7 +89,7 @@ export async function pasteMobileNativeChatImagePaths({
       // clock here would let one write outlast the whole sequence's ceiling.
       { timeoutMs: remainingMs, budgetSpansConnect: true }
     )
-    if (!isTerminalSendRpcAccepted(response)) {
+    if (nativeChatTerminalWrite.interpret(response) !== true) {
       return false
     }
   }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { HostStatusReply } from './host-status-reply-schema'
-import type { ConnectionState, RpcSuccess } from './types'
+import type { ConnectionState } from './types'
+import { hostStatusProbe, readHostStatusGates } from './host-status-probe-operations'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
-import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
+import type { HostStatusReply } from './host-status-reply-schema'
 import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
 
 export type HostStatusGates = {
@@ -15,13 +15,13 @@ export type HostStatusGates = {
    *  hook does not own — the mobile web bundle's. Kept as the reply's own fields rather than a
    *  restated shape so a rename upstream is a build error here. */
   hostProtocolWindow: HostProtocolWindow
+  statusPending: boolean
   /** Whether the settled answer came from a status this host actually returned and this client
    *  could decode. Both failure paths below settle the same closed gates an old host with no
    *  capabilities would produce, so without this a caller cannot tell "this desktop does not have
    *  the feature" from "nobody answered" — and the mobile web shell's wall is terminal, so it must
    *  never be shown for the second. */
   statusReadable: boolean
-  statusPending: boolean
 }
 
 // statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
@@ -35,6 +35,7 @@ export type HostProtocolWindow = Pick<
   'protocolVersion' | 'minCompatibleMobileVersion'
 >
 
+const EMPTY_HOST_CAPABILITIES: string[] = []
 // Stable identities: consumers compare gates by reference to decide whether to re-run a step.
 // Both keys stated: the reply schema salvages them as present-and-possibly-undefined, and
 // `evaluateMobileWebBundleCompat` reads an absent number as "oldest host" and "no floor".
@@ -42,7 +43,6 @@ const EMPTY_HOST_PROTOCOL_WINDOW: HostProtocolWindow = {
   protocolVersion: undefined,
   minCompatibleMobileVersion: undefined
 }
-const EMPTY_HOST_CAPABILITIES: string[] = []
 
 // Reads status.get on connect for capabilities, protocol-compat verdict, and the
 // floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
@@ -70,11 +70,12 @@ export function useHostStatusGates(args: {
     }
     void (async () => {
       try {
-        const response = await requestClient.sendRequest('status.get')
+        const reply = await hostStatusProbe.request(requestClient)
         if (cancelled) {
           return
         }
-        if (!response.ok) {
+        const status = readHostStatusGates(reply)
+        if (!status) {
           settle({
             hostCapabilities: [],
             floatingWorkspaceEnabled: false,
@@ -84,9 +85,6 @@ export function useHostStatusGates(args: {
             statusReadable: false
           })
           return
-        }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
-          capabilities?: string[]
         }
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,

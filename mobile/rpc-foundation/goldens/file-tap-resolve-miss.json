@@ -1,0 +1,93 @@
+{
+  "operation": "files.terminal-path-tap",
+  "family": "files.terminal-path-tap",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
+  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
+  "scenarioSha256": "0f76b96408081737b3d630ee837dbb80bcce6670b6acc4f1f7c033a69bd40533",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "3445711170ff": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 10000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "exists": false,
+            "isDirectory": false
+          }
+        }
+      }
+    },
+    "561f3fedeb78": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
+    "c7ce9c8dc60e": {
+      "activeSessionTabId": "tab-source",
+      "failed": 1,
+      "switched": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "file-tap-resolve-miss",
+    "checkpoints": [
+      {
+        "id": "missed",
+        "observation": {
+          "sender": ["3445711170ff"],
+          "payloads": ["561f3fedeb78"],
+          "settlements": {
+            "tap": "eb79a9b3682a"
+          },
+          "state": "c7ce9c8dc60e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

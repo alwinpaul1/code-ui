@@ -9,7 +9,7 @@
  * listed file whose count went up. Both lists only shrink.
  *
  * The owners are permanent — they implement, route or validate the port. The pending list is the
- * migration backlog and shares one reason, stated once here instead of 159 times:
+ * migration backlog and shares one reason, stated once here instead of 31 times:
  * the call site predates the typed contract and still picks its own method string, its own
  * acceptance rule and its own decoding. Replacing one with an RpcOperation deletes its line.
  *
@@ -72,56 +72,53 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
 /** Call sites awaiting migration to a typed operation. Grouped by the feature area that owns them. */
 export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcRequestPortEntry[] = [
   // app/h/[hostId]/ — Expo route screens
+  // Holdout behind two gates. The first is the mount: the screen reads
+  // `expo-router.useFocusEffect` and `react-native.ScrollView`, neither is a substituted member, so
+  // the trap refuses before any effect runs. Substituting exactly those two clears it and exposes
+  // the second gate — the mount effect opens `accounts.subscribe`, and no scenario has been written
+  // for that stream, so `status.get` is the only send driven today and the refresh control and the
+  // account rows carrying `accounts.list` and the three `accounts.select*` methods never exist to be
+  // driven. The runner itself is no longer the blocker: `ScenarioStep` carries `frame`. The two
+  // members are left out here because the engine gains `useFocusEffect` on its own track.
   { file: 'app/h/[hostId]/accounts.tsx', references: 2 },
 
   // app/ — Expo route screens
+  // Holdout: not the screen. It renders to completion under inert reanimated and gesture-handler
+  // substitutes, and then sends nothing: its host list comes from `loadHosts()`, which joins a
+  // device token held in the keychain through expo-secure-store. A scenario can declare the async
+  // store and the notification tray, not a credential, so `loadHosts()` answers with an empty list
+  // and the screen has no client. (Upstream's settings push probe migrated because its screen reads
+  // `loadHostCatalog()`, which keeps a credential-less entry; CODE UI has its own settings screens.)
+  // Line ~193 also reads `ms` off the reply envelope instead of off its result, so the value is
+  // always undefined; that is a product defect with its own fix and re-record, not something this
+  // migration may quietly repair.
   { file: 'app/terminal-settings.tsx', references: 3 },
 
-  // src/agent-history/ — agent history loads
-  { file: 'src/agent-history/MobileAgentSessionHistoryPanel.tsx', references: 6 },
-  { file: 'src/agent-history/use-mobile-agent-history-state.ts', references: 2 },
-
-  // src/browser/ — hosted browser control
-  { file: 'src/browser/use-mobile-browser-commands.ts', references: 5 },
-  { file: 'src/browser/use-mobile-browser-request.ts', references: 1 },
-
   // src/components/ — shared widgets that fetch their own data. The New Workspace drawer's
-  // execution target, setup hook, runtime context and Codex capability probe migrated in step 4:
-  // see new-workspace-operations.ts, codex-reset-credit-capability-operations.ts, and the SSH and
-  // agent-detection operations in tasks/mobile-workspace-source-operations.ts. Two remain, neither
-  // recordable. codex-reset-credit.ts loads under the module loader; its attempt-journal access
-  // throws on async-storage at call time, before the send, and nothing guards it away. The repo
-  // list fails one module further out: it renders use-last-visited-worktree-repo.ts, whose default
-  // import of async-storage is a property read the loader's proxy refuses.
-  { file: 'src/components/codex-reset-credit.ts', references: 3 },
-  { file: 'src/components/use-new-workspace-repositories.ts', references: 1 },
+  // execution target, setup hook, runtime context and Codex capability probe migrated in step 4,
+  // and the Codex reset redeem and the repo list followed once a scenario could declare the device
+  // store both of them read. See new-workspace-operations.ts,
+  // codex-reset-credit-{capability,consume}-operations.ts, the SSH and agent-detection operations
+  // in tasks/mobile-workspace-source-operations.ts, and the repo.list readers the dialog now shares
+  // in session/mobile-session-read-operations.ts. CODE UI: the SSH target labels are this fork's
+  // own and stay on the raw port until the fork records them.
   { file: 'src/components/use-new-workspace-ssh-target-labels.ts', references: 1 },
-
-  // src/dictation/ — dictation session control
-  { file: 'src/dictation/mobile-dictation-setup.ts', references: 10 },
 
   // src/files/ — file read, write and preview. The preview loader, the terminal-artifact grant
   // refresh and save, the session file tab and the mutation-ownership capture migrated in step 4:
   // see mobile-file-preview-operations.ts, mobile-file-tab-doc-operations.ts and
-  // mobile-file-ownership-operations.ts. The explorer panel's two sends sit inline in a React
-  // Native screen, which the recorder cannot mount and so cannot record. CODE UI: the chunked
-  // PDF read and its cache are this fork's own, and stay on the raw port until the fork records
-  // them; the preview loader and the file tab both hand them the same client they send with.
+  // mobile-file-ownership-operations.ts; the explorer panel's directory read and legacy list
+  // followed on screen mounting (mobile-file-explorer-operations.ts). CODE UI: the chunked PDF
+  // read and its cache are this fork's own, and stay on the raw port until the fork records them;
+  // the preview loader and the file tab both hand them the same client they send with.
   { file: 'src/files/mobile-file-chunked-read.ts', references: 2 },
   { file: 'src/files/mobile-pdf-cache.ts', references: 1 },
-  { file: 'src/files/MobileFileExplorerPanel.tsx', references: 2 },
 
-  // src/home/ — home screen host reads. The stats card and both task-provider probes migrated in
-  // step 4 (mobile-home-host-operations.ts, plus the shared task-tooling reads in
-  // tasks/mobile-task-runtime-operations.ts). The accounts read stays: its decoder is re-exported
-  // through a React Native screen module, which no recording can load.
-  { file: 'src/home/mobile-home-host-requests.ts', references: 2 },
+  // src/home/ — home screen host reads. The stats card, both task-provider probes and the accounts
+  // snapshot migrated in step 4 (mobile-home-host-operations.ts, plus the shared task-tooling reads
+  // in tasks/mobile-task-runtime-operations.ts). CODE UI: the account-usage refresh is this fork's
+  // own and stays on the raw port until the fork records it.
   { file: 'src/home/refresh-account-usage.ts', references: 2 },
-
-  // src/hooks/ — cross-screen data hooks
-  { file: 'src/hooks/mobile-dictation-audio-chunk.ts', references: 1 },
-  { file: 'src/hooks/mobile-dictation-desktop-start.ts', references: 4 },
-  { file: 'src/hooks/use-mobile-dictation.ts', references: 4 },
 
   // src/host-controls/ — CODE UI: host control sheet actions
   { file: 'src/host-controls/throwaway-terminal.ts', references: 5 },
@@ -129,74 +126,71 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
 
   // src/host-screen/ — host screen catalog and actions. The repo and label metadata reads, the
   // desktop view-settings mirror and the list's pin, remove and activate mutations migrated in
-  // step 4; see host-screen-operations.ts. What is left sends from inside a React Native screen,
-  // which the recorder cannot mount, plus CODE UI's own pinned-in-groups toggle.
+  // step 4; see host-screen-operations.ts.
+  // Holdout: the last `worktree.sleep` is an `onPress` this file builds for `ActionSheetContent`,
+  // which renders only inside an open `BottomDrawer`. Nothing gates those children — the drawer
+  // mounts on `visible || mounted` and `MountedBottomDrawer` renders them unconditionally inside
+  // its `Modal`. The block is that module's imports: reanimated and gesture-handler, neither of
+  // which has a substitute, so reaching this send means standing in for both engines rather than
+  // pinning a device input. Plus CODE UI's own pinned-in-groups toggle.
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
   { file: 'src/host-screen/use-host-show-pinned-in-groups.ts', references: 2 },
 
-  // src/notifications/ — push registration and delivery
+  // src/notifications/ — push registration and delivery. CODE UI's own push registration already
+  // sends through push-registration-operations.ts (upstream's push feature is not carried).
+  // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and the reconnect
+  // catch-up read (notifications.getMissedSince) sits beside the same subscription. The recorder
+  // can open a stream since step 6, but this fork's desktop notification stream is its own
+  // (upstream's `notifications.desktop-stream` scenarios do not describe it), so both stay on the
+  // raw port until the fork records its stream; see rpc-subscription-inventory.ts.
   { file: 'src/notifications/mobile-notifications.ts', references: 2 },
 
-  // src/session/ — session screen: chat, diff review, PR actions, tabs
+  // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
+  // the diff-review loaders and the rest of the screen migrated in step 4; see
+  // mobile-session-{read,write,launch}-operations.ts, mobile-clipboard-image-operations.ts and
+  // mobile-diff-review-git-operations.ts. The terminal input surface followed: the composed send,
+  // the live keystroke send, the clipboard paste and — in step 6 — the gesture flush all send
+  // through terminal.input-send in terminal/mobile-terminal-operations.ts, the menu's clear goes
+  // through terminal.clear-buffer-or-skip beside it, and the accessory's connection lookup reads
+  // the repo list through the new-tab operation. Step 6 also took the two requests that share an
+  // effect with a subscribe: the header's live title (worktree.show-record-or-skip) and native
+  // chat's older-history page (nativeChat.read-session-page-or-skip), both in
+  // mobile-session-read-operations.ts. Step 6's second migration took the last three hooks that
+  // were listed here as blocked on a WebView-ref substitute: none of them imports the terminal
+  // WebView, and all three sent with no ref at all. The startup effect's two `worktree.activate`
+  // sends now reuse host-screen's `worktreeActivate`, and the New Tab create and the terminal
+  // menu's display-mode toggle go through session.tabs-create-terminal and
+  // terminal.set-display-mode-or-skip in mobile-session-write-operations.ts.
+  // CODE UI: this fork's own session features stay on the raw port until the fork records them —
+  // the agent HUD launch args, the Codex model discovery and picker, document attachments, the
+  // permission and queue-editor sends, host image previews, the draft mirror, skills, the HUD
+  // observation, and the image-attachment test support.
   { file: 'src/session/agent-hud-desktop-launch-args.ts', references: 3 },
   { file: 'src/session/agent-hud-launch-config.ts', references: 2 },
-  { file: 'src/session/ai-vault-resume-launch.ts', references: 3 },
-  { file: 'src/session/ai-vault-resume-preparation.ts', references: 2 },
   { file: 'src/session/codex-model-discovery.ts', references: 1 },
   { file: 'src/session/codex-picker-apply.ts', references: 3 },
-  { file: 'src/session/github-pr-mutations.ts', references: 16 },
-  { file: 'src/session/github-pr-rpc.ts', references: 9 },
-  { file: 'src/session/mobile-clipboard-image.ts', references: 7 },
-  { file: 'src/session/mobile-diff-review-loaders.ts', references: 5 },
   { file: 'src/session/mobile-document-attachment.ts', references: 2 },
-  { file: 'src/session/mobile-file-tap-open.ts', references: 3 },
-  { file: 'src/session/mobile-image-attachment.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-image-attachment.ts', references: 1 },
-  { file: 'src/session/mobile-native-chat-image-send.ts', references: 2 },
   { file: 'src/session/mobile-native-chat-permission-send.ts', references: 1 },
   { file: 'src/session/mobile-native-chat-queue-editor-io.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-send.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-session-option-persistence.ts', references: 1 },
-  { file: 'src/session/mobile-native-chat-stale-input.ts', references: 1 },
-  { file: 'src/session/mobile-new-tab-agent-loader.ts', references: 4 },
-  { file: 'src/session/mobile-session-tab-activation.ts', references: 3 },
-  { file: 'src/session/mobile-session-tabs-stream-health.ts', references: 1 },
-  { file: 'src/session/mobile-structured-agent-session-launch.ts', references: 3 },
+  // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
+  // result type, and five call sites across two hooks pass their own, plus one inside this module's
+  // own mutation wrapper; an operation fixes the method at definition time, so migrating it is a
+  // restructure of those callers rather than of this send.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
-  { file: 'src/session/pr-ai-triage-launch.ts', references: 3 },
   { file: 'src/session/use-host-image-previews.ts', references: 2 },
-  { file: 'src/session/use-live-worktree-name.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-comment-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-git-actions.ts', references: 2 },
-  { file: 'src/session/use-mobile-diff-review-interactions.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-send-actions.ts', references: 3 },
-  { file: 'src/session/use-mobile-file-tap-handlers.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-draft-mirror.ts', references: 1 },
-  { file: 'src/session/use-mobile-native-chat-file-search.ts', references: 2 },
   { file: 'src/session/use-mobile-native-chat-image-attachments.test-support.ts', references: 2 },
-  { file: 'src/session/use-mobile-native-chat-readability.ts', references: 1 },
-  { file: 'src/session/use-mobile-native-chat-session.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-skills.ts', references: 2 },
-  { file: 'src/session/use-mobile-native-chat-stop.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-branch-context.ts', references: 2 },
-  { file: 'src/session/use-mobile-pr-comment-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-title-action.ts', references: 1 },
-  { file: 'src/session/use-mobile-session-accessory-selection.ts', references: 1 },
-  { file: 'src/session/use-mobile-session-close-actions.ts', references: 3 },
-  { file: 'src/session/use-mobile-session-content-create-actions.ts', references: 4 },
-  { file: 'src/session/use-mobile-session-diff-comments.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-document-readers.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-markdown-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-session-startup.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-terminal-input.ts', references: 3 },
-  { file: 'src/session/use-mobile-session-terminal-list.ts', references: 1 },
-  { file: 'src/session/use-mobile-session-terminal-send-actions.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-terminal-stream-display.ts', references: 1 },
+  // Holdout: the prompt `terminal.send` the create drops into the terminal it just made. Recorded
+  // (matrix-session.create-terminal-terminal.send-1), but it is the only `terminal.send` caller
+  // that falls back to its own copy when the host refuses with an empty message, so no existing
+  // operation carries its acceptance and inventing one was out of that migration's scope.
+  { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 1 },
+  // CODE UI: the gesture flush and the menu's clear migrated with step 6; what is left is this
+  // fork's own unpaced mouse-click send, which bypasses the wheel queue and stays on the raw port
+  // until the fork records it (upstream has no such site and reaches zero here).
+  { file: 'src/session/use-mobile-session-terminal-input.ts', references: 1 },
   { file: 'src/session/use-mobile-terminal-hud-observation.ts', references: 1 },
-  { file: 'src/session/use-mobile-terminal-paste.ts', references: 1 },
-  { file: 'src/session/use-quick-commands.ts', references: 2 },
 
   // src/source-control/ — one dynamic dispatcher left; the other 13 files migrated in step 4.
   // Its single reference multiplexes git.commit, git.status, git.upstreamStatus, git.fetch,
@@ -206,54 +200,37 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/source-control/use-mobile-git-requests.ts', references: 1 },
 
   // src/tasks/ — task lists, filters and mutations. The workspace-creation half migrated in
-  // step 4: create, hosted-base resolution, SSH/agent preflight, sparse presets, the Smart
-  // source picker's provider reads and the screen's own preference writes. See
-  // mobile-workspace-create-operations.ts, mobile-workspace-source-operations.ts,
-  // mobile-task-runtime-operations.ts and mobile-task-source-search-operations.ts. What is left
-  // is the provider item/detail/mutation half, plus two files that cannot reach zero:
-  // mobile-tasks-source-family.test-support.ts matches the literal in a source scanner rather
-  // than sending anything, and use-mobile-tasks-project-file-merge-actions.tsx and
-  // use-mobile-tasks-hosted-metadata-actions.tsx each multiplex a `{ method, params }` step the
-  // pickers hand them at runtime.
-  { file: 'src/tasks/mobile-tasks-filter-pickers.tsx', references: 1 },
+  // step 4; the provider item, detail, list and GitHub Projects board half followed, taking 70
+  // references across 22 files to zero. See mobile-task-item-detail-operations.ts,
+  // mobile-task-list-operations.ts, mobile-task-item-comment-operations.ts,
+  // mobile-task-item-state-operations.ts and mobile-task-project-board-operations.ts, alongside
+  // the workspace-creation modules.
+  // One is left, and it is not a call site:
+  //
+  //   - mobile-tasks-source-family.test-support.ts matches the literal `'sendRequest'` in a
+  //     source scanner rather than sending anything.
+  //
+  // The other two migrated on screen mounting: the filter sheet's linear.selectWorkspace is driven
+  // through the render helper's own element, and the screen-root hook's repo.list through the hook
+  // mounted over substitutes for its route and its insets.
   { file: 'src/tasks/mobile-tasks-source-family.test-support.ts', references: 1 },
-  { file: 'src/tasks/use-mobile-tasks-github-check-file-actions.tsx', references: 5 },
-  { file: 'src/tasks/use-mobile-tasks-github-reply-merge-actions.tsx', references: 5 },
-  { file: 'src/tasks/use-mobile-tasks-gitlab-github-status-actions.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-hosted-comment-review-actions.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-hosted-metadata-actions.tsx', references: 2 },
-  { file: 'src/tasks/use-mobile-tasks-item-detail-loading.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-item-detail-metadata-effects.tsx', references: 2 },
-  { file: 'src/tasks/use-mobile-tasks-linear-item-actions.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-list-and-detail-effects.tsx', references: 2 },
-  { file: 'src/tasks/use-mobile-tasks-project-detail-loading.tsx', references: 1 },
-  { file: 'src/tasks/use-mobile-tasks-project-file-merge-actions.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-project-loading-actions.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-project-metadata-actions.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-project-metadata-loading.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-project-repository-resolution.tsx', references: 1 },
-  { file: 'src/tasks/use-mobile-tasks-project-review-check-actions.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-project-thread-reply-actions.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-project-workspace-comment-actions.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-provider-load-actions.tsx', references: 5 },
-  { file: 'src/tasks/use-mobile-tasks-route-and-item-state.tsx', references: 1 },
-  { file: 'src/tasks/use-mobile-tasks-task-create-actions.tsx', references: 3 },
-  { file: 'src/tasks/use-mobile-tasks-task-list-loading.tsx', references: 4 },
-  { file: 'src/tasks/use-mobile-tasks-task-pagination-actions.tsx', references: 1 },
 
-  // src/terminal/ — terminal input, viewport and queries
-  { file: 'src/terminal/mobile-terminal-query-reply.ts', references: 2 },
-  { file: 'src/terminal/terminal-live-accessory-raw-send.ts', references: 2 },
-  { file: 'src/terminal/terminal-viewport-refit.ts', references: 1 },
-
-  // src/transport/ — pairing, endpoint probing and capability reads
-  { file: 'src/transport/host-status-gates.ts', references: 1 },
-  { file: 'src/transport/mobile-relay-credential-rotation.ts', references: 2 },
-  { file: 'src/transport/mobile-relay-direct-upgrade.ts', references: 2 },
-  { file: 'src/transport/mobile-relay-pairing-recovery.ts', references: 2 },
-  { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
-  { file: 'src/transport/pairing-candidate-race.ts', references: 1 },
+  // src/transport/ — what is left of pairing, probing and capability reads after step 4. The
+  // protocol gate, the retrying capability probe, the candidate race, credential rotation, the
+  // direct-to-relay upgrade, startup pairing recovery and first pairing all send through
+  // host-status-probe-operations.ts and mobile-relay-pairing-operations.ts now. Neither file below
+  // shares the pending list's stated reason, so each carries its own:
+  //
+  // Decorates one PairingCandidateClient with director recovery, forwarding whatever method it is
+  // handed. It IS the port for the candidate it wraps, so it cannot send through an operation; the
+  // one method string it did choose now comes from hostStatusProbe.
   { file: 'src/transport/pairing-relay-candidate.ts', references: 4 },
-  { file: 'src/transport/pre-profile-pairing-coordinator.ts', references: 2 },
+  // Its sender is the two physical clients' authenticated-but-not-yet-`connected` path, which is
+  // not an RpcClient and is unreachable from the recording oracle, so a migration here could not
+  // be shown to preserve behaviour. Its method and params are already shared constants.
+  { file: 'src/transport/mobile-runtime-capability-negotiation.ts', references: 2 },
+  // Sends through hostStatusProbe; the one reference left is its parameter type, which names the
+  // port as upstream's does (there, push-registration.ts holds only the sender; CODE UI's two
+  // callers both hold a client). It reaches zero when the callers migrate.
   { file: 'src/transport/runtime-capability-probe.ts', references: 1 }
 ]

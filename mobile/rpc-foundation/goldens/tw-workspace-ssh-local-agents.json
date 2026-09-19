@@ -3,9 +3,9 @@
   "family": "tasks.workspace-ssh-local",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "af0623c2d106d2ed18ef9149d4990539f9ed82146ae091a872a3e1d792efeffe",
   "platform": "darwin",
@@ -13,11 +13,15 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "41b0d115f434": {
-      "name": "workspaceDetectedAgentIds",
-      "value": {
-        "$rpc": "null"
-      }
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "5da628eecd2f": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     },
     "7400f4eebe66": {
       "agent": "claude",
@@ -28,8 +32,16 @@
         "$rpc": "null"
       }
     },
-    "cb93b17470e8": {
+    "9637248df9cb": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "9fdd4a87eb0b": {
       "name": "preflight.detectAgents#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -59,17 +71,15 @@
         }
       }
     },
-    "cbb858a786ac": {
-      "name": "workspaceDetectedAgentIds",
-      "value": ["codex", "claude"]
-    },
-    "cf32edc950ac": {
-      "name": "preflight.detectAgents#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
-    },
-    "ea709e13f0f0": {
+    "a9ec92743b9e": {
       "name": "workspaceAgentOverridden",
+      "ordinal": 2,
       "value": false
+    },
+    "d68cba3b57e1": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": ["codex", "claude"]
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -78,10 +88,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "ed6189938d78": {
-      "name": "workspaceAgent",
-      "value": "claude"
     }
   },
   "recording": {
@@ -90,13 +96,13 @@
       {
         "id": "local-agents-detected",
         "observation": {
-          "sender": ["cb93b17470e8"],
-          "payloads": ["cf32edc950ac"],
+          "sender": ["9fdd4a87eb0b"],
+          "payloads": ["5da628eecd2f"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "7400f4eebe66",
-          "effects": ["ed6189938d78", "ea709e13f0f0", "41b0d115f434", "cbb858a786ac"]
+          "effects": ["11405363c62d", "a9ec92743b9e", "9637248df9cb", "d68cba3b57e1"]
         }
       }
     ]

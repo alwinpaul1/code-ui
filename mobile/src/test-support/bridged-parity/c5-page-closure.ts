@@ -45,11 +45,13 @@ import type { PageClosurePins } from './page-closure'
 
 export const C5_PAGE_CLOSURE: PageClosurePins = {
   // CODE UI (2026-09-19, Orca #21649 port): this fork's closure of `app/h/_layout.tsx` and
-  // `app/h/[hostId]/agent-history/[worktreeId].web.tsx` (315 files), derived and pinned the way
-  // the C1 table is: 17 families, 89 goldens, 47 byte-identical, 35 `result-absent-settlement`,
-  // 7 `params-undefined`. It is C1's 16 families plus `settings.resume-metadata`; upstream's five
-  // added families are that one and four `aiVault.*` recorder families this fork does not carry
-  // yet (Orca #20277 and after, Group C) — they join this pin when their goldens exist here.
+  // `app/h/[hostId]/agent-history/[worktreeId].web.tsx`, derived and pinned the way the C1 table
+  // is. First (315 files): 17 families, 89 goldens, 47 byte-identical, 35
+  // `result-absent-settlement`, 7 `params-undefined` — C1's 16 plus `settings.resume-metadata`.
+  // Re-derived on the Group D merge (2026-09-19, later; 350 local modules): 25 families, 125
+  // goldens, 66 byte-identical, 47 `result-absent-settlement`, 7 `params-undefined`, 3
+  // `result-absent-stream-release`, 2 `write-ordinal` — C1's 20 plus upstream's own five AI Vault
+  // families, the four `aiVault.*` recorder families having arrived with Orca #20702.
   'settings.repo-metadata': {
     'matrix-settings.repo-metadata-host.platform-1': 'result-absent-settlement',
     'matrix-settings.repo-metadata-repo.list-1': 'result-absent-settlement',
@@ -58,6 +60,7 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
     'schedules-settings-repo-metadata-fulfilled': 'identical',
     'settings-repo-cache-expiry': 'identical',
     'settings-repo-metadata-fulfilled': 'identical',
+    'settings-repo-metadata-icons': 'identical',
     'settings-repo-metadata-refuse-after-data': 'identical',
     'settings-repo-metadata-refused': 'identical',
     'settings-repo-metadata-single-host': 'identical',
@@ -167,10 +170,61 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
   },
   'worktree.catalog-snapshot': {
     'matrix-worktree.catalog-snapshot-worktree.ps-1': 'result-absent-settlement',
-    'worktree-catalog-snapshot': 'identical'
+    'worktree-catalog-snapshot': 'identical',
+    'worktree-catalog-snapshot-unreadable': 'result-absent-settlement'
   },
   'worktree.retired-names': {
     'matrix-worktree.retired-names-worktree.listretirednames-1': 'result-absent-settlement',
     'worktree-retired-names': 'identical'
+  },
+  'worktree.agent-launch-create': {
+    'matrix-worktree.agent-launch-create-agent.launch-1': 'result-absent-settlement',
+    'tw-create-retry-agent-launched': 'identical'
+  },
+  'transport.host-status-gates': {
+    'matrix-transport.host-status-gates-status.get-1': 'result-absent-settlement',
+    'transport-host-status-gates-drop-keeps-capabilities': 'identical',
+    'transport-host-status-gates-ready': 'identical',
+    'transport-host-status-gates-refused-degrades': 'identical'
+  },
+  'aiVault.history': {
+    'aivault-history-scan-fulfilled': 'identical',
+    'aivault-history-scan-unsupported': 'identical',
+    'aivault-history-scan-worktrees-late': 'identical',
+    'matrix-aivault.history-aivault.listsessions-1': 'result-absent-settlement',
+    'matrix-aivault.history-status.get-1': 'result-absent-settlement'
+  },
+  'aiVault.resume-preparation': {
+    'aivault-resume-prepare-refused': 'identical',
+    'aivault-resume-prepare-repin': 'identical',
+    'aivault-resume-prepare-skipped': 'identical',
+    'aivault-resume-prepare-unavailable': 'identical',
+    'matrix-aivault.resume-preparation-aivault.preparesessionresume-1': 'result-absent-settlement'
+  },
+  'aiVault.resume-launch': {
+    'aivault-resume-launch-create-refused': 'identical',
+    'aivault-resume-launch-invalid-tab': 'identical',
+    'aivault-resume-launch-locked': 'identical',
+    'aivault-resume-launch-sent': 'identical',
+    'matrix-aivault.resume-launch-session.tabs.createterminal-1': 'result-absent-settlement',
+    'matrix-aivault.resume-launch-terminal.send-1': 'result-absent-settlement'
+  },
+  'components.new-workspace-repositories': {
+    'matrix-components.new-workspace-repositories-repo.list-1': 'result-absent-settlement',
+    'new-workspace-repositories-fulfilled': 'identical'
+  },
+  'aiVault.history-screen': {
+    'aivault-history-screen-listed': 'identical',
+    'aivault-history-screen-worktrees': 'identical',
+    'matrix-aivault.history-screen-platform-status': 'result-absent-settlement',
+    'matrix-aivault.history-screen-status.get-2': 'result-absent-settlement',
+    'matrix-aivault.history-screen-worktree.ps-1': 'result-absent-settlement'
+  },
+  'host-worktree-refresh': {
+    'host-worktree-refresh-stream': 'write-ordinal',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-1': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-2': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-1-3': 'result-absent-stream-release',
+    'matrix-host-worktree-refresh-runtime.clientevents.subscribe-2-1': 'write-ordinal'
   }
 }

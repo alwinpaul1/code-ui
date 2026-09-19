@@ -12,6 +12,7 @@ import { saveHost } from './host-store'
 import { readMobileNetworkIdentity, readMobileNetworkType } from './mobile-network-type'
 import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
+import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 type EndpointLifecycle = {
@@ -117,8 +118,8 @@ function createSupervisor(
     onLog,
     now: Date.now,
     randomBytes: ExpoCrypto.getRandomBytes,
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: defaultScheduleTimer,
+    clearTimer: defaultCancelTimer,
     networkType: readMobileNetworkType,
     networkIdentity: readMobileNetworkIdentity,
     ...(options.directReturnProbe === undefined ? {} : { directReturnProbe: options.directReturnProbe })

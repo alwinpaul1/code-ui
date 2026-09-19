@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
-import type { RpcSuccess } from '../transport/types'
+import { sessionTerminalListRead } from './mobile-session-read-operations'
+import type { Terminal } from './mobile-session-route-types'
 import {
   mergeTerminalListWithKnownRecords,
   mobileSessionTabsEqual,
@@ -11,7 +12,6 @@ import {
   pruneTerminalKeyboardMetrics,
   resolveRetainedTerminalHandles
 } from './mobile-terminal-prune-decision'
-import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
 import { closeTranscriptTailLeftovers, isTranscriptTailLeftover } from './transcript-tail-leftovers'
@@ -61,14 +61,17 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         allowEmptyLoaded,
         async (allowsEmpty, isCurrent) => {
           try {
-            const response = await client.sendRequest('terminal.list', {
-              worktree: `id:${worktreeId}`,
-              includeVisualLayouts: false
-            })
-            if (!isCurrent() || !response.ok) {
+            const response = sessionTerminalListRead.interpret(
+              await sessionTerminalListRead.request(client, {
+                worktree: `id:${worktreeId}`,
+                includeVisualLayouts: false
+              })
+            )
+            if (!isCurrent() || !response.accepted) {
               return false
             }
-            const listed = (response as RpcSuccess).result as { terminals: Terminal[] }
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checked the array and each row's handle; the rest of a row is the host's terminal record, which this module reads but does not re-declare.
+            const listed = response.value as { terminals: Terminal[] }
             // A transcript-tail terminal a 2026-09-19 build left on the
             // desktop is closed on sight and kept out of the strip meanwhile.
             closeTranscriptTailLeftovers(client, listed.terminals)

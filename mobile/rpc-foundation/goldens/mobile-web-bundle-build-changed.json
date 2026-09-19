@@ -3,9 +3,9 @@
   "family": "mobileWeb.bundle-fetch",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
   "scenarioSha256": "cef01677c0032d012985aa1be847dbe180f1df9aadd2d13f897c23dee1066d1a",
   "platform": "darwin",
@@ -13,12 +13,46 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "059bbadcabb1": {
+    "081e772e5b64": {
       "name": "mobileWeb.bundle.chunk#2",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":0}}"
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.chunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
+            "offset": 0,
+            "path": "index.html"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "invalid_argument",
+            "message": "mobile_web_bundle_build_changed"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
     },
-    "15e50441468d": {
+    "23871e324a00": {
       "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -73,16 +107,49 @@
         }
       }
     },
-    "21d5364bbddb": {
+    "2988ade7daff": {
+      "name": "mobileWeb.bundle.chunk#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"index.html\",\"offset\":0}}"
+    },
+    "775bfa42070b": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    },
+    "782d48c615ad": {
       "name": "bundle-progress",
+      "ordinal": 7,
       "value": {
         "completedAssets": 1,
         "receivedBytes": 11,
         "totalAssets": 2
       }
     },
-    "3905e9e6dfb6": {
+    "79725d734e7d": {
+      "assets": {
+        "$rpc": "null"
+      },
+      "outcome": "refused: mobile_web_bundle_build_changed"
+    },
+    "82b2a7971876": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "invalid_argument: mobile_web_bundle_build_changed",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "a0c050b31ee2": {
       "name": "mobileWeb.bundle.chunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"assets/app.js\",\"offset\":0}}"
+    },
+    "ae7f1100e6e5": {
+      "name": "mobileWeb.bundle.chunk#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -121,66 +188,6 @@
           }
         }
       }
-    },
-    "79725d734e7d": {
-      "assets": {
-        "$rpc": "null"
-      },
-      "outcome": "refused: mobile_web_bundle_build_changed"
-    },
-    "82b2a7971876": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "invalid_argument: mobile_web_bundle_build_changed",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "88c2560e6797": {
-      "name": "mobileWeb.bundle.chunk#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.chunk\",\"params\":{\"buildId\":\"973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177\",\"path\":\"assets/app.js\",\"offset\":0}}"
-    },
-    "bd43f05ce7e1": {
-      "name": "mobileWeb.bundle.chunk#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "mobileWeb.bundle.chunk"
-        },
-        {
-          "name": "params",
-          "value": {
-            "buildId": "973c008f6baf56072d8d3d41f451e005257b59026401473543ce96e81c5aa177",
-            "offset": 0,
-            "path": "index.html"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "undefined"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "invalid_argument",
-            "message": "mobile_web_bundle_build_changed"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "ebbd26fd91a8": {
-      "name": "mobileWeb.bundle.manifest#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
     }
   },
   "recording": {
@@ -189,13 +196,13 @@
       {
         "id": "bundle-build-changed",
         "observation": {
-          "sender": ["15e50441468d", "3905e9e6dfb6", "bd43f05ce7e1"],
-          "payloads": ["ebbd26fd91a8", "88c2560e6797", "059bbadcabb1"],
+          "sender": ["23871e324a00", "ae7f1100e6e5", "081e772e5b64"],
+          "payloads": ["775bfa42070b", "a0c050b31ee2", "2988ade7daff"],
           "settlements": {
             "fetch": "82b2a7971876"
           },
           "state": "79725d734e7d",
-          "effects": ["21d5364bbddb"]
+          "effects": ["782d48c615ad"]
         }
       }
     ]

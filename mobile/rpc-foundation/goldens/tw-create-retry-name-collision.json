@@ -3,105 +3,24 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
-  "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
+  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "6cb658dadc9e146c4f36c6ce643451e72300b8cdda19cc684ffa9fb2b0822c0a",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "2b7c07c2d2af": {
+    "06b14e4985de": {
       "name": "worktree.create#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "clientMutationId": "mutation-1",
-            "name": "kestrel",
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 600000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "conflict",
-            "message": "Branch \"kestrel\" already exists."
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "3f946ad0279c": {
-      "outcome": "uncreated"
-    },
-    "3fa75e508233": {
-      "name": "worktree.create#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel-2\",\"clientMutationId\":\"mutation-2\"}}"
-    },
-    "43a221c63628": {
-      "name": "worktree.create#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "96ffe866d064": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "name": "kestrel-2",
-        "worktreeId": "repo-1::/w2"
-      }
-    },
-    "c277d86477c3": {
+    "38d1ea203ccc": {
       "name": "worktree.create#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "clientMutationId": "mutation-2",
-            "name": "kestrel-2",
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 600000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "d0c9ecd48c97": {
-      "name": "worktree.create#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -138,10 +57,96 @@
         }
       }
     },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "60f191fb0fe4": {
+      "name": "worktree.create#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-2",
+            "name": "kestrel-2",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8267e2ceffd6": {
+      "name": "worktree.create#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel-2\",\"clientMutationId\":\"mutation-2\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "96ffe866d064": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "name": "kestrel-2",
+        "worktreeId": "repo-1::/w2"
+      }
+    },
     "db70004d62eb": {
       "outcome": {
         "name": "kestrel-2",
         "worktreeId": "repo-1::/w2"
+      }
+    },
+    "dbde9cf24b8b": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "clientMutationId": "mutation-1",
+            "name": "kestrel",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 600000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "conflict",
+            "message": "Branch \"kestrel\" already exists."
+          },
+          "id": "frame-1",
+          "ok": false
+        }
       }
     }
   },
@@ -151,8 +156,8 @@
       {
         "id": "retrying",
         "observation": {
-          "sender": ["2b7c07c2d2af", "c277d86477c3"],
-          "payloads": ["43a221c63628", "3fa75e508233"],
+          "sender": ["dbde9cf24b8b", "60f191fb0fe4"],
+          "payloads": ["06b14e4985de", "8267e2ceffd6"],
           "settlements": {
             "create": "9270aeb7d9c6"
           },
@@ -163,8 +168,8 @@
       {
         "id": "created-suffixed",
         "observation": {
-          "sender": ["2b7c07c2d2af", "d0c9ecd48c97"],
-          "payloads": ["43a221c63628", "3fa75e508233"],
+          "sender": ["dbde9cf24b8b", "38d1ea203ccc"],
+          "payloads": ["06b14e4985de", "8267e2ceffd6"],
           "settlements": {
             "create": "96ffe866d064"
           },
