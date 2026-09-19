@@ -2,7 +2,9 @@ import { compileFunction } from 'node:vm'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as React from 'react'
+import { sha256 } from '@noble/hashes/sha256'
 import ts from 'typescript'
+import * as zod from 'zod'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -21,6 +23,20 @@ export type OperationExposure = readonly [suffix: string, source: string]
 // object, so a second copy of the module has a second, empty registry and every marked rejection
 // reads as a definite failure inside the mounted operation. Same reason React is shared.
 const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
+
+/**
+ * The non-relative imports a mounted operation may resolve, and what it gets: the real library in
+ * every case, because each is pure. `zod` is what the checked reply readers parse with, and
+ * `@noble/hashes/sha256` is the same pure-JS digest the bundle fetch would run on a device
+ * (Orca #21374). Everything else non-relative stays a refusing proxy, which is what keeps an
+ * adapter from silently mounting a device API. (Code UI, 2026-09-19: the two-entry form of
+ * upstream's `native-mounting-substitutes.ts`, which arrives whole with Orca #20667.)
+ */
+const NATIVE_MOUNTING_SUBSTITUTES: ReadonlyMap<string, unknown> = new Map<string, unknown>([
+  ['react', React],
+  ['zod', zod],
+  ['@noble/hashes/sha256', { sha256 }]
+])
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
 export function operationModuleLoader(
@@ -41,8 +57,9 @@ export function operationModuleLoader(
     return file
   }
   function imported(base: string, name: string): unknown {
-    if (name === 'react') {
-      return React
+    const native = NATIVE_MOUNTING_SUBSTITUTES.get(name)
+    if (native !== undefined) {
+      return native
     }
     if (name.startsWith('.') && pathFor(resolve(dirname(base), name)) === sharedModulePath) {
       return deliveryAmbiguity

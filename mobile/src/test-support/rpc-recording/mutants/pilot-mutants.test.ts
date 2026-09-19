@@ -28,7 +28,8 @@ const mutants: Record<string, Mutation> = {
   'settings-task-hydration-fulfilled': 'task-hydration-envelope',
   'settings-task-write': 'task-preferences-optimistic',
   'settings-workspace-submit-fulfilled': 'workspace-submit-envelope',
-  'settings-task-workspace-fulfilled': 'task-workspace-envelope'
+  'settings-task-workspace-fulfilled': 'task-workspace-envelope',
+  'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2

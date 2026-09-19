@@ -3,6 +3,7 @@ import { fileRequestMountAdapters } from './file-request-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
+import { mobileWebBundleMountAdapters } from './mobile-web-bundle-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
@@ -28,6 +29,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: hostWorktreeActionMountAdapters
   },
   { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
+  { source: 'mobile-web-bundle-mount-adapters.ts', mounts: mobileWebBundleMountAdapters },
   { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
   { source: 'new-workspace-mount-adapters.ts', mounts: newWorkspaceMountAdapters },
   {

@@ -1,0 +1,88 @@
+{
+  "operation": "mobileWeb.bundle-fetch",
+  "family": "mobileWeb.bundle-fetch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
+  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
+  "recorderSha256": "716fc0fd7e7193a8828ed4288b8e8cfc5f6449c6790a59982c903900b6e7c6eb",
+  "adapterSha256": "af339fef2c684d5709c6d3f279e5f0d9c33d17b6d4e5c89e501963400901b564",
+  "scenarioSha256": "7333b1c83120bcfd9bdac8888ec1528c1db9b36325509f1328a551676df219c5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "12c415b60f69": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "mobileWeb.bundle.manifest"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "null"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "undefined"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "invalid_argument",
+            "message": "mobile_web_bundle_unavailable"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6858fdcae414": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "invalid_argument: mobile_web_bundle_unavailable",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "8ea0c6a90560": {
+      "assets": {
+        "$rpc": "null"
+      },
+      "outcome": "refused: mobile_web_bundle_unavailable"
+    },
+    "ebbd26fd91a8": {
+      "name": "mobileWeb.bundle.manifest#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"mobileWeb.bundle.manifest\",\"params\":null}"
+    }
+  },
+  "recording": {
+    "scenario": "mobile-web-bundle-unavailable",
+    "checkpoints": [
+      {
+        "id": "bundle-unavailable",
+        "observation": {
+          "sender": ["12c415b60f69"],
+          "payloads": ["ebbd26fd91a8"],
+          "settlements": {
+            "fetch": "6858fdcae414"
+          },
+          "state": "8ea0c6a90560",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

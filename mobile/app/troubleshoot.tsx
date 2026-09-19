@@ -26,6 +26,16 @@ import {
 } from '../src/diagnostics/host-reachability'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
+import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
+
+// Same guard as mobile-terminal-diagnostics.ts: `__DEV__` is undefined outside the React Native runtime. The import
+// above is static, so a release bundle still carries the row's graph and evaluates its hoisted
+// schemas at load; nothing mounts, no host is looked up and no request is made. This repo has no
+// `__DEV__`-conditional `require` idiom to trim it with — every `require` in `mobile/src` is a Metro
+// asset path — so introducing one is a change for the shell in Phase B, not for this row.
+// (Code UI keeps the whole screen in this route rather than upstream's TroubleshootView, so the
+// `developerRow` slot upstream added there is this one expression below the network button.)
+const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -218,6 +228,8 @@ export default function TroubleshootScreen() {
           <ScrollText size={16} color={colors.textPrimary} />
           <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
+
+        {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
 
         {checks.length > 0 && (
           <View style={styles.section}>

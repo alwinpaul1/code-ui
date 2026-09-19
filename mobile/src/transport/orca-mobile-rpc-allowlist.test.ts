@@ -4,6 +4,10 @@ import { extname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
+  MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+  MOBILE_WEB_BUNDLE_MANIFEST_METHOD
+} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import {
   HOST_MOBILE_CAPABILITY_KEYS,
   type HostMobileCapabilityKey
 } from './host-mobile-capability-operations'
@@ -97,6 +101,41 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     method: 'github.prComments',
     guard: 'never-sent',
     why: 'Named in github-pr-rpc.ts\'s METHODS_ACCEPTING_PR_REPO param-shape set only; no caller sends it.'
+  }
+]
+
+/**
+ * A method the tree sends by a CONSTANT imported from `src/shared`, never by a string literal
+ * under `app/` or `src/`, so the literal scan below cannot see it (2026-09-19, Orca #21374: the
+ * desktop-served mobile web bundle names its two methods through `bundle-rpc-contract.ts`).
+ * Each entry is checked three ways so it cannot rot: the spelled method must equal the imported
+ * constant, the named sender must bind that identifier to a `method:` field, and the fixture must
+ * still refuse the method — a re-captured fixture that allows it deletes the entry, and a literal
+ * that appears in the tree hands the method to the scan above and deletes it too.
+ */
+type ConstantNamedSend = {
+  readonly method: string
+  readonly constant: string
+  readonly identifier: string
+  readonly sender: string
+  /** How a host that refuses it is kept from ever being asked. */
+  readonly why: string
+}
+
+const CONSTANT_NAMED_SENDS: readonly ConstantNamedSend[] = [
+  {
+    method: 'mobileWeb.bundle.manifest',
+    constant: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+    identifier: 'MOBILE_WEB_BUNDLE_MANIFEST_METHOD',
+    sender: 'src/transport/mobile-web-bundle-operations.ts',
+    why: 'Every product sender is the hybrid web shell, which walls on the `mobileWeb.bundle.v1` status.get capability (Orca #21376) before it reads; a host on this fixture never advertises it. The one ungated sender is the Troubleshoot bundle probe row, mounted only under `__DEV__`.'
+  },
+  {
+    method: 'mobileWeb.bundle.chunk',
+    constant: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
+    identifier: 'MOBILE_WEB_BUNDLE_CHUNK_METHOD',
+    sender: 'src/transport/mobile-web-bundle-operations.ts',
+    why: 'Paged only after a manifest read succeeded, so it inherits the manifest read\'s gate above.'
   }
 ]
 
@@ -463,6 +502,28 @@ describe('every RPC method the phone can send', () => {
         sendableByMethod.get(exception.method) ?? [],
         `${exception.method} is claimed never-sent but sits somewhere a send could come from (a call argument, a ternary, a property) — gate it or allow it.`
       ).toEqual([])
+    }
+  })
+
+  it('names each constant-named send once, by a constant a real sender binds, for a method the host still refuses', () => {
+    const methods = CONSTANT_NAMED_SENDS.map((entry) => entry.method)
+    expect(methods.filter((method, index) => methods.indexOf(method) !== index)).toEqual([])
+    for (const entry of CONSTANT_NAMED_SENDS) {
+      expect(entry.constant, `${entry.identifier} no longer spells ${entry.method}`).toBe(entry.method)
+      expect(catalog.has(entry.method), `${entry.method} is not in the vendored catalog`).toBe(true)
+      expect(
+        allowlist.has(entry.method),
+        `The fixture now allows ${entry.method} — delete its constant-named entry.`
+      ).toBe(false)
+      expect(
+        namedByMethod.has(entry.method),
+        `The tree now names ${entry.method} by literal — delete its constant-named entry; the scan above owns it.`
+      ).toBe(false)
+      const source = readFileSync(join(mobileRoot, entry.sender), 'utf8')
+      expect(
+        source.includes(`method: ${entry.identifier}`),
+        `${entry.sender} no longer binds ${entry.identifier} to a method field`
+      ).toBe(true)
     }
   })
 
