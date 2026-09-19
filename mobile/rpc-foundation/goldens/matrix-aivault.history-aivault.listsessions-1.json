@@ -3,7 +3,7 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a499dada6eb797b02693c25933149221336859d1",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
   "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
   "adapterSha256": "7add46922ba5486e56c8acd99a53d083b605f5d98f3cc44ee3cb350ec0406080",
@@ -84,18 +84,6 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "1277d47c0e64": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Cannot read properties of undefined (reading 'sessions')"
       }
     },
     "23523c413cbd": {
@@ -295,18 +283,6 @@
             "ok": false
           }
         }
-      }
-    },
-    "61f76365e23c": {
-      "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "$rpc": "null"
-      },
-      "refreshing": false,
-      "scope": "workspace",
-      "screenState": {
-        "kind": "error",
-        "message": "Cannot read properties of null (reading 'sessions')"
       }
     },
     "698f848e6967": {
@@ -571,21 +547,16 @@
         "$rpc": "undefined"
       }
     },
-    "fc659419e768": {
+    "fead2d57ab18": {
       "activeWorktreePath": "/repo/feature",
       "hostStatusResult": {
-        "capabilities": ["aiVault.v1"]
+        "$rpc": "null"
       },
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
-        "issues": {
-          "$rpc": "undefined"
-        },
-        "kind": "ready",
-        "sessions": {
-          "$rpc": "undefined"
-        }
+        "kind": "error",
+        "message": "The host sent a reply this app could not read (aiVault.listSessions)"
       }
     }
   },
@@ -612,7 +583,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "1277d47c0e64",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -624,7 +595,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "61f76365e23c",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -636,7 +607,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -648,7 +619,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },
@@ -660,7 +631,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "fc659419e768",
+          "state": "fead2d57ab18",
           "effects": []
         }
       },

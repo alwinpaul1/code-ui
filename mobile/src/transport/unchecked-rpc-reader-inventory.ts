@@ -23,11 +23,12 @@
  * at least one unchecked reader, so a `readers: 0` line is itself a failure. Migrating a domain
  * therefore removes its files outright.
  *
- * CODE UI: this list is the fork's own, like the raw-port inventory next door. The fork carries no
- * push-registration, push-dismissal, push-probe or desktop-stream operation modules and no
- * worker-takeover reader, and it carries operation modules upstream lacks (project config, MCP
- * status, hunk revert, the mobile capability gate, the host screen's pinned-in-groups pair), which
- * are listed under their own `CODE UI` lines. The ratchet is upstream's unchanged.
+ * CODE UI: this list is the fork's own, like the raw-port inventory next door. Upstream's countdown
+ * is over — step 7 converted the last domain it named and its list is empty, so there the boundary
+ * test fails on the first unchecked reader anywhere. What is left here is this fork's own: four
+ * operation modules upstream lacks (project config, MCP status, hunk revert, the mobile capability
+ * gate), listed under `CODE UI` lines until the fork writes their schemas. Nothing else may be added
+ * back, a merge included — convert it with `rpcResultVariant(variant, schema)` in the merge.
  *
  * Two holes this list does not close, both deliberate:
  *   - A hand-written reader that returns `{ compatible: true, ... }` without going through those
@@ -44,23 +45,12 @@ export type UncheckedRpcReaderEntry = {
 /**
  * Files holding at least one unchecked reader, grouped by the feature area that owns them.
  *
- * The reason is shared by every line and is stated once here instead of 11 times: the reply has no
+ * The reason is shared by every line and is stated once here instead of 4 times: the reply has no
  * schema, so the operation declares what the payload is by assertion. Writing one schema per
  * consumed member — required exactly where the consumer reads it unguarded, optional everywhere
  * else, never `.strict()` — turns the assertion into a check and deletes the line.
  */
 export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
-  // agent-history
-  { file: 'src/agent-history/mobile-agent-history-operations.ts', readers: 6 },
-  // dictation
-  { file: 'src/dictation/mobile-dictation-operations.ts', readers: 8 },
-  // files
-  { file: 'src/files/mobile-file-explorer-operations.ts', readers: 2 },
-  { file: 'src/files/mobile-file-ownership-operations.ts', readers: 2 },
-  { file: 'src/files/mobile-file-preview-operations.ts', readers: 6 },
-  { file: 'src/files/mobile-file-tab-doc-operations.ts', readers: 3 },
-  // host-screen (CODE UI: 10, two more than upstream — its pinned-in-groups view-settings pair)
-  { file: 'src/host-screen/host-screen-operations.ts', readers: 10 },
   // project-config (CODE UI)
   { file: 'src/project-config/mcp-servers/mcp-status-overlay-operations.ts', readers: 1 },
   { file: 'src/project-config/project-config-file-operations.ts', readers: 2 },

@@ -11,6 +11,7 @@ import {
   previewErrorFromRefusal
 } from './mobile-file-preview-response'
 import { resolveMobilePdfUri } from './mobile-pdf-cache'
+import { RPC_INCOMPATIBLE_REPLY_CODE } from '../transport/rpc-incompatible-reply-error'
 
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///cache' } }))
 vi.mock('./mobile-pdf-cache', () => ({ resolveMobilePdfUri: vi.fn() }))
@@ -504,7 +505,7 @@ describe('mobile-file-preview-request', () => {
     })
   })
 
-  it('reports a malformed refreshed artifact read instead of treating it as changed desktop content', async () => {
+  it('names the unreadable reply on a refreshed artifact read instead of treating it as changed desktop content', async () => {
     const client = clientWithResponses([
       fail('terminal_file_grant_stale'),
       ok({
@@ -535,10 +536,9 @@ describe('mobile-file-preview-request', () => {
         '{"ok":false}',
         { baseContent: '{"ok":true}' }
       )
-    ).resolves.toEqual({
-      status: 'error',
-      message: 'Unable to load preview',
-      reconnect: false
+    ).rejects.toMatchObject({
+      code: RPC_INCOMPATIBLE_REPLY_CODE,
+      method: 'files.readTerminalArtifact'
     })
 
     expect(client.sendRequest).toHaveBeenCalledTimes(3)

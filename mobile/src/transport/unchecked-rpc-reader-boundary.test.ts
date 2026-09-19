@@ -130,12 +130,10 @@ describe('unchecked RPC reader boundary', () => {
   })
 
   it('scans a plausible number of files', () => {
-    // A broken root or extension filter would make every check below vacuously pass. The file floor
-    // is safe to hold at a constant; an offender-count floor is not, because the list counts down to
-    // zero. Main's batch took it from 29 files to 16 and its floor from 20 to 10; this batch reaches
-    // 8 upstream (11 here, with CODE UI's own modules), below that floor. Against the list instead,
-    // the check survives every step of the countdown: a filter that scanned nothing reports 0
-    // against a list naming 11.
+    // A broken root or extension filter would make every check below vacuously pass. Upstream's
+    // list has reached zero, so the equality asserts "no unchecked reader ships" there — which a
+    // scan of nothing would also satisfy. The file floor is what rules that out, and it stays a
+    // constant. (CODE UI's list still names its own four modules; the equality holds against it.)
     expect(scanned.length).toBeGreaterThan(400)
     expect(observed.size).toBe(inventory.length)
   })

@@ -3,7 +3,7 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a499dada6eb797b02693c25933149221336859d1",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
   "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
   "adapterSha256": "7a42a348f4407b94cf75ac77a4b6b783b7d28103b1ae1d111d2708dab0dd4a0c",
@@ -113,6 +113,28 @@
         }
       }
     },
+    "283fdeaee4be": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "SafeAreaView": 1,
+        "Search": 1,
+        "Text": 4,
+        "TextInput": 1,
+        "View": 5
+      },
+      "labels": ["Back to session", "Search files"],
+      "rows": [],
+      "text": [
+        "Files",
+        "orca-files",
+        "The host sent a reply this app could not read (files.list)",
+        "Retry"
+      ]
+    },
     "33bb136847f8": {
       "name": "files.readDir#1",
       "ordinal": 1,
@@ -148,23 +170,6 @@
           "ok": false
         }
       }
-    },
-    "3f0e975e9852": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "SafeAreaView": 1,
-        "Search": 1,
-        "Text": 4,
-        "TextInput": 1,
-        "View": 5
-      },
-      "labels": ["Back to session", "Search files"],
-      "rows": [],
-      "text": ["Files", "orca-files", "Cannot read properties of null (reading 'files')", "Retry"]
     },
     "41c86594aed3": {
       "name": "files.list#1",
@@ -424,28 +429,6 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readDir\",\"params\":{\"worktree\":\"id:wt-files\",\"relativePath\":\"\"}}"
     },
-    "ab30578d33e4": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "SafeAreaView": 1,
-        "Search": 1,
-        "Text": 4,
-        "TextInput": 1,
-        "View": 5
-      },
-      "labels": ["Back to session", "Search files"],
-      "rows": [],
-      "text": [
-        "Files",
-        "orca-files",
-        "Cannot read properties of undefined (reading 'files')",
-        "Retry"
-      ]
-    },
     "bc514f7a8e2e": {
       "crash": {
         "$rpc": "null"
@@ -623,23 +606,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "f9bd3ee15f3d": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "SafeAreaView": 1,
-        "Search": 1,
-        "Text": 4,
-        "TextInput": 1,
-        "View": 5
-      },
-      "labels": ["Back to session", "Search files"],
-      "rows": [],
-      "text": ["Files", "orca-files", "files is not iterable", "Retry"]
     }
   },
   "recording": {
@@ -677,7 +643,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "ab30578d33e4",
+          "state": "283fdeaee4be",
           "effects": []
         }
       },
@@ -689,7 +655,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "3f0e975e9852",
+          "state": "283fdeaee4be",
           "effects": []
         }
       },
@@ -701,7 +667,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f9bd3ee15f3d",
+          "state": "283fdeaee4be",
           "effects": []
         }
       },
@@ -713,7 +679,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f9bd3ee15f3d",
+          "state": "283fdeaee4be",
           "effects": []
         }
       },
@@ -725,7 +691,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "f9bd3ee15f3d",
+          "state": "283fdeaee4be",
           "effects": []
         }
       },

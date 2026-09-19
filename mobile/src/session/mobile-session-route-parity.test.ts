@@ -129,7 +129,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // unnecessary — the markdown tab doc (readMarkdownTab, saveMarkdownTab) and
 // the worktree record's diffComments (loadDiffComments) are typed by their
 // schemas now. Same 81 callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '61993176b9db498f2bcdde8a50e965e81ae6d9c2da7d72f399945eedea62bd6d'
+// 2026-09-19 (Orca #21269 ported): the markdown disk fallback's
+// `{ content, truncated, byteLength }` cast is retired — the preview reader
+// checks the content and salvages the flag, so readMarkdownTab reads
+// `fallback.value` directly. Same 81 callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '6f30302530f34c2061a8c4a0c93aef88d0bcf68bf09c49702a32bdaff5573205'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23

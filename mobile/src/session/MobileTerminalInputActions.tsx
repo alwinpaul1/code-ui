@@ -17,7 +17,7 @@ type MobileTerminalInputActionsProps = {
   readonly canSend: boolean
   readonly isAttaching: boolean
   readonly dictation: DictationState
-  readonly dictationMode: 'toggle' | 'hold'
+  readonly dictationMode: string | undefined
   readonly onAttachImage: () => void
   /** Any document via the system file picker. */
   readonly onAttachFile: () => void

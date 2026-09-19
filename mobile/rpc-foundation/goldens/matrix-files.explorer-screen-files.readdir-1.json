@@ -3,7 +3,7 @@
   "family": "files.explorer-screen",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "a499dada6eb797b02693c25933149221336859d1",
+  "baseline": "5052501588f2878224b6dfef58ac3d9eb8c8a285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
   "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
   "adapterSha256": "7a42a348f4407b94cf75ac77a4b6b783b7d28103b1ae1d111d2708dab0dd4a0c",
@@ -47,13 +47,6 @@
           }
         }
       }
-    },
-    "163f3de574ab": {
-      "crash": "state.entries is not iterable",
-      "elements": {},
-      "labels": [],
-      "rows": [],
-      "text": []
     },
     "33bb136847f8": {
       "name": "files.readDir#1",
@@ -508,13 +501,6 @@
       "rows": [],
       "text": ["Files", "orca-files", "transport failure", "Retry"]
     },
-    "c7a14cee57dc": {
-      "name": "screen.crash",
-      "ordinal": 3,
-      "value": {
-        "message": "state.entries is not iterable"
-      }
-    },
     "e0b32411ccef": {
       "name": "files.readDir#1",
       "ordinal": 1,
@@ -547,6 +533,28 @@
           "isRpcDeliveryUnknown": true
         }
       }
+    },
+    "e7f668dbae09": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "SafeAreaView": 1,
+        "Search": 1,
+        "Text": 4,
+        "TextInput": 1,
+        "View": 5
+      },
+      "labels": ["Back to session", "Search files"],
+      "rows": [],
+      "text": [
+        "Files",
+        "orca-files",
+        "The host sent a reply this app could not read (files.readDir)",
+        "Retry"
+      ]
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -669,8 +677,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "163f3de574ab",
-          "effects": ["c7a14cee57dc"]
+          "state": "e7f668dbae09",
+          "effects": []
         }
       },
       {
@@ -681,8 +689,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "163f3de574ab",
-          "effects": ["c7a14cee57dc"]
+          "state": "e7f668dbae09",
+          "effects": []
         }
       },
       {
@@ -693,8 +701,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "163f3de574ab",
-          "effects": ["c7a14cee57dc"]
+          "state": "e7f668dbae09",
+          "effects": []
         }
       },
       {
@@ -705,8 +713,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "163f3de574ab",
-          "effects": ["c7a14cee57dc"]
+          "state": "e7f668dbae09",
+          "effects": []
         }
       },
       {
@@ -717,8 +725,8 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "163f3de574ab",
-          "effects": ["c7a14cee57dc"]
+          "state": "e7f668dbae09",
+          "effects": []
         }
       },
       {
