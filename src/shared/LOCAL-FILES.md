@@ -84,6 +84,13 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.
+- `rpc-contract/rpc-params-catalog.generated.ts` — the two `mobileWeb.bundle.*`
+  entries and their import from 9641a1b54 (#21348, OTA phase A 3/5), on top of
+  its eedd35645 pin. The file is generated upstream from the host method
+  registry; this fork cannot run the generator, and a whole-file re-vendor at
+  9641a1b54 would drag in the `agent.launch` and other Group B/D entries that
+  are ported on their own. Drop this note when the catalog is re-vendored at or
+  past 9641a1b54.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
   `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
   (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional
