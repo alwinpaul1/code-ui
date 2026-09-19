@@ -263,13 +263,13 @@ describe('the host clock on the structured session', () => {
 
     const paged = reduceStructuredAgentSession(
       unstamped,
-      { type: 'tail-page', page: hydrationPage([user('u4', 4)], 6_000) },
+      { type: 'history-page', page: hydrationPage([user('u4', 4)], 6_000) },
       10_000
     )
     expect(paged.hostClock).toEqual({ hostNow: 6_000, receivedAt: 10_000 })
     expect(
       reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
-        type: 'tail-page',
+        type: 'history-page',
         page: hydrationPage([user('u1', 1)])
       }).hostClock
     ).toBeUndefined()

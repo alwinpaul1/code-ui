@@ -165,11 +165,11 @@ describe('the background tasks a structured session is monitoring', () => {
     expect(updated.backgroundTasks?.settledTasks).toHaveLength(1)
   })
 
-  it('survive a tail refresh of the same epoch that reports none', () => {
+  it('survive a history read of the same epoch that reports none', () => {
     const tasks = monitoring([{ id: 'task-1', kind: 'workflow' }])
     const state = seeded(tasks)
     const refreshed = reduceStructuredAgentSession(state, {
-      type: 'tail-page',
+      type: 'history-page',
       page: hydrationPage([item('one', 1), item('two', 2)])
     })
     expect(refreshed.backgroundTasks).toEqual(tasks)
@@ -255,7 +255,7 @@ describe('provider activity on a structured session', () => {
     expect(cleared.items).toBe(active.items)
   })
 
-  it('retains same-epoch activity across a newer journal tail refresh', () => {
+  it('retains same-epoch activity across a newer journal history read', () => {
     const active = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
       event: {
@@ -267,7 +267,7 @@ describe('provider activity on a structured session', () => {
       }
     })
     const refreshed = reduceStructuredAgentSession(active, {
-      type: 'tail-page',
+      type: 'history-page',
       page: hydrationPage([item('latest', 2)])
     })
     expect(refreshed.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })

@@ -148,6 +148,14 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   keyed to loaded user messages. None of the four can be re-vendored whole at
   2626e2eca for the reasons the entries above give; every hunk merged clean
   except the reducer's snapshot arm, which differed only by line wrapping.
+  The reducer also carries Orca #20581 (a4c11f188): the `tail-page` action and
+  its cursor-moving branch are gone, `history-page` replaces the page whole,
+  and `shouldAdvanceStructuredResumeCursor` is deleted. The phone never
+  dispatched `tail-page` (its only history read is `older-page`), so this is
+  alignment, not a fix here; the vendored reducer test is NOT updated for it
+  (seven conflicting hunks on a file that is never collected), so it still
+  names `tail-page`. `agent-session-journal-types.ts` carries #20518's
+  (4634d2c03) `userItemId` doc comment.
 
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
