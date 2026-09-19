@@ -8,10 +8,8 @@ import {
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
-import {
-  isMethodNotFoundRefusal,
-  requireRpcResultOrThrowCodedError
-} from './rpc-acceptance-policies'
+import { requireRpcResultOrThrowCodedError } from './rpc-acceptance-policies'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -223,10 +221,13 @@ async function runPairing(
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
-  if (isMethodNotFoundRefusal(provision)) {
+  if (isPairingRelayRpcUnavailable(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
+    // Why: this commits a LAN-only host instead of failing, so the refusal code is the only
+    // record of why the phone never got a relay endpoint.
+    log('info', 'Relay: desktop will not serve relay pairing', provision.error.code)
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
     await dependencies.clearJournal(journal.metadata.journalId)
     return { hostId }
