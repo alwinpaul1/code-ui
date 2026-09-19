@@ -37,7 +37,10 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
 
 - `native-chat-session-option-snapshot.ts` — an unlisted tracked model (a
   release newer than the catalog) keeps the catalog's fallback effort rows,
-  so the sheet is not model-name-only.
+  so the sheet is not model-name-only. It also carries Orca #20506's
+  (c287a5d9b) boolean-descriptor hunk by 3-way merge: `currentValue` always
+  resolves to `values[id] ?? defaultValue`, so a switch never renders `false`
+  for "nobody said"; provenance stays on `valueSource`.
 - `native-chat-session-option-state.ts` — when the agent reports a different
   model than the one the user picked, the user's own non-reported picks are
   carried onto the reported model instead of being dropped.
@@ -90,7 +93,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `description` winning over the curated one. Its test took #19928's two cases
   by 3-way merge.
 - `agent-session-wire.ts` also carries #19928's optional `description` /
-  `argumentHint` on `AgentSessionSlashCommand`.
+  `argumentHint` on `AgentSessionSlashCommand`, and #20506's (c287a5d9b) Fast
+  mode fields: `supportsFastMode` on a model, `AgentSessionFastModeState`,
+  `AgentSessionFastModeSupport`, `fastModeSupport` on the options result and
+  `fastMode` / `fastModeState` on its `current`.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
   from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
