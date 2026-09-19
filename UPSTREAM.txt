@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md)
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus two forward-ported hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -22,7 +22,9 @@ src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, se
 src/shared/structured-agent-session-options.ts: 546fd9b21
 src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
-src/shared/agent-session-wire.ts: f1d854502 (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
+src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/agent-session-background-task-wire.ts: f2af92b2f
+src/shared/remote-runtime-client-capabilities.ts: f2af92b2f
 src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502

@@ -403,6 +403,36 @@ describe('a structured tab reading its background tasks from the host', () => {
     expect(stopped).toEqual(['task-live'])
   })
 
+  it('hides the Stop on a row the host says it cannot stop, and keeps it on the rest', async () => {
+    // Orca #19705: the host now lists a foreground subagent that is live
+    // inside the turn, marked `stoppable: false` because no targeted stop can
+    // reach it. Its Stop would be a dead button; the backgrounded row beside
+    // it keeps its working one. Both themes, since the row is drawn either way.
+    for (const scheme of ['light', 'dark'] as const) {
+      const stopped: string[] = []
+      const { texts } = await renderHosted(scheme, {
+        hostBackgroundTasks: {
+          ...HOST_ROSTER,
+          tasks: [
+            { id: 'task-fg', kind: 'agent', description: 'Explore the repo', stoppable: false },
+            ...(HOST_ROSTER.tasks ?? [])
+          ]
+        },
+        onStopTask: (taskId) => stopped.push(taskId)
+      })
+      expect(texts).toContain('Explore the repo')
+      const stops = renderer!.root
+        .findAllByType('Pressable')
+        .map((node) => String(node.props.accessibilityLabel ?? ''))
+        .filter((label) => label.startsWith('Stop '))
+      expect(stops).toEqual(['Stop Audit the release notes', 'Stop Watch the build log'])
+      await press(renderer!, 'Stop Audit the release notes')
+      expect(stopped).toEqual(['task-live'])
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
   it('offers no stop at all when the caller passes no handler', async () => {
     await renderHosted('light')
     const stops = renderer!.root

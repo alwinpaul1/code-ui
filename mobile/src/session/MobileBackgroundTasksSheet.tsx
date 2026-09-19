@@ -287,7 +287,7 @@ function BackgroundTaskCard({
           )}
         </View>
       </View>
-      {onStop && task.status === 'running' ? (
+      {onStop && task.status === 'running' && task.stoppable !== false ? (
         <StopTaskButton taskId={task.id} title={task.title} onStop={onStop} />
       ) : null}
       {onOpen ? (

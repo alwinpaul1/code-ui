@@ -39,7 +39,12 @@ better: it is the provider's own answer, so it never strands a task the
 transcript could not retire.
 
 **Stopping one task** is offered only where the roster says
-`supportsTaskStop`. It sends `agentSession.cancel` with
+`supportsTaskStop`, and never on a row the host marks `stoppable: false`
+(Orca #19705, 2026-09-10: a foreground subagent live inside the turn, which
+the SDK cannot target — the phone advertises
+`agent-session.background-task-row-stop.v1` so the host sends those rows at
+all, and hides their Stop). Absent means stoppable, as every older host meant
+it. It sends `agentSession.cancel` with
 `{ turnId: 'background-tasks', scope: 'background-tasks', taskId }` — the
 `turnId` there is the host's scope marker, not a real turn, because a
 background task outlives the turn that launched it. Codex reports

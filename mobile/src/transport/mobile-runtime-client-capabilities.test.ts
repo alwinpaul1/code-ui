@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -20,6 +22,25 @@ describe('mobile runtime client capabilities', () => {
         STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
         CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
+    )
+  })
+
+  it('advertises that it reads a roster with no stop, and honours a row marked unstoppable', () => {
+    // Orca #19346 / #19705. Without the first, a host withholds a Codex roster
+    // that offers no stop; without the second, it withholds every foreground
+    // row — the in-turn subagent fan-out — because a reader that predates
+    // `stoppable` would draw a dead Stop on each. The sheet honours both.
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
+      expect.arrayContaining([
+        AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+        AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY
+      ])
+    )
+    expect(AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY).toBe(
+      'agent-session.background-task-stop.v1'
+    )
+    expect(AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY).toBe(
+      'agent-session.background-task-row-stop.v1'
     )
   })
 

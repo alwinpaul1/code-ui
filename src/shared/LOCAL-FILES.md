@@ -70,7 +70,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `agent-session-wire.ts` — the background-task fields from the same four
   commits, on top of its f1d854502 pin: `AgentSessionBackgroundTaskRunState`,
   `name`/`state`/`startedAt`/`totalTokens` on a task, `settledTasks`,
-  `supportsStopAll`, and `agentSessionBackgroundTasksEqual`. A whole-file
+  `supportsStopAll`, and `agentSessionBackgroundTasksEqual`. Since Orca #19705
+  (f2af92b2f) those definitions live in `agent-session-background-task-wire.ts`,
+  which IS vendored whole (it adds `stoppable` on a task), and this file carries
+  #19705's re-export hunk instead of the inline block. A whole-file
   re-vendor at 2bf298d1d would drag in the rewind surface (ce4a3a418, #19235 —
   it imports `agent-session-rewind.ts`, not vendored here) and
   `hostExecutionOwned` from 1c1cb7115, which is the orchestration-worker feature
@@ -80,10 +83,15 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
-  from 1ae7aa8bb. The file otherwise sits at its d07c47593 pin: upstream later added
-  `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
-  `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
-  whole-file re-vendor would drag in an unported change.
+  from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
+  #19346) plus `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
+  #19705), both in `RUNTIME_CAPABILITIES` too — the phone advertises them through
+  `remote-runtime-client-capabilities.ts`, which is re-vendored whole at f2af92b2f.
+  The file otherwise sits at its d07c47593 pin: upstream later added
+  `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
+  `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
+  constants, which are NOT vendored here, so a whole-file re-vendor would drag in an
+  unported change.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
   `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
   (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional

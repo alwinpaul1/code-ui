@@ -1,6 +1,7 @@
 // The shared reducer's and coalescer's own test files are vendored but never
 // collected here — this fork's vitest root is `mobile/`. So the background-task
-// half of Orca #18757/#18807/#19346/#19311 is pinned where the gate runs it.
+// half of Orca #18757/#18807/#19346/#19311, and #19705's `stoppable`, is pinned
+// where the gate runs it.
 
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
@@ -130,6 +131,23 @@ describe('the background tasks a structured session is monitoring', () => {
       )
     })
     expect(updated).toBe(state)
+  })
+
+  it("republishes when only a row's stoppability changes", () => {
+    // Orca #19705. A row losing its stop is the whole difference between an
+    // honest control and a dead one, so it must not be dropped as an equal
+    // state.
+    const state = seeded(monitoring([{ id: 'task-1', kind: 'agent' }]))
+    const updated = reduceStructuredAgentSession(state, {
+      type: 'event',
+      event: taskBatch(
+        state.cursor!.sequence,
+        monitoring([{ id: 'task-1', kind: 'agent', stoppable: false }])
+      )
+    })
+    expect(updated.backgroundTasks?.tasks).toEqual([
+      { id: 'task-1', kind: 'agent', stoppable: false }
+    ])
   })
 
   it('notice a settled sibling appearing beside a live task', () => {
@@ -271,6 +289,15 @@ describe('task-list equality on the wire', () => {
       agentSessionBackgroundTasksEqual(
         [{ id: 'a', kind: 'agent', totalTokens: 100 }],
         [{ id: 'a', kind: 'agent', totalTokens: 200 }]
+      )
+    ).toBe(false)
+  })
+
+  it('separates a task whose stop was withdrawn', () => {
+    expect(
+      agentSessionBackgroundTasksEqual(
+        [{ id: 'a', kind: 'agent' }],
+        [{ id: 'a', kind: 'agent', stoppable: false }]
       )
     ).toBe(false)
   })
