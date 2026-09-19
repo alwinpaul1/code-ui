@@ -122,6 +122,21 @@ The sweep on 2026-09-13 covered every upstream commit to `origin/main`
 and terminal fixes that do not. `UPSTREAM.txt` is unchanged by that sweep: all
 twelve ports are mobile-only, and its pin list records `src/shared/` files.
 
+The sweep on 2026-09-19 took `docs/upstream-port-backlog-2026-09-19.md`'s
+Group A — the 29 native-chat commits on the structured lane from f2af92b2f
+(#19705) to 7f5141ae2 (#20977), in the order the table lists them — plus
+955051ded (#20138) and e7206f62a (#20868), two commits the backlog did not list
+because the files they change did not exist here when it was cut. Seventeen
+landed (rows above, each with its failing-first evidence), twelve are in the
+Skipped table with the grep that proved no phone reader. Every landed port ran
+`tsc`, its own tests red-then-green, and the full suite; the branch was gated
+whole after the large ones (#19695, #20133, #20601) and at the end. `UPSTREAM.txt`
+gained or moved 41 `src/shared/` pins, and `LOCAL-FILES.md` records every
+hand-applied hunk. Not verified against a live host: no desktop here is past
+c287a5d9b, so the Fast row, the prompt-cancel X's precise path and the
+`stoppable` foreground rows have not been watched arriving; each falls back to
+the pre-port view on a host that does not send them.
+
 **This table is behind `main` for work outside the chat-rendering and
 shared-path batches.** It was last rewritten at 588b199, and several ports have
 landed since without adding a row — the pins in `UPSTREAM.txt` for
