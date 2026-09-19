@@ -369,15 +369,12 @@ describe('the recorded mobile-scope allowlist', () => {
   })
 
   it('agrees with the catalog on spelling, except for what the vendored catalog is too old to know', () => {
-    // The installed desktop is newer than the catalog this fork vendors: on
-    // 2026-09-18 it allowed two aiVault search methods the catalog has no row
-    // for. Nothing on the phone can send them (tsc would refuse the name), so
-    // they are pinned here rather than hidden; re-vendoring the catalog past
-    // them shrinks this list, and a typo in a re-captured fixture grows it.
-    expect(fixture.methods.filter((method) => !catalog.has(method))).toEqual([
-      'aiVault.searchSessions',
-      'aiVault.searchStatus'
-    ])
+    // 2026-09-19: the catalog caught up (#20277, #20886 ported the
+    // rpc-params-catalog.generated.ts hunks that add aiVault.searchSessions,
+    // aiVault.searchStatus and aiVault.setSearchEnabled), so this gap is
+    // empty again. A typo in a re-captured fixture, or the installed desktop
+    // moving ahead of the vendored catalog again, would grow it.
+    expect(fixture.methods.filter((method) => !catalog.has(method))).toEqual([])
   })
 
   it('does not carry the two methods that were caught missing, or the ratchet would be vacuous', () => {

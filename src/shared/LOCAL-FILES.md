@@ -35,6 +35,17 @@ redundant — check before re-applying it.
 These came from upstream and were then edited here. A re-vendor must
 re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
 
+- `agent-session-record.ts` — carries `rewind?: AgentSessionRewindRecord` and
+  `conversationName?: string` on `AgentSessionRecord`, plus the matching
+  conjuncts in `isAgentSessionRecord`. Hand-written from upstream's
+  `agent-session-rewind.ts` / the `AgentSessionRecord` shape at ce4a3a418
+  #19235 rather than copied by re-vendoring this file wholesale, because
+  `agent-session-record.ts` itself cannot be re-vendored past f1d854502 (see
+  "Vendored files carrying a hand-applied upstream hunk" below re:
+  `agent-session-wire.ts`, which this file's own type chain touches).
+  Upstream's own `agent-session-record.ts` at HEAD has neither field. Noted
+  2026-09-19 while re-pinning this file for #20785's `shapeValid` ->
+  `fieldsValid` rename, found undocumented until now.
 - `native-chat-session-option-snapshot.ts` — an unlisted tracked model (a
   release newer than the catalog) keeps the catalog's fallback effort rows,
   so the sheet is not model-name-only.

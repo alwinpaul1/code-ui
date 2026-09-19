@@ -78,8 +78,12 @@ const HOST_COMPONENT_NAMES = new Set([
 // 282 since 2026-09-19 (upstream #20069): useMobileSessionFoundation binds
 // useHostProtocolGates for hostCapabilities, which the create action reads to
 // decide whether it may paint a created tab's placement itself.
-const HEAD_MAIN_HOOK_SHA256 = 'fa902ad516ec0e243c8e3d0eb8132a2295c0e703b280e9994036fcc99a01a400'
-const HEAD_HOOK_BINDING_SHA256 = '37f37b23e3b348d868dd806a144ae7cf2b62366bb768ebe789930d9c08b48e80'
+// 283 since 2026-09-19 (upstream #20545): useTerminalCopyTrimsGutter's
+// binding call in use-mobile-session-accessory-selection.ts, mirroring the
+// desktop's "Trim Gutter on Copy" setting onto the mobile Copy button. Both
+// ports landed the same day on separate branches; re-pinned at the merge.
+const HEAD_MAIN_HOOK_SHA256 = 'c27764d94ee5f15e78220e16e7770163d0bf93225e01b52fe1117a488d35a071'
+const HEAD_HOOK_BINDING_SHA256 = '902f2bd9c8c7131a3594a912b7bed07a0a45a61267923c74d41bc7f47533ab9e'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -111,7 +115,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
-const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
+// 2026-09-19 (perf-group port, #20545): the Copy button's handler now trims
+// the agent gutter through stripTerminalSelectionGutter when the mirrored
+// desktop setting is on.
+const HEAD_CALLBACK_BODY_SHA256 = '2551fcb7e13621a636d239b47229152a3b4d75ba28c583772105f79a6df2a406'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -650,7 +657,8 @@ describe('mobile session route extraction parity', () => {
     // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
     // 282 since 2026-09-19: useHostProtocolGates in the foundation (#20069).
-    expect(main.hooks).toHaveLength(282)
+    // 283 since 2026-09-19: useTerminalCopyTrimsGutter (#20545), merged the same day.
+    expect(main.hooks).toHaveLength(283)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)

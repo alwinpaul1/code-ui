@@ -18,16 +18,16 @@ src/shared/native-chat-session-option-defaults.test.ts: 546fd9b21
 src/shared/native-chat-session-options.ts: 546fd9b21
 src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/native-chat-session-option-snapshot.test.ts: 546fd9b21
-src/shared/native-chat-session-option-state.ts: 546fd9b21 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/native-chat-session-option-state.ts: 13c0c8b53 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/structured-agent-session-options.ts: 546fd9b21
 src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
 src/shared/agent-session-wire.ts: f1d854502 (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
-src/shared/agent-session-record.ts: f1d854502
+src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
 src/shared/structured-agent-session-composer.ts: ecd7b19ad
-src/shared/native-chat-diff.ts: ddc5b75ac7ba0079e53d8a0a3e9552fcad875c9a
+src/shared/native-chat-diff.ts: 0d4d059ae
 src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-task-list.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
@@ -42,8 +42,10 @@ src/shared/native-chat-turn-status.ts: fab78c766
 src/shared/native-chat-turn-status.test.ts: fab78c766
 src/shared/structured-agent-session-live-turn.ts: fab78c766 (partial, see LOCAL-FILES.md)
 src/shared/structured-agent-session-live-turn.test.ts: fab78c766 (partial, see LOCAL-FILES.md)
-src/shared/native-chat-tool-summary.ts: c1e15c400
+src/shared/native-chat-tool-summary.ts: 2d1bd1eb4 (except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
+src/shared/native-chat-tool-preview-prefix.ts: 2d1bd1eb4
+src/shared/native-chat-tool-preview-scan.test.ts: 2d1bd1eb4
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-model.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-unified-patch.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
@@ -51,21 +53,30 @@ src/shared/native-chat-begin-patch.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-normalize.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
 src/shared/native-chat-edit-patch-files.ts: e80fae0c4d4d70424d52eebe383c57b2291b9daa
 src/shared/native-chat-edit-normalize.test.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
-src/shared/native-chat-ask.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
+src/shared/native-chat-ask.ts: 231e805b1
 src/shared/native-chat-ask-fifo.test.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
 src/shared/native-chat-tool-pair-limit.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
 src/shared/native-chat-tool-attribution-allocation.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
 src/shared/ai-vault-session-depth.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
 src/shared/ai-vault-session-depth.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
-src/shared/ai-vault-session-filters.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
+src/shared/ai-vault-session-filters.ts: fa3d29fa1
 src/shared/ai-vault-session-filters.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
-src/shared/project-host-setup-projection.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
+src/shared/ai-vault-search-query-operators.ts: cf7408a37
+src/shared/ai-vault-search-query-operators.test.ts: cf7408a37
+src/shared/project-host-setup-projection.ts: c35a47958
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
 src/shared/agent-launch-intent.ts: 0bf815a48
 src/shared/github/owner-slug.ts: 85d1ffc07
 src/shared/github/owner-slug.test.ts: 85d1ffc07
+src/shared/pr-comment-audience.ts: dcc1f9012
+src/shared/terminal-query-reply.ts: 09073086a
+src/shared/terminal-selection-gutter.ts: 55b339201
+src/shared/terminal-selection-gutter.test.ts: 55b339201
+src/shared/ai-vault-search-contract.ts: 1f7655f3e (plus a01027697's isolated AiVaultSetSearchEnabledParamsSchema addition, hand-applied — see docs/upstream-port-inventory.md)
+src/shared/ai-vault-search-contract.test.ts: 1f7655f3e
+src/shared/ai-vault-search-limit.ts: 1f7655f3e
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -134,10 +145,10 @@ src/shared/rpc-contract/plugins-params.ts: c84007c54
 src/shared/rpc-contract/preflight-params.ts: c84007c54
 src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
-src/shared/rpc-contract/repo-update-params.ts: c84007c54
+src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md)
-src/shared/rpc-contract/rpc-send-params.ts: eedd35645
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md)
+src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-schemas-params.ts: c84007c54
@@ -152,7 +163,7 @@ src/shared/rpc-contract/terminal-stream-params.ts: c84007c54
 src/shared/rpc-contract/terminal-unary-params.ts: c84007c54
 src/shared/rpc-contract/terminal-viewport-methods-params.ts: c84007c54
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: c84007c54
-src/shared/rpc-contract/ui-update-value-tolerance-params.ts: c84007c54
+src/shared/rpc-contract/ui-update-value-tolerance-params.ts: 231e805b1
 src/shared/rpc-contract/updater-params.ts: c84007c54
 src/shared/rpc-contract/workspace-cleanup-ui-params.ts: c84007c54
 src/shared/rpc-contract/workspace-ports-params.ts: c84007c54
