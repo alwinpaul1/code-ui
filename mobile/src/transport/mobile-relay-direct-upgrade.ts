@@ -22,10 +22,8 @@ import {
 } from './mobile-relay-direct-upgrade-journal'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile } from './types'
-import {
-  isMethodNotFoundRefusal,
-  requireRpcResultOrThrowCodedError
-} from './rpc-acceptance-policies'
+import { requireRpcResultOrThrowCodedError } from './rpc-acceptance-policies'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -68,7 +66,7 @@ export async function upgradeDirectMobileRelay(args: {
   }
 
   const initial = await getEndpoints(args.client, journal.reqId)
-  if (initial === 'method-not-found') {
+  if (initial === 'relay-pairing-unavailable') {
     await dependencies.clearJournal(args.host.id)
     return null
   }
@@ -83,7 +81,7 @@ export async function upgradeDirectMobileRelay(args: {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFoundRefusal(provisionResponse)) {
+  if (isPairingRelayRpcUnavailable(provisionResponse)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
@@ -92,7 +90,7 @@ export async function upgradeDirectMobileRelay(args: {
   )
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
-  if (reconciled === 'method-not-found') {
+  if (reconciled === 'relay-pairing-unavailable') {
     throw new Error('relay endpoint reconciliation became unavailable')
   }
   assertCommitted(reconciled, installed)
@@ -140,10 +138,10 @@ async function publishCommitted(
 async function getEndpoints(
   client: RpcClient,
   installReqId: string
-): Promise<PairingGetEndpointsResult | 'method-not-found'> {
+): Promise<PairingGetEndpointsResult | 'relay-pairing-unavailable'> {
   const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFoundRefusal(response)) {
-    return 'method-not-found'
+  if (isPairingRelayRpcUnavailable(response)) {
+    return 'relay-pairing-unavailable'
   }
   return PairingGetEndpointsResultSchema.parse(requireRpcResultOrThrowCodedError(response))
 }

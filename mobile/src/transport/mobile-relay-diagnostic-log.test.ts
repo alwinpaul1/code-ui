@@ -1,4 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+
+// Why: the log reads a dial's close code off RelayOuterError (#21566), which lives in the
+// e2ee link, whose session module imports expo-crypto and through it React Native's
+// Flow-typed entry. The same two mocks upstream's latch and verdict tests use.
+vi.mock('./mobile-e2ee-v2-client-session', () => ({
+  MobileE2EEV2ClientSession: { create: () => ({}) }
+}))
+vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
+  MobileE2EEAuthenticationError: class extends Error {},
+  MobileE2EEV2PhysicalChannel: class {}
+}))
+
 import {
   RelayCredentialRefusalTracker,
   createRelayCredentialRefusalRun,
