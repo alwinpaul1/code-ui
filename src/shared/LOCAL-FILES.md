@@ -85,7 +85,12 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   because it imports `agent-session-rewind.ts` — the codes stay inline in this
   file, and every importer reads them from here as before.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
-  `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
+  `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above;
+  and from Orca #19928 (9b83f976f) the `argumentHint` field plus a reported
+  `description` winning over the curated one. Its test took #19928's two cases
+  by 3-way merge.
+- `agent-session-wire.ts` also carries #19928's optional `description` /
+  `argumentHint` on `AgentSessionSlashCommand`.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
   from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
