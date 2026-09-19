@@ -41,6 +41,7 @@ import {
   type NativeChatSessionOptionRecord
 } from '../../../src/shared/native-chat-session-option-state'
 import { activeModels } from './mobile-chat-model-row-naming'
+import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
 
 export type MobileNativeChatSessionOptionsController = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -115,6 +116,10 @@ export function useMobileNativeChatSessionOptions(args: {
   scopeKey: string | null
   /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
+  /** The command the running OMP extension installed for a model switch (Orca
+   *  #20612). Absent on an older host: the model row then stays read-only,
+   *  because OMP's own `/model` opens a TUI picker the chat cannot drive. */
+  modelSwitchCommand?: string
   /** Effort level as the terminal's status line shows it, when observed. */
   reportedEffort?: string | null
   /** The agent's OWN name for the reported model ("Opus 4.8.5"); the catalog
@@ -159,7 +164,15 @@ export function useMobileNativeChatSessionOptions(args: {
     // effective-model resolution desktop does — `previousModelId` below is tracked-only,
     // so a CLI-default model would render option rows that do nothing when tapped.
     const base =
-      agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null
+      agent === 'claude' || agent === 'codex' || agent === 'omp'
+        ? getAgentSessionOptionCatalog(agent)
+        : null
+    if (base && agent === 'omp') {
+      // OMP seeds no models: the list is whatever the host discovered, and a
+      // switch is offered only where the running extension installed the
+      // command for it (Orca #20612).
+      return mobileOmpSessionCatalog(base, discoveredModels, args.modelSwitchCommand)
+    }
     return base && discoveredModels && discoveredModels.length > 0
       ? {
           ...base,
@@ -167,7 +180,7 @@ export function useMobileNativeChatSessionOptions(args: {
           ...(discoveredModelApply ? { modelApply: discoveredModelApply } : {})
         }
       : base
-  }, [agent, discoveredModelApply, discoveredModels])
+  }, [agent, args.modelSwitchCommand, discoveredModelApply, discoveredModels])
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)
   // Bumped when the grace on a dispatched model pick expires, so the seeding

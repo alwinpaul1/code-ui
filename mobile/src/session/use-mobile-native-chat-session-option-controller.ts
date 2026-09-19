@@ -14,6 +14,7 @@ import {
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
 import { useCodexNativeChatOptions } from './use-codex-native-chat-options'
+import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
 
 export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
@@ -35,6 +36,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   terminalHandle?: string | null
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
+  /** The command the running OMP extension installed for a model switch; absent
+   *  on an older host, which then gets a read-only model row (Orca #20612). */
+  modelSwitchCommand?: string
   structured: {
     conversationCommands?: readonly AgentSessionConversationCommand[]
     optionPickerRequest?: { id: string; sequence: number } | null
@@ -105,7 +109,14 @@ export function useMobileNativeChatSessionOptionController(args: {
     refreshHud,
     onFailure
   })
+  const discoveredOmpModels = useMobileOmpModelDiscovery({
+    client,
+    hostId,
+    worktreeId,
+    enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
+  })
   const sessionOptions = useMobileNativeChatSessionOptions({
+    modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
@@ -115,7 +126,10 @@ export function useMobileNativeChatSessionOptionController(args: {
     terminalHandle,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
-    discoveredModels: codex.discoveredModels,
+    // Codex discovers through its own hook (`codex debug models`); OMP through
+    // the host's `git.discoverCommitMessageModels` probe (Orca #20612). One
+    // agent is active at a time, so the two never both carry a list.
+    discoveredModels: agent === 'omp' ? discoveredOmpModels : codex.discoveredModels,
     discoveredModelApply: codex.discoveredModelApply,
     applyOverride: codex.applyOverride
   })

@@ -54,7 +54,9 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
   for "nobody said"; provenance stays on `valueSource`.
 - `native-chat-session-option-state.ts` — when the agent reports a different
   model than the one the user picked, the user's own non-reported picks are
-  carried onto the reported model instead of being dropped.
+  carried onto the reported model instead of being dropped. (Re-vendored at
+  ae9c06c94 for Orca #20612 by 3-way merge; the local hunk is still the only
+  difference.)
 - `native-chat-slash-commands.ts` (and its test) — Code UI enumerated Claude
   Code 2.1.261's and Codex 0.153.4's real command tables in place of upstream's
   five-entry catalogs, and added `opensOverlay`, `isSlashCommandToken` and
@@ -114,6 +116,13 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `fastMode` / `fastModeState` on its `current`; and #20601's (f55b7ba68)
   `AGENT_SESSION_ID_MAX_LENGTH`, which the re-vendored
   `rpc-contract/structured-agent-session-params.ts` imports.
+- `agent-status-types.ts` — Orca #20612's (ae9c06c94) `modelSwitchCommand`
+  on the status entry and payload, the pick and the normalizer, hand-applied.
+  The file otherwise sits at the vendor base and cannot be re-vendored whole:
+  the base→ae9c06c94 delta also carries #19807 and #19645 (both skipped, see
+  the inventory) and the orchestration fleet `attention` field. The commit's
+  `agent-hook-listener/providers/pi-family-events.ts` half — the producer that
+  stamps the field — is host-side and not vendored.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
   from 1ae7aa8bb; `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,

@@ -196,6 +196,7 @@ export function useMobileNativeChatController(
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
   const isCodexChat = activeChatResolution?.agent === 'codex'
+  const isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live; fold that into the beacon-built
   // report so the pill and sheet can use it as a floor when the beacon's
   // transcript tail lags on a huge session.
@@ -400,14 +401,24 @@ export function useMobileNativeChatController(
       // through useCodexCurrentModel, which guards the host's occasional Claude
       // id on a Codex pane and falls back to the picker's `(current)` row). The
       // footer, when a turn has drawn it, is only a fresher override.
-      reportedModel: isCodexChat ? codexModel.model : claudeReported.model,
-      reportedEffort: isCodexChat ? codexModel.effort : claudeReported.effort,
+      //
+      // OMP (Orca #20612): its extension stamps `provider/id` on every hook post
+      // and re-posts on a switch, so for that agent — and only that one — the
+      // tab's `agentStatus.model` is the agent's own live word, not the launch
+      // record `reportedModelPair` refuses. The switch command rides beside it.
+      reportedModel: isCodexChat
+        ? codexModel.model
+        : isOmpChat
+          ? (activeSessionTab?.agentStatus?.model ?? null)
+          : claudeReported.model,
+      reportedEffort: isCodexChat ? codexModel.effort : isOmpChat ? null : claudeReported.effort,
       // The agent's own name for it, so the pill can say "Opus 4.8.5" rather
       // than the family the catalog collapses every Opus onto.
-      reportedModelLabel: isCodexChat ? null : claudeReported.label,
+      reportedModelLabel: isCodexChat || isOmpChat ? null : claudeReported.label,
       // Codex resolves its own model elsewhere and has no launch-record path
-      // here, so its report is always the live one.
-      reportedModelSource: isCodexChat ? 'live' : claudeReported.source,
+      // here, so its report is always the live one; so is OMP's, see above.
+      reportedModelSource: isCodexChat || isOmpChat ? 'live' : claudeReported.source,
+      modelSwitchCommand: isOmpChat ? activeSessionTab?.agentStatus?.modelSwitchCommand : undefined,
       terminalHandle: activeHandle,
       openRequest: modelSheetRequest,
       structured: {

@@ -206,11 +206,16 @@ export function resolveReportedModelSeed(input: {
   const { catalog, agent, reportedModel, reportedEffort, source, scopeKey, terminalHandle } = input
   // Codex's lineup (gpt-6-astra, …) outpaces the catalog, so track a reported id
   // it does not list as the raw model; `withTrackedNativeChatModel` then names
-  // it in the pill. Claude keeps the strict match — its badge label "Opus 5" is
-  // not a catalog id.
+  // it in the pill. OMP reports exact `provider/id` selectors, including ones
+  // absent from cached discovery, and those are what its CLI accepts back — so
+  // it never goes through the catalog match, whose longest-prefix rule would
+  // fold `deepseek/deepseek-v4-pro-new` onto `…-v4-pro` (Orca #20612). Claude
+  // keeps the strict match — its badge label "Opus 5" is not a catalog id.
   const matched =
-    matchNativeChatCatalogModelId(catalog, reportedModel) ??
-    (agent === 'codex' ? reportedModel.trim() : null)
+    agent === 'omp'
+      ? reportedModel.trim() || null
+      : (matchNativeChatCatalogModelId(catalog, reportedModel) ??
+        (agent === 'codex' ? reportedModel.trim() : null))
   if (!matched) {
     return null
   }
