@@ -332,7 +332,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     return false
   }
   const record = value as Partial<AgentSessionRecord>
-  const shapeValid =
+  const fieldsValid =
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
@@ -348,7 +348,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     record.lease.sessionId === record.sessionId &&
     Number.isSafeInteger(record.createdAt) &&
     Number.isSafeInteger(record.updatedAt)
-  if (!shapeValid) {
+  if (!fieldsValid) {
     return false
   }
   const validated = record as AgentSessionRecord
