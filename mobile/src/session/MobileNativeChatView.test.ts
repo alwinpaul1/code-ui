@@ -114,6 +114,10 @@ type Overrides = {
   structuredActivityUi?: boolean
   turnThinking?: boolean
   agentWorking?: boolean
+  canStop?: boolean
+  ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  question?: Parameters<typeof MobileNativeChatView>[0]['question']
+  permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
 }
 
@@ -727,6 +731,79 @@ describe('MobileNativeChatView', () => {
         vi.useRealTimers()
       }
     })
+
+    // Orca #20496. While the agent waits on the user, "Working for N" under the
+    // prompt is a lie the card beside it contradicts. Withheld, not settled: the
+    // turn's clock keeps counting, Stop stays, and the row returns once the
+    // prompt resolves.
+    it.each([
+      {
+        label: 'structured question',
+        cardType: 'ChatAsk',
+        interaction: {
+          ask: {
+            questions: [
+              {
+                question: 'Pick destination',
+                multiSelect: false,
+                options: [{ label: 'Choice A' }, { label: 'Choice B' }]
+              }
+            ]
+          }
+        }
+      },
+      {
+        label: 'question',
+        cardType: 'ChatQuestion',
+        interaction: {
+          question: {
+            question: 'Pick destination',
+            options: ['Choice A', 'Choice B'],
+            multiSelect: false,
+            allowOther: true,
+            optionTokens: ['choice-a', 'choice-b']
+          }
+        }
+      },
+      {
+        label: 'approval',
+        cardType: 'ChatPermission',
+        interaction: {
+          permission: {
+            title: 'Allow command?',
+            detail: 'pnpm test',
+            options: [
+              { label: 'Allow', send: 'allow' },
+              { label: 'Deny', send: 'deny' }
+            ]
+          }
+        }
+      }
+    ] as const)(
+      'hides live turn activity for a pending $label without settling it',
+      async (testCase) => {
+        const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'waiting for input')]
+        const working = {
+          messages: folded,
+          folded,
+          structuredActivityUi: true,
+          agentWorking: true,
+          canStop: true
+        }
+        await render({ ...working, ...testCase.interaction })
+
+        expect(rowProps('u1').turnStatus).toBeNull()
+        expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+        expect(
+          renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
+        ).toHaveLength(1)
+        expect(renderer!.root.findAll((node) => node.type === testCase.cardType)).toHaveLength(1)
+
+        await update(working)
+        expect(rowProps('u1').turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
+        expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+      }
+    )
 
     it('does not treat pre-user history as part of the live turn', async () => {
       const history = [

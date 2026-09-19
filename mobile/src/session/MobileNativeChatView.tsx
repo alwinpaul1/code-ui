@@ -219,6 +219,7 @@ export function MobileNativeChatView({
     workingStartedAt,
     settledTurns,
     thinking: turnThinking,
+    awaitingInput: structuredActivityUi && (ask != null || permission != null || question != null),
     scopeKey: sendSurfaceId
   })
 

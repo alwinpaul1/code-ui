@@ -29,6 +29,7 @@ export function useMobileNativeChatTurnDisclosure({
   workingStartedAt,
   settledTurns,
   thinking = false,
+  awaitingInput = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
@@ -37,6 +38,12 @@ export function useMobileNativeChatTurnDisclosure({
   workingStartedAt?: number | null
   /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
+  /** A structured prompt (approval, question, ask) is waiting on the user. The
+   *  live turn's "Working for N" row is withheld while it is — the agent is not
+   *  working, it is waiting — but the turn is NOT settled: its clock keeps
+   *  running, Stop stays, and the row comes back when the prompt resolves
+   *  (Orca #20496). */
+  awaitingInput?: boolean
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
@@ -96,7 +103,9 @@ export function useMobileNativeChatTurnDisclosure({
     })
   }, [enabled, messages])
 
-  const { active, activeTurnKey, completedByTurn } = turnStatuses
+  const { active: liveActive, activeTurnKey, completedByTurn } = turnStatuses
+  // Withheld, not settled: the timing state above still counts the turn.
+  const active = awaitingInput ? null : liveActive
   const resolveRow = useCallback(
     (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]

@@ -235,7 +235,10 @@
             // 2026-09-19, later: +2 for workingStartedAt / settledTurns (Orca
             // #19695), the host-recorded turn timing threaded to the turn
             // disclosure; the logic is use-mobile-structured-agent-turn-timing.
-            "max": 412,
+            // +1 the same day for `awaitingInput` (Orca #20496): the live-turn
+            // row withheld while a prompt card waits; the rule lives in the
+            // disclosure hook.
+            "max": 413,
             "skipBlankLines": true,
             "skipComments": true
           }
