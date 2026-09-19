@@ -7,6 +7,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useStableEchoes } from './use-stable-echoes'
 import { preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import {
   normalizeNativeChatUserText,
   stripImagePromptMarker
@@ -203,7 +204,7 @@ function isCutOf(shorter: string, longer: string): boolean {
 /** Like `promptKey`, but paragraph breaks survive, because that is where a
  *  cut reading ends. */
 function cutKey(text: string): string {
-  return stripImagePromptMarker(text)
+  return stripImagePromptMarker(asPaintedPrompt(text))
     .split('\n')
     .map((line) => line.trim().replace(/\s+/g, ' '))
     .filter((line, index, all) => line.length > 0 || (index > 0 && all[index - 1] !== ''))
@@ -218,7 +219,7 @@ type HeldEcho = { text: string; anchorId: string | null; seq: number; provisiona
  *  scrollback and the transcript each wrap it differently, and only the
  *  transcript keeps the `[Image #1]` markers, so both are normalised away. */
 function promptKey(text: string): string {
-  return normalizeNativeChatUserText(text)
+  return normalizeNativeChatUserText(asPaintedPrompt(text))
 }
 
 /** Claude's queue box cuts a long entry short with `…`, so a key read there

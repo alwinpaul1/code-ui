@@ -1,4 +1,8 @@
-import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
+import {
+  codeSpanContent,
+  createMarkdownInlineMatcher,
+  type MarkdownInlineMatch
+} from './markdown-inline-matcher'
 import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
@@ -151,9 +155,11 @@ function renderInline(
   chipScale?: ReturnType<typeof markdownChipScale>
 ): ReactNode[] {
   const parts: ReactNode[] = []
+  // Code spans are found by backtick run inside the matcher, not here.
   const pattern = createMarkdownInlineMatcher(
     text,
-    /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
+    /(~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
+    true,
     true
   )
   let pendingStart = 0
@@ -201,7 +207,7 @@ function renderInline(
         parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
       }
     } else if (token.startsWith('`')) {
-      const code = token.slice(1, -1)
+      const code = codeSpanContent(token)
       const openFile =
         onOpenFile && isFilePathCodeSpan(code)
           ? () => onOpenFile(normalizeFilePath(code.trim()))

@@ -10,10 +10,7 @@ import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './Mo
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { witnessesToRemember } from './mobile-native-chat-witness-memory'
-import {
-  pendingTextsStillDrawn,
-  pendingWithoutTranscriptTwins
-} from './desktop-prompt-own-sends'
+import { pendingWithoutTranscriptTwins, textsAlreadyShown } from './desktop-prompt-own-sends'
 import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
@@ -161,14 +158,16 @@ export function MobileNativeChatOverlay({
   // …except a send the transcript itself has a record of: that record says
   // where the message was taken, the phone's echo only guessed, so the echo
   // steps aside for it (2026-09-19, see desktop-prompt-own-sends.ts).
+  // …and a message the agent's queue box still lists is drawn THERE, not as
+  // a bubble above it (2026-09-19, see textsAlreadyShown).
   const unlandedPrompts = useMemo(
     () =>
       withoutLandedDesktopPrompts(
         desktopPrompts,
         baseFolded,
-        pendingTextsStillDrawn(controller.chatPending, desktopPrompts)
+        textsAlreadyShown(controller.chatPending, desktopPrompts, queuedMessages ?? [])
       ),
-    [controller.chatPending, desktopPrompts, baseFolded]
+    [controller.chatPending, desktopPrompts, baseFolded, queuedMessages]
   )
   const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded, session.messages)
   // Existing sessions have no hook, but the agent draws its own queue and the

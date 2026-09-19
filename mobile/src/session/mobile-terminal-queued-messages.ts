@@ -1,4 +1,5 @@
 import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 /** Verified against Claude Code 2.1.263. Two different queue footers exist:
  * the legacy whole-queue recall, and the per-message selector that only appears
@@ -248,7 +249,7 @@ const QUEUE_ROW_MATCH_FLOOR = 24
  *  author's — and accept the drawn row as a prefix of what was sent once it is
  *  long enough to be unambiguous. */
 export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
-  const dense = (text: string) => text.replace(/\s+/g, '')
+  const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
   const want = dense(sent)
   const row = dense(drawn).replace(/(?:\u2026|\.{3})$/, '')
   if (row.length === 0 || want.length === 0) {
@@ -281,7 +282,7 @@ export function readingIsJoinedLandedRows(
   landed: readonly string[],
   reading: string
 ): boolean {
-  const dense = (text: string) => text.replace(/\s+/g, '')
+  const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
   const want = dense(reading)
   if (want.length < QUEUE_ROW_MATCH_FLOOR) {
     return false
@@ -345,9 +346,9 @@ export function projectMobileChatQueue<T extends { text: string; images?: string
     if (!splitOrcaPastedImagePaths(text).paths.length && !/\[Image #\d+\]/.test(text)) {
       return text
     }
-    const normalized = normalizeNativeChatUserText(text)
+    const normalized = normalizeNativeChatUserText(asPaintedPrompt(text))
     const index = available.findIndex(
-      (item) => normalizeNativeChatUserText(item.text) === normalized
+      (item) => normalizeNativeChatUserText(asPaintedPrompt(item.text)) === normalized
     )
     if (index === -1) {
       return text

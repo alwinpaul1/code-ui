@@ -55,3 +55,68 @@ describe('inline code chips', () => {
     expect(isInlineCodeChip('')).toBe(false)
   })
 })
+
+// 2026-09-19, from a phone screenshot beside the Claude app: an answer that
+// wrote "`` `user` `` becomes `user`, blank lines vanish, rows hard-wrap…"
+// drew an empty chip, "user", another empty chip, "becomes" as a chip, and
+// then the REST OF THE PARAGRAPH as chips, one per line. The Claude app drew
+// `user` (backticks and all) as one chip and `user` as another. The inline
+// rule was "a backtick, then anything up to the next backtick": it knew
+// nothing of CommonMark's backtick runs, where a span opened by N backticks
+// closes only at a run of exactly N, and a run with no match is literal.
+describe('backtick runs (CommonMark code spans)', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  function chips(content: string): string[] {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content }))
+    })
+    return renderer!.root
+      .findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
+      .map((chip) => chip.findByType('Text' as never).children.join(''))
+  }
+
+  it('closes a double-backtick span only at the next double run, so a backtick can sit inside a chip', () => {
+    expect(
+      chips(
+        'Claude Code 2.1.278 paints a queued prompt as rendered markdown: `` `user` `` becomes `user`, blank lines vanish, rows hard-wrap at the phone\'s PTY width.'
+      )
+    ).toEqual(['`user`', 'user'])
+  })
+
+  it('keeps a run with no partner literal instead of chipping the rest of the paragraph', () => {
+    // A lone backtick with nothing to close it, and a double run whose only
+    // later run is a single: both literal (CommonMark). The single after the
+    // double is literal too, since nothing follows it.
+    expect(chips('a stray ` here and nothing after')).toEqual([])
+    expect(chips('a ``double with no partner, then `real` here')).toEqual(['real'])
+  })
+
+  it('strips one space of padding, not more, and keeps a span of triple backticks inside single ones', () => {
+    expect(chips('see `  two  ` and ` ``` ` here')).toEqual([' two ', '```'])
+  })
+})
+
+// Jev's likeliest remaining gap after the run fix (2026-09-19): an emphasis
+// token that opens before a code span and closes INSIDE it won by earliest
+// index and swallowed the span's opener. CommonMark binds code spans tighter
+// than emphasis, so the chip wins and the lone `*` stays literal.
+describe('a code span inside an emphasis candidate', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  it('keeps the chip when a star pair would cut through it', () => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: 'see *a `b*` c and `d`' }))
+    })
+    const chips = renderer!.root
+      .findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
+      .map((chip) => chip.findByType('Text' as never).children.join(''))
+    expect(chips).toEqual(['b*', 'd'])
+  })
+})

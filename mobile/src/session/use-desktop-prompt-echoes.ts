@@ -3,6 +3,8 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
+import { withShortSkillToken } from './mobile-native-chat-command-turns'
 
 
 /**
@@ -211,10 +213,10 @@ export function withoutLandedDesktopPrompts(
       ),
     ...alsoShown
   ]
-    .map(normalizeNativeChatUserText)
+    .map(landedKey)
     .filter((text) => text.length > 0)
   return prompts.filter((prompt) => {
-    const key = normalizeNativeChatUserText(prompt.text)
+    const key = landedKey(prompt.text)
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
     // from the length was wrong whenever escapes or multibyte text moved the
@@ -223,4 +225,11 @@ export function withoutLandedDesktopPrompts(
       (other) => other === key || (prompt.cut === true && key.length > 0 && other.startsWith(key))
     )
   })
+}
+
+/** The key a hook prompt is retired on. Painted, because `alsoShown` can hold
+ *  a restored screen reading (no backticks); short-token, because the surfaced
+ *  row of a plugin skill is `/name`, not `/plugin:name`. */
+function landedKey(text: string): string {
+  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(text)))
 }

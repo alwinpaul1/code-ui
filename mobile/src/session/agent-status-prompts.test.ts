@@ -78,3 +78,65 @@ describe('desktop prompts read off the tab status', () => {
     expect(state.prompts[0]!.text).toBe('prompt 36')
   })
 })
+
+// 2026-09-19, on the phone: the Code UI chat drew a user bubble that was never
+// typed into it — `<pasted_content id="f750"> Third probe, first line.
+// session:ok last line here </pasted_content id="f750">`. The agent had
+// started a second `claude` in a tmux pane from its own Bash tool, whose
+// environment carries the terminal's ORCA_PANE_KEY, hook port and token, so
+// the nested session's hooks posted as this pane: the tab's `stateHistory`
+// holds the nested prompts, and `providerSession.id` flipped to the nested
+// session while it ran. The pane caches `prompt` across events, so when the
+// parent's next hook flipped `providerSession` back, the row read
+// providerSession=parent with the nested text still in `prompt`.
+describe('a prompt posted on this pane by another session', () => {
+  const PARENT = '7449d614-3e02-439b-8e71-5bed99eaf4f0'
+  const NESTED = '3b1d0c52-8e7a-4a1e-9f0c-2b9d4a1e7c55'
+  const parentText = "[Image #40] [Image #41] so the thing is that I uploaded the images from my mobile still it's showing the images around desktop"
+  const nestedText =
+    '<pasted_content id="f750"> [Image #37] Third probe, first line. session:ok last line here </pasted_content id="f750">'
+  const row = (id: string, prompt: string, updatedAt: number) => ({
+    state: 'working',
+    updatedAt,
+    prompt,
+    providerSession: { key: 'session_id' as const, id }
+  })
+
+  it('is not drawn as this session\'s prompt when the row names the other session', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, PARENT, row(PARENT, parentText, 1))
+    state = observeAgentStatusPrompt(state, PARENT, row(NESTED, nestedText, 2))
+    expect(state.prompts.map((p) => p.text)).toEqual([parentText])
+  })
+
+  it('is not taken as new when the pane flips back to this session with the other session\'s prompt still cached', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, PARENT, row(PARENT, parentText, 1))
+    // The intermediate row, seen: providerSession=nested.
+    state = observeAgentStatusPrompt(state, PARENT, row(NESTED, nestedText, 2))
+    // The parent's next tool ping: providerSession=parent, prompt cached.
+    state = observeAgentStatusPrompt(state, PARENT, row(PARENT, nestedText, 3))
+    expect(state.prompts.map((p) => p.text)).toEqual([parentText])
+    // A genuinely new prompt afterwards still lands.
+    state = observeAgentStatusPrompt(state, PARENT, row(PARENT, '[Image #42] Ask jev to find this bug where is it', 4))
+    expect(state.prompts.map((p) => p.text)).toEqual([parentText, '[Image #42] Ask jev to find this bug where is it'])
+  })
+
+  it('survives the chat itself following the flip: the cached prompt is still not re-taken on the way back', () => {
+    // `resolveMobileNativeChat` takes the chat's session id from the same
+    // `providerSession`, so the key the hook is called with can flip too.
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, PARENT, row(PARENT, parentText, 1))
+    state = observeAgentStatusPrompt(state, NESTED, row(NESTED, nestedText, 2))
+    // While the chat shows the nested session, that prompt is its own.
+    expect(state.prompts.map((p) => p.text)).toEqual([nestedText])
+    state = observeAgentStatusPrompt(state, PARENT, row(PARENT, nestedText, 3))
+    expect(state.prompts).toEqual([])
+  })
+
+  it('still takes a prompt from a row with no provider session (older hosts)', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, PARENT, {
+      state: 'working',
+      updatedAt: 1,
+      prompt: parentText
+    })
+    expect(state.prompts.map((p) => p.text)).toEqual([parentText])
+  })
+})

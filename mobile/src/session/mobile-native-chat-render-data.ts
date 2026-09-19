@@ -4,6 +4,7 @@ import {
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
@@ -81,7 +82,9 @@ export function foldMobileNativeChatMessages(
   // to their prompt before normalizing, or they render above the bubble.
   // Normalize (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  const foldedForImages = foldQueuedImageTurns(messages)
+  // A slash command's envelope row is the user's turn; surfaced before the
+  // noise filter would hide it (mobile-native-chat-command-turns.ts).
+  const foldedForImages = foldQueuedImageTurns(surfaceCommandTurns(messages))
   // Orca's normalizer deletes a `[Image #N]` it cannot turn into a picture, and
   // on the phone the bytes never arrive; see mobile-desktop-image-placeholders.
   const normalized = keepDesktopImagePlaceholders(

@@ -24,6 +24,8 @@ export type AgentStatusPromptSource = {
   prompt?: string | null
   updatedAt?: number | null
   stateStartedAt?: number | null
+  /** The session the row's last hook event came from (Claude `session_id`). */
+  providerSession?: { id: string } | null
 } | null
 
 export type AgentStatusPromptState = {
@@ -50,7 +52,14 @@ export function observeAgentStatusPrompt(
   status: AgentStatusPromptSource | undefined
 ): AgentStatusPromptState {
   if (sessionKey !== state.sessionKey) {
-    state = { sessionKey, last: null, prompts: [] }
+    // The prompts start over; the last TEXT seen does not. The pane caches
+    // `prompt` across events, and a hook from another session on the same
+    // pane flips `providerSession` there and back — a nested `claude` started
+    // from the agent's own Bash tool inherits the terminal's ORCA_PANE_KEY and
+    // posts as this pane (2026-09-19). On the way back the row carried that
+    // session's text with this session's id, and a reset to null took it as a
+    // new prompt of this chat.
+    state = { sessionKey, last: state.last, prompts: [] }
   }
   if (sessionKey === null) {
     return state
@@ -63,6 +72,12 @@ export function observeAgentStatusPrompt(
   }
   if (text === state.last) {
     return state
+  }
+  const owner = status?.providerSession?.id
+  if (typeof owner === 'string' && owner.length > 0 && owner !== sessionKey) {
+    // Another session's row on this pane. Its prompt is not this chat's, but
+    // it is SEEN: the pane will still be carrying the text when it flips back.
+    return { ...state, last: text }
   }
   const at = typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : null
   const prompt: DesktopPrompt = {

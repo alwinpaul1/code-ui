@@ -169,3 +169,48 @@ it('returns the same array while nothing changed', () => {
 // image markers, in mobile-terminal-prompt-images.test.ts and
 // mobile-desktop-image-placeholders.test.ts; anchoring and tab scoping, by the
 // queue-box tests still in this file.
+
+// 2026-09-19: a message sent from the phone with three photos, while the agent
+// was busy, drew TWICE — the phone's own bubble, then a second one with three
+// "Image on Desktop" chips, no backticks, no blank lines and hard wraps at the
+// terminal's width. Claude Code paints a queued prompt as rendered markdown:
+// inline code loses its backticks (queue box captured on Claude Code 2.1.278
+// at 46 columns, below, verbatim). The typed text keeps them, so the witness's
+// key and the own send's key never met, and the own send came back as a
+// "new" absorbed message built from the painted rows.
+it('does not redraw a phone send with inline code when the queue box paints it without the backticks', () => {
+  const typed =
+    'Left as is. For the record only: the fired wakeup is written as a `user` row with `turnOrigin: "scheduled"` (a human message carries `turnOrigin: "human"`), so that field is the switch. The loop still fires at 23:57.'
+  // `claudeQueueViewFromScreen` joins the wrapped rows with '\n', markers intact.
+  const painted = [
+    '[Image #37] [Image #38] [Image #39] Left as is. For the record only: the fired',
+    'wakeup is written as a user row with',
+    'turnOrigin: "scheduled" (a human message',
+    'carries turnOrigin: "human"), so that field',
+    'is the switch. The loop still fires at',
+    '23:57.'
+  ].join('\n')
+  const folded = [row('a1', 'assistant', 'working')]
+  let renderer: ReactTestRenderer | null = null
+  act(() => {
+    renderer = create(createElement(ProbeOwn, { queued: [painted], folded, own: [typed] }))
+  })
+  act(() => {
+    renderer!.update(createElement(ProbeOwn, { queued: [], folded, own: [typed] }))
+  })
+  expect(latest).toEqual([])
+  act(() => renderer!.unmount())
+})
+
+function ProbeOwn({
+  queued,
+  folded,
+  own
+}: {
+  queued: string[]
+  folded: NativeChatMessage[]
+  own: string[]
+}): null {
+  latest = useAbsorbedQueueEchoes(queued, [], folded, 'tab-a', folded, own)
+  return null
+}

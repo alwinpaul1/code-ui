@@ -3,6 +3,7 @@ import {
   claudeQueueViewFromScreen,
   queuedMessagesFromScreen,
   pendingOutsideVisibleQueue,
+  queueRowIsPendingSend,
   projectMobileChatQueue
 } from './mobile-terminal-queued-messages'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
@@ -445,5 +446,35 @@ describe('Claude Code 2.1.277 queue', () => {
         'Press up to edit queued messages'
       )
     ).toEqual(['indented entry\nwrapped'])
+  })
+})
+
+// Claude Code paints a queued prompt as rendered markdown, so inline code
+// loses its backticks on screen (queue box captured on 2.1.278 at 46 columns:
+// typed "written as a `user` row" is painted "written as a user row"). The
+// phone compares the row against what it sent, and a send with backticks was
+// never recognised as its own row: it stood as a bubble AND a queue row, the
+// 2026-09-14 shape back for any message with inline code (2026-09-19).
+it('recognises its own queued row when the box paints inline code without the backticks', () => {
+  const typed =
+    'Left as is. For the record only: the fired wakeup is written as a `user` row with `turnOrigin: "scheduled"` (a human message carries `turnOrigin: "human"`), so that field is the switch. The loop still fires at 23:57.'
+  const painted = [
+    'Left as is. For the record only: the fired',
+    'wakeup is written as a user row with',
+    'turnOrigin: "scheduled" (a human message',
+    'carries turnOrigin: "human"), so that field',
+    'is the switch. The loop still fires at',
+    '23:57.'
+  ].join('\n')
+  expect(queueRowIsPendingSend(typed, painted)).toBe(true)
+  expect(pendingOutsideVisibleQueue([{ text: typed }], [painted])).toEqual([])
+})
+
+it('pairs a photo send with its painted row when the caption has inline code', () => {
+  const typed = 'See `foo()` here'
+  const image = { text: typed, images: ['file:///a.jpg'] }
+  expect(projectMobileChatQueue([image], ['[Image #1] See foo() here'])).toEqual({
+    pending: [],
+    queue: [{ text: typed, images: ['file:///a.jpg'], caption: '[Image #1] See foo() here' }]
   })
 })

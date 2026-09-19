@@ -1,4 +1,5 @@
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
 /** Whether `longer` is `shorter` plus a suffix starting at a word boundary. */
 export function extendsAtWordBoundary(shorter: string, longer: string): boolean {
@@ -22,8 +23,8 @@ export function extendsAtWordBoundary(shorter: string, longer: string): boolean 
  * Returns which of the two to keep, or null when they are different messages.
  */
 export function preferredWitnessReading(a: string, b: string): 'a' | 'b' | null {
-  const ka = normalizeNativeChatUserText(a)
-  const kb = normalizeNativeChatUserText(b)
+  const ka = normalizeNativeChatUserText(asPaintedPrompt(a))
+  const kb = normalizeNativeChatUserText(asPaintedPrompt(b))
   if (ka === kb) {
     return 'a'
   }

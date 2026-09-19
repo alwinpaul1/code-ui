@@ -1,4 +1,4 @@
-import { createMarkdownInlineMatcher } from '../markdown-inline-matcher'
+import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -264,14 +264,15 @@ function parseAlignRow(line: string): CellAlign[] {
 
 // Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
 // emitting plain-text runs between matches. Unbalanced markers stay literal text.
-const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
+// Code spans are found by backtick run inside the matcher, not here.
+const INLINE = /(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
   // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
   // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
   const plain = stripHtmlTags(text)
-  const matcher = createMarkdownInlineMatcher(plain, INLINE)
+  const matcher = createMarkdownInlineMatcher(plain, INLINE, false, true)
   let cursor = 0
   let guard = 0
   while (cursor < plain.length && guard < 5000) {
@@ -286,7 +287,7 @@ export function parseInline(text: string): InlineToken[] {
     }
     const token = m[0]
     if (token.startsWith('`')) {
-      tokens.push({ kind: 'code', text: token.slice(1, -1) })
+      tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
     } else if (token.startsWith('[')) {

@@ -172,3 +172,18 @@ describe('parseInline', () => {
     expect(parseInline('a * b')).toEqual([{ kind: 'text', text: 'a * b' }])
   })
 })
+
+// Same defect as the chat renderer's, swept the same day (2026-09-19): a
+// backtick run of N closes only at a run of exactly N, so a review comment
+// quoting a backtick — "`` `user` `` becomes `user`" — is two code tokens,
+// not an empty one and the rest of the line.
+describe('parseInline code spans by backtick run', () => {
+  it('pairs runs of equal length', () => {
+    expect(parseInline('`` `user` `` becomes `user`, then prose')).toEqual([
+      { kind: 'code', text: '`user`' },
+      { kind: 'text', text: ' becomes ' },
+      { kind: 'code', text: 'user' },
+      { kind: 'text', text: ', then prose' }
+    ])
+  })
+})

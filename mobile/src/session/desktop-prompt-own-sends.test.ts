@@ -1,5 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { pendingTextsStillDrawn, pendingWithoutTranscriptTwins } from './desktop-prompt-own-sends'
+import {
+  pendingTextsStillDrawn,
+  pendingWithoutTranscriptTwins,
+  textsAlreadyShown
+} from './desktop-prompt-own-sends'
+import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
 
 describe('a phone send the transcript has a record of', () => {
   // Device, 2026-09-19: "did you check the hold and copy scrolling issue on
@@ -40,5 +46,44 @@ describe('a phone send the transcript has a record of', () => {
     const pending = [{ id: 'pending-1', text: 'x' }]
     expect(pendingWithoutTranscriptTwins(pending, [])).toEqual(pending)
     expect(pendingWithoutTranscriptTwins([], [])).toEqual([])
+  })
+})
+
+// 2026-09-19, phone screenshot: "Ask jev to confirm these fixes and bugs…"
+// drawn as a bubble AND listed in the queue box below it for the 19 s the
+// agent took to absorb it (transcript: enqueue 22:38:47, absorbed 22:39:06).
+// The own bubble had stepped aside for the hook's timed copy, and that copy
+// knew nothing of the queue box.
+describe('a send still in the agent queue box', () => {
+  const typed =
+    'Ask jev to confirm these fixes and bugs if no dig deeper and find the bugs and confirm it and then fix and bump the version to 0.9.4'
+  // As the box paints it at the phone's width, joined by the parser.
+  const painted = [
+    'Ask jev to confirm these fixes and',
+    'bugs if no dig deeper and find the',
+    'bugs and confirm it and then fix and',
+    'bump the version to 0.9.4'
+  ].join('\n')
+  const hook = [{ nonce: 'status:s:1789857527552:0', text: typed, at: 1789857527552 }]
+
+  it('is not drawn as a desktop-prompt bubble while the queue box shows it', () => {
+    const shown = textsAlreadyShown([{ text: typed }], hook, [painted])
+    expect(withoutLandedDesktopPrompts(hook, [], shown)).toEqual([])
+  })
+
+  // The defect was one of STRUCTURE: the overlay excluded only the pending
+  // texts, so the pure filter was right and never told the queue. Pin the
+  // call site, on code not commentary.
+  it('is what the overlay excludes, queue rows included', () => {
+    const source = readFileSync(new URL('./MobileNativeChatOverlay.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(
+      /withoutLandedDesktopPrompts\(\s*desktopPrompts,\s*baseFolded,\s*textsAlreadyShown\(controller\.chatPending, desktopPrompts, queuedMessages \?\? \[\]\)/
+    )
+  })
+
+  it('is drawn once the row leaves the box (the own bubble has stepped aside for it)', () => {
+    expect(pendingWithoutTranscriptTwins([{ text: typed }], hook)).toEqual([])
+    const shown = textsAlreadyShown([{ text: typed }], hook, [])
+    expect(withoutLandedDesktopPrompts(hook, [], shown)).toHaveLength(1)
   })
 })

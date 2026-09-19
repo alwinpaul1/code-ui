@@ -8,6 +8,7 @@ import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
 import { AGENT_TUI_MAX_KEY_WRITE_BYTES } from './agent-tui-clear-write-chunks'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
 /** Each pair is two bytes, so this keeps a burst strictly under the bound. */
 const MAX_QUEUE_CLEAR_PAIRS_PER_WRITE = Math.floor((AGENT_TUI_MAX_KEY_WRITE_BYTES - 1) / 2)
@@ -33,18 +34,24 @@ export const normalize = (text: string) => text.replace(/\s+/g, ' ').trim()
  * caption's whitespace is not the author's. Compare only the printing
  * characters: a word-by-word match refused a queue holding a long URL or path,
  * and it refused it after the recall had already emptied the queue. */
-const dense = (text: string) => text.replace(/\s+/g, '')
+const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
 /** The one comparator for "is this drawn row the message I sent". It must be
  * the same everywhere: matching a caption loosely in one place and strictly in
  * another means the queue that the loose test lets through is the queue the
  * strict test can never confirm, and the messages strand on the phone. */
-export const sameText = (a: string, b: string) => dense(a) === dense(b)
+export const sameText = (a: string, b: string) => {
+  const x = dense(a)
+  // An all-backtick draft densifies to nothing, and nothing matched anything.
+  return x.length > 0 && x === dense(b)
+}
 /** A queue caption is the message as Claude drew it: wrapped, and shortened
  * with an ellipsis when it is very long. Either side may be the shorter one. */
 export const sameEntry = (draft: string, caption: string) => {
   const text = dense(draft)
   const drawn = dense(caption).replace(/(?:\u2026|\.{3})$/, '')
-  return drawn.length > 0 && (text.startsWith(drawn) || drawn.startsWith(text))
+  return (
+    text.length > 0 && drawn.length > 0 && (text.startsWith(drawn) || drawn.startsWith(text))
+  )
 }
 export const opaque = (text: string) => /\[(?:Image|Pasted (?:text|image))\b/i.test(text)
 export const hasControlCharacters = (text: string) =>
@@ -78,7 +85,10 @@ export function segmentRecalledQueue(draft: string, entries: readonly string[]):
   let packed = ''
   for (let i = 0; i < draft.length; i++) {
     const char = draft[i]!
-    if (!/\s/.test(char)) {
+    // Backticks are skipped like whitespace: the caption was painted without
+    // them (`dense` drops them on that side too), but the draft keeps them and
+    // they go back into the segment below.
+    if (!/\s/.test(char) && char !== '`') {
       at.push(i)
       packed += char
     }
@@ -90,16 +100,24 @@ export function segmentRecalledQueue(draft: string, entries: readonly string[]):
     if (!wanted || packed.slice(cursor, cursor + wanted.length) !== wanted) {
       return null
     }
-    const last = at[cursor + wanted.length - 1]!
-    const next = at[cursor + wanted.length]
+    let start = at[cursor]!
+    let end = at[cursor + wanted.length - 1]!
+    // A segment's own backticks sit outside its packed characters.
+    while (start > 0 && draft[start - 1] === '`') {
+      start -= 1
+    }
+    while (draft[end + 1] === '`') {
+      end += 1
+    }
     // Word matching enforced this for free: a boundary between two messages is
     // a newline in the recalled draft. Ignoring whitespace inside a caption must
     // not also let a truncated caption cut mid-token and shift every boundary
     // after it, which would mis-split silently instead of refusing.
-    if (next !== undefined && next === last + 1) {
+    const following = draft[end + 1]
+    if (following !== undefined && !/\s/.test(following)) {
       return null
     }
-    segments.push(draft.slice(at[cursor]!, last + 1))
+    segments.push(draft.slice(start, end + 1))
     cursor += wanted.length
   }
   return cursor === packed.length ? segments : null

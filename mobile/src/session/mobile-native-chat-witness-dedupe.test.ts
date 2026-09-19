@@ -46,3 +46,12 @@ describe('dedupeWitnessReadings', () => {
     ])
   })
 })
+
+// Claude Code paints a prompt's inline code without the backticks (queue box,
+// 2.1.278). The phone's own copy keeps them, so the two readings of one send
+// were "different messages" and the send drew twice (2026-09-19).
+it('reads the painted row and the typed text as the same message when only backticks differ', () => {
+  const typed = 'written as a `user` row with `turnOrigin: "scheduled"` inside'
+  const painted = 'written as a user row with turnOrigin:\n"scheduled" inside'
+  expect(preferredWitnessReading(typed, painted)).toBe('a')
+})
