@@ -9,7 +9,7 @@
  * listed file whose count went up. Both lists only shrink.
  *
  * The owners are permanent — they implement, route or validate the port. The pending list is the
- * migration backlog and shares one reason, stated once here instead of 159 times:
+ * migration backlog and shares one reason, stated once here instead of 112 times:
  * the call site predates the typed contract and still picks its own method string, its own
  * acceptance rule and its own decoding. Replacing one with an RpcOperation deletes its line.
  *
@@ -128,10 +128,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/session/ai-vault-resume-preparation.ts', references: 2 },
   { file: 'src/session/codex-model-discovery.ts', references: 1 },
   { file: 'src/session/codex-picker-apply.ts', references: 3 },
-  { file: 'src/session/github-pr-mutations.ts', references: 16 },
-  { file: 'src/session/github-pr-rpc.ts', references: 9 },
   { file: 'src/session/mobile-clipboard-image.ts', references: 7 },
-  { file: 'src/session/mobile-diff-review-loaders.ts', references: 5 },
   { file: 'src/session/mobile-document-attachment.ts', references: 2 },
   { file: 'src/session/mobile-file-tap-open.ts', references: 3 },
   { file: 'src/session/mobile-image-attachment.ts', references: 2 },
@@ -147,7 +144,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/session/mobile-session-tabs-stream-health.ts', references: 1 },
   { file: 'src/session/mobile-structured-agent-session-launch.ts', references: 3 },
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
-  { file: 'src/session/pr-ai-triage-launch.ts', references: 3 },
   { file: 'src/session/use-host-image-previews.ts', references: 2 },
   { file: 'src/session/use-live-worktree-name.ts', references: 1 },
   { file: 'src/session/use-mobile-diff-review-comment-actions.ts', references: 1 },
@@ -162,10 +158,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/session/use-mobile-native-chat-session.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-skills.ts', references: 2 },
   { file: 'src/session/use-mobile-native-chat-stop.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-branch-context.ts', references: 2 },
-  { file: 'src/session/use-mobile-pr-comment-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-pr-title-action.ts', references: 1 },
   { file: 'src/session/use-mobile-session-accessory-selection.ts', references: 1 },
   { file: 'src/session/use-mobile-session-close-actions.ts', references: 3 },
   { file: 'src/session/use-mobile-session-content-create-actions.ts', references: 4 },
