@@ -13,6 +13,7 @@ import type {
   AgentSessionSlashCommand
 } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
@@ -49,6 +50,11 @@ export type MobileNativeChatViewProps = {
   turnActivity?: { kind: 'description'; text: string } | null
   /** Whether the live turn is reasoning right now (structured lane only). */
   turnThinking?: boolean
+  /** Structured lane: host-recorded turn timing feeding the per-turn status rows
+   *  (Orca #19695). The live counter's local anchor, and each settled turn's
+   *  host duration, which outranks whatever this phone clocked. */
+  workingStartedAt?: number | null
+  settledTurns?: NativeChatSettledTurns | null
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
@@ -142,6 +148,9 @@ export type MobileNativeChatViewProps = {
    *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  /** Cancel a structured approval/question with exact item identity when supported
+   *  (Orca #20601). Absent on the bridge lane, whose cards have no durable identity. */
+  onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null

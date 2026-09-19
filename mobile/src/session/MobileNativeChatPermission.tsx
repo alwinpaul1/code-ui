@@ -1,11 +1,12 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import { splitPermissionDetail } from './mobile-permission-detail'
 import { ScrollView, useWindowDimensions, View } from 'react-native'
-import { ShieldQuestion } from 'lucide-react-native'
+import { ShieldQuestion, X } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
 import { TextInputModal } from '../components/TextInputModal'
+import { MobileMarkdown } from '../components/MobileMarkdown'
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
@@ -44,10 +45,14 @@ function truncatedNotice(preview: Extract<ProposedEditPreview, { kind: 'truncate
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
-  onRespondWithComment
+  onRespondWithComment,
+  onCancel
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  /** Cancels the prompt itself, by identity where the host can (Orca #20601);
+   *  the card passes its own `permission.prompt` so the right item is named. */
+  onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   /** Rejects a Claude Code plan review with typed feedback in one tap
    *  (option select + comment, sequenced by the caller). Only offered when
    *  set: the structured (native chat) lane has no verified way to carry
@@ -55,7 +60,7 @@ function MobileNativeChatPermissionImpl({
    *  comment-less reject — see claude-plan-permission.ts. */
   onRespondWithComment?: (send: string, comment: string) => Promise<boolean>
 }): React.JSX.Element {
-  const { colors, radius, space } = useTheme()
+  const { colors, fonts, radius, space } = useTheme()
   // The card sits in the dock, which the chat list clears; a tall one would push
   // the composer off a short screen, so the reading area gives up space first and
   // the choices keep theirs. Half the window leaves the conversation visible.
@@ -72,14 +77,19 @@ function MobileNativeChatPermissionImpl({
   // The SDK lane's detail is the tool input itself; for a file change that is
   // the diff, shown before the user accepts. Anything else falls through to
   // the text below. See mobile-permission-proposed-edit.ts.
+  // A finished plan arrives as an approval carrying a typed subject (Orca
+  // #21090): content to read, not a privilege to grant. It replaces the raw
+  // detail — which is the ExitPlanMode tool input, thousands of characters of
+  // escaped JSON — rather than rendering beside it.
+  const plan = permission.subject?.kind === 'plan' ? permission.subject : null
   const preview = useMemo(
-    () => proposedEditPreview(permission.title, permission.detail),
-    [permission.title, permission.detail]
+    () => (plan ? null : proposedEditPreview(permission.title, permission.detail)),
+    [permission.title, permission.detail, plan]
   )
   const [showAllRows, setShowAllRows] = useState(false)
   const folded = useMemo(
     () =>
-      preview.kind === 'diff'
+      preview?.kind === 'diff'
         ? foldProposedFiles(preview.files, showAllRows ? MAX_DIFF_CARD_ROWS : PROPOSED_ROWS_FOLDED)
         : null,
     [preview, showAllRows]
@@ -112,8 +122,22 @@ function MobileNativeChatPermissionImpl({
           command: permission.command ?? permission.detail?.slice(commandStart + 2).trim() ?? null
         }
       : splitPermissionDetail(permission.detail, permission.command)
-  const description = split.description ?? undefined
-  const command = split.command ?? undefined
+  const description = plan ? undefined : (split.description ?? undefined)
+  const command = plan ? undefined : (split.command ?? undefined)
+  // The harness's own presentation (Orca #21087): why the request was raised,
+  // not only what it was. The SDK documents its title as the prompt text to
+  // use and warns its reason may carry terminal escapes; the host strips those.
+  const context = [
+    permission.description ? { label: null, text: permission.description } : null,
+    permission.decisionReason ? { label: 'Reason', text: permission.decisionReason } : null,
+    permission.blockedPath ? { label: 'Blocked path', text: permission.blockedPath } : null,
+    permission.matchedAskRule
+      ? {
+          label: 'Ask rule',
+          text: `${permission.matchedAskRule.ruleContent ?? permission.matchedAskRule.toolName} · ${permission.matchedAskRule.source}`
+        }
+      : null
+  ].filter((entry): entry is { label: string | null; text: string } => entry !== null)
   const respond = async (send: string, index: number, comment?: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -152,7 +176,38 @@ function MobileNativeChatPermissionImpl({
         <Txt variant="label" weight="semibold" style={{ flex: 1 }}>
           {permission.title}
         </Txt>
+        {onCancel ? (
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => void onCancel(permission.prompt)}
+            disabled={submitting}
+          >
+            <X size={16} color={colors.textMuted} />
+          </PressScale>
+        ) : null}
       </View>
+      {context.length > 0 ? (
+        <ScrollView
+          testID="native-chat-approval-context"
+          style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
+          nestedScrollEnabled
+          contentContainerStyle={{ gap: space.xs }}
+        >
+          {context.map((entry) => (
+            <Txt key={entry.label ?? 'description'} variant="caption" tone="secondary" selectable>
+              {entry.label ? (
+                <Txt variant="caption" weight="semibold">
+                  {`${entry.label}: `}
+                </Txt>
+              ) : null}
+              {entry.text}
+            </Txt>
+          ))}
+        </ScrollView>
+      ) : null}
       {folded ? (
         <>
           <ScrollView
@@ -191,7 +246,24 @@ function MobileNativeChatPermissionImpl({
           ) : null}
         </>
       ) : null}
-      {preview.kind === 'truncated' ? (
+      {plan ? (
+        // The plan reads line by line, like a diff, so it takes the diff's share
+        // of the window; the choices below keep theirs.
+        <ScrollView
+          testID="native-chat-approval-plan"
+          style={{ maxHeight: diffMaxHeight, flexShrink: 1 }}
+          nestedScrollEnabled
+          contentContainerStyle={{ gap: space.sm }}
+        >
+          <MobileMarkdown content={plan.text} />
+          {plan.filePath ? (
+            <Txt variant="caption" tone="secondary" selectable style={{ fontFamily: fonts.mono }}>
+              {`Plan file: ${plan.filePath}`}
+            </Txt>
+          ) : null}
+        </ScrollView>
+      ) : null}
+      {preview?.kind === 'truncated' ? (
         // The host clipped the request before it reached the phone. Half a
         // diff would read as the whole of it, so the raw text stands, with one
         // line saying why.

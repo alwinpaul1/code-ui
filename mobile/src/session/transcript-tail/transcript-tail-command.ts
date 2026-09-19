@@ -83,8 +83,22 @@ export function transcriptTailFile(
  *  TAIL_ROW_MAX_CHARS. `awk` here uses index() and substr() only — no regex
  *  intervals, which older awks lack — and flushes per line, or a plain pipe
  *  would block-buffer and the phone would see nothing for kilobytes. Before
- *  the filter the desktop tab was a wall of base64 (2026-09-19). */
-const KEPT_ROW_MARKS = ['"queue-operation"', 'queued_command', '"tool_use"', '"tool_result"', '"type":"user"']
+ *  the filter the desktop tab was a wall of base64 (2026-09-19).
+ *
+ *  Three shapes, all a person's own words or the queue: a queue operation,
+ *  a queued prompt taken mid-turn, and a typed turn — the last is a user
+ *  row whose content is a string or opens with a text block, which a tool
+ *  result (also `type: user`, content opening with `tool_use_id`) never
+ *  does. Tool calls and results used to come too, for the "Running · 12s"
+ *  row; that row is gone, and they were most of what the desktop tab
+ *  showed — a whole LaTeX chapter in one tool result (screenshot,
+ *  2026-09-19). */
+const KEPT_ROW_MARKS = [
+  '"queue-operation"',
+  'queued_command',
+  '"role":"user","content":"',
+  '"role":"user","content":[{"type":"text"'
+]
 const AWK_CUT =
   `| awk '{ if (${KEPT_ROW_MARKS.map((mark) => `index($0, "${mark.replace(/"/g, '\\"')}")`).join(' || ')}) { ` +
   `i = index($0, "\\"type\\":\\"image\\""); if (i > 0) $0 = substr($0, 1, i - 1); ` +

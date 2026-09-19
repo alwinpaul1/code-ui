@@ -21,7 +21,8 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
-  CircleHelp: 'CircleHelp'
+  CircleHelp: 'CircleHelp',
+  X: 'X'
 }))
 
 function renderQuestion(
@@ -134,6 +135,42 @@ describe('MobileNativeChatQuestion', () => {
       .flatMap((node) => node.props.children)
     expect(texts).toContain('Skips the deep scan')
     expect(texts).toContain('Reads every file')
+  })
+
+  // Orca #20601: the X on the card cancels the prompt itself, naming the item.
+  it('passes the rendered prompt identity to cancel, in both themes', async () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const onCancel = vi.fn(async () => true)
+      colorScheme = scheme
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatQuestion, {
+              question: {
+                question: 'Pick one',
+                prompt: { itemId: 'question-1', expectedRevision: 7 },
+                options: ['Choice'],
+                multiSelect: false,
+                allowOther: false,
+                optionTokens: ['choice-token']
+              },
+              onAnswer: vi.fn(async () => true),
+              onCancel
+            })
+          )
+        )
+      })
+      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
+      await act(async () => cancel.props.onPress())
+      expect(onCancel).toHaveBeenCalledWith({ itemId: 'question-1', expectedRevision: 7 })
+      expect(renderer!.root.findByType('X').props.color).toBe(
+        (scheme === 'dark' ? darkColors : lightColors).textMuted
+      )
+      act(() => renderer?.unmount())
+      renderer = null
+    }
   })
 
   it('keeps the option description readable in light and dark', () => {

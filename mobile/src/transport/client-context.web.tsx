@@ -65,6 +65,9 @@ export function RpcClientProvider({
       // Both are pairing verdicts, and pairing happened natively before this document existed.
       isPairingRejected: () => false,
       isHostSignedOut: () => false,
+      // Upstream's own answer (Orca #21566): the page never dials, so the relay's verdict on the
+      // host is whatever the native client that opened this document already holds.
+      getRelayHostReachability: () => 'connecting',
       // Code UI: the liveness probe is this fork's own header state; the page never probes.
       isLivenessProbing: () => false,
       subscribeHostState: (_hostId: string, listener: (next: ConnectionState) => void) =>

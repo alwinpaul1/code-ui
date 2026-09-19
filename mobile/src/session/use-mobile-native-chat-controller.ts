@@ -65,6 +65,7 @@ export function useMobileNativeChatController(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    agentSessionPromptCancelSupported = null,
     onSendError,
     onSendResolved
   } = args
@@ -107,8 +108,10 @@ export function useMobileNativeChatController(
       transcriptPath: activeChatResolution?.transcriptPath ?? null,
       sessionId: activeChatSessionId,
       sourceIdentity,
+      callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
+      promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
   // The agent's own transcript, tailed on the host: what a hand-started
@@ -162,13 +165,12 @@ export function useMobileNativeChatController(
   })
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
-  const nativeChatAgentWorking = activeChatStructured
-    ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
+  const nativeChatAgentWorking =
+    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   const nativeChatStreamingText = useThrottledLatestValue(
     activeChatStructured
       ? undefined
@@ -493,6 +495,10 @@ export function useMobileNativeChatController(
   })
 
   const tailQueue = useTranscriptTailQueue(transcriptTail, visibleQueuedMessages)
+  const structuredCancelPrompt = useNativeChatAcceptedAction(
+    activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
+    onSendResolved
+  )
 
   return {
     isTabChatView,
@@ -517,6 +523,8 @@ export function useMobileNativeChatController(
     nativeChatStructured: activeChatStructured,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,
     nativeChatTurnThinking: activeChatStructured ? structuredNativeChat.turnThinking : false,
+    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
+    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatAgentWorking,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
@@ -537,6 +545,9 @@ export function useMobileNativeChatController(
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
+    // Heuristic/legacy cards have no durable prompt identity, so keep their
+    // cancel affordance absent instead of exposing a dead action.
+    handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
     handleNativeChatRespondPermission: respond,
     handleNativeChatRespondPermissionWithComment: respondWithComment,
     openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,

@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../src/shared/native-chat-turn-status'
@@ -24,6 +25,7 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   isWorking,
   workingStartedAt,
+  settledTurns,
   thinking = false,
   scopeKey
 }: {
@@ -31,6 +33,8 @@ export function useMobileNativeChatTurnStatus({
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
   /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
@@ -93,15 +97,17 @@ export function useMobileNativeChatTurnStatus({
   // props each tick and the memoized message rows all re-render.
   const turnIsWorking = enabled && isWorking
   const turnIsThinking = enabled && thinking
+  const settledByTurn = enabled ? (settledTurns ?? undefined) : undefined
   const statuses = useMemo(
     () =>
       selectNativeChatTurnStatuses(timingByTurn, {
         activeTurnKey,
         isWorking: turnIsWorking,
         workingStartedAt,
-        thinking: turnIsThinking
+        thinking: turnIsThinking,
+        settledByTurn
       }),
-    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking]
+    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, turnIsThinking, settledByTurn]
   )
   return { ...statuses, activeTurnKey }
 }

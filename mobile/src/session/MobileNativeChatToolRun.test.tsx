@@ -155,6 +155,44 @@ describe('a batch of tool calls in one run header', () => {
     const nameless: NativeChatBlock[] = [{ type: 'tool-call', name: '', input: {} }]
     expect(render(nameless).texts).toContain('Used a tool')
   })
+
+  // Orca #21151. A run whose call failed used to read exactly like a clean one
+  // once collapsed; the failure was only findable by expanding it. The header
+  // now says `N failed`, counted over every call, in the muted type of
+  // whichever theme is on — text only, since a tool error is routine work.
+  it.each(['light', 'dark'] as const)(
+    'says how many calls failed in a collapsed run, in %s',
+    (scheme) => {
+      const mixed: NativeChatBlock[] = [
+        { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' },
+        { type: 'tool-result', output: 'exit 1', isError: true },
+        { type: 'tool-call', name: 'shell', input: { command: 'b' }, state: 'failed' },
+        { type: 'tool-result', output: 'exit 2', isError: true },
+        { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, state: 'completed' },
+        { type: 'tool-result', output: 'ok' }
+      ]
+      const { texts } = render(mixed, scheme)
+      expect(texts).toContain('2 failed')
+      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 2')
+      expect(flattenColor(mark.props.style)).toBe(
+        (scheme === 'dark' ? darkColors : lightColors).textMuted
+      )
+    }
+  )
+
+  it('counts an error result on a lane that writes no lifecycle state, once per call', () => {
+    const legacy: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'a' } },
+      { type: 'tool-result', output: 'exit 1', isError: true }
+    ]
+    expect(render(legacy).texts).toContain('1 failed')
+  })
+
+  it('says nothing about failures on a clean run', () => {
+    expect(render(LONG_RUN).texts.some((text) => text.endsWith(' failed'))).toBe(false)
+    expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
+  })
 })
 
 // A live turn: a `shell` call still running, and one already settled behind it.

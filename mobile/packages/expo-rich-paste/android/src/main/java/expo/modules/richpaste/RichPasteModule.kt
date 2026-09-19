@@ -10,6 +10,7 @@ import androidx.core.view.ContentInfoCompat
 import androidx.core.view.OnReceiveContentListener
 import androidx.core.view.ViewCompat
 import expo.modules.kotlin.exception.Exceptions
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
@@ -95,8 +96,20 @@ class RichPasteModule : Module() {
       remainder
     }
 
+  /** The view for a tag, or null when the mount has not produced it (yet).
+   *  Fabric throws IllegalViewOperationException for a tag it does not hold,
+   *  and that exception once left here as a rejected call and took the chat
+   *  screen down (device, 2026-09-19). Missing is an answer, not an error. */
+  private fun findViewOrNull(viewTag: Int): View? =
+    try {
+      appContext.findView<View>(viewTag)
+    } catch (error: Exception) {
+      Log.d(TAG, "no view for tag $viewTag yet: ${error.message}")
+      null
+    }
+
   private fun attach(viewTag: Int): Boolean {
-    val view = appContext.findView<View>(viewTag)
+    val view = findViewOrNull(viewTag)
     if (view !is EditText) return false
     if (attached.add(viewTag)) {
       ViewCompat.setOnReceiveContentListener(view, MIME_TYPES, listenerFor(viewTag))
@@ -106,7 +119,7 @@ class RichPasteModule : Module() {
 
   private fun detach(viewTag: Int) {
     attached.remove(viewTag)
-    val view = appContext.findView<View>(viewTag) ?: return
+    val view = findViewOrNull(viewTag) ?: return
     ViewCompat.setOnReceiveContentListener(view, null, null)
   }
 
@@ -120,10 +133,13 @@ class RichPasteModule : Module() {
     // down on launch (seen on the device, 2026-09-19).
 
     /** Declare image MIME types on the TextInput with this tag and start
-     *  receiving. Idempotent per view; the listener is dropped with the view. */
-    Function("attach") { viewTag: Int -> attach(viewTag) }
+     *  receiving. Idempotent per view; the listener is dropped with the view.
+     *  On the main queue: Fabric mounts there after the JS commit, so a
+     *  lookup from the JS thread can run before the view exists, and the
+     *  view's listener must be set on the UI thread anyway. */
+    AsyncFunction("attach") { viewTag: Int -> attach(viewTag) }.runOnQueue(Queues.MAIN)
 
-    Function("detach") { viewTag: Int -> detach(viewTag) }
+    AsyncFunction("detach") { viewTag: Int -> detach(viewTag) }.runOnQueue(Queues.MAIN)
   }
 
   companion object {

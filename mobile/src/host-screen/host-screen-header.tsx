@@ -63,6 +63,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
+    hostName: state.hostName,
     ...relayRecovery
   })
   // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.

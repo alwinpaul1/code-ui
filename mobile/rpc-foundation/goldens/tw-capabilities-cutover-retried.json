@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "f459455b1534e8dcf877a72fd5daf24a15ab2feed816fb570d5c4f459f704272",
+  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "fb9c0e4b7c34f9bd1bd355b606c6ba75a7583cff3788000b7ed013612f5574fe",
   "platform": "darwin",
@@ -20,8 +20,9 @@
     "32354557bece": {
       "capabilities": "unprobed"
     },
-    "4e6e53404f59": {
+    "8a8da145ef52": {
       "capabilities": {
+        "agentLaunch": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -32,18 +33,6 @@
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
-    },
-    "a8bcef1e95ed": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": true,
-        "worktreeCreateIdempotency": false
-      }
     },
     "ae9ff6b74ec1": {
       "name": "status.get#2",
@@ -81,6 +70,19 @@
     "c0c86e67c300": {
       "name": "status.get#2",
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "c7a06214cf1f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": true,
+        "worktreeCreateIdempotency": false
+      }
     },
     "c9c0513fdcb9": {
       "name": "status.get#2",
@@ -174,10 +176,10 @@
           "sender": ["edf54746317d", "ae9ff6b74ec1"],
           "payloads": ["1e5b32902af7", "c0c86e67c300"],
           "settlements": {
-            "probe": "a8bcef1e95ed",
+            "probe": "c7a06214cf1f",
             "migrate": "eb79a9b3682a"
           },
-          "state": "4e6e53404f59",
+          "state": "8a8da145ef52",
           "effects": []
         }
       }

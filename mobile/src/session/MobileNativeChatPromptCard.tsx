@@ -12,6 +12,8 @@ export type MobileNativeChatPromptCardProps = {
   onDismissAsk?: () => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  /** Cancels a structured approval/question by its item identity (Orca #20601). */
+  onCancelPrompt?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null
@@ -29,6 +31,7 @@ export function MobileNativeChatPromptCard({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   question,
   onAnswerQuestion,
   permission,
@@ -69,6 +72,7 @@ export function MobileNativeChatPromptCard({
                 (await onRespondPermissionWithComment(send, comment)) ?? false
             : undefined
         }
+        onCancel={onCancelPrompt}
       />
     )
   }
@@ -78,6 +82,7 @@ export function MobileNativeChatPromptCard({
         key={mobileChatQuestionKey(question)}
         question={question}
         onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
+        onCancel={onCancelPrompt}
       />
     )
   }

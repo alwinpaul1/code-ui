@@ -109,6 +109,11 @@ export type BackgroundTask = {
   elapsedMs: number | null
   /** The notification's own one-line summary, kept for a caption. */
   summary?: string
+  /** Whether the host can stop this row by name. Absent means yes — every
+   *  roster before Orca #19705 listed only backgrounded, stoppable work. A
+   *  foreground subagent inside a live turn arrives as `false`: the SDK has no
+   *  way to reach it, so drawing a Stop there is a dead button. */
+  stoppable?: boolean
 }
 
 export type BackgroundTasks = {

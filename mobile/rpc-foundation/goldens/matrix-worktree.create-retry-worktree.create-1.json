@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "c6a72169843ececf3a21da370ac50c5c5a4e6462",
   "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
-  "recorderSha256": "f459455b1534e8dcf877a72fd5daf24a15ab2feed816fb570d5c4f459f704272",
+  "recorderSha256": "7b7c6bfe7c8fdadb71d7c4a0d396cd5cdcf71b9558ddc77db415ac3bf7a36ae0",
   "adapterSha256": "343b97826782820b7aecaddd13a4c8cdbbbca057c83021863d577a677934f3a3",
   "scenarioSha256": "e93a36ef900de27e1a566cdb2389ba4f900a330eadbb476b9bfb1ef05707b352",
   "platform": "darwin",
@@ -89,32 +89,12 @@
         }
       }
     },
-    "199931225ca2": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'displayName')",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "240b0b1c72b2": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "error": ""
-      }
-    },
-    "2588fd63a157": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of undefined (reading 'worktree')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "292579caa07d": {
@@ -358,6 +338,14 @@
         }
       }
     },
+    "9df0ac2b0247": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Failed to create workspace"
+      }
+    },
     "a947768bc0ed": {
       "status": "rejected",
       "startedAt": 0,
@@ -375,16 +363,6 @@
       "value": {
         "name": "kestrel",
         "worktreeId": "repo-1::/w"
-      }
-    },
-    "b5447f4dd931": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "TypeError",
-        "message": "Cannot read properties of null (reading 'worktree')",
-        "isRpcDeliveryUnknown": false
       }
     },
     "b6ebedadd49b": {
@@ -511,6 +489,11 @@
         "name": "kestrel",
         "worktreeId": "repo-1::/w"
       }
+    },
+    "ed1eb862d036": {
+      "outcome": {
+        "error": "Failed to create workspace"
+      }
     }
   },
   "recording": {
@@ -534,9 +517,9 @@
           "sender": ["cf574d8c995b"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "2588fd63a157"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -546,9 +529,9 @@
           "sender": ["0938d32a2ec2"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "b5447f4dd931"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -558,9 +541,9 @@
           "sender": ["6bf7db287168"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -570,9 +553,9 @@
           "sender": ["96a4c62e654d"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },
@@ -582,9 +565,9 @@
           "sender": ["2e78a1dad2ea"],
           "payloads": ["43a221c63628"],
           "settlements": {
-            "create": "199931225ca2"
+            "create": "9df0ac2b0247"
           },
-          "state": "3f946ad0279c",
+          "state": "ed1eb862d036",
           "effects": []
         }
       },

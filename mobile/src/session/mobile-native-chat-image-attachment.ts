@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
+import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -23,6 +24,18 @@ export type PendingNativeChatImage = {
    *  settle first and delete the video's chip, and the video never went with
    *  the message (2026-09-13). */
   readonly batch?: string
+  /** Stable across repeat uploads of the same bytes; never contains the image
+   *  (Orca #20133: the send's durable operation key is built from it, so a
+   *  re-pick of the same photo is the same send). */
+  readonly contentFingerprint?: string
+}
+
+export function mobileNativeChatImageContentFingerprint(base64: string): string {
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.nativeChat.image',
+    sessionId: '',
+    fields: { base64 }
+  })
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */
@@ -117,9 +130,10 @@ export async function uploadMobileNativeChatImages(
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
     onImageStart?.(image.name ? { previewUri, kind: 'file', name: image.name } : { previewUri })
     const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
+    const contentFingerprint = mobileNativeChatImageContentFingerprint(image.base64)
     const result = image.name
-      ? { path, previewUri, kind: 'file' as const, name: image.name }
-      : { path, previewUri }
+      ? { path, previewUri, kind: 'file' as const, name: image.name, contentFingerprint }
+      : { path, previewUri, contentFingerprint }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

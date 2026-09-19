@@ -26,8 +26,11 @@ const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
 
 /**
  * The non-relative imports a mounted operation may resolve, and what it gets: the real library in
- * every case, because each is pure. `zod` is what the checked reply readers parse with, and
- * `@noble/hashes/sha256` is the same pure-JS digest the bundle fetch would run on a device
+ * every case, because each is pure. `zod` is what the checked reply readers parse with — and a
+ * checked reader builds its schema at module load (`z.custom(...)` in
+ * mobile-workspace-create-operations.ts since #21137), so a refusing proxy would fail the mount
+ * before any request is sent — and `@noble/hashes/sha256` is the same pure-JS digest the bundle
+ * fetch would run on a device
  * (Orca #21374). Everything else non-relative stays a refusing proxy, which is what keeps an
  * adapter from silently mounting a device API. (Code UI, 2026-09-19: the two-entry form of
  * upstream's `native-mounting-substitutes.ts`, which arrives whole with Orca #20667.)

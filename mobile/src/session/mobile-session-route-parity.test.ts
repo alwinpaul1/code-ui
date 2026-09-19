@@ -75,8 +75,18 @@ const HOST_COMPONENT_NAMES = new Set([
 // resolveAskAboutScreenTarget and askAboutTerminalScreen, the terminal's
 // "Ask about this screen" (VS Code 2.1.275's "Send terminal output to
 // Claude" parity).
-const HEAD_MAIN_HOOK_SHA256 = 'e8683f2696debd3ae8b8506be7e30f5477509aa5110a71b6d49e16593b33c1be'
-const HEAD_HOOK_BINDING_SHA256 = '787a3a06788141d54258ddc18a1dfcf38c81d9c84bf547afc72384a2df1e6d32'
+// 282 since 2026-09-19 (upstream #20069): useMobileSessionFoundation binds
+// useHostProtocolGates for hostCapabilities, which the create action reads to
+// decide whether it may paint a created tab's placement itself.
+// 283 since 2026-09-19 (upstream #20545): useTerminalCopyTrimsGutter's
+// binding call in use-mobile-session-accessory-selection.ts, mirroring the
+// desktop's "Trim Gutter on Copy" setting onto the mobile Copy button. Both
+// ports landed the same day on separate branches; re-pinned at the merge.
+// 284 since 2026-09-19 (upstream #20601, the native-chat group): the chat
+// controller's structuredCancelPrompt, and the tab reconciliation's
+// prompt-cancel capability read; re-pinned again at that merge.
+const HEAD_MAIN_HOOK_SHA256 = '7f5eadd80a25f8fc48ec5be7f457c1265185c171ef655cb26194d06e23984dfa'
+const HEAD_HOOK_BINDING_SHA256 = 'a26754f833de531d4e27936951b7911314add8eb6c1e66b3ce604a192f02a0d0'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -108,11 +118,17 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
-const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
+// 2026-09-19 (perf-group port, #20545): the Copy button's handler now trims
+// the agent gutter through stripTerminalSelectionGutter when the mirrored
+// desktop setting is on.
+const HEAD_CALLBACK_BODY_SHA256 = '2551fcb7e13621a636d239b47229152a3b4d75ba28c583772105f79a6df2a406'
 // 2026-09-19 (Orca #21503 port): the last-visited-worktree effect's bare store
 // write became writeLastVisitedWorktree, the one writer of that key, so the
 // hybrid shell's page mirror sees it as it is written rather than one `init` later.
-const HEAD_EFFECT_SHA256 = '0a93fb85be06a23527fea5a4aebd7a944b3a6156ceff1ca383a45635998e0e5f'
+// Re-pinned on the group E merge, 2026-09-19: main's hash (da074a63) carried
+// the perf-group effects, ours (0a93fb85) carried this one; the merged tree
+// carries both, and this is what the test printed for it.
+const HEAD_EFFECT_SHA256 = '6121e237b5248bc985b57d2288f4bc96c8c35371ac3bd740317ef9d6a35ce67f'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -140,8 +156,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // 2026-09-18: handleForkClaudeSession joins handleClearTerminal inside
 // useMobileSessionTerminalInput — the session menu's Fork action types
 // Claude's own `/fork` command and submits it.
+// 2026-09-19 (upstream #20069): handleCreateTerminal captures one afterTabId
+// for both the request and the optimistic paint, places the created tab with
+// the shared placeCreatedSessionTab, and paints nothing at all against a host
+// without session-tabs.split-group-placement.v1 (its snapshot places it).
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '48b0504dc330d10f4c8b38bf164f24e620df21cebdcf8dc8a4ebd68fc592eb19'
+  'b014e15d80d68923e7a6b4c4181a68eae50766a54079637546ea7e869d5f2ee8'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -253,7 +273,7 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // navigators for the new project-config screens (MCP servers, permission
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
-const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
+const HEAD_CAPABILITY_SHA256 = '0522812c020ba11508726574cf1ef08fb39343af167959360191fb0f27c7db69'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -645,7 +665,11 @@ describe('mobile session route extraction parity', () => {
     // the diff cards' "Revert this hunk" to this session's client and tab.
     // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
-    expect(main.hooks).toHaveLength(281)
+    // 282 since 2026-09-19: useHostProtocolGates in the foundation (#20069).
+    // 283 since 2026-09-19: useTerminalCopyTrimsGutter (#20545), merged the same day.
+    // 284 since 2026-09-19: structuredCancelPrompt (useNativeChatAcceptedAction),
+    // the cancel-by-identity for a pending approval/question (Orca #20601).
+    expect(main.hooks).toHaveLength(284)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)
@@ -688,7 +712,8 @@ describe('mobile session route extraction parity', () => {
     // see HEAD_NAVIGATION_SHA256.
     expect(compatibility.navigation).toHaveLength(9)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    // 6 since 2026-09-19: agent-session.prompt-cancel.v1 (Orca #20601).
+    expect(compatibility.capabilities).toHaveLength(6)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 

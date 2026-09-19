@@ -32,7 +32,9 @@ export default defineConfig({
     onConsoleLog: (log) => !log.includes('react-test-renderer is deprecated'),
     // .tsx too: component tests exist (react-test-renderer + mocked react-native) and were
     // silently never collected, so render-level regressions shipped untested.
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // scripts/ too: the tests-typecheck ratchet's own parser tests live under it (#21298) and had
+    // no runnable test home otherwise — a test vitest never collects is not a gate.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'],
     // Why: the 5 s default is a wall-clock budget, and two things here spend wall clock without
     // the test under it doing any more work. The RPC recording oracle (#20521, #20544) transpiles
     // product source through the TypeScript compiler API on every scenario, so whichever of its

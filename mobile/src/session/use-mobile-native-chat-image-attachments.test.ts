@@ -94,7 +94,13 @@ describe('useMobileNativeChatImageAttachments', () => {
     // `batch` names the selection that put the chip here, so one selection's
     // sweep cannot clear another's (2026-09-13).
     expect(hook!.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg', batch: 'batch-1' }
+      {
+        id: 'img-1',
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg',
+        batch: 'batch-1',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
     ])
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })

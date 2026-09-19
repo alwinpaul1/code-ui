@@ -28,8 +28,10 @@ import type { PageClosurePins } from './page-closure'
 
 export const C1_PAGE_CLOSURE: PageClosurePins = {
   // CODE UI (2026-09-19, Orca #21533 port): this fork's route tree's closure, derived the same way
-  // (the value-import closure of `app/h/_layout.tsx` and `app/h/[hostId]/index.tsx` with `.web.*`
-  // resolution, matched against each scenario's sites) and pinned from a measured bridged run over
+  // (the value-import closure of `app/h/_layout.tsx` and `app/h/[hostId]/index.web.tsx` — the web
+  // sibling, since the native file mounts the shell and would pull the two `mobileWeb.*` families
+  // in — with `.web.*` resolution, matched against each scenario's sites) and pinned from a
+  // measured bridged run over
   // this fork's 264-golden corpus: 16 families, 79 goldens, 42 byte-identical, 30
   // `result-absent-settlement`, 7 `params-undefined`. Upstream's table has six more families —
   // `host-worktree-refresh`, `transport.capability-probe`, `transport.host-status-gates`,

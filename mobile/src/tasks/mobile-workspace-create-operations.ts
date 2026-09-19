@@ -1,8 +1,13 @@
+import { z } from 'zod'
+import {
+  isAgentLaunchResult,
+  type AgentLaunchResult
+} from '../../../src/shared/agent-launch-intent'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
 
-// Creating a workspace from a task. Every reply here is one the call site only re-typed, so the
-// readers are unchecked: moving a shape check in would be a validation change, not a migration.
+// Legacy readers preserve their existing validation; the replay-required route validates receipts.
 
 /**
  * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
@@ -17,6 +22,31 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcUncheckedPayloadReader('created-worktree')
+  })
+)
+
+/**
+ * agent.launch carrying a create payload: the host settles whether the agent lands in a structured
+ * session or a terminal. Same reply discipline as worktreeCreateRun, and for the same reason — the
+ * two share one clientMutationId, so the retry loop must see an unlost reply either way.
+ */
+export const agentLaunchRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch',
+    method: 'agent.launch',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcUncheckedPayloadReader('agent-launch-receipt')
+  })
+)
+
+export const agentLaunchReplayRun = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'agent.launch-replay',
+    method: 'agent.launchReplay',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('agent-launch-receipt', z.custom<AgentLaunchResult>(isAgentLaunchResult))
   })
 )
 

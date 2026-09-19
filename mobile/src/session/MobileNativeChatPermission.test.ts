@@ -21,9 +21,11 @@ vi.mock('lucide-react-native', () => ({
   FileMinus2: 'FileMinus2',
   FilePen: 'FilePen',
   FilePlus2: 'FilePlus2',
-  ShieldQuestion: 'ShieldQuestion'
+  ShieldQuestion: 'ShieldQuestion',
+  X: 'X'
 }))
 vi.mock('../components/TextInputModal', () => ({ TextInputModal: 'TextInputModal' }))
+vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -31,6 +33,160 @@ describe('MobileNativeChatPermission', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  // Orca #20601: the X on the card cancels the prompt itself, and names the
+  // exact item so a host that can cancel precisely does not stop the turn.
+  it('passes the rendered prompt identity to cancel, in both themes', async () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const onCancel = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Approve?',
+                prompt: { itemId: 'approval-1', expectedRevision: 4 },
+                options: [{ label: 'Allow', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true),
+              onCancel
+            })
+          )
+        )
+      })
+      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
+      await act(async () => cancel.props.onPress())
+      expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 4 })
+      // The glyph takes the muted tone of whichever theme is on.
+      const glyph = renderer!.root.findByType('X')
+      expect(glyph.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  // Orca #21087: the harness's presentation — description, reason, blocked path,
+  // ask rule — is drawn in a bounded scroller above the choices, so an oversized
+  // payload can never push Allow off the screen. Both themes: the block reads
+  // from the theme's secondary tone.
+  it('keeps oversized provider context in a bounded scroller above the actions, in both themes', async () => {
+    const description = `Workspace access ${'description '.repeat(400)}`
+    const decisionReason = `Outside the allowed root ${'reason '.repeat(400)}`
+    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
+    const ruleContent = `/repo/${'**/'.repeat(400)}`
+    for (const scheme of ['light', 'dark'] as const) {
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Claude wants to read secrets.txt '.repeat(400),
+                description,
+                decisionReason,
+                blockedPath,
+                matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
+                options: [{ label: 'Allow', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true)
+            })
+          )
+        )
+      })
+      const context = renderer!.root.findByProps({ testID: 'native-chat-approval-context' })
+      // The card's reading budget on the mocked 915 px window: 16 %, capped at 132.
+      expect(context.props.style).toMatchObject({ maxHeight: 132, flexShrink: 1 })
+      const texts = context.findAllByType('Text').flatMap((node) => {
+        const children = Array.isArray(node.props.children)
+          ? node.props.children
+          : [node.props.children]
+        return children.filter((child: unknown) => typeof child === 'string')
+      })
+      expect(texts).toContain(description)
+      expect(texts).toContain(decisionReason)
+      expect(texts).toContain(blockedPath)
+      expect(texts).toContain(`${ruleContent} · project`)
+      expect(texts).toContain('Reason: ')
+      expect(texts).toContain('Blocked path: ')
+      expect(texts).toContain('Ask rule: ')
+      expect(context.findAllByProps({ children: 'Allow' })).toHaveLength(0)
+      const palette = scheme === 'dark' ? darkColors : lightColors
+      const colors = context.findAllByType('Text').flatMap((node) => {
+        const style = node.props.style
+        return (Array.isArray(style) ? style.flat() : [style])
+          .filter((entry) => entry && typeof entry === 'object' && typeof entry.color === 'string')
+          .map((entry) => entry.color as string)
+      })
+      expect(colors).toContain(palette.textSecondary)
+      // The choice sits outside the context block, in its own scroller.
+      expect(renderer!.root.findAllByProps({ children: 'Allow' }).length).toBeGreaterThan(0)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  // Orca #21090: a finished plan is an approval carrying a typed subject. It
+  // is content to read, drawn as markdown in a bounded scroller, and it
+  // replaces the raw ExitPlanMode input the detail carries.
+  it.each(['light', 'dark'] as const)(
+    'renders a plan as markdown inside a bounded scroller and never the raw detail, in %s',
+    async (scheme) => {
+      const planText = '# Release plan\n\n- Run the tests'
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Claude wants to present its plan',
+                subject: { kind: 'plan', text: planText, filePath: '/repo/PLAN.md' },
+                detail: 'raw json that must not be shown',
+                options: [{ label: 'Approve plan', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true)
+            })
+          )
+        )
+      })
+      const content = renderer!.root.findByProps({ testID: 'native-chat-approval-plan' })
+      // The diff's share of the mocked 915 px window: 30 %, floored at 120.
+      expect(content.props.style).toMatchObject({ maxHeight: 275, flexShrink: 1 })
+      expect(content.findByType('MobileMarkdown').props.content).toBe(planText)
+      const texts = renderer!.root.findAllByType('Text').flatMap((node) => {
+        const children = Array.isArray(node.props.children)
+          ? node.props.children
+          : [node.props.children]
+        return children.filter((child: unknown) => typeof child === 'string')
+      })
+      expect(texts).toContain('Plan file: /repo/PLAN.md')
+      expect(texts).not.toContain('raw json that must not be shown')
+      expect(texts).toContain('Approve plan')
+      const fileLine = content
+        .findAllByType('Text')
+        .find((node) => node.props.children === 'Plan file: /repo/PLAN.md')!
+      const styles = Array.isArray(fileLine.props.style) ? fileLine.props.style.flat() : [fileLine.props.style]
+      const color = styles.find((entry) => entry && typeof entry.color === 'string')?.color
+      expect(color).toBe((scheme === 'dark' ? darkColors : lightColors).textSecondary)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  )
+
+  it('offers no cancel on a card whose caller cannot cancel by identity', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Cancel' })).toHaveLength(0)
   })
 
   it('shows the complete remembered scope and sends only the selected agent response', async () => {

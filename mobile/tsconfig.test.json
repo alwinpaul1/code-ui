@@ -1,0 +1,13 @@
+{
+  // The main config excludes test files so Metro never compiles them into the release bundle, and
+  // vitest transpiles without typechecking — so until this config existed nothing typechecked a
+  // mobile test, and a type-level pin written in one proved nothing.
+  //
+  // Upstream Orca excludes four Node-side test files here (they import the desktop main process or
+  // src/shared/child-process, checked against @types/node rather than React Native's libs, where
+  // `setTimeout` answers a number rather than a NodeJS.Timeout). This fork has none of those files
+  // — grep for an import of src/main or src/shared/child-process from a mobile *.test.ts finds
+  // nothing (2026-09-19) — so nothing is excluded here beyond node_modules.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules"]
+}
