@@ -75,8 +75,11 @@ const HOST_COMPONENT_NAMES = new Set([
 // resolveAskAboutScreenTarget and askAboutTerminalScreen, the terminal's
 // "Ask about this screen" (VS Code 2.1.275's "Send terminal output to
 // Claude" parity).
-const HEAD_MAIN_HOOK_SHA256 = 'e8683f2696debd3ae8b8506be7e30f5477509aa5110a71b6d49e16593b33c1be'
-const HEAD_HOOK_BINDING_SHA256 = '787a3a06788141d54258ddc18a1dfcf38c81d9c84bf547afc72384a2df1e6d32'
+// 282 since 2026-09-19 (perf-group port, #20545): useTerminalCopyTrimsGutter's
+// binding call in use-mobile-session-accessory-selection.ts, mirroring the
+// desktop's "Trim Gutter on Copy" setting onto the mobile Copy button.
+const HEAD_MAIN_HOOK_SHA256 = 'd3c73dab5541667973de5e19fd151b764efaa81093c4cef40f94ca7b3497b116'
+const HEAD_HOOK_BINDING_SHA256 = '8d67c71442219f570595108f57c37402c4e43b1409276c6a00159aa4ac9114d8'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -108,7 +111,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
-const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
+// 2026-09-19 (perf-group port, #20545): the Copy button's handler now trims
+// the agent gutter through stripTerminalSelectionGutter when the mirrored
+// desktop setting is on.
+const HEAD_CALLBACK_BODY_SHA256 = '2551fcb7e13621a636d239b47229152a3b4d75ba28c583772105f79a6df2a406'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -642,7 +648,8 @@ describe('mobile session route extraction parity', () => {
     // the diff cards' "Revert this hunk" to this session's client and tab.
     // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
-    expect(main.hooks).toHaveLength(281)
+    // 282 since 2026-09-19 (perf-group port, #20545): useTerminalCopyTrimsGutter.
+    expect(main.hooks).toHaveLength(282)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)
