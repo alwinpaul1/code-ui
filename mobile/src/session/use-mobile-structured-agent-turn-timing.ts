@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -29,10 +29,18 @@ export function useMobileStructuredAgentTurnTiming(
   },
   turnId: string | null
 ): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
-  const settledTurns = useMemo(
+  // Selected per batch, but handed on only when its content changed: the
+  // turn-status memo downstream keys on this map, and a new map per token
+  // batch re-rendered every visible settled user row (review, 2026-09-19).
+  const selected = useMemo(
     () => selectStructuredAgentSettledTurns(items, submissions),
     [items, submissions]
   )
+  const settledRef = useRef<NativeChatSettledTurns>(selected)
+  if (!sameSettledTurns(settledRef.current, selected)) {
+    settledRef.current = selected
+  }
+  const settledTurns = settledRef.current
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   const runningTiming = useMemo(
     () => (turnId === null ? null : selectStructuredAgentRunningTurnTiming(items, turnId)),
@@ -51,4 +59,29 @@ export function useMobileStructuredAgentTurnTiming(
     setLatch(step.latch)
   }
   return { settledTurns, workingStartedAt: step.workingStartedAt }
+}
+
+function sameSettledTurns(a: NativeChatSettledTurns, b: NativeChatSettledTurns): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [turn, settled] of a) {
+    if (!b.has(turn)) {
+      return false
+    }
+    const other = b.get(turn)
+    if (settled === null || other === null || other === undefined) {
+      if (settled !== other) {
+        return false
+      }
+      continue
+    }
+    if (settled.startedAt !== other.startedAt || settled.workedSeconds !== other.workedSeconds) {
+      return false
+    }
+  }
+  return true
 }

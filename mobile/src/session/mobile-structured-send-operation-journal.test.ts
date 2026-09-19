@@ -38,6 +38,8 @@ function getOrCreateMobileStructuredSendOperation(
   }).then(({ operationId, retained }) => ({ operationId, retained }))
 }
 
+const JOURNAL_KEY = 'orca:mobileStructuredSendOperations:v1'
+
 function operationIdAt(timestamp: number, entropy: string): string {
   return `${timestamp}-${entropy.repeat(32).slice(0, 32)}`
 }
@@ -237,8 +239,17 @@ describe('mobile structured send operation journal', () => {
     ).resolves.toEqual({ operationId: expired, retained: true })
   })
 
-  it('fails closed when a retained operation id is malformed', async () => {
-    asyncStorage.getItem.mockResolvedValueOnce(
+  it('starts over from an unreadable journal instead of refusing every send from then on', async () => {
+    // Fork-local, on purpose (review of the group A merge, 2026-09-19).
+    // Upstream fails closed here: a malformed entry rejects every send until
+    // the app's data is cleared, and the phone has no other way out. The
+    // phone's contracts fail open (CLAUDE.md): a blob that cannot be read
+    // holds no identity to dedupe against, so it is dropped, once, and the
+    // send goes out under a fresh id. A transient storage error still fails
+    // closed (next case): the write would fail too.
+    for (const blob of [
+      '{not json',
+      JSON.stringify({ v: 1, entries: 'nope' }),
       JSON.stringify({
         v: 1,
         entries: [
@@ -251,15 +262,20 @@ describe('mobile structured send operation journal', () => {
           }
         ]
       })
-    )
-
-    await expect(
-      getOrCreateMobileStructuredSendOperation({
-        operationKey: OPERATION_KEY,
-        createOperationId: () => operationIdAt(NOW, '8'),
-        now: NOW
-      })
-    ).rejects.toThrow('unreadable')
+    ]) {
+      values.clear()
+      values.set(JOURNAL_KEY, blob)
+      await expect(
+        getOrCreateMobileStructuredSendOperation({
+          operationKey: OPERATION_KEY,
+          createOperationId: () => operationIdAt(NOW, '8'),
+          now: NOW
+        })
+      ).resolves.toMatchObject({ operationId: operationIdAt(NOW, '8'), retained: false })
+      // The unreadable blob is gone; what is stored now is the new entry alone.
+      const stored = JSON.parse(values.get(JOURNAL_KEY) ?? 'null') as { entries: unknown[] }
+      expect(stored.entries).toHaveLength(1)
+    }
   })
 
   it('fails closed when durable identity cannot be read or written', async () => {

@@ -59,6 +59,13 @@ function newOperationIdIsAdmissible(operationId: string, now: number): boolean {
   )
 }
 
+/** Fork-local: upstream throws "unreadable" here, and every later send is
+ *  refused until the app's data is cleared — a dead composer with no way
+ *  out on a phone (review of the group A merge, 2026-09-19). The phone's
+ *  contracts fail open (CLAUDE.md): a blob that cannot be read holds no
+ *  identity to dedupe against, so it is dropped, once, with a warning, and
+ *  the send goes out under a fresh id. A transient storage error is
+ *  different and still fails closed: the write would fail too. */
 function parseJournal(raw: string | null): OperationJournal {
   if (raw === null) {
     return { v: 1, entries: [] }
@@ -67,11 +74,11 @@ function parseJournal(raw: string | null): OperationJournal {
   try {
     value = JSON.parse(raw)
   } catch {
-    throw new Error('Structured send operation journal is unreadable')
+    return unreadableJournal('not JSON')
   }
   const parsed = OperationJournalSchema.safeParse(value)
   if (!parsed.success) {
-    throw new Error('Structured send operation journal is unreadable')
+    return unreadableJournal('wrong shape')
   }
   if (
     new Set(parsed.data.entries.map((entry) => entry.operationKey)).size !==
@@ -80,9 +87,14 @@ function parseJournal(raw: string | null): OperationJournal {
       (entry) => parseAgentSessionOperationTimestamp(entry.operationId) === null
     )
   ) {
-    throw new Error('Structured send operation journal is unreadable')
+    return unreadableJournal('duplicate key or malformed operation id')
   }
   return parsed.data
+}
+
+function unreadableJournal(why: string): OperationJournal {
+  console.warn(`[structured-send] operation journal unreadable (${why}); starting over`)
+  return { v: 1, entries: [] }
 }
 
 async function writeEntries(entries: OperationEntry[]): Promise<void> {

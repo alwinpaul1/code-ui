@@ -82,6 +82,58 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     vi.useRealTimers()
   })
 
+  it("keeps the settled map's identity across a streaming batch that settled nothing new", () => {
+    // Review 2026-09-19 (group A merge): the map was rebuilt on every `items`
+    // change, and the turn-status memo downstream keys on it, so every
+    // visible settled user row re-rendered per token batch. Same content,
+    // same map.
+    vi.useFakeTimers()
+    vi.setSystemTime(CLIENT_NOW)
+    const settled = lifecycle(
+      't1',
+      2,
+      {
+        state: 'completed',
+        startedAt: HOST_START,
+        completedAt: HOST_START + 61_000,
+        userItemId: 'codex:thread:t1:0'
+      },
+      HOST_START + 5
+    )
+    const running = lifecycle('t2', 4, { state: 'running', startedAt: HOST_START + 100_000 }, HOST_START + 102_500)
+    const first = [user('u1', 1), settled, user('u2', 3), running]
+    act(() => {
+      renderer = create(createElement(Harness, { items: first, submissions: SUBMISSIONS, turnId: 't2' }))
+    })
+    const before = timing!.settledTurns
+    // A token batch: a new items array, an assistant row appended, nothing settled.
+    const assistant: AgentJournalRenderItem = {
+      itemId: 'a1',
+      revision: 3,
+      sequence: 5,
+      observedAt: HOST_START + 103_000,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'streaming…' }] }
+    }
+    act(() => {
+      renderer!.update(createElement(Harness, { items: [...first, assistant], submissions: SUBMISSIONS, turnId: 't2' }))
+    })
+    expect(timing!.settledTurns).toBe(before)
+    // And a turn that does settle produces a new map.
+    const settledSecond = lifecycle(
+      't2',
+      6,
+      { state: 'completed', startedAt: HOST_START + 100_000, completedAt: HOST_START + 130_000 },
+      HOST_START + 130_005
+    )
+    act(() => {
+      renderer!.update(
+        createElement(Harness, { items: [...first, assistant, settledSecond], submissions: SUBMISSIONS, turnId: null })
+      )
+    })
+    expect(timing!.settledTurns).not.toBe(before)
+    expect(timing!.settledTurns.get('u2')).toEqual({ startedAt: HOST_START + 100_000, workedSeconds: 30 })
+  })
+
   it('hands settled host durations through and anchors the live counter locally, once per turn', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
