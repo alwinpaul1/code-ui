@@ -1,0 +1,118 @@
+{
+  "operation": "session.terminal-clipboard",
+  "family": "session.terminal-paste",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
+  "recorderSha256": "1bc117ad620b99f598ca87c926320f2c055a3112f01b942eb8a9afd51f083aac",
+  "adapterSha256": "3bf45380dd38229ba2c4dcffc204a91ec8dbdd75072f2448ec423c3c714f135e",
+  "scenarioSha256": "65f0e38be1b43c7629e82597dcd842008c5c75a93b5628106c65536138186925",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4516e17f3251": {
+      "name": "toast",
+      "value": {
+        "durationMs": {
+          "$rpc": "null"
+        },
+        "message": "Copied"
+      },
+      "sent": 0
+    },
+    "460853db4ef0": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u001b[200~echo hi\u001b[201~"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": false
+            }
+          }
+        }
+      }
+    },
+    "4e4f49e68523": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b[200~echo hi\\u001b[201~\",\"enter\":false,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "528166d1face": {
+      "connectionId": "unresolved",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "sent"
+    },
+    "5e2973256901": {
+      "name": "refresh-can-paste",
+      "value": {},
+      "sent": 1
+    },
+    "eb1f3c2bf74f": {
+      "name": "flush-live-input",
+      "value": {
+        "handle": "terminal-1"
+      },
+      "sent": 0
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "terminal-paste-refused",
+    "checkpoints": [
+      {
+        "id": "not-reported",
+        "observation": {
+          "sender": ["460853db4ef0"],
+          "payloads": ["4e4f49e68523"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "copy": "eb79a9b3682a",
+            "paste": "eb79a9b3682a"
+          },
+          "state": "528166d1face",
+          "effects": ["4516e17f3251", "eb1f3c2bf74f", "5e2973256901"]
+        }
+      }
+    ]
+  }
+}

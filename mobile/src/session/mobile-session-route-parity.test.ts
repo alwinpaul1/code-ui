@@ -114,7 +114,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // load and persist — and the refusal try/catch in the diff-comment persist is
 // an interpretOrThrowRefusalMessage call. Same 81 callbacks, same identities;
 // the goldens under mobile/rpc-foundation pin the behaviour and did not move.
-const HEAD_CALLBACK_BODY_SHA256 = '5950624b8aa920fa614d5b1a0a4169397ac33e38de76fcc0fe32d7202cabc986'
+// 2026-09-19 (Orca #20915 ported): two more — the live keystroke send
+// (sendLiveTerminalInput) and the accessory's connection lookup
+// (getActiveWorktreeConnectionId) name terminal.input-send and the new-tab
+// repo.list reader. Same 81 callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = 'dd37a161251597b544cea3cb5bc297b29c8017154264211c32d9d8e35dc43185'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -147,8 +151,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // operations — the markdown note and browser creates, the browser navigation
 // command, and the terminal rename, terminal close and session-tab close (the
 // last two keep this fork's early-return and close-plan shape). Count still 13.
+// 2026-09-19 (Orca #20915 ported): handleSend, the composed draft send, names
+// terminal.input-send. Count still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '6173c3aee344fc4ce8e731ed6269d0e0e0b05ac88fe293ec2b1db0013efc6da5'
+  'f437f43d69f938515d8abb16dc553d45027336fc8dabd0938df3fdb26eaad6e6'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -186,8 +192,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // browser navigation command's three 'browser.back'/'forward'/'reload' arms
 // and three '' fallbacks. Checked by diffing the reader's output against the
 // pre-port tree; upstream's own count moved by the same six.
+// 668 since 2026-09-19 (Orca #20915 ported): the three method literals that
+// became operation definitions — one repo.list and two terminal.send — and
+// nothing else, the same three upstream lost (540 → 537 there).
 const HEAD_RUNTIME_STRING_SHA256 =
-  'f2ea9d643f8445325682bca54d70d730d3a7c351e5ff6e430f1a7df3cdd444a8'
+  '5e058408c4a748e0f0aeb4c0084816da1de63facf7006c4d0c5596514802dd99'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -733,7 +742,7 @@ describe('mobile session route extraction parity', () => {
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
     // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
     // MobileSessionActiveContent asks the mobile RPC gate about.
-    expect(strings).toHaveLength(671)
+    expect(strings).toHaveLength(668)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
