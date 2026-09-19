@@ -1,4 +1,5 @@
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 
 // Race relay alongside an unauthenticated direct dial on the next event-loop
 // turn. A fixed LAN head start also delays cellular and stale Wi-Fi endpoints;
@@ -6,7 +7,7 @@ import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 export const DIRECT_DIAL_GRACE_MS = 0
 
 type DirectGraceTimerDependencies = {
-  setTimer: typeof setTimeout
+  setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
 }
 

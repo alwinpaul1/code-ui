@@ -6,6 +6,7 @@ import {
 } from './mobile-direct-endpoint-list'
 import type { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import type { RpcClient } from './rpc-client'
+import type { ScheduleTimer } from './timer-scheduler'
 import type { HostProfile } from './types'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
@@ -27,7 +28,7 @@ export class DirectReturnProbe {
   constructor(
     private readonly deps: {
       now: () => number
-      setTimer: typeof setTimeout
+      setTimer: ScheduleTimer
       clearTimer: typeof clearTimeout
       openDirect: (endpoint: string) => RpcClient
       /** expo-network's `NetworkStateType` name, or null when unknown. */
