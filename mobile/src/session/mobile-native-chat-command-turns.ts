@@ -1,5 +1,8 @@
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { surfaceSkillInvocationUserTurns } from '../../../src/shared/native-chat-command-envelope'
+import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import {
+  parseNativeChatCommandEnvelope,
+  surfaceSkillInvocationUserTurns
+} from '../../../src/shared/native-chat-command-envelope'
 
 /**
  * A slash command the session ran is the user's turn, and the phone draws it
@@ -25,7 +28,36 @@ import { surfaceSkillInvocationUserTurns } from '../../../src/shared/native-chat
 const NO_CATALOG: ReadonlySet<string> = new Set()
 
 export function surfaceCommandTurns(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return surfaceSkillInvocationUserTurns(messages, NO_CATALOG)
+  return surfaceSkillInvocationUserTurns(messages.map(withEnvelopeBesideImages), NO_CATALOG)
+}
+
+/** Upstream surfaces an envelope only when every block is text, so a command
+ *  sent with a photo stayed hidden and the photo went with it (review,
+ *  2026-09-19). Rewrite the envelope text in place and keep the other blocks;
+ *  the upstream pass then leaves the row alone, already surfaced. */
+function withEnvelopeBesideImages(message: NativeChatMessage): NativeChatMessage {
+  if (message.role !== 'user' || message.blocks.every(isTextBlock)) {
+    return message
+  }
+  const envelope = parseNativeChatCommandEnvelope(
+    message.blocks.filter(isTextBlock).map((block) => block.text).join('\n')
+  )
+  if (!envelope) {
+    return message
+  }
+  const token = `/${envelope.name.replace(/^\//, '').split(':').at(-1) ?? ''}`
+  const surfaced = envelope.args ? `${token} ${envelope.args}` : token
+  let replaced = false
+  const blocks: NativeChatBlock[] = []
+  for (const block of message.blocks) {
+    if (!isTextBlock(block)) {
+      blocks.push(block)
+    } else if (!replaced) {
+      replaced = true
+      blocks.push({ ...block, text: surfaced })
+    }
+  }
+  return { ...message, blocks }
 }
 
 /** A leading plugin-qualified skill token as the surfaced turn spells it:

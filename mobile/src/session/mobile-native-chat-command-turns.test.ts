@@ -131,3 +131,26 @@ it('retires the hook echo of a plugin-qualified skill typed in full', () => {
   const status = [{ nonce: 's', text: '/codex:rescue look at the failing build', at: T('21:00:05.000') }]
   expect(withoutLandedDesktopPrompts(status, folded)).toEqual([])
 })
+
+// Review (2026-09-19): upstream surfaces an envelope only when every block is
+// text, so a `/x` sent with a photo stayed hidden as noise and the photo
+// vanished with it. The turn is the user's whether or not it carries an image.
+it('surfaces a slash command sent with a photo, photo kept', () => {
+  const folded = foldMobileNativeChatMessages([
+    text('a0', 'assistant', 'hi', T('21:00:00.000')),
+    {
+      id: 'u0',
+      role: 'user',
+      blocks: [
+        {
+          type: 'text',
+          text: '<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>this screen</command-args>'
+        },
+        { type: 'image-ref', url: 'file:///tmp/shot.jpg' }
+      ],
+      timestamp: T('21:00:05.000'),
+      source: 'transcript'
+    }
+  ])
+  expect(bubbleTexts(folded)).toEqual(['assistant:hi', 'user:/review this screen[image-ref]'])
+})
