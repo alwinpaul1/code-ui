@@ -163,5 +163,7 @@ src/shared/orchestration-fleet-outcome-resolution.ts: c84007c54
 src/shared/orchestration-fleet-status-index.ts: c84007c54
 src/shared/orchestration-fleet-worker-projection.ts: c84007c54
 src/shared/worker-terminal-host-scope.ts: c84007c54
+src/shared/zod-salvage.ts: a28085adb
+src/shared/hosted-review-creation-providers.ts: a28085adb
 
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.
