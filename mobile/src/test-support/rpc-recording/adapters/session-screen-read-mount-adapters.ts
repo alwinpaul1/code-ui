@@ -42,6 +42,7 @@ export function sessionScreenReadMountAdapters(
             // the scenarios read worktree paths, so none are consulted.
             terminalsRef: { current: [] },
             activeSessionTabId: null,
+            sessionTabs: [],
             setMarkdownDocs: (update) => {
               markdownDocs = typeof update === 'function' ? update(markdownDocs) : update
             },

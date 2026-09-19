@@ -100,15 +100,35 @@ describe('mobileNativeChatStreamPreview', () => {
 })
 
 describe('deriveMobileNativeChatStreaming', () => {
-  it('shows a genuine reply that repeats the previous turn as a prefix', () => {
+  it('hides a stream that is no more than the previous reply, and shows it once it grows past', () => {
+    // Device 2026-09-19, "Same response twice" (0.9.0 and 0.9.1): a host that
+    // never went idle between two turns carried the last reply into the next
+    // turn's status, and the phone drew it again under the new prompt. A
+    // stream that is a prefix of (or equal to) the last assistant row is that
+    // row. A genuinely repeated reply stays hidden until it diverges — the
+    // old "shows a genuine reply that repeats the previous turn as a prefix"
+    // rule — or its own row lands.
     const prior = [assistant('a1', 'The tests pass.')]
     const { results } = run([
       { folded: prior }, // idle tick anchors the pre-stream tail
       { folded: prior, text: 'The' },
-      { folded: prior, text: 'The tests' },
-      { folded: prior, text: 'The tests pass.' }
+      { folded: prior, text: 'The tests pass.' },
+      { folded: prior, text: 'The tests pass. And the lint.' }
     ])
-    expect(results).toEqual([null, 'The', 'The tests', 'The tests pass.'])
+    expect(results).toEqual([null, null, null, 'The tests pass. And the lint.'])
+  })
+
+  it('hides the previous reply replayed through a turn boundary the host never marked idle', () => {
+    const before = [assistant('a1', 'earlier'), assistant('a2', '0.9.1 is published: CI green.')]
+    const { results } = run([
+      // The gate anchored on a2 while live (mounted mid-turn, first tail).
+      { folded: before, live: true },
+      // The next turn begins; the status still carries a2's text.
+      { folded: before, text: '0.9.1 is published: CI green.', live: true },
+      // The new reply arrives.
+      { folded: before, text: 'The duplicate is gone.', live: true }
+    ])
+    expect(results).toEqual([null, null, 'The duplicate is gone.'])
   })
 
   it('hides the bubble once the real turn lands leading with the streamed text', () => {
@@ -122,15 +142,15 @@ describe('deriveMobileNativeChatStreaming', () => {
     expect(results).toEqual([null, 'fresh answer', null])
   })
 
-  it('suppresses an identical repeated reply once its own turn lands', () => {
+  it('keeps an identical repeated reply hidden through to its own turn landing', () => {
     const prior = [assistant('a1', 'Done.')]
     const landed = [...prior, assistant('a2', 'Done.')]
     const { results } = run([
       { folded: prior },
-      { folded: prior, text: 'Done.' }, // repeated-prefix reply stays visible
-      { folded: landed, text: 'Done.' } // its own turn landed — hide
+      { folded: prior, text: 'Done.' }, // no more than the last reply: hidden
+      { folded: landed, text: 'Done.' } // its own turn landed — still hidden
     ])
-    expect(results).toEqual([null, 'Done.', null])
+    expect(results).toEqual([null, null, null])
   })
 
   it('keeps hiding for the rest of a segment after the turn lands', () => {
@@ -152,24 +172,24 @@ describe('deriveMobileNativeChatStreaming', () => {
     const prior = [assistant('a1', 'Done.')]
     const { results } = run([
       { folded: prior },
-      { folded: prior, text: 'Done.', live: true },
+      { folded: prior, text: 'Done again.', live: true },
       { folded: [], live: true },
-      { folded: [], text: 'Done.', live: true },
-      { folded: prior, text: 'Done.', live: true }
+      { folded: [], text: 'Done again.', live: true },
+      { folded: prior, text: 'Done again.', live: true }
     ])
-    expect(results).toEqual([null, 'Done.', 'Done.', 'Done.', 'Done.'])
+    expect(results).toEqual([null, 'Done again.', 'Done again.', 'Done again.', 'Done again.'])
   })
 
   it('still hides after a hidden gap once the reply landed as its own turn', () => {
     const prior = [assistant('a1', 'Done.')]
-    const landed = [...prior, assistant('a2', 'Done.')]
+    const landed = [...prior, assistant('a2', 'Done again.')]
     const { results } = run([
       { folded: prior },
-      { folded: prior, text: 'Done.', live: true },
+      { folded: prior, text: 'Done again.', live: true },
       { folded: [], live: true },
-      { folded: landed, text: 'Done.', live: true }
+      { folded: landed, text: 'Done again.', live: true }
     ])
-    expect(results).toEqual([null, 'Done.', 'Done.', null])
+    expect(results).toEqual([null, 'Done again.', 'Done again.', null])
   })
 
   it('hides a reply whose own turn landed before its status text arrived', () => {
@@ -197,9 +217,9 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: prior },
       { folded: [] },
       { folded: [], live: true },
-      { folded: prior, text: 'Done.', live: true }
+      { folded: prior, text: 'Done again.', live: true }
     ])
-    expect(results).toEqual([null, null, null, 'Done.'])
+    expect(results).toEqual([null, null, null, 'Done again.'])
   })
 
   it('anchors on the first tail it sees when mounted mid-turn', () => {
@@ -208,9 +228,9 @@ describe('deriveMobileNativeChatStreaming', () => {
     const prior = [assistant('a1', 'Done.')]
     const { results } = run([
       { folded: prior, live: true },
-      { folded: prior, text: 'Done.', live: true }
+      { folded: prior, text: 'Done again.', live: true }
     ])
-    expect(results).toEqual([null, 'Done.'])
+    expect(results).toEqual([null, 'Done again.'])
   })
 
   it('anchors on a textless tick once the turn ends', () => {
@@ -220,9 +240,9 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: prior },
       { folded: prior, text: 'second answer', live: true },
       { folded: landed },
-      { folded: landed, text: 'second answer', live: true }
+      { folded: landed, text: 'second answer, revised', live: true }
     ])
-    expect(results).toEqual([null, 'second answer', null, 'second answer'])
+    expect(results).toEqual([null, 'second answer', null, 'second answer, revised'])
   })
 
   it('does not treat the previous turn as a segment start after re-anchoring', () => {
@@ -249,9 +269,9 @@ describe('deriveMobileNativeChatStreaming', () => {
       { folded: prior, text: 'part one' },
       { folded: partOneLanded, text: 'part one' }, // caught up — hide
       // Part two is not an extension of part one: new segment, new baseline.
-      { folded: partOneLanded, text: 'part' }
+      { folded: partOneLanded, text: 'partial next' }
     ])
-    expect(results).toEqual([null, 'part one', null, 'part'])
+    expect(results).toEqual([null, 'part one', null, 'partial next'])
   })
 
   it('falls back to suppress-on-prefix when text arrives on the first tick', () => {
@@ -264,9 +284,9 @@ describe('deriveMobileNativeChatStreaming', () => {
 
   it('is idempotent for a repeated tick', () => {
     const prior = [assistant('a1', 'The tests pass.')]
-    const first = run([{ folded: prior }, { folded: prior, text: 'The tests' }])
-    const again = deriveMobileNativeChatStreaming(first.gate, prior, 'The tests')
-    expect(again.streaming).toBe('The tests')
+    const first = run([{ folded: prior }, { folded: prior, text: 'The lint' }])
+    const again = deriveMobileNativeChatStreaming(first.gate, prior, 'The lint')
+    expect(again.streaming).toBe('The lint')
     expect(again.gate).toBe(first.gate)
   })
 

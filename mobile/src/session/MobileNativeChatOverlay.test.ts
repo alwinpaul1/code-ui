@@ -124,14 +124,22 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     return views.length === 0 ? 'hidden' : (views[0].props.streaming as string | null)
   }
 
-  it('keeps streaming a reply that repeats the previous turn as a prefix', async () => {
+  it('hides a stream that is no more than the previous reply, and shows it once it grows past', async () => {
+    // Device 2026-09-19, "Same response twice" (0.9.0 and 0.9.1): a host that
+    // never went idle between two turns carried the last reply into the next
+    // turn's status, and the bubble drew it again under the new prompt. A
+    // stream that is a prefix of the last assistant row is that row; a
+    // genuinely repeated reply shows once it diverges or its own row lands.
     const prior = [assistantTurn('a1', 'The tests pass.')]
     await render({ messages: prior })
     expect(streaming()).toBeNull()
 
     await update({ messages: prior, streamingText: 'The tests', streamLive: true })
-
-    expect(streaming()).toBe('The tests')
+    expect(streaming()).toBeNull()
+    await update({ messages: prior, streamingText: 'The tests pass.', streamLive: true })
+    expect(streaming()).toBeNull()
+    await update({ messages: prior, streamingText: 'The tests pass. Lint too.', streamLive: true })
+    expect(streaming()).toBe('The tests pass. Lint too.')
   })
 
   it('keeps live prose visible through a status gap until the transcript arrives', async () => {
@@ -165,12 +173,12 @@ describe('MobileNativeChatOverlay streaming gate', () => {
   it('drops the streaming bubble once the reply lands as its own turn', async () => {
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
+    await update({ messages: prior, streamingText: 'Done again.', streamLive: true })
+    expect(streaming()).toBe('Done again.')
 
     await update({
-      messages: [...prior, assistantTurn('a2', 'Done.')],
-      streamingText: 'Done.',
+      messages: [...prior, assistantTurn('a2', 'Done again.')],
+      streamingText: 'Done again.',
       streamLive: true
     })
 
@@ -222,18 +230,18 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     // and the repeated-prefix reply keeps streaming on the way back.
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
+    await update({ messages: prior, streamingText: 'Done again.', streamLive: true })
+    expect(streaming()).toBe('Done again.')
 
     await update({ show: false, messages: [], streamLive: true })
     expect(streaming()).toBe('hidden')
     // Back on chat the session withholds its transcript until a fresh read
     // settles, so the throttled stream text returns a round trip ahead of it.
     await update({ messages: [], streamLive: true })
-    await update({ messages: [], streamingText: 'Done.', streamLive: true })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
+    await update({ messages: [], streamingText: 'Done again.', streamLive: true })
+    await update({ messages: prior, streamingText: 'Done again.', streamLive: true })
 
-    expect(streaming()).toBe('Done.')
+    expect(streaming()).toBe('Done again.')
   })
 
   it('keeps the bubble across a peek at the terminal taken between turns', async () => {
@@ -245,10 +253,10 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     await update({ show: false, messages: [] })
     await update({ show: false, messages: [], streamLive: true })
     await update({ messages: [], streamLive: true })
-    await update({ messages: [], streamingText: 'Done.', streamLive: true })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
+    await update({ messages: [], streamingText: 'Done again.', streamLive: true })
+    await update({ messages: prior, streamingText: 'Done again.', streamLive: true })
 
-    expect(streaming()).toBe('Done.')
+    expect(streaming()).toBe('Done again.')
   })
 
   it('hides a repeated part whose own turn landed during a mid-turn gap', async () => {
@@ -258,12 +266,12 @@ describe('MobileNativeChatOverlay streaming gate', () => {
     // adopt it as history and render it a second time.
     const prior = [assistantTurn('a1', 'Done.')]
     await render({ messages: prior })
-    await update({ messages: prior, streamingText: 'Done.', streamLive: true })
-    expect(streaming()).toBe('Done.')
+    await update({ messages: prior, streamingText: 'Done again.', streamLive: true })
+    expect(streaming()).toBe('Done again.')
 
-    const landed = [...prior, assistantTurn('a2', 'Done.')]
+    const landed = [...prior, assistantTurn('a2', 'Done again.')]
     await update({ messages: landed, streamLive: true })
-    await update({ messages: landed, streamingText: 'Done.', streamLive: true })
+    await update({ messages: landed, streamingText: 'Done again.', streamLive: true })
 
     expect(streaming()).toBeNull()
   })

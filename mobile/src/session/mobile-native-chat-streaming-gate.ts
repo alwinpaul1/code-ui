@@ -145,8 +145,31 @@ export function deriveMobileNativeChatStreaming(
       landedMessageId = candidate.id
     }
   }
+  // The previous reply, replayed: a host that never went idle between two
+  // turns (background tasks keep it "working") carries the last reply's text
+  // into the next turn, and the phone drew it again under the new prompt
+  // (device 2026-09-19, "Same response twice", on 0.9.0 and 0.9.1). A stream
+  // that is no more than the last assistant row already in the transcript is
+  // that row, not a new reply; it shows again the moment it grows past it.
+  // The price: a genuinely repeated reply stays hidden until it diverges or
+  // its own row lands.
+  const replayed = !landedMessageId && isReplayOfLastReply(folded, baselineIndex, text)
   return {
     gate: advanceGate(scopedGate, text, baselineTailId, landedMessageId),
-    streaming: landedMessageId ? null : text
+    streaming: landedMessageId || replayed ? null : text
   }
+}
+
+function isReplayOfLastReply(
+  folded: readonly NativeChatMessage[],
+  baselineIndex: number,
+  text: string
+): boolean {
+  for (let index = Math.min(baselineIndex, folded.length - 1); index >= 0; index -= 1) {
+    const candidateText = assistantTailText(folded[index]!)
+    if (candidateText) {
+      return candidateText.startsWith(text)
+    }
+  }
+  return false
 }

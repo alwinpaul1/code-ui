@@ -85,12 +85,13 @@ const HOST_COMPONENT_NAMES = new Set([
 // 284 since 2026-09-19 (upstream #20601, the native-chat group): the chat
 // controller's structuredCancelPrompt, and the tab reconciliation's
 // prompt-cancel capability read; re-pinned again at that merge.
-const HEAD_MAIN_HOOK_SHA256 = '7f5eadd80a25f8fc48ec5be7f457c1265185c171ef655cb26194d06e23984dfa'
-const HEAD_HOOK_BINDING_SHA256 = 'a26754f833de531d4e27936951b7911314add8eb6c1e66b3ce604a192f02a0d0'
+// 286 since 2026-09-19 (night): terminalHandlesFor and the outside-worktree prefetch effect (readers).
+const HEAD_MAIN_HOOK_SHA256 = '42fb1fdf3c753fdb6d261a3f44bf3d1ca96f1af74aadc19b5e4b0b24d9f65f89'
+const HEAD_HOOK_BINDING_SHA256 = '96c2e7ea211e778ca7be4220ad8b21087c54df95565835391cac4e7db8df0db7'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '95698646714e4a98e552e350ceb2cdbc5d16f625c9310535baf10fc1f6967877'
+  '5b4f48bbf2460bd478d435eb4459914a7a2ea5a566620949649f362db49e7b16'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -158,7 +159,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (the active tab's first) to resolveMobileFileTabDoc, so a desktop-opened
 // tab whose path is outside the worktree reads through a terminal-artifact
 // grant, and names 'outside_worktree' when nothing vouches for the path.
-const HEAD_CALLBACK_BODY_SHA256 = '68bfedd56e14c94565bcbd06928ab52ebdcfcf961deda4b757cc03818efc95a4'
+const HEAD_CALLBACK_BODY_SHA256 = '52beb42c98db4e66abd15dc8fabea98abe61dd6383dad5525e8c6d4a8474e46b'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -171,7 +172,7 @@ const HEAD_CALLBACK_BODY_SHA256 = '68bfedd56e14c94565bcbd06928ab52ebdcfcf961deda
 // carries both, and this is what the test printed for it.
 // Re-pinned again on the group D merge, 2026-09-19: main's (6121e237) carried
 // #21503's writer, ours (d5529ed9) #21083's worktreeActivate; both now.
-const HEAD_EFFECT_SHA256 = '40d89fcb986ddfa89b65c3302c8f936f38fd608678d035071725beabbecbc987'
+const HEAD_EFFECT_SHA256 = 'a2eb1f03d69306521f517471a24118ca45b528baadccb95003b0241f3d1d7aae'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -279,7 +280,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // so an image pastes as the agent's own attachment form or as an @file mention.
 // 666 since 2026-09-19 (evening): 'outside_worktree' and its copy in readFileTab.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '6dba4dab9fb4f2ec938064a77870f67f4f23172c4b9522f73353c9bbd181c6bd'
+  'e9c71f6e9e73d64ed435e6221ec51e571701b69e4a0e05e78bf261575e93788d'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -756,13 +757,18 @@ describe('mobile session route extraction parity', () => {
     // 283 since 2026-09-19: useTerminalCopyTrimsGutter (#20545), merged the same day.
     // 284 since 2026-09-19: structuredCancelPrompt (useNativeChatAcceptedAction),
     // the cancel-by-identity for a pending approval/question (Orca #20601).
-    expect(main.hooks).toHaveLength(284)
+    // 286 since 2026-09-19 (night): terminalHandlesFor (useCallback) and the
+    // prefetch effect in useMobileSessionDocumentReaders — a desktop-opened
+    // file outside the worktree is read while a terminal still shows its path.
+    expect(main.hooks).toHaveLength(286)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(81)
+    // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
+    expect(main.callbacks).toHaveLength(82)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
-    expect(main.effects).toHaveLength(23)
+    // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.
+    expect(main.effects).toHaveLength(24)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
@@ -838,7 +844,10 @@ describe('mobile session route extraction parity', () => {
     // pastes as the agent's own attachment form or as an @file mention.
     // 666 since 2026-09-19 (evening): 'outside_worktree' and its reader copy
     // in readFileTab (see HEAD_CALLBACK_BODY_SHA256).
-    expect(strings).toHaveLength(666)
+    // 674 since 2026-09-19 (night): the reader's "on Desktop" copy for a file
+    // no terminal vouches for (Image/File + the reason), and the prefetch effect's
+    // literals (see HEAD_MAIN_HOOK_SHA256).
+    expect(strings).toHaveLength(674)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

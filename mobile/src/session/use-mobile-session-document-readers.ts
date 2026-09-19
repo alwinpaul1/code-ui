@@ -1,6 +1,12 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { RpcFailure } from '../transport/types'
 import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
+import {
+  prefetchOutsideWorktreeFileTabs,
+  prefetchedFileTabDoc,
+  rememberFileTabDoc
+} from '../files/mobile-file-tab-prefetch'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
 import {
@@ -11,7 +17,28 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, setMarkdownDocs, setFileDocs, terminalsRef, activeSessionTabId } = scope
+  const { worktreeId, client, setMarkdownDocs, setFileDocs, terminalsRef, activeSessionTabId, sessionTabs } =
+    scope
+  // The worktree's terminal handles, the active tab's first: a file outside
+  // the worktree is read through a grant the host mints for the terminal
+  // that printed its path.
+  const terminalHandlesFor = useCallback(() => {
+    const terminals = terminalsRef.current.filter((terminal) => terminal.connected !== false)
+    const active = terminals.find((terminal) => terminal.tabId === activeSessionTabId)
+    return [
+      ...(active ? [active.handle] : []),
+      ...terminals.filter((terminal) => terminal !== active).map((terminal) => terminal.handle)
+    ]
+  }, [activeSessionTabId, terminalsRef])
+  // Read a desktop-opened outside-the-worktree file as soon as its tab
+  // appears, while a terminal still shows its path (see
+  // mobile-file-tab-prefetch.ts); the tab's own read serves it later.
+  useEffect(() => {
+    if (!client) {
+      return
+    }
+    prefetchOutsideWorktreeFileTabs(client, worktreeId, sessionTabs, terminalHandlesFor())
+  }, [client, sessionTabs, terminalHandlesFor, worktreeId])
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
@@ -80,23 +107,25 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       if (!client) {
         return
       }
+      const prefetched =
+        tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+          ? null
+          : prefetchedFileTabDoc(worktreeId, tab.relativePath)
+      if (prefetched) {
+        setFileDocs((prev) => new Map(prev).set(tab.id, prefetched))
+        return
+      }
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
-        // A file outside the worktree is read through a grant the host mints
-        // for the terminal that printed its path; the active tab's terminal
-        // is the likeliest, the rest follow.
-        const terminals = terminalsRef.current.filter((terminal) => terminal.connected !== false)
-        const active = terminals.find((terminal) => terminal.tabId === activeSessionTabId)
-        const terminalHandles = [
-          ...(active ? [active.handle] : []),
-          ...terminals.filter((terminal) => terminal !== active).map((terminal) => terminal.handle)
-        ]
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource,
-          terminalHandles
+          terminalHandles: terminalHandlesFor()
         })
+        if (tab.diffSource !== 'staged' && tab.diffSource !== 'unstaged') {
+          rememberFileTabDoc(worktreeId, tab.relativePath, doc)
+        }
         setFileDocs((prev) => new Map(prev).set(tab.id, doc))
       } catch (err) {
         const message = err instanceof Error ? err.message : ''
@@ -106,7 +135,12 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             : message === 'file_too_large'
               ? 'File too large for mobile preview'
               : message === 'outside_worktree'
-                ? 'This file is outside the workspace and no terminal here printed its path'
+                ? // The chat's chip wording for the same thing ("Image on
+                  // Desktop"), asked for on 2026-09-19: the phone can read a
+                  // file outside the workspace only while a terminal here
+                  // still shows its path (the host vouches for the last 64 KB
+                  // of a terminal's output, and a grant lives ten minutes).
+                  `${classifyMobileArtifact(tab.relativePath) === 'image' ? 'Image' : 'File'} on Desktop. The phone can show it only while a terminal here still shows its path.`
                 : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
                 ? "Couldn't load diff preview"
                 : "Couldn't load file preview"
@@ -118,7 +152,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         )
       }
     },
-    [client, worktreeId]
+    [client, worktreeId, terminalHandlesFor]
   )
   return {
     readMarkdownTab,
