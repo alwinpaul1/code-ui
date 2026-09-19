@@ -56,7 +56,9 @@ src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a6
 src/shared/native-chat-tool-identity.test.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-agent-profiles.ts: ecd7b19ad
 src/shared/native-chat-agent-profiles.test.ts: ecd7b19ad
-src/shared/native-chat-tool-activity.ts: c1e15c400
+src/shared/native-chat-tool-activity.ts: 68ea3b92e
+src/shared/native-chat-tool-run-outcome.ts: 68ea3b92e
+src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02
 src/shared/native-chat-turn-status.test.ts: 533b0bd02
