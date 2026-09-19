@@ -9,7 +9,7 @@
  * listed file whose count went up. Both lists only shrink.
  *
  * The owners are permanent — they implement, route or validate the port. The pending list is the
- * migration backlog and shares one reason, stated once here instead of 84 times:
+ * migration backlog and shares one reason, stated once here instead of 74 times:
  * the call site predates the typed contract and still picks its own method string, its own
  * acceptance rule and its own decoding. Replacing one with an RpcOperation deletes its line.
  *
@@ -61,13 +61,11 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // app/ — Expo route screens
   { file: 'app/terminal-settings.tsx', references: 3 },
 
-  // src/agent-history/ — agent history loads
-  { file: 'src/agent-history/MobileAgentSessionHistoryPanel.tsx', references: 6 },
-  { file: 'src/agent-history/use-mobile-agent-history-state.ts', references: 2 },
-
-  // src/browser/ — hosted browser control
-  { file: 'src/browser/use-mobile-browser-commands.ts', references: 5 },
-  { file: 'src/browser/use-mobile-browser-request.ts', references: 1 },
+  // src/agent-history/ — agent history loads. The history scan and its resume metadata migrated in
+  // step 4; see mobile-agent-history-operations.ts.
+  // Holdout: the last reach is a worktree.ps inside the screen component's own effect, which no
+  // recording can mount without a fabricated react-native view tree.
+  { file: 'src/agent-history/MobileAgentSessionHistoryPanel.tsx', references: 1 },
 
   // src/components/ — shared widgets that fetch their own data. The New Workspace drawer's
   // execution target, setup hook, runtime context and Codex capability probe migrated in step 4:
@@ -80,9 +78,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/components/codex-reset-credit.ts', references: 3 },
   { file: 'src/components/use-new-workspace-repositories.ts', references: 1 },
   { file: 'src/components/use-new-workspace-ssh-target-labels.ts', references: 1 },
-
-  // src/dictation/ — dictation session control
-  { file: 'src/dictation/mobile-dictation-setup.ts', references: 10 },
 
   // src/files/ — file read, write and preview. The preview loader, the terminal-artifact grant
   // refresh and save, the session file tab and the mutation-ownership capture migrated in step 4:
@@ -102,11 +97,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/home/mobile-home-host-requests.ts', references: 2 },
   { file: 'src/home/refresh-account-usage.ts', references: 2 },
 
-  // src/hooks/ — cross-screen data hooks
-  { file: 'src/hooks/mobile-dictation-audio-chunk.ts', references: 1 },
-  { file: 'src/hooks/mobile-dictation-desktop-start.ts', references: 4 },
-  { file: 'src/hooks/use-mobile-dictation.ts', references: 4 },
-
   // src/host-controls/ — CODE UI: host control sheet actions
   { file: 'src/host-controls/throwaway-terminal.ts', references: 5 },
   { file: 'src/host-controls/use-mac-host-controls.ts', references: 1 },
@@ -118,7 +108,11 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/host-screen/host-screen-overlays.tsx', references: 1 },
   { file: 'src/host-screen/use-host-show-pinned-in-groups.ts', references: 2 },
 
-  // src/notifications/ — push registration and delivery
+  // src/notifications/ — push registration and delivery. CODE UI's own push registration already
+  // sends through push-registration-operations.ts (upstream's push feature is not carried).
+  // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and subscriptions are a
+  // later step; the request-only recording runner refuses to open one. CODE UI's second reach is
+  // its reconnect catch-up read (notifications.getMissedSince) beside the same subscription.
   { file: 'src/notifications/mobile-notifications.ts', references: 2 },
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs
@@ -203,11 +197,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/tasks/mobile-tasks-filter-pickers.tsx', references: 1 },
   { file: 'src/tasks/mobile-tasks-source-family.test-support.ts', references: 1 },
   { file: 'src/tasks/use-mobile-tasks-route-and-item-state.tsx', references: 1 },
-
-  // src/terminal/ — terminal input, viewport and queries
-  { file: 'src/terminal/mobile-terminal-query-reply.ts', references: 2 },
-  { file: 'src/terminal/terminal-live-accessory-raw-send.ts', references: 2 },
-  { file: 'src/terminal/terminal-viewport-refit.ts', references: 1 },
 
   // src/transport/ — what is left of pairing, probing and capability reads after step 4. The
   // protocol gate, the retrying capability probe, the candidate race, credential rotation, the
