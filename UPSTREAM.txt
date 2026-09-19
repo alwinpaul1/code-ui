@@ -40,6 +40,7 @@ src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
 src/shared/structured-agent-session-outbox.ts: f55b7ba68
+src/shared/structured-agent-session-message-projection.ts: 434365d2d
 src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
 src/shared/structured-agent-session-send-disposition.test.ts: f55b7ba68
