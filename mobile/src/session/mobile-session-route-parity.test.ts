@@ -109,7 +109,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
 const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
-const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
+// 2026-09-19 (Orca #21503 port): the last-visited-worktree effect's bare store
+// write became writeLastVisitedWorktree, the one writer of that key, so the
+// hybrid shell's page mirror sees it as it is written rather than one `init` later.
+const HEAD_EFFECT_SHA256 = '0a93fb85be06a23527fea5a4aebd7a944b3a6156ceff1ca383a45635998e0e5f'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
