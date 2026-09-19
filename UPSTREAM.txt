@@ -64,6 +64,8 @@ src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd8
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
 src/shared/agent-launch-intent.ts: 0bf815a48
+src/shared/github/owner-slug.ts: 85d1ffc07
+src/shared/github/owner-slug.test.ts: 85d1ffc07
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
