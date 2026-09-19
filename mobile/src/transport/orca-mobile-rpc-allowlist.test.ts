@@ -8,7 +8,10 @@ import {
   type HostMobileCapabilityKey
 } from './host-mobile-capability-operations'
 import * as protocolVersion from '../../../src/shared/protocol-version'
-import { isAgentLaunchUnsupportedRefusal } from '../tasks/agent-launch-worktree-create'
+import {
+  isAgentLaunchReplayUnsupportedRefusal,
+  isAgentLaunchUnsupportedRefusal
+} from '../tasks/agent-launch-worktree-create'
 
 /**
  * Ratchet: every RPC method the phone can send is either on the host's
@@ -118,6 +121,14 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     gatedIn: 'src/tasks/worktree-create-capability.ts',
     downgradesOn: isAgentLaunchUnsupportedRefusal,
     why: 'A workspace create with an agent (upstream #19850). createWorktreeWithNameRetry sends it only when readNewWorktreeRuntimeCapabilities saw the agent.launch capability (v2 since #20999) on status.get — the 1.4.205 bundle neither advertises nor registers it — and on the gate\'s refusal re-sends the same candidate as worktree.create.'
+  },
+  {
+    method: 'agent.launchReplay',
+    guard: 'capability',
+    capability: protocolVersion.AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
+    gatedIn: 'src/tasks/worktree-create-capability.ts',
+    downgradesOn: isAgentLaunchReplayUnsupportedRefusal,
+    why: 'The ledger-backed create (upstream #21137): sent, with a durable operationId, only when the probe also saw agent.launch.replay-required.v1. On the gate\'s refusal the same candidate is re-sent unnamed through worktree.create.'
   },
   {
     method: 'github.prComments',

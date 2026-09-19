@@ -20,10 +20,17 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
+/** What this host's `agent.launch` can do, in the `| false` shape `worktree.create`'s own
+ *  idempotency probe already uses: `false` is an older host with no `agent.launch` at all. */
+export type AgentLaunchSupport = {
+  /** The host deduplicates operationId durably and refuses unknown or expired outcomes. */
+  replay: boolean
+}
+
 export type WorktreeCreateAgentLaunch = {
   agent: TuiAgent
   /** Resolved before the first create: an older host has no `agent.launch` at all. */
-  supported: boolean | Promise<boolean>
+  supported: AgentLaunchSupport | false | Promise<AgentLaunchSupport | false>
 }
 
 /** `worktreeId` is tied to the shared contract so a change to it fails this reader's typecheck
@@ -35,10 +42,12 @@ export type AgentLaunchCreateOutcome = {
 
 export function agentLaunchCreateParams(
   agent: TuiAgent,
-  create: WorkspaceCreateParams
+  create: WorkspaceCreateParams,
+  operationId?: string | null
 ): RpcSendParams<'agent.launch'> {
   return {
     agent,
+    ...(operationId ? { operationId } : {}),
     target: { kind: 'create-worktree', create: withoutReservedAgentCreateFields(create) }
   }
 }
@@ -87,4 +96,22 @@ export function isAgentLaunchUnsupportedRefusal(error: {
     return true
   }
   return (error.message ?? '').includes('agent_launch_unsupported')
+}
+
+/**
+ * The same question for `agent.launchReplay`, the ledger-backed method a host that advertises
+ * `agent.launch.replay-required.v1` serves. `agent_launch_replay_unsupported` is a replacement
+ * host without the ledger refusing the method itself; the create is then re-sent unnamed.
+ * Named here rather than inline in the retry loop so the mobile allowlist ratchet can check the
+ * reader the loop really downgrades on.
+ */
+export function isAgentLaunchReplayUnsupportedRefusal(error: {
+  code?: string
+  message?: string
+}): boolean {
+  return (
+    error.code === 'method_not_found' ||
+    error.code === 'forbidden' ||
+    error.code === 'agent_launch_replay_unsupported'
+  )
 }

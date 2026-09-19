@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus four hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus five hand-applied upstream hunks, see LOCAL-FILES.md)
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus two forward-ported hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -74,7 +74,7 @@ The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018)
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
 src/shared/rpc-contract/accounts-params.ts: c84007c54
 src/shared/rpc-contract/agent-hooks-params.ts: c84007c54
-src/shared/rpc-contract/agent-launch-params.ts: 0bf815a48
+src/shared/rpc-contract/agent-launch-params.ts: abc8386e1
 src/shared/rpc-contract/agent-session-params.ts: c84007c54
 src/shared/rpc-contract/ai-vault-params.ts: c84007c54
 src/shared/rpc-contract/artifacts-params.ts: c84007c54
@@ -134,7 +134,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: c84007c54
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19, see LOCAL-FILES.md)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md)
 src/shared/rpc-contract/rpc-send-params.ts: eedd35645
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54

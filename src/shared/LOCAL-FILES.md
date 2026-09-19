@@ -86,14 +86,17 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES` and `RUNTIME_CAPABILITIES`) from
   6da72383d (#19849), at its 4b87bc718 (#20999) value `agent.launch.v2`, and
   `AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES` entry)
-  from 0bf815a48 (#21106). The file otherwise sits at its d07c47593 pin: upstream later added
+  from 0bf815a48 (#21106), with its comment and the sibling
+  `AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY` from abc8386e1 (#21137). The file
+  otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.
 - `rpc-contract/rpc-params-catalog.generated.ts` — on its eedd35645 pin plus the
   `agent.launch` row and its `AgentLaunch` import from 97aa5ff19 (#19850; #19849 had
   first listed the method under `RPC_METHODS_WITHOUT_SHARED_PARAMS`, #19850 moved it
-  into the catalog, and the net of the two is what is here). A whole-file re-vendor
+  into the catalog, and the net of the two is what is here), and the
+  `agent.launchReplay` row from abc8386e1 (#21137). A whole-file re-vendor
   would drag in the `aiVault.search*` rows and `FilePathsExist`, whose schemas this
   fork does not vendor.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
