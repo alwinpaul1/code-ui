@@ -35,6 +35,119 @@ function clientOf(byMethod: Record<string, RpcResponse>): {
 
 const WT = { worktreeId: 'wt1' }
 
+describe('a file tab the desktop opened outside the worktree', () => {
+  // Device 2026-09-19, "Cant preview image from my desktop": the desktop had
+  // opened /private/tmp/…/fstrip2.png (printed by the agent, clicked in the
+  // terminal) and published the tab with that absolute path as its
+  // `relativePath`. The phone asked files.readPreview for it as a
+  // worktree-relative path, the host refused, and the tab said "Couldn't
+  // load file preview". A path outside the worktree is a terminal artifact:
+  // the phone asks the host to resolve it against the terminal that printed
+  // it, gets a grant, and reads through the grant — the same path a tapped
+  // path in the terminal already takes.
+  const ABSOLUTE = '/private/tmp/claude-501/scratch/fstrip2.png'
+  const GRANT = { kind: 'absolute-file', absolutePath: ABSOLUTE, grantId: 'grant-1' }
+
+  it('reads an image through a terminal-artifact grant minted for the terminal that printed it', async () => {
+    const seen: unknown[] = []
+    const client = {
+      sendRequest: (method: string, params: unknown) => {
+        seen.push({ method, params })
+        if (method === 'files.resolveTerminalPath') {
+          const terminal = (params as { terminal?: string }).terminal
+          return Promise.resolve(
+            ok(
+              terminal === 'term_agent'
+                ? { worktree: 'wt1', exists: true, isDirectory: false, openTarget: GRANT }
+                : { worktree: 'wt1', relativePath: null, absolutePath: ABSOLUTE, exists: false, isDirectory: false }
+            )
+          )
+        }
+        if (method === 'files.readTerminalArtifactPreview') {
+          return Promise.resolve(ok({ isImage: true, mimeType: 'image/png', content: PNG_BASE64 }))
+        }
+        return Promise.reject(new Error(`unexpected method ${method}`))
+      }
+    }
+    const doc = await resolveMobileFileTabDoc(client as never, {
+      ...WT,
+      relativePath: ABSOLUTE,
+      terminalHandles: ['term_other', 'term_agent']
+    })
+    expect(doc).toMatchObject({ status: 'ready', kind: 'image' })
+    expect(seen.map((s) => (s as { method: string }).method)).toEqual([
+      'files.resolveTerminalPath',
+      'files.resolveTerminalPath',
+      'files.readTerminalArtifactPreview'
+    ])
+    expect((seen[0] as { params: object }).params).toMatchObject({
+      worktree: 'id:wt1',
+      pathText: ABSOLUTE,
+      crossWorkspace: true,
+      terminal: 'term_other'
+    })
+    expect((seen[2] as { params: object }).params).toMatchObject({
+      worktree: 'id:wt1',
+      absolutePath: ABSOLUTE,
+      grantId: 'grant-1'
+    })
+  })
+
+  it('reads text the same way, and a file in another worktree through that worktree', async () => {
+    const client = clientOf({
+      'files.resolveTerminalPath': ok({
+        worktree: 'wt1',
+        exists: true,
+        isDirectory: false,
+        openTarget: { ...GRANT, absolutePath: '/private/tmp/x/notes.txt' }
+      }),
+      'files.readTerminalArtifact': ok({ content: 'hello', truncated: false, byteLength: 5 })
+    })
+    const doc = await resolveMobileFileTabDoc(client as never, {
+      ...WT,
+      relativePath: '/private/tmp/x/notes.txt',
+      terminalHandles: ['term_agent']
+    })
+    expect(doc).toMatchObject({ status: 'ready', kind: 'file', content: 'hello' })
+
+    const other = clientOf({
+      'files.resolveTerminalPath': ok({
+        worktree: 'wt2',
+        relativePath: 'README.md',
+        absolutePath: '/Users/me/other/README.md',
+        exists: true,
+        isDirectory: false,
+        openTarget: { kind: 'worktree-file', provider: 'local', relativePath: 'README.md' }
+      }),
+      'files.read': ok({ content: '# Other', truncated: false, byteLength: 7 })
+    })
+    const md = await resolveMobileFileTabDoc(other as never, {
+      ...WT,
+      relativePath: '/Users/me/other/README.md',
+      terminalHandles: []
+    })
+    expect(md).toMatchObject({ status: 'ready', kind: 'markdown', content: '# Other' })
+    expect(other.calls).toEqual(['files.resolveTerminalPath', 'files.read'])
+  })
+
+  it('says the file is out of reach when no terminal vouches for the path', async () => {
+    const client = clientOf({
+      'files.resolveTerminalPath': ok({
+        worktree: 'wt1',
+        relativePath: null,
+        absolutePath: ABSOLUTE,
+        exists: false,
+        isDirectory: false
+      })
+    })
+    await expect(
+      resolveMobileFileTabDoc(client as never, { ...WT, relativePath: ABSOLUTE, terminalHandles: ['t1'] })
+    ).rejects.toThrow('outside_worktree')
+    // Never files.readPreview with an absolute path: the host refuses it.
+    expect(client.calls).not.toContain('files.readPreview')
+  })
+})
+
 describe('resolveMobileFileTabDoc', () => {
   it('renders a staged text diff', async () => {
     const client = clientOf({

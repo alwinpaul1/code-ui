@@ -11,7 +11,7 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+  const { worktreeId, client, setMarkdownDocs, setFileDocs, terminalsRef, activeSessionTabId } = scope
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
@@ -82,10 +82,20 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       }
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
+        // A file outside the worktree is read through a grant the host mints
+        // for the terminal that printed its path; the active tab's terminal
+        // is the likeliest, the rest follow.
+        const terminals = terminalsRef.current.filter((terminal) => terminal.connected !== false)
+        const active = terminals.find((terminal) => terminal.tabId === activeSessionTabId)
+        const terminalHandles = [
+          ...(active ? [active.handle] : []),
+          ...terminals.filter((terminal) => terminal !== active).map((terminal) => terminal.handle)
+        ]
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
-          diffSource: tab.diffSource
+          diffSource: tab.diffSource,
+          terminalHandles
         })
         setFileDocs((prev) => new Map(prev).set(tab.id, doc))
       } catch (err) {
@@ -95,7 +105,9 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             ? 'Binary preview unavailable'
             : message === 'file_too_large'
               ? 'File too large for mobile preview'
-              : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+              : message === 'outside_worktree'
+                ? 'This file is outside the workspace and no terminal here printed its path'
+                : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
                 ? "Couldn't load diff preview"
                 : "Couldn't load file preview"
         setFileDocs((prev) =>

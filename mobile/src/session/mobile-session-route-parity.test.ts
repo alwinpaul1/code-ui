@@ -154,7 +154,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // and the retired casts; the merged tree carries both (the terminal-list
 // refresh reads through sessionTerminalListRead AND closes the leftover), and
 // this is what the test printed for it.
-const HEAD_CALLBACK_BODY_SHA256 = 'd5de393d05cb313ba56b0a14559263c68400789a4125eabf67fac2ad8ac32c80'
+// 2026-09-19 (evening): readFileTab hands the worktree's terminal handles
+// (the active tab's first) to resolveMobileFileTabDoc, so a desktop-opened
+// tab whose path is outside the worktree reads through a terminal-artifact
+// grant, and names 'outside_worktree' when nothing vouches for the path.
+const HEAD_CALLBACK_BODY_SHA256 = '68bfedd56e14c94565bcbd06928ab52ebdcfcf961deda4b757cc03818efc95a4'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -273,8 +277,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 664 since 2026-09-19 (Orca e7da72c3d ported, merged after group D): the
 // 'agentStatus' key useMobileSessionAttachments reads the tab's agent through,
 // so an image pastes as the agent's own attachment form or as an @file mention.
+// 666 since 2026-09-19 (evening): 'outside_worktree' and its copy in readFileTab.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9a56fab725a1a6d9ba0e1a7ecec7654977c398e822b02c2a540e104624602a6a'
+  '6dba4dab9fb4f2ec938064a77870f67f4f23172c4b9522f73353c9bbd181c6bd'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -831,7 +836,9 @@ describe('mobile session route extraction parity', () => {
     // 664 since 2026-09-19 (upstream e7da72c3d): the 'agentStatus' key
     // useMobileSessionAttachments reads the tab's agent through, so an image
     // pastes as the agent's own attachment form or as an @file mention.
-    expect(strings).toHaveLength(664)
+    // 666 since 2026-09-19 (evening): 'outside_worktree' and its reader copy
+    // in readFileTab (see HEAD_CALLBACK_BODY_SHA256).
+    expect(strings).toHaveLength(666)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

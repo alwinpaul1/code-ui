@@ -8,7 +8,7 @@ import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-as
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
+import { useMobileNativeChatStreamPreview } from './use-mobile-native-chat-stream-preview'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
@@ -164,10 +164,9 @@ export function useMobileNativeChatController(
     : activeTabAgentWorking
   const nativeChatAgentWorking =
     nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
+  const streamPreview = useMobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking)
   const nativeChatStreamingText = useThrottledLatestValue(
-    activeChatStructured
-      ? undefined
-      : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
+    activeChatStructured ? undefined : streamPreview,
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
   const {

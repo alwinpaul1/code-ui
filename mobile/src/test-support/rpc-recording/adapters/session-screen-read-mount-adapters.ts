@@ -37,6 +37,11 @@ export function sessionScreenReadMountAdapters(
           mountFixture<Parameters<typeof useReaders>[0]>({
             worktreeId: WORKSPACE,
             client,
+            // Code UI: a file tab outside the worktree is read through a
+            // terminal-artifact grant minted for one of these (2026-09-19);
+            // the scenarios read worktree paths, so none are consulted.
+            terminalsRef: { current: [] },
+            activeSessionTabId: null,
             setMarkdownDocs: (update) => {
               markdownDocs = typeof update === 'function' ? update(markdownDocs) : update
             },

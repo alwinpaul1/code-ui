@@ -30,15 +30,35 @@ export type MobileNativeChatStreamingGate = {
  *  mistaken for a continuation of a tool result. */
 export function mobileNativeChatStreamPreview(
   status:
-    | { lastAssistantMessage?: string; lastAssistantMessageIsToolOutput?: boolean }
+    | {
+        lastAssistantMessage?: string
+        lastAssistantMessageIsToolOutput?: boolean
+        lastCompletedAssistantMessage?: string
+      }
     | null
     | undefined,
-  working: boolean
+  working: boolean,
+  /** The text the status carried while the tab was idle, for a host that
+   *  publishes no `lastCompletedAssistantMessage`. */
+  settledText: string | null = null
 ): string | undefined {
   if (!working || status?.lastAssistantMessageIsToolOutput === true) {
     return undefined
   }
-  return status?.lastAssistantMessage
+  const text = status?.lastAssistantMessage
+  // The previous turn's reply, carried into this turn by a status the host
+  // never reset (the state stayed "working" across the turn boundary): drawn
+  // as a bubble it repeats the reply under the next prompt (device
+  // 2026-09-19, "Same response twice"). The host's own completed-reply field
+  // names it; so does the text seen while idle.
+  if (
+    text !== undefined &&
+    text !== '' &&
+    (text === status?.lastCompletedAssistantMessage || text === settledText)
+  ) {
+    return undefined
+  }
+  return text
 }
 
 export function createMobileNativeChatStreamingGate(

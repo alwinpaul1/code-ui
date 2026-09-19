@@ -66,6 +66,37 @@ describe('mobileNativeChatStreamPreview', () => {
     expect(mobileNativeChatStreamPreview(null, true)).toBeUndefined()
     expect(mobileNativeChatStreamPreview(undefined, true)).toBeUndefined()
   })
+
+  // Device 2026-09-19, "Same response twice": the previous reply drawn again
+  // under the next prompt. The status carried the old `lastAssistantMessage`
+  // into the new turn (the state never went to done between the turns, so
+  // the host did not reset it), and the gate cannot tell that text from a
+  // new reply that repeats it. The host does say: its
+  // `lastCompletedAssistantMessage` is the reply the last turn ended on, so a
+  // preview equal to it is the old reply, not a new one. Where a host does
+  // not say, the text the status carried while idle is the same evidence.
+  it('drops the previous turn\'s reply replayed as the next turn\'s preview', () => {
+    const replay = 'Release 0.9.0 is out: the workflow passed.'
+    expect(
+      mobileNativeChatStreamPreview(
+        { lastAssistantMessage: replay, lastCompletedAssistantMessage: replay },
+        true
+      )
+    ).toBeUndefined()
+    expect(
+      mobileNativeChatStreamPreview({ lastAssistantMessage: replay }, true, replay)
+    ).toBeUndefined()
+  })
+
+  it('passes a reply that differs from the last completed one, even by a suffix', () => {
+    expect(
+      mobileNativeChatStreamPreview(
+        { lastAssistantMessage: 'Done. And one more thing.', lastCompletedAssistantMessage: 'Done.' },
+        true
+      )
+    ).toBe('Done. And one more thing.')
+    expect(mobileNativeChatStreamPreview({ lastAssistantMessage: 'Done.' }, true, 'Other.')).toBe('Done.')
+  })
 })
 
 describe('deriveMobileNativeChatStreaming', () => {
