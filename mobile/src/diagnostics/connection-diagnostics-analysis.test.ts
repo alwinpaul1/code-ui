@@ -40,6 +40,33 @@ describe('diagnoseConnection', () => {
     })
   })
 
+  it('keeps the refused credential ahead of a 503 when both sit before the last resume', () => {
+    // Review of the #21566 merge (2026-09-19): the selector may pick a failure from before the
+    // app last resumed, and the 401 sweep has to read the same run that failure came from — not
+    // the empty window after the resume — or the stale qualifier wraps the exact "keep Orca open,
+    // recovery will retry" advice the 2026-09-14 rule exists to remove.
+    const diagnosis = diagnoseConnection({
+      endpoint: 'ws://100.88.90.25:6768',
+      state: 'reconnecting',
+      pendingPath: 'relay',
+      entries: [
+        { ...event('Relay: relay dial failed', 'relay director resolve failed (401)'), id: 'r1' },
+        { ...event('Relay: relay dial failed', 'relay director resolve failed (401)'), id: 'r2' },
+        {
+          ...event('Relay: relay dial failed', 'relay director resolve failed (503)'),
+          id: 'r3',
+          ts: 3
+        },
+        { ...event('App returned to foreground'), id: 'resume', ts: 4, code: 'app-resumed' }
+      ]
+    })
+    expect(diagnosis.likelyCause).toBe(
+      'Before the app last resumed: Relay rejected the saved resume credential.'
+    )
+    expect(diagnosis.nextStep).not.toContain('recovery should retry')
+    expect(diagnosis.reportability).toBe('none')
+  })
+
   it("reads the Relay's own close code instead of blaming the phone's reach", () => {
     // Verbatim from a report on 2026-09-12: the Relay drained, every dial for
     // 17 minutes closed with 4503, and the diagnosis said "relay_outer_1006 …
@@ -121,6 +148,34 @@ describe('diagnoseConnection', () => {
       reportability: 'orca-relay'
     })
     expect(getReportableConnectionIncidentId(args)).toBe('dial')
+  })
+
+  it('reads a 403 in the socket error text as a refused device, whatever the close code', () => {
+    // Review of the #21566 merge (2026-09-19): the socket text is the one place the cell's HTTP
+    // status leaks through, and a real dial entry always carries a close code (1006 here), so the
+    // text has to be read before the code is mapped — the sibling 503 check already was.
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.72.20.78:6768',
+        state: 'reconnecting',
+        pendingPath: 'relay',
+        entries: [
+          {
+            ...event(
+              'relay dial failed',
+              "Error: relay_outer_1006 (Expected HTTP 101 response but was '403 Forbidden')"
+            ),
+            code: 'relay-dial-failed',
+            path: 'relay',
+            relayCloseCode: 1006
+          }
+        ]
+      })
+    ).toEqual({
+      likelyCause: 'The Relay cell rejected this device before the handshake.',
+      nextStep: 'Re-pair this phone with the desktop.',
+      reportability: 'none'
+    })
   })
 
   it('explains a bare relay_outer_1006 instead of "no specific failure"', () => {
