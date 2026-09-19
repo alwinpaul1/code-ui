@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pendingTextsStillDrawn, pendingWithoutTranscriptTwins } from './transcript-tail-own-sends'
+import { pendingTextsStillDrawn, pendingWithoutTranscriptTwins } from './desktop-prompt-own-sends'
 
 describe('a phone send the transcript has a record of', () => {
   // Device, 2026-09-19: "did you check the hold and copy scrolling issue on

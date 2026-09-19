@@ -36,11 +36,7 @@ import {
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useAgentHudBeacon } from './agent-hud-beacon'
-import {
-  useTranscriptTail,
-  useTranscriptTailPrompts,
-  useTranscriptTailQueue
-} from './transcript-tail/use-transcript-tail'
+import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 
 
@@ -114,17 +110,6 @@ export function useMobileNativeChatController(
       promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
-  // The agent's own transcript, tailed on the host: what a hand-started
-  // session never beacons — a message from the desktop or the Claude app
-  // mid-turn, and the queue (2026-09-19).
-  const transcriptTail = useTranscriptTail({
-    client,
-    hostId,
-    worktreeId,
-    transcriptPath: activeChatResolution?.transcriptPath ?? null,
-    sessionId: activeChatSessionId,
-    enabled: showNativeChat && !activeChatStructured && connState === 'connected' && activeChatResolution?.agent === 'claude'
-  })
   const handleBeacon = useAgentHudBeacon(activeHandle)
   // Only the beacon of the session this tab is showing: a beacon is keyed by
   // terminal handle, and a handle outlives the process that emitted into it,
@@ -132,7 +117,15 @@ export function useMobileNativeChatController(
   // previous session's desktop prompts (2026-09-18). `null` while the tab
   // does not yet know its session.
   const hudBeacon = agentHudBeaconMatches(handleBeacon, activeChatResolution?.agent ?? null, activeChatSessionId) ? handleBeacon : null
-  const tailPrompts = useTranscriptTailPrompts(transcriptTail, hudBeacon?.desktopPrompts)
+  // What a hand-started session never beacons — a message from the desktop
+  // or the Claude app, mid-turn or not — Orca's own hooks put on the tab
+  // status as `agentStatus.prompt`, and the phone reads it there
+  // (agent-status-prompts.ts, 2026-09-19).
+  const tailPrompts = useAgentStatusPrompts(
+    showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
+    nativeChatStatus,
+    hudBeacon?.desktopPrompts
+  )
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -494,7 +487,6 @@ export function useMobileNativeChatController(
     onError: onSendError
   })
 
-  const tailQueue = useTranscriptTailQueue(transcriptTail, visibleQueuedMessages)
   const structuredCancelPrompt = useNativeChatAcceptedAction(
     activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
     onSendResolved
@@ -514,7 +506,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, rememberEcho,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : tailQueue,
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews

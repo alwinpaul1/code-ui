@@ -1,7 +1,6 @@
 import { useCallback } from 'react'
 import { sessionTabsCacheKey, writeCachedSessionTabs } from './mobile-session-tabs-cache'
-import { withoutTranscriptTailTerminals } from './transcript-tail/transcript-tail-command'
-import { ownedTranscriptTailHandles } from './transcript-tail/transcript-tail-ownership'
+import { isTranscriptTailLeftover } from './transcript-tail-leftovers'
 import { recordSessionTabVisit } from './mobile-session-tab-history'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -67,7 +66,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         closedTabTombstonesRef.current,
         Date.now()
       )
-      nextTabs = withoutTranscriptTailTerminals(nextTabs, ownedTranscriptTailHandles())
+      // A transcript-tail tab a 2026-09-19 build left behind stays out of
+      // the strip until the terminal list's sweep has closed it.
+      nextTabs = nextTabs.filter(
+        (tab) => tab.type !== 'terminal' || !isTranscriptTailLeftover({ title: tab.title, connected: true })
+      )
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
@@ -90,7 +93,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       nextTabs = reconcileSessionTabsWithTerminalList(
         nextTabs,
-        withoutTranscriptTailTerminals(terminalsRef.current, ownedTranscriptTailHandles())
+        terminalsRef.current.filter((terminal) => !isTranscriptTailLeftover(terminal))
       ) as MobileSessionTab[]
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0

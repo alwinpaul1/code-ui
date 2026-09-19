@@ -14,12 +14,7 @@ import {
 import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
-import { isTranscriptTailTitle, withoutTranscriptTailTerminals } from './transcript-tail/transcript-tail-command'
-import {
-  closeStrayTranscriptTailTerminal,
-  closeTranscriptTailsLeftBehind,
-  ownedTranscriptTailHandles
-} from './transcript-tail/transcript-tail-ownership'
+import { closeTranscriptTailLeftovers, isTranscriptTailLeftover } from './transcript-tail-leftovers'
 import type { MobileTerminalInventoryRefreshOptions } from './use-mobile-terminal-inventory-recovery'
 
 export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamDisplayModel) {
@@ -74,27 +69,12 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
               return false
             }
             const listed = (response as RpcSuccess).result as { terminals: Terminal[] }
-            // The phone's own transcript-tail terminal is not a tab anyone
-            // opened; it is hidden from the strip and every count.
+            // A transcript-tail terminal a 2026-09-19 build left on the
+            // desktop is closed on sight and kept out of the strip meanwhile.
+            closeTranscriptTailLeftovers(client, listed.terminals)
             const result = {
-              terminals: withoutTranscriptTailTerminals(
-                listed.terminals,
-                ownedTranscriptTailHandles()
-              )
+              terminals: listed.terminals.filter((terminal) => !isTranscriptTailLeftover(terminal))
             }
-            // A tail terminal this process does not own was left by an
-            // earlier one (the app swiped away, a close that never landed):
-            // close it, or it tails the file on the desktop forever.
-            for (const terminal of listed.terminals) {
-              if (isTranscriptTailTitle(terminal.title) && terminal.connected === true) {
-                closeStrayTranscriptTailTerminal(client, hostId, terminal.handle)
-              }
-            }
-            void closeTranscriptTailsLeftBehind(
-              client,
-              hostId,
-              new Set(listed.terminals.filter((t) => t.connected === true).map((t) => t.handle))
-            )
             if (result.terminals.length === 0 && !allowsEmpty()) {
               return true
             }

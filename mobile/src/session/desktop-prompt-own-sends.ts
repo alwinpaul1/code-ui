@@ -1,17 +1,17 @@
-import type { DesktopPrompt } from '../agent-hud-beacon'
-import { normalizeNativeChatUserText } from '../../../../src/shared/native-chat-image-transcript-markers'
+import type { DesktopPrompt } from './agent-hud-beacon'
+import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 
 /**
- * When the transcript itself has the record of a message the phone sent, the
+ * When the host itself has a timed record of a message the phone sent, the
  * record wins over the phone's own echo of it.
  *
  * Why: a send made mid-turn never gets a user row, so its pending echo is
  * placed by the phone's guess of where it was — and that guess was three
- * turns under the reply that answered it (device, 2026-09-19). The
- * `queued_command` record the tail reads says exactly when it was taken.
- * So a pending text echo with a transcript twin steps aside for the twin;
- * an echo carrying photos stays, because the phone has bytes the record
- * has not.
+ * turns under the reply that answered it (device, 2026-09-19). The tab
+ * status's prompt (Orca's UserPromptSubmit hook) says when it was taken.
+ * So a pending text echo with a timed twin steps aside for the twin; an
+ * echo carrying photos stays, because the phone has bytes the record has
+ * not.
  */
 const key = (text: string) => normalizeNativeChatUserText(text)
 

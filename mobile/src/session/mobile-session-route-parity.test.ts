@@ -121,7 +121,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-19 (perf-group port, #20545): the Copy button's handler now trims
 // the agent gutter through stripTerminalSelectionGutter when the mirrored
 // desktop setting is on.
-const HEAD_CALLBACK_BODY_SHA256 = '2551fcb7e13621a636d239b47229152a3b4d75ba28c583772105f79a6df2a406'
+// 2026-09-19 (later): the transcript tail is gone — the tab status carries
+// the prompts — so both sites now only drop and close a "Code UI · transcript"
+// leftover by title (isTranscriptTailLeftover, closeTranscriptTailLeftovers).
+const HEAD_CALLBACK_BODY_SHA256 = '32cb43409c5e36b97f3bb17ff12fd55ee573213e10ef1b73702e409368a3447b'
 // 2026-09-19 (Orca #21503 port): the last-visited-worktree effect's bare store
 // write became writeLastVisitedWorktree, the one writer of that key, so the
 // hybrid shell's page mirror sees it as it is written rather than one `init` later.
@@ -191,8 +194,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 677 since 2026-09-18 (later): MobileSessionActiveContent asks the host's
 // mobile RPC gate about 'agentSession.rewind' (useHostMobileCapability) —
 // one new literal, the capability key.
+// 678 since 2026-09-19 (later): the 'terminal' literal in applySessionTabs' leftover filter.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd2df254a87794f558fd660ad077308920e01bfbdb6f2aff64655d441db29e4a5'
+  '9b65fa29aa83dd567d2abcad633d43659ada851aba39d545c896f6373a1a8930'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -743,7 +747,9 @@ describe('mobile session route extraction parity', () => {
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
     // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
     // MobileSessionActiveContent asks the mobile RPC gate about.
-    expect(strings).toHaveLength(677)
+    // 678 since 2026-09-19 (later): the 'terminal' tab-type literal in
+    // applySessionTabs' leftover filter (see HEAD_CALLBACK_BODY_SHA256).
+    expect(strings).toHaveLength(678)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
