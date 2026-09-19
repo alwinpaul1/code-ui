@@ -8,7 +8,7 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
@@ -54,7 +54,7 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
-  const router = useRouter()
+  const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
   const scopeRef = useRef('')
