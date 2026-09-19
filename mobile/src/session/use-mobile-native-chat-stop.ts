@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
 
 export function useMobileNativeChatStop(args: {
@@ -93,9 +93,9 @@ export function useMobileNativeChatStop(args: {
         reportIfSettled()
         return
       }
-      void client
-        .sendRequest(
-          'terminal.send',
+      void nativeChatTerminalWrite
+        .request(
+          client,
           {
             terminal: handle,
             text: String.fromCharCode(27),
@@ -109,7 +109,7 @@ export function useMobileNativeChatStop(args: {
           { timeoutMs, budgetSpansConnect: true }
         )
         .then((response) => {
-          if (isTerminalSendRpcAccepted(response)) {
+          if (nativeChatTerminalWrite.interpret(response) === true) {
             sawAccepted = true
           } else {
             sawRejected = true

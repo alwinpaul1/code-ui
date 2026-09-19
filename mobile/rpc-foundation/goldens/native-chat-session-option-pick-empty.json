@@ -1,0 +1,45 @@
+{
+  "operation": "nativeChat.session-option-pick",
+  "family": "nativeChat.session-option-pick",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
+  "recorderSha256": "1bc117ad620b99f598ca87c926320f2c055a3112f01b942eb8a9afd51f083aac",
+  "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
+  "scenarioSha256": "55f675f7d3f380db10dd966ae6d011927dbc7eb8f3abd36e09edf5043ad1131c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-session-option-pick-empty",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "empty": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
-import type { RpcSuccess } from '../transport/types'
+import { sessionTerminalListRead } from './mobile-session-read-operations'
+import type { Terminal } from './mobile-session-route-types'
 import {
   mergeTerminalListWithKnownRecords,
   mobileSessionTabsEqual,
@@ -11,7 +12,6 @@ import {
   pruneTerminalKeyboardMetrics,
   resolveRetainedTerminalHandles
 } from './mobile-terminal-prune-decision'
-import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionTerminalStreamDisplayModel } from './use-mobile-session-terminal-stream-display'
 import { MobileTerminalInventoryRequest } from './mobile-terminal-inventory-request'
 import { isTranscriptTailTitle, withoutTranscriptTailTerminals } from './transcript-tail/transcript-tail-command'
@@ -66,14 +66,17 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
         allowEmptyLoaded,
         async (allowsEmpty, isCurrent) => {
           try {
-            const response = await client.sendRequest('terminal.list', {
-              worktree: `id:${worktreeId}`,
-              includeVisualLayouts: false
-            })
-            if (!isCurrent() || !response.ok) {
+            const response = sessionTerminalListRead.interpret(
+              await sessionTerminalListRead.request(client, {
+                worktree: `id:${worktreeId}`,
+                includeVisualLayouts: false
+              })
+            )
+            if (!isCurrent() || !response.accepted) {
               return false
             }
-            const listed = (response as RpcSuccess).result as { terminals: Terminal[] }
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            const listed = response.value as { terminals: Terminal[] }
             // The phone's own transcript-tail terminal is not a tab anyone
             // opened; it is hidden from the strip and every count.
             const result = {

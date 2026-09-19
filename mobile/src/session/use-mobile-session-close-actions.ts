@@ -1,5 +1,10 @@
 import { forgetSessionTab, pickNextSessionTabAfterClose } from './mobile-session-tab-history'
 import { planSessionTabClose } from './mobile-session-tab-close-plan'
+import {
+  sessionTabClose,
+  sessionTerminalClose,
+  sessionTerminalRename
+} from './mobile-session-write-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
@@ -43,11 +48,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
-      const response = await client.sendRequest('terminal.rename', {
-        terminal: target.handle,
-        title
-      })
-      if (response.ok) {
+      const response = sessionTerminalRename.interpret(
+        await sessionTerminalRename.request(client, { terminal: target.handle, title })
+      )
+      if (response.accepted) {
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle
@@ -70,10 +74,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
 
     try {
-      const response = await client.sendRequest('terminal.close', {
-        terminal: target.handle
-      })
-      if (!response.ok) {
+      const response = sessionTerminalClose.interpret(
+        await sessionTerminalClose.request(client, { terminal: target.handle })
+      )
+      if (!response.accepted) {
         return false
       }
       unsubscribeTerminal(target.handle)
@@ -125,15 +129,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       return
     }
     try {
-      const response = await client.sendRequest('session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: plan.tabId,
-        ...(plan.leafId ? { leafId: plan.leafId } : {}),
-        // Why: a tapped tab close is explicit user intent; older hosts strip
-        // the unknown field and keep their legacy behavior.
-        reason: 'user'
-      })
-      if (response.ok) {
+      const response = sessionTabClose.interpret(
+        await sessionTabClose.request(client, {
+          worktree: `id:${worktreeId}`,
+          tabId: plan.tabId,
+          ...(plan.leafId ? { leafId: plan.leafId } : {}),
+          // Why: a tapped tab close is explicit user intent; older hosts strip
+          // the unknown field and keep their legacy behavior.
+          reason: 'user'
+        })
+      )
+      if (response.accepted) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {

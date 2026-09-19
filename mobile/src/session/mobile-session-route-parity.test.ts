@@ -108,7 +108,13 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
-const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
+// 2026-09-19 (Orca #20891 ported): body text, not behaviour. Five callbacks
+// send through declared operations instead of client.sendRequest — the
+// terminal-list refresh, the markdown tab read and save, and the diff-comment
+// load and persist — and the refusal try/catch in the diff-comment persist is
+// an interpretOrThrowRefusalMessage call. Same 81 callbacks, same identities;
+// the goldens under mobile/rpc-foundation pin the behaviour and did not move.
+const HEAD_CALLBACK_BODY_SHA256 = '5950624b8aa920fa614d5b1a0a4169397ac33e38de76fcc0fe32d7202cabc986'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -137,8 +143,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // 2026-09-18: handleForkClaudeSession joins handleClearTerminal inside
 // useMobileSessionTerminalInput — the session menu's Fork action types
 // Claude's own `/fork` command and submits it.
+// 2026-09-19 (Orca #20891 ported): six nested functions send through declared
+// operations — the markdown note and browser creates, the browser navigation
+// command, and the terminal rename, terminal close and session-tab close (the
+// last two keep this fork's early-return and close-plan shape). Count still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '48b0504dc330d10f4c8b38bf164f24e620df21cebdcf8dc8a4ebd68fc592eb19'
+  '6173c3aee344fc4ce8e731ed6269d0e0e0b05ac88fe293ec2b1db0013efc6da5'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -168,8 +178,16 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 677 since 2026-09-18 (later): MobileSessionActiveContent asks the host's
 // mobile RPC gate about 'agentSession.rewind' (useHostMobileCapability) —
 // one new literal, the capability key.
+// 671 since 2026-09-19 (Orca #20891 ported): twelve method literals left the
+// family for the operation modules (browser.tabCreate, files.createFile,
+// files.open, files.read, markdown.readTab, markdown.saveTab,
+// session.tabs.close, terminal.close, terminal.list, terminal.rename,
+// worktree.set, worktree.show) and six arrived with the migrated files — the
+// browser navigation command's three 'browser.back'/'forward'/'reload' arms
+// and three '' fallbacks. Checked by diffing the reader's output against the
+// pre-port tree; upstream's own count moved by the same six.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd2df254a87794f558fd660ad077308920e01bfbdb6f2aff64655d441db29e4a5'
+  'f2ea9d643f8445325682bca54d70d730d3a7c351e5ff6e430f1a7df3cdd444a8'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -715,7 +733,7 @@ describe('mobile session route extraction parity', () => {
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
     // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
     // MobileSessionActiveContent asks the mobile RPC gate about.
-    expect(strings).toHaveLength(677)
+    expect(strings).toHaveLength(671)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
