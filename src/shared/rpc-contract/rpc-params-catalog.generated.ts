@@ -3,6 +3,11 @@
 import type { z } from 'zod'
 import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
 import {
+  AiVaultSearchRequestSchema,
+  AiVaultSearchStatusRequestSchema,
+  AiVaultSetSearchEnabledParamsSchema
+} from '../ai-vault-search-contract'
+import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
   BrowserClientFileChannelWriteParams
@@ -29,6 +34,7 @@ import {
   SelectCodexAccountForTargetParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
+import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
 import {
   AiVaultListSessionsParams,
@@ -549,6 +555,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'agent.launch': AgentLaunch,
+  'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
@@ -577,6 +585,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,
   'aiVault.resolveSessionTitles': AiVaultSessionTitlesParams,
+  'aiVault.searchSessions': AiVaultSearchRequestSchema,
+  'aiVault.searchStatus': AiVaultSearchStatusRequestSchema,
+  'aiVault.setSearchEnabled': AiVaultSetSearchEnabledParamsSchema,
   'artifacts.delete': ArtifactsDeleteParams,
   'artifacts.getPublishedLink': SourceRequest,
   'artifacts.list': ListOptions,

@@ -128,6 +128,30 @@ describe('a figure in a markdown document', () => {
     })
   })
 
+  it('lays the run out again once the figure has its size, and only once', async () => {
+    // Device 2026-09-19, three screenshots of thesis_explained.md: every code
+    // chip in a run with a figure sat on top of the prose above it. Android
+    // places a Text's inline views at layout time and does not move them
+    // when the figure grows in afterwards, so the run must be laid out anew
+    // — remounted — when the figure sizes. Once: a remount mounts the figure
+    // again, and a second bump would remount forever.
+    const xml = '<svg viewBox="0 0 800 400"></svg>'
+    await render(async () => ({ kind: 'svg', xml }))
+    const before = selectableRun()
+    layout(360)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const after = selectableRun()
+    expect(after).not.toBe(before)
+    expect(after.findAllByType('SvgXml' as never)).toHaveLength(1)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(selectableRun()).toBe(after)
+  })
+
   it('draws the link, not a zero-width picture, before the document is measured', async () => {
     const xml = '<svg viewBox="0 0 800 400"></svg>'
     const r = await render(async () => ({ kind: 'svg', xml }))

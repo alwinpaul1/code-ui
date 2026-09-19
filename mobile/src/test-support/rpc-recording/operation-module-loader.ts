@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as React from 'react'
 import ts from 'typescript'
+import * as zod from 'zod'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -43,6 +44,13 @@ export function operationModuleLoader(
   function imported(base: string, name: string): unknown {
     if (name === 'react') {
       return React
+    }
+    // Why the real library: a checked reply reader builds its schema at module load
+    // (`z.custom(...)` in mobile-workspace-create-operations.ts since #21137), so a refusing proxy
+    // would fail the mount before any request is sent. Upstream's loader serves zod the same way
+    // through its substitute table (#20667); this fork's loader predates that table.
+    if (name === 'zod') {
+      return zod
     }
     if (name.startsWith('.') && pathFor(resolve(dirname(base), name)) === sharedModulePath) {
       return deliveryAmbiguity

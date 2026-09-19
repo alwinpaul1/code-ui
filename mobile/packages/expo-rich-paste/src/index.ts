@@ -11,8 +11,8 @@ export type RichPasteImage = {
 type Subscription = { remove(): void }
 
 type NativeRichPaste = {
-  attach(viewTag: number): boolean
-  detach(viewTag: number): void
+  attach(viewTag: number): Promise<boolean>
+  detach(viewTag: number): Promise<void>
   addListener(event: 'onImage', listener: (image: RichPasteImage) => void): Subscription
 }
 
@@ -24,14 +24,24 @@ const native: NativeRichPaste | null =
 export const isRichPasteSupported = native !== null
 
 /** Let the TextInput with this native tag receive images from the keyboard,
- *  the paste menu and drags. False when there is no such view yet, or the
- *  view is not an EditText; call again after the input mounts. */
-export function attachRichPaste(viewTag: number): boolean {
-  return native?.attach(viewTag) ?? false
+ *  the paste menu and drags. Resolves false when there is no such view yet,
+ *  or the view is not an EditText; call again after the input mounts. Never
+ *  rejects: the native side looks the view up on the UI thread and answers
+ *  false for a tag it cannot find, instead of throwing the lookup's error
+ *  into the caller's effect (device, 2026-09-19). */
+export async function attachRichPaste(viewTag: number): Promise<boolean> {
+  if (!native) {
+    return false
+  }
+  try {
+    return await native.attach(viewTag)
+  } catch {
+    return false
+  }
 }
 
 export function detachRichPaste(viewTag: number): void {
-  native?.detach(viewTag)
+  void native?.detach(viewTag).catch(() => undefined)
 }
 
 /** An image the user put into an attached input. */

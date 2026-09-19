@@ -20,7 +20,9 @@ import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-an
 import {
   readHydratedConnectionLog,
   readConnectionDiagnosticsSnapshot,
-  resolveDiagnosticsHostId
+  resolveDiagnosticsHostId,
+  type DiagnosticsHostSelection,
+  type DiagnosticsRouteKey
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
@@ -38,13 +40,9 @@ export default function ConnectionLogScreen() {
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
   const insets = useSafeAreaInsets()
-  const routeKey = useMemo(() => ({}), [params.hostId])
+  const routeKey = useMemo((): DiagnosticsRouteKey => ({}), [params.hostId])
   const [hosts, setHosts] = useState<HostProfile[]>([])
-  const [manualSelection, setManualSelection] = useState<{
-    hostId: string
-    requestedHostId: string | undefined
-    routeKey: object
-  } | null>(null)
+  const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
 
   useEffect(() => {

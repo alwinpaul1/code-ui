@@ -35,6 +35,17 @@ redundant — check before re-applying it.
 These came from upstream and were then edited here. A re-vendor must
 re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
 
+- `agent-session-record.ts` — carries `rewind?: AgentSessionRewindRecord` and
+  `conversationName?: string` on `AgentSessionRecord`, plus the matching
+  conjuncts in `isAgentSessionRecord`. Hand-written from upstream's
+  `agent-session-rewind.ts` / the `AgentSessionRecord` shape at ce4a3a418
+  #19235 rather than copied by re-vendoring this file wholesale, because
+  `agent-session-record.ts` itself cannot be re-vendored past f1d854502 (see
+  "Vendored files carrying a hand-applied upstream hunk" below re:
+  `agent-session-wire.ts`, which this file's own type chain touches).
+  Upstream's own `agent-session-record.ts` at HEAD has neither field. Noted
+  2026-09-19 while re-pinning this file for #20785's `shapeValid` ->
+  `fieldsValid` rename, found undocumented until now.
 - `native-chat-session-option-snapshot.ts` — an unlisted tracked model (a
   release newer than the catalog) keeps the catalog's fallback effort rows,
   so the sheet is not model-name-only. It also carries Orca #20506's
@@ -104,18 +115,35 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `AGENT_SESSION_ID_MAX_LENGTH`, which the re-vendored
   `rpc-contract/structured-agent-session-params.ts` imports.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
-  from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
+  from 1ae7aa8bb; `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
-  #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695) and
+  #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695),
   `AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY` (027acb4ef, #19863) and
   `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601), all in
-  `RUNTIME_CAPABILITIES` too — the phone advertises them through
-  `remote-runtime-client-capabilities.ts`, which is re-vendored whole at 2626e2eca.
-  The file otherwise sits at its d07c47593 pin: upstream later added
+  `RUNTIME_CAPABILITIES` too — the phone advertises the first two through
+  `remote-runtime-client-capabilities.ts`, which is re-vendored whole at 2626e2eca,
+  and the rest from `mobile-runtime-client-capabilities.ts`;
+  `SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY` (the
+  constant and its `RUNTIME_CAPABILITIES` entry) from 5287c5cdb (#20069), and
+  `AGENT_LAUNCH_RUNTIME_CAPABILITY` (the constant, its doc comment, and its entries in
+  `NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES` and `RUNTIME_CAPABILITIES`) from
+  6da72383d (#19849), at its 4b87bc718 (#20999) value `agent.launch.v2`, and
+  `AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES` entry)
+  from 0bf815a48 (#21106), with its comment and the sibling
+  `AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY` from abc8386e1 (#21137). The file
+  otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
   constants, which are NOT vendored here, so a whole-file re-vendor would drag in an
   unported change.
+- `rpc-contract/rpc-params-catalog.generated.ts` — on its eedd35645 pin plus the
+  `agent.launch` row and its `AgentLaunch` import from 97aa5ff19 (#19850; #19849 had
+  first listed the method under `RPC_METHODS_WITHOUT_SHARED_PARAMS`, #19850 moved it
+  into the catalog, and the net of the two is what is here), and the
+  `agent.launchReplay` row from abc8386e1 (#21137). A whole-file re-vendor
+  would drag in the `aiVault.search*` rows and `FilePathsExist`, whose schemas this
+  fork does not vendor, and the `agentSession.restart*` rows from 434365d2d (#21096),
+  which the phone never calls.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
   `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
   (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional

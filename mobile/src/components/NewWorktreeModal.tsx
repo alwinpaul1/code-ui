@@ -67,7 +67,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
-  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
+  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport, getAgentLaunchSupport } =
     useNewWorktreeRuntimeCapabilities(client, visible)
   const sshTargetLabels = useNewWorkspaceSshTargetLabels(client, visible)
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
@@ -123,6 +123,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
+    getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
     onCreated,

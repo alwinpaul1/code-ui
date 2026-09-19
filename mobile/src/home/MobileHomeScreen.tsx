@@ -154,11 +154,7 @@ export function MobileHomeScreen() {
           hostLastConnected={data.hostLastConnected}
           onRefreshAccounts={() => void data.refreshAccounts()}
           refreshingAccounts={data.refreshingAccounts}
-          hostPairingRejected={data.hostPairingRejected}
-          hostSignedOut={data.hostSignedOut}
-          hostLivenessProbing={data.hostLivenessProbing}
-          hostPaths={data.hostPaths}
-          hostPendingPaths={data.hostPendingPaths}
+          hostConnections={data.hostConnections}
           hosts={data.sortedHostCatalog}
           hostStates={data.hostStates}
           isWideLayout={isWideLayout}
