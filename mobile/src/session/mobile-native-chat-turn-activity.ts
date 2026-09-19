@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../src/shared/agent-session-turn-record'
 import type { AgentSessionTurnActivity } from '../../../src/shared/agent-session-wire'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import {
@@ -79,12 +80,10 @@ export function selectStructuredAgentTurnActivity(
   }
   let turnStartIndex = -1
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (
-      body?.kind === 'status' &&
-      body.turnLifecycle?.turnId === turnId &&
-      body.turnLifecycle.state === 'running'
-    ) {
+    // The turn record in either journal shape: the typed `turn` item a host
+    // past Orca #19695 writes, or the status row carrying `turnLifecycle`.
+    const turn = readAgentJournalTurn(items[index]?.body)
+    if (turn?.turnId === turnId && turn.state === 'running') {
       turnStartIndex = index
       break
     }

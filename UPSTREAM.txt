@@ -3,9 +3,11 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus five hand-applied upstream hunks, see LOCAL-FILES.md)
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus two forward-ported hunks, see LOCAL-FILES.md)
-src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
+src/shared/structured-agent-session-mutation.ts: 8999a0028
+src/shared/structured-agent-session-mutation.test.ts: 8999a0028
+src/shared/agent-session-host-authority.ts: 8999a0028
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -13,16 +15,35 @@ src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b806
 src/shared/structured-agent-session-create.ts: 1ae7aa8bb
 src/shared/agent-session-provider-handle.test.ts: 1ae7aa8bb
 src/shared/runtime-mobile-session-tab-contracts.ts: 53852c9ca4a34e741d68115caa474ebb622bed4e
-src/shared/native-chat-session-option-defaults.ts: 546fd9b21
-src/shared/native-chat-session-option-defaults.test.ts: 546fd9b21
-src/shared/native-chat-session-options.ts: 546fd9b21
-src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk, see LOCAL-FILES.md)
-src/shared/native-chat-session-option-snapshot.test.ts: 546fd9b21
+src/shared/native-chat-session-option-defaults.ts: c287a5d9b
+src/shared/native-chat-session-option-defaults.test.ts: c287a5d9b
+src/shared/native-chat-session-options.ts: c287a5d9b
+src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk and the #20506 hunk, see LOCAL-FILES.md)
+src/shared/native-chat-session-option-snapshot.test.ts: c287a5d9b
 src/shared/native-chat-session-option-state.ts: 13c0c8b53 (plus a local hunk, see LOCAL-FILES.md)
-src/shared/structured-agent-session-options.ts: 546fd9b21
-src/shared/structured-agent-session-options.test.ts: 546fd9b21
-src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
-src/shared/agent-session-wire.ts: f1d854502 (plus a hand-applied upstream hunk, see LOCAL-FILES.md)
+src/shared/structured-agent-session-options.ts: c287a5d9b
+src/shared/structured-agent-session-options.test.ts: c287a5d9b
+src/shared/structured-agent-session-option-picks.test.ts: c287a5d9b
+src/shared/structured-agent-session-option-codec.ts: c287a5d9b
+src/shared/structured-agent-session-option-codec.test.ts: c287a5d9b
+src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/agent-session-background-task-wire.ts: f2af92b2f
+src/shared/remote-runtime-client-capabilities.ts: 2626e2eca
+src/shared/agent-session-background-task-state-equality.ts: 2626e2eca
+src/shared/agent-session-turn-record.ts: 2626e2eca
+src/shared/agent-session-turn-record.test.ts: 2626e2eca
+src/shared/agent-turn-lifecycle-text.ts: 2626e2eca
+src/shared/structured-agent-session-turn-timing.ts: 533b0bd02
+src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02
+src/shared/structured-agent-turn-clock-anchor.ts: 533b0bd02
+src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
+src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
+src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
+src/shared/structured-agent-session-outbox.ts: f55b7ba68
+src/shared/structured-agent-session-message-projection.ts: 434365d2d
+src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
+src/shared/structured-agent-session-send-disposition.ts: 8999a0028
+src/shared/structured-agent-session-send-disposition.test.ts: f55b7ba68
 src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
@@ -36,12 +57,14 @@ src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a6
 src/shared/native-chat-tool-identity.test.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-agent-profiles.ts: ecd7b19ad
 src/shared/native-chat-agent-profiles.test.ts: ecd7b19ad
-src/shared/native-chat-tool-activity.ts: c1e15c400
+src/shared/native-chat-tool-activity.ts: 68ea3b92e
+src/shared/native-chat-tool-run-outcome.ts: 68ea3b92e
+src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
-src/shared/native-chat-turn-status.ts: fab78c766
-src/shared/native-chat-turn-status.test.ts: fab78c766
-src/shared/structured-agent-session-live-turn.ts: fab78c766 (partial, see LOCAL-FILES.md)
-src/shared/structured-agent-session-live-turn.test.ts: fab78c766 (partial, see LOCAL-FILES.md)
+src/shared/native-chat-turn-status.ts: 533b0bd02
+src/shared/native-chat-turn-status.test.ts: 533b0bd02
+src/shared/structured-agent-session-live-turn.ts: fab78c766
+src/shared/structured-agent-session-live-turn.test.ts: fab78c766
 src/shared/native-chat-tool-summary.ts: 2d1bd1eb4 (except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-tool-preview-prefix.ts: 2d1bd1eb4
@@ -155,7 +178,7 @@ src/shared/rpc-contract/session-tabs-schemas-params.ts: c84007c54
 src/shared/rpc-contract/skills-params.ts: c84007c54
 src/shared/rpc-contract/speech-params.ts: c84007c54
 src/shared/rpc-contract/ssh-params.ts: c84007c54
-src/shared/rpc-contract/structured-agent-session-params.ts: c84007c54
+src/shared/rpc-contract/structured-agent-session-params.ts: f55b7ba68
 src/shared/rpc-contract/task-resume-state-params.ts: c84007c54
 src/shared/rpc-contract/terminal-orphan-params.ts: c84007c54
 src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54

@@ -109,6 +109,50 @@ describe('the `/` menu of a session that reports its own command surface', () =>
     expect(catalog.skills).toEqual([scanned])
   })
 
+  it('prefers the description the session reported over the curated one', () => {
+    // Orca #19928: the provider describes every command it can run; the
+    // curated catalog is only the fallback for a names-only report.
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [],
+      sessionCommands: [
+        { name: 'clear', kind: 'command', description: 'Wipe the transcript' },
+        { name: 'goal', kind: 'command', description: 'Set or view the goal' },
+        { name: 'compact', kind: 'command' }
+      ]
+    })
+    expect(catalog.commands).toEqual([
+      { name: 'clear', description: 'Wipe the transcript' },
+      { name: 'goal', description: 'Set or view the goal' },
+      // This fork's own catalog text (Claude Code 2.1.261), not upstream's.
+      { name: 'compact', description: 'Free up context by summarizing the conversation so far' }
+    ])
+  })
+
+  it('keeps a reported description and argument hint the curated catalog never claims', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'codex',
+      scannedSkills: [],
+      sessionCommands: [
+        {
+          name: 'opsx:apply',
+          kind: 'command',
+          description: 'Apply the plan',
+          argumentHint: '<plan-id>',
+          kindUnspecified: true
+        }
+      ]
+    })
+    expect(catalog.commands).toEqual([
+      {
+        name: 'opsx:apply',
+        description: 'Apply the plan',
+        argumentHint: '<plan-id>',
+        kindUnspecified: true
+      }
+    ])
+  })
+
   it('keeps an unclassified name the scan does not know as a command', () => {
     const catalog = mobileNativeChatSlashCatalog({
       agent: 'claude',

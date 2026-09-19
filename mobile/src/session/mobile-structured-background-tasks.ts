@@ -49,7 +49,8 @@ export function projectStructuredBackgroundTasks(
 }
 
 /** Whether the host offers to stop one named task. Absent means it does not:
- *  a stop this host would refuse is worse than no button. */
+ *  a stop this host would refuse is worse than no button. A row the host marks
+ *  `stoppable: false` hides its own button even when this is true. */
 export function structuredBackgroundTaskStopSupported(
   state: AgentSessionBackgroundTaskState | null | undefined
 ): boolean {
@@ -62,7 +63,10 @@ function liveTask(task: AgentSessionBackgroundTask, now: number): BackgroundTask
     ...identity(task),
     status: 'running',
     startedAt,
-    elapsedMs: startedAt === null ? null : Math.max(0, now - startedAt)
+    elapsedMs: startedAt === null ? null : Math.max(0, now - startedAt),
+    // Only an explicit `false` is carried: absent means stoppable on the wire
+    // (Orca #19705), and the sheet reads absence the same way.
+    ...(task.stoppable === false ? { stoppable: false } : {})
   }
 }
 

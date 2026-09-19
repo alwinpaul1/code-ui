@@ -110,6 +110,29 @@ describe('the background tasks a structured tab reads off the wire', () => {
     expect(projected?.finished[0]?.elapsedMs).toBeNull()
   })
 
+  it('carries a row the host cannot stop as unstoppable, and leaves the rest alone', () => {
+    // Orca #19705: a foreground subagent inside a live turn is published with
+    // `stoppable: false`. Absent means yes, so only the explicit `false` is
+    // carried — the rows a pre-#19705 host sends must look exactly as before.
+    const projected = projectStructuredBackgroundTasks(
+      roster({
+        supportsTaskStop: true,
+        tasks: [
+          { id: 'fg', kind: 'agent', description: 'in-turn fan-out', stoppable: false },
+          { id: 'bg', kind: 'agent', description: 'backgrounded', stoppable: true },
+          { id: 'old', kind: 'command', description: 'from an older host' }
+        ]
+      }),
+      NOW
+    )
+    expect(projected?.running.map((task) => [task.id, task.stoppable])).toEqual([
+      ['fg', false],
+      ['bg', undefined],
+      ['old', undefined]
+    ])
+    expect(projected?.running[1]).not.toHaveProperty('stoppable')
+  })
+
   it('survives a host that sends the state alone with no task list', () => {
     expect(projectStructuredBackgroundTasks(roster({ tasks: undefined }), NOW)).toEqual({
       running: [],

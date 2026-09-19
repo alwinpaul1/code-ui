@@ -3,17 +3,21 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../src/shared/structured-agent-session-reducer'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
 
-function item(sequence: number) {
-  // itemId and revision are what mergeItems keys and compares on.
+function item(sequence: number): AgentJournalRenderItem {
+  // itemId and revision are what mergeItems keys and compares on; the body is a
+  // real journal shape because mergeSubmissions reads `body.kind` on every
+  // retained item since Orca #19695 (2026-09-19: the earlier `item:` stand-in
+  // threw there).
   return {
     itemId: `i${sequence}`,
     revision: 1,
     sequence,
-    epoch: 'e1',
-    item: { kind: 'text' as const, role: 'assistant' as const, text: `line ${sequence}` }
-  } as never
+    observedAt: sequence,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `line ${sequence}` }] }
+  }
 }
 
 function page(sequence: number[]): AgentSessionHistoryPage {

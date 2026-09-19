@@ -1,23 +1,24 @@
 // What the newest turn in a structured journal is doing right now, read off the
-// tail of the item list. Every scan here stops at the turn's own record, because
-// state from an earlier turn is never this turn's state.
-//
-// CODE UI HAND-APPLIED UPSTREAM PORT (Orca #19977, fab78c766): upstream's file
-// also carries `activeStructuredAgentSessionTurnId` and
-// `activeStructuredAgentSessionToolCall`, which this fork still keeps in
-// `structured-agent-session-projection.ts`, and reads the turn record through
-// `readAgentJournalTurn` — a typed `turn` journal item this fork's
-// `agent-session-journal-types` does not have. Here the turn record is the
-// legacy status row that carries `turnLifecycle`, which is what this fork's
-// hosts write. See src/shared/LOCAL-FILES.md.
+// tail of the item list. Every scan here stops at the turn's own record — the
+// typed `turn` item, or the legacy status row that carries one — because state
+// from an earlier turn is never this turn's state.
 
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalToolCallItem
+} from './agent-session-journal-types'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 
-/** The turn record a scan stops at: this fork's lifecycle-carrying status row. */
-function readTurnLifecycle(
-  body: AgentJournalRenderItem['body'] | undefined
-): { turnId: string; state: 'running' | 'completed' } | null {
-  return body?.kind === 'status' && body.turnLifecycle ? body.turnLifecycle : null
+export function activeStructuredAgentSessionTurnId(
+  items: readonly AgentJournalRenderItem[]
+): string | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const turn = readAgentJournalTurn(items[index]?.body)
+    if (turn) {
+      return turn.state === 'running' ? turn.turnId : null
+    }
+  }
+  return null
 }
 
 /**
@@ -34,7 +35,7 @@ export function isStructuredAgentSessionThinking(
   let newestContentIsReasoning: boolean | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
-    const turn = readTurnLifecycle(body)
+    const turn = readAgentJournalTurn(body)
     if (turn) {
       return turn.state === 'running' && newestContentIsReasoning === true
     }
@@ -54,4 +55,22 @@ export function isStructuredAgentSessionThinking(
     // Plain status copy is activity chrome, not newer transcript content.
   }
   return false
+}
+
+/** The tool call the newest turn is still inside, or null when nothing is running.
+ *  An abandoned `running` call from an earlier crashed turn can never be reported
+ *  as live work. */
+export function activeStructuredAgentSessionToolCall(
+  items: readonly AgentJournalRenderItem[]
+): AgentJournalToolCallItem | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const body = items[index]?.body
+    if (readAgentJournalTurn(body)) {
+      return null
+    }
+    if (body?.kind === 'tool-call' && body.state === 'running') {
+      return body
+    }
+  }
+  return null
 }

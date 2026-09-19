@@ -82,8 +82,11 @@ const HOST_COMPONENT_NAMES = new Set([
 // binding call in use-mobile-session-accessory-selection.ts, mirroring the
 // desktop's "Trim Gutter on Copy" setting onto the mobile Copy button. Both
 // ports landed the same day on separate branches; re-pinned at the merge.
-const HEAD_MAIN_HOOK_SHA256 = 'c27764d94ee5f15e78220e16e7770163d0bf93225e01b52fe1117a488d35a071'
-const HEAD_HOOK_BINDING_SHA256 = '902f2bd9c8c7131a3594a912b7bed07a0a45a61267923c74d41bc7f47533ab9e'
+// 284 since 2026-09-19 (upstream #20601, the native-chat group): the chat
+// controller's structuredCancelPrompt, and the tab reconciliation's
+// prompt-cancel capability read; re-pinned again at that merge.
+const HEAD_MAIN_HOOK_SHA256 = '7f5eadd80a25f8fc48ec5be7f457c1265185c171ef655cb26194d06e23984dfa'
+const HEAD_HOOK_BINDING_SHA256 = 'a26754f833de531d4e27936951b7911314add8eb6c1e66b3ce604a192f02a0d0'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -119,7 +122,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the agent gutter through stripTerminalSelectionGutter when the mirrored
 // desktop setting is on.
 const HEAD_CALLBACK_BODY_SHA256 = '2551fcb7e13621a636d239b47229152a3b4d75ba28c583772105f79a6df2a406'
-const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
+const HEAD_EFFECT_SHA256 = 'da074a630233fd8fba28c318289de33e65ee4f60da8a0f317b2541e2482ac29c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -264,7 +267,7 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // navigators for the new project-config screens (MCP servers, permission
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
-const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
+const HEAD_CAPABILITY_SHA256 = '0522812c020ba11508726574cf1ef08fb39343af167959360191fb0f27c7db69'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -658,7 +661,9 @@ describe('mobile session route extraction parity', () => {
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
     // 282 since 2026-09-19: useHostProtocolGates in the foundation (#20069).
     // 283 since 2026-09-19: useTerminalCopyTrimsGutter (#20545), merged the same day.
-    expect(main.hooks).toHaveLength(283)
+    // 284 since 2026-09-19: structuredCancelPrompt (useNativeChatAcceptedAction),
+    // the cancel-by-identity for a pending approval/question (Orca #20601).
+    expect(main.hooks).toHaveLength(284)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)
@@ -701,7 +706,8 @@ describe('mobile session route extraction parity', () => {
     // see HEAD_NAVIGATION_SHA256.
     expect(compatibility.navigation).toHaveLength(9)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    // 6 since 2026-09-19: agent-session.prompt-cancel.v1 (Orca #20601).
+    expect(compatibility.capabilities).toHaveLength(6)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 

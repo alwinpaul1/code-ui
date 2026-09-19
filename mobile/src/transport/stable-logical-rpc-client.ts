@@ -102,13 +102,11 @@ export function createStableLogicalRpcClient(
           .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
           .then(
             (response) => {
-              if (closed) {
-                reject(new Error('Client closed'))
-              } else if (requestGeneration !== generation) {
-                reject(new LogicalClientCutoverError())
-              } else {
-                resolve(response)
-              }
+              // A correlated response is definitive even if close/cutover won the
+              // callback race after the physical promise had already settled
+              // (Orca #20133). The error arm below keeps this fork's cutover wrap:
+              // a rejection is the only evidence of whether the frame was written.
+              resolve(response)
             },
             (error: unknown) => {
               // Why: the retiring physical session settles this, so keep its error as the

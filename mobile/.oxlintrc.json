@@ -165,7 +165,11 @@
             // 2026-09-19: +17 for the transcript tail — useTranscriptTail's enable
             // condition and the merged queue/prompts it hands the contract;
             // the tail itself lives in session/transcript-tail/.
-            "max": 496,
+            // 2026-09-19 (later): +6 for Orca #20601 — the prompt-cancel
+            // capability threaded to the session lane, and
+            // structuredCancelPrompt handed to the contract; the cancel itself
+            // is mobile-structured-agent-session-cancel.ts.
+            "max": 502,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -232,7 +236,14 @@
             // only threads them.
             // 2026-09-19: +1 for onPasteImageFile — an image the keyboard put
             // into the composer, threaded to it; the module is expo-rich-paste.
-            "max": 410,
+            // 2026-09-19, later: +2 for workingStartedAt / settledTurns (Orca
+            // #19695), the host-recorded turn timing threaded to the turn
+            // disclosure; the logic is use-mobile-structured-agent-turn-timing.
+            // +1 the same day for `awaitingInput` (Orca #20496): the live-turn
+            // row withheld while a prompt card waits; the rule lives in the
+            // disclosure hook. +1 for `onCancelPrompt` (Orca #20601), the
+            // prompt card's cancel-by-identity threaded through.
+            "max": 414,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -273,6 +284,82 @@
             // clock the liveness rule reads. +3 the same day for the beat a
             // beacon declares (`hb=`), parsed and kept across a merge.
             "max": 325,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-structured-agent-session.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +7 over 300 for Orca #20601's cancel-by-identity —
+            // `requestCancel` and the `cancelPrompt` it feeds. The dispatch
+            // itself is mobile-structured-agent-session-cancel.ts; the hook
+            // only threads the capability and the pending prompt's identity.
+            "max": 307,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-session-native-chat-dictation.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +2 over 300 for Orca #20601's
+            // `agentSessionPromptCancelSupported`, the host capability fact
+            // threaded from the feedback-capabilities probe to the controller.
+            "max": 302,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-native-chat-controller.test.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +5 over the 800 test ceiling for Orca #20601's
+            // structuredCancelPrompt mock and the case that pins the bridge
+            // lane offering no prompt cancel. This fork's copy carries its
+            // own queue-editor and tail cases on top of upstream's.
+            "max": 805,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-native-chat-image-attachments.test.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +6 over the 800 test ceiling for Orca #20133's
+            // `contentFingerprint` on an uploaded chip — one expectation grew
+            // from one line to six. This fork's copy carries its own batch and
+            // document cases on top of upstream's, which is why it is at the
+            // ceiling at all.
+            "max": 806,
             "skipBlankLines": true,
             "skipComments": true
           }
