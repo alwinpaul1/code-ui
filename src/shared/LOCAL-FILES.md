@@ -158,7 +158,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   alignment, not a fix here; the vendored reducer test is NOT updated for it
   (seven conflicting hunks on a file that is never collected), so it still
   names `tail-page`. `agent-session-journal-types.ts` carries #20518's
-  (4634d2c03) `userItemId` doc comment.
+  (4634d2c03) `userItemId` doc comment, and both it and
+  `agent-session-journal-schemas.ts` carry #21086's (533b0bd02) optional
+  `requestedAt` on the turn lifecycle — the host clock at the send that opened
+  the turn — by 3-way merge.
 
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and

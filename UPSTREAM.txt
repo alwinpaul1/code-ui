@@ -33,8 +33,10 @@ src/shared/agent-session-background-task-state-equality.ts: 2626e2eca
 src/shared/agent-session-turn-record.ts: 2626e2eca
 src/shared/agent-session-turn-record.test.ts: 2626e2eca
 src/shared/agent-turn-lifecycle-text.ts: 2626e2eca
-src/shared/structured-agent-session-turn-timing.ts: 2626e2eca
-src/shared/structured-agent-session-turn-timing.test.ts: 2626e2eca
+src/shared/structured-agent-session-turn-timing.ts: 533b0bd02
+src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02
+src/shared/structured-agent-turn-clock-anchor.ts: 533b0bd02
+src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
 src/shared/structured-agent-session-outbox.ts: f55b7ba68
@@ -56,8 +58,8 @@ src/shared/native-chat-agent-profiles.ts: ecd7b19ad
 src/shared/native-chat-agent-profiles.test.ts: ecd7b19ad
 src/shared/native-chat-tool-activity.ts: c1e15c400
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
-src/shared/native-chat-turn-status.ts: fab78c766
-src/shared/native-chat-turn-status.test.ts: fab78c766
+src/shared/native-chat-turn-status.ts: 533b0bd02
+src/shared/native-chat-turn-status.test.ts: 533b0bd02
 src/shared/structured-agent-session-live-turn.ts: fab78c766
 src/shared/structured-agent-session-live-turn.test.ts: fab78c766
 src/shared/native-chat-tool-summary.ts: c1e15c400
