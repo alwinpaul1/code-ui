@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -203,14 +204,43 @@ describe('the tail command', () => {
       'posix'
     )
     expect(command.startsWith(`tail -n ${TAIL_BACKLOG_ROWS} -F '/Users/me/.claude/projects/a/b'\\''c.jsonl' | awk '`)).toBe(true)
-    for (const mark of ['"queue-operation"', 'queued_command', '"tool_use"', '"tool_result"', '"type":"user"']) {
+    for (const mark of [
+      '"queue-operation"',
+      'queued_command',
+      '"role":"user","content":"',
+      '"role":"user","content":[{"type":"text"'
+    ]) {
       expect(command).toContain(`index($0, "${mark.replace(/"/g, '\\"')}")`)
     }
+    // Tool rows fed the "Running · 12s" row, which is gone; they were most of
+    // what the desktop tab showed (a LaTeX chapter in one tool result,
+    // screenshot 2026-09-19).
+    expect(command).not.toContain('tool_use')
+    expect(command).not.toContain('tool_result')
     expect(command).toContain(`i = index($0, "\\"type\\":\\"image\\""); if (i > 0) $0 = substr($0, 1, i - 1)`)
     expect(command).toContain(`print substr($0, 1, ${TAIL_ROW_MAX_CHARS})`)
     expect(command).toContain('fflush()')
     // Plain string matching only: no regex, no intervals, every awk has these.
     expect(command).not.toMatch(/\{[0-9]+,\}/)
+  })
+
+  it('lets a prompt row through and drops a tool result, run for real through awk', () => {
+    // The awk program over the real 2.1.277 rows: what leaves the host is
+    // the queue operations, the queued prompt and the typed turn; the tool
+    // result and the assistant row do not, and the image prompt is cut
+    // before its base64.
+    const command = transcriptTailCommand({ kind: 'path', transcriptPath: '/tmp/x.jsonl' }, 'posix')
+    const program = command.slice(command.indexOf("awk '") + 5, command.lastIndexOf("'"))
+    const input = Object.values(ROWS).join('\n') + '\n'
+    const out = execFileSync('awk', [program], { input, encoding: 'utf8' })
+    const lines = out.split('\n').filter((line) => line.length > 0)
+    expect(lines.some((line) => line.includes('"queue-operation"'))).toBe(true)
+    expect(lines.some((line) => line.includes('queued_command'))).toBe(true)
+    expect(lines.some((line) => line.includes('"role":"user","content":"'))).toBe(true)
+    expect(lines.some((line) => line.includes('tool_result'))).toBe(false)
+    expect(lines.some((line) => line.includes('"type":"assistant"'))).toBe(false)
+    expect(lines.some((line) => line.includes('"type":"image"'))).toBe(false)
+    expect(lines.every((line) => line.length <= TAIL_ROW_MAX_CHARS)).toBe(true)
   })
 
   it('is a PowerShell Get-Content -Wait on Windows', () => {
