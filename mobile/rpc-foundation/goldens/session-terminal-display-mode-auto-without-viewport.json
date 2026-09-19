@@ -1,0 +1,167 @@
+{
+  "operation": "session.terminal-display-mode",
+  "family": "session.terminal-display-mode",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
+  "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
+  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
+  "adapterSha256": "ff68498f757748a0db27470d256cdcbbd149532036ef5472c20e1d1791db1574",
+  "scenarioSha256": "bb278c4da53b82d84cf50b308901ce196cc1f07c1a84790ad491319ee6746541",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "36a9812a9d80": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": [],
+      "viewport": {
+        "$rpc": "null"
+      }
+    },
+    "7491d197d4aa": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "mode": "auto"
+          }
+        }
+      }
+    },
+    "8dda780d8b54": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "inFlight": ["terminal-1"],
+      "viewport": {
+        "$rpc": "null"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9b2c475f2a98": {
+      "name": "measure-viewport-once",
+      "ordinal": 2,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "d64dff72588d": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.setDisplayMode"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "mode": "auto",
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "e27323f28d10": {
+      "name": "subscribe-terminal",
+      "ordinal": 1,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
+    "e72e066ca115": {
+      "name": "terminal.setDisplayMode#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.setDisplayMode\",\"params\":{\"terminal\":\"terminal-1\",\"mode\":\"auto\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-terminal-display-mode-auto-without-viewport",
+    "checkpoints": [
+      {
+        "id": "in-flight",
+        "observation": {
+          "sender": ["d64dff72588d"],
+          "payloads": ["e72e066ca115"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "9270aeb7d9c6"
+          },
+          "state": "8dda780d8b54",
+          "effects": ["e27323f28d10", "9b2c475f2a98"]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["7491d197d4aa"],
+          "payloads": ["e72e066ca115"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "toggle": "eb79a9b3682a"
+          },
+          "state": "36a9812a9d80",
+          "effects": ["e27323f28d10", "9b2c475f2a98"]
+        }
+      }
+    ]
+  }
+}

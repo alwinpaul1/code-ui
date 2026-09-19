@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "9e01c50e6dc919de3c0129e755f1ea9ec335dc59",
+  "baseline": "9add08bb5943144f5fb0178ab628cdfebe99c22a",
   "scenarios": [
     {
       "id": "b1",
@@ -20027,6 +20027,1014 @@
         },
         {
           "checkpoint": "cleared"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-both-activation-sites",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "created": "1"
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "advance": 1800
+        },
+        {
+          "checkpoint": "reactivating"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sleepingAgentWake": "unsupported-headless"
+            }
+          }
+        },
+        {
+          "checkpoint": "reactivated"
+        },
+        {
+          "advance": 750
+        },
+        {
+          "checkpoint": "refreshed"
+        },
+        {
+          "action": "consume-created-route",
+          "id": "consume-route"
+        },
+        {
+          "checkpoint": "activating"
+        },
+        {
+          "complete": "worktree.activate#2",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sleepingAgentWake": "unsupported-headless"
+            }
+          }
+        },
+        {
+          "checkpoint": "activated"
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "reloaded"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-floating-route-skips-activation",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "created": "1",
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "advance": 2600
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-keeps-terminals-visible-on-reconnect",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "initialized": ["terminal-0"]
+          }
+        },
+        {
+          "checkpoint": "loading"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "refreshed"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
+        },
+        {
+          "checkpoint": "unmounted"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-refused-tab-load-still-loads-terminals",
+      "operation": "session.startup",
+      "version": 1,
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "tabLoadRejects": true
+          }
+        },
+        {
+          "checkpoint": "tab-load-refused"
+        },
+        {
+          "complete": "worktree.activate#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "notifyClients": false,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {}
+          }
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-with-prompt",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0",
+            "deviceToken": "device-token-1"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "initialPrompt": "review these notes",
+            "successToast": "Notes sent",
+            "errorToast": "Couldn't run Notes"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "review these notes",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "prompt-sent"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-replaces-active",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-refused",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "errorToast": "Couldn't run Notes"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "pty_exhausted",
+              "message": "No pty slots left on the host"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-without-handle",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": null,
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-without-active-tab",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": {
+              "$undefined": true
+            },
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-runs-a-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "startupCommand": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "errorToast": "Couldn't run Tests"
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "command": "pnpm test",
+            "startupCommandDelivery": "shell-ready",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-launches-an-agent-quick-command",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create",
+          "args": {
+            "agent": "claude",
+            "agentPrompt": "summarize the diff",
+            "errorToast": "Couldn't run Review"
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {}
+            }
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "platform": "darwin"
+            }
+          }
+        },
+        {
+          "checkpoint": "creating"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "agentPrompt": "summarize the diff",
+            "agent": "claude",
+            "activate": false,
+            "select": true,
+            "navigation": "caller",
+            "launchConfig": {
+              "agentArgs": "--dangerously-skip-permissions --settings '{\"statusLine\":{\"type\":\"command\",\"command\":\"i=$(cat); g(){ printf %s \\\"$i\\\" | sed -nE \\\"s/.*$1.*/\\\\1/p\\\"; }; q(){ printf %s \\\"$1\\\" | LC_ALL=C sed -e \\\"s/%/%25/g\\\" -e \\\"s/ /%20/g\\\" -e \\\"s/;/%3B/g\\\"; }; si=$(g \\\"\\\\\\\"session_id\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); mi=$(g \\\"\\\\\\\"model\\\\\\\":\\\\{\\\\\\\"id\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); mn=$(g \\\"\\\\\\\"display_name\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); ef=$(g \\\"\\\\\\\"effort\\\\\\\":\\\\{\\\\\\\"level\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); pc=$(g \\\"\\\\\\\"used_percentage\\\\\\\":([0-9.]+),\\\\\\\"remaining_percentage\\\\\\\"\\\"); cw=$(g \\\"\\\\\\\"context_window_size\\\\\\\":([0-9]+)\\\"); ta=$(g \\\"\\\\\\\"current_usage\\\\\\\":\\\\{\\\\\\\"input_tokens\\\\\\\":([0-9]+)\\\"); tb=$(g \\\"\\\\\\\"cache_creation_input_tokens\\\\\\\":([0-9]+)\\\"); tc=$(g \\\"\\\\\\\"cache_read_input_tokens\\\\\\\":([0-9]+)\\\"); ha=$(g \\\"\\\\\\\"five_hour\\\\\\\":\\\\{\\\\\\\"used_percentage\\\\\\\":([0-9.]+)\\\"); hr=$(g \\\"\\\\\\\"five_hour\\\\\\\":\\\\{\\\\\\\"used_percentage\\\\\\\":[0-9.]+,\\\\\\\"resets_at\\\\\\\":([0-9]+)\\\"); wa=$(g \\\"\\\\\\\"seven_day\\\\\\\":\\\\{\\\\\\\"used_percentage\\\\\\\":([0-9.]+)\\\"); wb=$(g \\\"\\\\\\\"seven_day\\\\\\\":\\\\{\\\\\\\"used_percentage\\\\\\\":[0-9.]+,\\\\\\\"resets_at\\\\\\\":([0-9]+)\\\"); wd=$(g \\\"\\\\\\\"cwd\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); tp=$(g \\\"\\\\\\\"transcript_path\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); [ -n \\\"$tp\\\" ] && tp=$(printf %s \\\"$tp\\\" | tr \\\"\\\\\\\\\\\\\\\\\\\" /); dn=\\\"\\\"; bg=\\\"\\\"; ba=\\\"\\\"; lv=\\\"\\\"; [ -n \\\"$tp\\\" ] && [ -r \\\"$tp\\\" ] && ba=$(tail -c 4194304 \\\"$tp\\\" 2>/dev/null | grep -F \\\"\\\\\\\"content\\\\\\\":\\\\\\\"Command \\\" 2>/dev/null | grep -v \\\"\\\\\\\"type\\\\\\\":\\\\\\\"assistant\\\\\\\"\\\" 2>/dev/null | grep -o -e \\\"\\\\\\\"content\\\\\\\":\\\\\\\"Command running in background with ID: [A-Za-z0-9_-]\\\\{3,\\\\}\\\" -e \\\"\\\\\\\"content\\\\\\\":\\\\\\\"Command did not complete[^\\\\\\\"]*moved to the background (ID: [A-Za-z0-9_-]\\\\{3,\\\\}\\\" -e \\\"\\\\\\\"content\\\\\\\":\\\\\\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\\\{3,\\\\}\\\" 2>/dev/null | sed -e \\\"s/.*ID: //\\\" | awk \\\"!s[\\\\$0]++\\\"); [ -n \\\"$ba\\\" ] && bg=$(printf \\\"%s\\\\n\\\" \\\"$ba\\\" | tail -n 64 | tr \\\"\\\\n\\\" \\\",\\\"); [ -n \\\"$tp\\\" ] && [ -r \\\"$tp\\\" ] && da=$(tail -c 4194304 \\\"$tp\\\" 2>/dev/null | grep -F \\\"<status>\\\" 2>/dev/null | grep -v \\\"\\\\\\\"type\\\\\\\":\\\\\\\"assistant\\\\\\\"\\\" 2>/dev/null | grep -o \\\"<task-id>[A-Za-z0-9_-]\\\\{3,\\\\}</task-id>\\\" 2>/dev/null | sed -e \\\"s/<task-id>//\\\" -e \\\"s#</task-id>##\\\" | awk \\\"!s[\\\\$0]++\\\"); dc=\\\",\\\"; [ -n \\\"$da\\\" ] && dc=\\\",$(printf \\\"%s\\\\n\\\" \\\"$da\\\" | tr \\\"\\\\n\\\" \\\",\\\")\\\"; [ -n \\\"$ba\\\" ] && lv=$(printf \\\"%s\\\\n\\\" \\\"$ba\\\" | awk -v d=\\\"$dc\\\" \\\"index(d, \\\\\\\",\\\\\\\"\\\\$0\\\\\\\",\\\\\\\")==0\\\" | tr \\\"\\\\n\\\" \\\",\\\"); [ -n \\\"$da\\\" ] && dn=$(printf \\\"%s\\\\n\\\" \\\"$da\\\" | awk -v b=\\\",$bg,\\\" \\\"{a[NR]=\\\\$0} END{for(i=1;i<=NR;i++) if (index(b, \\\\\\\",\\\\\\\"a[i]\\\\\\\",\\\\\\\")>0 || i>NR-32) print a[i]}\\\" | tr \\\"\\\\n\\\" \\\",\\\"); o=\\\"CUIHUD1 agent=claude hk=1 hb=5\\\"; [ -n \\\"$si\\\" ] && o=\\\"$o sid=$(q \\\"$si\\\")\\\"; [ -n \\\"$mi\\\" ] && o=\\\"$o model=$(q \\\"$mi\\\")\\\"; [ -n \\\"$mn\\\" ] && o=\\\"$o name=$(q \\\"$mn\\\")\\\"; [ -n \\\"$ef\\\" ] && o=\\\"$o effort=$(q \\\"$ef\\\")\\\"; [ -n \\\"$ta\\\" ] && o=\\\"$o used=$((ta+${tb:-0}+${tc:-0}))\\\"; [ -n \\\"$cw\\\" ] && o=\\\"$o win=$cw\\\"; [ -n \\\"$pc\\\" ] && o=\\\"$o pct=${pc%.*}\\\"; [ -n \\\"$ha\\\" ] && o=\\\"$o h5=${ha%.*}:${hr:-0}\\\"; [ -n \\\"$wa\\\" ] && o=\\\"$o d7=${wa%.*}:${wb:-0}\\\"; [ -n \\\"$dn\\\" ] && o=\\\"$o done=${dn%,}\\\"; [ -n \\\"$bg\\\" ] && o=\\\"$o bg=${bg%,}\\\"; [ -n \\\"$tp\\\" ] && [ -r \\\"$tp\\\" ] && o=\\\"$o live=${lv%,}\\\"; w(){ printf \\\"\\\\033]7777;%s\\\\007\\\" \\\"$o\\\" 2>/dev/null >> \\\"$1\\\"; }; tt=$CUIHUD_TTY; wn=0; case $(uname -s 2>/dev/null || true) in MSYS*|MINGW*|CYGWIN*) wn=1;; esac; if [ -z \\\"$tt\\\" ] && [ \\\"$wn\\\" = 0 ]; then pw=$PPID; nw=0; while [ -n \\\"$pw\\\" ] && [ \\\"$pw\\\" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true); case \\\"$dv\\\" in \\\"\\\"|\\\"?\\\"|\\\"??\\\") pw=$(ps -o ppid= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true);; *) tt=\\\"/dev/$dv\\\"; break;; esac; nw=$((nw+1)); done; fi; if [ -n \\\"$tt\\\" ]; then w \\\"$tt\\\"; elif [ \\\"$wn\\\" = 1 ]; then w \\\"${CUIHUD_WIN_TTY:-/dev/tty}\\\" || w \\\"${CUIHUD_WIN_CONOUT:-/dev/conout}\\\"; fi; xn(){ node -e \\\"const s=JSON.parse(require(\\\\\\\"fs\\\\\\\").readFileSync(process.argv[1],\\\\\\\"utf8\\\\\\\"));const c=s.statusLine&&s.statusLine.type===\\\\\\\"command\\\\\\\"&&s.statusLine.command;if(c)process.stdout.write(c)\\\" \\\"$1\\\" 2>/dev/null; }; xp(){ python3 -c \\\"import json,sys;s=json.load(open(sys.argv[1])).get(\\\\\\\"statusLine\\\\\\\") or {};c=s.get(\\\\\\\"command\\\\\\\") if s.get(\\\\\\\"type\\\\\\\")==\\\\\\\"command\\\\\\\" else None;sys.stdout.write(c or \\\\\\\"\\\\\\\")\\\" \\\"$1\\\" 2>/dev/null; }; xj(){ jq -r \\\".statusLine.command // empty\\\" \\\"$1\\\" 2>/dev/null; }; xs(){ tr -d \\\"\\\\n\\\\r\\\" < \\\"$1\\\" 2>/dev/null | sed -nE \\\"s/.*\\\\\\\"statusLine\\\\\\\"[[:space:]]*:[[:space:]]*\\\\{[^}]*\\\\\\\"command\\\\\\\"[[:space:]]*:[[:space:]]*\\\\\\\"((\\\\\\\\\\\\\\\\.|[^\\\\\\\"\\\\\\\\\\\\\\\\])*)\\\\\\\".*/\\\\1/p\\\" | sed -e \\\"s/\\\\\\\\\\\\\\\\\\\\\\\"/\\\\\\\"/g\\\" -e \\\"s/\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\/g\\\"; }; x(){ [ -r \\\"$1\\\" ] || return 1; c=\\\"\\\"; if command -v node >/dev/null 2>&1; then c=$(xn \\\"$1\\\"); fi; if [ -z \\\"$c\\\" ] && command -v python3 >/dev/null 2>&1; then c=$(xp \\\"$1\\\"); fi; if [ -z \\\"$c\\\" ] && command -v jq >/dev/null 2>&1; then c=$(xj \\\"$1\\\"); fi; if [ -z \\\"$c\\\" ]; then c=$(xs \\\"$1\\\"); fi; printf %s \\\"$c\\\"; }; y=\\\"\\\"; for f in \\\"$wd/.claude/settings.local.json\\\" \\\"$wd/.claude/settings.json\\\" \\\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.local.json\\\" \\\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json\\\"; do y=$(x \\\"$f\\\" 2>/dev/null); [ -n \\\"$y\\\" ] && break; done; if [ -n \\\"$y\\\" ] && ! printf %s \\\"$y\\\" | grep -q CUIHUD; then printf %s \\\"$i\\\" | sh -c \\\"$y\\\" 2>/dev/null; fi; exit 0\",\"refreshInterval\":5},\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"i=$(cat 2>/dev/null || true); rn=$(printf %s \\\"$i\\\" | tr \\\"{\\\" \\\"\\\\n\\\" | grep -v \\\"\\\\\\\"type\\\\\\\"[[:space:]]*:[[:space:]]*\\\\\\\"in_process_teammate\\\\\\\"\\\" 2>/dev/null | grep \\\"\\\\\\\"status\\\\\\\"[[:space:]]*:[[:space:]]*\\\\\\\"running\\\\\\\"\\\" 2>/dev/null | sed -nE \\\"s/.*\\\\\\\"id\\\\\\\"[[:space:]]*:[[:space:]]*\\\\\\\"([A-Za-z0-9_-]+)\\\\\\\".*/\\\\\\\\1/p\\\" | awk \\\"!s[\\\\$0]++\\\" | tail -n 64 | tr \\\"\\\\n\\\" \\\",\\\"); si=$(printf %s \\\"$i\\\" | sed -nE \\\"s/.*\\\\\\\"session_id\\\\\\\"[[:space:]]*:[[:space:]]*\\\\\\\"([A-Za-z0-9._-]+)\\\\\\\".*/\\\\\\\\1/p\\\" | head -n 1); o=\\\"CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}\\\"; w(){ printf \\\"\\\\033]7777;%s\\\\007\\\" \\\"$o\\\" 2>/dev/null >> \\\"$1\\\"; }; tt=$CUIHUD_TTY; wn=0; case $(uname -s 2>/dev/null || true) in MSYS*|MINGW*|CYGWIN*) wn=1;; esac; if [ -z \\\"$tt\\\" ] && [ \\\"$wn\\\" = 0 ]; then pw=$PPID; nw=0; while [ -n \\\"$pw\\\" ] && [ \\\"$pw\\\" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true); case \\\"$dv\\\" in \\\"\\\"|\\\"?\\\"|\\\"??\\\") pw=$(ps -o ppid= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true);; *) tt=\\\"/dev/$dv\\\"; break;; esac; nw=$((nw+1)); done; fi; if [ -n \\\"$tt\\\" ]; then w \\\"$tt\\\"; elif [ \\\"$wn\\\" = 1 ]; then w \\\"${CUIHUD_WIN_TTY:-/dev/tty}\\\" || w \\\"${CUIHUD_WIN_CONOUT:-/dev/conout}\\\"; fi\"}]}],\"UserPromptSubmit\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"i=$(cat 2>/dev/null || true); g(){ printf %s \\\"$i\\\" | LC_ALL=C sed -nE \\\"s/.*$1.*/\\\\1/p\\\"; }; q(){ printf %s \\\"$1\\\" | LC_ALL=C sed -e \\\"s/%/%25/g\\\" -e \\\"s/ /%20/g\\\" -e \\\"s/;/%3B/g\\\"; }; pr=$(g \\\"\\\\\\\"prompt\\\\\\\":\\\\\\\"(([^\\\\\\\"\\\\\\\\\\\\\\\\]|\\\\\\\\\\\\\\\\.)*)\\\\\\\"\\\"); pf=$(printf %s \\\"$pr\\\" | awk \\\"{print substr(\\\\$0,1,2000)}\\\"); ct=\\\"\\\"; [ \\\"$pf\\\" != \\\"$pr\\\" ] && ct=\\\" cut=1\\\"; pr=\\\"$pf\\\"; tp=$(g \\\"\\\\\\\"transcript_path\\\\\\\":\\\\\\\"([^\\\\\\\"]*)\\\\\\\"\\\"); [ -n \\\"$tp\\\" ] && tp=$(printf %s \\\"$tp\\\" | tr \\\"\\\\\\\\\\\\\\\\\\\" /); [ -n \\\"$tp\\\" ] && [ -r \\\"$tp\\\" ] && at=$(tail -c 1048576 \\\"$tp\\\" 2>/dev/null | grep -E \\\"\\\\\\\"type\\\\\\\":\\\\\\\"(user|assistant)\\\\\\\"\\\" 2>/dev/null | grep -v -E \\\"\\\\\\\"(tool_use|tool_result|thinking)\\\\\\\"\\\" 2>/dev/null | tail -n 1 | grep -o \\\"\\\\\\\"uuid\\\\\\\":\\\\\\\"[0-9a-fA-F-]*\\\\\\\"\\\" 2>/dev/null | head -n 1 | sed -e \\\"s/.*\\\\\\\"uuid\\\\\\\":\\\\\\\"//\\\" -e \\\"s/\\\\\\\"$//\\\"); si=$(g \\\"\\\\\\\"session_id\\\\\\\":\\\\\\\"([A-Za-z0-9._-]+)\\\\\\\"\\\"); o=\\\"CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q \\\"$pr\\\")$ct${at:+ at=$at}\\\"; [ -z \\\"$pr\\\" ] && exit 0; w(){ printf \\\"\\\\033]7777;%s\\\\007\\\" \\\"$o\\\" 2>/dev/null >> \\\"$1\\\"; }; tt=$CUIHUD_TTY; wn=0; case $(uname -s 2>/dev/null || true) in MSYS*|MINGW*|CYGWIN*) wn=1;; esac; if [ -z \\\"$tt\\\" ] && [ \\\"$wn\\\" = 0 ]; then pw=$PPID; nw=0; while [ -n \\\"$pw\\\" ] && [ \\\"$pw\\\" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true); case \\\"$dv\\\" in \\\"\\\"|\\\"?\\\"|\\\"??\\\") pw=$(ps -o ppid= -p \\\"$pw\\\" 2>/dev/null | tr -d \\\" \\\" || true);; *) tt=\\\"/dev/$dv\\\"; break;; esac; nw=$((nw+1)); done; fi; if [ -n \\\"$tt\\\" ]; then w \\\"$tt\\\"; elif [ \\\"$wn\\\" = 1 ]; then w \\\"${CUIHUD_WIN_TTY:-/dev/tty}\\\" || w \\\"${CUIHUD_WIN_CONOUT:-/dev/conout}\\\"; fi; exit 0\"}]}]}}'",
+              "agentEnv": {}
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-terminal-ignores-a-second-create-in-flight",
+      "operation": "session.create-terminal",
+      "version": 1,
+      "family": "session.create-terminal",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "worktreeId": "wt-1",
+            "activeSessionTabId": "tab-0"
+          }
+        },
+        {
+          "action": "create",
+          "id": "create"
+        },
+        {
+          "action": "create",
+          "id": "create-again"
+        },
+        {
+          "bind": "first-create",
+          "request": "session.tabs.createTerminal#1",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          }
+        },
+        {
+          "checkpoint": "second-create-ignored"
+        },
+        {
+          "complete": "first-create",
+          "params": {
+            "worktree": "id:wt-1",
+            "afterTabId": "tab-0",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        },
+        {
+          "advance": 500
+        },
+        {
+          "checkpoint": "tabs-refreshed"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-take-floor",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-to-desktop",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "desktop",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "desktop"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-drops-second-toggle",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "phone"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "first",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "second",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "one-in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "desktop",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "desktop"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "action": "toggle",
+          "id": "third",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "retoggled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-viewport",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "deviceToken": "device-token-1",
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-display-mode-auto-without-device-token",
+      "operation": "session.terminal-display-mode",
+      "version": 1,
+      "family": "session.terminal-display-mode",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            },
+            "modes": {
+              "terminal-1": "desktop"
+            }
+          }
+        },
+        {
+          "action": "toggle",
+          "id": "toggle",
+          "args": {
+            "handle": "terminal-1"
+          }
+        },
+        {
+          "checkpoint": "in-flight"
+        },
+        {
+          "complete": "terminal.setDisplayMode#1",
+          "params": {
+            "terminal": "terminal-1",
+            "mode": "auto",
+            "viewport": {
+              "cols": 100,
+              "rows": 30
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "mode": "auto"
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
         }
       ]
     }

@@ -121,8 +121,16 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-19 (Orca #20954 ported): the diff-comment load's worktree.show
 // reader is renamed (sessionWorktreeRecordRead) and the gesture flush
 // (flushTerminalGestureInput) names terminal.input-send. Same 81 callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = 'a031b741a80ea125c786d373d5baa68901a52080d7910375ee988625476a10a8'
-const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
+// 2026-09-19 (Orca #21083 ported): setDisplayMode's send became
+// terminalDisplayModeSet; this fork's queued, viewport-measuring shape is
+// unchanged and it still returns the accepted verdict the floor release
+// retries on. Same 81 callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '85557d5c2784068d0774dcbbde406deb8670ea37ed57738cd8084d5b83b52d66'
+// 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
+// sends became host-screen's worktreeActivate, and the sleeping-agent check
+// reads that operation's verdict instead of the reply envelope. Same 23
+// effects.
+const HEAD_EFFECT_SHA256 = 'd5529ed922b190ef6eae299609eb09310522cbe7d366e10f4f31a776826b9a44'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -158,8 +166,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // terminal.input-send. Count still 13.
 // 2026-09-19 (Orca #20954 ported): handleClearTerminal names
 // terminal.clear-buffer-or-skip. Count still 13.
+// 2026-09-19 (Orca #21083 ported): handleCreateTerminal names
+// sessionTabCreateTerminal, and its `response.ok` branch became that
+// operation's own throw-the-host-message acceptance; this fork's HUD launch
+// config still rides the create. Count still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'e9d4b1b00d5c44b38e082e17b018dc6d9446b3f14665bd82bf2a5996f1352e52'
+  '7c68356f8b99e85f11a03421c449b8974cbbee1f48722c831db7e3e79ee7b778'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -204,8 +216,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // terminal.clearBuffer are fixed at their operations' definitions instead of
 // spelled in the gesture flush and the menu's clear — the same two upstream
 // lost.
+// 662 since 2026-09-19 (Orca #21083 ported): worktree.activate twice,
+// session.tabs.createTerminal and terminal.setDisplayMode are fixed at their
+// operations' definitions — the same four upstream lost (535 → 531 there).
 const HEAD_RUNTIME_STRING_SHA256 =
-  '2c18a85ae37842760c20c173ef5d1471cef4b7619c0d1d08f81915124ec60aea'
+  'd1a8d646caf7af398cdc687edf628757d4fe4f74b24a8415775054dbc8540b70'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -751,7 +766,7 @@ describe('mobile session route extraction parity', () => {
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
     // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
     // MobileSessionActiveContent asks the mobile RPC gate about.
-    expect(strings).toHaveLength(666)
+    expect(strings).toHaveLength(662)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

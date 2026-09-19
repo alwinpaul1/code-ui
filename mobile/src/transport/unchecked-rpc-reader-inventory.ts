@@ -16,7 +16,8 @@
  * A merge is the one case where a line goes up without a migration undoing itself: main can land an
  * operation the branch never saw. Raise the line then, and name the PR that brought it, so the next
  * reader can tell an import from a regression. #20954 brought three
- * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`).
+ * (`notification-stream-closed`, `native-chat-session-page`, `terminal-buffer-cleared`) and step 6's
+ * second migration brought two (`created-terminal-tab`, `terminal-display-mode-set`).
  *
  * CODE UI: this list is the fork's own, like the raw-port inventory next door. The fork carries no
  * push-registration, push-dismissal, push-probe or desktop-stream operation modules and no
@@ -78,7 +79,7 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   { file: 'src/session/mobile-review-terminal-operations.ts', readers: 3 },
   { file: 'src/session/mobile-session-launch-operations.ts', readers: 7 },
   { file: 'src/session/mobile-session-read-operations.ts', readers: 11 },
-  { file: 'src/session/mobile-session-write-operations.ts', readers: 8 },
+  { file: 'src/session/mobile-session-write-operations.ts', readers: 10 },
   // tasks
   { file: 'src/tasks/mobile-task-item-comment-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },
