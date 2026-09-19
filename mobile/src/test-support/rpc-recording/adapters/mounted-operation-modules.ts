@@ -26,6 +26,7 @@ import { homeAccountsMountAdapters } from './home-accounts-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
+import { nativeChatPagingMountAdapters } from './native-chat-paging-mount-adapters'
 import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
@@ -36,6 +37,7 @@ import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
 import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
 import { sessionTabMountAdapters } from './session-tab-mount-adapters'
+import { sessionTerminalGestureMountAdapters } from './session-terminal-gesture-mount-adapters'
 import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
 import { sourceControlMountAdapters } from './source-control-mount-adapters'
@@ -105,6 +107,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: hostWorktreeActionMountAdapters
   },
   { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
+  { source: 'native-chat-paging-mount-adapters.ts', mounts: nativeChatPagingMountAdapters },
   { source: 'native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
   { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
   { source: 'new-workspace-mount-adapters.ts', mounts: newWorkspaceMountAdapters },
@@ -121,6 +124,10 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   },
   { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
   { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
+  {
+    source: 'session-terminal-gesture-mount-adapters.ts',
+    mounts: sessionTerminalGestureMountAdapters
+  },
   {
     source: 'session-terminal-input-mount-adapters.ts',
     mounts: sessionTerminalInputMountAdapters

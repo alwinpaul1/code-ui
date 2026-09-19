@@ -9,7 +9,7 @@
  * listed file whose count went up. Both lists only shrink.
  *
  * The owners are permanent — they implement, route or validate the port. The pending list is the
- * migration backlog and shares one reason, stated once here instead of 35 times:
+ * migration backlog and shares one reason, stated once here instead of 33 times:
  * the call site predates the typed contract and still picks its own method string, its own
  * acceptance rule and its own decoding. Replacing one with an RpcOperation deletes its line.
  *
@@ -122,19 +122,25 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
 
   // src/notifications/ — push registration and delivery. CODE UI's own push registration already
   // sends through push-registration-operations.ts (upstream's push feature is not carried).
-  // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and subscriptions are a
-  // later step; the request-only recording runner refuses to open one. CODE UI's second reach is
-  // its reconnect catch-up read (notifications.getMissedSince) beside the same subscription.
+  // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and the reconnect
+  // catch-up read (notifications.getMissedSince) sits beside the same subscription. The recorder
+  // can open a stream since step 6, but this fork's desktop notification stream is its own
+  // (upstream's `notifications.desktop-stream` scenarios do not describe it), so both stay on the
+  // raw port until the fork records its stream; see rpc-subscription-inventory.ts.
   { file: 'src/notifications/mobile-notifications.ts', references: 2 },
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see
   // mobile-session-{read,write,launch}-operations.ts, mobile-clipboard-image-operations.ts and
   // mobile-diff-review-git-operations.ts. The terminal input surface followed: the composed send,
-  // the live keystroke send and the clipboard paste all send through terminal.input-send in
-  // terminal/mobile-terminal-operations.ts, and the accessory's connection lookup reads the repo
-  // list through the new-tab operation. Every upstream holdout below opens or rides a subscription
-  // or takes its method as a parameter, except the gesture-input file, which was simply not covered.
+  // the live keystroke send, the clipboard paste and — in step 6 — the gesture flush all send
+  // through terminal.input-send in terminal/mobile-terminal-operations.ts, the menu's clear goes
+  // through terminal.clear-buffer-or-skip beside it, and the accessory's connection lookup reads
+  // the repo list through the new-tab operation. Step 6 also took the two requests that share an
+  // effect with a subscribe: the header's live title (worktree.show-record-or-skip) and native
+  // chat's older-history page (nativeChat.read-session-page-or-skip), both in
+  // mobile-session-read-operations.ts. Every upstream holdout below opens or rides a subscription
+  // the recorder has no substitute for, or takes its method as a parameter.
   // CODE UI: this fork's own session features stay on the raw port until the fork records them —
   // the agent HUD launch args, the Codex model discovery and picker, document attachments, the
   // permission and queue-editor sends, host image previews, the draft mirror, skills, the HUD
@@ -152,16 +158,8 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // restructure of those callers rather than of this send.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
   { file: 'src/session/use-host-image-previews.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. `worktree.show` here sits inside the same focus
-  // effect as a `runtime.clientEvents` subscription, and the request-only recording runner refuses
-  // to open one, so no golden can hold this file's behaviour.
-  { file: 'src/session/use-live-worktree-name.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-draft-mirror.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-image-attachments.test-support.ts', references: 2 },
-  // Holdout: unrecorded site, record-first rule. The `nativeChat.readSession` read lives in the
-  // paging callback, not in an effect, but only the mount effect's `nativeChat.subscribe` arms the
-  // offset and generation it pages against — and the request-only runner refuses to open one.
-  { file: 'src/session/use-mobile-native-chat-session.ts', references: 1 },
   { file: 'src/session/use-mobile-native-chat-skills.ts', references: 2 },
   // Holdout: unrecorded site, record-first rule. The startup effect drives 36 members of the
   // session model including the terminal subscription lifecycle, which is a later step.
@@ -169,12 +167,10 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // Holdout: unrecorded site, record-first rule. The create path subscribes to the terminal it
   // makes, and the request-only runner refuses the subscription.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
-  // Holdout: scope only, no recorder gap. The gesture flush reads refs (client, connection state,
-  // PTY modes, the gesture buckets, active handle and tab type), and the clear-buffer ref optional-
-  // chains the webview, so a mount with a null terminal ref records both sends. These refs are
-  // migratable as they stand; they were out of that PR's bucket. (CODE UI: 3, one more than
-  // upstream, for the unpaced mouse-click send that bypasses the wheel queue.)
-  { file: 'src/session/use-mobile-session-terminal-input.ts', references: 3 },
+  // CODE UI: the gesture flush and the menu's clear migrated with step 6; what is left is this
+  // fork's own unpaced mouse-click send, which bypasses the wheel queue and stays on the raw port
+  // until the fork records it (upstream has no such site and reaches zero here).
+  { file: 'src/session/use-mobile-session-terminal-input.ts', references: 1 },
   // Holdout: unrecorded site, record-first rule. The display-mode write is gated on an open
   // terminal subscription, which is a later step.
   { file: 'src/session/use-mobile-session-terminal-stream-display.ts', references: 1 },

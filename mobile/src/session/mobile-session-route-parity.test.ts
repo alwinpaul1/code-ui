@@ -118,7 +118,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (sendLiveTerminalInput) and the accessory's connection lookup
 // (getActiveWorktreeConnectionId) name terminal.input-send and the new-tab
 // repo.list reader. Same 81 callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = 'dd37a161251597b544cea3cb5bc297b29c8017154264211c32d9d8e35dc43185'
+// 2026-09-19 (Orca #20954 ported): the diff-comment load's worktree.show
+// reader is renamed (sessionWorktreeRecordRead) and the gesture flush
+// (flushTerminalGestureInput) names terminal.input-send. Same 81 callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = 'a031b741a80ea125c786d373d5baa68901a52080d7910375ee988625476a10a8'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
@@ -153,8 +156,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // last two keep this fork's early-return and close-plan shape). Count still 13.
 // 2026-09-19 (Orca #20915 ported): handleSend, the composed draft send, names
 // terminal.input-send. Count still 13.
+// 2026-09-19 (Orca #20954 ported): handleClearTerminal names
+// terminal.clear-buffer-or-skip. Count still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'f437f43d69f938515d8abb16dc553d45027336fc8dabd0938df3fdb26eaad6e6'
+  'e9d4b1b00d5c44b38e082e17b018dc6d9446b3f14665bd82bf2a5996f1352e52'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -195,8 +200,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 668 since 2026-09-19 (Orca #20915 ported): the three method literals that
 // became operation definitions — one repo.list and two terminal.send — and
 // nothing else, the same three upstream lost (540 → 537 there).
+// 666 since 2026-09-19 (Orca #20954 ported): terminal.send and
+// terminal.clearBuffer are fixed at their operations' definitions instead of
+// spelled in the gesture flush and the menu's clear — the same two upstream
+// lost.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '5e058408c4a748e0f0aeb4c0084816da1de63facf7006c4d0c5596514802dd99'
+  '2c18a85ae37842760c20c173ef5d1471cef4b7619c0d1d08f81915124ec60aea'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -742,7 +751,7 @@ describe('mobile session route extraction parity', () => {
     // MCP Servers / Permission Rules / Project Memory — see HEAD_RUNTIME_STRING_SHA256.
     // 677 since 2026-09-18 (later): the 'agentSession.rewind' capability key
     // MobileSessionActiveContent asks the mobile RPC gate about.
-    expect(strings).toHaveLength(668)
+    expect(strings).toHaveLength(666)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
