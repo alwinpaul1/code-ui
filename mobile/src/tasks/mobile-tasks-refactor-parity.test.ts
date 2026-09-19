@@ -54,7 +54,7 @@ const hash = (parts: string[] | string): string =>
 // `semantics` 3275 → 3271 is exactly the four literals inside the deleted cast type (`'DISMISSED'`,
 // `'VIEWED'`, `'UNVIEWED'`, `'status'`), checked against the pre-port tree; the render-token hash
 // does not move. The hooks hash is upstream's own value once more.
-const PROVIDER_RPC_SCREEN_HOOKS = 'be9bb8e21c3a8c0912e8b9256a7c8e5c9ca08ebb776d57cf4fff1101fb060095'
+const PROVIDER_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 // 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
 // `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
@@ -79,19 +79,29 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // token. TasksRow gained a `raised` prop and the StyleSheet a `taskRowPressedOnRaised` key, which
 // moves `semantics` (one more jsx: attribute and the new literal), the StyleSheet pin (one new
 // key) and the render tree (+4). The statements and declarations pins do not move.
-const PROVIDER_RPC_STATEMENTS = '699596006b67ea3e7e1c7841be9f8faa6449c9b0b435775bed3d567c80c73e16'
+// 2026-09-19, Orca #21694 (OTA C2.1), the same three movements upstream records for it and
+// nothing else: the workspace-creation push moves onto `hostNewWorktreeSessionRoute`, which
+// already built the href with both segments encoded — the hook list and the statement hash
+// move because the handler's statements changed shape, and `semantics` loses exactly the two
+// lines it deletes (the `URLSearchParams` construction and the raw `/h/${hostId}/session/...`
+// template, 3 271 → 3 269); and the two clipboard writes move onto the platform seam, so the
+// comment-review hook gains one hook call (350 → 351) and one statement (417 → 418). No RPC
+// call, method literal or JSX host signature changed, and the render and style pins hold. The
+// hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
+// stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
+const PROVIDER_RPC_STATEMENTS = '1a4b59ae77b80dfea9e39844fb514e3c90751a0f2d8bda97e612d57fecc91c12'
 const PRESS_FEEDBACK_DECLARATIONS = 'f8464f6f6335d926853910de3afe7af6441b21d9c11cddc88af52af14bd7d05e'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
-const PROVIDER_RPC_SEMANTICS = '53d63320f9d66a3a9c058a7fd081d656072c6faf7cfb27c50bcdee423b15a8fc'
+const PROVIDER_RPC_SEMANTICS = '83be444130c10fbf983edd37bb6fef5982345f7f2607c6585ea928156a0be568'
 const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
 const TAP_TARGET_RENDER_TREE = '7916ba63543b7c9f5e559000c2cd3699cdbfa1f2fbaad3ffff53a67c67322ec5'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(350)
+    expect(screenHooks).toHaveLength(351)
     expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
@@ -101,7 +111,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(417)
+    expect(statements).toHaveLength(418)
     expect(hash(statements)).toBe(PROVIDER_RPC_STATEMENTS)
   })
 
@@ -113,7 +123,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_271)
+    expect(semantics.split('\n')).toHaveLength(3_269)
     expect(hash(semantics)).toBe(PROVIDER_RPC_SEMANTICS)
   })
 

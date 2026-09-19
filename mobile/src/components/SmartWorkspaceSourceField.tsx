@@ -1,4 +1,5 @@
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import {
   CircleDot,
   ExternalLink,
@@ -72,7 +73,15 @@ export function SmartWorkspaceSourceField({
           {selection.url ? (
             <Pressable
               hitSlop={6}
-              onPress={() => selection.url && void Linking.openURL(selection.url).catch(() => {})}
+              // The seam, not react-native's `Linking`: this field is in the tasks page closure, and
+              // inside the shell's WebView `openURL` resolves without opening anything. (Code UI
+              // calls the seam here directly; upstream threads it through an `onOpenExternalUrl`
+              // prop chain this fork never took.)
+              onPress={() => {
+                if (selection.url) {
+                  openExternalLink(selection.url)
+                }
+              }}
             >
               <ExternalLink size={15} color={colors.textMuted} />
             </Pressable>

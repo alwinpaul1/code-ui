@@ -1,5 +1,6 @@
-import { Linking, Platform, Pressable, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { openExternalLink } from '../platform/external-link'
+import { useRouteHandoff } from '../navigation/route-handoff'
+import { Platform, Pressable, Text, View } from 'react-native'
 import { useThemedStyles, type Theme } from '../theme/theme-context'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
@@ -68,6 +69,7 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   // Code UI: painted from the live theme, never the legacy static palette, so the wall reads in
   // light and in dark (it shipped dark-only until 2026-09-19).
   const styles = useThemedStyles(blockScreenStyles)
+  const router = useRouteHandoff()
   const remedy = blockRemedy(verdict)
   // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
   const mobileUpdateTarget =
@@ -98,7 +100,9 @@ export function ProtocolBlockScreen({ verdict }: Props) {
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
             onPress={() => {
-              void Linking.openURL(primaryAction.url)
+              // The seam: this screen is in the tasks page closure, where react-native's `openURL`
+              // calls a `window.open` both shells refuse and resolves anyway.
+              openExternalLink(primaryAction.url)
             }}
           >
             <Text style={styles.primaryButtonText}>{primaryAction.label}</Text>
@@ -107,8 +111,9 @@ export function ProtocolBlockScreen({ verdict }: Props) {
         <Pressable
           style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
           onPress={() => {
-            // Why: route back to the host list so the user can pair a
-            // different host instead of getting trapped on this screen.
+            // The handoff, not expo-router's singleton: `/` is the phone's home screen and the
+            // page does not carry it, so inside the shell a singleton replace renders the root
+            // route in the WebView rather than leaving it. This posts the target to the shell.
             router.replace('/')
           }}
         >
