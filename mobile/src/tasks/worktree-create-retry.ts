@@ -88,11 +88,7 @@ export async function createWorktreeWithNameRetry(
     // Why the raw refusal: the retry decision below is `isRetryableWorktreeCreateConflict` over the
     // host's message, and no acceptance policy carries a refusal message through without throwing.
     if (response.ok) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      const result = worktreeCreateRun.interpret(response) as {
-        worktree: { id: string; displayName?: string }
-        warning?: string
-      }
+      const result = worktreeCreateRun.interpret(response)
       const authoritativeName = result.worktree.displayName
       // Why: a create can succeed with the startup terminal failing (pty exhaustion); dropping
       // `warning` here is what lands the phone on an unexplained empty session.

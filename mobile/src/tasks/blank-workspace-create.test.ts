@@ -180,4 +180,27 @@ describe('createBlankWorkspace', () => {
     expect(result).toEqual({ error: 'SSH connection is not available' })
     expect(calls).toHaveLength(1)
   })
+
+  // The break branch (Orca #21246): the create screen reads `result.worktree.id` unguarded into
+  // the session route, so the checked reader requires it and a reply without one is named as
+  // unreadable rather than read as a create that failed. It reaches the same catch as before;
+  // only the sentence changes, and it now names the method.
+  it('names an accepted worktree.create reply that carries no workspace id', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: {} }), calls)
+
+    await expect(
+      createBlankWorkspace({
+        client,
+        repoId: 'repo-1',
+        baseName: 'octopus',
+        createdWithAgentId: undefined,
+        comment: undefined,
+        setupDecision: 'inherit',
+        nameWasGenerated: false,
+        worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+      })
+    ).rejects.toThrow('worktree.create')
+    expect(calls).toHaveLength(1)
+  })
 })

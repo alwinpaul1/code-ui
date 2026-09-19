@@ -3,9 +3,9 @@
   "family": "tasks.task-list-linear",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "8931fa5f9fd7608d3e0a42a2c458bd08baee91f3",
+  "baseline": "a499dada6eb797b02693c25933149221336859d1",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
+  "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
   "adapterSha256": "07a15e900363faa25bc364f5bc1c330f96798abfeaed35210428c2ac558586b8",
   "scenarioSha256": "c589700af145f58c37292dafb891b3b7d50302fd4ec044155c044ccd48f79c74",
   "platform": "darwin",
@@ -25,12 +25,6 @@
     },
     "1e54d4dce85b": {
       "error": "",
-      "items": [],
-      "loading": false,
-      "refreshing": false
-    },
-    "2ca7c411bba8": {
-      "error": "Unexpected Linear tasks response",
       "items": [],
       "loading": false,
       "refreshing": false
@@ -128,15 +122,21 @@
         }
       }
     },
-    "5dbe1b841a86": {
-      "name": "error",
-      "ordinal": 13,
-      "value": "Unexpected Linear tasks response"
-    },
     "609f32a21704": {
       "name": "loading",
       "ordinal": 2,
       "value": true
+    },
+    "6471b12e6bc2": {
+      "error": "The host sent a reply this app could not read (linear.searchIssues)",
+      "items": [],
+      "loading": false,
+      "refreshing": false
+    },
+    "68051d50754d": {
+      "name": "error",
+      "ordinal": 13,
+      "value": "The host sent a reply this app could not read (linear.searchIssues)"
     },
     "6d7869e6f6ea": {
       "name": "loading",
@@ -939,7 +939,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "2ca7c411bba8",
+          "state": "6471b12e6bc2",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -949,7 +949,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "5dbe1b841a86",
+            "68051d50754d",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -966,7 +966,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "2ca7c411bba8",
+          "state": "6471b12e6bc2",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -976,7 +976,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "5dbe1b841a86",
+            "68051d50754d",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -993,7 +993,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "2ca7c411bba8",
+          "state": "6471b12e6bc2",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1003,7 +1003,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "5dbe1b841a86",
+            "68051d50754d",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1020,7 +1020,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "2ca7c411bba8",
+          "state": "6471b12e6bc2",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1030,7 +1030,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "5dbe1b841a86",
+            "68051d50754d",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]
@@ -1047,7 +1047,7 @@
             "set-query-1": "eb79a9b3682a",
             "load-2": "eb79a9b3682a"
           },
-          "state": "2ca7c411bba8",
+          "state": "6471b12e6bc2",
           "effects": [
             "39f99cf479f0",
             "609f32a21704",
@@ -1057,7 +1057,7 @@
             "104bf14d3af8",
             "5b1f238d80cf",
             "126a1c470845",
-            "5dbe1b841a86",
+            "68051d50754d",
             "83e72fb8e8cd",
             "d0a895d46972"
           ]

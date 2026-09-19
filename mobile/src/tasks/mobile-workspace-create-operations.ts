@@ -1,8 +1,15 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import {
+  worktreeCreateReceiptSchema,
+  worktreeHostedBaseSchema
+} from './workspace-create-reply-schema'
+import { taskRuntimeStatusSchema } from './task-runtime-reply-schema'
 
-// Creating a workspace from a task. Every reply here is one the call site only re-typed, so the
-// readers are unchecked: moving a shape check in would be a validation change, not a migration.
+// Creating a workspace from a task. Checked against workspace-create-reply-schema.ts; the
+// create-time status probe reads through the Tasks screen's own status schema, because the two
+// operations differ in acceptance and not in what the host sends. (Upstream also declares the
+// agent.launch create pair here; that route is Orca #19849/#20999's and is not in this fork yet.)
 
 /**
  * worktree.create. A lost reply is *unknown*, never failed — `worktree-create-retry.ts` replays on
@@ -16,7 +23,7 @@ export const worktreeCreateRun = bindDeferredRpcOperation(
     method: 'worktree.create',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('created-worktree')
+    read: rpcResultVariant('created-worktree', worktreeCreateReceiptSchema)
   })
 )
 
@@ -30,7 +37,7 @@ export const worktreePrBaseResolve = bindDeferredRpcOperation(
     method: 'worktree.resolvePrBase',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('pr-start-point')
+    read: rpcResultVariant('pr-start-point', worktreeHostedBaseSchema)
   })
 )
 
@@ -41,7 +48,7 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
     method: 'worktree.resolveMrBase',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('mr-start-point')
+    read: rpcResultVariant('mr-start-point', worktreeHostedBaseSchema)
   })
 )
 
@@ -51,7 +58,7 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
  * Separately named because the callers disagree about what a refused status means: the
  * Tasks screen cannot hydrate without it and surfaces the host's message (`taskRuntimeStatusRead`),
  * while create-time capability probing degrades to "no capabilities" and creates anyway, so here a
- * refusal is a skip. One reader serves both — the payload is unchecked in each.
+ * refusal is a skip. One reader serves both, and it is now the same checked schema in each.
  */
 export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -59,6 +66,6 @@ export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
     method: 'status.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('runtime-status')
+    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
   })
 )

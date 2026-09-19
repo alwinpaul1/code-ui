@@ -3,9 +3,9 @@
   "family": "components.execution-target",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "8931fa5f9fd7608d3e0a42a2c458bd08baee91f3",
+  "baseline": "a499dada6eb797b02693c25933149221336859d1",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
+  "recorderSha256": "b1cd1b0cf89ee1deaa2e667947ace3a636b06a1bff2e81bf34787da59d15fe6c",
   "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
   "scenarioSha256": "8b8f7fe7227d44330e216e0bf5d366c41b54d9bf76acfb24df2c1770984b9f27",
   "platform": "darwin",
@@ -527,17 +527,6 @@
         }
       }
     },
-    "c04e51232b36": {
-      "detected": {
-        "$rpc": "null"
-      },
-      "gate": {
-        "connectInProgress": false,
-        "error": "Cannot read properties of null (reading 'state')",
-        "requiresConnection": true,
-        "status": "error"
-      }
-    },
     "c06edc5665d7": {
       "name": "ssh.connect#1",
       "ordinal": 5,
@@ -585,13 +574,13 @@
         }
       }
     },
-    "d714ad0ce8fb": {
+    "eaf7ed4ebea4": {
       "detected": {
         "$rpc": "null"
       },
       "gate": {
         "connectInProgress": false,
-        "error": "Cannot read properties of undefined (reading 'state')",
+        "error": "The host sent a reply this app could not read (ssh.connect)",
         "requiresConnection": true,
         "status": "error"
       }
@@ -677,7 +666,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "d714ad0ce8fb",
+          "state": "eaf7ed4ebea4",
           "effects": []
         }
       },
@@ -690,7 +679,7 @@
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
-          "state": "c04e51232b36",
+          "state": "eaf7ed4ebea4",
           "effects": []
         }
       },
