@@ -91,7 +91,11 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above;
   and from Orca #19928 (9b83f976f) the `argumentHint` field plus a reported
   `description` winning over the curated one. Its test took #19928's two cases
-  by 3-way merge.
+  by 3-way merge. Also Orca #20672's (f1a901e97) `OMP_COMMANDS` catalog,
+  hand-applied, with one local difference: the ten entries upstream describes
+  as "in Terminal" carry `opensOverlay: true`, the flag this fork's Codex
+  catalog uses so the phone shows the terminal for a selector the chat cannot
+  drive. `native-chat-slash-commands.omp.test.ts` is vendored at f1a901e97.
 - `agent-session-wire.ts` also carries #19928's optional `description` /
   `argumentHint` on `AgentSessionSlashCommand`, and #20506's (c287a5d9b) Fast
   mode fields: `supportsFastMode` on a model, `AgentSessionFastModeState`,
