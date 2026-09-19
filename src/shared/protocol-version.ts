@@ -133,6 +133,11 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
 // the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19863, 027acb4ef); see LOCAL-FILES.md.
+// Why: older structured clients render durable pending replies as uncertain delivery. Capable
+// clients skip the host's bounded best-effort settlement observation.
+export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
+  'agent-session.pending-send-result.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
@@ -221,6 +226,7 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
 ] as const
@@ -273,6 +279,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,

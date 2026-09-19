@@ -1,4 +1,5 @@
 import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
@@ -13,6 +14,12 @@ import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runt
 // foreground rows — a live subagent inside a turn — at all.
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  // Orca #19863: the host answers agentSession.send as soon as the message is
+  // written, with a `pending` submission, instead of holding the reply up to
+  // 10 s for the provider's echo — an echo that cannot come until the turn
+  // ahead ends. This phone never read the reply's dispatch state: an `ok`
+  // is "accepted" and the journal's submission row carries the rest.
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   // Opts into the typed turn record; without it the host sends the legacy status carrier.

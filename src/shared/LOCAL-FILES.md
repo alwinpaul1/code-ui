@@ -89,7 +89,8 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
   from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
-  #19705) and `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695), all in
+  #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695) and
+  `AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY` (027acb4ef, #19863), all in
   `RUNTIME_CAPABILITIES` too — the phone advertises them through
   `remote-runtime-client-capabilities.ts`, which is re-vendored whole at 2626e2eca.
   The file otherwise sits at its d07c47593 pin: upstream later added
