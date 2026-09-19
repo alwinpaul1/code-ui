@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "9e01c50e6dc919de3c0129e755f1ea9ec335dc59",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "2eacaea9c7bf0e0e3e7d021666a93d2b42476bab05017351d68dc857891574e7",
+  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
   "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
   "scenarioSha256": "142b241bf1605807c40f541fd6426f2bd609becf0764f0182953f920c59a0a14",
   "platform": "darwin",
@@ -13,54 +13,9 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "1ce75e48864f": {
-      "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
-    },
-    "1d3e6369460d": {
-      "name": "terminal.send#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "client": {
-              "id": "device-token-1",
-              "type": "mobile"
-            },
-            "terminal": "terminal-1",
-            "text": "\u001b"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "send": {
-              "accepted": true
-            }
-          }
-        }
-      }
-    },
-    "3c04f6d0878f": {
+    "44045fc21677": {
       "name": "terminal.send#2",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
@@ -100,10 +55,62 @@
         }
       }
     },
-    "60fbbfd9bd11": {
+    "5cd1d4a9aed5": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "75263c07c807": {
       "name": "cancel-pending",
-      "value": {},
-      "sent": 0
+      "ordinal": 1,
+      "value": {}
+    },
+    "ab0f3d65723e": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "d5972c43f562": {
+      "name": "terminal.send#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     },
     "debf84af8d66": {
       "errors": []
@@ -115,11 +122,6 @@
       "value": {
         "$rpc": "undefined"
       }
-    },
-    "f6d9dea0749b": {
-      "name": "terminal.send#2",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 2
     }
   },
   "recording": {
@@ -128,25 +130,25 @@
       {
         "id": "first-accepted",
         "observation": {
-          "sender": ["1d3e6369460d"],
-          "payloads": ["1ce75e48864f"],
+          "sender": ["ab0f3d65723e"],
+          "payloads": ["5cd1d4a9aed5"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
           "state": "debf84af8d66",
-          "effects": ["60fbbfd9bd11"]
+          "effects": ["75263c07c807"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["1d3e6369460d", "3c04f6d0878f"],
-          "payloads": ["1ce75e48864f", "f6d9dea0749b"],
+          "sender": ["ab0f3d65723e", "44045fc21677"],
+          "payloads": ["5cd1d4a9aed5", "d5972c43f562"],
           "settlements": {
             "stop": "eb79a9b3682a"
           },
           "state": "debf84af8d66",
-          "effects": ["60fbbfd9bd11"]
+          "effects": ["75263c07c807"]
         }
       }
     ]

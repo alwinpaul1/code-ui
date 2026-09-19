@@ -103,7 +103,7 @@ src/shared/rpc-contract/github-pull-request-update-params.ts: c84007c54
 src/shared/rpc-contract/github-repo-target-params.ts: c84007c54
 src/shared/rpc-contract/github-repo-work-item-params.ts: c84007c54
 src/shared/rpc-contract/gitlab-params.ts: c84007c54
-src/shared/rpc-contract/hosted-review-params.ts: c84007c54
+src/shared/rpc-contract/hosted-review-params.ts: 9add08bb5
 src/shared/rpc-contract/jira-params.ts: c84007c54
 src/shared/rpc-contract/linear-agent-access-params.ts: c84007c54
 src/shared/rpc-contract/linear-issue-attribute-filter-params.ts: c84007c54

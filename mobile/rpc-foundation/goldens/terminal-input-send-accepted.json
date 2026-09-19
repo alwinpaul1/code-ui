@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "9e01c50e6dc919de3c0129e755f1ea9ec335dc59",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "2eacaea9c7bf0e0e3e7d021666a93d2b42476bab05017351d68dc857891574e7",
+  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
   "adapterSha256": "3bf45380dd38229ba2c4dcffc204a91ec8dbdd75072f2448ec423c3c714f135e",
   "scenarioSha256": "60547c6ec5aa480dd1adea0ddf193b462cf26f08c15fd843ab3f59d67719cbc8",
   "platform": "darwin",
@@ -21,21 +21,9 @@
       "liveAccepted": "unsent",
       "sending": false
     },
-    "5e9826c92f7b": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "input": "ls -la",
-      "liveAccepted": "unsent",
-      "sending": false
-    },
-    "72956b7aff32": {
+    "3c80a8ff0cc7": {
       "name": "terminal.send#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls -la\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}",
-      "sent": 1
-    },
-    "750695db0ef8": {
-      "name": "terminal.send#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -75,6 +63,14 @@
         }
       }
     },
+    "5e9826c92f7b": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "input": "ls -la",
+      "liveAccepted": "unsent",
+      "sending": false
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -82,6 +78,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "f63b98989963": {
+      "name": "terminal.send#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"ls -la\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
     }
   },
   "recording": {
@@ -103,8 +104,8 @@
       {
         "id": "sent",
         "observation": {
-          "sender": ["750695db0ef8"],
-          "payloads": ["72956b7aff32"],
+          "sender": ["3c80a8ff0cc7"],
+          "payloads": ["f63b98989963"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "type": "eb79a9b3682a",

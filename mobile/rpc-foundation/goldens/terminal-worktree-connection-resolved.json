@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "9e01c50e6dc919de3c0129e755f1ea9ec335dc59",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "2eacaea9c7bf0e0e3e7d021666a93d2b42476bab05017351d68dc857891574e7",
+  "recorderSha256": "31acfeda3811096f545482f706558a9aa5686546ba6cb4cafe0eeb8fa37f453f",
   "adapterSha256": "3bf45380dd38229ba2c4dcffc204a91ec8dbdd75072f2448ec423c3c714f135e",
   "scenarioSha256": "d0299eb9d252e37c6d3281ff6fa3894ea4d1092b8bbfce52b26f10483a9f5f4d",
   "platform": "darwin",
@@ -13,8 +13,14 @@
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "4ed227a9cf4c": {
+    "19b2979d7fc2": {
       "name": "repo.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "ba1ef093d69c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -57,11 +63,6 @@
         }
       }
     },
-    "5730368193ee": {
-      "name": "repo.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}",
-      "sent": 1
-    },
     "e61132f30b52": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -90,8 +91,8 @@
       {
         "id": "resolved",
         "observation": {
-          "sender": ["4ed227a9cf4c"],
-          "payloads": ["5730368193ee"],
+          "sender": ["ba1ef093d69c"],
+          "payloads": ["19b2979d7fc2"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connection": "e61132f30b52"
