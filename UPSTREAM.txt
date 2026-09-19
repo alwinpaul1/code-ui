@@ -4,7 +4,7 @@ Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md)
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus two forward-ported hunks, see LOCAL-FILES.md)
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -24,7 +24,15 @@ src/shared/structured-agent-session-options.test.ts: 546fd9b21
 src/shared/structured-agent-session-option-picks.test.ts: 546fd9b21
 src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md)
 src/shared/agent-session-background-task-wire.ts: f2af92b2f
-src/shared/remote-runtime-client-capabilities.ts: f2af92b2f
+src/shared/remote-runtime-client-capabilities.ts: 2626e2eca
+src/shared/agent-session-background-task-state-equality.ts: 2626e2eca
+src/shared/agent-session-turn-record.ts: 2626e2eca
+src/shared/agent-session-turn-record.test.ts: 2626e2eca
+src/shared/agent-turn-lifecycle-text.ts: 2626e2eca
+src/shared/structured-agent-session-turn-timing.ts: 2626e2eca
+src/shared/structured-agent-session-turn-timing.test.ts: 2626e2eca
+src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
+src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
 src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
@@ -42,8 +50,8 @@ src/shared/native-chat-tool-activity.ts: c1e15c400
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: fab78c766
 src/shared/native-chat-turn-status.test.ts: fab78c766
-src/shared/structured-agent-session-live-turn.ts: fab78c766 (partial, see LOCAL-FILES.md)
-src/shared/structured-agent-session-live-turn.test.ts: fab78c766 (partial, see LOCAL-FILES.md)
+src/shared/structured-agent-session-live-turn.ts: fab78c766
+src/shared/structured-agent-session-live-turn.test.ts: fab78c766
 src/shared/native-chat-tool-summary.ts: c1e15c400
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a

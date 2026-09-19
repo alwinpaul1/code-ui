@@ -28,6 +28,7 @@ import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-dr
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 export type MobileNativeChatController = {
@@ -72,6 +73,9 @@ export type MobileNativeChatController = {
    *  `NativeChatLiveTurnIndicator`; this fork already threads the activity text
    *  on its own prop, so only the reading it lacked is added (Orca #19977). */
   nativeChatTurnThinking: boolean
+  /** Structured lane: host-recorded turn timing for the per-turn status rows (Orca #19695). */
+  nativeChatWorkingStartedAt: number | null
+  nativeChatSettledTurns: NativeChatSettledTurns | null
   nativeChatAgentWorking: boolean
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */

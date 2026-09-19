@@ -79,14 +79,19 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `hostExecutionOwned` from 1c1cb7115, which is the orchestration-worker feature
   this fork does not implement. `AgentSessionStatusSummary.backgroundTasks` from
   2bf298d1d is deliberately NOT taken: it feeds a session list this app has no
-  surface for.
+  surface for. Orca #19695 (2626e2eca) added `hostNow` on the history page and
+  on every subscribe frame, hand-applied here; the same commit moved the
+  refusal codes into `agent-session-wire-refusals.ts`, which is NOT vendored
+  because it imports `agent-session-rewind.ts` — the codes stay inline in this
+  file, and every importer reads them from here as before.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above.
 - `protocol-version.ts` — `STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY`
   from 1ae7aa8bb, and `AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY` (5868fdc9e,
-  #19346) plus `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
-  #19705), both in `RUNTIME_CAPABILITIES` too — the phone advertises them through
-  `remote-runtime-client-capabilities.ts`, which is re-vendored whole at f2af92b2f.
+  #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
+  #19705) and `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695), all in
+  `RUNTIME_CAPABILITIES` too — the phone advertises them through
+  `remote-runtime-client-capabilities.ts`, which is re-vendored whole at 2626e2eca.
   The file otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
@@ -119,6 +124,19 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   vendor. No file here can be re-vendored whole at d0506bf5d, because all four
   also carry the forward-ported #19228 hints above. Every hunk is marked
   `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
+- `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts`,
+  `structured-agent-session-projection.ts` and
+  `structured-agent-session-reducer.ts` also carry Orca #19695 (2626e2eca), the
+  durable turn record, by 3-way merge onto the hunks above: the typed `turn`
+  item (`AgentJournalTurnItem`, `AgentJournalTurnLifecycle` with
+  `userItemId`/`startedAt`/`completedAt`/`durationMs`, schema version 3 and
+  `journalRowSchemaVersion`), its zod shape, the projection painting a turn
+  record — and any kind this build does not know — as no message, and the
+  reducer's `hostClock` sample, `receivedAt` argument and submission retention
+  keyed to loaded user messages. None of the four can be re-vendored whole at
+  2626e2eca for the reasons the entries above give; every hunk merged clean
+  except the reducer's snapshot arm, which differed only by line wrapping.
+
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
   `projectStructuredItemsToNativeChat` delegating to the single-item
@@ -145,14 +163,11 @@ upstream's `mcpIdentity` field. #19226 landed, so both were re-vendored whole at
 their c1e15c400 pin and the field is back; the entry is gone.
 
 
-- `structured-agent-session-live-turn.ts` and its test carry only
-  `isStructuredAgentSessionThinking` out of Orca #19977 (fab78c766). Upstream's
-  file also holds `activeStructuredAgentSessionTurnId` and
-  `activeStructuredAgentSessionToolCall`, which this fork still keeps in
-  `structured-agent-session-projection.ts`, and reads the turn record through
-  `readAgentJournalTurn` — a typed `turn` journal item this fork's
-  `agent-session-journal-types.ts` does not have. Here the turn record is the
-  legacy status row carrying `turnLifecycle`, which is what this fork's hosts
-  write; the two typed-`turn` cases in upstream's test are dropped for the same
-  reason. The divergence is marked
-  `CODE UI HAND-APPLIED UPSTREAM PORT` in the source.
+- `structured-agent-session-live-turn.ts` and its test used to sit here as a
+  partial port of Orca #19977 (fab78c766), because they read the turn record
+  through `readAgentJournalTurn` and the typed `turn` item did not exist here.
+  Orca #19695 (2626e2eca) landed on 2026-09-19 and brought both, so the file
+  and its test are now vendored whole at fab78c766, and
+  `structured-agent-session-projection.ts` re-exports
+  `activeStructuredAgentSessionTurnId` / `activeStructuredAgentSessionToolCall`
+  from it, exactly as upstream's projection does. The entry is gone.

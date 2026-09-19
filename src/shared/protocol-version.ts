@@ -156,8 +156,14 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 // advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
 // probe before subscribing or they reconnect forever and never show any status at all.
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
-// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19346 5868fdc9e and #19705 f2af92b2f): the two
-// background-task capabilities. The file otherwise sits at its d07c47593 pin; see LOCAL-FILES.md.
+// CODE UI HAND-APPLIED UPSTREAM HUNKS (Orca #19346 5868fdc9e, #19705 f2af92b2f, #19695 2626e2eca):
+// the two background-task capabilities and the turn item. The file otherwise sits at its
+// d07c47593 pin; see LOCAL-FILES.md.
+// Why: a `turn` journal item replaced the status row that used to carry a turn's lifecycle. A
+// client that predates it would render the unknown kind as text, so the host publishes the legacy
+// status form to clients that do not advertise this. Transitional: drop the downgrade once no
+// supported release lacks the capability.
+export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
@@ -272,6 +278,7 @@ export const RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,

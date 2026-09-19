@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   MOBILE_UNANCHORED_TURN_KEY,
   useMobileNativeChatTurnStatus,
@@ -25,12 +26,17 @@ export function useMobileNativeChatTurnDisclosure({
   messages,
   enabled,
   isWorking,
+  workingStartedAt,
+  settledTurns,
   thinking = false,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking: boolean
+  workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
   /** Host/worktree/tab identity for timing and disclosure isolation. */
@@ -46,6 +52,8 @@ export function useMobileNativeChatTurnDisclosure({
     messages,
     enabled,
     isWorking,
+    workingStartedAt,
+    settledTurns,
     thinking,
     scopeKey
   })

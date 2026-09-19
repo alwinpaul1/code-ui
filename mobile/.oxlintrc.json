@@ -232,7 +232,10 @@
             // only threads them.
             // 2026-09-19: +1 for onPasteImageFile — an image the keyboard put
             // into the composer, threaded to it; the module is expo-rich-paste.
-            "max": 410,
+            // 2026-09-19, later: +2 for workingStartedAt / settledTurns (Orca
+            // #19695), the host-recorded turn timing threaded to the turn
+            // disclosure; the logic is use-mobile-structured-agent-turn-timing.
+            "max": 412,
             "skipBlankLines": true,
             "skipComments": true
           }

@@ -29,6 +29,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type {
   StructuredMobileAttachment,
   StructuredMobileSession
@@ -260,6 +261,7 @@ export function useMobileStructuredAgentSession(args: {
     [state.items, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   // "Thinking" means the turn is reasoning right now, read off the journal's
   // tail, not inferred from the turn having produced nothing yet (Orca #19977).
   const turnThinking = isStructuredAgentSessionThinking(state.items)
@@ -294,6 +296,7 @@ export function useMobileStructuredAgentSession(args: {
       hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
     canStop: turnId !== null,
     turnId,
+    ...turnTiming,
     turnThinking,
     turnActivity,
     sendWithOutcome,

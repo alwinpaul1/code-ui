@@ -162,13 +162,12 @@ export function useMobileNativeChatController(
   })
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
-  const nativeChatAgentWorking = activeChatStructured
-    ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
+  const nativeChatAgentWorking =
+    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   const nativeChatStreamingText = useThrottledLatestValue(
     activeChatStructured
       ? undefined
@@ -517,6 +516,8 @@ export function useMobileNativeChatController(
     nativeChatStructured: activeChatStructured,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,
     nativeChatTurnThinking: activeChatStructured ? structuredNativeChat.turnThinking : false,
+    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
+    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatAgentWorking,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,

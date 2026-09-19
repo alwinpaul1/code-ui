@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -15,12 +16,13 @@ const HOST_CAPABILITY_LIMIT = 64
 const HOST_CAPABILITY_NAME_LIMIT = 128
 
 describe('mobile runtime client capabilities', () => {
-  it('advertises structured agent sessions including the Claude lane', () => {
+  it('advertises structured agent sessions, the Claude lane, and the turn item', () => {
     expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
       expect.arrayContaining([
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
         STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+        CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        AGENT_SESSION_TURN_ITEM_CAPABILITY
       ])
     )
   })
