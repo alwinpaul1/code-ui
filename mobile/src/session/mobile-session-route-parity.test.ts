@@ -125,7 +125,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // terminalDisplayModeSet; this fork's queued, viewport-measuring shape is
 // unchanged and it still returns the accepted verdict the floor release
 // retries on. Same 81 callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '85557d5c2784068d0774dcbbde406deb8670ea37ed57738cd8084d5b83b52d66'
+// 2026-09-19 (Orca #21089 ported): the reply casts the checked readers made
+// unnecessary — the markdown tab doc (readMarkdownTab, saveMarkdownTab) and
+// the worktree record's diffComments (loadDiffComments) are typed by their
+// schemas now. Same 81 callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '61993176b9db498f2bcdde8a50e965e81ae6d9c2da7d72f399945eedea62bd6d'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -170,8 +174,11 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // sessionTabCreateTerminal, and its `response.ok` branch became that
 // operation's own throw-the-host-message acceptance; this fork's HUD launch
 // config still rides the create. Count still 13.
+// 2026-09-19 (Orca #21089 ported): handleCreateBrowser's
+// `{ browserPageId?: string }` cast is carried by its schema now. Count
+// still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '7c68356f8b99e85f11a03421c449b8974cbbee1f48722c831db7e3e79ee7b778'
+  'ccff5b6caf6a77139ad252256af3613d6bfb4cf2a4edc448dacb9f610b45a380'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
 const HEAD_NATIVE_REMOVAL_SHA256 =

@@ -32,6 +32,7 @@ import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
 import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
+import { prSidebarMountAdapters } from './pr-sidebar-mount-adapters'
 import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
 import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
 import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
@@ -123,6 +124,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: newWorkspaceRepositoryMountAdapters
   },
   { source: 'pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
+  { source: 'pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
   { source: 'relay-credential-mount-adapters.ts', mounts: relayCredentialMountAdapters },
   { source: 'session-notes-mount-adapters.ts', mounts: sessionNotesMountAdapters },
   {

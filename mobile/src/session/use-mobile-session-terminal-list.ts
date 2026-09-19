@@ -75,7 +75,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
             if (!isCurrent() || !response.accepted) {
               return false
             }
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checked the array and each row's handle; the rest of a row is the host's terminal record, which this module reads but does not re-declare.
             const listed = response.value as { terminals: Terminal[] }
             // The phone's own transcript-tail terminal is not a tab anyone
             // opened; it is hidden from the strip and every count.
