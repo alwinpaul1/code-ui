@@ -2,7 +2,7 @@ import { optionalSettingsRead } from '../transport/settings-read-operations'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
@@ -56,7 +56,9 @@ export function MobileAgentSessionHistoryPanel({
   worktreeId,
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
-  const router = useRouter()
+  // Not `useRouter`: inside the shell's page this screen is one document standing in for one
+  // screen, and the session it resumes into is a native route the shell has to push.
+  const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)

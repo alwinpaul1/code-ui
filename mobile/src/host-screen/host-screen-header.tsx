@@ -92,8 +92,20 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           gap: space.xs
         }}
       >
-        <IconButton icon={ChevronLeft} accessibilityLabel="Back to hosts" onPress={actions.leaveHost} />
-        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <IconButton
+          icon={ChevronLeft}
+          accessibilityLabel="Back to hosts"
+          onPress={actions.leaveHost}
+        />
+        <View
+          style={{
+            flex: 1,
+            minWidth: 0,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.sm
+          }}
+        >
           <StatusDot state={connState} verdict={headerVerdict} gap={false} />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Txt variant="heading" weight="semibold" numberOfLines={1}>
@@ -177,14 +189,14 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           icon={UserCircle}
           accessibilityLabel="Accounts"
           size={36}
-          onPress={() => actions.navigateFromHostList(`/h/${hostId}/accounts`)}
+          onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/accounts`)}
           disabled={!online}
         />
         <IconButton
           icon={List}
           accessibilityLabel="Tasks"
           size={36}
-          onPress={() => actions.navigateFromHostList(`/h/${hostId}/tasks`)}
+          onPress={() => actions.navigateFromHostList(`/h/${encodeURIComponent(hostId)}/tasks`)}
           disabled={!online}
         />
         {embedded ? (
