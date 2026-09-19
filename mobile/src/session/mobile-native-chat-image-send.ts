@@ -1,5 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
-import { imagePasteWritesFollowedByText } from '../../../src/shared/image-paste-following-text'
+import { agentImagePasteWrites } from '../../../src/shared/agent-image-paste'
 import { buildMobileImagePastePayload } from './mobile-clipboard-image'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
@@ -21,6 +21,7 @@ const MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT = '\x15'
 type MobileTerminalClient = { id: string; type: 'mobile' }
 
 type PasteImagesArgs = {
+  readonly agent?: string | null
   readonly client: Pick<RpcClient, 'sendRequest'>
   readonly terminal: string
   readonly deviceToken: string | null
@@ -42,6 +43,7 @@ type PasteImagesArgs = {
  *  one, so the caller can abort before Enter. */
 export async function pasteMobileNativeChatImagePaths({
   client,
+  agent,
   terminal,
   deviceToken,
   imagePaths,
@@ -62,7 +64,11 @@ export async function pasteMobileNativeChatImagePaths({
     // as keys, and a long draft needs a clear burst past that bound. See
     // AGENT_TUI_MAX_KEY_WRITE_BYTES.
     ...splitAgentTuiClearWrites(clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT),
-    ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
+    ...agentImagePasteWrites(
+      agent,
+      imagePaths.map((path) => buildMobileImagePastePayload(path, agent)),
+      followedByText
+    )
   ]) {
     const remainingMs = deadline - Date.now()
     // Why: the budget is the whole sequence's — starting a write it can't fund would

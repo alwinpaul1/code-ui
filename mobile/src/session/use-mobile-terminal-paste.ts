@@ -1,3 +1,4 @@
+import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import { useCallback, type RefObject } from 'react'
 import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, Paths } from 'expo-file-system'
@@ -70,6 +71,7 @@ function buildMobileTerminalClipboardTextPayload(
 }
 
 type UseMobileTerminalPasteOptions = {
+  readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
   readonly activeSessionTabTypeRef: RefObject<string | null>
@@ -90,6 +92,7 @@ type UseMobileTerminalPasteOptions = {
 
 export function useMobileTerminalPaste({
   activeHandle,
+  agent,
   activeHandleRef,
   activeSessionTabTypeRef,
   canSend,
@@ -130,7 +133,10 @@ export function useMobileTerminalPaste({
         const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
           connectionId
         })
-        payload = buildMobileImagePastePayload(imagePath)
+        payload = separateImagePasteFromFollowingText(
+          buildMobileImagePastePayload(imagePath, agent),
+          true
+        )
       }
 
       const wrappedBytes = new TextEncoder().encode(payload).byteLength
@@ -181,6 +187,7 @@ export function useMobileTerminalPaste({
     }
   }, [
     activeHandle,
+    agent,
     activeHandleRef,
     activeSessionTabTypeRef,
     canSend,

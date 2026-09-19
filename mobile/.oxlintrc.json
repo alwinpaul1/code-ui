@@ -348,6 +348,27 @@
     },
     {
       "files": [
+        "src/session/use-mobile-native-chat-image-attachments.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +3 over the 300 ceiling for Orca e7da72c3d, which
+            // threads the tab's agent into the paste so a non-attachment
+            // agent (OMP) receives an @file mention instead of a bare path.
+            // Upstream's copy sits well under the ceiling; this fork's carries
+            // the keyboard image paste (attachImageFile) on top of it, which
+            // is why three lines tip it over.
+            "max": 303,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-native-chat-image-attachments.test.ts"
       ],
       "rules": {
@@ -358,8 +379,9 @@
             // `contentFingerprint` on an uploaded chip — one expectation grew
             // from one line to six. This fork's copy carries its own batch and
             // document cases on top of upstream's, which is why it is at the
-            // ceiling at all.
-            "max": 806,
+            // ceiling at all. Later that day +1 for Orca e7da72c3d: the ride-
+            // along case now runs per agent and passes `agent` to the hook.
+            "max": 807,
             "skipBlankLines": true,
             "skipComments": true
           }

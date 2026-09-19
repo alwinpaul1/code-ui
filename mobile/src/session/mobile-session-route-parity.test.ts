@@ -196,7 +196,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // one new literal, the capability key.
 // 678 since 2026-09-19 (later): the 'terminal' literal in applySessionTabs' leftover filter.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9b65fa29aa83dd567d2abcad633d43659ada851aba39d545c896f6373a1a8930'
+  '055e02f1f0b9f35f24c25073d4c56626fc226fa6b17972e2279e98ed604c72c2'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -749,7 +749,10 @@ describe('mobile session route extraction parity', () => {
     // MobileSessionActiveContent asks the mobile RPC gate about.
     // 678 since 2026-09-19 (later): the 'terminal' tab-type literal in
     // applySessionTabs' leftover filter (see HEAD_CALLBACK_BODY_SHA256).
-    expect(strings).toHaveLength(678)
+    // 679 since 2026-09-19 (upstream e7da72c3d): the 'agentStatus' key
+    // useMobileSessionAttachments reads the tab's agent through, so an image
+    // pastes as the agent's own attachment form or as an @file mention.
+    expect(strings).toHaveLength(679)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

@@ -105,7 +105,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })
 
-  it('rides pending images along on send: pastes the path, settles, then delegates the text', async () => {
+  it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -134,6 +134,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     mount(
       baseArgs({
         client: trackedClient as RpcClient,
+        agent,
         deviceTokenRef: { current: 'device-1' },
         baseSend,
         beforeImagePaste: async () => {
@@ -167,7 +168,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       enter: false
     })
     expect(sendCalls[1]?.params).toMatchObject({
-      text: '\x1b[200~/tmp/a.png\x1b[201~ ',
+      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
       enter: false
     })
     const combined = String(sendCalls[1]?.params.text ?? '') + 'look at this'

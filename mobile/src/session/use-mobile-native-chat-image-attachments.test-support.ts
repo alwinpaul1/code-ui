@@ -48,6 +48,7 @@ export const SCOPE_B = 'h\0w\0tab-b'
 
 export function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): HookArgs {
   return {
+    agent: 'claude',
     structuredNativeChat: false,
     activeHandleRef: { current: 'term-1' },
     deviceTokenRef: { current: null },

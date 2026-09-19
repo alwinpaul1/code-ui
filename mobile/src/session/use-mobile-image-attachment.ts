@@ -17,6 +17,7 @@ type CurrentRef<T> = {
 type ShowToast = (message: string, durationMs?: number) => void
 
 type UseMobileImageAttachmentArgs = {
+  readonly agent?: string | null
   readonly client: RpcClient | null
   readonly activeHandle: string | null
   readonly canSend: boolean
@@ -44,6 +45,7 @@ function getErrorMessage(error: unknown): string {
 
 export function useMobileImageAttachment({
   client,
+  agent,
   activeHandle,
   canSend,
   connState,
@@ -92,6 +94,7 @@ export function useMobileImageAttachment({
       run(() =>
         attachMobileImageToTerminal(source, {
           client: client!,
+          agent,
           terminal: activeHandle!,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
@@ -100,7 +103,7 @@ export function useMobileImageAttachment({
           beforeTerminalSend
         })
       ),
-    [activeHandle, beforeTerminalSend, client, deviceTokenRef, getActiveWorktreeConnectionId, run]
+    [activeHandle, agent, beforeTerminalSend, client, deviceTokenRef, getActiveWorktreeConnectionId, run]
   )
   const attachDocument = useCallback(
     () =>

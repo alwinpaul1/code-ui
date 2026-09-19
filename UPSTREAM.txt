@@ -26,6 +26,9 @@ src/shared/agent-session-option-catalog.ts: ae9c06c94
 src/shared/agent-session-option-catalog-omp.ts: ae9c06c94
 src/shared/agent-session-option-catalog-omp.test.ts: ae9c06c94
 src/shared/omp-model-list-probe.ts: ae9c06c94
+src/shared/agent-image-paste.ts: e7da72c3d
+src/shared/agent-image-paste.test.ts: e7da72c3d
+src/shared/file-uri-path.ts: e7da72c3d
 src/shared/structured-agent-session-options.ts: c287a5d9b
 src/shared/structured-agent-session-options.test.ts: c287a5d9b
 src/shared/structured-agent-session-option-picks.test.ts: c287a5d9b

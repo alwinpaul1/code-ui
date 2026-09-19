@@ -39,8 +39,13 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     refreshCanPaste,
     activeSessionTab
   } = scope
+  const agent =
+    activeSessionTab && 'agentStatus' in activeSessionTab
+      ? (activeSessionTab.agentStatus?.agentType ?? nativeChatController.nativeChatAgent)
+      : nativeChatController.nativeChatAgent
   const handlePaste = useMobileTerminalPaste({
     client,
+    agent,
     activeHandle,
     activeHandleRef,
     activeSessionTabTypeRef,
@@ -72,6 +77,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   const { attachImage, attachDocument, isAttaching, nativeChatImages } =
     useMobileSessionImageAttachments({
       client,
+      agent,
       activeHandle,
       activeHandleRef,
       canSend,
