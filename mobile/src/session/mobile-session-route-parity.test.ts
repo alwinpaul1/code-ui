@@ -75,8 +75,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // resolveAskAboutScreenTarget and askAboutTerminalScreen, the terminal's
 // "Ask about this screen" (VS Code 2.1.275's "Send terminal output to
 // Claude" parity).
-const HEAD_MAIN_HOOK_SHA256 = 'e8683f2696debd3ae8b8506be7e30f5477509aa5110a71b6d49e16593b33c1be'
-const HEAD_HOOK_BINDING_SHA256 = '787a3a06788141d54258ddc18a1dfcf38c81d9c84bf547afc72384a2df1e6d32'
+// 282 since 2026-09-19: the chat controller's structuredCancelPrompt, and the
+// tab reconciliation's prompt-cancel capability read (Orca #20601).
+const HEAD_MAIN_HOOK_SHA256 = '82d767b398256db7f3e604521fa47cc33482edb0532c0ec417f420d127366a5c'
+const HEAD_HOOK_BINDING_SHA256 = 'b600d78ee5a93f5881211e7b36e981c2ae31d18896e14588dfd3fc80a4beb6a3'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -109,7 +111,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // owned handle) before use, and the refresh closes a tail terminal this
 // process does not own, plus any an earlier process recorded and left.
 const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
-const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
+const HEAD_EFFECT_SHA256 = 'da074a630233fd8fba28c318289de33e65ee4f60da8a0f317b2541e2482ac29c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -250,7 +252,7 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // navigators for the new project-config screens (MCP servers, permission
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
-const HEAD_CAPABILITY_SHA256 = '7703776b3776ee1f3a7968cae26fa6741b747665c9070bd89bb62f69dd704af4'
+const HEAD_CAPABILITY_SHA256 = '0522812c020ba11508726574cf1ef08fb39343af167959360191fb0f27c7db69'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -642,7 +644,9 @@ describe('mobile session route extraction parity', () => {
     // the diff cards' "Revert this hunk" to this session's client and tab.
     // 281 since 2026-09-18 (later still): resolveAskAboutScreenTarget and
     // askAboutTerminalScreen, the terminal's "Ask about this screen".
-    expect(main.hooks).toHaveLength(281)
+    // 282 since 2026-09-19: structuredCancelPrompt (useNativeChatAcceptedAction),
+    // the cancel-by-identity for a pending approval/question (Orca #20601).
+    expect(main.hooks).toHaveLength(282)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(81)
@@ -685,7 +689,8 @@ describe('mobile session route extraction parity', () => {
     // see HEAD_NAVIGATION_SHA256.
     expect(compatibility.navigation).toHaveLength(9)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    // 6 since 2026-09-19: agent-session.prompt-cancel.v1 (Orca #20601).
+    expect(compatibility.capabilities).toHaveLength(6)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
-import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
+import { ArrowUp, Check, CircleHelp, X } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
@@ -15,13 +15,19 @@ import {
 type Props = {
   question: MobileChatQuestion
   onAnswer: (text: string) => Promise<boolean>
+  /** Cancels the prompt itself, by identity where the host can (Orca #20601). */
+  onCancel?: (prompt?: NonNullable<MobileChatQuestion['prompt']>) => Promise<boolean>
 }
 
 /** Renders an agent's choice prompt as a tappable card. Single-select answers
  *  on tap; multi-select toggles then Submits; an always-present text entry lets
  *  the user answer freely (the escape hatch) when the heuristic misreads the
  *  options or none apply. */
-export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.JSX.Element {
+export function MobileNativeChatQuestion({
+  question,
+  onAnswer,
+  onCancel
+}: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
   // The choices scroll instead of pushing Submit and the reply box off the
   // screen. The card lives in the dock, which the chat list clears, so a card
@@ -131,6 +137,18 @@ export function MobileNativeChatQuestion({ question, onAnswer }: Props): React.J
         <Txt variant="heading" weight="semibold" style={{ flex: 1 }}>
           {notificationPlainText(question.question)}
         </Txt>
+        {onCancel ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => void onCancel(question.prompt)}
+            disabled={sending}
+          >
+            <X size={16} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
       </View>
 
       {hasOptions ? (

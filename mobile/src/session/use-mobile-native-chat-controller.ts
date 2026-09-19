@@ -65,6 +65,7 @@ export function useMobileNativeChatController(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    agentSessionPromptCancelSupported = null,
     onSendError,
     onSendResolved
   } = args
@@ -110,6 +111,7 @@ export function useMobileNativeChatController(
       callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
+      promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
   // The agent's own transcript, tailed on the host: what a hand-started
@@ -493,6 +495,10 @@ export function useMobileNativeChatController(
   })
 
   const tailQueue = useTranscriptTailQueue(transcriptTail, visibleQueuedMessages)
+  const structuredCancelPrompt = useNativeChatAcceptedAction(
+    activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
+    onSendResolved
+  )
 
   return {
     isTabChatView,
@@ -539,6 +545,9 @@ export function useMobileNativeChatController(
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
+    // Heuristic/legacy cards have no durable prompt identity, so keep their
+    // cancel affordance absent instead of exposing a dead action.
+    handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
     handleNativeChatRespondPermission: respond,
     handleNativeChatRespondPermissionWithComment: respondWithComment,
     openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,

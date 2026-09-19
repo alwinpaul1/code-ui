@@ -108,6 +108,10 @@ export type MobileNativeChatController = {
     selections: AskAnswerSelection[]
   ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
+  handleNativeChatCancelPrompt?: (prompt?: {
+    itemId: string
+    expectedRevision: number
+  }) => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   /** Rejects a Claude Code plan review with typed feedback in one tap. TUI
    *  lane only — undefined in the structured lane, where the comment sheet
@@ -201,6 +205,8 @@ export type MobileNativeChatControllerArgs = {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  /** Host capability fact from the shared runtime status probe (Orca #20601). */
+  agentSessionPromptCancelSupported?: boolean | null
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */

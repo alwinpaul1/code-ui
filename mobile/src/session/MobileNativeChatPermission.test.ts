@@ -21,7 +21,8 @@ vi.mock('lucide-react-native', () => ({
   FileMinus2: 'FileMinus2',
   FilePen: 'FilePen',
   FilePlus2: 'FilePlus2',
-  ShieldQuestion: 'ShieldQuestion'
+  ShieldQuestion: 'ShieldQuestion',
+  X: 'X'
 }))
 vi.mock('../components/TextInputModal', () => ({ TextInputModal: 'TextInputModal' }))
 
@@ -31,6 +32,51 @@ describe('MobileNativeChatPermission', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  // Orca #20601: the X on the card cancels the prompt itself, and names the
+  // exact item so a host that can cancel precisely does not stop the turn.
+  it('passes the rendered prompt identity to cancel, in both themes', async () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const onCancel = vi.fn(async () => true)
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Approve?',
+                prompt: { itemId: 'approval-1', expectedRevision: 4 },
+                options: [{ label: 'Allow', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true),
+              onCancel
+            })
+          )
+        )
+      })
+      const cancel = renderer!.root.findByProps({ accessibilityLabel: 'Cancel' })
+      await act(async () => cancel.props.onPress())
+      expect(onCancel).toHaveBeenCalledWith({ itemId: 'approval-1', expectedRevision: 4 })
+      // The glyph takes the muted tone of whichever theme is on.
+      const glyph = renderer!.root.findByType('X')
+      expect(glyph.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  it('offers no cancel on a card whose caller cannot cancel by identity', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatPermission, {
+          permission: { title: 'Approve?', options: [{ label: 'Allow', send: '1' }] },
+          onRespond: vi.fn(async () => true)
+        })
+      )
+    })
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Cancel' })).toHaveLength(0)
   })
 
   it('shows the complete remembered scope and sends only the selected agent response', async () => {

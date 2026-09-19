@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import { dispatchStructuredTurnCancel } from './mobile-structured-agent-cancel'
 import { useMobileStructuredRewind } from './mobile-structured-agent-rewind'
 import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
@@ -35,6 +34,10 @@ import type {
 } from './mobile-structured-agent-session-contract'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
+import {
+  pendingStructuredPromptIdentity,
+  requestMobileStructuredAgentSessionCancel
+} from './mobile-structured-agent-session-cancel'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -46,6 +49,8 @@ export function useMobileStructuredAgentSession(args: {
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
+  /** Capability fact from the shared runtime status probe; null follows legacy cancellation. */
+  promptCancelSupported?: boolean | null
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
@@ -57,14 +62,13 @@ export function useMobileStructuredAgentSession(args: {
     sessionId,
     sourceIdentity = '',
     enabled,
-    onSendError
+    onSendError,
+    promptCancelSupported = null
   } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
   useEffect(() => () => operationIdsRef.current.clear(), [])
-  const retainOperationId = (key: string, operationId?: string): string =>
-    retainStructuredOpId(operationIdsRef.current, key, operationId)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
   useMobileStructuredSendOperationReconciliation(state.submissions)
@@ -81,7 +85,11 @@ export function useMobileStructuredAgentSession(args: {
       }
       const targetFence = current.fence
       const key = `${sessionKey}:${fingerprintMethod}:${JSON.stringify(fields)}`
-      const clientOperationId = retainOperationId(key, operationIdsRef.current.get(key))
+      const clientOperationId = retainStructuredOpId(
+        operationIdsRef.current,
+        key,
+        operationIdsRef.current.get(key)
+      )
       const result = await requestStructuredAgentSessionMutation<TValue>({
         client,
         method,
@@ -210,7 +218,6 @@ export function useMobileStructuredAgentSession(args: {
       setStructuredOption
     ]
   )
-
   const { groupedDraft, respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,
     sessionKey,
@@ -218,23 +225,21 @@ export function useMobileStructuredAgentSession(args: {
     onSendError
   })
 
-  const cancel = useCallback(() => {
-    const current = stateRef.current
-    const turnId = activeStructuredAgentSessionTurnId(current.items)
-    if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
-      onSendError('Stop not sent')
-      return
-    }
-    dispatchStructuredTurnCancel({
-      client,
-      sessionId,
-      fence: current.fence,
-      turnId,
-      sessionKey,
-      operationIds: operationIdsRef.current,
-      onError: onSendError
-    })
-  }, [client, enabled, onSendError, sessionId, sessionKey])
+  const requestCancel = useCallback(
+    (prompt?: { itemId: string; expectedRevision: number }): Promise<boolean> =>
+      requestMobileStructuredAgentSessionCancel({
+        client,
+        enabled,
+        onSendError,
+        operationIds: operationIdsRef.current,
+        prompt,
+        promptCancelSupported,
+        sessionId,
+        sessionKey,
+        stateRef
+      }),
+    [client, enabled, onSendError, promptCancelSupported, sessionId, sessionKey, stateRef]
+  )
 
   // Conversation only: the host wraps no file restore (see the dispatcher's header).
   const rewindToItem = useMobileStructuredRewind({
@@ -278,7 +283,6 @@ export function useMobileStructuredAgentSession(args: {
     () => state.items.find(pendingStructuredQuestion) ?? null,
     [state.items]
   )
-
   return {
     conversationCommands,
     optionPickerRequest,
@@ -300,7 +304,11 @@ export function useMobileStructuredAgentSession(args: {
     turnThinking,
     turnActivity,
     sendWithOutcome,
-    cancel,
+    cancel: () => {
+      void requestCancel()
+    },
+    cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
+      requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current.items)),
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
     optionSnapshot,

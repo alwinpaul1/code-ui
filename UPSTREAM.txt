@@ -37,10 +37,10 @@ src/shared/structured-agent-session-turn-timing.ts: 2626e2eca
 src/shared/structured-agent-session-turn-timing.test.ts: 2626e2eca
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
-src/shared/structured-agent-session-outbox.ts: 8999a0028
-src/shared/structured-agent-session-dispatch-rejection.ts: 8999a0028
+src/shared/structured-agent-session-outbox.ts: f55b7ba68
+src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
-src/shared/structured-agent-session-send-disposition.test.ts: 8999a0028
+src/shared/structured-agent-session-send-disposition.test.ts: f55b7ba68
 src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
@@ -156,7 +156,7 @@ src/shared/rpc-contract/session-tabs-schemas-params.ts: c84007c54
 src/shared/rpc-contract/skills-params.ts: c84007c54
 src/shared/rpc-contract/speech-params.ts: c84007c54
 src/shared/rpc-contract/ssh-params.ts: c84007c54
-src/shared/rpc-contract/structured-agent-session-params.ts: c84007c54
+src/shared/rpc-contract/structured-agent-session-params.ts: f55b7ba68
 src/shared/rpc-contract/task-resume-state-params.ts: c84007c54
 src/shared/rpc-contract/terminal-orphan-params.ts: c84007c54
 src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54

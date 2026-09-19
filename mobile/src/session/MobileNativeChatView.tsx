@@ -116,6 +116,7 @@ export function MobileNativeChatView({
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
+  onCancelPrompt,
   question,
   onAnswerQuestion,
   permission,
@@ -415,7 +416,7 @@ export function MobileNativeChatView({
           clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
         ask={ask} askKey={askKey} onDismissAsk={onDismissAsk}
-        onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk}
+        onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission, onRespondPermissionWithComment }}
       />

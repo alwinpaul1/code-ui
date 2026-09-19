@@ -12,6 +12,8 @@ export type MobileChatPermission = {
   title: string
   detail?: string
   command?: string
+  /** Structured prompt identity, present only when the host can cancel it exactly. */
+  prompt?: { itemId: string; expectedRevision: number }
   options: Array<{ label: string; send: string }>
 }
 

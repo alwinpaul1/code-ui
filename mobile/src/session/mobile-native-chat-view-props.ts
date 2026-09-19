@@ -148,6 +148,9 @@ export type MobileNativeChatViewProps = {
    *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
+  /** Cancel a structured approval/question with exact item identity when supported
+   *  (Orca #20601). Absent on the bridge lane, whose cards have no durable identity. */
+  onCancelPrompt?: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
   permission?: MobileChatPermission | null

@@ -1,7 +1,7 @@
 import { memo, useMemo, useRef, useState } from 'react'
 import { splitPermissionDetail } from './mobile-permission-detail'
 import { ScrollView, useWindowDimensions, View } from 'react-native'
-import { ShieldQuestion } from 'lucide-react-native'
+import { ShieldQuestion, X } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
@@ -44,10 +44,14 @@ function truncatedNotice(preview: Extract<ProposedEditPreview, { kind: 'truncate
 function MobileNativeChatPermissionImpl({
   permission,
   onRespond,
-  onRespondWithComment
+  onRespondWithComment,
+  onCancel
 }: {
   permission: MobileChatPermission
   onRespond: (send: string) => Promise<boolean>
+  /** Cancels the prompt itself, by identity where the host can (Orca #20601);
+   *  the card passes its own `permission.prompt` so the right item is named. */
+  onCancel?: (prompt?: NonNullable<MobileChatPermission['prompt']>) => Promise<boolean>
   /** Rejects a Claude Code plan review with typed feedback in one tap
    *  (option select + comment, sequenced by the caller). Only offered when
    *  set: the structured (native chat) lane has no verified way to carry
@@ -152,6 +156,18 @@ function MobileNativeChatPermissionImpl({
         <Txt variant="label" weight="semibold" style={{ flex: 1 }}>
           {permission.title}
         </Txt>
+        {onCancel ? (
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+            style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
+            onPress={() => void onCancel(permission.prompt)}
+            disabled={submitting}
+          >
+            <X size={16} color={colors.textMuted} />
+          </PressScale>
+        ) : null}
       </View>
       {folded ? (
         <>

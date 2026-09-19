@@ -55,4 +55,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
   rewindToItem: (itemId: string) => Promise<boolean>
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
+  /** Cancels the pending approval/question by its item identity where the host
+   *  advertises `agent-session.prompt-cancel.v1`; otherwise the turn stop
+   *  (Orca #20601). Without an argument it names the pending prompt itself. */
+  cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
 }
