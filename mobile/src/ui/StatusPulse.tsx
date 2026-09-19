@@ -39,10 +39,14 @@ export function StatusPulse({
     }
     return () => cancelAnimation(progress)
   }, [progress, pulse, reducedMotion])
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: pulse ? 0.55 * (1 - progress.value) : 0,
-    transform: [{ scale: 1 + progress.value * 1.6 }]
-  }))
+  const ringStyle = useAnimatedStyle(
+    () => ({
+      opacity: pulse ? 0.55 * (1 - progress.value) : 0,
+      transform: [{ scale: 1 + progress.value * 1.6 }]
+    }),
+    // Named so the mapper has inputs where no Babel closure is written (the web bundle).
+    [progress, pulse]
+  )
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View

@@ -28,13 +28,21 @@ export function useUsageProgress(percent: number, circumference = 1) {
   }, [pct, progress])
   const palette = [colors.success, colors.warning, colors.danger]
   const stops = [...USAGE_COLOR_STOPS]
-  const barStyle = useAnimatedStyle(() => ({
-    width: `${progress.value}%`,
-    backgroundColor: interpolateColor(progress.value, stops, palette)
-  }))
-  const ringProps = useAnimatedProps(() => ({
-    stroke: interpolateColor(progress.value, stops, palette),
-    strokeDashoffset: circumference * (1 - progress.value / 100)
-  }))
+  // Dependency arrays named so the mappers have inputs where no Babel closure is written (the
+  // web bundle); see reanimated-web-mapper-deps.test.ts.
+  const barStyle = useAnimatedStyle(
+    () => ({
+      width: `${progress.value}%`,
+      backgroundColor: interpolateColor(progress.value, stops, palette)
+    }),
+    [progress, stops, palette]
+  )
+  const ringProps = useAnimatedProps(
+    () => ({
+      stroke: interpolateColor(progress.value, stops, palette),
+      strokeDashoffset: circumference * (1 - progress.value / 100)
+    }),
+    [progress, stops, palette, circumference]
+  )
   return { barStyle, ringProps }
 }

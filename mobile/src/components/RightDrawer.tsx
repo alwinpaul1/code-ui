@@ -173,12 +173,15 @@ function MountedRightDrawer({
       : interpolate(progress.value, [0, 1], [panelWidth, 0], Extrapolation.CLAMP)
     const transform = [{ translateX: enterTravel + translateX.value }]
     return { opacity: reduceMotion ? progress.value : 1, transform }
-  })
+    // The dependency array names every shared value the updater reads: the web bundle is built
+    // without Reanimated's Babel plugin, so `__closure` is never written and this list is what the
+    // mapper listens to (reanimated-web-mapper-deps.test.ts).
+  }, [progress, translateX, panelWidth, reduceMotion])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateX.value, [0, panelWidth], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  })
+  }, [progress, translateX, panelWidth])
 
   return (
     <Animated.View

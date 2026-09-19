@@ -28,10 +28,14 @@ export function PressScale({
   ...rest
 }: PressScaleProps) {
   const pressed = useSharedValue(0)
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - pressed.value * (1 - pressedScale) }],
-    opacity: 1 - pressed.value * (1 - pressedOpacity)
-  }))
+  const animatedStyle = useAnimatedStyle(
+    () => ({
+      transform: [{ scale: 1 - pressed.value * (1 - pressedScale) }],
+      opacity: 1 - pressed.value * (1 - pressedOpacity)
+    }),
+    // Named so the mapper has inputs where no Babel closure is written (the web bundle).
+    [pressed, pressedScale, pressedOpacity]
+  )
   const handlePressIn = useCallback<NonNullable<PressableProps['onPressIn']>>(
     (event) => {
       if (!disabled) {
