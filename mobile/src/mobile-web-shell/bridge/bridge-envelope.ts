@@ -12,6 +12,7 @@ import {
   BRIDGE_MAX_METHOD_CHARS,
   BRIDGE_MAX_PAGE_ROUTES,
   BRIDGE_MAX_REPLY_PARTS,
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_ROUTE_HREF_CHARS,
   BRIDGE_MAX_ROUTE_PARAM_CHARS,
   BRIDGE_MAX_ROUTE_PARAMS,
@@ -21,6 +22,7 @@ import {
   BRIDGE_MAX_HOST_FIELD_CHARS,
   BRIDGE_ROUTE_HREF_PATTERN,
   BRIDGE_ROUTE_PATHNAME_PATTERN,
+  isBridgeExternalLinkUrl,
   parseBridgeMessage,
   type BridgeDirection,
   type BridgeRead
@@ -71,13 +73,10 @@ export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
 /** Closed against `ForegroundNudgeReason`; the pin lives in this module's test.
  *  CODE UI: `'user-send'` is this fork's own fourth arm (0.2.92 — a send on a cooled-down relay
  *  re-dials), so the list closes over the fork's union. Upstream's page never sends it; this
- *  fork's shell accepts it and its native client already understands it. */
-export const BRIDGE_FOREGROUND_NUDGE_REASONS = [
-  'focus',
-  'app-resume',
-  'network-change',
-  'user-send'
-] as const
+ *  fork's shell accepts it and its native client already understands it. Two lines rather than a
+ *  wrapped literal so the file stays under the 300-line ceiling upstream's sits just beneath. */
+const FOREGROUND_NUDGE_REASONS = ['focus', 'app-resume', 'network-change', 'user-send'] as const
+export const BRIDGE_FOREGROUND_NUDGE_REASONS = FOREGROUND_NUDGE_REASONS
 
 /**
  * What the page's synchronous `RpcClient` getters read. It travels whole rather than as deltas so a
@@ -179,6 +178,16 @@ export const BRIDGE_FAULT_GRANT = 'fault'
  */
 export const BRIDGE_NAVIGATE_BACK_NOTIFY = 'navigate-back'
 
+/**
+ * The grant a page needs before the shell will open anything outside it.
+ *
+ * Its own name rather than a verb of `navigate`, because it is a different capability: `navigate`
+ * opens a screen this app carries, and this hands a URL to whatever the device opens it with. A
+ * shell that implements one and not the other is a real shell, and the route policy has to be able
+ * to say so.
+ */
+export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
+
 /** Pinned against `SendRequestOptions` in this module's test. */
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
@@ -278,6 +287,15 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       v: versionSchema,
       type: z.literal('notify'),
       name: z.literal(BRIDGE_NAVIGATE_BACK_NOTIFY)
+    }),
+    // Behind the `externalLink` grant. The URL is held to the same three schemes on both sides: the
+    // page refuses at the call site so a tap knows it went nowhere, and this refuses the frame so a
+    // page that did not check is still held to it.
+    z.object({
+      v: versionSchema,
+      type: z.literal('notify'),
+      name: z.literal(BRIDGE_EXTERNAL_LINK_GRANT),
+      url: z.string().min(1).max(BRIDGE_MAX_EXTERNAL_LINK_CHARS).refine(isBridgeExternalLinkUrl)
     }),
     // Behind the `storage` grant, for the same reason `navigate` is behind its own.
     z.object({
