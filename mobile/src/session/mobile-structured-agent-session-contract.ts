@@ -11,7 +11,10 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
-export type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
+export type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
+  id?: string
+  contentFingerprint?: string
+}
 
 /** What `useMobileStructuredAgentSession` hands the controller. Its own file so
  *  the hook stays under its line cap. */

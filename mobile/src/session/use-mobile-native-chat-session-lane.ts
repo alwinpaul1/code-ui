@@ -16,6 +16,7 @@ export function useMobileNativeChatSessionLane({
   transcriptPath,
   sessionId,
   sourceIdentity,
+  callerIdentity,
   enabled,
   connState,
   onSendError
@@ -29,6 +30,7 @@ export function useMobileNativeChatSessionLane({
   transcriptPath: string | null
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
+  callerIdentity: string
   enabled: boolean
   connState: ConnectionState
   onSendError: (message: string) => void
@@ -55,6 +57,7 @@ export function useMobileNativeChatSessionLane({
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
+    callerIdentity,
     enabled,
     // Holds are connection-scoped; dropping this on transport loss lets the hook
     // reacquire the provider without clearing the cached transcript.

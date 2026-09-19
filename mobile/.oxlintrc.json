@@ -281,6 +281,26 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "src/session/use-mobile-native-chat-image-attachments.test.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +6 over the 800 test ceiling for Orca #20133's
+            // `contentFingerprint` on an uploaded chip — one expectation grew
+            // from one line to six. This fork's copy carries its own batch and
+            // document cases on top of upstream's, which is why it is at the
+            // ceiling at all.
+            "max": 806,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
     }
   ]
 }

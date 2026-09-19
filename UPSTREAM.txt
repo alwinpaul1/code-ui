@@ -5,7 +5,9 @@ once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md)
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
-src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
+src/shared/structured-agent-session-mutation.ts: 8999a0028
+src/shared/structured-agent-session-mutation.test.ts: 8999a0028
+src/shared/agent-session-host-authority.ts: 8999a0028
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -33,7 +35,10 @@ src/shared/structured-agent-session-turn-timing.ts: 2626e2eca
 src/shared/structured-agent-session-turn-timing.test.ts: 2626e2eca
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
-src/shared/structured-agent-session-outbox.ts: 027acb4ef
+src/shared/structured-agent-session-outbox.ts: 8999a0028
+src/shared/structured-agent-session-dispatch-rejection.ts: 8999a0028
+src/shared/structured-agent-session-send-disposition.ts: 8999a0028
+src/shared/structured-agent-session-send-disposition.test.ts: 8999a0028
 src/shared/agent-session-record.ts: f1d854502
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502

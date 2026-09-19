@@ -8,9 +8,12 @@ import { dispatchStructuredTurnCancel } from './mobile-structured-agent-cancel'
  *  `agent_session_operation_unknown` kept its retained operation id, so every
  *  later Stop was admitted as the SAME request and did nothing.
  *
- *  This fork routes that refusal differently, so the question is whether the
- *  defect reaches us at all. Answered by driving the real dispatcher, not by
- *  reading the diff. */
+ *  When this test was written the fork routed that refusal to `refused`, so
+ *  the defect could not reach it. Orca #20133 (ported 2026-09-19) maps a
+ *  cancel's `agent_session_operation_unknown` to `unknown`, exactly as
+ *  upstream did when it shipped the bug — this test went red on that port
+ *  and #20868's `hostReportedOperationUnknown` was folded in with it. Driven
+ *  through the real dispatcher, not by reading the diff. */
 function hostRefusesOperationAsUnknown(): RpcClient {
   const sendRequest = vi.fn(async () => ({
     ok: true,

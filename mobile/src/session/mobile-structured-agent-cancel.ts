@@ -10,7 +10,9 @@ import type { RpcClient } from '../transport/rpc-client'
  *  button press, and the transcript is what proves the stop landed.
  *
  *  An `unknown` outcome keeps the retained operation id, so a retry is admitted
- *  as the same request rather than as a second stop. */
+ *  as the same request rather than as a second stop — unless the host itself
+ *  answered `agent_session_operation_unknown` about that id (Orca #20133 maps
+ *  that to `unknown` for cancel; #20868 tells the two apart). */
 export function dispatchStructuredTurnCancel(args: {
   client: RpcClient
   sessionId: string
@@ -38,7 +40,10 @@ export function dispatchStructuredTurnCancel(args: {
     fields,
     clientOperationId
   }).then((result) => {
-    if (result.status !== 'unknown') {
+    // Cancel's plan recovers no unknown ledger row, so an id the host answered that
+    // way earns the same refusal until it expires; keeping it leaves Stop unusable.
+    // Transport doubt proves nothing about delivery, so it stays a replay.
+    if (result.status !== 'unknown' || result.hostReportedOperationUnknown === true) {
       operationIds.delete(key)
     }
     if (result.status === 'unknown') {
