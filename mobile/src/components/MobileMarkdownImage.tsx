@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View, type TextStyle } from 'react-native'
 import { SvgXml } from 'react-native-svg'
 import { openImagePreviewSources } from '../session/image-preview-store'
@@ -10,6 +10,30 @@ import {
 } from './markdown-image-source'
 
 type Loaded = { source: MarkdownImageSource; aspectRatio: number }
+
+/** What each url resolved to, per resolver (a document's figures) and for
+ *  remote urls, so a remount draws the picture on its first render. Why:
+ *  the run around a figure is remounted once the figure has its size (see
+ *  MobileMarkdown), and a remount that started over from the link would lay
+ *  the run out without the figure again, then grow it, which is the very
+ *  layout the remount exists to avoid. Bounded by a document's figures. */
+const loadedByResolver = new WeakMap<MarkdownImageResolver, Map<string, Loaded>>()
+const loadedRemote = new Map<string, Loaded>()
+
+function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): Map<string, Loaded> | null {
+  if (isRemoteImageUrl(url)) {
+    return loadedRemote
+  }
+  if (!resolve) {
+    return null
+  }
+  let cache = loadedByResolver.get(resolve)
+  if (!cache) {
+    cache = new Map()
+    loadedByResolver.set(resolve, cache)
+  }
+  return cache
+}
 
 /**
  * An image block of a markdown document, drawn as the image, inside the
@@ -39,6 +63,7 @@ export function MobileMarkdownImage({
   width,
   resolve,
   onOpen,
+  onSized,
   styles
 }: {
   alt: string
@@ -47,13 +72,27 @@ export function MobileMarkdownImage({
   width: number
   resolve?: MarkdownImageResolver
   onOpen: () => void
+  /** Called with the url once the picture has a size, so the Text around
+   *  it can lay itself out again (see MobileMarkdown's inline layout epoch). */
+  onSized?: (url: string) => void
   styles: { link: TextStyle; imageCaptionInline: TextStyle }
 }) {
-  const [loaded, setLoaded] = useState<Loaded | null | undefined>(undefined)
+  const [loaded, setLoaded] = useState<Loaded | null | undefined>(() =>
+    loadedCache(resolve, url)?.get(url)
+  )
   useEffect(() => {
     let cancelled = false
+    const cache = loadedCache(resolve, url)
+    const known = cache?.get(url)
+    if (known) {
+      setLoaded(known)
+      return
+    }
     setLoaded(undefined)
     const settle = (value: Loaded | null) => {
+      if (value) {
+        cache?.set(url, value)
+      }
       if (!cancelled) {
         setLoaded(value)
       }
@@ -87,6 +126,15 @@ export function MobileMarkdownImage({
       cancelled = true
     }
   }, [resolve, url])
+
+  const sized = loaded !== undefined && loaded !== null && width > 0
+  const onSizedRef = useRef(onSized)
+  onSizedRef.current = onSized
+  useEffect(() => {
+    if (sized) {
+      onSizedRef.current?.(url)
+    }
+  }, [sized, url])
 
   if (!loaded || !(width > 0)) {
     return (
