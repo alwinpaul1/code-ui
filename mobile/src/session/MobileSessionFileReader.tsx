@@ -22,6 +22,7 @@ import {
 } from './mobile-file-syntax'
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
+import type { MarkdownImageResolver } from '../components/markdown-image-source'
 import { colors } from '../theme/mobile-theme'
 import { useTheme } from '../theme/theme-context'
 import { styles } from './mobile-session-styles'
@@ -51,13 +52,19 @@ export function FileReader({
   relativePath,
   language,
   diffCommentActions,
-  onAskAboutLines
+  onAskAboutLines,
+  readingPositionKey = null,
+  resolveImage
 }: {
   doc: FileDocState | undefined
   title: string
   relativePath: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  /** Names the document across opens for the PDF and rendered-markdown views. */
+  readingPositionKey?: string | null
+  /** Reads the document's images off the host for the rendered view. */
+  resolveImage?: MarkdownImageResolver
   /** Alt+K parity: ask the active chat about the selected lines, or (`range:
    *  null`) about the whole file. Absent when this file tab has nowhere to
    *  send it — see askAboutFileLines in use-mobile-session-file-actions.ts —
@@ -283,7 +290,13 @@ export function FileReader({
   }
 
   if (doc.kind === 'pdf') {
-    return <MobileFilePdfPreview uri={doc.uri} fileName={relativePath || title} />
+    return (
+      <MobileFilePdfPreview
+        uri={doc.uri}
+        fileName={relativePath || title}
+        readingPositionKey={readingPositionKey}
+      />
+    )
   }
 
   if (doc.kind === 'image') {
@@ -402,6 +415,8 @@ export function FileReader({
           content={doc.content}
           truncated={doc.truncated}
           byteLength={doc.byteLength}
+          readingPositionKey={readingPositionKey}
+          resolveImage={resolveImage}
           renderSource={() => renderSourceText(doc.content)}
         />
       </View>

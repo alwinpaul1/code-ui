@@ -8,6 +8,8 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
+import { useScrollReadingPosition } from '../files/use-reading-position'
+import type { MarkdownImageResolver } from '../components/markdown-image-source'
 
 /**
  * Reading and writing are two different jobs, and the tab only ever offered the
@@ -37,10 +39,17 @@ export function MarkdownReader({
   onSave,
   onCopy,
   onDiscard,
-  keyboardLift
+  keyboardLift,
+  readingPositionKey = null,
+  resolveImage
 }: {
   documentId: string
   doc: MarkdownDocState | undefined
+  /** Names the document across opens, so Preview scrolls back to where the
+   *  reader left it. */
+  readingPositionKey?: string | null
+  /** Reads the document's images off the host for Preview. */
+  resolveImage?: MarkdownImageResolver
   onRefresh: () => void
   onChange: (content: string) => void
   onSave: () => void
@@ -51,6 +60,7 @@ export function MarkdownReader({
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const [mode, setMode] = useState<MarkdownViewMode>('preview')
+  const readingScroll = useScrollReadingPosition(readingPositionKey)
   const theme = useTheme()
   const modeStyles = useThemedStyles(markdownModeStyles)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
@@ -115,8 +125,16 @@ export function MarkdownReader({
       {mode === 'preview' ? (
         // Unmounting the editor is deliberate: two live copies of one document
         // would both answer onChange, and the WebView keeps its own undo stack.
-        <ScrollView style={modeStyles.previewScroll} contentContainerStyle={modeStyles.preview}>
-          <MobileMarkdown content={doc.localContent} fallback="This file is empty." />
+        <ScrollView
+          {...readingScroll}
+          style={modeStyles.previewScroll}
+          contentContainerStyle={modeStyles.preview}
+        >
+          <MobileMarkdown
+            content={doc.localContent}
+            fallback="This file is empty."
+            resolveImage={resolveImage}
+          />
         </ScrollView>
       ) : (
         <MobileRichMarkdownEditor

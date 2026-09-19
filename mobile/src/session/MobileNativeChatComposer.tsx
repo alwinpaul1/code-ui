@@ -10,6 +10,7 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
+import { useRichPasteInput } from './use-rich-paste-input'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -59,6 +60,10 @@ type Props = {
   onCaptureImage?: () => void
   onAttachImage?: () => void
   onPasteImage?: () => void
+  /** An image put into the input itself — the keyboard's clipboard panel,
+   *  the paste menu, a drag — as a `file://` copy. Undefined when images
+   *  cannot be attached here at all. */
+  onPasteImageFile?: (uri: string) => void
   /** Any document via the system file picker; shown as a named chip. */
   onAttachFile?: () => void
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
@@ -116,6 +121,7 @@ export function MobileNativeChatComposer({
   sessionOptions,
   onCaptureImage,
   onAttachImage,
+  onPasteImageFile,
   onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
@@ -150,6 +156,7 @@ export function MobileNativeChatComposer({
     null
   )
   const textInputRef = useRef<TextInput>(null)
+  useRichPasteInput(textInputRef, onPasteImageFile)
   // Only on an actual increase, never on a re-render at the same value — a
   // route revisit that leaves focusRequest untouched must not steal the
   // keyboard back from whatever the user is doing now.

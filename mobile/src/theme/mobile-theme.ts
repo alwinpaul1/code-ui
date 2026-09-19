@@ -77,5 +77,5 @@ export const typography = {
   titleSize: 18,
   bodySize: 14,
   metaSize: 12,
-  monoFamily: 'monospace' as const
+  monoFamily: 'JetBrainsMono_400Regular' as const
 } as const

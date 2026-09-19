@@ -1,4 +1,6 @@
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { MobileFileImageZoom } from './MobileFileImageZoom'
 import { colors } from '../theme/mobile-theme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
@@ -7,6 +9,7 @@ import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import { MobileFilePdfPreview } from './MobileFilePdfPreview'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import type { MarkdownImageResolver } from '../components/markdown-image-source'
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -16,6 +19,11 @@ type Props = {
   draftContent: string
   saveError: string
   lineColumn: MobileFilePreviewLineColumn | null
+  /** Names the document across opens for the PDF and markdown readers. */
+  readingPositionKey: string | null
+  /** Reads a markdown document's images off the host; null for a source
+   *  (a terminal artifact) whose neighbours the phone cannot read. */
+  resolveImage: MarkdownImageResolver | null
   imageWidth: number
   imageHeight: number
   onDraftChange: (content: string) => void
@@ -52,28 +60,31 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
     )
   }
   if (preview.kind === 'image') {
+    // Why not ScrollView's zoom props: they are iOS-only, so an image file
+    // opened on the phone could not be zoomed at all (2026-09-19). The
+    // gesture root is the screen's own: a file preview is not a Modal.
     return (
       <View style={styles.imageContainer}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.imageScrollContent}
-          maximumZoomScale={4}
-          minimumZoomScale={1}
-          centerContent
-        >
-          <Image
-            source={{ uri: preview.dataUri }}
-            style={[styles.image, { width: options.imageWidth, height: options.imageHeight }]}
-            resizeMode="contain"
+        <GestureHandlerRootView style={styles.imageScrollContent}>
+          <MobileFileImageZoom
+            uri={preview.dataUri}
+            width={options.imageWidth}
+            height={options.imageHeight}
+            label={`${options.title} image`}
             onError={options.onImageError}
-            accessibilityLabel={`${options.title} image`}
           />
-        </ScrollView>
+        </GestureHandlerRootView>
       </View>
     )
   }
   if (preview.kind === 'pdf') {
-    return <MobileFilePdfPreview uri={preview.uri} fileName={options.relativePath || options.title} />
+    return (
+      <MobileFilePdfPreview
+        uri={preview.uri}
+        fileName={options.relativePath || options.title}
+        readingPositionKey={options.readingPositionKey}
+      />
+    )
   }
   if (preview.kind === 'markdown') {
     return options.editable ? (
@@ -85,6 +96,8 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         truncated={preview.truncated}
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
+        readingPositionKey={options.readingPositionKey}
+        resolveImage={options.resolveImage ?? undefined}
       />
     )
   }

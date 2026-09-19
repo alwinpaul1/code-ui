@@ -1,0 +1,26 @@
+plugins {
+  id 'com.android.library'
+  // Why this plugin and not the legacy ExpoModulesCorePlugin.gradle the sibling
+  // packages apply: in SDK 57 the module DSL's typed `Function` parameters are
+  // resolved by a Kotlin compiler plugin (pika) that only this gradle plugin
+  // applies. Without it the compiled module keeps `reifiedOperationMarker`
+  // calls and throws at registration, taking the app down on launch
+  // (device, 2026-09-19).
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.richpaste'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.richpaste"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // ViewCompat.setOnReceiveContentListener and ContentInfoCompat.
+  implementation "androidx.core:core:1.13.1"
+}

@@ -21,6 +21,27 @@
   "overrides": [
     {
       "files": [
+        "src/components/MobileMarkdown.tsx"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-19: +16 for images that draw — the image block and the
+            // resolver prop threaded to it (MobileMarkdownImage.tsx holds the
+            // drawing), and the rule/image spans inside the selectable run.
+            // Later that day +4: lists and quotes moved INTO the run as spans
+            // (so a selection can cross them); their View branches went, the
+            // span branches are a little longer.
+            "max": 420,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/terminal/TerminalWebView.tsx"
       ],
       "rules": {
@@ -141,7 +162,10 @@
             // as cardPermission, so a plan-review approval tap can be checked
             // against the highlighted row (the check itself lives in
             // mobile-native-chat-permission-send.ts).
-            "max": 479,
+            // 2026-09-19: +17 for the transcript tail — useTranscriptTail's enable
+            // condition and the merged queue/prompts it hands the contract;
+            // the tail itself lives in session/transcript-tail/.
+            "max": 496,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -206,7 +230,9 @@
             // read. Each stayed under 405 on its own branch; the merge did
             // not. Each feature's logic lives in its own module; this file
             // only threads them.
-            "max": 409,
+            // 2026-09-19: +1 for onPasteImageFile — an image the keyboard put
+            // into the composer, threaded to it; the module is expo-rich-paste.
+            "max": 410,
             "skipBlankLines": true,
             "skipComments": true
           }

@@ -87,6 +87,8 @@ export type MobileNativeChatImageAttachments = {
   readonly attachments: PendingNativeChatImage[]
   readonly isAttaching: boolean
   readonly attachImage: (source: MobileImageSource) => Promise<void>
+  /** An image file already on the phone (a keyboard paste's cache copy). */
+  readonly attachImageFile: (uri: string) => Promise<void>
   /** Any document via the file picker; described to the agent in the message text. */
   readonly attachDocument: () => Promise<void>
   readonly removeAttachment: (id: string) => void
@@ -123,7 +125,7 @@ export function useMobileNativeChatImageAttachments({
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
 
-  const { attachImage, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
+  const { attachImage, attachImageFile, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
     client,
     activeHandleRef,
     getActiveWorktreeConnectionId,
@@ -372,5 +374,5 @@ export function useMobileNativeChatImageAttachments({
     ]
   )
 
-  return { attachments, isAttaching, attachImage, attachDocument, removeAttachment, sendNativeChat }
+  return { attachments, isAttaching, attachImage, attachImageFile, attachDocument, removeAttachment, sendNativeChat }
 }

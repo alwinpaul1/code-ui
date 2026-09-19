@@ -175,7 +175,9 @@ describe('what the controller takes from a beacon on the active terminal', () =>
     beacon(`hk=1 sid=${OTHER} up=41:typed%20on%20the%20desk`)
     expect(controller?.nativeChatDesktopPrompts).toEqual([])
     expect(controller?.nativeChatPromptHook).toBeNull()
-    expect(draftsArgs.at(-1)?.beaconPromptReceipts).toBeUndefined()
+    // Empty, not absent: since 2026-09-19 the receipts are the transcript
+    // tail's prompts merged with the beacon's, and the tail is idle here.
+    expect(draftsArgs.at(-1)?.beaconPromptReceipts).toEqual([])
     beacon(`hk=1 sid=${OWN} up=42:typed%20on%20the%20desk`)
     expect(controller?.nativeChatDesktopPrompts).toEqual([{ nonce: '42', text: 'typed on the desk', cut: false }])
     expect(controller?.nativeChatPromptHook).toBe(true)

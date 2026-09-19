@@ -20,7 +20,9 @@
   "dependencies": {
     "@codeui/expo-apk-updater": "file:./packages/expo-apk-updater",
     "@codeui/expo-background-link": "file:./packages/expo-background-link",
+    "@codeui/expo-rich-paste": "file:./packages/expo-rich-paste",
     "@expo-google-fonts/instrument-sans": "0.4.2",
+    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",

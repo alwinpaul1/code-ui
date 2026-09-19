@@ -1,9 +1,9 @@
 import { Pressable, Text } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useChatTextSelectable } from '../components/chat-text-selectable-context'
+import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
 import { TEXT_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -53,10 +53,11 @@ export function Prose({
       // no host round trip, nothing to fail.
       return <MobileNativeChatImageThumb uri={uri} label={block.alt ?? 'Image'} styles={styles} />
     }
-    // Desktop clipboard files have no mobile preview grant. A transcript path
-    // alone cannot make those bytes available on the phone; don't expose an
-    // action that only produces a path error. A real URI above still wins.
-    const desktopPaste = splitOrcaPastedImagePaths(uri ?? '').paths.length > 0
+    // Desktop clipboard files have no mobile preview grant, and a `[Image #N]`
+    // stand-in names no file at all. A transcript path alone cannot make those
+    // bytes available on the phone; don't expose an action that only produces
+    // a path error. A real URI above still wins.
+    const desktopPaste = isDesktopImageRef(block)
     const hostPath = block.path
     return (
       <Pressable

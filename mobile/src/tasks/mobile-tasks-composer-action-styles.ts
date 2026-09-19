@@ -1,6 +1,5 @@
 import {
   StyleSheet,
-  Platform,
   colors,
   radii,
   spacing,
@@ -116,7 +115,7 @@ export const mobileTasksComposerActionStyles = StyleSheet.create({
     minHeight: 88
   },
   monoInput: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   commentInput: {
     minHeight: 72,

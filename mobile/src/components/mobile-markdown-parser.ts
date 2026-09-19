@@ -118,8 +118,11 @@ function isFenceClosed(raw: string): boolean {
   )
 }
 
-/** A paragraph holding nothing but one web image is the image block the
- *  renderer frames on its own; anything else stays prose. */
+/** A paragraph holding nothing but one image is the image block the renderer
+ *  draws on its own; anything else stays prose. Any href, not only the web:
+ *  a document's `![fig](fig/plot.svg)` names a file beside it, which the
+ *  renderer can now read off the host (2026-09-19). Where it cannot, the
+ *  block is drawn as the link it always was. */
 function standaloneImage(token: Tokens.Paragraph): MobileMarkdownBlock | null {
   const content = token.tokens.filter(
     (child) => !(child.type === 'text' && !child.raw.trim()) && child.type !== 'space'
@@ -129,7 +132,7 @@ function standaloneImage(token: Tokens.Paragraph): MobileMarkdownBlock | null {
     return null
   }
   const image = only as Tokens.Image
-  if (!/^https?:\/\//i.test(image.href)) {
+  if (!image.href.trim()) {
     return null
   }
   return { type: 'image', alt: image.text ?? '', url: image.href }

@@ -104,13 +104,18 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-18 (evening): subscribeToTerminal and unsubscribeTerminal stamp when
 // the phone starts and stops listening on a handle (noteAgentHudBeaconListening),
 // which is what the HUD measures a beacon's silence from.
-const HEAD_CALLBACK_BODY_SHA256 = 'f646b35189ab8ea50b9c3b53e5a25282b6d50249763ef505223c36029eaf61af'
+// 2026-09-19: applySessionTabs and the terminal-list refresh drop the phone's
+// own transcript-tail terminal (withoutTranscriptTailTerminals, by title and by
+// owned handle) before use, and the refresh closes a tail terminal this
+// process does not own, plus any an earlier process recorded and left.
+const HEAD_CALLBACK_BODY_SHA256 = '8665f3346cdf09d204d27c4410f661d7d590816571ce6dbd38ca655d2542f2d6'
 const HEAD_EFFECT_SHA256 = '1961e639d17f15cf6b60eb4e7616633184c5aa8477c2ce2aa6f23292c8f9e47c'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
 // four new bindings on top of the prior 17.
-const HEAD_CONTENT_HOOK_SHA256 = 'f31fa6a1723e25916c1fb01a88c4252ef63f607501f0963ac904e75d04b614ce'
+// 2026-09-19: MarkdownReader binds useScrollReadingPosition (22 bindings).
+const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d4281cc3ee5a3581aab'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -188,7 +193,9 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 2026-09-18 (evening): the header's model pill View gained flexShrink/minWidth
 // so a long live label truncates instead of running under the terminal icon.
 // Same host record COUNT (99); that one View's captured style moved.
-const HEAD_HOST_JSX_SHA256 = '0c4421215989bca29fa7fa74f22ff9bf9f3880372f5e5e039281676940068cb8'
+// 2026-09-19: the .md tab's Preview ScrollView spreads the reading-position
+// props; FileReader and MarkdownReader take readingPositionKey.
+const HEAD_HOST_JSX_SHA256 = '0e144db3ff60e989d05f114b28b7f7845add250668ae3d3d895258369d667f53'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -226,7 +233,10 @@ const HEAD_HOST_JSX_SHA256 = '0c4421215989bca29fa7fa74f22ff9bf9f3880372f5e5e0392
 // `onRevertHunk` — the mobile RPC gate's answer for agentSession.rewind, ANDed
 // with the session's own rewindSupport inside the overlay. Same 73 records;
 // only the overlay's record changed. Host and style references untouched.
-const HEAD_LEAF_JSX_SHA256 = 'b8250259712d51a638be3aa1956b09c4d8b7e2e1bd2003a7802efe94f5a095a8'
+// 2026-09-19: FileReader hands readingPositionKey to the PDF and markdown views,
+// and (later) resolveImage to the markdown view; MarkdownReader's Preview
+// hands MobileMarkdown resolveImage too, so a document's figures draw.
+const HEAD_LEAF_JSX_SHA256 = 'b6c8bd98ef2075b8e0f396deea84ed9afeee7497a719d4e50a72aac5b8e94b14'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -640,7 +650,9 @@ describe('mobile session route extraction parity', () => {
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(23)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
-    expect(contentBindings).toHaveLength(21)
+    // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
+    // .md tab's Preview scroller remembering where the reader was.
+    expect(contentBindings).toHaveLength(22)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
     expect(nestedFunctions).toHaveLength(13)

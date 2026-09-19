@@ -55,6 +55,7 @@ describe('an 80-column document read on a phone', () => {
     const markers = render(WRAPPED_LIST)
       .root.findAllByType('Text' as never)
       .map((node) => flatten(node))
+      .map((text) => text.trim())
       .filter((text) => /^\d+\.$/.test(text))
     expect(markers).toEqual(['1.', '2.'])
   })
@@ -75,13 +76,18 @@ describe('an 80-column document read on a phone', () => {
   })
 
   it('indents a nested list item so its level is visible', () => {
+    // The list lives inside the prose run as spans (2026-09-19, so a
+    // selection can cross it), so the level is leading spaces on the line,
+    // and a deeper bullet glyph.
     const tree = render('- outer\n  - inner')
-    const rows = tree.root.findAllByType('View' as never).filter((node) => {
-      const style = flattenStyle(node.props.style)
-      return style.flexDirection === 'row'
-    })
-    const indents = rows.map((row) => flattenStyle(row.props.style).marginLeft ?? 0)
-    expect(indents).toEqual([0, 16])
+    const run = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => node.props.selectable === true)!
+    const inOrder = (node: ReactTestInstance): string =>
+      node.children
+        .map((child) => (typeof child === 'string' ? child : inOrder(child)))
+        .join('')
+    expect(inOrder(run)).toBe('•  outer\n    ◦  inner')
   })
 
   it('scrolls a code fence sideways rather than wrapping the command', () => {

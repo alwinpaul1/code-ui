@@ -17,6 +17,7 @@ vi.mock('expo-file-system', () => ({
 import {
   ImageLibraryPermissionError,
   pickMobileImage,
+  pickMobileImageFiles,
   pickMobileImages,
   type PickedMobileImage
 } from './mobile-image-source-picker'
@@ -268,5 +269,23 @@ describe('pasting an image from the clipboard', () => {
     await expect(
       pickMobileImage('clipboard', { readClipboardImage: async () => ({ data: 'not base64 !!' }) })
     ).rejects.toThrow(/base64/i)
+  })
+})
+
+describe('an image the keyboard put straight into the composer', () => {
+  // The cache copy expo-rich-paste writes; no picker, no permission prompt.
+  it('reads the file into the same upload shape a picked image takes', async () => {
+    const file = fileFactory(new Uint8Array([137, 80, 78, 71]))
+    const images = await collectImages(
+      pickMobileImageFiles(['file:///cache/rich-paste/paste-1.png'], file.createFile)
+    )
+    expect(images).toEqual([{ base64: 'iVBORw==', uri: 'file:///cache/rich-paste/paste-1.png' }])
+    expect(file.close).toHaveBeenCalled()
+  })
+
+  it('yields nothing for an empty file, and nothing at all for no files', async () => {
+    const empty = fileFactory(new Uint8Array())
+    expect(await collectImages(pickMobileImageFiles(['file:///x.png'], empty.createFile))).toEqual([])
+    expect(await collectImages(pickMobileImageFiles([], empty.createFile))).toEqual([])
   })
 })

@@ -7,6 +7,7 @@ import type { ConnectionState } from '../transport/types'
 import {
   ImageLibraryPermissionError,
   pickMobileDocuments,
+  pickMobileImageFiles,
   pickMobileImages,
   type MobileImageSource
 } from './mobile-image-source-picker'
@@ -36,6 +37,7 @@ export function useMobileNativeChatImageUpload(args: {
   onError?: () => void
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
+  attachImageFile: (uri: string) => Promise<void>
   attachDocument: () => Promise<void>
   isAttaching: boolean
 } {
@@ -150,10 +152,14 @@ export function useMobileNativeChatImageUpload(args: {
       ),
     [attachWith]
   )
+  const attachImageFile = useCallback(
+    (uri: string) => attachWith(() => pickMobileImageFiles([uri]), 'files'),
+    [attachWith]
+  )
   const attachDocument = useCallback(
     () => attachWith(() => pickMobileDocuments(), 'files'),
     [attachWith]
   )
 
-  return { attachImage, attachDocument, isAttaching }
+  return { attachImage, attachImageFile, attachDocument, isAttaching }
 }

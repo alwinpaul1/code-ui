@@ -98,6 +98,90 @@ describe('agent prose the reader wants to copy', () => {
     expect(flat).toContain('Second paragraph here.')
   })
 
+  it('lets one selection cross a rule and an image on its way to the next section', () => {
+    // Why: reported 2026-09-19 with a screenshot of thesis_explained.md — the
+    // selection ran from one paragraph through the heading below it and
+    // stopped dead before "## 4. CKA, the new score". Between them the source
+    // has a `---` and, after the heading, `![CKA twins](fig/fig3_cka.svg)`.
+    // Both were their own View, so the prose on either side was two Texts and
+    // Android would not let a selection cross. Lines are from that file.
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: [
+            '### Extra checks added on the way',
+            '',
+            "The sweep's \"10 epochs\" were really 500-batch rounds, none retraining from scratch.",
+            '',
+            '---',
+            '',
+            '## 4. CKA, the new score, in plain words',
+            '',
+            '![CKA twins](fig/fig3_cka.svg)',
+            '',
+            'Take the trained model. Make two copies by copying the weights, no training.'
+          ].join('\n')
+        })
+      )
+    })
+    const selectableTexts = renderer!.root
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.selectable === true)
+    expect(selectableTexts).toHaveLength(1)
+    const flat = selectableTexts[0]!
+      .findAll(() => true)
+      .flatMap((node) => node.children)
+      .filter((child): child is string => typeof child === 'string')
+      .join('')
+    expect(flat).toContain('none retraining from scratch.')
+    expect(flat).toContain('4. CKA, the new score, in plain words')
+    expect(flat).toContain('CKA twins')
+    expect(flat).toContain('Take the trained model.')
+  })
+
+  it('lets one selection run from a paragraph through the list under it and on', () => {
+    // Why: reported 2026-09-19 with a screenshot of the phone — a long press
+    // on "Stopped. State of things:" selected down to "Checked on the device:"
+    // and the handle would not drag into the bullets below it. Each list item
+    // was its own Text in a row View, so the paragraph run ended at the list.
+    // The list, and a quote, now join the run as spans. Lines are from that
+    // screen.
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: [
+            'Stopped. State of things:',
+            '',
+            'The build on the phone now (0.8.0, versionCode 233, no bump) has the chip fix and the stale-queue fix. Checked on the device:',
+            '',
+            '- Queue box is empty of the old stale entries.',
+            '- A phone send while I was working showed in the box within a second and left it when the turn took it.',
+            '',
+            '> The row it writes is pinned by a test using the real transcript row.',
+            '',
+            'Not checked live: tapping **Send now** on the phone.'
+          ].join('\n')
+        })
+      )
+    })
+    const selectableTexts = renderer!.root
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.selectable === true)
+    expect(selectableTexts).toHaveLength(1)
+    // In reading order, spans included: what a copy of the selection carries.
+    const inOrder = (node: ReactTestInstance): string =>
+      node.children
+        .map((child) => (typeof child === 'string' ? child : inOrder(child)))
+        .join('')
+    const flat = inOrder(selectableTexts[0]!)
+    expect(flat).toContain('Checked on the device:')
+    expect(flat).toContain('left it when the turn took it.')
+    expect(flat).toContain('Not checked live: tapping Send now on the phone.')
+    // The bullets are still bullets, and the quote still a quote, when copied.
+    expect(flat).toMatch(/•\s+Queue box is empty of the old stale entries\.\n•\s+A phone send/)
+    expect(flat).toMatch(/▎ The row it writes is pinned by a test using the real transcript row\./)
+  })
+
   it('lets the reader select a heading, a quote, a fence, a table cell and a list item', () => {
     const { selectable } = textsBySelectability()
     expect(selectable).toContain('What changed')

@@ -31,6 +31,8 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { readingPositionKey } from '../storage/reading-positions'
+import { createMarkdownImageResolver } from './markdown-image-resolver'
 
 type Props = {
   route: MobileFilePreviewRouteState
@@ -193,6 +195,19 @@ export function MobileFilePreviewScreen({ route }: Props) {
     }
   }, [lastConnectedAt, loadPreview, preview.status, previewSource])
 
+  // Images beside a worktree document read through the same file RPCs; a
+  // terminal artifact's neighbours are outside the jail, so none for those.
+  const resolveImage = useMemo(
+    () =>
+      previewParams && previewParams.source !== 'terminalArtifact' && previewParams.relativePath
+        ? createMarkdownImageResolver({
+            client,
+            worktreeId: previewParams.worktreeId,
+            documentRelativePath: previewParams.relativePath
+          })
+        : null,
+    [client, previewParams]
+  )
   const displayPath =
     previewParams?.source === 'terminalArtifact'
       ? (previewParams.absolutePath ?? '')
@@ -299,6 +314,12 @@ export function MobileFilePreviewScreen({ route }: Props) {
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}
+        readingPositionKey={
+          previewParams
+            ? readingPositionKey(previewParams.hostId, previewParams.worktreeId, displayPath)
+            : null
+        }
+        resolveImage={resolveImage}
         imageWidth={Math.max(1, width - spacing.md * 2)}
         imageHeight={Math.max(240, height - 160)}
         onDraftChange={setDraftContent}

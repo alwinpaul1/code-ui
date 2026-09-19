@@ -118,9 +118,6 @@ export const filePreviewStyles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.md
   },
-  image: {
-    backgroundColor: colors.editorSurface
-  },
   editContainer: {
     flex: 1,
     backgroundColor: colors.editorSurface,

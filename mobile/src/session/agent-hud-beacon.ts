@@ -40,7 +40,10 @@ export type AgentHudBeaconLimit = {
  *  the phone's message id) at the moment the prompt was submitted, beaconed
  *  by the hook as `at=`. The echo anchors right after that row wherever it
  *  sits, so a late-arriving beacon cannot land the message turns too low. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string }
+/** `at`: epoch ms of the submission, when the source knows it (the transcript
+ *  does; the beacon does not) — places the echo after the last row written
+ *  before it when `anchorId` names a row the phone never holds. */
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number }
 
 export type AgentHudBeacon = {
   agent: string

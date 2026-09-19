@@ -159,8 +159,9 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
-  /** Prompts submitted on the desktop, from the agent's own hook. */
-  nativeChatDesktopPrompts: { nonce: string; text: string }[]
+  /** Prompts submitted while a turn ran, from any client: the agent's own
+   *  transcript (tailed on the host) first, the HUD beacon's hook second. */
+  nativeChatDesktopPrompts: { nonce: string; text: string; anchorId?: string }[]
   /** Prompts the agent has already accepted, read off its own screen. */
   nativeChatScreenPrompts: string[]
   /** Whether this tab was launched with the prompt hook; null until a beacon lands. */

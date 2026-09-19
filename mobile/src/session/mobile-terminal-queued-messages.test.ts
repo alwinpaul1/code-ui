@@ -313,3 +313,137 @@ it('gives a drawn row to the longest send that starts with it', () => {
     pendingOutsideVisibleQueue([{ text: a }, { text: b }], [a, `${a} and then tag the rel…`])
   ).toEqual([])
 })
+
+describe('Claude Code 2.1.277 queue', () => {
+  // Captured live on 2026-09-19 (`orca terminal read --screen`, Claude Code
+  // 2.1.277). This build moved the queue: the entry sits at COLUMN ZERO right
+  // under the spinner, its wrapped lines are indented two spaces, and a new
+  // "ctrl+x ctrl+s to send now" row closes the block. The composer placeholder
+  // is still "Press up to edit queued messages", which Orca publishes as the
+  // draft. Every row here is verbatim from that frame.
+  const CAPTURED_2_1_277 = [
+    '⏺ Running 5 shell commands…',
+    '  ⎿  $ cd "/Users/alwinpaul/Desktop/Project/Code UI/mobile" && grep -n',
+    '     "clipboardImage" src/session/MobileNativeChatOverlay.tsx | head; echo "==',
+    '     "MobileNativeCha…',
+    '✻ Frolicking… (15m 36s · ↓ 56.6k tokens)',
+    "❯ [Image #4] [Image #5] Also see a message i send from claude mobile app isn't",
+    '  still here on our codeui app',
+    '  ctrl+x ctrl+s to send now',
+    '                                                  Ctrl+Y to paste deleted text',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '  [Opus 5 (1M context) xhigh | Max 20x] ██░░░░ 28% (275k/1.0M)',
+    '  Usage ░░░░░░ 7% (resets 1:20 AM) | Weekly ██░░░░ 38% (resets Wed 7:00 PM)',
+    '  ─────────────────────────────────────────────────────────────────────────',
+    '  ✓ Bash ×19 | ✓ Skill ×1',
+    '  ⏵⏵ auto mode on · 1 shell · ← for agents'
+  ]
+
+  it('shows the message the phone just queued instead of nothing', () => {
+    // On the phone this read as an empty queue: the row was walked past as a
+    // transcript echo and the "send now" hint was taken for a wrapped line.
+    expect(queuedMessagesFromScreen(CAPTURED_2_1_277, 'Press up to edit queued messages')).toEqual([
+      "[Image #4] [Image #5] Also see a message i send from claude mobile app isn't\nstill here on our codeui app"
+    ])
+  })
+
+  it('reads several entries, each at column zero', () => {
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '✻ Frolicking… (1s)',
+          '❯ first queued',
+          '  wrapped',
+          '❯ second queued',
+          '  ctrl+x ctrl+s to send now',
+          '────────',
+          '❯'
+        ],
+        'Press up to edit queued messages'
+      )
+    ).toEqual(['first queued\nwrapped', 'second queued'])
+  })
+
+  it('does not take a delivered message above the spinner for a queued one', () => {
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '❯ already delivered',
+          '  and answered',
+          '⏺ Running a command…',
+          '✻ Frolicking… (1s)',
+          '❯ still queued',
+          '  ctrl+x ctrl+s to send now',
+          '────────',
+          '❯'
+        ],
+        'Press up to edit queued messages'
+      )
+    ).toEqual(['still queued'])
+  })
+
+  it('reads the queue under a spinner that hard-wrapped on a phone-width terminal', () => {
+    // Shape from the wrap rule, not a capture: at ~40 columns the spinner
+    // line "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)" breaks and its tail
+    // lands at column zero with no marker.
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '✻ Frolicking… (15m 36s · ↓ 56.6k',
+          'tokens)',
+          '❯ still queued',
+          '  ctrl+x ctrl+s to send now',
+          '────────',
+          '❯'
+        ],
+        'Press up to edit queued messages'
+      )
+    ).toEqual(['still queued'])
+  })
+
+  it('does not take the todo list under the spinner for a message', () => {
+    // Shape from Claude Code 2.1.277's todo rendering, not a capture.
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '✻ Frolicking… (1m 2s · ctrl+t to hide todos)',
+          '  ⎿  ☐ Write the failing test',
+          '     ☐ Fix the parser',
+          '❯ still queued',
+          '  ctrl+x ctrl+s to send now',
+          '────────',
+          '❯'
+        ],
+        'Press up to edit queued messages'
+      )
+    ).toEqual(['still queued'])
+  })
+
+  it('refuses when nothing bounds the block above', () => {
+    // A column-zero marker with no spinner, blank or tool row above it could
+    // as easily be the transcript; a wrong queue rewrite loses messages, an
+    // empty one only hides a pencil.
+    expect(
+      queuedMessagesFromScreen(
+        [
+          '❯ maybe delivered, maybe queued',
+          '  ctrl+x ctrl+s to send now',
+          '────────',
+          '❯'
+        ],
+        'Press up to edit queued messages'
+      )
+    ).toEqual([])
+  })
+
+  it('still reads the 2.1.263 indented rows when the send-now hint is absent', () => {
+    expect(
+      queuedMessagesFromScreen(
+        ['✻ Working…', '', '  ❯ indented entry', '    wrapped', '────────', '❯'],
+        'Press up to edit queued messages'
+      )
+    ).toEqual(['indented entry\nwrapped'])
+  })
+})

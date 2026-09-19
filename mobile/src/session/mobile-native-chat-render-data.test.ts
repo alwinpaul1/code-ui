@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import {
   pendingFoldBoundaries,
   buildMobileNativeChatTransientData,
@@ -198,7 +199,41 @@ describe('buildMobileNativeChatTransientData', () => {
       imagePreviewsByMessageId: { prompt: ['file:///phone-photo.jpg'] }
     })
 
-    expect(result.data[0]?.blocks).toEqual([{ type: 'image-ref', url: 'file:///phone-photo.jpg' }])
+    // The marker's chip slot is what the preview fills (2026-09-19): one
+    // block, drawn as the photo because its url is renderable.
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF, url: 'file:///phone-photo.jpg' }
+    ])
+  })
+
+  it('draws a chip, not words in the caption, for a landed prompt whose image stayed on the desktop', () => {
+    // Device 2026-09-19: "see this Image on Desktop i already send…" read as
+    // the user's own sentence. A phone send draws its pictures above the
+    // caption; a desktop paste now does the same.
+    const rows = [user('prompt', 'see this [Image #1] i already send')]
+    const result = buildMobileNativeChatTransientData({
+      messages: rows,
+      folded: foldMobileNativeChatMessages(rows),
+      streaming: null,
+      pending: []
+    })
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+      { type: 'text', text: 'see this  i already send' }
+    ])
+  })
+
+  it('draws a chip above the caption for an echo whose image was pasted on the desktop', () => {
+    const result = buildMobileNativeChatTransientData({
+      messages: [],
+      folded: [],
+      streaming: null,
+      pending: [{ id: 'p1', text: 'see this [Image #1] i already send' }]
+    })
+    expect(result.data[0]?.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+      { type: 'text', text: 'see this i already send' }
+    ])
   })
 
   it('appends a synthetic bubble for gated streaming text, between transcript and pending', () => {

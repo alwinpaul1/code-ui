@@ -1,0 +1,13 @@
+{
+  "name": "@codeui/expo-rich-paste",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lets an Android TextInput accept images from the keyboard's clipboard and the paste menu, the way the Claude app does: the EditText declares image MIME types and receives the content instead of dropping it.",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}

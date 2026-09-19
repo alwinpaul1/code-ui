@@ -1,6 +1,5 @@
 import {
   StyleSheet,
-  Platform,
   colors,
   radii,
   spacing,
@@ -212,7 +211,7 @@ export const mobileTasksProjectPickerStyles = StyleSheet.create({
     color: colors.textPrimary
   },
   monoText: {
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   pickerSubtitle: {
     fontSize: 11,

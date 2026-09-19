@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
+import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function user(id: string, text: string, extra: NativeChatMessage['blocks'] = []): NativeChatMessage {
@@ -24,9 +25,22 @@ describe('a landed prompt whose image the phone does not have', () => {
     const original = [user('m1', 'see the host terminal [Image #192] it had images')]
     const normalized = [user('m1', 'see the host terminal  it had images')]
     const kept = keepDesktopImagePlaceholders(original, normalized)
-    expect(kept[0]!.blocks[0]).toMatchObject({
-      text: 'see the host terminal Image on Desktop it had images'
-    })
+    // A chip above the caption, as a phone send is laid out — not the words
+    // "Image on Desktop" spliced into the sentence (device, 2026-09-19).
+    expect(kept[0]!.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+      { type: 'text', text: 'see the host terminal  it had images' }
+    ])
+  })
+
+  it('draws one chip per image on a row that carried several', () => {
+    const original = [user('m1', '[Image #1] [Image #2] compare these')]
+    const normalized = [user('m1', 'compare these')]
+    expect(keepDesktopImagePlaceholders(original, normalized)[0]!.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+      { type: 'text', text: 'compare these' }
+    ])
   })
 
   it('leaves a row alone when the picture itself is there', () => {
@@ -56,14 +70,16 @@ describe('a landed prompt whose image the phone does not have', () => {
     expect(keepDesktopImagePlaceholders([], [])).toEqual([])
   })
 
-  it('leaves a marker-only turn to the preview path', () => {
-    // No text block to write into, and the row may still gain a picture further
-    // down the pipeline from a local preview. Adding a placeholder here put one
-    // beside that picture.
+  it('gives a marker-only turn a chip, which a local preview then fills', () => {
+    // The row may still gain a picture further down the pipeline from a local
+    // preview. A text placeholder here used to sit beside that picture; an
+    // image block is the slot the preview fills, so the two cannot both show.
     const original = [user('m1', '[Image #7]')]
     const normalized: NativeChatMessage[] = [
       { id: 'm1', role: 'user', blocks: [], timestamp: 0, source: 'transcript' } as NativeChatMessage
     ]
-    expect(keepDesktopImagePlaceholders(original, normalized)[0]).toBe(normalized[0])
+    expect(keepDesktopImagePlaceholders(original, normalized)[0]!.blocks).toEqual([
+      { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF }
+    ])
   })
 })

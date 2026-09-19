@@ -1,11 +1,10 @@
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
-import { Fragment, memo, useMemo, type ReactNode } from 'react'
+import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Linking, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import {
   MARKDOWN_BASE_SIZE,
-  MARKDOWN_LIST_INDENT,
   useMarkdownStyles,
   type MarkdownStyles
 } from './mobile-markdown-styles'
@@ -21,6 +20,8 @@ import {
 } from './markdown-inline-token-rules'
 import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
 import { useChatTextSelectable } from './chat-text-selectable-context'
+import { MobileMarkdownImage } from './MobileMarkdownImage'
+import type { MarkdownImageResolver } from './markdown-image-source'
 import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
@@ -42,13 +43,27 @@ type Props = {
    *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
    *  paths render as plain text (no behavior change). */
   onOpenFile?: (pathText: string) => void
+  /** Reads an image named from the document (`![fig](fig/plot.svg)`) off the
+   *  host, so it draws as the image. Without it, and for anything the host
+   *  cannot give, an image stays the tappable link inside the prose run. */
+  resolveImage?: MarkdownImageResolver
 }
 
 const MAX_TABLE_ROWS = 40
+/** A `---` drawn as text so it can sit inside a selectable run. Copies as a
+ *  divider, which is what the source line is. */
+const RULE_TEXT = '─'.repeat(24)
 const MAX_TABLE_COLUMNS = 8
 /** Bullet per nesting level, so a sub-item reads as one even where the indent
  *  alone is too narrow to see at ~40 columns. Deeper levels reuse the last. */
 const LIST_BULLETS = ['•', '◦', '▪']
+/** One level of list nesting inside the prose run, as text: a span cannot
+ *  carry a margin, so the indent is spaces. Four is about 16 px at the prose
+ *  size. Narrow on purpose: at ~40 columns a desktop-sized indent leaves a
+ *  third-level item too little room to read. */
+const LIST_INDENT_TEXT = '    '
+/** The bar a quote carries on each of its lines inside the prose run. */
+const QUOTE_BAR = '▎ '
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
@@ -275,9 +290,18 @@ function renderInline(
   return parts
 }
 
-function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile }: Props) {
+function MobileMarkdownInner({
+  content,
+  fallback = '',
+  textScale = 1,
+  onOpenFile,
+  resolveImage
+}: Props) {
   const selectable = useChatTextSelectable()
   const styles = useMarkdownStyles()
+  // The document's width, for figures drawn inline in the prose run (an
+  // inline view needs a size of its own; see MobileMarkdownImage).
+  const [contentWidth, setContentWidth] = useState(0)
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
@@ -294,16 +318,38 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   // Why one Text per run: Android confines a selection to a single Text node,
   // so a reader could select one paragraph but never the next (2026-09-12,
   // screenshot). Consecutive paragraphs and headings become one selectable
-  // Text, headings as nested styled spans and a blank line between blocks;
-  // quotes, lists, fences, tables and images still start a new run.
+  // Text, headings as nested styled spans and a blank line between blocks.
+  // A `---` rule and an image link join the run too, drawn as spans: each
+  // was its own View, and a document with a rule before every section let a
+  // selection reach the end of a section and no further (2026-09-19,
+  // screenshot of thesis_explained.md). Lists and quotes join it as well:
+  // an item was a row View with its own Text, so a selection that started in
+  // the paragraph above a list stopped at the list's first bullet (2026-09-19,
+  // screenshot of the phone). The price is the hanging indent — a span has no
+  // margin, so a wrapped item continues under its bullet, as plain text does.
+  // An image joins it whether or not the phone can draw it: drawn, it is an
+  // inline view inside the Text, which a selection crosses (a figure per
+  // section in a thesis write-up cut every copy at the figure, 2026-09-19).
+  // Fences and tables still start a new run — each needs a View of its own
+  // to draw.
   type Block = (typeof blocks)[number]
-  type ProseBlock = Extract<Block, { type: 'paragraph' | 'heading' }>
+  type ProseBlock = Extract<
+    Block,
+    { type: 'paragraph' | 'heading' | 'rule' | 'image' | 'list' | 'quote' }
+  >
   type Run = { start: number; blocks: Block[]; prose: ProseBlock[] | null }
+  const isProse = (block: Block): block is ProseBlock =>
+    block.type === 'paragraph' ||
+    block.type === 'heading' ||
+    block.type === 'rule' ||
+    block.type === 'list' ||
+    block.type === 'quote' ||
+    block.type === 'image'
   const runs: Run[] = []
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!
     const last = runs.at(-1)
-    if (block.type === 'paragraph' || block.type === 'heading') {
+    if (isProse(block)) {
       if (last?.prose && last.start + last.blocks.length === index) {
         last.blocks.push(block)
         last.prose.push(block)
@@ -316,7 +362,10 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   }
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      onLayout={(event) => setContentWidth(Math.round(event.nativeEvent.layout.width))}
+    >
       {runs.map((run) => {
         const index = run.start
         const block = run.blocks[0]!
@@ -330,6 +379,41 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                     <Text style={[styles.heading, headingScale(styles, member.level)]}>
                       {renderInline(styles, member.text, onOpenFile, chipScale)}
                     </Text>
+                  ) : member.type === 'rule' ? (
+                    <Text style={styles.ruleText}>{RULE_TEXT}</Text>
+                  ) : member.type === 'list' ? (
+                    member.items.map((item, itemIndex) => {
+                      const marker = listMarker(item)
+                      return (
+                        <Fragment key={itemIndex}>
+                          {itemIndex > 0 ? '\n' : null}
+                          {LIST_INDENT_TEXT.repeat(item.depth)}
+                          {marker ? (
+                            <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
+                          ) : null}
+                          {renderInline(styles, item.text, onOpenFile, chipScale)}
+                        </Fragment>
+                      )
+                    })
+                  ) : member.type === 'quote' ? (
+                    <Text style={styles.quoteText}>
+                      {member.text.split('\n').map((line, lineIndex) => (
+                        <Fragment key={lineIndex}>
+                          {lineIndex > 0 ? '\n' : null}
+                          <Text style={styles.quoteBar}>{QUOTE_BAR}</Text>
+                          {renderInline(styles, line, onOpenFile, chipScale)}
+                        </Fragment>
+                      ))}
+                    </Text>
+                  ) : member.type === 'image' ? (
+                    <MobileMarkdownImage
+                      alt={member.alt}
+                      url={member.url}
+                      width={contentWidth}
+                      resolve={resolveImage}
+                      onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+                      styles={styles}
+                    />
                   ) : (
                     // One inline pass over the WHOLE paragraph. Matching line by
                     // line left `**bold` on one source line and `text**` on the
@@ -343,15 +427,6 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             </Text>
           )
         }
-        if (block.type === 'quote') {
-          return (
-            <View key={index} style={styles.quote}>
-              <Text selectable={selectable} style={[styles.quoteText, proseScale]}>
-                {renderInline(styles, block.text, onOpenFile, chipScale)}
-              </Text>
-            </View>
-          )
-        }
         if (block.type === 'code') {
           return renderMarkdownCodeBlock({
             block,
@@ -360,20 +435,6 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             selectable,
             mermaidSourceOccurrences
           })
-        }
-        if (block.type === 'image') {
-          return (
-            <Pressable
-              key={index}
-              style={styles.imageFrame}
-              onPress={() => openMarkdownHref(block.url, onOpenFile)}
-            >
-              <Text style={styles.link}>{block.alt || 'Open image'}</Text>
-              <Text style={styles.imageCaption} numberOfLines={1}>
-                {block.url}
-              </Text>
-            </Pressable>
-          )
         }
         if (block.type === 'table') {
           const totalColumns = tableColumnCount(block.headers, block.rows)
@@ -429,29 +490,6 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               </View>
             </ScrollView>
           )
-        }
-        if (block.type === 'list') {
-          return (
-            <View key={index} style={styles.list}>
-              {block.items.map((item, itemIndex) => (
-                <View
-                  key={itemIndex}
-                  style={[
-                    styles.listItem,
-                    item.depth > 0 ? { marginLeft: item.depth * MARKDOWN_LIST_INDENT } : null
-                  ]}
-                >
-                  <Text style={[styles.listMarker, proseScale]}>{listMarker(item)}</Text>
-                  <Text selectable={selectable} style={[styles.listText, proseScale]}>
-                    {renderInline(styles, item.text, onOpenFile, chipScale)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )
-        }
-        if (block.type === 'rule') {
-          return <View key={index} style={styles.rule} />
         }
         return null
       })}

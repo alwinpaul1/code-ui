@@ -32,13 +32,24 @@ function text(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed
 }
 
+/** The agent's name for itself without any parenthesised aside: Claude Code
+ *  paints "Opus 5 (1M context)", and the window size is a fact about the
+ *  window, not the model. On a phone-width pill it pushed the effort off the
+ *  end (2026-09-19: "opus 5 xhigh", "opus 4.8 max"). */
+function withoutAsides(label: string): string {
+  return label.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
+}
+
 export function sessionModelPillLabel(live: LiveModelPair | null): string | null {
   // A label with no model behind it is not a statement about this session.
   const model = text(live?.model)
   if (model === null) {
     return null
   }
-  const name = text(live?.label) ?? model
+  // The screen parser can hand the painted name back as the model itself,
+  // with no separate label; the aside comes off whichever one is shown.
+  const label = text(live?.label)
+  const name = text(withoutAsides(label ?? model)) ?? text(withoutAsides(model)) ?? model
   const effort = text(live?.effort)
   return effort === null ? name : `${name} ${effort}`
 }

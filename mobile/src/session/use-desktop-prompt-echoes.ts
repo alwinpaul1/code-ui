@@ -111,9 +111,19 @@ export function useDesktopPromptEchoes(
       const beaconed = prompt.anchorId
       const anchorRow =
         beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
+      // The transcript names the row it was written after, and that row is
+      // often a tool call or result Orca never projects — so the id is never
+      // held. The record's own time is enough: the last row written before
+      // it is where it belongs. Without this the wait ran out and the echo
+      // fell to the arrival tail, three turns under the reply that answered
+      // it (device, 2026-09-19).
+      const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, prompt.at) : undefined
       if (anchorRow) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, anchorRow.id)
+      } else if (timedRow !== undefined) {
+        waitsByNonce.delete(prompt.nonce)
+        rememberAnchor(prompt.nonce, timedRow)
       } else if (beaconed === undefined) {
         // An older hook names no row; the arrival tail is all there is.
         rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)
@@ -155,6 +165,33 @@ export function useDesktopPromptEchoes(
     })
   }
   return useStableEchoes(echoes)
+}
+
+/** The id of the last row written at or before `at`, null when every held
+ *  row is later (the prompt led the conversation), undefined when there is no
+ *  time to go by or no row carries one. */
+export function lastRowBefore(
+  rawMessages: readonly NativeChatMessage[],
+  at: number | undefined
+): string | null | undefined {
+  if (at === undefined) {
+    return undefined
+  }
+  let found: string | null | undefined
+  let any = false
+  for (const message of rawMessages) {
+    if (message.timestamp === null) {
+      continue
+    }
+    any = true
+    if (message.timestamp <= at) {
+      found = message.id
+    }
+  }
+  if (!any) {
+    return undefined
+  }
+  return found ?? null
 }
 
 /** Drop prompts the transcript already shows: a prompt submitted while the

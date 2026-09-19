@@ -28,9 +28,15 @@ importers:
       '@codeui/expo-background-link':
         specifier: file:./packages/expo-background-link
         version: file:packages/expo-background-link(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
+      '@codeui/expo-rich-paste':
+        specifier: file:./packages/expo-rich-paste
+        version: file:packages/expo-rich-paste(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
       '@expo-google-fonts/instrument-sans':
         specifier: 0.4.2
         version: 0.4.2
+      '@expo-google-fonts/jetbrains-mono':
+        specifier: ^0.4.1
+        version: 0.4.1
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
@@ -1198,6 +1204,12 @@ packages:
       expo: '*'
       react-native: '*'
 
+  '@codeui/expo-rich-paste@file:packages/expo-rich-paste':
+    resolution: {directory: packages/expo-rich-paste, type: directory}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   '@egjs/hammerjs@2.0.17':
     resolution: {integrity: sha512-XQsZgjm2EcVUiZQf11UBJQfmZeEmOW8DpI1gsFeln6w0ae0ii4dMQEQ0kjl6DspdWX1aGY1/loyXnP0JS06e/A==}
     engines: {node: '>=0.8.0'}
@@ -1563,6 +1575,9 @@ packages:
 
   '@expo-google-fonts/instrument-sans@0.4.2':
     resolution: {integrity: sha512-YR0jemCJ/eUlknOfxxxiLnJWpFDaT0KgLiB1q333jIDPlRAERfuMpOislkWA1A7HGX85N9LCsjWLlB3QOZo1wg==}
+
+  '@expo-google-fonts/jetbrains-mono@0.4.1':
+    resolution: {integrity: sha512-CslACrtMOcRwoWXCO7OMEI+9w3fukWSoBtvNz46OqPoogEuuoY0tkDY1O8sFumk8t0pC6Cx0Xr95O0TOQhpkug==}
 
   '@expo-google-fonts/material-symbols@0.4.34':
     resolution: {integrity: sha512-PdwETUhvu1gHF1e8eIyEHnBJLq/dRNoTrT5yhsGUfGyRxH5pbm54dF3+QPknxwMKj0M1trN7PSelYz+yzlt3lA==}
@@ -8260,6 +8275,11 @@ snapshots:
       expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
       react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
 
+  '@codeui/expo-rich-paste@file:packages/expo-rich-paste(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))':
+    dependencies:
+      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
+      react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
+
   '@egjs/hammerjs@2.0.17':
     dependencies:
       '@types/hammerjs': 2.0.46
@@ -8485,6 +8505,8 @@ snapshots:
       levn: 0.4.1
 
   '@expo-google-fonts/instrument-sans@0.4.2': {}
+
+  '@expo-google-fonts/jetbrains-mono@0.4.1': {}
 
   '@expo-google-fonts/material-symbols@0.4.34': {}
 

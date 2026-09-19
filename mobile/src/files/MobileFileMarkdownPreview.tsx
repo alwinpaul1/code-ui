@@ -7,6 +7,8 @@ import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
 } from './MobileFilePreviewSourceText'
+import { useScrollReadingPosition } from './use-reading-position'
+import type { MarkdownImageResolver } from '../components/markdown-image-source'
 
 type Props = {
   relativePath: string
@@ -14,6 +16,13 @@ type Props = {
   truncated: boolean
   byteLength: number
   initialLine?: number
+  /** Names the document across opens, so the rendered view scrolls back to
+   *  where the reader left it, app restarts included. Without it the document
+   *  opens at the top every time. */
+  readingPositionKey?: string | null
+  /** Reads an image the document names off the host, so it draws as the
+   *  image. Without it images stay tappable links. */
+  resolveImage?: MarkdownImageResolver
   /**
    * The raw file, drawn by the caller's own source view. The session file tab
    * lends its numbered, virtualized one — a single <Text> holding a 4000-line
@@ -39,10 +48,13 @@ export function MobileFileMarkdownPreview({
   truncated,
   byteLength,
   initialLine,
+  readingPositionKey = null,
+  resolveImage,
   renderSource
 }: Props) {
   const { colors } = useTheme()
   const styles = useThemedStyles(markdownPreviewStyles)
+  const readingScroll = useScrollReadingPosition(readingPositionKey)
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
   const [previousInitialLine, setPreviousInitialLine] = useState(initialLine)
@@ -87,11 +99,15 @@ export function MobileFileMarkdownPreview({
         </Pressable>
       </View>
       {mode === 'preview' ? (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
+        <ScrollView
+          {...readingScroll}
+          style={styles.scroll}
+          contentContainerStyle={styles.markdownContent}
+        >
           {truncated ? (
             <MobileFilePreviewTruncatedNote byteLength={byteLength} style={styles.truncatedNote} />
           ) : null}
-          <MobileMarkdown content={content} />
+          <MobileMarkdown content={content} resolveImage={resolveImage} />
         </ScrollView>
       ) : renderSource ? (
         renderSource()

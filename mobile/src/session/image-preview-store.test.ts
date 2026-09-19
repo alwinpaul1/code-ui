@@ -12,7 +12,7 @@ describe('image preview store', () => {
 
   it('opens with a uri and label, then closes to null', () => {
     openImagePreview('file:///a.png', 'a photo')
-    expect(peekImagePreview()).toEqual({ uri: 'file:///a.png', uris: ['file:///a.png'], index: 0, label: 'a photo' })
+    expect(peekImagePreview()).toMatchObject({ uri: 'file:///a.png', uris: ['file:///a.png'], index: 0, label: 'a photo' })
     closeImagePreview()
     expect(peekImagePreview()).toBeNull()
   })

@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { sessionTabsCacheKey, writeCachedSessionTabs } from './mobile-session-tabs-cache'
+import { withoutTranscriptTailTerminals } from './transcript-tail/transcript-tail-command'
+import { ownedTranscriptTailHandles } from './transcript-tail/transcript-tail-ownership'
 import { recordSessionTabVisit } from './mobile-session-tab-history'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -65,6 +67,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         closedTabTombstonesRef.current,
         Date.now()
       )
+      nextTabs = withoutTranscriptTailTerminals(nextTabs, ownedTranscriptTailHandles())
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
       const currentMarkdownDocs = markdownDocsRef.current
@@ -87,7 +90,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       nextTabs = reconcileSessionTabsWithTerminalList(
         nextTabs,
-        terminalsRef.current
+        withoutTranscriptTailTerminals(terminalsRef.current, ownedTranscriptTailHandles())
       ) as MobileSessionTab[]
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0

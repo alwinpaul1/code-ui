@@ -24,7 +24,6 @@ import {
   MobileNativeChatComposerTasks,
   useMobileNativeChatTaskProgress
 } from './mobile-native-chat-composer-tasks'
-import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
@@ -83,7 +82,7 @@ export function MobileNativeChatView({
   composerText,
   onComposerTextChange,
   composerFocusRequest,
-  onCaptureImage, onAttachImage, onPasteImage,
+  onCaptureImage, onAttachImage, onPasteImage, onPasteImageFile,
   onAttachFile,
   attachments,
   onRemoveAttachment,
@@ -440,6 +439,7 @@ export function MobileNativeChatView({
         sessionOptions={sessionOptions}
         onCaptureImage={onCaptureImage}
         onAttachImage={onAttachImage} onPasteImage={onPasteImage}
+        onPasteImageFile={onPasteImageFile}
         onAttachFile={onAttachFile}
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
@@ -466,7 +466,6 @@ export function MobileNativeChatView({
         onNeedSkills={onNeedSkills}
       />
       </View>
-      <ImagePreviewModal />
     </View>
   )
 }

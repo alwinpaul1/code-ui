@@ -190,7 +190,8 @@ export const fontFamily = {
   medium: 'InstrumentSans_500Medium',
   semibold: 'InstrumentSans_600SemiBold',
   bold: 'InstrumentSans_700Bold',
-  mono: 'monospace'
+  // Bundled, not the platform alias: see `useAppFonts` for the Samsung reason.
+  mono: 'JetBrainsMono_400Regular'
 } as const
 
 export type FontWeight = Exclude<keyof typeof fontFamily, 'mono'>

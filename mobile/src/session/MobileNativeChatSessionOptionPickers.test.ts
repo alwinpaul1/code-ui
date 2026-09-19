@@ -197,11 +197,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
       liveModel: { model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' }
     })
-    expect(pill('Model').props.accessibilityLabel).toBe('Model, Opus 5 (1M context) xhigh')
+    expect(pill('Model').props.accessibilityLabel).toBe('Model, Opus 5 xhigh')
     const labels = renderer!.root
       .findAll((node) => node.type === 'Text')
       .map((node) => (node.props as { children?: unknown }).children)
-    expect(labels).toContain('Opus 5 (1M context) xhigh')
+    expect(labels).toContain('Opus 5 xhigh')
     expect(labels).not.toContain('Sonnet 5 High')
   })
 

@@ -1,5 +1,5 @@
 import { useTerminalEngine } from '../terminal/use-terminal-engine'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
@@ -18,6 +18,8 @@ import { MarkdownReader } from './MobileSessionMarkdownReader'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS } from '../terminal/terminal-key-definitions'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import { readingPositionKey } from '../storage/reading-positions'
+import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 
 export function MobileSessionActiveContent({
   controller
@@ -109,6 +111,17 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+
+  // Images a document names, read off the host for the .md tab and the file
+  // tab's rendered view; one resolver per document, so a figure fetches once.
+  const documentPath = activeMarkdownTab?.relativePath ?? activeFileTab?.relativePath ?? null
+  const resolveImage = useMemo(
+    () =>
+      documentPath
+        ? createMarkdownImageResolver({ client, worktreeId, documentRelativePath: documentPath })
+        : undefined,
+    [client, documentPath, worktreeId]
+  )
   // Claude Code only cycles modes (Shift+Tab), and which modes are in the cycle
   // depends on how the session was started; Codex has two collaboration modes
   // on the same key. Press, wait for the footer to move, judge, repeat — and
@@ -195,6 +208,8 @@ export function MobileSessionActiveContent({
       <MarkdownReader
         documentId={activeMarkdownTab.id}
         doc={markdownDocs.get(activeMarkdownTab.id)}
+        readingPositionKey={readingPositionKey(hostId, worktreeId, activeMarkdownTab.relativePath)}
+        resolveImage={resolveImage}
         onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
         onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
         onSave={() => void saveMarkdownTab(activeMarkdownTab)}
@@ -215,6 +230,8 @@ export function MobileSessionActiveContent({
         title={activeFileTab.title || 'File'}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
+        readingPositionKey={readingPositionKey(hostId, worktreeId, activeFileTab.relativePath)}
+        resolveImage={resolveImage}
         onAskAboutLines={(range) => askAboutFileLines(activeFileTab.relativePath, range)}
         diffCommentActions={
           activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'

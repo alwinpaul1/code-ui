@@ -14,7 +14,13 @@ export default defineConfig({
         new URL('./src/test/react-native-reanimated-mock.ts', import.meta.url)
       ),
       // Why: react-native-pdf is a native view with no Node entry.
-      'react-native-pdf': fileURLToPath(new URL('./src/test/react-native-pdf-mock.ts', import.meta.url))
+      'react-native-pdf': fileURLToPath(new URL('./src/test/react-native-pdf-mock.ts', import.meta.url)),
+      // Why: the rich-paste module imports `expo`, which has no Node entry either.
+      '@codeui/expo-rich-paste': fileURLToPath(
+        new URL('./src/test/expo-rich-paste-mock.ts', import.meta.url)
+      ),
+      // Why: react-native-svg's entry is TypeScript the Node runtime cannot parse.
+      'react-native-svg': fileURLToPath(new URL('./src/test/react-native-svg-mock.ts', import.meta.url))
     }
   },
   // Why: the app tsconfig intentionally excludes tests; Vite 8's OXC transform

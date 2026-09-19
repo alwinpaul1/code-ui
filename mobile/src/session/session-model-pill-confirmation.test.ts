@@ -22,10 +22,24 @@ import { sessionModelPillLabel } from './session-model-pill'
  * figure that cannot be known.
  */
 describe('the model pill states the agent’s own word', () => {
-  it('shows the label the status line painted, with its effort', () => {
+  it('shows the model family and its effort, and drops the context-window aside', () => {
+    // Asked for 2026-09-19: "opus 5 xhigh", "opus 4.8 max". The status line
+    // paints "Opus 5 (1M context)"; the aside is a fact about the window, not
+    // the model, and it pushed the effort off a phone-width pill.
     expect(
       sessionModelPillLabel({ model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' })
-    ).toBe('Opus 5 (1M context) xhigh')
+    ).toBe('Opus 5 xhigh')
+    expect(sessionModelPillLabel({ model: 'opus', label: 'Opus 4.8', effort: 'max' })).toBe(
+      'Opus 4.8 max'
+    )
+    expect(
+      sessionModelPillLabel({ model: 'opus', label: '(1M context)', effort: 'high' })
+    ).toBe('opus high')
+    // The device showed "Opus 5 (1M conte…" after the label fix: the parser
+    // had put the painted name in `model` with no label at all.
+    expect(
+      sessionModelPillLabel({ model: 'Opus 5 (1M context)', label: null, effort: 'xhigh' })
+    ).toBe('Opus 5 xhigh')
   })
 
   it('shows the label alone when the agent stated no effort', () => {

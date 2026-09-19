@@ -26,7 +26,9 @@ export function splitSyntaxIntoLines(
   return lines
 }
 
-/** How wide the gutter has to be for the highest line number. */
-export function gutterWidthForLines(count: number, charWidth = 8): number {
+/** How wide the gutter has to be for the highest line number: its digits
+ *  in the code face (JetBrains Mono at 14 px is ~8.4 px a glyph) plus the gap
+ *  the gutter keeps before the code (`MobileSyntaxLine`'s paddingRight). */
+export function gutterWidthForLines(count: number, charWidth = 9): number {
   return Math.max(2, String(Math.max(count, 1)).length) * charWidth + 10
 }

@@ -1,8 +1,12 @@
-import { StyleSheet, Text, type TextStyle } from 'react-native'
+import { StyleSheet, Text, View, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
 import { colors } from '../theme/mobile-theme'
 
-/** One numbered source line: the gutter, then the line's coloured segments. */
+/** One numbered source line: the gutter in its own column, then the line's
+ *  coloured segments beside it. A row, not one Text with the number as a span:
+ *  a span has no column, so a line that wrapped went back to column zero
+ *  under its number and the file read as prose (screenshot, 2026-09-19). Beside
+ *  a fixed gutter, a wrapped line continues under its own first character. */
 export function MobileSyntaxLine({
   number,
   segments,
@@ -41,19 +45,42 @@ export function MobileSyntaxLine({
   onPress?: () => void
 }) {
   return (
-    <Text
-      selectable={selectable}
-      style={highlighted ? [lineStyle, highlightStyle] : lineStyle}
-      onLongPress={onLongPress}
-      onPress={onPress}
-    >
-      <Text selectable={false} style={[gutterStyle, { width: gutterWidth }]}>
-        {String(number).padStart(gutterDigits, ' ') + '  '}
+    <View style={highlighted ? [lineStyles.row, highlightStyle] : lineStyles.row}>
+      <Text
+        selectable={false}
+        style={[lineStyle, gutterStyle, lineStyles.gutter, { width: gutterWidth }]}
+        onLongPress={onLongPress}
+        onPress={onPress}
+      >
+        {String(number).padStart(gutterDigits, ' ')}
       </Text>
-      <MobileSyntaxSegments segments={segments} />
-    </Text>
+      <Text
+        selectable={selectable}
+        style={[lineStyle, lineStyles.code]}
+        onLongPress={onLongPress}
+        onPress={onPress}
+      >
+        <MobileSyntaxSegments segments={segments} />
+      </Text>
+    </View>
   )
 }
+
+const lineStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start'
+  },
+  gutter: {
+    textAlign: 'right',
+    paddingRight: 10
+  },
+  code: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0
+  }
+})
 
 export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
   return (

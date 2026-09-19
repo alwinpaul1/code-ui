@@ -58,7 +58,12 @@ export function makeChatViewStyles(theme: Theme) {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 0
+      bottom: 0,
+      // Opaque: the dock floats over the list, and with the reader scrolled
+      // off the tail a row that slid under the Working/Tools strip showed
+      // through it — the queue box's text over "Working" (device,
+      // 2026-09-19). The page colour, so the strip reads as part of the page.
+      backgroundColor: colors.bg
     },
     listContent: {
       paddingVertical: space.sm,

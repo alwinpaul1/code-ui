@@ -49,8 +49,11 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // key) and the render tree (+4). The statements and declarations pins do not move.
 const TAP_TARGET_STATEMENTS = 'd7350b217e5d774c7c2ebea307babb6beb91ebf9ef73cd1d76f38b8b9ebe8dc8'
 const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
-const TAP_TARGET_SEMANTICS = '0da438601c08cbed75ab29836dcae9a099644f8401e2e86a61d3b772cc8080cf'
-const PRE_REFACTOR_STYLES = '02b2a5bb8efde1de40d6549ef97f5ae4ac8288927736dccb028d62fe19de2f2d'
+// 2026-09-19: the two Platform.select monospace stacks in the tasks styles
+// became typography.monoFamily (the bundled code face — 'monospace' is not
+// monospace on a Samsung), and their Platform imports went with them: 6 lines.
+const TAP_TARGET_SEMANTICS = '17de745e8dd74a1d904833e7a4a5a3a5233f79b1613a4b438cbcde0e5ed87fee'
+const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
 const TAP_TARGET_RENDER_TREE = 'ee1e8e3181777d7764c0cad5909d60de997f5aa6f05688952285623d6b392ce9'
 
 describe('Mobile Tasks refactor parity', () => {
@@ -78,7 +81,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_455)
+    expect(semantics.split('\n')).toHaveLength(3_449)
     expect(hash(semantics)).toBe(TAP_TARGET_SEMANTICS)
   })
 

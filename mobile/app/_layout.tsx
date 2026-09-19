@@ -29,6 +29,7 @@ import { sendQuestionAnswerFromNotification } from '../src/notifications/questio
 import { repostBannerWithReplyVerdict } from '../src/notifications/question-reply-verdict'
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
+import { ImagePreviewModal } from '../src/components/ImagePreviewModal'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
@@ -322,6 +323,9 @@ function ThemedRoot() {
         {/* Mounted once, above every route: the battery prompt is raised from a
             launch effect outside the tree and needs somewhere to render. */}
         <MobileBackgroundPowerPrompt />
+        {/* Likewise the full-screen image viewer: a chat thumbnail, a
+            markdown figure and an image file all open it (2026-09-19). */}
+        <ImagePreviewModal />
       </View>
     </RpcClientProvider>
   )

@@ -98,6 +98,38 @@ describe('where a desktop prompt echo anchors', () => {
     expect(latest[0]!.baselineTailMessageId).toBe('a3')
   })
 
+  // 2026-09-19, on the device: the transcript names the row a queued prompt
+  // was written after, but that row is a tool call Orca never projects, so
+  // the id was never held, the wait ran out, and the bubble fell to the
+  // arrival tail — three turns under the reply that answered it. The record's
+  // own time places it after the last row written before it.
+  it('anchors by time when the row it names is one the phone never holds', () => {
+    const at = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
+    const raw = [at('a1', 1000), at('a2', 2000), at('a3', 3000), at('a4', 4000)]
+    const prompts: DesktopPrompt[] = [
+      { nonce: 'u1', text: 'typed mid-turn', anchorId: 'toolu-row-never-projected', at: 2500 }
+    ]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
+    // Later rows arriving do not move it.
+    act(() => {
+      renderer!.update(createElement(Probe, { prompts, raw: [...raw, at('a5', 5000)] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('a2')
+  })
+
+  it('leads the conversation when it was typed before every held row', () => {
+    const at = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
+    const raw = [at('a1', 1000), at('a2', 2000)]
+    const prompts: DesktopPrompt[] = [{ nonce: 'u2', text: 'first', anchorId: 'x', at: 500 }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBeNull()
+  })
+
   it('falls back to the arrival tail when the beacon carries no anchor (older hook)', () => {
     const raw = [assistant('a1'), assistant('a2'), assistant('a3')]
     const prompts: DesktopPrompt[] = [{ nonce: '8', text: 'plain' }]

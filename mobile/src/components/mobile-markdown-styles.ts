@@ -13,10 +13,6 @@ export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
  *  A chip in a table cell was sliced across the middle (2026-09-14). */
 export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 2
 
-/** One level of list nesting, in px. Narrow on purpose: at ~40 columns a
- *  desktop-sized indent leaves a third-level item too little room to read. */
-export const MARKDOWN_LIST_INDENT = 16
-
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
   return StyleSheet.create({
@@ -116,16 +112,17 @@ export function makeMarkdownStyles(theme: Theme) {
       color: colors.accentText,
       textDecorationLine: 'underline'
     },
-    quote: {
-      borderLeftWidth: 2,
-      borderLeftColor: colors.borderStrong,
-      paddingLeft: space.md
-    },
+    /** A quote inside the prose run: muted text behind a bar span on each
+     *  line (`quoteBar`). It was a View with a left border; see MobileMarkdown
+     *  for why it is a span now (2026-09-19). */
     quoteText: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
       lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.textSecondary
+    },
+    quoteBar: {
+      color: colors.borderStrong
     },
     codeBlock: {
       backgroundColor: colors.codeBg,
@@ -162,20 +159,17 @@ export function makeMarkdownStyles(theme: Theme) {
       color: colors.textMuted,
       marginTop: space.xs
     },
-    imageFrame: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      backgroundColor: colors.bgRaised,
-      overflow: 'hidden',
-      padding: space.sm
-    },
-    imageCaption: {
-      paddingHorizontal: space.sm,
-      paddingVertical: space.xs,
+    /** The image link's path, as a span inside the prose run (the link is
+     *  what an image is until the host hands the file over, or for good when
+     *  it will not; see MobileMarkdownImage). */
+    imageCaptionInline: {
       fontFamily: fonts.regular,
       fontSize: 11,
       color: colors.textSecondary
+    },
+    /** A `---` inside the prose run; the same colour the View rule used. */
+    ruleText: {
+      color: colors.border
     },
     table: {
       borderTopWidth: 1,
@@ -221,25 +215,15 @@ export function makeMarkdownStyles(theme: Theme) {
       fontSize: MARKDOWN_BASE_SIZE - 2,
       color: colors.textMuted
     },
-    list: {
-      gap: space.xs + 2
-    },
-    listItem: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: space.sm
-    },
-    listMarker: {
-      // minWidth, not width: a fixed 22 clipped `10.` and beyond. Each marker
-      // then sizes to its own content, so a list that crosses 9 indents its
-      // tenth item a few px further than its ninth — the readable trade against
-      // a clipped number.
-      minWidth: 22,
+    /** A list marker inside the prose run. The list was a column of row
+     *  Views with a marker cell and a text cell; see MobileMarkdown for why it
+     *  is spans now (2026-09-19). */
+    listMarkerInline: {
       fontFamily: fonts.mono,
       fontSize: MARKDOWN_BASE_SIZE - 1,
-      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.textSecondary
     },
+    /** Kept for the chip-clipping fixture, which measures a list line. */
     listText: {
       flex: 1,
       minWidth: 0,
@@ -248,6 +232,8 @@ export function makeMarkdownStyles(theme: Theme) {
       lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
+    /** The notice row's divider (MobileNativeChatNoticeRow); the markdown
+     *  document draws its own `---` as `ruleText` inside the prose run. */
     rule: {
       height: 1,
       backgroundColor: colors.border

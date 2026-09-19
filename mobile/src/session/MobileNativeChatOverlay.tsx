@@ -11,6 +11,10 @@ import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { witnessesToRemember } from './mobile-native-chat-witness-memory'
 import {
+  pendingTextsStillDrawn,
+  pendingWithoutTranscriptTwins
+} from './transcript-tail/transcript-tail-own-sends'
+import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
@@ -154,12 +158,15 @@ export function MobileNativeChatOverlay({
   const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
   // The hook fires for the phone's own sends too, and those already have a
   // pending echo, so anything matching one is left out (2026-09-13).
+  // …except a send the transcript itself has a record of: that record says
+  // where the message was taken, the phone's echo only guessed, so the echo
+  // steps aside for it (2026-09-19, see transcript-tail-own-sends.ts).
   const unlandedPrompts = useMemo(
     () =>
       withoutLandedDesktopPrompts(
         desktopPrompts,
         baseFolded,
-        controller.chatPending.map((p) => p.text)
+        pendingTextsStillDrawn(controller.chatPending, desktopPrompts)
       ),
     [controller.chatPending, desktopPrompts, baseFolded]
   )
@@ -202,13 +209,12 @@ export function MobileNativeChatOverlay({
       rememberEcho?.(witness.id, witness.text, witness.anchorId)
     }
   }, [absorbedEchoes, desktopEchoes, rememberEcho])
-  const pendingWithDesktopPrompts = useMemo(
-    () =>
-      desktopEchoes.length > 0 || absorbedEchoes.length > 0
-        ? [...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes]
-        : projectedQueue.pending,
-    [absorbedEchoes, desktopEchoes, projectedQueue.pending]
-  )
+  const pendingWithDesktopPrompts = useMemo(() => {
+    const own = pendingWithoutTranscriptTwins(projectedQueue.pending, desktopPrompts)
+    return desktopEchoes.length > 0 || absorbedEchoes.length > 0
+      ? [...own, ...absorbedEchoes, ...desktopEchoes]
+      : own
+  }, [absorbedEchoes, desktopEchoes, desktopPrompts, projectedQueue.pending])
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]
@@ -303,6 +309,7 @@ export function MobileNativeChatOverlay({
         onCaptureImage={() => void images.attachImage('camera')}
         onAttachImage={() => void images.attachImage('library')}
         onPasteImage={clipboardImage ? () => void images.attachImage('clipboard') : undefined}
+        onPasteImageFile={(uri) => void images.attachImageFile(uri)}
         onAttachFile={() => void images.attachDocument()}
         attachments={images.attachments}
         onRemoveAttachment={images.removeAttachment}

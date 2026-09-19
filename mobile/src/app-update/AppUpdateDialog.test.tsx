@@ -94,6 +94,11 @@ vi.mock('react-native', async () => {
     Linking: { openURL: mocks.openUrl },
     Modal: 'Modal',
     Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
+    // Release notes may carry an image; the markdown image block measures it
+    // through Image.getSize, and here there is nothing to measure.
+    Image: Object.assign(host('Image'), {
+      getSize: (_uri: string, _ok: unknown, fail?: () => void) => fail?.()
+    }),
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
     StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 0.5 },
@@ -185,12 +190,18 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return Object.assign({}, ...list.filter(Boolean))
 }
 
+/** Every string under the node, in reading order. Recursive because the
+ *  notes' list lives inside one selectable Text as spans (2026-09-19), so a
+ *  bullet's words are a grandchild of the run, not a child of their own Text. */
 function textOf(node: ReactTestInstance): string {
-  return node
-    .findAllByType('Text')
-    .flatMap((text) => (Array.isArray(text.props.children) ? text.props.children : [text.props.children]))
-    .filter((child) => typeof child === 'string')
+  return node.children
+    .map((child) => (typeof child === 'string' ? child : textOf(child)))
     .join('')
+}
+
+/** The bullet markers the notes draw: one span per list item. */
+function bullets(root: ReactTestInstance): ReactTestInstance[] {
+  return root.findAll((node) => node.type === 'Text' && node.props.children === '•  ')
 }
 
 function buttons(root: ReactTestInstance): ReactTestInstance[] {
@@ -375,10 +386,7 @@ describe('release notes', () => {
     const copy = textOf(root)
     expect(copy).toContain("What's changed")
     expect(copy).toContain('Draw a send where it happened')
-    const bullets = root.findAll(
-      (node) => node.type === 'Text' && node.props.children === '•'
-    )
-    expect(bullets).toHaveLength(8)
+    expect(bullets(root)).toHaveLength(8)
     // The section label is a heading by weight, not a 22px display line the
     // 270 card has no room for.
     const label = root.findAll(
@@ -409,14 +417,14 @@ describe('release notes', () => {
     expect(style.maxHeight).toBe(220)
     expect(style.height).toBeUndefined()
     expect(style.minHeight).toBeUndefined()
-    expect(root.findAll((node) => node.type === 'Text' && node.props.children === '•')).toHaveLength(1)
+    expect(bullets(root)).toHaveLength(1)
   })
 
   it('fall back to one line when the release carries none', async () => {
     showAvailable(null)
     const root = (await renderDialog()).root
     expect(textOf(root)).toContain('Fixes and improvements.')
-    expect(root.findAll((node) => node.type === 'Text' && node.props.children === '•')).toHaveLength(0)
+    expect(bullets(root)).toHaveLength(0)
   })
 
   it('keep the full changelog reachable as a short link, not a bare URL', async () => {

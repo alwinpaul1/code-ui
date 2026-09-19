@@ -153,7 +153,16 @@ permission mode.
 
 When a figure is not on the beacon and not on screen, show nothing rather than
 a number from anywhere else. A reader that opened a host terminal to read
-transcript files was removed on 2026-09-09; opening a terminal is still out.
+transcript files was removed on 2026-09-09. **One exception was granted on
+2026-09-19, for parity with the VS Code extension on hand-started sessions:**
+the chat over a Claude terminal tab opens ONE background host terminal running
+`tail -F` on the session's own transcript (`mobile/src/session/transcript-tail/`),
+reads it back over `terminal.read`, and hides that tab from the phone's strip
+by its title. That is how mid-turn messages from other clients, the queue and
+the tool call under way reach the phone without a hook. It reads what the agent
+writes for itself and draws nothing in the agent's terminal; it is still a tab
+on the desktop, which the user accepted. No other terminal may be opened to read
+files, and the HUD figures still come only from the beacon and the screen.
 
 **When a figure genuinely cannot be known, show what is known and say the rest
 is unknown.** Never invent a denominator. Claude Code's TRANSCRIPT never

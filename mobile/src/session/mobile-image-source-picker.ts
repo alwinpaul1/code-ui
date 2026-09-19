@@ -177,6 +177,21 @@ async function* pickFromFiles(
   }
 }
 
+/** Image files already on the phone, by URI: what the composer received from
+ *  the keyboard's clipboard panel or the paste menu (`expo-rich-paste` copies
+ *  each into the app cache). No picker, no permission — the bytes are ours. */
+export async function* pickMobileImageFiles(
+  uris: readonly string[],
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+): AsyncGenerator<PickedMobileImage> {
+  for (const uri of uris) {
+    const base64 = await readUriAsBase64(uri, undefined, createFile)
+    if (base64) {
+      yield { base64, uri }
+    }
+  }
+}
+
 /** Any document (PDF, docx, csv, source…) via the system file picker. The bytes
  *  ride the same host upload as images (the only byte channel a phone has). */
 export async function* pickMobileDocuments(

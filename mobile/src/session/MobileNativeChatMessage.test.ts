@@ -48,6 +48,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'u1', role: 'user', blocks, timestamp: null, source: 'transcript' }
@@ -243,6 +244,29 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root)).toContain('Image on Desktop')
     // The bubble itself is tappable (it discloses the copy control); the
     // image chip must not be.
+    expect(
+      tree.root
+        .findAllByType('Pressable')
+        .filter((node) => node.props.onPress && node.props.accessibilityLabel !== 'Sent prompt')
+    ).toHaveLength(0)
+    expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  it('draws a desktop-pasted image the phone has no bytes for as the same chip, not tappable', () => {
+    // Device 2026-09-19: the `[Image #N]` in a landed prompt was drawn as the
+    // words "Image on Desktop" inside the sentence. It is now an image block
+    // with the desktop stand-in path, and that block draws the chip.
+    const onOpenFile = vi.fn()
+    const tree = render(
+      userMessage([
+        { type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF },
+        { type: 'text', text: 'see this i already send' }
+      ]),
+      { onOpenFile }
+    )
+    expect(textIn(tree.root)).toContain('Image on Desktop')
+    expect(textIn(tree.root)).toContain('see this i already send')
+    expect(tree.root.findAllByType('Image' as never)).toHaveLength(0)
     expect(
       tree.root
         .findAllByType('Pressable')

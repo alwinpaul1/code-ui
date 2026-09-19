@@ -36,8 +36,12 @@ import {
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useAgentHudBeacon } from './agent-hud-beacon'
+import {
+  useTranscriptTail,
+  useTranscriptTailPrompts,
+  useTranscriptTailQueue
+} from './transcript-tail/use-transcript-tail'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
-const NO_DESKTOP_PROMPTS: { nonce: string; text: string }[] = []
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -107,6 +111,17 @@ export function useMobileNativeChatController(
       connState,
       onSendError
     })
+  // The agent's own transcript, tailed on the host: what a hand-started
+  // session never beacons — a message from the desktop or the Claude app
+  // mid-turn, and the queue (2026-09-19).
+  const transcriptTail = useTranscriptTail({
+    client,
+    hostId,
+    worktreeId,
+    transcriptPath: activeChatResolution?.transcriptPath ?? null,
+    sessionId: activeChatSessionId,
+    enabled: showNativeChat && !activeChatStructured && connState === 'connected' && activeChatResolution?.agent === 'claude'
+  })
   const handleBeacon = useAgentHudBeacon(activeHandle)
   // Only the beacon of the session this tab is showing: a beacon is keyed by
   // terminal handle, and a handle outlives the process that emitted into it,
@@ -114,6 +129,7 @@ export function useMobileNativeChatController(
   // previous session's desktop prompts (2026-09-18). `null` while the tab
   // does not yet know its session.
   const hudBeacon = agentHudBeaconMatches(handleBeacon, activeChatResolution?.agent ?? null, activeChatSessionId) ? handleBeacon : null
+  const tailPrompts = useTranscriptTailPrompts(transcriptTail, hudBeacon?.desktopPrompts)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -142,7 +158,7 @@ export function useMobileNativeChatController(
     transcriptLoading: nativeChatSession.transcriptLoading,
     transcriptSettled: nativeChatSession.status === 'ready',
     onUnconfirmedSendLanded: onSendResolved,
-    beaconPromptReceipts: hudBeacon?.desktopPrompts
+    beaconPromptReceipts: tailPrompts
   })
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
@@ -476,6 +492,8 @@ export function useMobileNativeChatController(
     onError: onSendError
   })
 
+  const tailQueue = useTranscriptTailQueue(transcriptTail, visibleQueuedMessages)
+
   return {
     isTabChatView,
     toggleTabChatView,
@@ -490,7 +508,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, rememberEcho,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : (visibleQueuedMessages ?? []),
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : tailQueue,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews
@@ -537,7 +555,7 @@ export function useMobileNativeChatController(
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
-    nativeChatDesktopPrompts: hudBeacon?.desktopPrompts ?? NO_DESKTOP_PROMPTS,
+    nativeChatDesktopPrompts: tailPrompts,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
     nativeChatContextWindow: liveHud.context, nativeChatLiveModel: { model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,

@@ -2,7 +2,9 @@ import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcri
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 /** Verified against Claude Code 2.1.263. Two different queue footers exist:
  * the legacy whole-queue recall, and the per-message selector that only appears
- * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment. */
+ * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
+ * Claude Code 2.1.277 keeps the placeholder but redraws the block itself —
+ * see `columnZeroQueueEntries`. */
 export const QUEUE_HINT =
   /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
 export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
@@ -60,6 +62,18 @@ export function claudeQueueViewFromScreen(
   const hint = window(footer)
   const selecting = SELECTED_HINT.test(hint)
   const selectable = selecting || /select a queued message/i.test(hint)
+  if (!selecting) {
+    const sendNow = sendNowHintAbove(lines, footer)
+    if (sendNow !== -1) {
+      return {
+        entries: columnZeroQueueEntries(lines, sendNow).map(withoutComposerNotice),
+        selectable,
+        selecting: false,
+        selected: null,
+        selectedOldest: false
+      }
+    }
+  }
   const block: string[] = []
   let seenEntry = false
   for (let i = footer - 1; i >= Math.max(0, footer - 60); i--) {
@@ -117,6 +131,84 @@ export function claudeQueueViewFromScreen(
     selected: null,
     selectedOldest: false
   }
+}
+
+/** Claude Code 2.1.277 closes its queue block with this row instead of putting
+ *  "Enter to send them immediately" in the composer placeholder. Its presence
+ *  is what tells the 2.1.277 shape from a 2.1.263 transcript echo, which draws
+ *  a delivered message with the same column-zero marker. */
+const SEND_NOW_HINT = /^\s*ctrl\+x ctrl\+s to send now\s*$/i
+/** The working spinner Claude draws between the transcript and the queue:
+ *  "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)". The glyph rotates; the
+ *  ellipsis after the verb does not. */
+const SPINNER_ROW = /^[^\s❯›>⏺⎿]\s+\S.*…/
+const TOOL_ROW = /^\s*[⏺⎿]/
+
+function isQueueBound(line: string): boolean {
+  return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
+}
+
+/** Index of the "ctrl+x ctrl+s to send now" row directly above the composer,
+ *  looking past the separator and Claude's right-aligned yank hint, or -1. */
+function sendNowHintAbove(lines: readonly string[], footer: number): number {
+  for (let i = footer - 1; i >= Math.max(0, footer - 4); i--) {
+    const line = lines[i]!
+    if (/^[\s─━—-]*$/.test(line) || /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
+      continue
+    }
+    return SEND_NOW_HINT.test(line) ? i : -1
+  }
+  return -1
+}
+
+/**
+ * Claude Code 2.1.277 draws each queued message at column zero, marker first,
+ * with its wrapped lines indented two spaces, between the spinner and the
+ * send-now row (captured live 2026-09-19; see the test fixture). Read upward
+ * from the hint. The block must end at a row that cannot be message text — the
+ * spinner, a blank, a tool row — or the reading is refused: a delivered
+ * message in the transcript has exactly this shape, and with nothing between
+ * it and the queue the two cannot be told apart. A wrong queue rewrite loses
+ * the user's messages; an empty one only hides a pencil.
+ */
+function columnZeroQueueEntries(lines: readonly string[], sendNow: number): string[] {
+  const rows: string[] = []
+  let bounded = false
+  let i = sendNow - 1
+  for (; i >= Math.max(0, sendNow - 60); i--) {
+    const line = lines[i]!
+    if (/^[❯›>]\s+\S/.test(line) || /^\s{2,}\S/.test(line)) {
+      rows.unshift(line)
+      continue
+    }
+    bounded = isQueueBound(line)
+    if (!bounded) {
+      // A spinner line that hard-wrapped on a phone-width terminal puts its
+      // tail at column zero, marker-less. The row above it says what it is.
+      const above = lines[i - 1]
+      bounded = above !== undefined && SPINNER_ROW.test(above)
+    }
+    break
+  }
+  // Indented rows above the first marker are not a message's wrapped lines:
+  // they belong to whatever sits above the queue (a tool row's own
+  // continuation, the spinner's todo list).
+  while (rows.length > 0 && !/^[❯›>]\s+\S/.test(rows[0]!)) {
+    rows.shift()
+  }
+  if (!bounded || rows.length === 0) {
+    return []
+  }
+  const entries: string[] = []
+  for (const line of rows) {
+    const match = /^[❯›>]\s+(.+)$/.exec(line)
+    if (match) {
+      entries.push(match[1]!.trim())
+    } else {
+      entries[entries.length - 1] += '\n' + line.trim()
+    }
+  }
+  return entries
 }
 
 /** Claude's own context warning, drawn in the composer box beside the queue
