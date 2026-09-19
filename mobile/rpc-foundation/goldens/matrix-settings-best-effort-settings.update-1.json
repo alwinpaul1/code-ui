@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "958e2d46022bf1cb6fd73ff784d7b455f25940c6633b2c8f942236167582d0cf",
+  "recorderSha256": "91d218b49a535fa839a8ed389dade70253610aaea3f4d6b4985e5b41559dc0bd",
   "adapterSha256": "d3b7f33d810e1fa420ac41a628cde9fe4a9e65fd57f89fbca0a40fc7d74951ab",
   "scenarioSha256": "cf671da175d50a4c2e1336f4e8338c24c4752db111e1eafd226bee6ff3582b1d",
   "platform": "darwin",
@@ -276,6 +276,11 @@
         }
       }
     },
+    "8bdf90b8099a": {
+      "name": "defaultGitHubPreset",
+      "value": "assigned",
+      "sent": 0
+    },
     "9b81c7f38dcf": {
       "name": "settings.update#1",
       "args": [
@@ -342,10 +347,6 @@
           }
         }
       }
-    },
-    "b2897d5daa49": {
-      "name": "defaultGitHubPreset",
-      "value": "assigned"
     },
     "d26aa345f588": {
       "name": "settings.update#1",
@@ -434,7 +435,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -447,7 +448,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -460,7 +461,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -473,7 +474,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -486,7 +487,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -499,7 +500,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -512,7 +513,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -525,7 +526,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -538,7 +539,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -551,7 +552,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -564,7 +565,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       },
       {
@@ -577,7 +578,7 @@
             "write": "eb79a9b3682a"
           },
           "state": "5db909d58c6f",
-          "effects": ["b2897d5daa49"]
+          "effects": ["8bdf90b8099a"]
         }
       }
     ]

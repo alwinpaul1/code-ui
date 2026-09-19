@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "958e2d46022bf1cb6fd73ff784d7b455f25940c6633b2c8f942236167582d0cf",
+  "recorderSha256": "91d218b49a535fa839a8ed389dade70253610aaea3f4d6b4985e5b41559dc0bd",
   "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "6cf6ebd20adc4cc76a12d3424863ee9db2b24f36593664a1f4e0e05de9a53d39",
   "platform": "darwin",
@@ -31,6 +31,11 @@
     "387442f96b16": {
       "name": "git.push#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\",\"publish\":true}}"
+    },
+    "8e30f48c04a4": {
+      "name": "progress",
+      "value": "publishing",
+      "sent": 0
     },
     "b12e1ce5068c": {
       "name": "git.push#1",
@@ -65,10 +70,6 @@
           }
         }
       }
-    },
-    "dc538c734db2": {
-      "name": "progress",
-      "value": "publishing"
     }
   },
   "recording": {
@@ -83,7 +84,7 @@
             "apply": "00e8a3bac22f"
           },
           "state": "0fe2eb2410a4",
-          "effects": ["dc538c734db2"]
+          "effects": ["8e30f48c04a4"]
         }
       }
     ]

@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "958e2d46022bf1cb6fd73ff784d7b455f25940c6633b2c8f942236167582d0cf",
+  "recorderSha256": "91d218b49a535fa839a8ed389dade70253610aaea3f4d6b4985e5b41559dc0bd",
   "adapterSha256": "3ddb44511547ae2fc97340e5a49393233f6716f9704b7b994f43bc030788b25b",
   "scenarioSha256": "35fadd03f2c98344e22d6aec2dc85ad15ca5ac8e092fc1c29a20366db5d46628",
   "platform": "darwin",
@@ -18,17 +18,18 @@
       "idle": false,
       "started": true
     },
-    "76026c7189a2": {
-      "name": "keep-awake-acquire",
-      "value": {
-        "id": "dictation-1"
-      }
-    },
     "84e5ca07cb7a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": true
+    },
+    "a0128a3c7e10": {
+      "name": "keep-awake-acquire",
+      "value": {
+        "id": "dictation-1"
+      },
+      "sent": 1
     },
     "bbe508ab7f95": {
       "name": "speech.dictation.start#1",
@@ -80,7 +81,7 @@
             "start": "84e5ca07cb7a"
           },
           "state": "6db9a10e2b00",
-          "effects": ["76026c7189a2"]
+          "effects": ["a0128a3c7e10"]
         }
       }
     ]

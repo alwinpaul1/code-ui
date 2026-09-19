@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "f512a3f0471a7c75d6bd7864697e97aad1dd9b33cb1b2053d1a4806968d0e428",
-  "recorderSha256": "958e2d46022bf1cb6fd73ff784d7b455f25940c6633b2c8f942236167582d0cf",
+  "recorderSha256": "91d218b49a535fa839a8ed389dade70253610aaea3f4d6b4985e5b41559dc0bd",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "fbd311a377672a9335521c30734880eea1b04bab0aff367854c1deebcf66b105",
   "platform": "darwin",
@@ -73,12 +73,6 @@
           "message": "Connection lost",
           "isRpcDeliveryUnknown": true
         }
-      }
-    },
-    "24054d93a95f": {
-      "name": "providers",
-      "value": {
-        "host-1": ["github"]
       }
     },
     "27e92f99be15": {
@@ -287,6 +281,13 @@
     "7ddcb1852b39": {
       "name": "settings.get#1",
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "8f1426c2f53b": {
+      "name": "providers",
+      "value": {
+        "host-1": ["github"]
+      },
+      "sent": 3
     },
     "a3c30fa6fdda": {
       "name": "linear.status#1",
@@ -606,7 +607,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -630,7 +631,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -642,7 +643,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -654,7 +655,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -666,7 +667,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -678,7 +679,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -690,7 +691,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -702,7 +703,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -714,7 +715,7 @@
             "load": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -727,7 +728,7 @@
             "disconnect": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       },
       {
@@ -740,7 +741,7 @@
             "cutover": "eb79a9b3682a"
           },
           "state": "79b8c1b0d1d1",
-          "effects": ["24054d93a95f"]
+          "effects": ["8f1426c2f53b"]
         }
       }
     ]
