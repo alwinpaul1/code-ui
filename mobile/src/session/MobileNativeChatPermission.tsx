@@ -6,6 +6,7 @@ import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
 import { TextInputModal } from '../components/TextInputModal'
+import { MobileMarkdown } from '../components/MobileMarkdown'
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
@@ -59,7 +60,7 @@ function MobileNativeChatPermissionImpl({
    *  comment-less reject — see claude-plan-permission.ts. */
   onRespondWithComment?: (send: string, comment: string) => Promise<boolean>
 }): React.JSX.Element {
-  const { colors, radius, space } = useTheme()
+  const { colors, fonts, radius, space } = useTheme()
   // The card sits in the dock, which the chat list clears; a tall one would push
   // the composer off a short screen, so the reading area gives up space first and
   // the choices keep theirs. Half the window leaves the conversation visible.
@@ -76,14 +77,19 @@ function MobileNativeChatPermissionImpl({
   // The SDK lane's detail is the tool input itself; for a file change that is
   // the diff, shown before the user accepts. Anything else falls through to
   // the text below. See mobile-permission-proposed-edit.ts.
+  // A finished plan arrives as an approval carrying a typed subject (Orca
+  // #21090): content to read, not a privilege to grant. It replaces the raw
+  // detail — which is the ExitPlanMode tool input, thousands of characters of
+  // escaped JSON — rather than rendering beside it.
+  const plan = permission.subject?.kind === 'plan' ? permission.subject : null
   const preview = useMemo(
-    () => proposedEditPreview(permission.title, permission.detail),
-    [permission.title, permission.detail]
+    () => (plan ? null : proposedEditPreview(permission.title, permission.detail)),
+    [permission.title, permission.detail, plan]
   )
   const [showAllRows, setShowAllRows] = useState(false)
   const folded = useMemo(
     () =>
-      preview.kind === 'diff'
+      preview?.kind === 'diff'
         ? foldProposedFiles(preview.files, showAllRows ? MAX_DIFF_CARD_ROWS : PROPOSED_ROWS_FOLDED)
         : null,
     [preview, showAllRows]
@@ -116,8 +122,8 @@ function MobileNativeChatPermissionImpl({
           command: permission.command ?? permission.detail?.slice(commandStart + 2).trim() ?? null
         }
       : splitPermissionDetail(permission.detail, permission.command)
-  const description = split.description ?? undefined
-  const command = split.command ?? undefined
+  const description = plan ? undefined : (split.description ?? undefined)
+  const command = plan ? undefined : (split.command ?? undefined)
   // The harness's own presentation (Orca #21087): why the request was raised,
   // not only what it was. The SDK documents its title as the prompt text to
   // use and warns its reason may carry terminal escapes; the host strips those.
@@ -240,7 +246,24 @@ function MobileNativeChatPermissionImpl({
           ) : null}
         </>
       ) : null}
-      {preview.kind === 'truncated' ? (
+      {plan ? (
+        // The plan reads line by line, like a diff, so it takes the diff's share
+        // of the window; the choices below keep theirs.
+        <ScrollView
+          testID="native-chat-approval-plan"
+          style={{ maxHeight: diffMaxHeight, flexShrink: 1 }}
+          nestedScrollEnabled
+          contentContainerStyle={{ gap: space.sm }}
+        >
+          <MobileMarkdown content={plan.text} />
+          {plan.filePath ? (
+            <Txt variant="caption" tone="secondary" selectable style={{ fontFamily: fonts.mono }}>
+              {`Plan file: ${plan.filePath}`}
+            </Txt>
+          ) : null}
+        </ScrollView>
+      ) : null}
+      {preview?.kind === 'truncated' ? (
         // The host clipped the request before it reached the phone. Half a
         // diff would read as the whole of it, so the raw text stands, with one
         // line saying why.

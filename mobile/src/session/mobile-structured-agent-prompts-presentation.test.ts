@@ -46,10 +46,28 @@ describe('the approval card reads the harness presentation off the journal', () 
     })
   })
 
+  it('carries a plan subject (Orca #21090) so the card can draw it as a plan', () => {
+    const projected = projectStructuredPermission(
+      approval({ subject: { kind: 'plan', text: '# Plan\n\n- step', filePath: '/repo/PLAN.md' } })
+    )
+    expect(projected?.subject).toEqual({
+      kind: 'plan',
+      text: '# Plan\n\n- step',
+      filePath: '/repo/PLAN.md'
+    })
+  })
+
   it('carries nothing extra for an older host that records only the title', () => {
     const projected = projectStructuredPermission(approval({}))
     expect(projected).not.toBeNull()
-    for (const key of ['displayName', 'description', 'decisionReason', 'blockedPath', 'matchedAskRule']) {
+    for (const key of [
+      'displayName',
+      'description',
+      'decisionReason',
+      'blockedPath',
+      'matchedAskRule',
+      'subject'
+    ]) {
       expect(projected).not.toHaveProperty(key)
     }
   })

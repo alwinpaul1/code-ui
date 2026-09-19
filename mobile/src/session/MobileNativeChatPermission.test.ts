@@ -25,6 +25,7 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 vi.mock('../components/TextInputModal', () => ({ TextInputModal: 'TextInputModal' }))
+vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 describe('MobileNativeChatPermission', () => {
   let renderer: ReactTestRenderer | null = null
@@ -127,6 +128,54 @@ describe('MobileNativeChatPermission', () => {
       renderer = null
     }
   })
+
+  // Orca #21090: a finished plan is an approval carrying a typed subject. It
+  // is content to read, drawn as markdown in a bounded scroller, and it
+  // replaces the raw ExitPlanMode input the detail carries.
+  it.each(['light', 'dark'] as const)(
+    'renders a plan as markdown inside a bounded scroller and never the raw detail, in %s',
+    async (scheme) => {
+      const planText = '# Release plan\n\n- Run the tests'
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Claude wants to present its plan',
+                subject: { kind: 'plan', text: planText, filePath: '/repo/PLAN.md' },
+                detail: 'raw json that must not be shown',
+                options: [{ label: 'Approve plan', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true)
+            })
+          )
+        )
+      })
+      const content = renderer!.root.findByProps({ testID: 'native-chat-approval-plan' })
+      // The diff's share of the mocked 915 px window: 30 %, floored at 120.
+      expect(content.props.style).toMatchObject({ maxHeight: 275, flexShrink: 1 })
+      expect(content.findByType('MobileMarkdown').props.content).toBe(planText)
+      const texts = renderer!.root.findAllByType('Text').flatMap((node) => {
+        const children = Array.isArray(node.props.children)
+          ? node.props.children
+          : [node.props.children]
+        return children.filter((child: unknown) => typeof child === 'string')
+      })
+      expect(texts).toContain('Plan file: /repo/PLAN.md')
+      expect(texts).not.toContain('raw json that must not be shown')
+      expect(texts).toContain('Approve plan')
+      const fileLine = content
+        .findAllByType('Text')
+        .find((node) => node.props.children === 'Plan file: /repo/PLAN.md')!
+      const styles = Array.isArray(fileLine.props.style) ? fileLine.props.style.flat() : [fileLine.props.style]
+      const color = styles.find((entry) => entry && typeof entry.color === 'string')?.color
+      expect(color).toBe((scheme === 'dark' ? darkColors : lightColors).textSecondary)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  )
 
   it('offers no cancel on a card whose caller cannot cancel by identity', async () => {
     await act(async () => {

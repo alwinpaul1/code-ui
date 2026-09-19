@@ -147,6 +147,12 @@ export type AgentJournalApprovalMatchedAskRule = {
   ruleContent?: string
 }
 
+export type AgentJournalApprovalSubject = {
+  kind: 'plan'
+  text: string
+  filePath?: string
+}
+
 export type AgentJournalApprovalItem = {
   kind: 'approval'
   title: string
@@ -155,6 +161,7 @@ export type AgentJournalApprovalItem = {
   decisionReason?: string
   blockedPath?: string
   matchedAskRule?: AgentJournalApprovalMatchedAskRule
+  subject?: AgentJournalApprovalSubject
   detail: string | null
   options: AgentJournalPromptOption[]
   resolution: AgentJournalResolution

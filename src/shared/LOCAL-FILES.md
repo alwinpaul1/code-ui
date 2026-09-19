@@ -164,7 +164,7 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   the turn — by 3-way merge, and #21087's (aad41b1a4) approval presentation
   fields (`displayName`, `description`, `decisionReason`, `blockedPath`,
   `matchedAskRule`, and the `AgentJournalApprovalMatchedAskRule` type) the
-  same way.
+  same way, and #21090's (e42f7c00b) typed plan `subject` on an approval.
 
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
