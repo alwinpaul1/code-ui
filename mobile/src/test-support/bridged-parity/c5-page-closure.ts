@@ -1,41 +1,55 @@
 /**
- * The goldens recorded at a call site inside the C1 page closure, and what each one did at the
+ * The goldens recorded at a call site inside the C5 page closure, and what each one did at the
  * bridge.
  *
- * C1 moves a screen to the web: `app/h/_layout.tsx` and `app/h/[hostId]/index.tsx` and everything
- * they import. The suite next door already proves the corpus replays byte-identically or in a named
- * class, but it proves it as counts over the corpus, and a count is the wrong instrument for the
- * claim C1 needs. These are the ones whose divergence would be this domain's divergence, so
- * each is pinned by id to the verdict it gives, not counted into a total another golden can pay for.
+ * CODE UI: the numbers in this docstring are upstream's (27 families / 134 goldens over a
+ * 787-golden corpus); this fork's are on the table's own comment below (17 / 89 over 264).
  *
- * The rule is not "none excluded". Upstream's 103 split 54 byte-identical and 49 not, in four of
- * the five classes the suite next door names — 37 `result-absent-settlement`, 7 `params-undefined`,
- * 3 `result-absent-stream-release`, 2 `write-ordinal` (this fork's numbers are on the table
- * below). Every one is a recorder observation artifact
- * whose wire bytes C0.5 and C0.8 proved identical: what differs is the shape the recorder injects
- * below the frame boundary, or the pre-serialization object a step is matched against, and neither
- * is something a transport carries. What the pin buys is that the 49 are named. A fiftieth arriving
- * is a red test here even though every count in `BRIDGED_PARITY_BASELINE` still holds, because the
- * class it joined has room in its bound for a golden that left.
+ * C5 moves agent session history to the web: `app/h/_layout.tsx` and
+ * `app/h/[hostId]/agent-history/[worktreeId].web.tsx` and everything they import. The suite next
+ * door proves the whole corpus replays byte-identically or in a named class, but it proves it as
+ * counts over 787 goldens, and a count cannot tell this domain's regression from another domain's
+ * improvement. These 134 are the ones whose divergence would be this domain's.
+ *
+ * C1's 22 families are a strict subset of these 27, and their verdicts are inherited from
+ * `c1-page-closure.ts` rather than derived again. That is not tidiness: deriving them from C2's
+ * classification rule disagrees with the committed file on 10 pins, in three ways that are each a
+ * true statement read too far. `tasks.smart-source-search` is a `params-undefined` family and the
+ * rule's list of those is the five families C2 adds, not C1's one. `host-worktree-refresh` carries
+ * `write-ordinal` and `result-absent-stream-release` goldens, classes the rule does not model
+ * because no family C2 adds carries one. And "a scenario scripting `{ ok: true }` with no result"
+ * is a property of the scenario a golden derives from, not of its family, so reading it family-wide
+ * moves `worktree-catalog-snapshot`. The rule decides the five families C5 adds and nothing else.
+ *
+ * 72 replay byte for byte and 62 do not, in four of the five classes the suite next door names —
+ * 50 `result-absent-settlement`, 7 `params-undefined`, 3 `result-absent-stream-release`, 2
+ * `write-ordinal`. Every one is a recorder observation artifact whose wire bytes C0.5 and C0.8
+ * proved identical. What the pin buys is that the 62 are named: a sixty-third arriving is a red
+ * test here even though every count in `BRIDGED_PARITY_BASELINE` still holds.
+ *
+ * The five families C5 adds are all AI Vault: `aiVault.history`, `aiVault.history-screen`,
+ * `aiVault.resume-launch`, `aiVault.resume-preparation` and `settings.resume-metadata`. None of
+ * the five is wholly excluded — each has at least one byte-identical golden — so unlike C2's five
+ * this pin means more than "the divergence kept its name". One inherited family is:
+ * `host-worktree-refresh` has no byte-identical golden at all, which is C1's finding and C1's
+ * file's to explain, carried here because this closure counts it.
  *
  * Derived from the value-import closure of the two route modules with `.web.*` resolution applied,
- * against the module each operation's mount adapter loads. `mobileWeb.bundle-manifest` is not here:
- * it reaches the closure only through the shared `rpc-operation.ts` runner, and its own operation
- * module is the shell's, not the page's.
+ * against the module each operation's mount adapter loads. The `.web.tsx` sibling is the entry, not
+ * the native file: the native one reaches `MobileWebShellScreen` and pulls the shell into the
+ * closure, which adds 46 local modules and the two `mobileWeb.*` families the C1 docstring already
+ * excludes by name. Measured at this base: 3510 modules, 370 local, 16 under `src/agent-history`.
  */
 
 import type { PageClosurePins } from './page-closure'
 
-export const C1_PAGE_CLOSURE: PageClosurePins = {
-  // CODE UI (2026-09-19, Orca #21533 port): this fork's route tree's closure, derived the same way
-  // (the value-import closure of `app/h/_layout.tsx` and `app/h/[hostId]/index.tsx` with `.web.*`
-  // resolution, matched against each scenario's sites) and pinned from a measured bridged run over
-  // this fork's 264-golden corpus: 16 families, 79 goldens, 42 byte-identical, 30
-  // `result-absent-settlement`, 7 `params-undefined`. Upstream's table has six more families —
-  // `host-worktree-refresh`, `transport.capability-probe`, `transport.host-status-gates`,
-  // `notifications.push-registration`, `components.new-workspace-repositories`,
-  // `worktree.agent-launch-create` — whose recorder families arrive with Groups B and D of the
-  // 2026-09-19 backlog; they join this pin when their goldens exist here.
+export const C5_PAGE_CLOSURE: PageClosurePins = {
+  // CODE UI (2026-09-19, Orca #21649 port): this fork's closure of `app/h/_layout.tsx` and
+  // `app/h/[hostId]/agent-history/[worktreeId].web.tsx` (315 files), derived and pinned the way
+  // the C1 table is: 17 families, 89 goldens, 47 byte-identical, 35 `result-absent-settlement`,
+  // 7 `params-undefined`. It is C1's 16 families plus `settings.resume-metadata`; upstream's five
+  // added families are that one and four `aiVault.*` recorder families this fork does not carry
+  // yet (Orca #20277 and after, Group C) — they join this pin when their goldens exist here.
   'settings.repo-metadata': {
     'matrix-settings.repo-metadata-host.platform-1': 'result-absent-settlement',
     'matrix-settings.repo-metadata-repo.list-1': 'result-absent-settlement',
@@ -60,6 +74,18 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
     'settings-workspace-context-refuse-after-data': 'identical',
     'settings-workspace-context-refused': 'identical',
     'settings-workspace-context-transport-error': 'identical'
+  },
+  'settings.resume-metadata': {
+    'matrix-settings.resume-metadata-folderworkspace.list-1': 'result-absent-settlement',
+    'matrix-settings.resume-metadata-projectgroup.list-1': 'result-absent-settlement',
+    'matrix-settings.resume-metadata-repo.list-1': 'result-absent-settlement',
+    'matrix-settings.resume-metadata-settings.get-1': 'result-absent-settlement',
+    'matrix-settings.resume-metadata-worktree.ps-1': 'result-absent-settlement',
+    'schedules-settings-resume-metadata-fulfilled': 'identical',
+    'settings-resume-metadata-fulfilled': 'identical',
+    'settings-resume-metadata-refuse-after-data': 'identical',
+    'settings-resume-metadata-refused': 'identical',
+    'settings-resume-metadata-transport-error': 'identical'
   },
   'worktree.create-retry': {
     'matrix-worktree.create-retry-worktree.create-1': 'result-absent-settlement',
