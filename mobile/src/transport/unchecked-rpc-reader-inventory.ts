@@ -46,7 +46,7 @@ export type UncheckedRpcReaderEntry = {
 /**
  * Files holding at least one unchecked reader, grouped by the feature area that owns them.
  *
- * The reason is shared by every line and is stated once here instead of 29 times: the reply has no
+ * The reason is shared by every line and is stated once here instead of 25 times: the reply has no
  * schema, so the operation declares what the payload is by assertion. Writing one schema per
  * consumed member — required exactly where the consumer reads it unguarded, optional everywhere
  * else, never `.strict()` — turns the assertion into a check and deletes the line.
@@ -78,10 +78,6 @@ export const UNCHECKED_RPC_READERS: readonly UncheckedRpcReaderEntry[] = [
   // (CODE UI) the chat's diff-card hunk revert
   { file: 'src/session/mobile-diff-hunk-revert-operations.ts', readers: 1 },
   // tasks
-  { file: 'src/tasks/mobile-task-item-comment-operations.ts', readers: 7 },
-  { file: 'src/tasks/mobile-task-item-detail-operations.ts', readers: 8 },
-  { file: 'src/tasks/mobile-task-item-state-operations.ts', readers: 17 },
-  { file: 'src/tasks/mobile-task-list-operations.ts', readers: 6 },
   { file: 'src/tasks/mobile-task-project-board-operations.ts', readers: 17 },
   { file: 'src/tasks/mobile-task-runtime-operations.ts', readers: 7 },
   { file: 'src/tasks/mobile-task-source-search-operations.ts', readers: 7 },
