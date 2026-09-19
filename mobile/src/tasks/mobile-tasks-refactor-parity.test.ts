@@ -21,8 +21,17 @@ const hash = (parts: string[] | string): string =>
 // behaviour they used to pin is pinned by the recordings in mobile/rpc-foundation/goldens instead,
 // which did not move. Statement, declaration, render and style counts are unchanged; `semantics`
 // loses exactly the 22 `rpc:` signatures and 22 method literals the migration deleted.
-const WORKSPACE_RPC_SCREEN_HOOKS =
-  '26ed5700089a9de13ea984274eb10ddea62f72b28135992514e3c16ef8e47e30'
+// 2026-09-19, Orca #20685 ported: the provider item, detail, list and GitHub Projects board half
+// sends through operations too (70 raw-port references across 22 files to zero). The hook and
+// statement hashes move because both readers capture the effect and callback bodies the send left;
+// their counts hold at 350 and 417. `semantics` is a pure deletion, 148 lines out and none in —
+// the same 148 upstream lost: 70 `rpc:` call signatures, 75 method literals over 58 methods and
+// three duplicated `item.source.type` comparisons — 3449 → 3301, checked by diffing the reader's
+// output against the pre-port tree. Declarations, the render tree and the StyleSheets are
+// byte-identical. The hooks hash is upstream's own PROVIDER_RPC_SCREEN_HOOKS value, since the
+// migrated hooks are byte-identical to upstream's; the statement and semantics hashes are this
+// fork's because its tap-target and press-feedback hunks sit in the same readers.
+const PROVIDER_RPC_SCREEN_HOOKS = '7af4478d440cd913770b8a2d5e96c33aaf956192d2a820787af0727a0f33c018'
 const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
 // 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
 // `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
@@ -47,12 +56,12 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // token. TasksRow gained a `raised` prop and the StyleSheet a `taskRowPressedOnRaised` key, which
 // moves `semantics` (one more jsx: attribute and the new literal), the StyleSheet pin (one new
 // key) and the render tree (+4). The statements and declarations pins do not move.
-const TAP_TARGET_STATEMENTS = 'd7350b217e5d774c7c2ebea307babb6beb91ebf9ef73cd1d76f38b8b9ebe8dc8'
+const PROVIDER_RPC_STATEMENTS = '2aaf39554c761d1d73728b401449053b405eb7142f78dcd51a693ba68259ba8d'
 const PRESS_FEEDBACK_DECLARATIONS = 'a9c4420f0350cbc6c623e02a7d8b114cb3de76e2099498be72fbc7d6d0c0240a'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
-const TAP_TARGET_SEMANTICS = '17de745e8dd74a1d904833e7a4a5a3a5233f79b1613a4b438cbcde0e5ed87fee'
+const PROVIDER_RPC_SEMANTICS = '1b1be26096a48f59297a3056a1cae803e7faf6661655432959af120fe6b71a8e'
 const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
 const TAP_TARGET_RENDER_TREE = 'ee1e8e3181777d7764c0cad5909d60de997f5aa6f05688952285623d6b392ce9'
 
@@ -60,7 +69,7 @@ describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
     expect(screenHooks).toHaveLength(350)
-    expect(hash(screenHooks)).toBe(WORKSPACE_RPC_SCREEN_HOOKS)
+    expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
     expect(diffHooks).toHaveLength(3)
@@ -70,7 +79,7 @@ describe('Mobile Tasks refactor parity', () => {
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
     expect(statements).toHaveLength(417)
-    expect(hash(statements)).toBe(TAP_TARGET_STATEMENTS)
+    expect(hash(statements)).toBe(PROVIDER_RPC_STATEMENTS)
   })
 
   it('preserves every moved top-level declaration', () => {
@@ -81,8 +90,8 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_449)
-    expect(hash(semantics)).toBe(TAP_TARGET_SEMANTICS)
+    expect(semantics.split('\n')).toHaveLength(3_301)
+    expect(hash(semantics)).toBe(PROVIDER_RPC_SEMANTICS)
   })
 
   // 35_287 -> 35_291: `raised={selected}` on the GitHub page picker row, four
