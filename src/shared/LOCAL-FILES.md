@@ -84,8 +84,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   constant and its `RUNTIME_CAPABILITIES` entry) from 5287c5cdb (#20069), and
   `AGENT_LAUNCH_RUNTIME_CAPABILITY` (the constant, its doc comment, and its entries in
   `NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES` and `RUNTIME_CAPABILITIES`) from
-  6da72383d (#19849), at its 4b87bc718 (#20999) value `agent.launch.v2`. The file
-  otherwise sits at its d07c47593 pin: upstream later added
+  6da72383d (#19849), at its 4b87bc718 (#20999) value `agent.launch.v2`, and
+  `AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES` entry)
+  from 0bf815a48 (#21106). The file otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY` and
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY`, which are NOT vendored here, so a
   whole-file re-vendor would drag in an unported change.

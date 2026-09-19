@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus three hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus four hand-applied upstream hunks, see LOCAL-FILES.md)
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus two forward-ported hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 1ae7aa8bb
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
@@ -63,7 +63,7 @@ src/shared/project-host-setup-projection.ts: 2c5cd845a2ec3512cf983f62f10bd88eea6
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
-src/shared/agent-launch-intent.ts: 4b87bc718
+src/shared/agent-launch-intent.ts: 0bf815a48
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -74,7 +74,7 @@ The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018)
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
 src/shared/rpc-contract/accounts-params.ts: c84007c54
 src/shared/rpc-contract/agent-hooks-params.ts: c84007c54
-src/shared/rpc-contract/agent-launch-params.ts: 97aa5ff19
+src/shared/rpc-contract/agent-launch-params.ts: 0bf815a48
 src/shared/rpc-contract/agent-session-params.ts: c84007c54
 src/shared/rpc-contract/ai-vault-params.ts: c84007c54
 src/shared/rpc-contract/artifacts-params.ts: c84007c54
