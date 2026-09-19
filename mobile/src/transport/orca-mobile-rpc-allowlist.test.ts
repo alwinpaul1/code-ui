@@ -117,7 +117,7 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     capability: protocolVersion.AGENT_LAUNCH_RUNTIME_CAPABILITY,
     gatedIn: 'src/tasks/worktree-create-capability.ts',
     downgradesOn: isAgentLaunchUnsupportedRefusal,
-    why: 'A workspace create with an agent (upstream #19850). createWorktreeWithNameRetry sends it only when readNewWorktreeRuntimeCapabilities saw agent.launch.v1 on status.get — the 1.4.205 bundle neither advertises nor registers it — and on the gate\'s refusal re-sends the same candidate as worktree.create.'
+    why: 'A workspace create with an agent (upstream #19850). createWorktreeWithNameRetry sends it only when readNewWorktreeRuntimeCapabilities saw the agent.launch capability (v2 since #20999) on status.get — the 1.4.205 bundle neither advertises nor registers it — and on the gate\'s refusal re-sends the same candidate as worktree.create.'
   },
   {
     method: 'github.prComments',
