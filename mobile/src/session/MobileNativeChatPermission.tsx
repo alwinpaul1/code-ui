@@ -118,6 +118,20 @@ function MobileNativeChatPermissionImpl({
       : splitPermissionDetail(permission.detail, permission.command)
   const description = split.description ?? undefined
   const command = split.command ?? undefined
+  // The harness's own presentation (Orca #21087): why the request was raised,
+  // not only what it was. The SDK documents its title as the prompt text to
+  // use and warns its reason may carry terminal escapes; the host strips those.
+  const context = [
+    permission.description ? { label: null, text: permission.description } : null,
+    permission.decisionReason ? { label: 'Reason', text: permission.decisionReason } : null,
+    permission.blockedPath ? { label: 'Blocked path', text: permission.blockedPath } : null,
+    permission.matchedAskRule
+      ? {
+          label: 'Ask rule',
+          text: `${permission.matchedAskRule.ruleContent ?? permission.matchedAskRule.toolName} · ${permission.matchedAskRule.source}`
+        }
+      : null
+  ].filter((entry): entry is { label: string | null; text: string } => entry !== null)
   const respond = async (send: string, index: number, comment?: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -169,6 +183,25 @@ function MobileNativeChatPermissionImpl({
           </PressScale>
         ) : null}
       </View>
+      {context.length > 0 ? (
+        <ScrollView
+          testID="native-chat-approval-context"
+          style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
+          nestedScrollEnabled
+          contentContainerStyle={{ gap: space.xs }}
+        >
+          {context.map((entry) => (
+            <Txt key={entry.label ?? 'description'} variant="caption" tone="secondary" selectable>
+              {entry.label ? (
+                <Txt variant="caption" weight="semibold">
+                  {`${entry.label}: `}
+                </Txt>
+              ) : null}
+              {entry.text}
+            </Txt>
+          ))}
+        </ScrollView>
+      ) : null}
       {folded ? (
         <>
           <ScrollView

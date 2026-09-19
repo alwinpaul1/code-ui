@@ -67,6 +67,67 @@ describe('MobileNativeChatPermission', () => {
     }
   })
 
+  // Orca #21087: the harness's presentation — description, reason, blocked path,
+  // ask rule — is drawn in a bounded scroller above the choices, so an oversized
+  // payload can never push Allow off the screen. Both themes: the block reads
+  // from the theme's secondary tone.
+  it('keeps oversized provider context in a bounded scroller above the actions, in both themes', async () => {
+    const description = `Workspace access ${'description '.repeat(400)}`
+    const decisionReason = `Outside the allowed root ${'reason '.repeat(400)}`
+    const blockedPath = `/repo/${'nested/'.repeat(400)}secrets.txt`
+    const ruleContent = `/repo/${'**/'.repeat(400)}`
+    for (const scheme of ['light', 'dark'] as const) {
+      await act(async () => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatPermission, {
+              permission: {
+                title: 'Claude wants to read secrets.txt '.repeat(400),
+                description,
+                decisionReason,
+                blockedPath,
+                matchedAskRule: { source: 'project', toolName: 'Read', ruleContent },
+                options: [{ label: 'Allow', send: '1' }]
+              },
+              onRespond: vi.fn(async () => true)
+            })
+          )
+        )
+      })
+      const context = renderer!.root.findByProps({ testID: 'native-chat-approval-context' })
+      // The card's reading budget on the mocked 915 px window: 16 %, capped at 132.
+      expect(context.props.style).toMatchObject({ maxHeight: 132, flexShrink: 1 })
+      const texts = context.findAllByType('Text').flatMap((node) => {
+        const children = Array.isArray(node.props.children)
+          ? node.props.children
+          : [node.props.children]
+        return children.filter((child: unknown) => typeof child === 'string')
+      })
+      expect(texts).toContain(description)
+      expect(texts).toContain(decisionReason)
+      expect(texts).toContain(blockedPath)
+      expect(texts).toContain(`${ruleContent} · project`)
+      expect(texts).toContain('Reason: ')
+      expect(texts).toContain('Blocked path: ')
+      expect(texts).toContain('Ask rule: ')
+      expect(context.findAllByProps({ children: 'Allow' })).toHaveLength(0)
+      const palette = scheme === 'dark' ? darkColors : lightColors
+      const colors = context.findAllByType('Text').flatMap((node) => {
+        const style = node.props.style
+        return (Array.isArray(style) ? style.flat() : [style])
+          .filter((entry) => entry && typeof entry === 'object' && typeof entry.color === 'string')
+          .map((entry) => entry.color as string)
+      })
+      expect(colors).toContain(palette.textSecondary)
+      // The choice sits outside the context block, in its own scroller.
+      expect(renderer!.root.findAllByProps({ children: 'Allow' }).length).toBeGreaterThan(0)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
   it('offers no cancel on a card whose caller cannot cancel by identity', async () => {
     await act(async () => {
       renderer = create(

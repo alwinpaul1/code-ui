@@ -161,7 +161,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   (4634d2c03) `userItemId` doc comment, and both it and
   `agent-session-journal-schemas.ts` carry #21086's (533b0bd02) optional
   `requestedAt` on the turn lifecycle — the host clock at the send that opened
-  the turn — by 3-way merge.
+  the turn — by 3-way merge, and #21087's (aad41b1a4) approval presentation
+  fields (`displayName`, `description`, `decisionReason`, `blockedPath`,
+  `matchedAskRule`, and the `AgentJournalApprovalMatchedAskRule` type) the
+  same way.
 
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
