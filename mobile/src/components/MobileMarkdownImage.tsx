@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Image, Pressable, Text, View, type TextStyle } from 'react-native'
 import { SvgXml } from 'react-native-svg'
 import { openImagePreviewSources } from '../session/image-preview-store'
@@ -46,13 +46,11 @@ function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): M
  * the document's width at its own aspect ratio (a bitmap's from Image, an
  * SVG's from its viewBox), so a figure is never cropped or stretched.
  *
- * Why it sits INSIDE the run, as an inline view with a size of its own: a
- * figure that was its own View split the prose into two Texts, and Android
- * lets a selection cross an inline view but never a second Text. A thesis
- * write-up with a figure per section could be copied one section at a time
- * (2026-09-19, "the same copying issue is for md file previews too"). The
- * width comes from the document, measured once, because an inline view
- * cannot ask for a percentage of a Text.
+ * The width comes from the document, measured once. The picture is a block
+ * of its own between prose runs, not an inline view inside one: inline was
+ * tried, so a selection could cross a figure, and Android drew a figure that
+ * loaded after the run's first layout over the text around it (device
+ * 2026-09-19). The link fallback still sits inside the run as a span.
  *
  * Tapping a drawn figure opens the full-screen viewer, where it can be
  * pinched to read the labels in it (2026-09-19).
@@ -63,7 +61,6 @@ export function MobileMarkdownImage({
   width,
   resolve,
   onOpen,
-  onSized,
   styles
 }: {
   alt: string
@@ -72,9 +69,6 @@ export function MobileMarkdownImage({
   width: number
   resolve?: MarkdownImageResolver
   onOpen: () => void
-  /** Called with the url once the picture has a size, so the Text around
-   *  it can lay itself out again (see MobileMarkdown's inline layout epoch). */
-  onSized?: (url: string) => void
   styles: { link: TextStyle; imageCaptionInline: TextStyle }
 }) {
   const [loaded, setLoaded] = useState<Loaded | null | undefined>(() =>
@@ -126,15 +120,6 @@ export function MobileMarkdownImage({
       cancelled = true
     }
   }, [resolve, url])
-
-  const sized = loaded !== undefined && loaded !== null && width > 0
-  const onSizedRef = useRef(onSized)
-  onSizedRef.current = onSized
-  useEffect(() => {
-    if (sized) {
-      onSizedRef.current?.(url)
-    }
-  }, [sized, url])
 
   if (!loaded || !(width > 0)) {
     return (

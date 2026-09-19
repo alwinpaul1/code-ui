@@ -1,5 +1,5 @@
 import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
-import { Fragment, memo, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { Linking, ScrollView, Text, View } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
@@ -21,10 +21,11 @@ import {
 import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
-import type { MarkdownImageResolver } from './markdown-image-source'
+import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
+import { buildProseRuns } from './mobile-markdown-prose-runs'
 
 /** Every inline span is a rounded, bordered View chip, as in the Claude app.
  *  Only a span with a newline in it stays a nested Text. */
@@ -302,23 +303,6 @@ function MobileMarkdownInner({
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
   const [contentWidth, setContentWidth] = useState(0)
-  // Bumped when a figure inside a run takes its size. Android positions the
-  // inline views of a Text (code chips, figures) when the text is laid out
-  // and does not move them when one of them grows afterwards, so a figure
-  // that loaded after the first layout left every chip in its run drawn
-  // where the pre-figure layout put it, on top of the prose (device
-  // 2026-09-19, three screenshots of thesis_explained.md). The run remounts
-  // on the bump and is laid out once more, with the figure at its size.
-  const [inlineLayoutEpoch, setInlineLayoutEpoch] = useState(0)
-  // Once per figure: the remount mounts the figure again, and it reports
-  // its size again; a second bump for the same url would remount forever.
-  const sizedFigures = useRef(new Set<string>())
-  const bumpInlineLayout = useCallback((url: string) => {
-    if (!sizedFigures.current.has(url)) {
-      sizedFigures.current.add(url)
-      setInlineLayoutEpoch((epoch) => epoch + 1)
-    }
-  }, [])
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
@@ -332,51 +316,11 @@ function MobileMarkdownInner({
   }
   const mermaidSourceOccurrences = new Map<string, number>()
 
-  // Why one Text per run: Android confines a selection to a single Text node,
-  // so a reader could select one paragraph but never the next (2026-09-12,
-  // screenshot). Consecutive paragraphs and headings become one selectable
-  // Text, headings as nested styled spans and a blank line between blocks.
-  // A `---` rule and an image link join the run too, drawn as spans: each
-  // was its own View, and a document with a rule before every section let a
-  // selection reach the end of a section and no further (2026-09-19,
-  // screenshot of thesis_explained.md). Lists and quotes join it as well:
-  // an item was a row View with its own Text, so a selection that started in
-  // the paragraph above a list stopped at the list's first bullet (2026-09-19,
-  // screenshot of the phone). The price is the hanging indent — a span has no
-  // margin, so a wrapped item continues under its bullet, as plain text does.
-  // An image joins it whether or not the phone can draw it: drawn, it is an
-  // inline view inside the Text, which a selection crosses (a figure per
-  // section in a thesis write-up cut every copy at the figure, 2026-09-19).
-  // Fences and tables still start a new run — each needs a View of its own
-  // to draw.
-  type Block = (typeof blocks)[number]
-  type ProseBlock = Extract<
-    Block,
-    { type: 'paragraph' | 'heading' | 'rule' | 'image' | 'list' | 'quote' }
-  >
-  type Run = { start: number; blocks: Block[]; prose: ProseBlock[] | null }
-  const isProse = (block: Block): block is ProseBlock =>
-    block.type === 'paragraph' ||
-    block.type === 'heading' ||
-    block.type === 'rule' ||
-    block.type === 'list' ||
-    block.type === 'quote' ||
-    block.type === 'image'
-  const runs: Run[] = []
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]!
-    const last = runs.at(-1)
-    if (isProse(block)) {
-      if (last?.prose && last.start + last.blocks.length === index) {
-        last.blocks.push(block)
-        last.prose.push(block)
-      } else {
-        runs.push({ start: index, blocks: [block], prose: [block] })
-      }
-    } else {
-      runs.push({ start: index, blocks: [block], prose: null })
-    }
-  }
+  // See mobile-markdown-prose-runs.ts for why the blocks group as they do.
+  const runs = buildProseRuns(
+    blocks,
+    (url) => isRemoteImageUrl(url) || resolveImage !== undefined
+  )
 
   return (
     <View
@@ -388,11 +332,7 @@ function MobileMarkdownInner({
         const block = run.blocks[0]!
         if (run.prose) {
           return (
-            <Text
-              key={`${index}:${inlineLayoutEpoch}`}
-              selectable={selectable}
-              style={[styles.paragraph, proseScale]}
-            >
+            <Text key={index} selectable={selectable} style={[styles.paragraph, proseScale]}>
               {run.prose.map((member, memberIndex) => (
                 <Fragment key={memberIndex}>
                   {memberIndex > 0 ? '\n\n' : null}
@@ -431,7 +371,6 @@ function MobileMarkdownInner({
                       alt={member.alt}
                       url={member.url}
                       width={contentWidth}
-                      onSized={bumpInlineLayout}
                       resolve={resolveImage}
                       onOpen={() => openMarkdownHref(member.url, onOpenFile)}
                       styles={styles}
@@ -447,6 +386,20 @@ function MobileMarkdownInner({
                 </Fragment>
               ))}
             </Text>
+          )
+        }
+        if (block.type === 'image') {
+          return (
+            <View key={index} style={styles.figure}>
+              <MobileMarkdownImage
+                alt={block.alt}
+                url={block.url}
+                width={contentWidth}
+                resolve={resolveImage}
+                onOpen={() => openMarkdownHref(block.url, onOpenFile)}
+                styles={styles}
+              />
+            </View>
           )
         }
         if (block.type === 'code') {
