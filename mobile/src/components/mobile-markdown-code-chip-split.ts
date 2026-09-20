@@ -53,3 +53,29 @@ function pack(pieces: string[], max: number): string[] {
   }
   return out
 }
+
+/** JetBrains Mono's advance width, 600/1000 em (read from the bundled TTF's
+ *  hmtx table, 2026-09-20). Every glyph is this wide, so a span's width in
+ *  dp is its length times the font size times this. */
+const MONO_ADVANCE_EM = 0.6
+/** What a pill adds around its text: 5 dp padding, 1 dp border, 3 dp margin,
+ *  each side (mobile-markdown-styles.ts `inlineCodeChip`). */
+const CHIP_INSETS = 2 * (5 + 1 + 3)
+
+/**
+ * How many characters of a span fit on one line as ONE pill, from the
+ * paragraph's measured width and the pill text's size.
+ *
+ * The fixed cap of 34 cut `.claude/worktrees/agent-a1922af126912f522` (42
+ * characters) into two pills that then sat side by side on a single line,
+ * with room to spare (device, 2026-09-20): a span that fits the line is one
+ * pill, and only the line's width says whether it fits. Unknown width (0,
+ * before the first layout) keeps the fixed cap.
+ */
+export function inlineCodeChipMaxChars(contentWidth: number, fontSize: number): number {
+  if (!(contentWidth > 0) || !(fontSize > 0)) {
+    return INLINE_CODE_CHIP_MAX_CHARS
+  }
+  const chars = Math.floor((contentWidth - CHIP_INSETS) / (fontSize * MONO_ADVANCE_EM))
+  return Math.max(12, chars)
+}

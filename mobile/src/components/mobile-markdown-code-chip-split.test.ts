@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { INLINE_CODE_CHIP_MAX_CHARS, splitInlineCodeChips } from './mobile-markdown-code-chip-split'
+import {
+  INLINE_CODE_CHIP_MAX_CHARS,
+  inlineCodeChipMaxChars,
+  splitInlineCodeChips
+} from './mobile-markdown-code-chip-split'
 
 describe('splitInlineCodeChips', () => {
   it('keeps a span that fits on one line as a single pill', () => {
@@ -40,5 +44,26 @@ describe('splitInlineCodeChips', () => {
 
   it('returns nothing for an empty span', () => {
     expect(splitInlineCodeChips('')).toEqual([])
+  })
+})
+
+// 2026-09-20, phone: `.claude/worktrees/agent-a1922af126912f522` drew as two
+// pills side by side on one line. The cut was the fixed 34-character cap;
+// the line, 372 dp on this device at 13 dp mono, holds 45.
+describe('a span that fits the line is one pill', () => {
+  const path = '.claude/worktrees/agent-a1922af126912f522'
+  it('is not cut when the measured line holds it', () => {
+    const max = inlineCodeChipMaxChars(372, 13)
+    expect(max).toBe(45)
+    expect(splitInlineCodeChips(path, max)).toEqual([path])
+  })
+  it('is still cut, after the slash, on a line that cannot hold it', () => {
+    const max = inlineCodeChipMaxChars(300, 13)
+    expect(max).toBe(36)
+    expect(splitInlineCodeChips(path, max)).toEqual(['.claude/worktrees/', 'agent-a1922af126912f522'])
+  })
+  it('keeps the fixed cap until the paragraph has been measured', () => {
+    expect(inlineCodeChipMaxChars(0, 13)).toBe(INLINE_CODE_CHIP_MAX_CHARS)
+    expect(inlineCodeChipMaxChars(60, 13)).toBe(12)
   })
 })

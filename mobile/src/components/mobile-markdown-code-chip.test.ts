@@ -152,3 +152,28 @@ describe('bold around a code span', () => {
     expect(boldWithChip.length).toBeGreaterThan(0)
   })
 })
+
+// 2026-09-20, phone: `.claude/worktrees/agent-a1922af126912f522` was two
+// pills side by side on one line. The component now takes the cut from the
+// paragraph's measured width; until it is measured the fixed cap stands.
+describe('a path that fits the measured line', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  it('is one pill once the width is known, two before', () => {
+    const path = '.claude/worktrees/agent-a1922af126912f522'
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: `at \`${path}\` still` }))
+    })
+    const chips = () =>
+      renderer!.root
+        .findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
+        .map((chip) => chip.findByType('Text' as never).children.join(''))
+    expect(chips()).toEqual(['.claude/worktrees/', 'agent-a1922af126912f522'])
+    const root = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
+    act(() => root.props.onLayout({ nativeEvent: { layout: { width: 372, height: 40, x: 0, y: 0 } } }))
+    expect(chips()).toEqual([path])
+  })
+})

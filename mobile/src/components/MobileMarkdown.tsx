@@ -27,7 +27,11 @@ import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markd
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
-import { splitInlineCodeChips } from './mobile-markdown-code-chip-split'
+import {
+  INLINE_CODE_CHIP_MAX_CHARS,
+  inlineCodeChipMaxChars,
+  splitInlineCodeChips
+} from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
@@ -152,7 +156,10 @@ function renderInline(
   text: string,
   onOpenFile?: (pathText: string) => void,
   /** Pill sizes at the reader's zoom; null when they have not zoomed. */
-  chipScale?: ReturnType<typeof markdownChipScale>
+  chipScale?: ReturnType<typeof markdownChipScale>,
+  /** How many characters fit one pill on this paragraph's line
+   *  (`inlineCodeChipMaxChars`); the fixed cap until the width is known. */
+  chipMaxChars: number = INLINE_CODE_CHIP_MAX_CHARS
 ): ReactNode[] {
   const parts: ReactNode[] = []
   // Code spans are found by backtick run inside the matcher, not here.
@@ -217,7 +224,7 @@ function renderInline(
         // It cannot break across lines, so a long span is several pills that
         // wrap. Its text is outside a press-and-hold selection of the prose;
         // the message copy button still carries it.
-        splitInlineCodeChips(code).forEach((piece, pieceIndex) => {
+        splitInlineCodeChips(code, chipMaxChars).forEach((piece, pieceIndex) => {
           parts.push(
             <View
               // The paragraph's length is in the key on purpose. Android
@@ -276,19 +283,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale, chipMaxChars)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale, chipMaxChars)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile, chipScale)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile, chipScale, chipMaxChars)}
         </Text>
       )
     }
@@ -320,6 +327,11 @@ function MobileMarkdownInner({
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
   const chipScale = markdownChipScale(textScale)
+  // A span that fits the measured line is one pill (2026-09-20).
+  const chipMaxChars = inlineCodeChipMaxChars(
+    contentWidth,
+    chipScale?.fontSize ?? MARKDOWN_BASE_SIZE - 2
+  )
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -347,7 +359,7 @@ function MobileMarkdownInner({
                   {memberIndex > 0 ? '\n\n' : null}
                   {member.type === 'heading' ? (
                     <Text style={[styles.heading, headingScale(styles, member.level)]}>
-                      {renderInline(styles, member.text, onOpenFile, chipScale)}
+                      {renderInline(styles, member.text, onOpenFile, chipScale, chipMaxChars)}
                     </Text>
                   ) : member.type === 'rule' ? (
                     <Text style={styles.ruleText}>{RULE_TEXT}</Text>
@@ -361,7 +373,7 @@ function MobileMarkdownInner({
                           {marker ? (
                             <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
                           ) : null}
-                          {renderInline(styles, item.text, onOpenFile, chipScale)}
+                          {renderInline(styles, item.text, onOpenFile, chipScale, chipMaxChars)}
                         </Fragment>
                       )
                     })
@@ -371,7 +383,7 @@ function MobileMarkdownInner({
                         <Fragment key={lineIndex}>
                           {lineIndex > 0 ? '\n' : null}
                           <Text style={styles.quoteBar}>{QUOTE_BAR}</Text>
-                          {renderInline(styles, line, onOpenFile, chipScale)}
+                          {renderInline(styles, line, onOpenFile, chipScale, chipMaxChars)}
                         </Fragment>
                       ))}
                     </Text>
@@ -390,7 +402,7 @@ function MobileMarkdownInner({
                     // next as literal asterisks on the phone (reported from the
                     // device); the parser has already reflowed soft wraps, so
                     // any newline left here is a deliberate hard break.
-                    renderInline(styles, member.text, onOpenFile, chipScale)
+                    renderInline(styles, member.text, onOpenFile, chipScale, chipMaxChars)
                   )}
                 </Fragment>
               ))}
