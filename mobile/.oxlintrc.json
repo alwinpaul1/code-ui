@@ -169,7 +169,10 @@
             // capability threaded to the session lane, and
             // structuredCancelPrompt handed to the contract; the cancel itself
             // is mobile-structured-agent-session-cancel.ts.
-            "max": 502,
+            // 2026-09-20: +1 for the screen's peer-message rows handed to the
+            // contract (read in use-mobile-terminal-hud-observation.ts, placed
+            // by use-screen-peer-notices.ts).
+            "max": 503,
             "skipBlankLines": true,
             "skipComments": true
           }

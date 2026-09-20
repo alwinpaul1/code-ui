@@ -15,6 +15,7 @@ import {
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
+import { useScreenPeerNotices } from './use-screen-peer-notices'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 import { useOwnQueueAbsorption } from './use-own-queue-absorption'
 import { withAbsorbedPlacement } from './own-queue-absorption'
@@ -204,7 +205,7 @@ export function MobileNativeChatOverlay({
     session.messages,
     ownPrompts
   )
-  const folded = useMemo(
+  const foldedWithoutPeers = useMemo(
     () =>
       desktopEchoes.length > 0 || absorbedEchoes.length > 0
         ? foldMobileNativeChatMessages(
@@ -213,6 +214,14 @@ export function MobileNativeChatOverlay({
           )
         : baseFolded,
     [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages]
+  )
+  // A message from a subagent or another session mostly never reaches the
+  // transcript the phone reads; the agent's screen says one arrived, and
+  // from whom, so that is drawn where it was seen (2026-09-20).
+  const folded = useScreenPeerNotices(
+    controller.nativeChatScreenPeerNotices ?? NO_SCREEN_PROMPTS,
+    foldedWithoutPeers,
+    controller.nativeChatStreamScopeKey
   )
   // Witnessed messages are remembered with the phone's own sends, so they
   // survive a reconnect, a tab switch and a relaunch (2026-09-13).

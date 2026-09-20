@@ -13,6 +13,7 @@ import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
 import { taskCompletionsFromScreen } from './mobile-terminal-task-completions'
+import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -46,6 +47,9 @@ export function useMobileTerminalHudObservation(args: {
   /** Background-task completions the agent has stated on its scrollback,
    *  as this read saw them (`mobile-terminal-task-completions.ts`). */
   taskCompletions: ScreenTaskCompletion[]
+  /** Senders of the peer-message rows on its scrollback, one per row, as
+   *  this read saw them (`mobile-terminal-peer-notices.ts`). */
+  peerNotices: string[]
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -59,6 +63,7 @@ export function useMobileTerminalHudObservation(args: {
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [taskCompletions, setTaskCompletions] = useState<ScreenTaskCompletion[]>([])
+  const [peerNotices, setPeerNotices] = useState<string[]>([])
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
@@ -143,6 +148,8 @@ export function useMobileTerminalHudObservation(args: {
         setTaskCompletions((current) =>
           JSON.stringify(current) === JSON.stringify(completions) ? current : completions
         )
+        const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines) : []
+        setPeerNotices((current) => (JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         // The screen parser names only Claude's Bash dialog, so tracking
         // dismissal by it alone meant an Edit or MCP approval was never seen
@@ -215,6 +222,7 @@ export function useMobileTerminalHudObservation(args: {
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     taskCompletions: enabled && queueScopeRef.current === handleKey ? taskCompletions : [],
+    peerNotices: enabled && queueScopeRef.current === handleKey ? peerNotices : [],
     permissionDismissed
   }
 }

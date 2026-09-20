@@ -1,0 +1,45 @@
+
+
+✻ Cooked for 2s · done 11:02 PM
+
+❯ Use the Agent tool to start a background
+  general-purpose agent named probe with this
+  prompt: 'Send one message to your parent
+  with SendMessage saying: hello from probe.
+  Then stop.' Wait until its message reaches
+  you, then reply with the single word
+  received.
+
+⏺ Agent(Probe agent sends message)
+
+⏺ The probe agent is running. I'll reply once
+  its message arrives.
+
+  session:ok
+
+
+› Message from @probe (ctrl+o to expand)
+
+⏺ received
+
+  session:ok
+
+
+⏺ Teammate @probe finished
+  Sent "hello from probe" to team-lead.
+  Stopping here.…
+
+⏺ The probe agent has finished and gone idle.
+  Nothing further to do.
+
+  session:ok
+
+──────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────
+  [Opus 5 xhigh | Max 20x] ░░░░ 6% (61k/1...
+  Usage ░░░░ 0% (resets 4:00 AM)
+  ──────────────────────────────────────────
+  ✓ Bash ×2
+  ✓ general-purpose: Probe agent sends me...
+  ⏵⏵ bypass permissions on (shift+tab to  ·

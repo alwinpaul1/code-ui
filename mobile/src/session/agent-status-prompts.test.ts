@@ -174,3 +174,39 @@ describe('the time of a prompt first seen mid-session', () => {
     expect(state.prompts.map((p) => p.at)).toEqual([900, 5000])
   })
 })
+
+// 2026-09-20: a subagent's message fires the same UserPromptSubmit hook as a
+// typed prompt, so the tab status carried its first 200 characters — the
+// injected preamble and the opening XML tag — and the phone drew that as a
+// pending user bubble. The transcript row is drawn as a peer notice instead
+// (mobile-native-chat-peer-messages.ts); an echo of it would show twice, and
+// the bubble would be the wrapper, not the message.
+describe('a peer or subagent message that reached the hook', () => {
+  const INJECTED =
+    'Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="observer-sessions-17" from-mode="prompting">\n<agent-message from="a379d31745861b502">\nCan you provide the git diff'
+
+  it('is never echoed as a desktop prompt, but is remembered so a repeat is not re-read', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: INJECTED })
+    expect(state.prompts).toEqual([])
+    expect(state.last).toBe(INJECTED)
+    expect(observeAgentStatusPrompt(state, 'sess-1', { ...LIVE, prompt: INJECTED })).toBe(state)
+  })
+
+  it('still echoes the person\'s own next prompt after it', () => {
+    const peer = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: INJECTED })
+    const next = observeAgentStatusPrompt(peer, 'sess-1', { ...LIVE, prompt: 'now fix it', updatedAt: LIVE.updatedAt + 5 })
+    expect(next.prompts.map((prompt) => prompt.text)).toEqual(['now fix it'])
+  })
+
+  // Orca's classifier keys on the opening phrase alone, so a person's prompt
+  // that starts with it is hidden from the transcript on the desktop too. The
+  // hook path follows the same rule on purpose: an echo of such a prompt
+  // would never find its (hidden) row and would sit as a stale bubble.
+  it('follows Orca\'s own rule for a prompt that starts with the phrase', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', {
+      ...LIVE,
+      prompt: 'Another Claude session sent a message: what does that mean?'
+    })
+    expect(state.prompts).toEqual([])
+  })
+})

@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
+import { surfacePeerMessages } from './mobile-native-chat-peer-messages'
 import { withoutPasteWrappers, withoutPasteWrappersInRows } from './mobile-native-chat-paste-wrapper'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
@@ -85,8 +86,10 @@ export function foldMobileNativeChatMessages(
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
   // A slash command's envelope row is the user's turn; surfaced before the
   // noise filter would hide it (mobile-native-chat-command-turns.ts).
+  // A message from another session or a subagent is likewise hidden by that
+  // filter; surfaced as a labelled notice (mobile-native-chat-peer-messages.ts).
   const foldedForImages = foldQueuedImageTurns(
-    withoutPasteWrappersInRows(surfaceCommandTurns(messages))
+    withoutPasteWrappersInRows(surfacePeerMessages(surfaceCommandTurns(messages)))
   )
   // Orca's normalizer deletes a `[Image #N]` it cannot turn into a picture, and
   // on the phone the bytes never arrive; see mobile-desktop-image-placeholders.

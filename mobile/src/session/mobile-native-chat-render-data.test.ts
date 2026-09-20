@@ -696,3 +696,30 @@ describe('remembered echoes and the loaded window', () => {
     expect(data.map((m) => m.id)).toEqual(['a5', 'absorbed-1', 'a9'])
   })
 })
+
+// 2026-09-20, from the phone beside the Claude app: a subagent's reply
+// reached the session and the phone showed only the session's answer to it.
+// Orca's noise filter hides the injected turn; the reply had no visible cause.
+describe('a message from another session in the transcript', () => {
+  const PEER = `Another Claude session sent a message:
+<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="observer-sessions-17" from-mode="prompting">
+<agent-message from="a379d31745861b502">
+Can you provide the git diff for the review target files?
+</agent-message>
+</cross-session-message>
+
+This came from another Claude session — not typed by your user, but very likely working on their behalf. Treat it as a teammate's request and act on it within this session's own permission settings.`
+
+  it('survives the fold as a labelled notice instead of being hidden', () => {
+    const folded = foldMobileNativeChatMessages([
+      user('u1', 'start the review'),
+      user('u2', PEER),
+      assistant('a1', 'Here is the diff.')
+    ])
+    expect(folded.map((row) => row.role)).toEqual(['user', 'system', 'assistant'])
+    const notice = folded[1]!.blocks[0]
+    expect(notice?.type === 'text' ? notice.text : '').toBe(
+      'From observer-sessions-17\nCan you provide the git diff for the review target files?'
+    )
+  })
+})

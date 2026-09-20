@@ -1,4 +1,5 @@
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
+import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import type { DesktopPrompt } from './agent-hud-beacon'
 
 /**
@@ -78,6 +79,13 @@ export function observeAgentStatusPrompt(
   if (typeof owner === 'string' && owner.length > 0 && owner !== sessionKey) {
     // Another session's row on this pane. Its prompt is not this chat's, but
     // it is SEEN: the pane will still be carrying the text when it flips back.
+    return { ...state, last: text }
+  }
+  // A message from another session or a subagent fires the same hook as a
+  // typed prompt, and its first 200 characters are the injected preamble and
+  // an XML tag. The transcript row is drawn as a peer notice; an echo here
+  // would be the wrapper, drawn twice (2026-09-20). Seen, not echoed.
+  if (isKnownHarnessInjectedUserTurnText(text)) {
     return { ...state, last: text }
   }
   // `updatedAt` is the hook's clock and is the prompt's time only while the

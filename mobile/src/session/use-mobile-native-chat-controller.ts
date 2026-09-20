@@ -182,7 +182,8 @@ export function useMobileNativeChatController(
     permissionDismissed,
     queuedMessages: visibleQueuedMessages,
     sentPrompts: screenSentPrompts,
-    taskCompletions: screenTaskCompletions
+    taskCompletions: screenTaskCompletions,
+    peerNotices: screenPeerNotices
   } = useMobileNativeChatHud({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
@@ -576,6 +577,7 @@ export function useMobileNativeChatController(
     readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatDesktopPrompts: tailPrompts,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
+    nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
     nativeChatContextWindow: liveHud.context, nativeChatLiveModel: { model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud
