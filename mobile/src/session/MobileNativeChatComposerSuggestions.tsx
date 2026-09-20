@@ -1,9 +1,10 @@
-import { FlatList, Pressable, View } from 'react-native'
+import { FlatList, Pressable, View, type LayoutChangeEvent } from 'react-native'
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { nativeChatSkillCommandName } from './mobile-native-chat-skill-command'
 import { formatNativeChatFileMentionToken } from './mobile-native-chat-file-mention'
 import { useTheme } from '../theme/theme-context'
+import { SUGGESTION_POPOVER_CAP, SUGGESTION_ROW_HEIGHT } from './mobile-native-chat-suggestion-popover'
 import { Txt } from '../ui/Txt'
 
 /** One row of the composer autocomplete: an agent slash command (with its
@@ -58,31 +59,23 @@ export function suggestionArgumentHint(suggestion: ComposerSuggestion): string |
   return hint ? hint.slice(0, ARGUMENT_HINT_MAX_LENGTH) : null
 }
 
-function suggestionDescription(suggestion: ComposerSuggestion): string | null {
-  if (suggestion.kind === 'command') {
-    return suggestion.command.description ?? null
-  }
-  if (suggestion.kind === 'skill') {
-    return suggestion.skill.description
-  }
-  return null
-}
 
-const SOURCE_LABEL: Record<DiscoveredSkill['sourceKind'], string> = {
-  repo: 'Project skill',
-  home: 'Skill',
-  bundled: 'Bundled',
-  plugin: 'Plugin'
-}
 
 export function MobileNativeChatComposerSuggestions({
   suggestions,
-  onPick
+  onPick,
+  maxHeight = SUGGESTION_POPOVER_CAP,
+  onLayout
 }: {
   suggestions: readonly ComposerSuggestion[]
   onPick: (suggestion: ComposerSuggestion) => void
+  /** From the composer: the room between the header and the dock, keyboard
+   *  included (mobile-native-chat-suggestion-popover.ts). */
+  maxHeight?: number
+  /** The popover's laid-out height, so the composer can tell the dock apart from it. */
+  onLayout?: (event: LayoutChangeEvent) => void
 }): React.JSX.Element {
-  const { colors, fonts, radius, space } = useTheme()
+  const { colors, radius, space } = useTheme()
   return (
     <View
       style={{
@@ -94,67 +87,38 @@ export function MobileNativeChatComposerSuggestions({
         backgroundColor: colors.bgPanel,
         overflow: 'hidden'
       }}
+      testID="composer-suggestions"
+      onLayout={onLayout}
     >
       <FlatList
         data={suggestions}
         keyExtractor={composerSuggestionKey}
         keyboardShouldPersistTaps="always"
-        // Why: tall enough to read through a full `/` catalog, short enough to
-        // keep the last messages and the composer on screen.
-        style={{ maxHeight: 360 }}
+        // Why a measured cap: the dock is absolutely positioned at the bottom
+        // and this list sits inside it, so a fixed height grew the dock up
+        // under the tab strip with the keyboard open (2026-09-20).
+        style={{ maxHeight }}
         initialNumToRender={14}
         windowSize={5}
-        renderItem={({ item: suggestion, index }) => (
+        // One line per row, the token and nothing else — the Claude app's
+        // menu, which the user asked for over the catalog description and the
+        // source badge each row carried (2026-09-20). The description is still
+        // what `suggestionDescription` returns for anything that wants it.
+        renderItem={({ item: suggestion }) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={composerSuggestionInsertText(suggestion)}
             style={({ pressed }) => ({
+              height: SUGGESTION_ROW_HEIGHT,
               paddingHorizontal: space.md,
-              paddingVertical: space.sm + 2,
-              borderTopWidth: index > 0 ? 1 : 0,
-              borderTopColor: colors.border,
-              backgroundColor: pressed ? colors.bgRaised : 'transparent',
-              gap: 1
+              justifyContent: 'center',
+              backgroundColor: pressed ? colors.bgRaised : 'transparent'
             })}
             onPress={() => onPick(suggestion)}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-              <Txt
-                variant="label"
-                numberOfLines={1}
-                style={{ fontFamily: fonts.mono, flexShrink: 1 }}
-              >
-                {composerSuggestionInsertText(suggestion)}
-              </Txt>
-              {suggestionArgumentHint(suggestion) ? (
-                <Txt
-                  variant="caption"
-                  tone="muted"
-                  numberOfLines={1}
-                  style={{ fontFamily: fonts.mono, flexShrink: 1 }}
-                >
-                  {suggestionArgumentHint(suggestion)}
-                </Txt>
-              ) : null}
-              {suggestion.kind === 'skill' ? (
-                <Txt
-                  variant="caption"
-                  tone="accent"
-                  weight="medium"
-                  style={{
-                    paddingHorizontal: 6,
-                    borderRadius: radius.xs,
-                    backgroundColor: colors.accentSoft
-                  }}
-                >
-                  {SOURCE_LABEL[suggestion.skill.sourceKind]}
-                </Txt>
-              ) : null}
-            </View>
-            {suggestionDescription(suggestion) ? (
-              <Txt variant="caption" tone="secondary" numberOfLines={1}>
-                {suggestionDescription(suggestion)}
-              </Txt>
-            ) : null}
+            <Txt variant="body" tone="accent" numberOfLines={1}>
+              {composerSuggestionInsertText(suggestion)}
+            </Txt>
           </Pressable>
         )}
       />

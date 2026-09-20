@@ -412,7 +412,7 @@ describe('MobileNativeChatComposer', () => {
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 2 } } })
     )
     const firstSuggestion = renderer!.root.findAll(
-      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+      (node) => node.type === 'Pressable' && typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('/')
     )[0] as { props: { onPress: () => void } }
     await act(async () => firstSuggestion.props.onPress())
     expect(onChangeText).toHaveBeenCalledWith('/clear ')
@@ -445,10 +445,11 @@ describe('MobileNativeChatComposer', () => {
     const texts = renderer!.root
       .findAll((node) => node.type === 'Text')
       .map((node) => (node.props as { children?: unknown }).children)
-    // Codex-only commands from the shared catalog, with their description rows —
-    // and none of the old hardcoded provider-agnostic list's phantom entries.
+    // Codex-only commands from the shared catalog — and none of the old
+    // hardcoded provider-agnostic list's phantom entries. Rows are the token
+    // alone since 2026-09-20; the description is no longer drawn.
     expect(texts).toContain('/permissions')
-    expect(texts).toContain('Choose what Codex is allowed to do')
+    expect(texts).not.toContain('Choose what Codex is allowed to do')
     expect(texts).not.toContain('/cost')
   })
 
@@ -706,7 +707,7 @@ describe('MobileNativeChatComposer', () => {
       await Promise.resolve()
     })
     const suggestion = renderer!.root.findAll(
-      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+      (node) => node.type === 'Pressable' && typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('/')
     )[0] as { props: { onPress: () => void } }
     await act(async () => suggestion.props.onPress())
     await act(async () => {

@@ -243,7 +243,10 @@
             // row withheld while a prompt card waits; the rule lives in the
             // disclosure hook. +1 for `onCancelPrompt` (Orca #20601), the
             // prompt card's cancel-by-identity threaded through.
-            "max": 414,
+            // 2026-09-20: +4 for the `/` popover's cap — the root's measured height
+            // and the dock height threaded to the composer; the rule and its hooks
+            // live in mobile-native-chat-suggestion-popover.ts.
+            "max": 418,
             "skipBlankLines": true,
             "skipComments": true
           }

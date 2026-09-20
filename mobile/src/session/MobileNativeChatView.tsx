@@ -35,6 +35,7 @@ import { interimAssistantMessageIds } from './mobile-native-chat-interim'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
+import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
@@ -195,6 +196,9 @@ export function MobileNativeChatView({
     onLoadEarlier
   })
   const { dockHeight, onDockLayout } = useChatDock(pinToTail)
+  // The composer's popover may take only the room between the header and the
+  // dock, keyboard included (mobile-native-chat-suggestion-popover.ts).
+  const [rootHeight, onRootLayout] = useMeasuredHeight()
   const { rewindable, request: requestRewind, sheet: rewindSheet } = useMobileNativeChatRewind({
     messages, folded, onRewindToMessage, composerText, onComposerTextChange
   })
@@ -298,7 +302,7 @@ export function MobileNativeChatView({
   const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={onRootLayout}>
       {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.textSecondary} />
@@ -465,6 +469,8 @@ export function MobileNativeChatView({
         disabled={lockReason !== null}
         placeholder={composerPlaceholder(lockReason, agentWorking)}
         filePaths={filePaths}
+        popoverSpace={rootHeight - bottomPad}
+        dockHeight={dockHeight}
         onNeedFiles={onNeedFiles}
         skills={skills}
         sessionCommands={sessionCommands}

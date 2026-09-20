@@ -65,7 +65,11 @@ describe('a `/` row with the argument hint the provider reported (Orca #19928)',
     renderer = null
   })
 
-  it('shows the hint beside the token, in the muted tone of whichever theme is on', () => {
+  // 2026-09-20: the rows show the token and nothing else, the Claude app's
+  // menu, which the user asked for over the hint and description rows. The
+  // hint is still computed (`suggestionArgumentHint`) for anything that wants
+  // it; the row does not draw it. Both themes: the accent tone is the theme's.
+  it('shows the token alone, in the accent tone of whichever theme is on', () => {
     for (const [scheme, palette] of [
       ['light', lightColors],
       ['dark', darkColors]
@@ -83,14 +87,9 @@ describe('a `/` row with the argument hint the provider reported (Orca #19928)',
         )
       })
       const { texts, colors } = readTexts(renderer!)
-      expect(texts).toEqual([
-        '/goal',
-        '<objective>',
-        'Set or view the goal',
-        '/clear',
-        'Start a new session with empty context'
-      ])
-      expect(colors).toContain(palette.textMuted)
+      expect(texts).toEqual(['/goal', '/clear'])
+      expect(colors).toContain(palette.accentText)
+      expect(colors).not.toContain(palette.textMuted)
       act(() => renderer?.unmount())
       renderer = null
     }

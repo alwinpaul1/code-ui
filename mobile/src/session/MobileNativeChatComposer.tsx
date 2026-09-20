@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
@@ -15,13 +15,9 @@ import type { AgentSessionConversationCommand } from '../../../src/shared/agent-
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
-import { mobileNativeChatSlashSuggestions } from './mobile-native-chat-session-catalog'
+import { useComposerSuggestions } from './use-composer-suggestions'
 import { PressScale } from '../ui/PressScale'
-import {
-  applyAutocomplete,
-  detectAutocompleteTrigger,
-  rankSuggestions
-} from './mobile-native-chat-autocomplete'
+import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
   composerSuggestionInsertText,
   MobileNativeChatComposerSuggestions,
@@ -105,6 +101,10 @@ type Props = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** Asked once the slash menu opens so the host scan is lazy. */
   onNeedSkills?: () => void
+  /** The chat view's height above the keyboard, for the popover's cap. */
+  popoverSpace?: number
+  /** The dock's current height (which includes the popover when it is up). */
+  dockHeight?: number
 }
 
 /** Claude-app style composer: a rounded card with the text field on top and a
@@ -144,7 +144,9 @@ export function MobileNativeChatComposer({
   skills = NO_SKILLS,
   sessionCommands,
   conversationCommands,
-  onNeedSkills
+  onNeedSkills,
+  popoverSpace = 0,
+  dockHeight = 0
 }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
   const [cursor, setCursor] = useState(0)
@@ -196,37 +198,19 @@ export function MobileNativeChatComposer({
     !uploading &&
     !sessionOptionDispatching
 
-  const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
-  const suggestions = useMemo<ComposerSuggestion[]>(() => {
-    if (!trigger) {
-      return []
-    }
-    if (trigger.kind === 'slash') {
-      return mobileNativeChatSlashSuggestions({
-        agent: agent ?? null,
-        scannedSkills: skills,
-        sessionCommands,
-        conversationCommands,
-        query: trigger.query
-      })
-    }
-    return rankSuggestions(filePaths, trigger.query).map((path) => ({
-      kind: 'file' as const,
-      path
-    }))
-  }, [trigger, filePaths, agent, skills, sessionCommands, conversationCommands])
-
-  useEffect(() => {
-    if (trigger?.kind === 'file') {
-      onNeedFiles?.(trigger.query)
-    }
-  }, [onNeedFiles, trigger?.kind, trigger?.query])
-
-  useEffect(() => {
-    if (trigger?.kind === 'slash') {
-      onNeedSkills?.()
-    }
-  }, [onNeedSkills, trigger?.kind])
+  const { trigger, suggestions, popoverMaxHeight, onPopoverLayout } = useComposerSuggestions({
+    value,
+    cursor,
+    agent: agent ?? null,
+    skills,
+    sessionCommands,
+    conversationCommands,
+    filePaths,
+    onNeedFiles,
+    onNeedSkills,
+    popoverSpace,
+    dockHeight
+  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -293,7 +277,12 @@ export function MobileNativeChatComposer({
   return (
     <View>
       {suggestions.length > 0 ? (
-        <MobileNativeChatComposerSuggestions suggestions={suggestions} onPick={pickSuggestion} />
+        <MobileNativeChatComposerSuggestions
+          suggestions={suggestions}
+          onPick={pickSuggestion}
+          maxHeight={popoverMaxHeight}
+          onLayout={onPopoverLayout}
+        />
       ) : null}
       <View
         style={{ paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md }}
