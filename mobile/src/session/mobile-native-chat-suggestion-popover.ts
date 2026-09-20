@@ -24,16 +24,20 @@ export const SUGGESTION_POPOVER_FLOOR = Math.round(SUGGESTION_ROW_HEIGHT * 1.5)
 const SUGGESTION_POPOVER_GAP = 8
 
 export function suggestionPopoverMaxHeight(args: {
-  /** The chat view's height minus the keyboard and bottom inset. */
-  spaceAboveKeyboard: number
-  /** The dock's height while no popover is mounted. */
+  /** The chat view's laid-out height, header excluded. Not less the keyboard:
+   *  the dock lifts itself clear of the keyboard with its own bottom padding,
+   *  which its measured height includes, and taking the lift off here as
+   *  well left a row-and-a-half menu under an empty screen (device,
+   *  2026-09-20, second install). */
+  viewHeight: number
+  /** The dock's height while no popover is mounted, keyboard lift included. */
   dockBaseHeight: number
 }): number {
-  const { spaceAboveKeyboard, dockBaseHeight } = args
-  if (!Number.isFinite(spaceAboveKeyboard) || !Number.isFinite(dockBaseHeight) || spaceAboveKeyboard <= 0) {
+  const { viewHeight, dockBaseHeight } = args
+  if (!Number.isFinite(viewHeight) || !Number.isFinite(dockBaseHeight) || viewHeight <= 0) {
     return SUGGESTION_POPOVER_CAP
   }
-  const room = spaceAboveKeyboard - dockBaseHeight - SUGGESTION_POPOVER_GAP
+  const room = viewHeight - dockBaseHeight - SUGGESTION_POPOVER_GAP
   return Math.max(SUGGESTION_POPOVER_FLOOR, Math.min(SUGGESTION_POPOVER_CAP, Math.floor(room)))
 }
 
@@ -50,7 +54,7 @@ export function suggestionPopoverMaxHeight(args: {
  */
 export function useSuggestionPopoverMaxHeight(
   suggestionCount: number,
-  spaceAboveKeyboard: number,
+  viewHeight: number,
   dockHeight: number
 ): { maxHeight: number; onPopoverLayout: (event: LayoutChangeEvent) => void } {
   const dockBaseRef = useRef(dockHeight)
@@ -65,7 +69,7 @@ export function useSuggestionPopoverMaxHeight(
     dockBaseRef.current = dockHeight - popoverHeight
   }
   return {
-    maxHeight: suggestionPopoverMaxHeight({ spaceAboveKeyboard, dockBaseHeight: dockBaseRef.current }),
+    maxHeight: suggestionPopoverMaxHeight({ viewHeight, dockBaseHeight: dockBaseRef.current }),
     onPopoverLayout
   }
 }

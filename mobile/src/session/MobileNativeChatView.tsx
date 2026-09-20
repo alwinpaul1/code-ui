@@ -469,7 +469,7 @@ export function MobileNativeChatView({
         disabled={lockReason !== null}
         placeholder={composerPlaceholder(lockReason, agentWorking)}
         filePaths={filePaths}
-        popoverSpace={rootHeight - bottomPad}
+        popoverSpace={rootHeight}
         dockHeight={dockHeight}
         onNeedFiles={onNeedFiles}
         skills={skills}

@@ -101,7 +101,8 @@ type Props = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** Asked once the slash menu opens so the host scan is lazy. */
   onNeedSkills?: () => void
-  /** The chat view's height above the keyboard, for the popover's cap. */
+  /** The chat view's height, for the popover's cap (the dock's own height
+   *  carries the keyboard lift). */
   popoverSpace?: number
   /** The dock's current height (which includes the popover when it is up). */
   dockHeight?: number
