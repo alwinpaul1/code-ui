@@ -330,18 +330,22 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
   })
 }
 
-/** A photo row shows the caption the phone sent, not the row Claude drew:
- *  the drawn one carries the paste marker or the temp-file path. `caption`
- *  keeps the drawn row, because that is what a recall has to match against. */
+/** A row that is the phone's own send shows the text the phone SENT, not the
+ *  row Claude drew: a photo row's drawn text carries the paste marker or the
+ *  temp-file path, and any row is wrapped where the agent's screen wrapped it
+ *  ("…confirm with jev and / then fixx / and again…", device 2026-09-20).
+ *  `caption` keeps the drawn row, because that is what a recall has to match
+ *  against. A row with no own send behind it — typed on the desk — stays a
+ *  string, the screen's own reading. */
 export type MobileChatQueueEntry = string | { text: string; images: string[]; caption: string }
 
-/** Show each confirmed queued send once, retaining local photos in the queue. */
+/** Show each confirmed queued send once, as typed, retaining local photos. */
 export function projectMobileChatQueue<T extends { text: string; images?: string[] }>(
   pending: readonly T[],
   queue: readonly string[]
 ): { pending: T[]; queue: MobileChatQueueEntry[] } {
   const available = pending.filter((item) => item.images?.length)
-  const matchedImages = new Set<T>()
+  const matched = new Set<T>()
   const projected = queue.map((text): MobileChatQueueEntry => {
     if (!splitOrcaPastedImagePaths(text).paths.length && !/\[Image #\d+\]/.test(text)) {
       return text
@@ -354,14 +358,31 @@ export function projectMobileChatQueue<T extends { text: string; images?: string
       return text
     }
     const item = available.splice(index, 1)[0]!
-    matchedImages.add(item)
+    matched.add(item)
     return { text: item.text, images: item.images!, caption: text }
   })
+  // Plain rows: the longest own send a row is (queueRowIsPendingSend) takes
+  // the row's place, as typed; the same rule pendingOutsideVisibleQueue hides
+  // the pending bubble by, so the two never disagree about which row is whose.
+  const remaining = pending.filter((item) => !matched.has(item))
+  for (let index = 0; index < projected.length; index += 1) {
+    const row = projected[index]
+    if (typeof row !== 'string') {
+      continue
+    }
+    let best: T | null = null
+    for (const item of remaining) {
+      if (!matched.has(item) && queueRowIsPendingSend(item.text, row) && (best === null || item.text.length > best.text.length)) {
+        best = item
+      }
+    }
+    if (best !== null) {
+      matched.add(best)
+      projected[index] = { text: best.text, images: best.images ?? [], caption: row }
+    }
+  }
   return {
-    pending: pendingOutsideVisibleQueue(
-      pending.filter((item) => !matchedImages.has(item)),
-      projected.filter((item): item is string => typeof item === 'string')
-    ),
+    pending: pending.filter((item) => !matched.has(item)),
     queue: projected
   }
 }

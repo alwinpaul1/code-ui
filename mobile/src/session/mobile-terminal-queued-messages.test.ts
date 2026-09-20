@@ -478,3 +478,26 @@ it('pairs a photo send with its painted row when the caption has inline code', (
     queue: [{ text: typed, images: ['file:///a.jpg'], caption: '[Image #1] See foo() here' }]
   })
 })
+
+// 2026-09-20, phone: the queue box read "…confirm with jev and / then fixx /
+// and again confirm with jev so no bug / exist" — the message the user had
+// typed as one line (transcript queue-operation content), broken where the
+// agent's screen wrapped it. The row IS the phone's own send; the phone has
+// the text as typed and shows that, keeping the painted row for the recall
+// to match against, as a photo row already does.
+it('shows the phone’s own queued send as typed, not as the screen wrapped it', () => {
+  const typed =
+    'will this popover thing height change according to phone size or resolution or is it fixed confirm with jev and then fixx and again confirm with jev so no bug exist'
+  const painted = [
+    'will this popover thing height change',
+    'according to phone size or resolution',
+    'or is it fixed confirm with jev and',
+    'then fixx',
+    'and again confirm with jev so no bug',
+    'exist'
+  ].join('\n')
+  expect(projectMobileChatQueue([{ text: typed, id: 1 }], [painted, 'typed on the desk'])).toEqual({
+    pending: [],
+    queue: [{ text: typed, images: [], caption: painted }, 'typed on the desk']
+  })
+})

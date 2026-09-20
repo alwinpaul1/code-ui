@@ -5,6 +5,7 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
+import { absorbedQueueKey, type OwnQueueAbsorption } from './own-queue-absorption'
 
 
 /**
@@ -45,6 +46,11 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
  */
 const anchorByNonce = new Map<string, string | null>()
 const DESKTOP_PROMPT_ANCHOR_CAP = 256
+const NO_ABSORPTION: OwnQueueAbsorption = new Map()
+
+function rawIndex(rawMessages: readonly NativeChatMessage[], id: string): number {
+  return rawMessages.findIndex((message) => message.id === id)
+}
 
 /**
  * How many readings a prompt may WAIT for the row the beacon named.
@@ -70,6 +76,16 @@ const waitsByNonce = new Map<string, number>()
  *  belongs, which is what the code did before the waiting was added; the wait
  *  only ever UPGRADES it to the beaconed row. */
 const provisionalByNonce = new Map<string, string | null>()
+/** Prompts whose anchor came from their TIME, still open to a later row.
+ *
+ *  A timed anchor is the last held row written before the prompt, and the
+ *  phone's rows lag the desk: at first sight the row written 1.2 s before the
+ *  send had not loaded, so nine calls read as eight (device, 2026-09-20). For
+ *  a while after the prompt a later-loading row that still predates it moves
+ *  the anchor down; nothing written after the prompt ever qualifies, so a
+ *  later turn cannot drag it. */
+const timedByNonce = new Map<string, number>()
+const TIMED_ANCHOR_OPEN_MS = 10 * 60_000
 
 function rememberedAnchor(nonce: string): string | null | undefined {
   if (!anchorByNonce.has(nonce)) {
@@ -83,6 +99,7 @@ function rememberedAnchor(nonce: string): string | null | undefined {
 
 function rememberAnchor(nonce: string, anchor: string | null): void {
   provisionalByNonce.delete(nonce)
+  timedByNonce.delete(nonce)
   anchorByNonce.delete(nonce)
   if (anchorByNonce.size >= DESKTOP_PROMPT_ANCHOR_CAP) {
     const oldest = anchorByNonce.keys().next()
@@ -98,10 +115,40 @@ export function useDesktopPromptEchoes(
   folded: readonly NativeChatMessage[],
   // The RAW tail, for the same reason the absorbed-queue echoes use it: a
   // folded run is one row, so folded anchors would stack every echo together.
-  rawMessages: readonly NativeChatMessage[] = folded
+  rawMessages: readonly NativeChatMessage[] = folded,
+  /** Where the agent's queue box took each of the phone's own sends
+   *  (own-queue-absorption.ts). That is where Claude Code draws the message,
+   *  and it outranks any anchor guessed from the send. */
+  absorbed: OwnQueueAbsorption = NO_ABSORPTION
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
+    const taken = absorbed.get(absorbedQueueKey(prompt.text))
+    if (taken !== undefined && rememberedAnchor(prompt.nonce) !== taken && rawIndex(rawMessages, taken) !== -1) {
+      rememberAnchor(prompt.nonce, taken)
+    } else if (timedByNonce.has(prompt.nonce)) {
+      const at = timedByNonce.get(prompt.nonce)!
+      const current = rememberedAnchor(prompt.nonce) ?? null
+      const later = lastRowBefore(rawMessages, at)
+      // Closed by the transcript's own clock, not the phone's: once a held
+      // row was written this long after the prompt, the rows before it are
+      // all in and there is nothing left to load.
+      const closed = rawMessages.some(
+        (message) => message.timestamp !== null && message.timestamp - at >= TIMED_ANCHOR_OPEN_MS
+      )
+      if (
+        typeof later === 'string' &&
+        later !== current &&
+        rawIndex(rawMessages, later) > rawIndex(rawMessages, current ?? '')
+      ) {
+        rememberAnchor(prompt.nonce, later)
+        if (!closed) {
+          timedByNonce.set(prompt.nonce, at)
+        }
+      } else if (closed) {
+        timedByNonce.delete(prompt.nonce)
+      }
+    }
     // A beacon restored before the transcript loads would pin the echo to
     // the bottom for good; wait for a row to anchor on (2026-09-13).
     if (rememberedAnchor(prompt.nonce) === undefined && rawMessages.length > 0) {
@@ -126,6 +173,9 @@ export function useDesktopPromptEchoes(
       } else if (timedRow !== undefined) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, timedRow)
+        if (prompt.at !== undefined) {
+          timedByNonce.set(prompt.nonce, prompt.at)
+        }
       } else if (beaconed === undefined) {
         // An older hook names no row; the arrival tail is all there is.
         rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)

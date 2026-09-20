@@ -16,6 +16,8 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
+import { useOwnQueueAbsorption } from './use-own-queue-absorption'
+import { withAbsorbedPlacement } from './own-queue-absorption'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -23,6 +25,7 @@ import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-reque
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 const CLIPBOARD_POLL_MS = 3000
 
+const NO_QUEUED: string[] = []
 const NO_PROMPTS: { nonce: string; text: string }[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 
@@ -169,12 +172,25 @@ export function MobileNativeChatOverlay({
       ),
     [controller.chatPending, desktopPrompts, baseFolded, queuedMessages]
   )
-  const desktopEchoes = useDesktopPromptEchoes(unlandedPrompts, baseFolded, session.messages)
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
   const ownPrompts = useMemo(
     () => [...projectedQueue.pending.map((p) => p.text), ...desktopPrompts.map((p) => p.text)],
     [desktopPrompts, projectedQueue.pending]
+  )
+  // Where the box let each of the phone's own sends go: that is where Claude
+  // Code draws it, after the calls that ran while it waited (2026-09-20).
+  const ownAbsorption = useOwnQueueAbsorption(
+    queuedMessages ?? NO_QUEUED,
+    ownPrompts,
+    session.messages,
+    controller.nativeChatStreamScopeKey
+  )
+  const desktopEchoes = useDesktopPromptEchoes(
+    unlandedPrompts,
+    baseFolded,
+    session.messages,
+    ownAbsorption
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],
@@ -209,11 +225,14 @@ export function MobileNativeChatOverlay({
     }
   }, [absorbedEchoes, desktopEchoes, rememberEcho])
   const pendingWithDesktopPrompts = useMemo(() => {
-    const own = pendingWithoutTranscriptTwins(projectedQueue.pending, desktopPrompts)
+    const own = withAbsorbedPlacement(
+      pendingWithoutTranscriptTwins(projectedQueue.pending, desktopPrompts),
+      ownAbsorption
+    )
     return desktopEchoes.length > 0 || absorbedEchoes.length > 0
       ? [...own, ...absorbedEchoes, ...desktopEchoes]
       : own
-  }, [absorbedEchoes, desktopEchoes, desktopPrompts, projectedQueue.pending])
+  }, [absorbedEchoes, desktopEchoes, desktopPrompts, ownAbsorption, projectedQueue.pending])
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]

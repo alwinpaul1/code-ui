@@ -5,6 +5,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useDesktopPromptEchoes, withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
+import { absorbedQueueKey } from './own-queue-absorption'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -470,5 +471,66 @@ describe('where a waiting prompt sits while rows keep arriving', () => {
       )
     })
     expect(latest[0]!.baselineTailMessageId).toBe('y2')
+  })
+})
+
+// 2026-09-20, phone beside the desk: the desk read "Ran 10 shell commands"
+// and then the queued message; the phone drew the message after 8. From the
+// transcript (7449d614…jsonl): nine Bash calls before the send
+// (08:23:04…08:23:58.4), the send at 08:23:59.6, one more call at 08:24:32.3,
+// and the queue absorbed it at 08:24:32.5 — after the tenth. The echo was
+// anchored by its hook time against the rows the phone HELD at first sight
+// (the ninth had not loaded, 1.2 s old), and the anchor was then final.
+// Claude Code draws a queued message where it TOOK it, and the phone can see
+// that moment: the row leaves the agent's queue box.
+describe('where a queued send lands', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const T = (clock: string) => Date.parse(`2026-09-20T${clock}Z`)
+  const call = (id: string, clock: string): NativeChatMessage => ({ ...assistant(id), timestamp: T(clock) })
+  const first8 = [
+    call('c1', '08:23:04.245'), call('c2', '08:23:08.121'), call('c3', '08:23:12.794'), call('c4', '08:23:28.644'),
+    call('c5', '08:23:34.525'), call('c6', '08:23:38.300'), call('c7', '08:23:42.801'), call('c8', '08:23:46.406')
+  ]
+  const c9 = call('c9', '08:23:58.446')
+  const c10 = call('c10', '08:24:32.294')
+  const text = 'actaully ran 10 shell commands my mobile shows only 8 see what happened and fix that bug confirm with jev'
+  const prompts: DesktopPrompt[] = [{ nonce: 'status:s:1789892639646:3', text, at: T('08:23:59.646') }]
+
+  function ProbeAbsorbed({
+    raw,
+    absorbed
+  }: {
+    raw: readonly NativeChatMessage[]
+    absorbed: ReadonlyMap<string, string>
+  }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw, absorbed)
+    return null
+  }
+
+  it('follows a row that loads late but was written before the send', () => {
+    act(() => {
+      renderer = create(createElement(ProbeAbsorbed, { raw: first8, absorbed: new Map() }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c8')
+    act(() => {
+      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9], absorbed: new Map() }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c9')
+  })
+
+  it('moves to where the agent took it once its queue row leaves the box', () => {
+    act(() => {
+      renderer = create(createElement(ProbeAbsorbed, { raw: [...first8, c9], absorbed: new Map() }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c9')
+    const absorbed = new Map([[absorbedQueueKey(text), 'c10']])
+    act(() => {
+      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9, c10], absorbed }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c10')
   })
 })
