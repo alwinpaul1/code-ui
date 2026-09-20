@@ -44,5 +44,20 @@ export function backgroundTaskKindLabel(kind: BackgroundTaskKind): string {
 }
 
 export function backgroundTaskStatusLabel(status: BackgroundTaskStatus): string {
-  return status === 'failed' ? 'Failed' : status === 'completed' ? 'Completed' : 'Running'
+  switch (status) {
+    case 'running':
+      return 'Running'
+    case 'completed':
+      return 'Completed'
+    case 'failed':
+      return 'Failed'
+    case 'finished':
+      // Retired by the agent's own shell count, not by a notification: the
+      // phone knows it ended, not how (mobile-background-tasks.ts).
+      return "Finished (agent's count)"
+    default: {
+      const exhaustive: never = status
+      return exhaustive
+    }
+  }
 }

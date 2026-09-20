@@ -197,8 +197,9 @@ export function useMobileNativeChatController(
   const isCodexChat = activeChatResolution?.agent === 'codex'
   const isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live; fold that into the beacon-built
-  // report so the pill and sheet can use it as a floor when the beacon's
-  // transcript tail lags on a huge session.
+  // report so the pill and sheet can fit the named list to it: a floor when
+  // the beacon's transcript tail lags on a huge session, and a cap on a
+  // hand-started tab that has no beacon to retire a mid-turn completion.
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
   const backgroundTaskReportWithScreen = useMemo(
     () => ({ ...backgroundTaskReport, onScreenShellCount }),

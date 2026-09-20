@@ -99,7 +99,9 @@ export type BackgroundTaskDeriveOptions = {
  *  kinds — calling those two "shell" would put a claim on the row that the
  *  host never made. */
 export type BackgroundTaskKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'unknown'
-export type BackgroundTaskStatus = 'running' | 'completed' | 'failed'
+/** `finished` is a shell the agent's own footer count retired: over, outcome
+ *  unseen. `completed` and `failed` come from a notification that said so. */
+export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'finished'
 
 export type BackgroundTask = {
   /** Claude's own task id — a shell's `bzp6f42la`, or a subagent's `agentId`. */
@@ -133,6 +135,9 @@ const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
 /** Beyond this a summary is a paragraph, not a caption; drop it rather than
  *  truncate a sentence into something that reads as a different claim. */
 const SUMMARY_MAX = 160
+/** Longer than the idle screen poll (5 s), so a launch the footer has not yet
+ *  been re-read with is not retired by its count. */
+const COUNT_RETIRE_GRACE_MS = 10_000
 
 /** Split the transcript's background work into what is still running and what
  *  has reported back. Pure: `now` is the only clock, so tests set it. */
@@ -196,27 +201,65 @@ export function deriveBackgroundTasks(
     options.runningTaskIdsAt ?? null,
     options.subagentRuns ?? null
   )
-  return padToOnScreenShellCount(tasks, options.onScreenShellCount ?? null)
+  return fitToOnScreenShellCount(tasks, options.onScreenShellCount ?? null, now)
 }
 
-/** The agent's footer counts its background shells live and in full; when it
- *  says more shells are running than the transcript-and-beacon walk could name
- *  — a shell launched further back than the beacon's tail can reach, on a huge
- *  session — the remainder are shown as unnamed running shells rather than
- *  dropped, so the count matches what the desk shows (2026-09-14). Never
- *  removes a named shell, and does nothing when the footer count is absent or
- *  already covered. */
-export function padToOnScreenShellCount(
+/** The agent's footer counts its background shells live and in full, and the
+ *  phone's named list is fitted to it both ways.
+ *
+ *  Up: when it says MORE shells are running than the transcript-and-beacon
+ *  walk could name — a shell launched further back than the beacon's tail can
+ *  reach, on a huge session — the remainder are shown as unnamed running
+ *  shells rather than dropped, so the count matches the desk (2026-09-14).
+ *
+ *  Down: when it says FEWER, some named shell has finished and the phone did
+ *  not see it. That is every mid-turn completion on a hand-started tab: a bare
+ *  `claude` typed into a terminal has no Code UI beacon (no `live=`, no
+ *  `done=`), Claude Code writes a mid-turn completion as an attachment record
+ *  Orca's reader never surfaces, and the pane stays `working` with its start
+ *  pinned before the launch, so nothing else ever retires it (phone
+ *  2026-09-20: desk "· 2 shells", phone "3 running tasks", all three named).
+ *  The count is the agent's own and is taken as it stands; WHICH shell
+ *  finished the phone cannot know, so the oldest launches are retired, as
+ *  `finished` rather than `completed`: over, outcome unseen. Shells only, in
+ *  both directions:
+ *  the footer counts no subagents, and a running agent is never retired here.
+ *  Does nothing when the footer count is absent or already met. */
+export function fitToOnScreenShellCount(
   tasks: BackgroundTasks,
-  onScreenShellCount: number | null
+  onScreenShellCount: number | null,
+  now: number
 ): BackgroundTasks {
   if (onScreenShellCount === null) {
     return tasks
   }
   const namedShells = tasks.running.filter((task) => task.kind === 'shell').length
   const missing = onScreenShellCount - namedShells
-  if (missing <= 0) {
+  if (missing === 0) {
     return tasks
+  }
+  if (missing < 0) {
+    // Running is in launch order, oldest first; the surplus is taken from the
+    // front, so the shells most recently launched keep their rows. A shell
+    // launched within the grace is never retired: the transcript is pushed
+    // and the screen polled, so its launch can be named before the footer has
+    // been re-read with it counted, and retiring it would flip the row to
+    // finished and back a second later.
+    let toRetire = -missing
+    const running: BackgroundTask[] = []
+    const retired: BackgroundTask[] = []
+    for (const task of tasks.running) {
+      const fresh = task.startedAt !== null && now - task.startedAt < COUNT_RETIRE_GRACE_MS
+      if (task.kind === 'shell' && toRetire > 0 && !fresh) {
+        toRetire -= 1
+        retired.push({ ...task, status: 'finished', elapsedMs: null })
+      } else {
+        running.push(task)
+      }
+    }
+    // Newest-first, like the rest of the finished list; these ended at an
+    // unknown time after their launch, so they go ahead of the notified ones.
+    return { running, finished: [...retired.toReversed(), ...tasks.finished] }
   }
   const filler: BackgroundTask[] = Array.from({ length: missing }, (_unused, index) => ({
     id: `onscreen-shell-${index}`,
