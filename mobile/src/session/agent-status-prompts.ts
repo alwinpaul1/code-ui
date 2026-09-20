@@ -51,7 +51,8 @@ export function observeAgentStatusPrompt(
   sessionKey: string | null,
   status: AgentStatusPromptSource | undefined
 ): AgentStatusPromptState {
-  if (sessionKey !== state.sessionKey) {
+  const firstSight = sessionKey !== state.sessionKey
+  if (firstSight) {
     // The prompts start over; the last TEXT seen does not. The pane caches
     // `prompt` across events, and a hook from another session on the same
     // pane flips `providerSession` there and back — a nested `claude` started
@@ -79,7 +80,17 @@ export function observeAgentStatusPrompt(
     // it is SEEN: the pane will still be carrying the text when it flips back.
     return { ...state, last: text }
   }
-  const at = typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : null
+  // `updatedAt` is the hook's clock and is the prompt's time only while the
+  // phone is watching as the prompt arrives. For the first status a session
+  // shows the phone — a tab opened an hour into its turn — it is the last tool
+  // ping, and a prompt timed by it anchored at the tail under the tool fold
+  // (device, 2026-09-20). The pane's current state began when its prompt was
+  // taken, so that is the prompt's time at first sight.
+  const clock =
+    firstSight && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt)
+      ? status.stateStartedAt
+      : status?.updatedAt
+  const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
   const prompt: DesktopPrompt = {
     nonce: `status:${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,

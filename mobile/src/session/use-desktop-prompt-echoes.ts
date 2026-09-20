@@ -119,10 +119,24 @@ export function useDesktopPromptEchoes(
   /** Where the agent's queue box took each of the phone's own sends
    *  (own-queue-absorption.ts). That is where Claude Code draws the message,
    *  and it outranks any anchor guessed from the send. */
-  absorbed: OwnQueueAbsorption = NO_ABSORPTION
+  absorbed: OwnQueueAbsorption = NO_ABSORPTION,
+  /** Whether rows older than the loaded page exist and are not loaded. A
+   *  prompt older than every held row is then a row above the page, not a
+   *  bubble to place: it shows when the page that holds it loads, and the
+   *  hook copy retires against it (device, 2026-09-20: a 2,858-character
+   *  prompt drawn as its 200-character hook cut, under the tool fold). */
+  hasEarlier = false
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
+    if (
+      hasEarlier &&
+      rememberedAnchor(prompt.nonce) === undefined &&
+      prompt.anchorId === undefined &&
+      lastRowBefore(rawMessages, prompt.at) === null
+    ) {
+      continue
+    }
     const taken = absorbed.get(absorbedQueueKey(prompt.text))
     if (taken !== undefined && rememberedAnchor(prompt.nonce) !== taken && rawIndex(rawMessages, taken) !== -1) {
       rememberAnchor(prompt.nonce, taken)

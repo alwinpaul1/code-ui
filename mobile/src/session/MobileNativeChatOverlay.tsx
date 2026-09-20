@@ -190,7 +190,8 @@ export function MobileNativeChatOverlay({
     unlandedPrompts,
     baseFolded,
     session.messages,
-    ownAbsorption
+    ownAbsorption,
+    session.hasMore
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],

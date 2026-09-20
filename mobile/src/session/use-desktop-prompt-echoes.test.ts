@@ -534,3 +534,46 @@ describe('where a queued send lands', () => {
     expect(latest[0]!.baselineTailMessageId).toBe('c10')
   })
 })
+
+// 2026-09-20, phone: a tab opened on a session already an hour into its
+// turn showed the prompt CUT at the hook's 200 characters, under the tool
+// fold, with nothing above. The prompt's own row (2,858 characters, 09:19:09)
+// was above the page the phone had loaded (the tail of 122 rows); the echo
+// could not retire against it, and its time was the status clock at first
+// sight — a tool ping minutes later — so it anchored at the tail. A prompt
+// older than every loaded row, on a page with rows above it, is a row the
+// phone has not loaded yet: not a bubble to guess.
+describe('a prompt older than the loaded page', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const T = (clock: string) => Date.parse(`2026-09-20T${clock}Z`)
+  const raw = [
+    { ...assistant('a-fetch-1'), timestamp: T('09:36:47.526') },
+    { ...assistant('a-fetch-2'), timestamp: T('09:36:49.774') }
+  ]
+  const prompts: DesktopPrompt[] = [
+    { nonce: 'status:6116568a:1789895949068:0', text: '<pasted_content id="329c"> Find me a men\'s insulated winter jacket', cut: true, at: T('09:19:09.068') }
+  ]
+  function ProbeEarlier({ hasEarlier }: { hasEarlier: boolean }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw, undefined, hasEarlier)
+    return null
+  }
+
+  it('is not drawn while earlier rows are still unloaded', () => {
+    act(() => {
+      renderer = create(createElement(ProbeEarlier, { hasEarlier: true }))
+    })
+    expect(latest).toEqual([])
+  })
+
+  it('leads the conversation when the page is the whole transcript', () => {
+    act(() => {
+      renderer = create(createElement(ProbeEarlier, { hasEarlier: false }))
+    })
+    expect(latest).toHaveLength(1)
+    expect(latest[0]!.baselineTailMessageId).toBeNull()
+  })
+})

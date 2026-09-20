@@ -18,11 +18,13 @@ const LIVE = {
 describe('desktop prompts read off the tab status', () => {
   it('turns the prompt a hand-started session just took into a desktop prompt, at its time', () => {
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', LIVE)
+    // Its time is when the pane's working state began — the prompt was taken
+    // then; `updatedAt` had moved on with the tool pings since (2026-09-20).
     expect(state.prompts).toEqual([
       {
-        nonce: expect.stringMatching(/^status:sess-1:1789823360008:0$/),
+        nonce: expect.stringMatching(/^status:sess-1:1789823300000:0$/),
         text: LIVE.prompt,
-        at: 1789823360008
+        at: 1789823300000
       }
     ])
   })
@@ -138,5 +140,37 @@ describe('a prompt posted on this pane by another session', () => {
       prompt: parentText
     })
     expect(state.prompts.map((p) => p.text)).toEqual([parentText])
+  })
+})
+
+// 2026-09-20: a tab opened an hour into a turn. `updatedAt` was the last tool
+// ping, minutes ago, so the prompt anchored at the tail. The state the pane
+// is in began when the prompt was taken — for the first status the phone
+// sees of a session, that is the prompt's time.
+describe('the time of a prompt first seen mid-session', () => {
+  it('is when the pane’s current state began, not the status clock', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-9', {
+      state: 'working',
+      prompt: '<pasted_content id="329c"> Find me a jacket',
+      updatedAt: 1789897000000,
+      stateStartedAt: 1789895949068
+    })
+    expect(state.prompts[0]?.at).toBe(1789895949068)
+  })
+
+  it('is the status clock for a prompt that arrives while the phone is watching', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-9', {
+      state: 'working',
+      prompt: 'first',
+      updatedAt: 1000,
+      stateStartedAt: 900
+    })
+    state = observeAgentStatusPrompt(state, 'sess-9', {
+      state: 'working',
+      prompt: 'second, mid-turn',
+      updatedAt: 5000,
+      stateStartedAt: 900
+    })
+    expect(state.prompts.map((p) => p.at)).toEqual([900, 5000])
   })
 })
