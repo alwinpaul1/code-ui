@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 const NONE: readonly ScreenPeerNotice[] = []
 
@@ -10,7 +11,7 @@ const NONE: readonly ScreenPeerNotice[] = []
  *  that first saw it, and drawn into the folded chat. The clock is the
  *  transcript's, not the phone's: the synthetic row only needs to sort. */
 export function useScreenPeerNotices(
-  senders: readonly string[],
+  rows: readonly ScreenPeerRow[],
   folded: readonly NativeChatMessage[],
   scopeKey: string | null
 ): NativeChatMessage[] {
@@ -21,7 +22,7 @@ export function useScreenPeerNotices(
   const tail = folded[folded.length - 1]
   memory.current = {
     scopeKey,
-    notices: observeScreenPeerNotices(memory.current.notices, senders, tail?.id ?? null, tail?.timestamp ?? 0)
+    notices: observeScreenPeerNotices(memory.current.notices, rows, tail?.id ?? null, tail?.timestamp ?? 0)
   }
   const notices = memory.current.notices
   return useMemo(() => withScreenPeerNotices(folded, notices), [folded, notices])

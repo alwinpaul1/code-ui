@@ -1,3 +1,4 @@
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -173,9 +174,9 @@ export type MobileNativeChatController = {
   nativeChatDesktopPrompts: { nonce: string; text: string; anchorId?: string }[]
   /** Prompts the agent has already accepted, read off its own screen. */
   nativeChatScreenPrompts: string[]
-  /** Senders of the peer-message rows on the agent's screen, one per row
+  /** The peer-message rows on the agent's screen, one per row
    *  (mobile-terminal-peer-notices.ts). */
-  nativeChatScreenPeerNotices: string[]
+  nativeChatScreenPeerNotices: ScreenPeerRow[]
   /** Whether this tab was launched with the prompt hook; null until a beacon lands. */
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */

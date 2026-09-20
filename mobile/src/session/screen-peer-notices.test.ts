@@ -18,19 +18,29 @@ describe('peer message rows read off the screen, placed into the chat', () => {
   const folded = [row('u1', 'user', 'start'), row('a1', 'assistant', 'working'), row('a2', 'assistant', 'done')]
 
   it('records a sighting once, anchored at the tail of that moment, and keeps it across polls', () => {
-    const first = observeScreenPeerNotices([], ['probe'], 'a1', 5)
+    const first = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
     expect(first).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5 }])
-    expect(observeScreenPeerNotices(first, ['probe'], 'a2', 6)).toBe(first)
+    expect(observeScreenPeerNotices(first, [{ sender: 'probe' }], 'a2', 6)).toBe(first)
     expect(observeScreenPeerNotices(first, [], 'a2', 6)).toBe(first)
   })
 
   it('counts a second row from the same sender as a second message, anchored where it was first seen', () => {
-    const one = observeScreenPeerNotices([], ['probe'], 'a1', 5)
-    const two = observeScreenPeerNotices(one, ['probe', 'probe'], 'a2', 6)
+    const one = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+    const two = observeScreenPeerNotices(one, [{ sender: 'probe' }, { sender: 'probe' }], 'a2', 6)
     expect(two.map((notice) => [notice.sender, notice.anchorId])).toEqual([
       ['probe', 'a1'],
       ['probe', 'a2']
     ])
+  })
+
+  it('remembers the message when the row carried it, and draws it as the same card a transcript row gets', () => {
+    const seen = observeScreenPeerNotices([], [{ sender: 'code-ui-6f', body: 'Capture probe: reply with received.' }], 'a1', 5)
+    expect(seen[0]).toMatchObject({ sender: 'code-ui-6f', body: 'Capture probe: reply with received.' })
+    const out = withScreenPeerNotices(folded, seen)
+    expect(out[2]?.blocks[0]).toMatchObject({
+      presentation: PEER_MESSAGE_PRESENTATION,
+      text: 'From code-ui-6f\nCapture probe: reply with received.'
+    })
   })
 
   it('draws each notice as a one-line row right after its anchor', () => {

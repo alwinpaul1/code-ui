@@ -1,14 +1,17 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_MESSAGE_PRESENTATION, peerMessageLabelAndBody } from './mobile-native-chat-peer-messages'
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 /**
  * Peer-message rows read off the screen, placed into the chat.
  *
- * A row says only who wrote (`› Message from @probe (ctrl+o to expand)`,
- * mobile-terminal-peer-notices.ts). The phone remembers each sighting with
- * the id of the last folded row at that moment and draws a one-line notice
- * after it: "a message from that agent arrived about here", which is all it
- * knows. When the transcript later carries the message itself (a row Orca
+ * A subagent's row says only who wrote (`› Message from @probe (ctrl+o to
+ * expand)`); another session's row carries the message too
+ * (mobile-terminal-peer-notices.ts). The phone remembers each sighting with
+ * the id of the last folded row at that moment and draws it after that row:
+ * the message as a card when the row carried it, else a one-line notice, "a
+ * message from that agent arrived about here", which is all it knows. When
+ * the transcript later carries the message itself (a row Orca
  * did publish, surfaced by mobile-native-chat-peer-messages.ts) after that
  * anchor, the notice steps aside for it, one notice per row; the many that
  * never land stay for the session (Jev 0.64 that this is honest, 2026-09-20).
@@ -19,6 +22,8 @@ export const PEER_NOTICE_PRESENTATION = 'peer-notice'
 export type ScreenPeerNotice = {
   id: string
   sender: string
+  /** The message as the screen painted it, when the row carried one. */
+  body?: string
   /** The last folded row when first seen; null on an empty chat. */
   anchorId: string | null
   /** Transcript clock at the sighting, for the synthetic row's timestamp. */
@@ -30,20 +35,29 @@ export type ScreenPeerNotice = {
  *  SAME array comes back when the poll showed nothing new. */
 export function observeScreenPeerNotices(
   previous: readonly ScreenPeerNotice[],
-  senders: readonly string[],
+  rows: readonly ScreenPeerRow[],
   tailId: string | null,
   now: number
 ): readonly ScreenPeerNotice[] {
-  const seen = new Map<string, number>()
-  for (const sender of senders) {
-    seen.set(sender, (seen.get(sender) ?? 0) + 1)
+  const seen = new Map<string, ScreenPeerRow[]>()
+  for (const row of rows) {
+    const list = seen.get(row.sender) ?? []
+    list.push(row)
+    seen.set(row.sender, list)
   }
   let next: ScreenPeerNotice[] | null = null
-  for (const [sender, count] of seen) {
+  for (const [sender, list] of seen) {
     const known = previous.filter((notice) => notice.sender === sender).length
-    for (let ordinal = known + 1; ordinal <= count; ordinal += 1) {
+    for (let ordinal = known + 1; ordinal <= list.length; ordinal += 1) {
       next ??= [...previous]
-      next.push({ id: `peer-notice:${sender}:${ordinal}`, sender, anchorId: tailId, sightedAt: now })
+      const body = list[ordinal - 1]?.body
+      next.push({
+        id: `peer-notice:${sender}:${ordinal}`,
+        sender,
+        ...(body ? { body } : {}),
+        anchorId: tailId,
+        sightedAt: now
+      })
     }
   }
   return next ?? previous
@@ -129,11 +143,11 @@ function landedPeerSender(message: NativeChatMessage): string | null {
 }
 
 function noticeRow(notice: ScreenPeerNotice): NativeChatMessage {
-  return {
-    id: notice.id,
-    role: 'system',
-    timestamp: notice.sightedAt,
-    source: 'transcript',
-    blocks: [{ type: 'text', text: `Message from @${notice.sender}`, presentation: PEER_NOTICE_PRESENTATION }]
-  }
+  // With the message: the same card a transcript row gets, so the reader
+  // cannot tell which surface it came from and does not need to.
+  const block =
+    notice.body === undefined
+      ? { type: 'text' as const, text: `Message from @${notice.sender}`, presentation: PEER_NOTICE_PRESENTATION }
+      : { type: 'text' as const, text: `From ${notice.sender}\n${notice.body}`, presentation: PEER_MESSAGE_PRESENTATION }
+  return { id: notice.id, role: 'system', timestamp: notice.sightedAt, source: 'transcript', blocks: [block] }
 }

@@ -1,0 +1,45 @@
+
+           Claude Code v2.1.278
+ ▐▛███▛█   Opus 5 with xhigh effort
+▝▜██████▀  Claude Max
+  ▝▝ ▝▝    /private/tmp
+
+
+⏺ Held peer message — from
+  uds:/tmp/cc-socks/99737.sock
+  [verified pid 99737] (peer claims
+  name: code-ui-6f); preview: «Capture
+  probe from the Code UI session:
+  reply with the single word received
+  and nothing else.» — not delivered
+  to Claude (1 held). The sending
+  session's permission mode class
+  doesn't match this session's. Review
+  it below, or set
+  "crossSessionInbound" to "accept".
+
+⏺ Released 1 held cross-session
+  message to Claude's queue (you
+  approved it).
+
+› Message from @code-ui-6f: Capture probe from
+the Code UI session: reply with the single
+word received and nothing else. (ctrl+o to
+expand)
+
+
+
+
+
+
+
+✽ Canoodling… (5s · ↓ 303 tokens)
+                           ◉ xhigh · /effort
+──────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────
+  [Opus 5 xhigh | Max 20x] ░░░░ 4% (37k/1...
+  Usage ░░░░ 3% (resets 4:00 AM)
+  ──────────────────────────────────────────
+  ✓ ToolSearch ×1
+  ⏵⏵ bypass permissions on (shift+tab to  ·

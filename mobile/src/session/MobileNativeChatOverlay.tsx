@@ -16,6 +16,7 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 import { useOwnQueueAbsorption } from './use-own-queue-absorption'
 import { withAbsorbedPlacement } from './own-queue-absorption'
@@ -29,6 +30,7 @@ const CLIPBOARD_POLL_MS = 3000
 const NO_QUEUED: string[] = []
 const NO_PROMPTS: { nonce: string; text: string }[] = []
 const NO_SCREEN_PROMPTS: string[] = []
+const NO_PEER_ROWS: ScreenPeerRow[] = []
 
 type Props = {
   controller: MobileNativeChatController
@@ -219,7 +221,7 @@ export function MobileNativeChatOverlay({
   // transcript the phone reads; the agent's screen says one arrived, and
   // from whom, so that is drawn where it was seen (2026-09-20).
   const folded = useScreenPeerNotices(
-    controller.nativeChatScreenPeerNotices ?? NO_SCREEN_PROMPTS,
+    controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
     foldedWithoutPeers,
     controller.nativeChatStreamScopeKey
   )

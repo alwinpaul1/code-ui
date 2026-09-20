@@ -13,7 +13,7 @@ import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
 import { taskCompletionsFromScreen } from './mobile-terminal-task-completions'
-import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
+import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
@@ -47,9 +47,9 @@ export function useMobileTerminalHudObservation(args: {
   /** Background-task completions the agent has stated on its scrollback,
    *  as this read saw them (`mobile-terminal-task-completions.ts`). */
   taskCompletions: ScreenTaskCompletion[]
-  /** Senders of the peer-message rows on its scrollback, one per row, as
-   *  this read saw them (`mobile-terminal-peer-notices.ts`). */
-  peerNotices: string[]
+  /** The peer-message rows on its scrollback, one per row, as this read saw
+   *  them (`mobile-terminal-peer-notices.ts`). */
+  peerNotices: ScreenPeerRow[]
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -63,7 +63,7 @@ export function useMobileTerminalHudObservation(args: {
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [taskCompletions, setTaskCompletions] = useState<ScreenTaskCompletion[]>([])
-  const [peerNotices, setPeerNotices] = useState<string[]>([])
+  const [peerNotices, setPeerNotices] = useState<ScreenPeerRow[]>([])
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
