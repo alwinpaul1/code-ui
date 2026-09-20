@@ -18,3 +18,17 @@ describe('the composer dock', () => {
     expect(dock).not.toMatch(/\n\s*borderTop/)
   })
 })
+
+// 2026-09-20, keyboard open on the device: a swipe begun on the row above the
+// composer did nothing. With no ground the list shows through that row and
+// reads as list, but the dock caught the touch. Pinned on the source: the
+// dock and the chrome row let touches through where they draw nothing.
+describe('touches on the dock’s empty parts', () => {
+  it('reach the list', () => {
+    const view = readFileSync(new URL('./MobileNativeChatView.tsx', import.meta.url), 'utf8')
+    const dock = /<View\s+style=\{\[styles\.dock[\s\S]*?>/.exec(view)?.[0] ?? ''
+    expect(dock).toMatch(/pointerEvents="box-none"/)
+    const row = readFileSync(new URL('./MobileNativeChatChromeRow.tsx', import.meta.url), 'utf8')
+    expect(row).toMatch(/<View style=\{styles\.chromeRow\} pointerEvents="box-none">/)
+  })
+})

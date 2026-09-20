@@ -36,8 +36,10 @@ export function MobileNativeChatChromeRow({
   const { colors } = useTheme()
   return (
     <>
-      <View style={styles.chromeRow}>
-        <View style={styles.chromeLeft}>
+      {/* Empty stretches of this row pass touches through to the list beneath
+          (see the dock in MobileNativeChatView); the toggle and Stop keep theirs. */}
+      <View style={styles.chromeRow} pointerEvents="box-none">
+        <View style={styles.chromeLeft} pointerEvents="box-none">
           {agentWorking && showWorkingIndicator ? <MobileAgentWorkingIndicator /> : null}
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
