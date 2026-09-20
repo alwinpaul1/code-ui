@@ -308,43 +308,54 @@ export function MobileNativeChatComposer({
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
           />
-          <TextInput
-            ref={textInputRef}
-            style={{
-              width: '100%',
-              // While the `/` or `@` menu is up the draft folds to two lines
-              // and scrolls, so a long prompt leaves the menu its rows; the
-              // Claude app does the same (device, 2026-09-20: four rows of
-              // draft and four photos left the menu a row and a half).
-              maxHeight: suggestions.length > 0 ? COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU : 150,
-              minHeight: 44,
-              color: colors.text,
-              fontFamily: fonts.regular,
-              fontSize: type.body.size + 1,
-              lineHeight: type.body.lineHeight + 1,
-              paddingHorizontal: space.lg,
-              paddingTop: space.md,
-              paddingBottom: space.xs
-            }}
-            value={value}
-            onChangeText={onChangeText}
-            // Controlled only transiently right after an autocomplete insert.
-            selection={pendingSelection ?? undefined}
-            onSelectionChange={(e) => {
-              setCursor(e.nativeEvent.selection.end)
-              setPendingSelection(null)
-            }}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accent}
-            multiline
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
-            textAlignVertical="top"
-          />
+          {/* While the `/` or `@` menu is up the draft folds to its last two
+              lines, so a long prompt leaves the menu its rows, as the Claude
+              app does (device, 2026-09-20: four rows of draft and four photos
+              left the menu a row and a half). The fold is a clipping wrapper,
+              not a smaller input: shrinking a multiline TextInput's own
+              maxHeight under its content blanked the text on Android. */}
+          <View
+            style={
+              suggestions.length > 0
+                ? { maxHeight: COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU, overflow: 'hidden', justifyContent: 'flex-end' }
+                : null
+            }
+            testID="native-chat-composer-input-fold"
+          >
+            <TextInput
+              ref={textInputRef}
+              style={{
+                width: '100%',
+                maxHeight: 150,
+                minHeight: 44,
+                color: colors.text,
+                fontFamily: fonts.regular,
+                fontSize: type.body.size + 1,
+                lineHeight: type.body.lineHeight + 1,
+                paddingHorizontal: space.lg,
+                paddingTop: space.md,
+                paddingBottom: space.xs
+              }}
+              value={value}
+              onChangeText={onChangeText}
+              // Controlled only transiently right after an autocomplete insert.
+              selection={pendingSelection ?? undefined}
+              onSelectionChange={(e) => {
+                setCursor(e.nativeEvent.selection.end)
+                setPendingSelection(null)
+              }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accent}
+              multiline
+              // Why: never revoke `editable` — iOS resigns first responder on a focused
+              // field, so a transient lock would yank the keyboard mid-typing (#10681).
+              // The lock gates sending; the draft survives and rides the next send.
+              textAlignVertical="top"
+            />
+          </View>
           <View
             style={{
               minHeight: 48,

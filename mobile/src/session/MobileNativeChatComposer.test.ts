@@ -785,4 +785,33 @@ describe('MobileNativeChatComposer', () => {
 
     expect(Keyboard.dismiss).not.toHaveBeenCalled()
   })
+
+// 2026-09-20, phone: with the `/` menu up over a long draft, the draft went
+// blank ("transparent") in the box. The fold that keeps the menu its rows had
+// been a smaller `maxHeight` on the multiline TextInput itself, and Android
+// stops drawing a multiline input's text when its own maxHeight drops under
+// its content. The fold is a clipping wrapper now; the input keeps its size.
+  it('folds a long draft under the / menu by clipping, never by shrinking the input', async () => {
+  await act(async () => {
+    renderer = create(
+      createElement(MobileNativeChatComposer, {
+        value: 'one\ntwo\nthree\nfour /',
+        onChangeText: vi.fn(),
+        onSend: vi.fn().mockResolvedValue(true),
+        sendSurfaceId: 'tab-a',
+        getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+        agent: 'claude'
+      })
+    )
+  })
+  const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+    props: { style: { maxHeight: number }; onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+  }
+  await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 20 } } }))
+  const fold = renderer!.root.findByProps({ testID: 'native-chat-composer-input-fold' }) as {
+    props: { style: { maxHeight?: number; overflow?: string } | null }
+  }
+  expect(fold.props.style).toMatchObject({ maxHeight: 72, overflow: 'hidden' })
+  expect(input.props.style.maxHeight).toBe(150)
+})
 })
