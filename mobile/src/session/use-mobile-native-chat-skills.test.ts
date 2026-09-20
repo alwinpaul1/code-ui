@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileNativeChatSkills } from './use-mobile-native-chat-skills'
+import { resetConfirmedSkillFilesForTest } from './mobile-native-chat-skill-browse-load'
 
 function Harness(props: {
   client: Pick<RpcClient, 'sendRequest'>
@@ -38,7 +39,9 @@ describe('the / menu’s skills list on a host that refuses skills.discover', ()
       await Promise.resolve()
       await Promise.resolve()
     })
-    // Past SKILLS_STALE_MS: a host that answered would be asked again here.
+    // Past SKILLS_STALE_MS, and past the 2 s prime the chat fires on its own:
+    // a host that answered would be asked again here, once, by whichever of
+    // the two comes first.
     await act(async () => {
       vi.advanceTimersByTime(4_000)
       loads[0]!()
@@ -188,4 +191,80 @@ describe('the / menu’s skills list, read by directory when the scan is refused
   act(() => renderer!.update(createElement(Probe, { token: 2 })))
   expect(latest!.nativeChatSkills.map((s) => s.name)).toContain('typesafe-ai')
 })
+
+  // 2026-09-20, device recording: typing right after the `/` that started a
+  // directory walk lagged by seconds and dropped characters. Every walk asked
+  // the host about all 215 skill folders again. Once per launch is enough.
+  // 2026-09-20, phone recording: the walk started at the first `/` of a
+  // launch, so its replies shared the JS thread with the controlled input
+  // while the user typed, and the next keys landed two seconds late in one
+  // lump. The walk belongs before the typing, not under it.
+  it('starts when the chat opens, so the first / of a launch finds the list already read', async () => {
+    resetConfirmedSkillFilesForTest()
+    vi.useFakeTimers()
+    const client = browsingClient()
+    function Probe(): null {
+      useMobileNativeChatSkills({
+        client: client as never,
+        worktreeId: 'w-prime::/Users/alwinpaul/Desktop/Project/Code UI'
+      })
+      return null
+    }
+    let renderer: ReactTestRenderer | null = null
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    expect(client.sendRequest).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(2_000)
+      for (let i = 0; i < 60; i += 1) {
+        await Promise.resolve()
+      }
+    })
+    const methods = client.sendRequest.mock.calls.map((call) => call[0])
+    expect(methods.filter((method) => method === 'skills.discover')).toHaveLength(1)
+    expect(methods.filter((method) => method === 'files.browseServerDir').length).toBeGreaterThan(0)
+    act(() => renderer!.unmount())
+    vi.useRealTimers()
+  })
+
+  describe('the SKILL.md confirmations', () => {
+    it('are asked once per launch, not on every walk', async () => {
+      resetConfirmedSkillFilesForTest()
+      const client = browsingClient()
+      const asks = () =>
+        client.sendRequest.mock.calls.filter(
+          (call) => call[0] === 'files.browseServerDir' && String((call[1] as { path: string }).path).endsWith('/academic-researcher')
+        ).length
+      let latest: { loadNativeChatSkills: () => void } | null = null
+      function Probe({ token }: { token: number }): null {
+        latest = useMobileNativeChatSkills({
+          client: (token === 1 ? client : { sendRequest: client.sendRequest }) as never,
+          worktreeId: 'w-confirm::/Users/alwinpaul/Desktop/Project/Code UI'
+        })
+        return null
+      }
+      let renderer: ReactTestRenderer | null = null
+      act(() => {
+        renderer = create(createElement(Probe, { token: 1 }))
+      })
+      await act(async () => {
+        latest!.loadNativeChatSkills()
+        for (let i = 0; i < 60; i += 1) {
+          await Promise.resolve()
+        }
+      })
+      expect(asks()).toBe(1)
+      // A reconnect walks again; the confirmation is remembered.
+      act(() => renderer!.update(createElement(Probe, { token: 2 })))
+      await act(async () => {
+        latest!.loadNativeChatSkills()
+        for (let i = 0; i < 60; i += 1) {
+          await Promise.resolve()
+        }
+      })
+      expect(asks()).toBe(1)
+      act(() => renderer!.unmount())
+    })
+  })
 })

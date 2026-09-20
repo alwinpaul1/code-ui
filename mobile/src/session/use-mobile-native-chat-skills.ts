@@ -16,6 +16,15 @@ const SKILLS_STALE_MS = 3_000
  *  shows up on the phone within this, or on the next connection. */
 const BROWSED_SKILLS_STALE_MS = 10 * 60_000
 
+/** How long after the chat opens, or reconnects, the skills read starts on
+ *  its own, so the first `/` of a launch finds the list already read. Why: it
+ *  used to start at that first `/`, exactly while the user was typing, and its
+ *  replies shared the JS thread with the controlled input: the next keys
+ *  landed two seconds late in one lump (phone recording, 2026-09-20). Two
+ *  seconds lets the chat's own first reads, the session and the screen, land
+ *  first. */
+const PRIME_SKILLS_DELAY_MS = 2_000
+
 /** The last browsed list per worktree, kept across reconnects for this launch. */
 const browsedByWorktree = new Map<string, DiscoveredSkill[]>()
 
@@ -134,6 +143,14 @@ export function useMobileNativeChatSkills(args: {
         }
       })
   }, [browseSkills, client, worktreeId])
+
+  useEffect(() => {
+    if (!client) {
+      return
+    }
+    const timer = setTimeout(loadNativeChatSkills, PRIME_SKILLS_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [client, loadNativeChatSkills])
 
   return { nativeChatSkills, loadNativeChatSkills }
 }

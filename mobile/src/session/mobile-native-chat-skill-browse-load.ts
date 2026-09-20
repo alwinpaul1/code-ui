@@ -11,10 +11,22 @@ import {
   type SkillBrowseRoot
 } from './mobile-native-chat-skill-browse'
 
-/** Listings in flight at once. The home skills root alone is 200 folders to
- *  confirm; four at a time over a 250 ms relay is under a minute, in the
- *  background, and never a burst the host notices. */
+/** Root and plugin listings in flight at once: a dozen or so folders, four
+ *  at a time over a 250 ms relay, never a burst the host notices. */
 const BROWSE_CONCURRENCY = 4
+/** The SKILL.md confirmations, which run while the menu is already usable.
+ *  The home skills root alone is 200 folders; one at a time is one small
+ *  reply per relay round trip, under a minute in the background on the first
+ *  walk of a launch, and never enough to crowd the JS thread while the user
+ *  types. */
+const CONFIRM_CONCURRENCY = 1
+/** Per launch: which skill files have been seen (true) or found missing (false). */
+const confirmedSkillFiles = new Map<string, boolean>()
+
+/** Test seam. */
+export function resetConfirmedSkillFilesForTest(): void {
+  confirmedSkillFiles.clear()
+}
 
 type Browse = (path: string) => Promise<ServerDirEntry[] | null>
 
@@ -79,8 +91,17 @@ export async function browseClaudeSkills(args: {
   // SKILL.md, is not). Confirm each home and repo skill's file and drop the
   // ones without. Plugin skills sit under a `skills` folder the plugin
   // shipped and are taken as they are.
-  const toConfirm = skills.filter((skill) => skill.sourceKind !== 'plugin')
-  await mapLimit(toConfirm, BROWSE_CONCURRENCY, async (skill) => {
+  // Confirmed once per launch and remembered by file path: a re-walk ten
+  // minutes later asks only about names it has not seen. The first cut
+  // asked about all 215 every walk, at four in flight over the relay — some
+  // fifteen seconds of replies decoded on the JS thread — and typing right
+  // after the `/` that started a walk lagged by seconds, with the controlled
+  // input then dropping characters (device recording, 2026-09-20).
+  const toConfirm = skills.filter(
+    (skill) => skill.sourceKind !== 'plugin' && !confirmedSkillFiles.has(skill.skillFilePath)
+  )
+  let dropped = false
+  await mapLimit(toConfirm, CONFIRM_CONCURRENCY, async (skill) => {
     if (!live()) {
       return
     }
@@ -94,10 +115,19 @@ export async function browseClaudeSkills(args: {
     // file, or at nothing.
     const drop = entries === null ? isLinkedBrowsedSkill(skill) : !hasSkillFile
     if (drop) {
+      confirmedSkillFiles.set(skill.skillFilePath, false)
       skills = skills.filter((other) => other !== skill)
-      onSkills(skills)
+      dropped = true
+    } else if (entries !== null) {
+      confirmedSkillFiles.set(skill.skillFilePath, true)
     }
   })
+  // Names already known to be missing their file, from an earlier walk.
+  const before = skills.length
+  skills = skills.filter((skill) => confirmedSkillFiles.get(skill.skillFilePath) !== false)
+  if (dropped || skills.length !== before) {
+    onSkills(skills)
+  }
 }
 
 /** Every `<marketplace>/<plugin>/<version>/skills` under the plugin cache. */

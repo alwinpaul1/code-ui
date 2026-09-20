@@ -64,6 +64,14 @@ export function MobileNativeChatComposerSuggestions({
         style={{ maxHeight }}
         initialNumToRender={14}
         windowSize={5}
+        // Rows are one fixed height, so the list needs no measuring pass and
+        // a keystroke that changes the list costs one layout, not two hundred.
+        getItemLayout={(_, index) => ({
+          length: SUGGESTION_ROW_HEIGHT,
+          offset: SUGGESTION_ROW_HEIGHT * index,
+          index
+        })}
+        removeClippedSubviews
         // One line per row, the token and nothing else — the Claude app's
         // menu, which the user asked for over the catalog description and the
         // source badge each row carried (2026-09-20). The description is still
