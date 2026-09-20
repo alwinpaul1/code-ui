@@ -59,11 +59,14 @@ export function makeChatViewStyles(theme: Theme) {
       left: 0,
       right: 0,
       bottom: 0,
-      // Opaque: the dock floats over the list, and with the reader scrolled
-      // off the tail a row that slid under the Working/Tools strip showed
-      // through it — the queue box's text over "Working" (device,
-      // 2026-09-19). The page colour, so the strip reads as part of the page.
-      backgroundColor: colors.bg
+      // See-through, as when the dock was introduced (2026-09-13, after the
+      // Claude app): the conversation runs on beneath the Working/Tools strip.
+      // It was made opaque on 2026-09-19 because a row scrolled under the
+      // strip showed through it, and that read as a bug then; the user asked
+      // for the glass back on 2026-09-20 — a row showing faintly through the
+      // strip is the look, not a defect. The composer box itself stays solid
+      // (bgPanelGlass, 2026-09-13), so nothing reads through the draft.
+      backgroundColor: colors.bgDock
     },
     listContent: {
       paddingVertical: space.sm,
