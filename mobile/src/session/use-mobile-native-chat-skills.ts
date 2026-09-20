@@ -2,12 +2,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../src/shared/skills'
 import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
 import type { RpcClient } from '../transport/rpc-client'
+import { browseClaudeSkills } from './mobile-native-chat-skill-browse-load'
+import { worktreePathFromId } from './mobile-native-chat-skill-browse'
 
 /** Re-scan when the `/` menu opens and the last scan is older than this, so a
  *  skill added or removed on the desktop shows up on the next `/` without
  *  leaving the session. Short because opening the menu is the natural refresh
  *  moment; the floor only stops a menu flicker from hammering the host. */
 const SKILLS_STALE_MS = 3_000
+
+/** The directory-listing fallback is a few hundred small requests, not one
+ *  scan, so it refreshes on a longer clock: a skill installed on the desktop
+ *  shows up on the phone within this, or on the next connection. */
+const BROWSED_SKILLS_STALE_MS = 10 * 60_000
 
 /**
  * Installed skills and plugin commands for the `/` menu.
@@ -24,6 +31,12 @@ const SKILLS_STALE_MS = 3_000
  * kept opening, and could never answer differently on that connection. This
  * is a read that fails open to an empty list, not an affordance that fails on
  * tap, which is why it is not probe-gated (orca-mobile-rpc-allowlist.test.ts).
+ *
+ * A refused scan is not the end of it: `files.browseServerDir` is allowed, and
+ * Claude Code's skills are directories, so the phone lists them itself — the
+ * home and repo skill and command roots, and every cached plugin's skills —
+ * names only, the way the Claude app's `/` menu shows them (2026-09-20; see
+ * mobile-native-chat-skill-browse.ts).
  */
 export function useMobileNativeChatSkills(args: {
   client: Pick<RpcClient, 'sendRequest'> | null
@@ -35,17 +48,48 @@ export function useMobileNativeChatSkills(args: {
   const inFlightRef = useRef(false)
   const unsupportedRef = useRef(false)
   const generationRef = useRef(0)
+  const browsedAtRef = useRef<number | null>(null)
+  const browsingRef = useRef(false)
 
   useEffect(() => {
     generationRef.current++
     loadedAtRef.current = null
     inFlightRef.current = false
     unsupportedRef.current = false
+    browsedAtRef.current = null
+    browsingRef.current = false
     setNativeChatSkills([])
   }, [client, worktreeId])
 
+  const browseSkills = useCallback(() => {
+    if (!client || browsingRef.current) {
+      return
+    }
+    const browsedAt = browsedAtRef.current
+    if (browsedAt !== null && Date.now() - browsedAt < BROWSED_SKILLS_STALE_MS) {
+      return
+    }
+    const generation = generationRef.current
+    browsingRef.current = true
+    browsedAtRef.current = Date.now()
+    void browseClaudeSkills({
+      client,
+      worktreePath: worktreePathFromId(worktreeId),
+      live: () => generationRef.current === generation,
+      onSkills: (skills) => setNativeChatSkills(skills)
+    }).finally(() => {
+      if (generationRef.current === generation) {
+        browsingRef.current = false
+      }
+    })
+  }, [client, worktreeId])
+
   const loadNativeChatSkills = useCallback(() => {
-    if (!client || inFlightRef.current || unsupportedRef.current) {
+    if (unsupportedRef.current) {
+      browseSkills()
+      return
+    }
+    if (!client || inFlightRef.current) {
       return
     }
     const loadedAt = loadedAtRef.current
@@ -66,6 +110,7 @@ export function useMobileNativeChatSkills(args: {
         if (!response.ok) {
           if (response.error.code === 'method_not_found' || isMobileScopeRefusal(response)) {
             unsupportedRef.current = true
+            browseSkills()
           }
           return
         }
@@ -79,7 +124,7 @@ export function useMobileNativeChatSkills(args: {
           inFlightRef.current = false
         }
       })
-  }, [client, worktreeId])
+  }, [browseSkills, client, worktreeId])
 
   return { nativeChatSkills, loadNativeChatSkills }
 }

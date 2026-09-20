@@ -44,7 +44,9 @@ describe('the / menu’s skills list on a host that refuses skills.discover', ()
       loads[0]!()
       await Promise.resolve()
     })
-    return sendRequest.mock.calls.length
+    // Only the scan itself: a refusal now also starts the directory-listing
+    // fallback, whose calls are its own (see the describe below).
+    return sendRequest.mock.calls.filter((call) => call[0] === 'skills.discover').length
   }
 
   // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses
@@ -64,5 +66,84 @@ describe('the / menu’s skills list on a host that refuses skills.discover', ()
 
   it('does ask again after a refusal that could change, such as a busy host', async () => {
     expect(await openMenuTwiceAcrossTheStaleWindow(refused('runtime_busy', 'try again'))).toBe(2)
+  })
+})
+
+// 2026-09-20, phone beside the Claude app: typing `/` on the phone listed
+// the curated built-ins and none of the user's skills; the Claude app lists
+// every one (`/academic-research-writer`, `/agents-sdk`, `/typesafe:typesafe-ai`…).
+// The host's scan is refused to a phone on Orca 1.4.205; directory listing is
+// not, and Claude Code's skills are directories.
+describe('the / menu’s skills list, read by directory when the scan is refused', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const HOME = '/Users/alwinpaul'
+  const dir = (name: string) => ({ name, isDirectory: true, isSymlink: false })
+  const file = (name: string) => ({ name, isDirectory: false, isSymlink: false })
+  const listings: Record<string, ReturnType<typeof dir>[]> = {
+    '': [dir('.claude'), dir('Desktop')],
+    [`${HOME}/.claude/skills`]: [dir('_sources'), dir('academic-researcher'), dir('android-reverse-engineering-skill')],
+    [`${HOME}/.claude/skills/academic-researcher`]: [file('SKILL.md')],
+    // A folder without SKILL.md is not a skill; Claude Code skips it.
+    [`${HOME}/.claude/skills/android-reverse-engineering-skill`]: [file('README.md')],
+    [`${HOME}/.claude/plugins/cache`]: [dir('typesafe-ai'), file('blocklist.json')],
+    [`${HOME}/.claude/plugins/cache/typesafe-ai`]: [dir('typesafe')],
+    [`${HOME}/.claude/plugins/cache/typesafe-ai/typesafe`]: [dir('0.5.7')],
+    [`${HOME}/.claude/plugins/cache/typesafe-ai/typesafe/0.5.7/skills`]: [dir('typesafe-ai')]
+  }
+  function browsingClient(): { sendRequest: ReturnType<typeof vi.fn> } {
+    const sendRequest = vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
+      if (method === 'skills.discover') {
+        return refused('forbidden', "Method 'skills.discover' is not available to mobile clients")
+      }
+      if (method === 'files.browseServerDir') {
+        const path = (params as { path: string }).path
+        const entries = listings[path]
+        if (!entries) {
+          return refused('not_found', `ENOENT ${path}`)
+        }
+        return { id: 'rpc', ok: true, result: { resolvedPath: path || HOME, entries }, _meta: { runtimeId: 'r' } }
+      }
+      return refused('method_not_found', method)
+    })
+    return { sendRequest }
+  }
+
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 40; i += 1) {
+      await Promise.resolve()
+    }
+  }
+
+  it('lists the home skills and cached plugin skills the Claude app lists, and drops a folder with no SKILL.md', async () => {
+    const client = browsingClient()
+    let latest: { nativeChatSkills: { name: string; sourceLabel: string }[]; loadNativeChatSkills: () => void } | null = null
+    function Probe(): null {
+      latest = useMobileNativeChatSkills({
+        client: client as never,
+        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((s) => `${s.sourceLabel}:${s.name}`)).toEqual([
+      'Home skills:academic-researcher',
+      'Claude plugin typesafe:typesafe-ai'
+    ])
+    // The repo roots were asked for too, and their absence was tolerated.
+    const asked = client.sendRequest.mock.calls
+      .filter((call) => call[0] === 'files.browseServerDir')
+      .map((call) => (call[1] as { path: string }).path)
+    expect(asked).toContain('/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills')
   })
 })
