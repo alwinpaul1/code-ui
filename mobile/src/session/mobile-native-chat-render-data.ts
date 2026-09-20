@@ -5,6 +5,7 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
+import { withoutPasteWrappers, withoutPasteWrappersInRows } from './mobile-native-chat-paste-wrapper'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
@@ -84,7 +85,9 @@ export function foldMobileNativeChatMessages(
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
   // A slash command's envelope row is the user's turn; surfaced before the
   // noise filter would hide it (mobile-native-chat-command-turns.ts).
-  const foldedForImages = foldQueuedImageTurns(surfaceCommandTurns(messages))
+  const foldedForImages = foldQueuedImageTurns(
+    withoutPasteWrappersInRows(surfaceCommandTurns(messages))
+  )
   // Orca's normalizer deletes a `[Image #N]` it cannot turn into a picture, and
   // on the phone the bytes never arrive; see mobile-desktop-image-placeholders.
   const normalized = keepDesktopImagePlaceholders(
@@ -275,7 +278,7 @@ export function buildMobileNativeChatTransientData({
         // Desktop" chip above the caption here so the reader can see one was
         // sent, while `item.text` keeps the raw marker that retirement
         // matches on (2026-09-15; chips instead of words 2026-09-19).
-        ...(item.text ? desktopPromptImageBlocks(item.text) : [])
+        ...(item.text ? desktopPromptImageBlocks(withoutPasteWrappers(item.text)) : [])
       ],
       timestamp: null,
       source: 'transcript'

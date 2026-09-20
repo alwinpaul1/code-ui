@@ -120,3 +120,35 @@ describe('a code span inside an emphasis candidate', () => {
     expect(chips).toEqual(['b*', 'd'])
   })
 })
+
+// 2026-09-20, phone: "**Alphabetical `/` menu.** Commands…" drew the chip
+// with the `**` left literal on either side. The rule that lets a code span
+// win over an emphasis token that ends INSIDE it was written as "ends after
+// the span starts", which also threw away a bold that simply contains one.
+describe('bold around a code span', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  it('stays bold, with the chip inside it and no literal stars', () => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: '**Alphabetical `/` menu.** Commands and skills' }))
+    })
+    const root = renderer!.root
+    const strings = root
+      .findAll((node) => node.type === 'Text')
+      .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+    expect(strings.join('')).not.toContain('**')
+    const chips = root.findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
+    expect(chips.map((chip) => chip.findByType('Text' as never).children.join(''))).toEqual(['/'])
+    // A bold Text holds the chip.
+    const boldWithChip = root.findAll(
+      (node) =>
+        node.type === 'Text' &&
+        [node.props.style].flat(3).some((style) => style && typeof style === 'object' && 'fontFamily' in style && String(style.fontFamily).toLowerCase().includes('semibold')) &&
+        node.findAll((inner) => inner.type === 'View' && inner.props.style?.borderRadius === 7).length === 1
+    )
+    expect(boldWithChip.length).toBeGreaterThan(0)
+  })
+})

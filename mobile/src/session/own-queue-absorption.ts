@@ -1,5 +1,6 @@
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
+import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 
 /**
  * Where the agent TOOK each of the phone's own queued sends: the last raw row
@@ -20,7 +21,7 @@ export type OwnQueueAbsorption = ReadonlyMap<string, string>
 const ABSORPTION_CAP = 64
 
 export function absorbedQueueKey(text: string): string {
-  return normalizeNativeChatUserText(asPaintedPrompt(text))
+  return normalizeNativeChatUserText(asPaintedPrompt(withoutPasteWrappers(text)))
 }
 
 /** Advance by one screen reading. `previousQueued` and `queued` are the

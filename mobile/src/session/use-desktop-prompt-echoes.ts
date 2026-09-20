@@ -6,6 +6,7 @@ import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-ima
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { absorbedQueueKey, type OwnQueueAbsorption } from './own-queue-absorption'
+import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 
 
 /**
@@ -295,5 +296,5 @@ export function withoutLandedDesktopPrompts(
  *  a restored screen reading (no backticks); short-token, because the surfaced
  *  row of a plugin skill is `/name`, not `/plugin:name`. */
 function landedKey(text: string): string {
-  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(text)))
+  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(text))))
 }

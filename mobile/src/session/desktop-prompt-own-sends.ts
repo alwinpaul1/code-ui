@@ -1,6 +1,7 @@
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
+import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 
 /**
  * When the host itself has a timed record of a message the phone sent, the
@@ -16,7 +17,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
  */
 // Painted on both sides: `pending` can hold a restored screen reading, which
 // has no backticks, beside the hook's typed copy (review, 2026-09-19).
-const key = (text: string) => normalizeNativeChatUserText(asPaintedPrompt(text))
+const key = (text: string) => normalizeNativeChatUserText(asPaintedPrompt(withoutPasteWrappers(text)))
 
 export function isTranscriptWitnessed(prompt: DesktopPrompt): boolean {
   return prompt.at !== undefined

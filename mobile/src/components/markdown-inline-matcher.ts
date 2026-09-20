@@ -105,14 +105,18 @@ export function createMarkdownInlineMatcher(
         nextCode = findCodeSpan(from)
       }
       // A code span binds tighter than emphasis (CommonMark): a token that
-      // opens before one and closes inside it is not a token. Look again from
-      // just past its opener, until the next candidate clears the span.
+      // opens before one and closes INSIDE it is not a token. Look again from
+      // just past its opener, until the next candidate clears the span. One
+      // that closes after the span contains it and stands — the first cut of
+      // this dropped "**Alphabetical `/` menu.**" and left the stars literal
+      // beside the chip (device, 2026-09-20).
       while (
         codeSpans &&
         nextCode &&
         nextOther &&
         nextOther.index < nextCode.index &&
-        nextOther.end > nextCode.index
+        nextOther.end > nextCode.index &&
+        nextOther.end < nextCode.end
       ) {
         nonLinkPattern.lastIndex = nextOther.index + 1
         const again = nonLinkPattern.exec(text)
