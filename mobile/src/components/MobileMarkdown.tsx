@@ -4,7 +4,7 @@ import {
   type MarkdownInlineMatch
 } from './markdown-inline-matcher'
 import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
-import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
+import { computeTableColumnWidths, tableCellChipMaxChars, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
@@ -448,6 +448,11 @@ function MobileMarkdownInner({
             horizontalPadding: styles.tableCell.paddingHorizontal
           })
           const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)
+          // A pill is cut to its own cell, as a paragraph's is to its line;
+          // the fallback cap is wider than a cell (2026-09-21).
+          const cellChipMax = columnWidths.map((width) =>
+            tableCellChipMaxChars(width, styles.tableCell.paddingHorizontal, chipScale?.fontSize ?? MARKDOWN_BASE_SIZE - 2)
+          )
           return (
             // A table that runs past the screen needs the same telling.
             <ScrollView key={index} horizontal showsHorizontalScrollIndicator persistentScrollbar>
@@ -459,7 +464,7 @@ function MobileMarkdownInner({
                       selectable={selectable}
                       style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
                     >
-                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile, chipScale)}
+                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile, chipScale, cellChipMax[cellIndex])}
                     </Text>
                   ))}
                 </View>
@@ -471,7 +476,7 @@ function MobileMarkdownInner({
                         selectable={selectable}
                         style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
                       >
-                        {renderInline(styles, row[cellIndex] ?? '', onOpenFile, chipScale)}
+                        {renderInline(styles, row[cellIndex] ?? '', onOpenFile, chipScale, cellChipMax[cellIndex])}
                       </Text>
                     ))}
                   </View>
