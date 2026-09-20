@@ -58,15 +58,16 @@ export function makeChatViewStyles(theme: Theme) {
       position: 'absolute',
       left: 0,
       right: 0,
-      bottom: 0,
-      // See-through, as when the dock was introduced (2026-09-13, after the
-      // Claude app): the conversation runs on beneath the Working/Tools strip.
-      // It was made opaque on 2026-09-19 because a row scrolled under the
-      // strip showed through it, and that read as a bug then; the user asked
-      // for the glass back on 2026-09-20 — a row showing faintly through the
-      // strip is the look, not a defect. The composer box itself stays solid
-      // (bgPanelGlass, 2026-09-13), so nothing reads through the draft.
-      backgroundColor: colors.bgDock
+      bottom: 0
+      // No ground at all. The dock floats over the list with nothing behind
+      // it; the composer box itself is solid (bgPanelGlass, 2026-09-13), so
+      // nothing reads through the draft. Every ground tried here read as a
+      // line above the Working row on the device: the translucent one on
+      // 2026-09-13 (removed the same day, 0a8642a6), the page-coloured opaque
+      // one on 2026-09-19 (a hard edge over scrolled rows), and the
+      // translucent one again on 2026-09-20 ("a black line above the tools").
+      // The list keeps a spacer the dock's height at its end, so at rest no
+      // message sits under it.
     },
     listContent: {
       paddingVertical: space.sm,
