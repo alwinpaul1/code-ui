@@ -16,6 +16,9 @@ const SKILLS_STALE_MS = 3_000
  *  shows up on the phone within this, or on the next connection. */
 const BROWSED_SKILLS_STALE_MS = 10 * 60_000
 
+/** The last browsed list per worktree, kept across reconnects for this launch. */
+const browsedByWorktree = new Map<string, DiscoveredSkill[]>()
+
 /**
  * Installed skills and plugin commands for the `/` menu.
  *
@@ -58,7 +61,10 @@ export function useMobileNativeChatSkills(args: {
     unsupportedRef.current = false
     browsedAtRef.current = null
     browsingRef.current = false
-    setNativeChatSkills([])
+    // A reconnect is a new client. The skills it listed last time are still
+    // on the desktop's disk; showing them until the fresh listing lands beats
+    // an empty `/` menu for the seconds the listing takes (2026-09-20).
+    setNativeChatSkills(browsedByWorktree.get(worktreeId) ?? [])
   }, [client, worktreeId])
 
   const browseSkills = useCallback(() => {
@@ -76,7 +82,10 @@ export function useMobileNativeChatSkills(args: {
       client,
       worktreePath: worktreePathFromId(worktreeId),
       live: () => generationRef.current === generation,
-      onSkills: (skills) => setNativeChatSkills(skills)
+      onSkills: (skills) => {
+        browsedByWorktree.set(worktreeId, skills)
+        setNativeChatSkills(skills)
+      }
     }).finally(() => {
       if (generationRef.current === generation) {
         browsingRef.current = false

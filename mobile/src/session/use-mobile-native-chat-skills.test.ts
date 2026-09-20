@@ -146,4 +146,36 @@ describe('the / menu’s skills list, read by directory when the scan is refused
       .map((call) => (call[1] as { path: string }).path)
     expect(asked).toContain('/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills')
   })
+
+// 2026-09-20: "/anim" typed a second after a tab opened showed no card. The
+// browse reported nothing until the plugin cache's forty listings were in.
+  it('reports the home skills before the plugin cache has been walked, and keeps the last list across a reconnect', async () => {
+  const client = browsingClient()
+  let latest: { nativeChatSkills: { name: string }[]; loadNativeChatSkills: () => void } | null = null
+  function Probe({ token }: { token: number }): null {
+    latest = useMobileNativeChatSkills({
+      client: (token === 1 ? client : { sendRequest: client.sendRequest }) as never,
+      worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+    })
+    return null
+  }
+  act(() => {
+    renderer = create(createElement(Probe, { token: 1 }))
+  })
+  await act(async () => {
+    latest!.loadNativeChatSkills()
+    // Enough ticks for the refusal, the home listing and the four roots — not the plugin walk.
+    for (let i = 0; i < 12; i += 1) {
+      await Promise.resolve()
+    }
+  })
+  expect(latest!.nativeChatSkills.map((s) => s.name)).toContain('academic-researcher')
+  await act(async () => {
+    await settle()
+  })
+  expect(latest!.nativeChatSkills.map((s) => s.name)).toContain('typesafe-ai')
+  // A new client object (reconnect): the list is not blanked.
+  act(() => renderer!.update(createElement(Probe, { token: 2 })))
+  expect(latest!.nativeChatSkills.map((s) => s.name)).toContain('typesafe-ai')
+})
 })

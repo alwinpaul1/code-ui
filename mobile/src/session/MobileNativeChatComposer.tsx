@@ -110,6 +110,9 @@ type Props = {
 
 /** Claude-app style composer: a rounded card with the text field on top and a
  *  single action row beneath (attach, model, mic, send). */
+/** Two lines of draft plus padding. */
+const COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU = 72
+
 export function MobileNativeChatComposer({
   value,
   onChangeText,
@@ -309,7 +312,11 @@ export function MobileNativeChatComposer({
             ref={textInputRef}
             style={{
               width: '100%',
-              maxHeight: 150,
+              // While the `/` or `@` menu is up the draft folds to two lines
+              // and scrolls, so a long prompt leaves the menu its rows; the
+              // Claude app does the same (device, 2026-09-20: four rows of
+              // draft and four photos left the menu a row and a half).
+              maxHeight: suggestions.length > 0 ? COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU : 150,
               minHeight: 44,
               color: colors.text,
               fontFamily: fonts.regular,

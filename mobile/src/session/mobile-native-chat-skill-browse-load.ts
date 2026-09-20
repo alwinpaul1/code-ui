@@ -44,10 +44,23 @@ export async function browseClaudeSkills(args: {
     return
   }
   const roots = claudeSkillRoots(home, worktreePath)
-  const [rootListings, pluginRoots] = await Promise.all([
-    mapLimit(roots, BROWSE_CONCURRENCY, async (root) => ({ root, entries: await browse(root.path) })),
-    pluginSkillRoots(browse, claudePluginCachePath(home))
-  ])
+  // The home and repo roots are four listings and hold most of the menu;
+  // they are reported as soon as they are in, before the plugin cache's
+  // forty-odd listings, so a `/` typed a second after the tab opened is not
+  // an empty card (device, 2026-09-20, "/anim" showing nothing).
+  const rootListings = await mapLimit(roots, BROWSE_CONCURRENCY, async (root) => ({
+    root,
+    entries: await browse(root.path)
+  }))
+  if (!live()) {
+    return
+  }
+  const fromRoots = dedupeBrowsedSkills(
+    rootListings.flatMap(({ root, entries }) => (entries ? skillsFromRootListing(root, entries) : []))
+  )
+  let skills = fromRoots
+  onSkills(skills)
+  const pluginRoots = await pluginSkillRoots(browse, claudePluginCachePath(home))
   const pluginListings = await mapLimit(pluginRoots, BROWSE_CONCURRENCY, async (root) => ({
     root,
     entries: await browse(root.path)
@@ -55,11 +68,10 @@ export async function browseClaudeSkills(args: {
   if (!live()) {
     return
   }
-  let skills = dedupeBrowsedSkills(
-    [...rootListings, ...pluginListings].flatMap(({ root, entries }) =>
-      entries ? skillsFromRootListing(root, entries) : []
-    )
-  )
+  skills = dedupeBrowsedSkills([
+    ...skills,
+    ...pluginListings.flatMap(({ root, entries }) => (entries ? skillsFromRootListing(root, entries) : []))
+  ])
   onSkills(skills)
   // A skills root can hold folders that are not skills (`_sources` is
   // filtered by name; `android-reverse-engineering-skill`, a folder with no
