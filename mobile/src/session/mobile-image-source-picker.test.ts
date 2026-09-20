@@ -76,7 +76,8 @@ describe('pickMobileImage', () => {
     expect(requestCameraPermission).toHaveBeenCalledOnce()
     expect(launchCamera).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
     expect(result?.uri).toBe('file:///tmp/shot.jpg')
-    expect(result?.base64).toBeTruthy()
+    // Read on demand since 2026-09-20, so the composer chip does not wait for it.
+    expect(await result?.load?.()).toBeTruthy()
   })
 
   it('refuses the camera without permission, with the shared permission error', async () => {
@@ -106,10 +107,9 @@ describe('pickMobileImage', () => {
       createFile: file.createFile
     })
 
-    expect(result).toEqual({
-      base64: Buffer.from(bytes).toString('base64'),
-      uri: 'file:///x.jpg'
-    })
+    // The picker names the file; the bytes are read on demand (2026-09-20).
+    expect(result).toMatchObject({ base64: '', uri: 'file:///x.jpg' })
+    expect(await result?.load?.()).toBe(Buffer.from(bytes).toString('base64'))
     expect(launchLibrary).toHaveBeenCalledWith(expect.objectContaining({ base64: false }))
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(file.close).toHaveBeenCalledTimes(1)
@@ -287,5 +287,53 @@ describe('an image the keyboard put straight into the composer', () => {
     const empty = fileFactory(new Uint8Array())
     expect(await collectImages(pickMobileImageFiles(['file:///x.png'], empty.createFile))).toEqual([])
     expect(await collectImages(pickMobileImageFiles([], empty.createFile))).toEqual([])
+  })
+})
+
+// 2026-09-20, phone: a photo taken with the camera took seconds to show in
+// the composer. The chip appeared only after the picker's full-resolution
+// file (quality 1, a 12-megapixel JPEG) had been streamed into base64 on the
+// JS thread, and the upload then carried all of it over the relay.
+describe('a photo from the camera', () => {
+  it('is handed over before its bytes are read, so the chip can show at once', async () => {
+    const { createFile } = fileFactory(new Uint8Array([1, 2, 3, 4]))
+    const launchCamera = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/shot.jpg', fileSize: 4, width: 800, height: 600 }]
+    })
+    const result = await pickMobileImage('camera', {
+      requestCameraPermission: vi.fn().mockResolvedValue(granted),
+      launchCamera,
+      createFile
+    })
+    expect(result?.uri).toBe('file:///tmp/shot.jpg')
+    // The bytes come on demand.
+    expect(result?.base64).toBe('')
+    expect(await result?.load?.()).toBeTruthy()
+  })
+
+  it('is scaled down to the vision-model size before it is read, at a lossy quality', async () => {
+    const { createFile } = fileFactory(new Uint8Array([1, 2, 3, 4]))
+    const launchCamera = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/shot.jpg', fileSize: 6_000_000, width: 4000, height: 3000 }]
+    })
+    const resizeImage = vi.fn().mockResolvedValue({ uri: 'file:///tmp/shot-small.jpg', width: 2048, height: 1536 })
+    const result = await pickMobileImage('camera', {
+      requestCameraPermission: vi.fn().mockResolvedValue(granted),
+      launchCamera,
+      createFile,
+      resizeImage
+    })
+    expect(launchCamera).toHaveBeenCalledWith(expect.objectContaining({ quality: expect.any(Number) }))
+    expect((launchCamera.mock.calls[0]![0] as { quality: number }).quality).toBeLessThan(1)
+    await result?.load?.()
+    expect(resizeImage).toHaveBeenCalledWith('file:///tmp/shot.jpg', { width: 2048, height: 1536 })
+    // A photo already within the cap is not touched.
+    resizeImage.mockClear()
+    const small = vi.fn().mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/s.jpg', fileSize: 4, width: 1200, height: 900 }] })
+    const kept = await pickMobileImage('camera', { requestCameraPermission: vi.fn().mockResolvedValue(granted), launchCamera: small, createFile, resizeImage })
+    await kept?.load?.()
+    expect(resizeImage).not.toHaveBeenCalled()
   })
 })

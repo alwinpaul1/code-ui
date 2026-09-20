@@ -13,7 +13,13 @@ export type MobileImageSource = 'camera' | 'library' | 'files' | 'clipboard'
 
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
+  // Empty when the bytes come on demand through `load`: a photo from the
+  // camera or the library is handed over as soon as the picker names it, so
+  // the composer chip shows at once, and its file is read only then — a
+  // 12-megapixel JPEG streamed into base64 on the JS thread took seconds
+  // before the chip appeared (device, 2026-09-20).
   readonly base64: string
+  readonly load?: () => Promise<string>
   // Local file URI of the picked asset — used only to render a composer preview
   // thumbnail (the host upload uses `base64`); absent when the source can't supply one.
   readonly uri?: string
@@ -100,13 +106,14 @@ async function readUriAsBase64(
 async function* pickFromCamera(
   requestPermission: typeof ImagePicker.requestCameraPermissionsAsync = ImagePicker.requestCameraPermissionsAsync,
   launch: typeof ImagePicker.launchCameraAsync = ImagePicker.launchCameraAsync,
-  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory,
+  resizeImage: MobileImageResizer = noResize
 ): AsyncGenerator<PickedMobileImage> {
   const permission = await requestPermission()
   if (!permission.granted) {
     throw new ImageLibraryPermissionError()
   }
-  const result = await launch({ mediaTypes: ['images'], base64: false, quality: 1 })
+  const result = await launch({ mediaTypes: ['images'], base64: false, quality: PHOTO_QUALITY })
   if (result.canceled) {
     return
   }
@@ -114,10 +121,7 @@ async function* pickFromCamera(
     if (!asset.uri) {
       continue
     }
-    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
-    if (base64) {
-      yield { base64, uri: asset.uri }
-    }
+    yield lazyPhoto(asset, createFile, resizeImage)
   }
 }
 
@@ -125,7 +129,8 @@ async function* pickFromLibrary(
   multiple: boolean,
   requestPermission: typeof ImagePicker.requestMediaLibraryPermissionsAsync = ImagePicker.requestMediaLibraryPermissionsAsync,
   launch: typeof ImagePicker.launchImageLibraryAsync = ImagePicker.launchImageLibraryAsync,
-  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory,
+  resizeImage: MobileImageResizer = noResize
 ): AsyncGenerator<PickedMobileImage> {
   const permission = await requestPermission()
   // Why: `granted` covers full + limited iOS access; only a hard denial blocks us.
@@ -137,7 +142,7 @@ async function* pickFromLibrary(
     base64: false,
     allowsMultipleSelection: multiple,
     ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
-    quality: 1
+    quality: PHOTO_QUALITY
   })
   if (result.canceled) {
     return
@@ -146,10 +151,7 @@ async function* pickFromLibrary(
     if (!asset.uri) {
       continue
     }
-    const base64 = await readUriAsBase64(asset.uri, asset.fileSize, createFile)
-    if (base64) {
-      yield { base64, uri: asset.uri }
-    }
+    yield lazyPhoto(asset, createFile, resizeImage)
   }
 }
 
@@ -218,7 +220,60 @@ export async function* pickMobileDocuments(
   }
 }
 
+/** Scale a picked photo down to fit `target`; returns the new file. */
+export type MobileImageResizer = (
+  uri: string,
+  target: { width: number; height: number }
+) => Promise<{ uri: string; width: number; height: number }>
+
+/** The longest edge a photo is sent at. Claude reads an image at about
+ *  1,568 px on its long side; a phone camera writes 4,000 and up, and every
+ *  byte beyond that is read, base64-encoded and relayed for nothing. */
+export const PHOTO_MAX_EDGE = 2048
+/** JPEG quality for a camera or library photo. */
+export const PHOTO_QUALITY = 0.85
+
+/** Without a resizer a photo is read as the camera wrote it. Supplied by the
+ *  caller rather than defaulted here, as the clipboard reader is: the
+ *  manipulator pulls in React Native's Flow-typed entry, which this module's
+ *  tests cannot parse (mobile-photo-resize.ts holds it). */
+const noResize: MobileImageResizer = async (uri) => ({ uri, width: 0, height: 0 })
+
+function fitsPhoto(width: number | undefined, height: number | undefined): boolean {
+  return !(typeof width === 'number' && typeof height === 'number' && Math.max(width, height) > PHOTO_MAX_EDGE)
+}
+
+function photoTarget(width: number, height: number): { width: number; height: number } {
+  const scale = PHOTO_MAX_EDGE / Math.max(width, height)
+  return { width: Math.round(width * scale), height: Math.round(height * scale) }
+}
+
+/** A photo as the picker named it, its bytes read on demand and scaled down
+ *  first when the camera wrote it larger than PHOTO_MAX_EDGE. */
+function lazyPhoto(
+  asset: { uri: string; fileSize?: number; width?: number; height?: number },
+  createFile: MobileImageFileFactory,
+  resizeImage: MobileImageResizer
+): PickedMobileImage {
+  let loading: Promise<string> | null = null
+  return {
+    base64: '',
+    uri: asset.uri,
+    load: () => {
+      loading ??= (async () => {
+        if (fitsPhoto(asset.width, asset.height)) {
+          return readUriAsBase64(asset.uri, asset.fileSize, createFile)
+        }
+        const small = await resizeImage(asset.uri, photoTarget(asset.width!, asset.height!))
+        return readUriAsBase64(small.uri, undefined, createFile)
+      })()
+      return loading
+    }
+  }
+}
+
 type MobileImagePickerDeps = {
+  readonly resizeImage?: MobileImageResizer
   readonly requestCameraPermission?: typeof ImagePicker.requestCameraPermissionsAsync
   readonly launchCamera?: typeof ImagePicker.launchCameraAsync
   readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
@@ -259,14 +314,20 @@ function pickMobileImagesWithMode(
     return pickFromClipboard(deps?.readClipboardImage)
   }
   if (source === 'camera') {
-    return pickFromCamera(deps?.requestCameraPermission, deps?.launchCamera, deps?.createFile)
+    return pickFromCamera(
+      deps?.requestCameraPermission,
+      deps?.launchCamera,
+      deps?.createFile,
+      deps?.resizeImage
+    )
   }
   if (source === 'library') {
     return pickFromLibrary(
       multiple,
       deps?.requestLibraryPermission,
       deps?.launchLibrary,
-      deps?.createFile
+      deps?.createFile,
+      deps?.resizeImage
     )
   }
   return pickFromFiles(multiple, deps?.launchFiles, deps?.createFile)

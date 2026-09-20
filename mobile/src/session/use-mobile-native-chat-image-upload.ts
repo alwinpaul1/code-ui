@@ -1,4 +1,5 @@
 import type { UploadingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { resizeMobilePhoto } from './mobile-photo-resize'
 import { readSystemClipboardImage } from './mobile-clipboard-image-reader'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
@@ -147,7 +148,8 @@ export function useMobileNativeChatImageUpload(args: {
   const attachImage = useCallback(
     (source: MobileImageSource) =>
       attachWith(
-        (picked) => pickMobileImages(picked, { readClipboardImage: readSystemClipboardImage }),
+        (picked) =>
+          pickMobileImages(picked, { readClipboardImage: readSystemClipboardImage, resizeImage: resizeMobilePhoto }),
         source
       ),
     [attachWith]

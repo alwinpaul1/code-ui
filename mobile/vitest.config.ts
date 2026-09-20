@@ -20,7 +20,13 @@ export default defineConfig({
         new URL('./src/test/expo-rich-paste-mock.ts', import.meta.url)
       ),
       // Why: react-native-svg's entry is TypeScript the Node runtime cannot parse.
-      'react-native-svg': fileURLToPath(new URL('./src/test/react-native-svg-mock.ts', import.meta.url))
+      'react-native-svg': fileURLToPath(new URL('./src/test/react-native-svg-mock.ts', import.meta.url)),
+      // Why: expo-image-manipulator's entry pulls Flow-typed RN internals; the
+      // composer's photo resizer (mobile-photo-resize.ts) is reached by the
+      // attachment hooks' tests.
+      'expo-image-manipulator': fileURLToPath(
+        new URL('./src/test/expo-image-manipulator-mock.ts', import.meta.url)
+      )
     }
   },
   // Why: the app tsconfig intentionally excludes tests; Vite 8's OXC transform

@@ -245,3 +245,23 @@ it('sweeps only the selection that finished, leaving another still uploading', (
   expect(dropUploadingNativeChatImages(chips, 'batch-2').map((c) => c.id)).toEqual(['a'])
   expect(dropUploadingNativeChatImages(chips).map((c) => c.id)).toEqual([])
 })
+
+// The chip must not wait for the file: the picker hands the image over with
+// its bytes still to load, the chip shows, then the bytes are read and sent.
+it('starts the chip before a lazily read image is loaded', async () => {
+  const order: string[] = []
+  const load = vi.fn(async () => {
+    order.push('load')
+    return 'AAAA'
+  })
+  const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/shot.png')])
+  const onImageStart = vi.fn(() => order.push('start'))
+  await uploadMobileNativeChatImages('camera', {
+    client,
+    getConnectionId: async () => 'c1',
+    pickImages: () => (async function* () { yield { uri: 'file:///tmp/shot.jpg', base64: '', load } })(),
+    onImageStart,
+    onImageUploaded: vi.fn()
+  })
+  expect(order).toEqual(['start', 'load'])
+})

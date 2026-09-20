@@ -129,8 +129,13 @@ export async function uploadMobileNativeChatImages(
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
     onImageStart?.(image.name ? { previewUri, kind: 'file', name: image.name } : { previewUri })
-    const path = await saveMobileClipboardImageAsTempFile(client, image.base64, { connectionId })
-    const contentFingerprint = mobileNativeChatImageContentFingerprint(image.base64)
+    // The chip is up; now the bytes, which a photo reads (and scales) on demand.
+    const base64 = image.base64 || (image.load ? await image.load() : '')
+    if (!base64) {
+      continue
+    }
+    const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
+    const contentFingerprint = mobileNativeChatImageContentFingerprint(base64)
     const result = image.name
       ? { path, previewUri, kind: 'file' as const, name: image.name, contentFingerprint }
       : { path, previewUri, contentFingerprint }

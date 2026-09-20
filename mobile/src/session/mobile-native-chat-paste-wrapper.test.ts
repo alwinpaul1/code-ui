@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
