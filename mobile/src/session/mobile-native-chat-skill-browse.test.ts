@@ -29,21 +29,33 @@ describe('skills the phone lists by directory name', () => {
     expect(worktreePathFromId('w1')).toBeNull()
   })
 
-  it('offers every skill directory of ~/.claude/skills, not the holding folders', () => {
+  // 2026-09-20, phone beside the Claude app for "/ani": the Claude app listed
+  // animation-vocabulary, find-animation-opportunities, improve-animations,
+  // review-animations and the-humanizer; the phone listed the-humanizer alone.
+  // 102 of this machine's 215 skill entries are SYMLINKS (to ~/.claude-work),
+  // which the host lists as `isDirectory: false, isSymlink: true`, and the
+  // reader took directories only. Claude Code follows the link.
+  const link = (name: string) => ({ name, isDirectory: false, isSymlink: true })
+
+  it('offers every skill directory of ~/.claude/skills, symlinked ones too, not the holding folders', () => {
     const [home] = claudeSkillRoots(HOME, null)
     const skills = skillsFromRootListing(home!, [
       dir('_sources'),
       dir('academic-research-writer'),
       dir('academic-researcher'),
-      dir('agents-sdk'),
+      link('agents-sdk'),
+      link('animation-vocabulary'),
       dir('.DS_Store_dir'),
       file('README.md')
     ])
     expect(skills.map((s) => nativeChatSkillCommandName(s))).toEqual([
       'academic-research-writer',
       'academic-researcher',
-      'agents-sdk'
+      'agents-sdk',
+      'animation-vocabulary'
     ])
+    // A link is confirmed by listing what it points at; a plain folder need not be.
+    expect(skills.map((s) => s.id.startsWith('browse-link:'))).toEqual([false, false, true, true])
     expect(skills[0]).toMatchObject({
       sourceKind: 'home',
       providers: ['claude'],

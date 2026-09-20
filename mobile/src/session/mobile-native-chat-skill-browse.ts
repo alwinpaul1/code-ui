@@ -82,11 +82,17 @@ export function skillsFromRootListing(
   const out: DiscoveredSkill[] = []
   for (const entry of entries) {
     if (root.kind === 'skills') {
-      if (!entry.isDirectory || !isSkillDirectoryName(entry.name)) {
+      // A symlink is listed as neither directory nor file (`isDirectory:
+      // false, isSymlink: true`), and 102 of this machine's 215 skills are
+      // links into ~/.claude-work (device, 2026-09-20: "/ani" listed one
+      // skill where the Claude app listed five). Claude Code follows the
+      // link; the phone offers it and confirms what it points at.
+      const linked = entry.isSymlink === true && !entry.isDirectory
+      if ((!entry.isDirectory && !linked) || !isSkillDirectoryName(entry.name)) {
         continue
       }
       const directoryPath = `${root.path}/${entry.name}`
-      out.push(skill(root, entry.name, directoryPath, `${directoryPath}/SKILL.md`))
+      out.push(skill(root, entry.name, directoryPath, `${directoryPath}/SKILL.md`, linked))
     } else {
       if (entry.isDirectory || !entry.name.endsWith('.md') || entry.name.startsWith('.')) {
         continue
@@ -101,9 +107,17 @@ export function skillsFromRootListing(
   return out
 }
 
-function skill(root: SkillBrowseRoot, name: string, directoryPath: string, skillFilePath: string): DiscoveredSkill {
+function skill(
+  root: SkillBrowseRoot,
+  name: string,
+  directoryPath: string,
+  skillFilePath: string,
+  linked = false
+): DiscoveredSkill {
   return {
-    id: `browse:${skillFilePath}`,
+    // `browse-link:` marks a symlink: the loader must SEE its SKILL.md to keep
+    // it, since a link can point at a file or at nothing.
+    id: `${linked ? 'browse-link' : 'browse'}:${skillFilePath}`,
     name,
     description: null,
     providers: ['claude'],
@@ -115,6 +129,11 @@ function skill(root: SkillBrowseRoot, name: string, directoryPath: string, skill
     installed: true,
     updatedAt: null
   }
+}
+
+/** Whether a browsed skill is a symlink whose target must be seen. */
+export function isLinkedBrowsedSkill(skill: DiscoveredSkill): boolean {
+  return skill.id.startsWith('browse-link:')
 }
 
 /** One row per dispatch token: a plugin cached at two versions lists its

@@ -86,10 +86,19 @@ describe('the / menu’s skills list, read by directory when the scan is refused
   const file = (name: string) => ({ name, isDirectory: false, isSymlink: false })
   const listings: Record<string, ReturnType<typeof dir>[]> = {
     '': [dir('.claude'), dir('Desktop')],
-    [`${HOME}/.claude/skills`]: [dir('_sources'), dir('academic-researcher'), dir('android-reverse-engineering-skill')],
+    [`${HOME}/.claude/skills`]: [
+      dir('_sources'),
+      dir('academic-researcher'),
+      dir('android-reverse-engineering-skill'),
+      { name: 'animation-vocabulary', isDirectory: false, isSymlink: true },
+      { name: 'dangling-link', isDirectory: false, isSymlink: true }
+    ],
     [`${HOME}/.claude/skills/academic-researcher`]: [file('SKILL.md')],
     // A folder without SKILL.md is not a skill; Claude Code skips it.
     [`${HOME}/.claude/skills/android-reverse-engineering-skill`]: [file('README.md')],
+    // A symlink to a skill folder lists like the folder it points at.
+    [`${HOME}/.claude/skills/animation-vocabulary`]: [file('SKILL.md')],
+    // `dangling-link` has no listing: a link to nothing, or to a file.
     [`${HOME}/.claude/plugins/cache`]: [dir('typesafe-ai'), file('blocklist.json')],
     [`${HOME}/.claude/plugins/cache/typesafe-ai`]: [dir('typesafe')],
     [`${HOME}/.claude/plugins/cache/typesafe-ai/typesafe`]: [dir('0.5.7')],
@@ -138,6 +147,7 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     })
     expect(latest!.nativeChatSkills.map((s) => `${s.sourceLabel}:${s.name}`)).toEqual([
       'Home skills:academic-researcher',
+      'Home skills:animation-vocabulary',
       'Claude plugin typesafe:typesafe-ai'
     ])
     // The repo roots were asked for too, and their absence was tolerated.

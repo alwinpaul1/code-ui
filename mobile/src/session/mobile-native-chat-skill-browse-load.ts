@@ -4,6 +4,7 @@ import {
   claudePluginCachePath,
   claudeSkillRoots,
   dedupeBrowsedSkills,
+  isLinkedBrowsedSkill,
   pluginSkillsRoot,
   skillsFromRootListing,
   type ServerDirEntry,
@@ -87,7 +88,12 @@ export async function browseClaudeSkills(args: {
     if (!live()) {
       return
     }
-    if (entries !== null && !entries.some((entry) => !entry.isDirectory && entry.name === 'SKILL.md')) {
+    const hasSkillFile = entries !== null && entries.some((entry) => !entry.isDirectory && entry.name === 'SKILL.md')
+    // A folder that would not list is kept (a transient refusal is not a
+    // missing skill); a LINK that would not list is dropped — it points at a
+    // file, or at nothing.
+    const drop = entries === null ? isLinkedBrowsedSkill(skill) : !hasSkillFile
+    if (drop) {
       skills = skills.filter((other) => other !== skill)
       onSkills(skills)
     }
@@ -96,8 +102,11 @@ export async function browseClaudeSkills(args: {
 
 /** Every `<marketplace>/<plugin>/<version>/skills` under the plugin cache. */
 async function pluginSkillRoots(browse: Browse, cachePath: string): Promise<SkillBrowseRoot[]> {
+  // A marketplace, plugin or version folder may itself be a symlink.
   const dirs = (entries: ServerDirEntry[] | null) =>
-    (entries ?? []).filter((entry) => entry.isDirectory && !entry.name.startsWith('.')).map((entry) => entry.name)
+    (entries ?? [])
+      .filter((entry) => (entry.isDirectory || entry.isSymlink === true) && !entry.name.startsWith('.'))
+      .map((entry) => entry.name)
   const marketplaces = dirs(await browse(cachePath))
   const plugins = (
     await mapLimit(marketplaces, BROWSE_CONCURRENCY, async (marketplace) =>
