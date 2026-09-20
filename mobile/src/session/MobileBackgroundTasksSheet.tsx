@@ -118,6 +118,7 @@ export function MobileBackgroundTasksSheetBody({
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
         launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
         onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null,
+        screenCompletions: backgroundTaskReport?.screenCompletions ?? [],
         subagentRuns
       }),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]

@@ -35,6 +35,7 @@ import {
   resolveObservedPermission
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import { useActiveTabScreenCompletions } from './use-active-tab-screen-completions'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
@@ -180,7 +181,8 @@ export function useMobileNativeChatController(
     terminalPermission,
     permissionDismissed,
     queuedMessages: visibleQueuedMessages,
-    sentPrompts: screenSentPrompts
+    sentPrompts: screenSentPrompts,
+    taskCompletions: screenTaskCompletions
   } = useMobileNativeChatHud({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
@@ -201,9 +203,12 @@ export function useMobileNativeChatController(
   // the beacon's transcript tail lags on a huge session, and a cap on a
   // hand-started tab that has no beacon to retire a mid-turn completion.
   const onScreenShellCount = hudObservation?.runningShellCount ?? null
+  // And the completions it has stated there, which name WHICH shell ended:
+  // the only source of that on a hand-started tab (2026-09-20).
+  const screenCompletions = useActiveTabScreenCompletions(activeHandle, activeChatSessionId, screenTaskCompletions)
   const backgroundTaskReportWithScreen = useMemo(
-    () => ({ ...backgroundTaskReport, onScreenShellCount }),
-    [backgroundTaskReport, onScreenShellCount]
+    () => ({ ...backgroundTaskReport, onScreenShellCount, screenCompletions }),
+    [backgroundTaskReport, onScreenShellCount, screenCompletions]
   )
 
   const {

@@ -1,5 +1,6 @@
 import { useMemo, useRef } from 'react'
 import type { AgentHudBeacon } from './agent-hud-beacon'
+import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 
 const NONE: readonly string[] = []
@@ -62,6 +63,9 @@ export type ActiveTabBackgroundTaskReport = {
    *  screen. The truthful floor when the beacon's transcript tail cannot reach
    *  a shell's launch on a huge session; null when no footer count is on screen. */
   onScreenShellCount?: number | null
+  /** Completions the agent stated on its screen, remembered since this tab's
+   *  session came on screen (`use-active-tab-screen-completions.ts`). */
+  screenCompletions?: readonly ScreenTaskCompletion[]
 }
 
 /** What the agent has said about its background work, all three halves, from

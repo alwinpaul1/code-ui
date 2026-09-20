@@ -28,6 +28,7 @@ import {
 } from '../../../src/shared/native-chat-types'
 import {
   INTERRUPTED,
+  foldWhitespace,
   readLaunch,
   readNotifications,
   readString,
@@ -84,6 +85,17 @@ export type BackgroundTaskDeriveOptions = {
    *  running — this is the transcript itself, read further back than the
    *  window, and fresher than the Stop hook's `run=` mid-turn. */
   launchedTaskIds?: readonly string[]
+  /** Completions the agent stated on its own screen: the notification's
+   *  summary as Claude paints it when a task's notification lands, read and
+   *  latched by the phone (`mobile-terminal-task-completions.ts`). Each names
+   *  the task by the text Claude quotes — its `description`, else its
+   *  command — and says how it ended. One entry retires one launch: the
+   *  oldest still-running shell with that label. Why: on a hand-started tab
+   *  there is no beacon, and a mid-turn completion is otherwise invisible
+   *  until every shell has finished (2026-09-20). The launch is the phone's,
+   *  the verdict the agent's; a row naming nothing the phone holds retires
+   *  nothing. */
+  screenCompletions?: readonly ScreenTaskCompletion[]
   /** How many background shells the agent's OWN footer says are running, read
    *  off the screen (`parseClaudeRunningShellCount`). Claude Code counts these
    *  live and in full, so on a huge session where the beacon's transcript tail
@@ -92,6 +104,10 @@ export type BackgroundTaskDeriveOptions = {
    *  shells rather than dropped. Null when no footer count is on screen. */
   onScreenShellCount?: number | null
 }
+
+/** A completion row as read off the agent's screen. `status` is the word the
+ *  row uses (`completed`, `failed`, `stopped`), judged like a notification's. */
+export type ScreenTaskCompletion = { label: string; status: string }
 
 /** `shell`, `agent` and `monitor` are what the transcript reader can name.
  *  `workflow` and `unknown` only ever arrive from the host's own roster
@@ -188,6 +204,18 @@ export function deriveBackgroundTasks(
   for (const id of options.finishedTaskIds ?? []) {
     if (!notifications.has(id)) {
       notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
+    }
+  }
+  // Launch order is insertion order, so the first unsettled match is the
+  // oldest; two shells sharing a description are retired one per row, oldest
+  // first — the order Claude would have to deliver them in anyway.
+  for (const completion of options.screenCompletions ?? []) {
+    const label = foldWhitespace(completion.label)
+    for (const launch of launches.values()) {
+      if (launch.kind === 'shell' && launch.label === label && !notifications.has(launch.id)) {
+        notifications.set(launch.id, { status: completion.status, summary: null, at: position + 1 })
+        break
+      }
     }
   }
   const tasks = splitByStatus(

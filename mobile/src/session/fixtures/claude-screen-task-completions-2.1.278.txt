@@ -1,0 +1,45 @@
+❯ Run these two, each as its own Bash call
+  with run_in_background true: (1) sleep 3,
+  description Short nap for a capture. (2) sh
+  -c 'sleep 5; exit 1', description A
+  failing nap for a capture. Wait for both
+  notifications, then reply with the single
+  word done.
+
+  Ran 2 shell commands
+
+⏺ Both are running in the background
+  (bn5kw0qig and bzc40tb41). I'll reply once
+  both notifications arrive.
+
+  session:ok
+
+✻ Sautéed for 5s · done 11:02 PM
+
+⏺ Background command "Short nap for a capture"
+completed (exit code 0)
+
+⏺ First task finished (exit 0). Still waiting
+  on the second.
+
+  session:ok
+
+✻ Crunched for 2s · done 11:02 PM
+
+⏺ Background command "A failing nap for a
+capture" failed with exit code 1
+
+⏺ done
+
+  session:ok
+
+✻ Cooked for 2s · done 11:02 PM
+
+──────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────
+  [Opus 5 xhigh | Max 20x] ░░░░ 6% (60k/1...
+  Usage ░░░░ 0% (resets 4:00 AM)
+  ──────────────────────────────────────────
+  ✓ Bash ×2
+  ⏵⏵ bypass permissions on (shift+tab to  ·

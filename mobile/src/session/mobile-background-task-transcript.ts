@@ -29,7 +29,18 @@ const NOTIFICATION_SUMMARY = /<summary>\s*([\S\s]*?)\s*<\/summary>/
 const INTERRUPTED = /^\s*\[request interrupted/i
 
 export type PendingCall = { name: string; input: unknown; startedAt: number | null }
-export type Launch = { id: string; kind: BackgroundTaskKind; title: string; startedAt: number | null }
+export type Launch = {
+  id: string
+  kind: BackgroundTaskKind
+  title: string
+  startedAt: number | null
+  /** What Claude's completion summary will quote for this launch: the Bash
+   *  `description`, else the whole command (19 of 19 in one session's
+   *  transcript; ~2,600 summaries on this machine, 2026-09-20). Whitespace
+   *  folded, because the screen re-wraps it. Null for a kind whose summary
+   *  says something else (agents, monitors). */
+  label: string | null
+}
 export type Notification = { status: string; summary: string | null; at: number }
 
 
@@ -44,17 +55,19 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
       SHELL_STARTED.exec(output)?.[1] ??
       SHELL_MOVED.exec(output)?.[1] ??
       SHELL_BACKGROUNDED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
+    return id
+      ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: shellLabel(call.input) }
+      : null
   }
   if (call.name === 'Agent') {
     const id = AGENT_LAUNCHED.exec(output)?.[1]
-    return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt } : null
+    return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt, label: null } : null
   }
   if (call.name === 'Monitor') {
     // A monitor is a long-running shell; its event notifications carry no
     // status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt } : null
+    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null } : null
   }
   return null
 }
@@ -67,6 +80,17 @@ function shellTitle(input: unknown): string {
   const command = readString(input, 'command')
   const firstLine = command?.split('\n', 1)[0]?.trim()
   return firstLine ? truncate(firstLine) : 'Background command'
+}
+
+function shellLabel(input: unknown): string | null {
+  const quoted = readString(input, 'description') ?? readString(input, 'command')
+  return quoted ? foldWhitespace(quoted) : null
+}
+
+/** One space for any run of whitespace, so a label read off a re-wrapped
+ *  screen row compares equal to the one the transcript holds. */
+export function foldWhitespace(value: string): string {
+  return value.replaceAll(/\s+/g, ' ').trim()
 }
 
 function agentTitle(input: unknown): string {
