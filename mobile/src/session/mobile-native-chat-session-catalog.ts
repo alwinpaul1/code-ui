@@ -26,7 +26,7 @@ import {
   rankSkillSuggestions,
   rankSlashCommandSuggestions
 } from './mobile-native-chat-autocomplete'
-import type { ComposerSuggestion } from './MobileNativeChatComposerSuggestions'
+import { composerSuggestionInsertText, type ComposerSuggestion } from './composer-suggestion-text'
 import {
   filterNativeChatSkillsForAgent,
   nativeChatSkillCommandName
@@ -142,5 +142,32 @@ export function mobileNativeChatSlashSuggestions(args: {
   const skills: ComposerSuggestion[] = rankSkillSuggestions(catalog.skills, query, SLASH_MENU_LIMIT)
     .filter((skill) => !(prefix === '/' && named.has(skill.name)))
     .map((skill) => ({ kind: 'skill', skill, prefix }))
-  return [...commands, ...skills]
+  return orderSlashMenu([...commands, ...skills], query)
+}
+
+/**
+ * The Claude app's order, which the user asked for (2026-09-20): one
+ * alphabetical list, commands and skills together, for a bare `/`; for a
+ * query, the tokens that START with it, then the ones that contain it, each
+ * group alphabetical ("/type": `/typesafe:typesafe-ai`,
+ * `/typescript-best-practices`, then `/principle-type-system-discipline`,
+ * `/prototype`). A row the ranker kept on some other ground (a description
+ * match) goes after both, still alphabetical.
+ */
+function orderSlashMenu(rows: readonly ComposerSuggestion[], query: string): ComposerSuggestion[] {
+  const q = query.trim().toLowerCase()
+  const token = (row: ComposerSuggestion): string => composerSuggestionInsertText(row).toLowerCase()
+  const rank = (row: ComposerSuggestion): number => {
+    if (q.length === 0) {
+      return 0
+    }
+    const name = token(row).slice(1)
+    return name.startsWith(q) ? 0 : name.includes(q) ? 1 : 2
+  }
+  // Code-unit order, not locale collation: ICU-style collation ignores the
+  // hyphen at its first pass and would put `/academic-researcher` before
+  // `/academic-research-writer`; the Claude app lists them the other way,
+  // and Hermes and V8 need not agree on `localeCompare`.
+  const byToken = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+  return [...rows].sort((a, b) => rank(a) - rank(b) || byToken(token(a), token(b)))
 }

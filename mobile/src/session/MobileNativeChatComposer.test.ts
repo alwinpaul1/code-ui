@@ -415,9 +415,10 @@ describe('MobileNativeChatComposer', () => {
       (node) => node.type === 'Pressable' && typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('/')
     )[0] as { props: { onPress: () => void } }
     await act(async () => firstSuggestion.props.onPress())
-    expect(onChangeText).toHaveBeenCalledWith('/clear ')
-    // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
-    expect(input().props.selection).toEqual({ start: 7, end: 7 })
+    // The first row for "/c" is the alphabetical first since 2026-09-20 (`/cd`).
+    expect(onChangeText).toHaveBeenCalledWith('/cd ')
+    // `/cd ` is 4 chars — the caret jumps just past the inserted command + space.
+    expect(input().props.selection).toEqual({ start: 4, end: 4 })
     // The next native selection event releases control so manual placement still works.
     await act(async () =>
       input().props.onSelectionChange({ nativeEvent: { selection: { end: 7 } } })

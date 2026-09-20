@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
-import { mobileNativeChatSlashCatalog } from './mobile-native-chat-session-catalog'
+import {
+  mobileNativeChatSlashCatalog,
+  mobileNativeChatSlashSuggestions
+} from './mobile-native-chat-session-catalog'
+import { composerSuggestionInsertText } from './composer-suggestion-text'
 
 function skill(overrides: Partial<DiscoveredSkill> & { name: string }): DiscoveredSkill {
   return {
@@ -258,5 +262,54 @@ describe('the `/` menu of a structured chat that has not reported its surface', 
       sessionCommands: [{ name: 'clear', kind: 'command' }]
     })
     expect(catalog.commands.map((command) => command.name)).toEqual(['clear'])
+  })
+})
+
+// 2026-09-20, phone beside the Claude app: the Claude app's `/` menu is one
+// alphabetical list (`/academic-research-writer`, `/academic-researcher`,
+// `/agents-sdk`, …); ours led with the curated commands in catalog order
+// (`/clear`, `/compact`, `/model`, `/loop`) and put every skill after them.
+// For a query the Claude app lists the names that START with it first, then
+// the ones that contain it, each group alphabetical: "/type" gives
+// `/typesafe:typesafe-ai`, `/typescript-best-practices`, then
+// `/principle-type-system-discipline`, `/prototype`.
+describe('the order of the / menu', () => {
+  const token = composerSuggestionInsertText
+
+  const tokens = (query: string) =>
+    mobileNativeChatSlashSuggestions({
+      agent: 'claude',
+      scannedSkills: [
+        skill({ name: 'academic-research-writer' }),
+        skill({ name: 'typescript-best-practices' }),
+        skill({ name: 'prototype' }),
+        skill({ name: 'academic-researcher' }),
+        skill({ name: 'principle-type-system-discipline' }),
+        skill({ name: 'typesafe-ai', sourceKind: 'plugin', sourceLabel: 'Claude plugin typesafe' }),
+        skill({ name: 'agents-sdk' })
+      ],
+      sessionCommands: undefined,
+      conversationCommands: undefined,
+      query
+    }).map(token)
+
+  it('is one alphabetical list, commands and skills together, for a bare /', () => {
+    const all = tokens('')
+    // `/academic-research-writer` before `/academic-researcher`, as the
+    // Claude app lists them: the hyphen sorts before a letter.
+    expect(all.slice(0, 4)).toEqual(['/academic-research-writer', '/academic-researcher', '/add-dir', '/advisor'])
+    const sorted = [...all].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    expect(all).toEqual(sorted)
+    expect(all).toContain('/clear')
+    expect(all).toContain('/typesafe:typesafe-ai')
+  })
+
+  it('lists prefix matches first, then substring matches, each alphabetical', () => {
+    expect(tokens('type')).toEqual([
+      '/typesafe:typesafe-ai',
+      '/typescript-best-practices',
+      '/principle-type-system-discipline',
+      '/prototype'
+    ])
   })
 })

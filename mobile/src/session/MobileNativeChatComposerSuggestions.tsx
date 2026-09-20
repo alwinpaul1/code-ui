@@ -1,50 +1,12 @@
 import { FlatList, Pressable, View, type LayoutChangeEvent } from 'react-native'
-import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
-import type { DiscoveredSkill } from '../../../src/shared/skills'
-import { nativeChatSkillCommandName } from './mobile-native-chat-skill-command'
-import { formatNativeChatFileMentionToken } from './mobile-native-chat-file-mention'
+import {
+  composerSuggestionInsertText,
+  composerSuggestionKey,
+  type ComposerSuggestion
+} from './composer-suggestion-text'
 import { useTheme } from '../theme/theme-context'
 import { SUGGESTION_POPOVER_CAP, SUGGESTION_ROW_HEIGHT } from './mobile-native-chat-suggestion-popover'
 import { Txt } from '../ui/Txt'
-
-/** One row of the composer autocomplete: an agent slash command (with its
- *  catalog description, desktop parity) or a worktree file path. */
-export type ComposerSuggestion =
-  | { kind: 'command'; command: SlashCommandSuggestion }
-  | { kind: 'file'; path: string }
-  /** An installed skill or plugin command; `prefix` is the agent's invoke token. */
-  | { kind: 'skill'; skill: DiscoveredSkill; prefix: '/' | '$' }
-
-export function composerSuggestionKey(suggestion: ComposerSuggestion): string {
-  switch (suggestion.kind) {
-    case 'command':
-      return `command:${suggestion.command.name}`
-    case 'file':
-      return `file:${suggestion.path}`
-    case 'skill':
-      return `skill:${nativeChatSkillCommandName(suggestion.skill)}`
-    default: {
-      const exhaustive: never = suggestion
-      return exhaustive
-    }
-  }
-}
-
-/** The text the suggestion inserts at the trigger span. */
-export function composerSuggestionInsertText(suggestion: ComposerSuggestion): string {
-  switch (suggestion.kind) {
-    case 'command':
-      return `/${suggestion.command.name}`
-    case 'file':
-      return formatNativeChatFileMentionToken(suggestion.path)
-    case 'skill':
-      return `${suggestion.prefix}${nativeChatSkillCommandName(suggestion.skill)}`
-    default: {
-      const exhaustive: never = suggestion
-      return exhaustive
-    }
-  }
-}
 
 /** A provider's argument sketch for a command (`<objective>`), shown beside the
  *  token so the row says how the command is invoked, not just what it does
@@ -60,6 +22,8 @@ export function suggestionArgumentHint(suggestion: ComposerSuggestion): string |
 }
 
 
+
+export { composerSuggestionInsertText, composerSuggestionKey, type ComposerSuggestion } from './composer-suggestion-text'
 
 export function MobileNativeChatComposerSuggestions({
   suggestions,
