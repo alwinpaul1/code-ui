@@ -19,6 +19,7 @@
 // name. The records in the transcript are what decide.
 
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { SubagentRunClock } from './mobile-subagent-runs'
 import {
   isTextBlock,
   isToolCallBlock,
@@ -55,6 +56,10 @@ export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagen
   Partial<Pick<AgentStatusEntry, 'stateStartedAt' | 'workingMode' | 'providerSession'>>
 
 export type BackgroundTaskDeriveOptions = {
+  /** When each roster subagent's current run began, as the phone watched it
+   *  (`mobile-subagent-runs.ts`). Absent, or absent for an id, means unknown:
+   *  the row shows no time. Never the roster's first-observed age. */
+  subagentRuns?: SubagentRunClock
   /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`).
    *  Why: a completion that lands mid-turn is written to Claude's transcript as
    *  a queue-operation record Orca never surfaces, but the status-line script
@@ -188,7 +193,8 @@ export function deriveBackgroundTasks(
     position + 1,
     options.runningTaskIds ?? null,
     options.launchedTaskIds ?? [],
-    options.runningTaskIdsAt ?? null
+    options.runningTaskIdsAt ?? null,
+    options.subagentRuns ?? null
   )
   return padToOnScreenShellCount(tasks, options.onScreenShellCount ?? null)
 }
@@ -231,7 +237,8 @@ function splitByStatus(
   afterTranscript: number,
   reportedRunning: readonly string[] | null,
   reportedLaunched: readonly string[] = [],
-  reportedRunningAt: number | null = null
+  reportedRunningAt: number | null = null,
+  subagentRuns: SubagentRunClock | null = null
 ): BackgroundTasks {
   const agentSaysRunning = reportedRunning === null ? null : new Set(reportedRunning)
   const running: BackgroundTask[] = []
@@ -332,13 +339,17 @@ function splitByStatus(
       if (launches.has(id)) {
         continue
       }
+      // Not `snapshot.startedAt`: that is when the host first saw the
+      // subagent, a teammate's creation hours before its current task
+      // (device, 2026-09-20; see mobile-subagent-runs.ts).
+      const runStartedAt = subagentRuns?.get(id) ?? null
       running.push({
         id,
         kind: 'agent',
         title: truncate(snapshot.description?.trim() || snapshot.agentType?.trim() || id),
         status: 'running',
-        startedAt: snapshot.startedAt,
-        elapsedMs: elapsedSince(snapshot.startedAt, now)
+        startedAt: runStartedAt,
+        elapsedMs: elapsedSince(runStartedAt, now)
       })
     }
   }

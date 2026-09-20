@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { countRunningBackgroundTasks, deriveBackgroundTasks } from './mobile-background-tasks'
+import { observeSubagentRuns } from './mobile-subagent-runs'
 import { formatBackgroundTaskElapsed, formatRunningTaskCount } from './mobile-background-task-labels'
 
 // ─── Real transcript bytes ──────────────────────────────────────────────────
@@ -514,10 +515,62 @@ describe('background tasks reconciled against the host agent status', () => {
         id: 'a0bfd776754906628',
         kind: 'agent',
         title: 'Sweep formatting',
-        status: 'running',
-        elapsedMs: NOW - T0
+        status: 'running'
       })
     ])
+  })
+
+  // 2026-09-20, phone beside the desk: the tasks sheet read "fable-writer ·
+  // Agent · 13h 16m" while Claude Code's own row read "fable-writer … 1m 23s".
+  // The roster's `startedAt` is when the host FIRST saw the subagent — a
+  // teammate created 13 hours earlier — not when its current run began, which
+  // the snapshot does not carry. The phone counts from the moment it watched
+  // the subagent go from idle (or absent) to working; before that moment it
+  // has no number, and shows none.
+  describe('a roster subagent’s time', () => {
+    const THIRTEEN_HOURS = 13 * 3_600_000
+    const teammate = (state: 'idle' | 'working') => ({
+      id: 'fable-writer',
+      description: 'fable-writer',
+      agentType: 'teammate',
+      state,
+      startedAt: NOW - THIRTEEN_HOURS
+    })
+
+    it('is not the roster’s first-observed age', () => {
+      const tasks = deriveBackgroundTasks([], NOW, { state: 'working', subagents: [teammate('working')] })
+      expect(tasks.running[0]?.elapsedMs).toBeNull()
+      expect(formatBackgroundTaskElapsed(tasks.running[0]?.elapsedMs ?? null)).toBeNull()
+    })
+
+    it('counts from the idle-to-working change the phone watched', () => {
+      let clock = observeSubagentRuns(null, [teammate('idle')], NOW - 90_000)
+      clock = observeSubagentRuns(clock, [teammate('working')], NOW - 83_000)
+      const tasks = deriveBackgroundTasks([], NOW, { state: 'working', subagents: [teammate('working')] }, { subagentRuns: clock })
+      expect(formatBackgroundTaskElapsed(tasks.running[0]?.elapsedMs ?? null)).toBe('1m 23s')
+    })
+
+    it('trusts first-observed only for a subagent the host just saw start', () => {
+      // An Agent-tool subagent the phone sees in its first snapshot, seconds
+      // old: its first observation IS its start.
+      const fresh = { id: 'a1', description: 'Sweep', agentType: 'general-purpose', state: 'working' as const, startedAt: NOW - 8_000 }
+      const clock = observeSubagentRuns(null, [fresh], NOW - 5_000)
+      const tasks = deriveBackgroundTasks([], NOW, { state: 'working', subagents: [fresh] }, { subagentRuns: clock })
+      expect(tasks.running[0]?.elapsedMs).toBe(8_000)
+      // A teammate already 13 h old in that first snapshot: unknown.
+      const old = observeSubagentRuns(null, [teammate('working')], NOW - 5_000)
+      expect(old.get('fable-writer')).toBeNull()
+    })
+
+    it('forgets a run once the subagent is idle again, so the next run starts fresh', () => {
+      let clock = observeSubagentRuns(null, [teammate('idle')], NOW - 100_000)
+      clock = observeSubagentRuns(clock, [teammate('working')], NOW - 90_000)
+      clock = observeSubagentRuns(clock, [teammate('idle')], NOW - 50_000)
+      expect(clock.has('fable-writer')).toBe(false)
+      clock = observeSubagentRuns(clock, [teammate('working')], NOW - 10_000)
+      expect(clock.get('fable-writer')).toBe(NOW - 10_000)
+      expect(observeSubagentRuns(clock, [], NOW).size).toBe(0)
+    })
   })
 
   it('does not count an idle teammate as a running task', () => {

@@ -22,6 +22,7 @@ import {
   type BackgroundTaskKind,
   type BackgroundTask
 } from './mobile-background-tasks'
+import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
@@ -99,6 +100,9 @@ export function MobileBackgroundTasksSheetBody({
     return target ? () => openSubagentTranscript(target, task.status === 'running') : undefined
   }
   const [now, setNow] = useState(() => Date.now())
+  // A roster subagent's time is the run the phone watched begin, never the
+  // host's first-observed age (2026-09-20, "13h 16m" beside the desk's "1m 23s").
+  const subagentRuns = useSubagentRunClock(agentStatus)
   const [runningOpen, setRunningOpen] = useState(true)
   const [finishedOpen, setFinishedOpen] = useState(true)
   const [finishedShown, setFinishedShown] = useState(FINISHED_PAGE)
@@ -113,9 +117,10 @@ export function MobileBackgroundTasksSheetBody({
         runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
         runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
         launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
-        onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null
+        onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null,
+        subagentRuns
       }),
-    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now]
+    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]
   )
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {

@@ -4,6 +4,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { countRunningBackgroundTasks } from './mobile-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
+import { useSubagentRunClock } from './use-subagent-run-clock'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** How many background tasks the tab has in flight, from the host's roster
@@ -17,6 +18,9 @@ export function useMobileRunningTaskCount(input: {
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
 }): number {
   const { messages, agentStatus, backgroundTaskReport, hostBackgroundTasks } = input
+  // Observed here as well as in the sheet, so a subagent's run start is
+  // caught while the sheet is closed (use-subagent-run-clock.ts).
+  useSubagentRunClock(agentStatus)
   return useMemo(() => {
     // The host's roster answers when it has one — including when its answer is
     // zero, which is why this is not a `||` fallthrough.
