@@ -266,3 +266,12 @@ src/shared/tui-agent-config.ts: c62eca398
 src/shared/tui-agent-display-names.ts: c62eca398
 src/shared/tui-agent-selection.ts: c62eca398
 src/shared/tui-agent.ts: c62eca398
+src/shared/constants.ts: c62eca398
+src/shared/pairing-local-ui-fields.ts: c62eca398
+src/shared/pairing-local-ui-fields.test.ts: c62eca398
+src/shared/persisted-ui-state-types.ts: c62eca398
+src/shared/agent-hook-listener/listener-event.ts: c62eca398
+src/shared/agent-status-ipc-payload.ts: c62eca398
+src/shared/agent-status-observation.ts: c62eca398
+src/shared/runtime-worktree-contracts.ts: c62eca398
+src/shared/agent-status-run.ts: c62eca398

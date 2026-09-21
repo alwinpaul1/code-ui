@@ -210,6 +210,8 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 | f3bda1bf3 #21732 | seam moves and the shared shell route guard for the source-control domain (OTA phase C, C4.1) | **done in a6a59c61; 21 of 22 files verbatim, the two renames completed, 1 adapted.** `shell-screen-route.ts` moved from `files/` to `mobile-web-shell/` with its test; the PR sidebar openers go through the external-link seam and its copies through the clipboard seam; the router-seam census walk moved into the seam module and the files, tasks and new source-control censuses call it. `shell-screen-route-census.test.ts` ties its root to the route files that mount the shell instead of the desktop registry this fork does not vendor |
 | 6a0200f41 #21724 | certify the files page closure, 28 families and 125 goldens (OTA phase C, C3.2) | **done in d93cef76; all 9 files as written, the five census numbers re-derived for this fork** as C1, C2 and C5 were: 26 families / 116 goldens (upstream's less the two C1 families whose recorder scenarios this fork lacks), identical 60, result-absent-settlement 44, C1 20 / 94, 20 shared with C2 and C5, 56 exclusions |
 
+| 9fed61e5c #19313, ebb1acfa3 #19683, 47b6c756f #19966, d138c3278 #20526 | agents-sidebar search visibility as a pairing-local preference; structured sessions published into the hook server store; the unexpected-signout notice shown once per version, then once across versions | **done, re-vendored at c62eca398 (v1.4.206)** in one sweep after the v1.4.206 pass found them unrecorded: `constants.ts`, `pairing-local-ui-fields.ts` (+test), `persisted-ui-state-types.ts`, `agent-hook-listener/listener-event.ts`, `agent-status-ipc-payload.ts`, `agent-status-observation.ts`, `runtime-worktree-contracts.ts`, plus `agent-status-run.ts` (#20531's run-identity types) which the payload file now imports. Base→release delta on each is a few added lines; nothing on the phone reads the new fields yet |
+
 ## Already solved here
 
 | Commit | What | Evidence |
@@ -226,6 +228,7 @@ Whoever owns those batches should fill them in; they are not guessed at here.
 |---|---|
 | 3160b54c6 #18554, reverted by d53cbed43 #19203 | upstream pulled its own push-notification feature |
 | 74cc9b503 #19935, d33354cfd #19951, 341b13cf6 #20068, reverted in part by e187c8267 #20040 | the re-landed desktop/mobile push integration. Code UI has no push feature and no paired-desktop push transport; the desktop half is `src/main/` this fork does not vendor. Upstream itself pulled the rollout once already |
+| 1d1bca2a7 #20661 | upstream's mobile app.json bump to 0.0.50; this fork versions itself |
 | 71f3bdb70 #21335, 85576b636 #21382 | upstream's own Android versionCode / version bumps; this fork versions itself (`mobile/app.json`, the `mobile-android-v*` tags) |
 | afce0c85c #19115 | `mobile/src/sync-runtime-graph/` does not exist here. The agent-status projection join it short-circuits is part of the runtime graph this fork does not carry |
 | 4e1681338 #19675 | a 5,200-line pure refactor that moves settings, diagnostics and editor-document screens out of their routes. These are among the most diverged files in this fork — Code UI wrote its own settings, voice and connection-log screens — so the extraction has no common ground to land on and no behaviour to gain |
