@@ -2,6 +2,9 @@ package expo.modules.termuxterminal
 
 import android.content.Context
 import android.graphics.Typeface
+import android.graphics.fonts.Font
+import android.graphics.fonts.FontFamily
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
@@ -65,12 +68,7 @@ class TermuxTerminalView(context: Context, appContext: AppContext) : ExpoView(co
   private var lastModes: List<Any> = emptyList()
   private var lastMetrics: List<Any> = emptyList()
 
-  private val monoTypeface: Typeface =
-    SYSTEM_MONO_FONT_FILES.firstNotNullOfOrNull { path ->
-      if (File(path).isFile) runCatching { Typeface.createFromFile(path) }.getOrNull() else null
-    } ?: Typeface.MONOSPACE.also {
-      Log.w(TAG, "no system monospace file found; falling back to Typeface.MONOSPACE, which an OEM may substitute")
-    }
+  private val monoTypeface: Typeface = monoWithSymbols(context)
 
   private val session = RemoteTerminalSession(
     onOutput = { bytes ->
@@ -279,5 +277,35 @@ class TermuxTerminalView(context: Context, appContext: AppContext) : ExpoView(co
   companion object {
     private const val TAG = "TermuxTerminalView"
     private val HEX_RGB = Regex("^#[0-9a-fA-F]{6}$")
+
+    /** Glyph fallbacks behind the system mono face, in order; Termux's renderer takes one
+     *  Typeface. The Nerd symbols font (private-use: powerline, devicons) is the Ghostty
+     *  engine's, minus its U+276C..2771 angle brackets so the prompt's `❯` keeps the system
+     *  glyph it had. The Noto subset is U+23F4..23FA only: Claude Code's status line writes
+     *  `⏵⏵` (U+23F5), which no font on a Galaxy S23 carries, and it drew as boxes
+     *  (2026-09-21). Custom fallbacks are consulted before the system chain, so each file
+     *  holds only glyphs the system lacks or draws wrongly. */
+    private val FALLBACK_FONT_ASSETS = listOf(
+      "fonts/NotoSansSymbols2-MediaControls.ttf",
+      "fonts/SymbolsNerdFontMono-Regular.ttf"
+    )
+
+    private fun monoWithSymbols(context: Context): Typeface {
+      val monoPath = SYSTEM_MONO_FONT_FILES.firstOrNull { File(it).isFile }
+      if (monoPath == null) {
+        Log.w(TAG, "no system monospace file found; falling back to Typeface.MONOSPACE, which an OEM may substitute")
+        return Typeface.MONOSPACE
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        runCatching {
+          val builder = Typeface.CustomFallbackBuilder(FontFamily.Builder(Font.Builder(File(monoPath)).build()).build())
+          for (asset in FALLBACK_FONT_ASSETS) {
+            builder.addCustomFallback(FontFamily.Builder(Font.Builder(context.assets, asset).build()).build())
+          }
+          return builder.build()
+        }.onFailure { Log.w(TAG, "symbols fallback unavailable: ${it.message}") }
+      }
+      return runCatching { Typeface.createFromFile(monoPath) }.getOrElse { Typeface.MONOSPACE }
+    }
   }
 }
