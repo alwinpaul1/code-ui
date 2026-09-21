@@ -13,6 +13,7 @@ import { resetHostNotificationSessionsForTests } from './notification-reconnect-
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
+  deleteNotificationChannelAsync: vi.fn(async () => {}),
   setNotificationChannelAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn(),

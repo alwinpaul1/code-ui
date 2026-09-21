@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { loadBackgroundUpdateCheckEnabled } from './auto-update-preference'
 import { performUpdateCheck } from './check-update'
 import { LAST_AVAILABLE_KEY } from './app-update-store'
+import { ANDROID_NOTIFICATION_CHANNEL_ID } from '../notifications/local-notification-scheduling'
 import { getInstalledBuildNumber, getInstalledVersion } from './installed-version'
 import {
   appUpdateNotificationContent,
@@ -75,7 +76,7 @@ export async function runBackgroundUpdateCheck(): Promise<void> {
       ...appUpdateNotificationContent(plan.version),
       data: buildAppUpdateNotificationData(plan.version)
     },
-    trigger: Platform.OS === 'android' ? { channelId: 'orca-desktop' } : null
+    trigger: Platform.OS === 'android' ? { channelId: ANDROID_NOTIFICATION_CHANNEL_ID } : null
   })
   await AsyncStorage.setItem(LAST_NOTIFIED_KEY, plan.version).catch(() => {})
 }

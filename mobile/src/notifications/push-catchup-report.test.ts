@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
+  deleteNotificationChannelAsync: vi.fn(async () => {}),
   setNotificationChannelAsync: vi.fn(async () => {}),
   getPermissionsAsync: vi.fn(async () => ({ status: 'granted' })),
   requestPermissionsAsync: vi.fn(async () => ({ status: 'granted' })),

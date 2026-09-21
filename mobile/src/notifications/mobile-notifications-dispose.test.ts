@@ -9,6 +9,7 @@ import { resetHostNotificationSessionsForTests } from './notification-reconnect-
 // max-lines ceiling, so the dispose contract lives beside it instead of inside it.
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
+  deleteNotificationChannelAsync: vi.fn(async () => {}),
   setNotificationChannelAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn(),

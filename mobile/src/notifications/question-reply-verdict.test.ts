@@ -64,7 +64,7 @@ describe('re-posting a banner after a reply that was not sent', () => {
         data: { hostId: 'host-1', worktreeId: 'wt-1', questionKey: 'q', picks: {} },
         categoryIdentifier: 'codeui-permission-question:answer=reply(x):Answer'
       },
-      trigger: { channelId: 'orca-desktop' }
+      trigger: { channelId: 'orca-desktop-quiet' }
     })
   })
 

@@ -14,6 +14,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
+  deleteNotificationChannelAsync: vi.fn(async () => {}),
   setNotificationChannelAsync: vi.fn(),
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn(),

@@ -6,6 +6,7 @@ const presented: { identifier: string; request: { content: { data?: unknown } } 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4 },
+  deleteNotificationChannelAsync: vi.fn(async () => {}),
   setNotificationChannelAsync: vi.fn(async () => {}),
   scheduleNotificationAsync: vi.fn(
     async (request: { identifier?: string; content: { data?: unknown } }) => {

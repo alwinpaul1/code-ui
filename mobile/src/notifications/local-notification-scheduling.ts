@@ -83,7 +83,18 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
  *
  *  A channel-aware trigger delivers immediately, exactly as `trigger: null`
  *  does; it is not a schedule. */
-const ANDROID_CHANNEL_TRIGGER = { channelId: 'orca-desktop' } as const
+/** The channel every Android notification is posted to. Its id changes when
+ *  a locked setting has to: Android fixes a channel's vibration, sound and
+ *  importance the moment the channel exists, and a later create with the same
+ *  id changes only its name. `orca-desktop` vibrated (`[0, 250]`); the user
+ *  asked for silence (2026-09-21), so this is a new, silent channel and the
+ *  old one is deleted on every install that has it. */
+export const ANDROID_NOTIFICATION_CHANNEL_ID = 'orca-desktop-quiet'
+/** Channels earlier builds created, deleted so their locked settings go with
+ *  them. Android keeps a deleted channel's id reserved with its old settings,
+ *  which is why a retired id is never reused. */
+export const RETIRED_ANDROID_NOTIFICATION_CHANNEL_IDS = ['orca-desktop'] as const
+const ANDROID_CHANNEL_TRIGGER = { channelId: ANDROID_NOTIFICATION_CHANNEL_ID } as const
 
 export function notificationTrigger(): { channelId: string } | null {
   return Platform.OS === 'android' ? ANDROID_CHANNEL_TRIGGER : null
@@ -104,20 +115,29 @@ export function ensureNotificationChannel(): Promise<void> {
   if (Platform.OS !== 'android') {
     return Promise.resolve()
   }
-  channelReady ??= Notifications.setNotificationChannelAsync('orca-desktop', {
+  channelReady ??= Notifications.setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
     name: 'Desktop Notifications',
     importance: Notifications.AndroidImportance.HIGH,
-    vibrationPattern: [0, 250],
+    enableVibrate: false,
     lightColor: '#6366f1'
-  }).then(
-    () => undefined,
-    () => {
-      // A channel that cannot be created is not a reason to lose the alert:
-      // Android falls back on its own and the user still hears about the agent.
-      // Left resolved so later posts do not retry on every notification.
-      return undefined
-    }
-  )
+  })
+    .then(
+      () => undefined,
+      () => {
+        // A channel that cannot be created is not a reason to lose the alert:
+        // Android falls back on its own and the user still hears about the agent.
+        // Left resolved so later posts do not retry on every notification.
+        return undefined
+      }
+    )
+    .then(async () => {
+      // Best effort, after the new channel exists so no post lands between:
+      // a channel that is already gone, or a build without the call, changes
+      // nothing about whether the alert is delivered.
+      for (const id of RETIRED_ANDROID_NOTIFICATION_CHANNEL_IDS) {
+        await Notifications.deleteNotificationChannelAsync(id).catch(() => undefined)
+      }
+    })
   return channelReady
 }
 
