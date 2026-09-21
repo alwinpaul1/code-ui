@@ -31,9 +31,6 @@ importers:
       '@codeui/expo-rich-paste':
         specifier: file:./packages/expo-rich-paste
         version: file:packages/expo-rich-paste(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
-      '@codeui/expo-termux-terminal':
-        specifier: file:./packages/expo-termux-terminal
-        version: file:packages/expo-termux-terminal(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
       '@expo-google-fonts/instrument-sans':
         specifier: 0.4.2
         version: 0.4.2
@@ -1215,12 +1212,6 @@ packages:
 
   '@codeui/expo-rich-paste@file:packages/expo-rich-paste':
     resolution: {directory: packages/expo-rich-paste, type: directory}
-    peerDependencies:
-      expo: '*'
-      react-native: '*'
-
-  '@codeui/expo-termux-terminal@file:packages/expo-termux-terminal':
-    resolution: {directory: packages/expo-termux-terminal, type: directory}
     peerDependencies:
       expo: '*'
       react-native: '*'
@@ -8296,11 +8287,6 @@ snapshots:
       react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
 
   '@codeui/expo-rich-paste@file:packages/expo-rich-paste(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))':
-    dependencies:
-      expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
-      react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
-
-  '@codeui/expo-termux-terminal@file:packages/expo-termux-terminal(expo@57.0.20)(react-native@0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))':
     dependencies:
       expo: 57.0.20(6c5ef6891ccf56e2045cdc427c6c3bc6)
       react-native: 0.86.3(patch_hash=9908cd33fcf41ae3c883d06bee16f2cd032bd99bb71edbe253b3d3a13fdc2380)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
