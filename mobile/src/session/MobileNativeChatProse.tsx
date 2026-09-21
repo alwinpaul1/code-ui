@@ -2,7 +2,6 @@ import { Pressable, Text } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { useChatTextSelectable } from '../components/chat-text-selectable-context'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
@@ -23,15 +22,15 @@ export function Prose({
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
 }) {
-  const selectable = useChatTextSelectable()
   if (isTextBlock(block)) {
     if (invert) {
-      // Why selectable: a prompt the user sent is the text they most often
-      // want back (2026-09-12: a long press on their own bubble did nothing
-      // while an agent's answer selected). Tap still reveals the copy control.
+      // Not selectable, on purpose: a hold on a sent prompt copies the whole
+      // prompt (MobileNativeChatMessage's Bubble, 2026-09-21), and a selectable
+      // Text would take that hold for Android's own selection first. The
+      // 2026-09-12 complaint — a hold on their own bubble did nothing — is
+      // answered by the copy now, not by selection.
       return (
         <Text
-          selectable={selectable}
           style={[
             styles.userText,
             { fontSize: TEXT_SIZE * fontScale, lineHeight: (TEXT_SIZE + 7) * fontScale }

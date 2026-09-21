@@ -16,6 +16,7 @@ import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { Prose } from './MobileNativeChatProse'
+import { triggerSuccess } from '../platform/haptics'
 import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
 import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
 import { useTheme } from '../theme/theme-context'
@@ -38,16 +39,24 @@ import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 /** Collapsed reasoning shows this many characters of its first line. */
 const REASONING_PREVIEW_CHARS = 96
 
-/** The message container: a sent prompt is tappable (it discloses its copy
- *  control); everything else is a plain view so nothing steals its touches. */
+/** A finger held this long is a copy, not a tap: Android's own long-press
+ *  timeout, the one the chat's scroll gate already keys on. */
+const HOLD_TO_COPY_MS = 400
+
+/** The message container: a sent prompt is tappable (it discloses its
+ *  controls) and copies itself on a hold (2026-09-21: "automatic copy on
+ *  long hold instead of long hold and copy button"); everything else is a
+ *  plain view so nothing steals its touches. */
 function Bubble({
   user,
   onToggle,
+  onCopy,
   style,
   children
 }: {
   user: boolean
   onToggle: () => void
+  onCopy: () => void
   style: StyleProp<ViewStyle>
   children: ReactNode
 }) {
@@ -55,7 +64,15 @@ function Bubble({
     return <View style={style}>{children}</View>
   }
   return (
-    <Pressable style={style} onPress={onToggle} accessibilityRole="button" accessibilityLabel="Sent prompt">
+    <Pressable
+      style={style}
+      onPress={onToggle}
+      onLongPress={onCopy}
+      delayLongPress={HOLD_TO_COPY_MS}
+      accessibilityRole="button"
+      accessibilityLabel="Sent prompt"
+      accessibilityHint="Hold to copy"
+    >
       {children}
     </Pressable>
   )
@@ -299,6 +316,8 @@ function MobileNativeChatMessageImpl({
       return
     }
     void Clipboard.setStringAsync(text)
+    // The hold has no button to press back, so the phone says it landed.
+    triggerSuccess()
     setCopied(true)
     if (copyTimer.current) {
       clearTimeout(copyTimer.current)
@@ -306,8 +325,10 @@ function MobileNativeChatMessageImpl({
     copyTimer.current = setTimeout(() => setCopied(false), 700)
   }
 
+  // Only Rewind lives here now; with no lane to rewind, a tap discloses
+  // nothing rather than an empty row.
   const sentPromptControls =
-    isUser && !onCancelQueued && promptControlsShown ? (
+    isUser && !onCancelQueued && promptControlsShown && onRewindToHere ? (
       <View style={styles.controlsRow}>
         {onRewindToHere ? (
           <Pressable
@@ -323,15 +344,6 @@ function MobileNativeChatMessageImpl({
             </Txt>
           </Pressable>
         ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-          onPress={handleCopy}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Copy prompt"
-        >
-          <Copy size={14} color={colors.userBubbleText} strokeWidth={2} />
-        </Pressable>
       </View>
     ) : null
 
@@ -353,6 +365,7 @@ function MobileNativeChatMessageImpl({
         <Bubble
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
+          onCopy={handleCopy}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           {segments.map((segment, segmentIndex) =>

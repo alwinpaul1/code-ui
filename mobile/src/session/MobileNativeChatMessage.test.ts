@@ -108,27 +108,41 @@ describe('MobileNativeChatMessage', () => {
     expect(work).toBeLessThan(after)
   })
 
-  it('lets the reader select the text of their own sent prompt', () => {
-    // Why: reported 2026-09-12 — press-and-hold on a sent prompt selected
-    // nothing, while an agent's answer selected. Only the agent side was
-    // ever marked selectable.
+  // 2026-09-21, the user: "automatic copy on long hold on user send prompts
+  // instead of long hold and copy button". A hold on a sent prompt now copies
+  // the whole prompt and tints the bubble, the way the agent's Copy control
+  // does; nothing to select, nothing to tap after. The bubble's text is
+  // therefore no longer a selection target — a selectable Text would take the
+  // hold for Android's own selection and the copy would never fire. The
+  // agent's prose keeps its selection (2026-09-12).
+  it('copies the whole prompt on a hold, and confirms it on the bubble', async () => {
+    const clipboard = await import('expo-clipboard')
+    const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
+    const bubble = tree.root.findByProps({ accessibilityLabel: 'Sent prompt' })
+    expect(bubble.props.delayLongPress).toBe(400)
+    act(() => {
+      bubble.props.onLongPress()
+    })
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith('run the full gate')
+    expect(bubble.props.accessibilityHint).toMatch(/hold to copy/i)
+  })
+
+  it('does not make the prompt text a selection target, so the hold reaches the bubble', () => {
     const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
     const selectable = tree.root
       .findAllByType('Text' as never)
       .filter((node) => node.props.selectable === true)
       .flatMap((node) => node.children)
       .filter((child): child is string => typeof child === 'string')
-    expect(selectable).toContain('run the full gate')
+    expect(selectable).not.toContain('run the full gate')
   })
 
-  it('offers a copy control on a sent prompt when it is tapped, never on a queued one', () => {
+  it('discloses no copy button on a tap any more, and none on a queued echo', () => {
     const sent = render(userMessage([{ type: 'text', text: 'record' }]))
-    expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
-
     act(() => {
       sent.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
     })
-    expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' }).length).toBeGreaterThan(0)
+    expect(sent.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
     act(() => sent.unmount())
 
     const queued = render(userMessage([{ type: 'text', text: 'record' }]), {
@@ -139,7 +153,7 @@ describe('MobileNativeChatMessage', () => {
   })
 
   // The VS Code extension puts "Rewind to here" on every user message; on the
-  // phone it sits beside Copy in the disclosed controls of a sent prompt, and
+  // phone it is the disclosed control of a sent prompt (Copy is the hold), and
   // only when the lane hands the row a way to rewind (the structured lane,
   // on a host that said it will). The row itself never decides that.
   it('offers Rewind to here on a sent prompt only when the lane can rewind, and hands back the message id', () => {
@@ -158,7 +172,8 @@ describe('MobileNativeChatMessage', () => {
     act(() => {
       withoutLane.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onPress()
     })
-    expect(withoutLane.root.findAllByProps({ accessibilityLabel: 'Copy prompt' }).length).toBeGreaterThan(0)
+    // Copy moved onto the hold, so with no lane to rewind a tap discloses nothing.
+    expect(withoutLane.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
     expect(withoutLane.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
   })
 
