@@ -211,12 +211,6 @@ public final class TerminalEmulator {
     /** Not really DECSET bit... - http://www.vt100.net/docs/vt510-rm/DECSACE */
     private static final int DECSET_BIT_RECTANGULAR_CHANGEATTRIBUTE = 1 << 12;
 
-    /** CODE UI: DECSET 1003, any-event mouse tracking. Upstream maps it to nothing, and a host
-     * snapshot replays xterm's one highest mouse mode, which for Claude Code is this one; with no
-     * bit the emulator saw no tracking and turned a swipe into arrow keys (device, 2026-09-21).
-     * Motion without a button is still not reported; the bit only makes the tracking count. */
-    private static final int DECSET_BIT_MOUSE_TRACKING_ANY_EVENT = 1 << 13;
-
 
     private String mTitle;
     private final Stack<String> mTitleStack = new Stack<>();
@@ -487,8 +481,6 @@ public final class TerminalEmulator {
                 return DECSET_BIT_MOUSE_TRACKING_PRESS_RELEASE;
             case 1002:
                 return DECSET_BIT_MOUSE_TRACKING_BUTTON_EVENT;
-            case 1003:
-                return DECSET_BIT_MOUSE_TRACKING_ANY_EVENT;
             case 1004:
                 return DECSET_BIT_SEND_FOCUS_EVENTS;
             case 1006:
@@ -693,11 +685,7 @@ public final class TerminalEmulator {
     }
 
     public boolean isMouseTrackingActive() {
-        return isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_PRESS_RELEASE) || isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_BUTTON_EVENT) || isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_ANY_EVENT);
-    }
-
-    public boolean isMouseAnyEventTrackingActive() {
-        return isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_ANY_EVENT);
+        return isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_PRESS_RELEASE) || isDecsetInternalBitSet(DECSET_BIT_MOUSE_TRACKING_BUTTON_EVENT);
     }
 
     private void setDefaultTabStops() {

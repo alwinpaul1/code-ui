@@ -248,7 +248,6 @@ class TermuxTerminalView(context: Context, appContext: AppContext) : ExpoView(co
     val term = session.getEmulator() ?: return
     val mouse = when {
       !term.isMouseTrackingActive -> "none"
-      term.isMouseAnyEventTrackingActive -> "any"
       term.isMouseButtonEventTrackingActive -> "drag"
       else -> "vt200"
     }
