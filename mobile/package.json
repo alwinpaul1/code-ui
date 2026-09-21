@@ -23,6 +23,7 @@
     "@codeui/expo-apk-updater": "file:./packages/expo-apk-updater",
     "@codeui/expo-background-link": "file:./packages/expo-background-link",
     "@codeui/expo-rich-paste": "file:./packages/expo-rich-paste",
+    "@codeui/expo-termux-terminal": "file:./packages/expo-termux-terminal",
     "@expo-google-fonts/instrument-sans": "0.4.2",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@noble/hashes": "1.8.0",

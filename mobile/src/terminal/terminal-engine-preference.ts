@@ -1,12 +1,13 @@
 /**
- * Which engine draws a terminal pane. 'ghostty' is libghostty-vt drawn by a
- * native view: on a corrected 51x38 grid it paints Claude Code's real repaint
- * stream at 55 distinct frames/s with no UI-thread hold over 35 ms, where
- * xterm behind the 48 ms write coalescer paints ~13. 'webview' is xterm.js
- * inside react-native-webview, the engine every release before this shipped;
- * it remains as a code path for tests, not as a user choice.
+ * Which engine draws a terminal pane. 'termux' is Termux's terminal
+ * (com.termux.view and com.termux.terminal, vendored into
+ * packages/expo-termux-terminal with a relay-fed session in place of the
+ * PTY-bound one), the engine terminal mode uses. 'ghostty' is libghostty-vt in
+ * a native view, the engine from 0.4 until this switch; 'webview' is xterm.js
+ * inside react-native-webview, the engine every release before 0.4 shipped.
+ * Both remain as code paths for tests, not as user choices.
  *
- * A flag, not a fork: both engines implement the same TerminalWebViewHandle,
+ * A flag, not a fork: every engine implements the same TerminalWebViewHandle,
  * so the session code does not know which one it has.
  */
-export type TerminalEngine = 'webview' | 'ghostty'
+export type TerminalEngine = 'webview' | 'ghostty' | 'termux'

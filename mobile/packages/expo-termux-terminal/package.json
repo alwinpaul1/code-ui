@@ -1,0 +1,13 @@
+{
+  "name": "@codeui/expo-termux-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Termux's terminal emulator and view, drawn natively and fed by the desktop's PTY over the relay. The Java under android/src/main/java/com/termux is Termux's terminal-view (GPLv3), vendored with one change: the view takes a small session interface instead of the PTY-bound TerminalSession.",
+  "license": "GPL-3.0-only",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}
