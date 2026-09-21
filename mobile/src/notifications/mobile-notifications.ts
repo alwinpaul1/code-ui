@@ -41,6 +41,31 @@ type SubscribeResult = {
 }
 
 // Per-connection subscription; a reconnect `ready` triggers watermarked catch-up (#8129) so already-pushed events aren't re-sent.
+/** How long after a foregrounding the app still counts as open. React Native
+ *  on Android can report 'background' for the first moments of a cold start,
+ *  before the first state event lands — which is when the reconnect replay
+ *  runs (phone, 2026-09-21: three old banners within 13 s of a cold open, on
+ *  a build that read the field alone). Longer than a relay dial and a replay;
+ *  shorter than a real background stint. */
+const FOREGROUND_GRACE_MS = 15_000
+
+let foregroundedAt: number | null = AppState.currentState === 'active' ? Date.now() : null
+AppState.addEventListener?.('change', (state) => {
+  if (state === 'active') {
+    foregroundedAt = Date.now()
+  }
+})
+
+/** Whether the user is looking at the app: the state field says so, or the
+ *  app came to the foreground within the grace. A headless start (the
+ *  foreground service after a reboot) never foregrounds, so it stays false. */
+function appIsOpen(): boolean {
+  if (AppState.currentState === 'active') {
+    return true
+  }
+  return foregroundedAt !== null && Date.now() - foregroundedAt < FOREGROUND_GRACE_MS
+}
+
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   configureNotificationChannel()
 
@@ -207,7 +232,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       // are silenced for good (the watermark moves past them). Only 'active'
       // is quiet; 'unknown' at a cold start shows, the safe side. A replay
       // while the app is still in the background still shows.
-      const quietUnlessActionable = () => AppState.currentState === 'active'
+      const quietUnlessActionable = () => appIsOpen()
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
       let contiguousSeq = askFrom

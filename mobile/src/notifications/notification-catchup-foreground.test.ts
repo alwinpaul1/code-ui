@@ -22,7 +22,19 @@ vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: vi.fn(),
   dismissNotificationAsync: vi.fn()
 }))
-const appState = vi.hoisted(() => ({ currentState: 'active' }))
+const appState = vi.hoisted(() => {
+  const listeners = new Set<(state: string) => void>()
+  return {
+    currentState: 'active',
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      listeners.add(listener)
+      return { remove: () => listeners.delete(listener) }
+    },
+    emit(state: string) {
+      for (const listener of listeners) listener(state)
+    }
+  }
+})
 vi.mock('react-native', () => ({
   Platform: { OS: 'android', Version: 34 },
   AppState: appState
@@ -102,24 +114,59 @@ describe('a reconnect catch-up while the app is open', () => {
   })
 
   it('still shows what was missed when the socket came back with the app in the background', async () => {
+    vi.useFakeTimers()
+    appState.currentState = 'background'
+    // Well past any foregrounding: a socket that came back on its own.
+    vi.advanceTimersByTime(20_000)
+    const { onData } = connect()
+    onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(3)
+    expect(persistedSeq()).toBe(8)
+    vi.useRealTimers()
+  })
+
+  // 2026-09-21, phone notification log: the app was opened cold at 20:51:44 and
+  // three banners for events 6–40 minutes old posted within 13 s, on the build
+  // that already had the active-state rule. React Native on Android can report
+  // 'background' for the first moments of a cold start, before the first state
+  // event lands — which is when the reconnect replay runs. An app that came to
+  // the foreground within the last few seconds is open, whatever the field says.
+  it('is quiet when the app came to the foreground seconds ago, even if the state field still reads background', async () => {
+    vi.useFakeTimers()
+    appState.currentState = 'background'
+    appState.emit('active')
     appState.currentState = 'background'
     const { onData } = connect()
     onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
-    await flushAsync()
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(50)
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled()
     expect(persistedSeq()).toBe(8)
+    vi.useRealTimers()
   })
 
-  it('shows the rest of a replay once the user leaves the app mid-way', async () => {
+  it('shows a background replay once the last foregrounding is well past', async () => {
+    vi.useFakeTimers()
+    appState.emit('active')
+    appState.currentState = 'background'
+    vi.advanceTimersByTime(20_000)
+    const { onData } = connect()
+    onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
+    await vi.advanceTimersByTimeAsync(50)
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(3)
+    vi.useRealTimers()
+  })
+
+  it('shows the rest of a replay once the user leaves the app mid-way, past the grace', async () => {
+    vi.useFakeTimers()
     appState.currentState = 'active'
+    vi.advanceTimersByTime(20_000)
     let shown = 0
     vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async () => {
       shown += 1
       return 'sched-1'
     })
     const { onData } = connect()
-    // The first event drains with the app open; the user backgrounds it before
-    // the second lands.
     let delivered = 0
     const original = vi.mocked(Notifications.getPermissionsAsync).getMockImplementation()
     vi.mocked(Notifications.getPermissionsAsync).mockImplementation(async (...args) => {
@@ -130,9 +177,10 @@ describe('a reconnect catch-up while the app is open', () => {
       return original ? original(...args) : ({ status: 'granted', canAskAgain: true } as never)
     })
     onData?.({ type: 'ready', subscriptionId: 'sub-1', epoch: 'epoch-1' })
-    await flushAsync()
+    await vi.advanceTimersByTimeAsync(50)
     expect(shown).toBe(2)
     expect(persistedSeq()).toBe(8)
+    vi.useRealTimers()
   })
 
   it('still shows a live event that arrives while the app is open', async () => {
