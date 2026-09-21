@@ -165,7 +165,9 @@ class TermuxTerminalView(context: Context, appContext: AppContext) : ExpoView(co
   fun setFontSizeDp(dp: Float) {
     if (dp <= 0f || dp == fontDp) return
     fontDp = dp
+    lastGrid = null // the cell size changed even where the grid did not; report it
     terminal.setTextSize((dp * density).roundToInt())
+    session.getEmulator()?.let { reportSize(it.mColumns, it.mRows) }
     terminal.invalidate()
   }
 
@@ -235,11 +237,20 @@ class TermuxTerminalView(context: Context, appContext: AppContext) : ExpoView(co
     reportMetrics()
   }
 
+  /** The grid, with the cell size in dp: the app widens the view to a host's column count
+   *  from it (cols × cellWidth + one pixel, since the grid floors) instead of shrinking the font. */
   private fun reportSize(columns: Int, rows: Int) {
     val grid = columns to rows
     if (grid == lastGrid) return
     lastGrid = grid
-    onResize(mapOf("cols" to columns, "rows" to rows))
+    onResize(
+      mapOf(
+        "cols" to columns,
+        "rows" to rows,
+        "cellWidth" to TerminalViewCells.cellWidth(terminal) / density,
+        "cellHeight" to TerminalViewCells.cellHeight(terminal) / density
+      )
+    )
   }
 
   private fun reportModes() {

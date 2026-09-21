@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { PixelRatio, ScrollView, StyleSheet, View } from 'react-native'
 import {
   TermuxTerminalNativeView,
   type TermuxTerminalModesEvent,
@@ -33,8 +33,11 @@ const RESET_SEQUENCE = '\u001b[?1049l\u001bc'
  *
  * Where the contract meets a native grid, the same way as the libghostty view before it:
  * - The grid is layout-driven. `init`/`resize`/`reflow` cannot set cols/rows; the view reports
- *   its own via onResize and the host fits the PTY to that. A host that keeps its own width
- *   gets the font scaled until the grid matches what it addresses.
+ *   its own via onResize and the host fits the PTY to that. A host that keeps a NARROWER width
+ *   gets the font scaled up until the grid matches what it addresses. A host that keeps a
+ *   WIDER one (the desktop window showing the tab at 126 columns, 2026-09-21) used to get the
+ *   font shrunk to 8 px; now the view is widened to that many columns at the reader's size
+ *   and pans sideways, since Claude Code keeps its text at the left.
  * - Writes go straight to the native parser; there is no bridge to coalesce for.
  * - Scroll is native: on a mouse-tracking program the view sends wheel reports through
  *   onInput; on the alternate screen without tracking it sends arrow keys, as Termux does;
@@ -63,7 +66,10 @@ export const TerminalTermuxView = forwardRef<TerminalWebViewHandle, TerminalWebV
     ref
   ) {
     const nativeRef = useRef<TermuxTerminalNativeHandle>(null)
+    /** The grid the SCREEN fits at the current font: what the host is asked to follow. A
+     *  widened view reports the host's columns instead, which are not a fit. */
     const gridRef = useRef<{ cols: number; rows: number } | null>(null)
+    const cellRef = useRef<{ width: number; height: number } | null>(null)
     const readyResolversRef = useRef<(() => void)[]>([])
     const announcedReadyRef = useRef(false)
     // expo-modules-core registers the native view after the first commit, so a command issued
@@ -71,6 +77,14 @@ export const TerminalTermuxView = forwardRef<TerminalWebViewHandle, TerminalWebV
     const pendingRef = useRef<(() => void)[]>([])
     const [hostFit, setHostFit] = useState(1)
     const hostFitRef = useRef(1)
+    /** The view's width in dp while the host holds more columns than the screen fits; null
+     *  otherwise. Termux takes floor(width / cellWidth) columns, hence the extra pixel. */
+    const [panWidth, setPanWidth] = useState<number | null>(null)
+    const panWidthRef = useRef<number | null>(null)
+    /** The view's height in dp while the host holds fewer rows than the screen fits, so its
+     *  bottom row (the prompt) sits over the keyboard instead of mid-pane; null otherwise. */
+    const [heldHeight, setHeldHeight] = useState<number | null>(null)
+    const heldHeightRef = useRef<number | null>(null)
 
     const theme = useMemo(() => termuxThemeFromMobileTheme(terminalTheme), [terminalTheme])
 
@@ -111,8 +125,15 @@ export const TerminalTermuxView = forwardRef<TerminalWebViewHandle, TerminalWebV
     )
 
     const handleResize = useCallback(
-      (event: { nativeEvent: { cols: number; rows: number } }) => {
-        gridRef.current = { cols: event.nativeEvent.cols, rows: event.nativeEvent.rows }
+      (event: { nativeEvent: { cols: number; rows: number; cellWidth: number; cellHeight: number } }) => {
+        const { cols, rows, cellWidth, cellHeight } = event.nativeEvent
+        cellRef.current = { width: cellWidth, height: cellHeight }
+        // A held size reports the host's grid, which is not what the screen fits.
+        const held = gridRef.current
+        gridRef.current = {
+          cols: panWidthRef.current === null || !held ? cols : held.cols,
+          rows: heldHeightRef.current === null || !held ? rows : held.rows
+        }
         for (const call of pendingRef.current.splice(0)) {
           call()
         }
@@ -220,11 +241,39 @@ export const TerminalTermuxView = forwardRef<TerminalWebViewHandle, TerminalWebV
             )
           })
         },
-        resize(cols) {
-          // Layout owns the grid, unless the host keeps a width of its own, in which case the
-          // font scales until the grid matches what it addresses.
+        resize(cols, rows) {
+          // Layout owns the grid, unless the host keeps a size of its own. Wider than the
+          // screen fits: the view is widened to the host's columns and pans. Narrower: the
+          // font scales up until the grid matches what the host addresses. Shorter: the view
+          // is that many rows tall, at the bottom of the pane.
           const grid = gridRef.current
-          if (!grid || cols <= 0 || grid.cols === cols) {
+          const cell = cellRef.current
+          if (!grid || !cell || cols <= 0) {
+            return
+          }
+          const density = PixelRatio.get()
+          const height = rows > 0 && rows < grid.rows ? (rows * cell.height * density + 1) / density : null
+          if (heldHeightRef.current !== height) {
+            heldHeightRef.current = height
+            setHeldHeight(height)
+          }
+          if (cols > grid.cols) {
+            const width = (cols * cell.width * density + 1) / density
+            if (panWidthRef.current !== width) {
+              panWidthRef.current = width
+              setPanWidth(width)
+            }
+            if (hostFitRef.current !== 1) {
+              hostFitRef.current = 1
+              setHostFit(1)
+            }
+            return
+          }
+          if (panWidthRef.current !== null) {
+            panWidthRef.current = null
+            setPanWidth(null)
+          }
+          if (grid.cols === cols) {
             return
           }
           const base = TERMUX_BASE_FONT_DP * textScale
@@ -266,25 +315,50 @@ export const TerminalTermuxView = forwardRef<TerminalWebViewHandle, TerminalWebV
       [textScale, whenReady]
     )
 
+    const terminal = (
+      <TermuxTerminalNativeView
+        ref={nativeRef}
+        style={
+          panWidth === null && heldHeight === null
+            ? styles.fill
+            : { width: panWidth ?? '100%', height: heldHeight ?? '100%' }
+        }
+        fontSize={TERMUX_BASE_FONT_DP * textScale * hostFit}
+        theme={theme}
+        onResize={handleResize}
+        onModes={handleModes}
+        onInput={handleInput}
+        onSelection={handleSelection}
+        onCopy={handleCopy}
+        onFontSize={handleFontSize}
+        onTap={handleTap}
+        onMetrics={handleMetrics}
+      />
+    )
     return (
-      <View style={style}>
-        <TermuxTerminalNativeView
-          ref={nativeRef}
-          style={styles.fill}
-          fontSize={TERMUX_BASE_FONT_DP * textScale * hostFit}
-          theme={theme}
-          onResize={handleResize}
-          onModes={handleModes}
-          onInput={handleInput}
-          onSelection={handleSelection}
-          onCopy={handleCopy}
-          onFontSize={handleFontSize}
-          onTap={handleTap}
-          onMetrics={handleMetrics}
-        />
+      <View style={[style, heldHeight === null ? null : styles.paneBottom]} testID="termux-terminal-pane">
+        {panWidth === null ? (
+          terminal
+        ) : (
+          // Horizontal only: Termux keeps every vertical gesture (its own transcript, or wheel
+          // reports for a program that tracks the mouse), and the pane pans sideways.
+          <ScrollView
+            horizontal
+            bounces={false}
+            showsHorizontalScrollIndicator
+            style={styles.fill}
+            contentContainerStyle={styles.panContent}
+          >
+            {terminal}
+          </ScrollView>
+        )}
       </View>
     )
   }
 )
 
-const styles = StyleSheet.create({ fill: { flex: 1 } })
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  panContent: { flexGrow: 1 },
+  paneBottom: { justifyContent: 'flex-end' }
+})
