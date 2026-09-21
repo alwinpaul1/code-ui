@@ -52,7 +52,13 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
   } = model
   return (
     <View style={styles.statusBar}>
-      <TasksButton hitSlop={tapTargetHitSlop(styles.backButton)} style={styles.backButton} onPress={() => router.back()}>
+      <TasksButton
+        hitSlop={tapTargetHitSlop(styles.backButton)}
+        style={styles.backButton}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+      >
         <ChevronLeft size={22} color={colors.textPrimary} />
       </TasksButton>
       <View style={styles.titleWrap}>

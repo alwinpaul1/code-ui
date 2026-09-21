@@ -94,9 +94,15 @@ const PRESS_FEEDBACK_DECLARATIONS = 'f8464f6f6335d926853910de3afe7af6441b21d9c11
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
-const PROVIDER_RPC_SEMANTICS = '83be444130c10fbf983edd37bb6fef5982345f7f2607c6585ea928156a0be568'
+// 2026-09-21, upstream #21715 (C2.8): the status bar's Back control gains `accessibilityRole="button"`
+// and `accessibilityLabel="Back"`, for a shell with no native chrome behind it to announce one. On this
+// fork's TasksButton (which already carried the hitSlop upstream added there) that is the two JSX props
+// only: `semantics` 3,269 -> 3,271 (the host signature widens and the two strings "button" and "Back"
+// arrive); the render-token stream gains the eight tokens the two attributes are, 35,291 -> 35,299.
+// Hooks, statements, declarations and styles do not move.
+const A11Y_BACK_SEMANTICS = '880bc90e83fd6a85b59852abf624c525909dd9caa73b31af102aa4909139faec'
 const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
-const TAP_TARGET_RENDER_TREE = '7916ba63543b7c9f5e559000c2cd3699cdbfa1f2fbaad3ffff53a67c67322ec5'
+const A11Y_BACK_RENDER_TREE = '71d021c1f5be406513850a3a32f8487dc352edbc017a2e7c37b5c1a5da131369'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -123,8 +129,8 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_269)
-    expect(hash(semantics)).toBe(PROVIDER_RPC_SEMANTICS)
+    expect(semantics.split('\n')).toHaveLength(3_271)
+    expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
   // 35_287 -> 35_291: `raised={selected}` on the GitHub page picker row, four
@@ -141,8 +147,8 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_291)
-    expect(hash(tokens)).toBe(TAP_TARGET_RENDER_TREE)
+    expect(tokens).toHaveLength(35_299)
+    expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 
   it('preserves every StyleSheet property and value', () => {
