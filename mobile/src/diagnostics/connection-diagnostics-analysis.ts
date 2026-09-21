@@ -168,7 +168,16 @@ function diagnoseFailure(
   // closing 1006 under "no single failure cause"). Nothing else is tried
   // because there is nothing else: no Relay credential for this desktop.
   // Relay recovery pending means there IS one, and the branches above own it.
-  if (args.pendingPath !== 'relay' && isPrivateLanAddress(args.endpoint) && leftNetworkSince(args.entries)) {
+  // Two ways to know the phone is off that network: a "Network changed" entry
+  // with only closes after it, or the phone saying it is on cellular now with
+  // only closes since the session began (a cold start on mobile data has no
+  // change to record; Jev 0.77 that this case is common, 2026-09-21).
+  if (
+    args.pendingPath !== 'relay' &&
+    isPrivateLanAddress(args.endpoint) &&
+    (leftNetworkSince(args.entries) ||
+      (args.networkType === 'CELLULAR' && closedOnlySinceSessionStart(args.entries)))
+  ) {
     const address = privateAddressLabel(args.endpoint)
     const where =
       args.networkType === 'CELLULAR' ? 'the phone is on mobile data' : 'the phone’s network changed'
@@ -207,6 +216,16 @@ function leftNetworkSince(entries: readonly ConnectionLogEntry[]): boolean {
     return false
   }
   const since = entries.slice(changed + 1)
+  return (
+    since.some((entry) => /websocket closed/i.test(entry.message)) &&
+    !since.some((entry) => entry.message === 'Authenticated' || entry.path === 'relay')
+  )
+}
+
+/** Since the session began, sockets have only closed: nothing authenticated,
+ *  no relay. The reading a cold start on cellular leaves behind. */
+function closedOnlySinceSessionStart(entries: readonly ConnectionLogEntry[]): boolean {
+  const since = entries.slice(entries.findLastIndex(isSessionBoundary) + 1)
   return (
     since.some((entry) => /websocket closed/i.test(entry.message)) &&
     !since.some((entry) => entry.message === 'Authenticated' || entry.path === 'relay')

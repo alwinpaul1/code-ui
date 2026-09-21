@@ -499,6 +499,30 @@ describe('a desktop known only by a private network address, after the phone lef
     ).not.toMatch(/private network address/)
   })
 
+  it('fires on a cold start on mobile data, where there is no network change to see, only closes', () => {
+    // App killed on the Wi‑Fi, opened on the train: the log starts on cellular.
+    const coldStart: ConnectionLogEntry[] = [
+      { id: '1', ts: 10, level: 'info', message: 'Opening WebSocket', detail: '192.168.1.132:6768' },
+      { id: '2', ts: 14, level: 'warn', message: 'WebSocket closed', detail: 'Close code 1006; reconnect scheduled' },
+      { id: '3', ts: 14, level: 'info', message: 'Reconnecting (attempt 2)', detail: '192.168.1.132:6768' },
+      { id: '4', ts: 24, level: 'warn', message: 'WebSocket closed', detail: 'Close code 1006; reconnect scheduled' }
+    ]
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://192.168.1.132:6768',
+        state: 'connecting',
+        pendingPath: null,
+        entries: coldStart,
+        networkType: 'CELLULAR'
+      }).likelyCause
+    ).toMatch(/private network address \(192\.168\.1\.132\).*the phone is on mobile data/)
+    // The same log on Wi‑Fi is an ordinary LAN outage: the desktop may be asleep.
+    expect(
+      diagnoseConnection({ endpoint: 'ws://192.168.1.132:6768', state: 'connecting', pendingPath: null, entries: coldStart, networkType: 'WIFI' })
+        .likelyCause
+    ).not.toMatch(/private network address/)
+  })
+
   it('does not fire on a private address that has not seen a network change, which is an ordinary LAN outage', () => {
     const noChange = kavin.filter((entry) => entry.message !== 'Network changed')
     expect(
