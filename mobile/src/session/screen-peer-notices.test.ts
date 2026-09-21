@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { PEER_MESSAGE_PRESENTATION } from './mobile-native-chat-peer-messages'
-import {
-  PEER_NOTICE_PRESENTATION,
-  observeScreenPeerNotices,
-  withScreenPeerNotices,
-  type ScreenPeerNotice
-} from './screen-peer-notices'
+import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
+import { observeScreenPeerNotices, withScreenPeerNotices } from './screen-peer-notices'
 
 function row(id: string, role: NativeChatMessage['role'], text: string, presentation?: string): NativeChatMessage {
   return { id, role, timestamp: 10, source: 'transcript', blocks: [{ type: 'text', text, ...(presentation ? { presentation } : {}) }] }
 }
-const peerRow = (id: string, sender: string) => row(id, 'system', `From ${sender}\nhello`, PEER_MESSAGE_PRESENTATION)
+/** A transcript peer turn as the fold draws it: the boilerplate bubble, no sender in sight. */
+const peerRow = (id: string, _sender: string) => row(id, 'system', PEER_BOILERPLATE_TEXT, PEER_BOILERPLATE_PRESENTATION)
 const textOf = (message: NativeChatMessage) => (message.blocks[0]?.type === 'text' ? message.blocks[0].text : '')
 
 describe('peer message rows read off the screen, placed into the chat', () => {
@@ -33,28 +29,19 @@ describe('peer message rows read off the screen, placed into the chat', () => {
     ])
   })
 
-  it('remembers the message when the row carried it, and draws it as the same card a transcript row gets', () => {
+  // 2026-09-21: the user wants the same bubble before every subagent reply
+  // and no "From <sender>" card, whichever surface the message came from.
+  // The screen row's body is remembered but not drawn.
+  it('draws a notice as the same boilerplate bubble a transcript turn gets, right after its anchor, whether or not the row carried the message', () => {
     const seen = observeScreenPeerNotices([], [{ sender: 'code-ui-6f', body: 'Capture probe: reply with received.' }], 'a1', 5)
     expect(seen[0]).toMatchObject({ sender: 'code-ui-6f', body: 'Capture probe: reply with received.' })
     const out = withScreenPeerNotices(folded, seen)
-    expect(out[2]?.blocks[0]).toMatchObject({
-      presentation: PEER_MESSAGE_PRESENTATION,
-      text: 'From code-ui-6f\nCapture probe: reply with received.'
-    })
-  })
-
-  it('draws each notice as a one-line row right after its anchor', () => {
-    const notices: ScreenPeerNotice[] = [{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5 }]
-    const out = withScreenPeerNotices(folded, notices)
-    expect(out.map((message) => message.id)).toEqual(['u1', 'a1', 'peer-notice:probe:1', 'a2'])
+    expect(out.map((message) => message.id)).toEqual(['u1', 'a1', 'peer-notice:code-ui-6f:1', 'a2'])
     expect(out[2]?.role).toBe('system')
-    expect(out[2]?.blocks[0]).toMatchObject({ presentation: PEER_NOTICE_PRESENTATION, text: 'Message from @probe' })
-  })
+    expect(out[2]?.blocks).toEqual([{ type: 'text', presentation: PEER_BOILERPLATE_PRESENTATION, text: PEER_BOILERPLATE_TEXT }])
 
-  it('never lands between a peer card and its boilerplate bubble when anchored at the card', () => {
-    const withBubble = [row('u1', 'user', 'start'), peerRow('t1', 'probe'), row('t1:peer-boilerplate', 'system', 'Another Claude session sent a message:', 'peer-boilerplate'), row('a2', 'assistant', 'done')]
-    const out = withScreenPeerNotices(withBubble, [{ id: 'n', sender: 'other', anchorId: 't1', sightedAt: 5 }])
-    expect(out.map((message) => message.id)).toEqual(['u1', 't1', 't1:peer-boilerplate', 'n', 'a2'])
+    const bare = withScreenPeerNotices(folded, [{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5 }])
+    expect(bare[2]?.blocks).toEqual([{ type: 'text', presentation: PEER_BOILERPLATE_PRESENTATION, text: PEER_BOILERPLATE_TEXT }])
   })
 
   it('draws a notice whose anchor has left the loaded window at the top, not nowhere', () => {
@@ -79,14 +66,19 @@ describe('peer message rows read off the screen, placed into the chat', () => {
     expect(out.map((message) => message.id)).toEqual(['u1', 'a1', 'a2', 'p1'])
   })
 
-  it('does not step aside for a transcript message from before the sighting, or from another sender', () => {
+  it('does not step aside for a transcript message from before the sighting', () => {
     const earlier = [peerRow('p0', 'probe'), ...folded]
     expect(withScreenPeerNotices(earlier, [{ id: 'n', sender: 'probe', anchorId: 'a1', sightedAt: 5 }]).map((m) => m.id)).toEqual([
       'p0', 'u1', 'a1', 'n', 'a2'
     ])
+  })
+
+  it('steps aside for a landed bubble whoever sent it: every bubble reads the same, so a mispairing changes nothing on screen', () => {
+    // The transcript bubble names no sender any more (the card that did is
+    // gone), so retirement pairs notices with landed bubbles in order.
     const other = [folded[0]!, folded[1]!, peerRow('p1', 'reviewer'), folded[2]!]
     expect(withScreenPeerNotices(other, [{ id: 'n', sender: 'probe', anchorId: 'a1', sightedAt: 5 }]).map((m) => m.id)).toEqual([
-      'u1', 'a1', 'n', 'p1', 'a2'
+      'u1', 'a1', 'p1', 'a2'
     ])
   })
 
@@ -99,6 +91,6 @@ describe('peer message rows read off the screen, placed into the chat', () => {
 
   it('returns the same array with no notices', () => {
     expect(withScreenPeerNotices(folded, [])).toBe(folded)
-    expect(textOf(withScreenPeerNotices([], [{ id: 'n', sender: 'x', anchorId: null, sightedAt: 1 }])[0]!)).toBe('Message from @x')
+    expect(textOf(withScreenPeerNotices([], [{ id: 'n', sender: 'x', anchorId: null, sightedAt: 1 }])[0]!)).toBe(PEER_BOILERPLATE_TEXT)
   })
 })

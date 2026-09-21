@@ -5,8 +5,6 @@ import type { NativeChatTextBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { PEER_MESSAGE_PRESENTATION, peerMessageLabelAndBody } from './mobile-native-chat-peer-messages'
-import { PEER_NOTICE_PRESENTATION } from './screen-peer-notices'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -20,8 +18,6 @@ export function isRenderableNativeChatNotice(block: NativeChatTextBlock): boolea
   return (
     block.presentation === 'compaction' ||
     block.presentation === 'plan-document' ||
-    block.presentation === PEER_MESSAGE_PRESENTATION ||
-    block.presentation === PEER_NOTICE_PRESENTATION ||
     block.tone === 'warning' ||
     block.tone === 'error' ||
     block.tone === 'notice'
@@ -54,36 +50,6 @@ export function MobileNativeChatNoticeRow({
         <View style={styles.rule} />
         <Txt variant="caption" tone="muted">
           {NATIVE_CHAT_NOTICE_COPY.compaction}
-        </Txt>
-        <View style={styles.rule} />
-      </View>
-    )
-  }
-
-  // A message from another session or a subagent: the sender on top, the
-  // message as it was written. A card like the plan's, not a user bubble:
-  // nobody here typed it (mobile-native-chat-peer-messages.ts).
-  if (block.presentation === PEER_MESSAGE_PRESENTATION) {
-    const { label, body } = peerMessageLabelAndBody(block.text)
-    return (
-      <View style={styles.card} accessibilityLabel={label} testID="native-chat-peer-message">
-        <Txt variant="caption" weight="semibold" tone="secondary">
-          {label}
-        </Txt>
-        <MobileMarkdown content={body} textScale={fontScale} onOpenFile={onOpenFile} />
-      </View>
-    )
-  }
-
-  // A peer message the agent's screen announced but the transcript never
-  // carried: who wrote, and nothing more, because that is all the phone knows
-  // (screen-peer-notices.ts). One muted line, like the compaction rule.
-  if (block.presentation === PEER_NOTICE_PRESENTATION) {
-    return (
-      <View style={styles.compaction} accessibilityLabel={block.text} testID="native-chat-peer-notice">
-        <View style={styles.rule} />
-        <Txt variant="caption" tone="muted">
-          {block.text}
         </Txt>
         <View style={styles.rule} />
       </View>

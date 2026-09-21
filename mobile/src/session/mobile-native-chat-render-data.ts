@@ -5,7 +5,7 @@ import {
 } from '../../../src/shared/native-chat-empty-state'
 import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
-import { afterPeerBoilerplate, isPeerBoilerplateRow, surfacePeerMessages } from './mobile-native-chat-peer-messages'
+import { isPeerBoilerplateRow, surfacePeerMessages } from './mobile-native-chat-peer-messages'
 import { withoutPasteWrappers, withoutPasteWrappersInRows } from './mobile-native-chat-paste-wrapper'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
@@ -87,7 +87,7 @@ export function foldMobileNativeChatMessages(
   // A slash command's envelope row is the user's turn; surfaced before the
   // noise filter would hide it (mobile-native-chat-command-turns.ts).
   // A message from another session or a subagent is likewise hidden by that
-  // filter; surfaced as a labelled notice (mobile-native-chat-peer-messages.ts).
+  // filter; surfaced as the harness's bubble (mobile-native-chat-peer-messages.ts).
   const foldedForImages = foldQueuedImageTurns(
     withoutPasteWrappersInRows(surfacePeerMessages(surfaceCommandTurns(messages)))
   )
@@ -341,18 +341,13 @@ export function buildMobileNativeChatTransientData({
   }
 
   const data: NativeChatMessage[] = [...leadingPending]
-  renderedFolded.forEach((message, index) => {
+  for (const message of renderedFolded) {
     data.push(message)
-    // An echo anchored at a peer card is drawn after the card's bubble, or
-    // it would split the two (mobile-native-chat-peer-messages.ts).
-    if (afterPeerBoilerplate(renderedFolded, index) !== index) {
-      return
-    }
-    const attached = anchoredPending.get(message.id) ?? (index > 0 && afterPeerBoilerplate(renderedFolded, index - 1) === index ? anchoredPending.get(renderedFolded[index - 1]!.id) : undefined)
+    const attached = anchoredPending.get(message.id)
     if (attached) {
       data.push(...attached)
     }
-  })
+  }
   if (streaming) {
     data.push({
       id: 'streaming',

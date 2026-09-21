@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { PEER_MESSAGE_PRESENTATION, afterPeerBoilerplate, peerMessageLabelAndBody } from './mobile-native-chat-peer-messages'
+import { isPeerBoilerplateRow, peerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 /**
@@ -8,16 +8,18 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * A subagent's row says only who wrote (`› Message from @probe (ctrl+o to
  * expand)`); another session's row carries the message too
  * (mobile-terminal-peer-notices.ts). The phone remembers each sighting with
- * the id of the last folded row at that moment and draws it after that row:
- * the message as a card when the row carried it, else a one-line notice, "a
- * message from that agent arrived about here", which is all it knows. When
- * the transcript later carries the message itself (a row Orca
- * did publish, surfaced by mobile-native-chat-peer-messages.ts) after that
- * anchor, the notice steps aside for it, one notice per row; the many that
- * never land stay for the session (Jev 0.64 that this is honest, 2026-09-20).
+ * the id of the last folded row at that moment and draws it after that row
+ * as the same bubble a transcript turn gets: the harness's boilerplate, the
+ * way the Claude app shows a peer message, and nothing of the message or the
+ * sender (the user's call, 2026-09-21; the earlier card and one-liner are
+ * gone). The body is still remembered for what follows. When the transcript
+ * later carries the turn itself (a row Orca did publish, surfaced by
+ * mobile-native-chat-peer-messages.ts) at or after that anchor, the notice
+ * steps aside for it, one notice per landed bubble in order; every bubble
+ * reads the same, so pairing by order rather than sender changes nothing on
+ * screen. The many that never land stay for the session (Jev 0.64 that this
+ * is honest, 2026-09-20).
  */
-
-export const PEER_NOTICE_PRESENTATION = 'peer-notice'
 
 export type ScreenPeerNotice = {
   id: string
@@ -74,8 +76,8 @@ export function withScreenPeerNotices(
   }
   const index = new Map<string, number>()
   folded.forEach((message, position) => index.set(message.id, position))
-  // A landed row retires at most one notice: the earliest sighting of that
-  // sender anchored before the row.
+  // A landed bubble retires at most one notice: the earliest sighting
+  // anchored at or before the row.
   const claimed = new Set<number>()
   const after = new Map<number, NativeChatMessage[]>()
   const atTop: NativeChatMessage[] = []
@@ -87,22 +89,20 @@ export function withScreenPeerNotices(
     // case the anchor IS the landed row.
     const landed = folded.findIndex(
       (message, position) =>
-        !claimed.has(position) &&
-        (anchorAt === null || position >= anchorAt) &&
-        landedPeerSender(message) === notice.sender
+        !claimed.has(position) && (anchorAt === null || position >= anchorAt) && isPeerBoilerplateRow(message)
     )
     if (landed !== -1) {
       claimed.add(landed)
       continue
     }
-    // A later message from the same sender is drawn after the earlier ones
-    // the transcript already carries, not between the anchor and them.
+    // A later message is drawn after the earlier ones the transcript already
+    // carries, not between the anchor and them.
     for (const position of claimed) {
-      if (anchorAt !== null && position >= anchorAt && landedPeerSender(folded[position]!) === notice.sender) {
+      if (anchorAt !== null && position >= anchorAt) {
         anchorAt = position
       }
     }
-    const drawn = noticeRow(notice)
+    const drawn = peerBoilerplateRow(notice.id, notice.sightedAt)
     if (anchorAt === null) {
       atEnd.push(drawn)
     } else if (anchorAt < 0) {
@@ -110,11 +110,9 @@ export function withScreenPeerNotices(
       // everything loaded, so the top is the honest place.
       atTop.push(drawn)
     } else {
-      // After the anchor's boilerplate bubble when it has one, never between.
-      const at = afterPeerBoilerplate(folded, anchorAt)
-      const list = after.get(at) ?? []
+      const list = after.get(anchorAt) ?? []
       list.push(drawn)
-      after.set(at, list)
+      after.set(anchorAt, list)
     }
   }
   if (claimed.size === notices.length) {
@@ -130,26 +128,4 @@ export function withScreenPeerNotices(
   })
   out.push(...atEnd)
   return out
-}
-
-function landedPeerSender(message: NativeChatMessage): string | null {
-  if (message.role !== 'system') {
-    return null
-  }
-  const block = message.blocks[0]
-  if (!block || block.type !== 'text' || block.presentation !== PEER_MESSAGE_PRESENTATION) {
-    return null
-  }
-  const { label } = peerMessageLabelAndBody(block.text)
-  return label.startsWith('From ') ? label.slice(5) : null
-}
-
-function noticeRow(notice: ScreenPeerNotice): NativeChatMessage {
-  // With the message: the same card a transcript row gets, so the reader
-  // cannot tell which surface it came from and does not need to.
-  const block =
-    notice.body === undefined
-      ? { type: 'text' as const, text: `Message from @${notice.sender}`, presentation: PEER_NOTICE_PRESENTATION }
-      : { type: 'text' as const, text: `From ${notice.sender}\n${notice.body}`, presentation: PEER_MESSAGE_PRESENTATION }
-  return { id: notice.id, role: 'system', timestamp: notice.sightedAt, source: 'transcript', blocks: [block] }
 }
