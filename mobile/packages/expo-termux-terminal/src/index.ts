@@ -30,10 +30,7 @@ export type TermuxTerminalNativeProps = {
   fontSize?: number
   theme?: TermuxTerminalTheme
   onInput?: (event: NativeSyntheticEvent<{ text: string; data: string }>) => void
-  /** The grid and the cell size in dp; `cols` is floor(width / cellWidth). */
-  onResize?: (
-    event: NativeSyntheticEvent<{ cols: number; rows: number; cellWidth: number; cellHeight: number }>
-  ) => void
+  onResize?: (event: NativeSyntheticEvent<{ cols: number; rows: number }>) => void
   onModes?: (event: NativeSyntheticEvent<TermuxTerminalModesEvent>) => void
   onSelection?: (event: NativeSyntheticEvent<{ active: boolean }>) => void
   onCopy?: (event: NativeSyntheticEvent<{ text: string }>) => void

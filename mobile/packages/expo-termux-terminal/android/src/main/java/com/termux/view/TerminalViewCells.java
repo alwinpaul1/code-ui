@@ -31,16 +31,6 @@ public final class TerminalViewCells {
         return Math.max(-transcriptRows, Math.min(emulator.mRows - 1, row));
     }
 
-    /** A cell's width in pixels, as the renderer measured the font (a float; the grid floors). */
-    public static float cellWidth(TerminalView view) {
-        return view.mRenderer == null ? 0f : view.mRenderer.mFontWidth;
-    }
-
-    /** A row's height in pixels. */
-    public static int cellHeight(TerminalView view) {
-        return view.mRenderer == null ? 0 : view.mRenderer.mFontLineSpacing;
-    }
-
     /** One row's text, trailing blanks trimmed, without joining wrapped neighbours. */
     public static String rowText(TerminalEmulator emulator, int row) {
         return emulator.getScreen().getSelectedText(0, row, emulator.mColumns - 1, row, false, false);

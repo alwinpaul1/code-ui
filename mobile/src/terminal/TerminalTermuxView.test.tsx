@@ -28,16 +28,12 @@ vi.mock('@codeui/expo-termux-terminal', async () => {
 })
 vi.mock('react-native', () => ({
   View: 'View',
-  ScrollView: 'ScrollView',
-  PixelRatio: { get: () => 2.5 },
   StyleSheet: { create: (styles: unknown) => styles }
 }))
 
 import { TerminalTermuxView } from './TerminalTermuxView'
 
 const RESET = '\u001b[?1049l\u001bc'
-
-let renderer: ReturnType<typeof create> | null = null
 
 function mount(overrides: Record<string, unknown> = {}) {
   const ref = createRef<TerminalWebViewHandle>()
@@ -49,7 +45,7 @@ function mount(overrides: Record<string, unknown> = {}) {
   native.writeText.mockClear()
   native.cancelSelect.mockClear()
   act(() => {
-    renderer = create(
+    create(
       createElement(TerminalTermuxView, {
         ref,
         onModesChanged,
@@ -195,80 +191,20 @@ describe('the Termux engine behind the terminal handle', () => {
     expect(onTerminalQueryReply).not.toHaveBeenCalled()
   })
 
-  // 2026-09-21, from the phone: with the desktop window showing the tab the
-  // PTY stays at the desktop's 126 columns, and shrinking 13 dp text until 126
-  // columns fit a phone gave 8 px glyphs nobody can read. The old engines did
-  // the same. Now the grid is widened to the host's columns at the reader's
-  // size and the pane pans sideways; Claude Code keeps its text at the left.
-  it('keeps the font at the reader\'s size and widens the grid to pan when the host holds a wider width', () => {
+  it('scales its font so the grid matches a host that keeps its own width', () => {
     const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
+    fire('onResize', { cols: 49, rows: 38 })
 
     act(() => {
-      ref.current!.resize(126, 26)
+      ref.current!.resize(51, 38)
     })
 
-    expect(native.props?.fontSize).toBe(13)
-    // Termux takes floor(width / cellWidth) columns: the host's count plus one pixel.
-    expect(native.props?.style).toMatchObject({ width: (126 * 7.8 * 2.5 + 1) / 2.5 })
-    expect(native.props?.style).toMatchObject({ width: expect.closeTo(983.2, 3) })
-  })
-
-  it('still reports the grid the SCREEN fits, not the widened one, so the host can follow the phone', async () => {
-    const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-    act(() => {
-      ref.current!.resize(126, 26)
-    })
-    // The widened view lays out and reports the host's columns; that is not the fit.
-    fire('onResize', { cols: 126, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-
-    expect(await ref.current!.measureFitDimensions()).toEqual({ cols: 49, rows: 38 })
-  })
-
-  it('returns to the screen width once the host follows the phone again', () => {
-    const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-    act(() => {
-      ref.current!.resize(126, 26)
-    })
-    fire('onResize', { cols: 126, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-
-    act(() => {
-      ref.current!.resize(49, 38)
-    })
-
-    expect(native.props?.style).not.toMatchObject({ width: expect.any(Number) })
-  })
-
-  it("sits a host's shorter grid at the bottom of the pane, so its prompt row is over the keyboard, not mid-screen", () => {
-    const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-
-    act(() => {
-      ref.current!.resize(126, 26)
-    })
-
-    expect(native.props?.style).toMatchObject({ height: (26 * 15.6 * 2.5 + 1) / 2.5 })
-    const pane = renderer!.root.findAllByType('View' as never).find((node) => node.props.testID === 'termux-terminal-pane')
-    expect(pane?.props.style).toEqual(expect.arrayContaining([expect.objectContaining({ justifyContent: 'flex-end' })]))
-  })
-
-  it('scales the font UP for a host narrower than the phone, so the text fills the width', () => {
-    const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
-
-    act(() => {
-      ref.current!.resize(45, 38)
-    })
-
-    expect(native.props?.fontSize).toBeCloseTo((13 * 49) / 45, 5)
-    expect(native.props?.style).not.toMatchObject({ width: expect.any(Number) })
+    expect(native.props?.fontSize).toBeCloseTo((13 * 49) / 51, 5)
   })
 
   it('leaves the font alone when the host follows the view', () => {
     const { ref, fire } = mount()
-    fire('onResize', { cols: 49, rows: 38, cellWidth: 7.8, cellHeight: 15.6 })
+    fire('onResize', { cols: 49, rows: 38 })
 
     act(() => {
       ref.current!.resize(49, 38)
