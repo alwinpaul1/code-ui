@@ -3,9 +3,9 @@ import {
   formatNativeChatEmptyStateCopy,
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
-import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
-import { surfacePeerMessages } from './mobile-native-chat-peer-messages'
+import { afterPeerBoilerplate, isPeerBoilerplateRow, surfacePeerMessages } from './mobile-native-chat-peer-messages'
 import { withoutPasteWrappers, withoutPasteWrappersInRows } from './mobile-native-chat-paste-wrapper'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
@@ -98,7 +98,7 @@ export function foldMobileNativeChatMessages(
     normalizeImageTranscriptMessages(foldedForImages)
   )
   if (!splitAfterIds?.size) {
-    return stripNoiseMessages(foldToolMessages(normalized))
+    return stripNoise(foldToolMessages(normalized))
   }
   // A send the phone made mid-turn is anchored after the row it was sent
   // against; the tool calls that came after it must not fold backward past
@@ -114,7 +114,15 @@ export function foldMobileNativeChatMessages(
     }
   }
   folded.push(...foldToolMessages(segment))
-  return stripNoiseMessages(folded)
+  return stripNoise(folded)
+}
+
+/** Orca's filter, minus one row of the phone's own making: the peer
+ *  boilerplate bubble starts with the very words the filter hides a turn by
+ *  ("Another Claude session sent a message"), and the filter is vendored.
+ *  Keyed on a hint only this code writes, so nothing else slips through. */
+function stripNoise(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
+  return messages.filter((message) => isPeerBoilerplateRow(message) || !isNoiseMessage(message))
 }
 
 /** Previews arrive keyed by RAW record id, because the hook that fetches them
@@ -333,13 +341,18 @@ export function buildMobileNativeChatTransientData({
   }
 
   const data: NativeChatMessage[] = [...leadingPending]
-  for (const message of renderedFolded) {
+  renderedFolded.forEach((message, index) => {
     data.push(message)
-    const attached = anchoredPending.get(message.id)
+    // An echo anchored at a peer card is drawn after the card's bubble, or
+    // it would split the two (mobile-native-chat-peer-messages.ts).
+    if (afterPeerBoilerplate(renderedFolded, index) !== index) {
+      return
+    }
+    const attached = anchoredPending.get(message.id) ?? (index > 0 && afterPeerBoilerplate(renderedFolded, index - 1) === index ? anchoredPending.get(renderedFolded[index - 1]!.id) : undefined)
     if (attached) {
       data.push(...attached)
     }
-  }
+  })
   if (streaming) {
     data.push({
       id: 'streaming',

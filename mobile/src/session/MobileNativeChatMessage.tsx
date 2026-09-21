@@ -26,6 +26,8 @@ import {
   type ChatMessageStyles
 } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
+import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
@@ -262,6 +264,11 @@ function MobileNativeChatMessageImpl({
         />
       </View>
     )
+  }
+
+  // The harness's words around a peer message, as the Claude app draws them.
+  if (isPeerBoilerplateRow(message)) {
+    return <MobileNativeChatPeerBoilerplateRow message={message} fontScale={fontScale} styles={styles} />
   }
 
   // A host-authored notice — a compaction boundary, a plan document, a toned

@@ -51,6 +51,12 @@ describe('peer message rows read off the screen, placed into the chat', () => {
     expect(out[2]?.blocks[0]).toMatchObject({ presentation: PEER_NOTICE_PRESENTATION, text: 'Message from @probe' })
   })
 
+  it('never lands between a peer card and its boilerplate bubble when anchored at the card', () => {
+    const withBubble = [row('u1', 'user', 'start'), peerRow('t1', 'probe'), row('t1:peer-boilerplate', 'system', 'Another Claude session sent a message:', 'peer-boilerplate'), row('a2', 'assistant', 'done')]
+    const out = withScreenPeerNotices(withBubble, [{ id: 'n', sender: 'other', anchorId: 't1', sightedAt: 5 }])
+    expect(out.map((message) => message.id)).toEqual(['u1', 't1', 't1:peer-boilerplate', 'n', 'a2'])
+  })
+
   it('draws a notice whose anchor has left the loaded window at the top, not nowhere', () => {
     const out = withScreenPeerNotices(folded, [{ id: 'n', sender: 'probe', anchorId: 'gone', sightedAt: 5 }])
     expect(out.map((message) => message.id)).toEqual(['n', 'u1', 'a1', 'a2'])

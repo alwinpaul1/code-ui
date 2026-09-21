@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
 import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import {
   pendingFoldBoundaries,
@@ -700,6 +701,8 @@ describe('remembered echoes and the loaded window', () => {
 // 2026-09-20, from the phone beside the Claude app: a subagent's reply
 // reached the session and the phone showed only the session's answer to it.
 // Orca's noise filter hides the injected turn; the reply had no visible cause.
+// Claude Code only: Codex has no peer-message turn of this shape, so there is
+// no second agent to cover here.
 describe('a message from another session in the transcript', () => {
   const PEER = `Another Claude session sent a message:
 <cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="observer-sessions-17" from-mode="prompting">
@@ -716,10 +719,32 @@ This came from another Claude session — not typed by your user, but very likel
       user('u2', PEER),
       assistant('a1', 'Here is the diff.')
     ])
-    expect(folded.map((row) => row.role)).toEqual(['user', 'system', 'assistant'])
+    expect(folded.map((row) => row.role)).toEqual(['user', 'system', 'system', 'assistant'])
     const notice = folded[1]!.blocks[0]
     expect(notice?.type === 'text' ? notice.text : '').toBe(
       'From observer-sessions-17\nCan you provide the git diff for the review target files?'
     )
+  })
+
+  // 2026-09-21: the bubble's text begins with the very words the vendored
+  // noise filter hides a turn by, so a fold that let the card through and
+  // dropped the bubble would show the message with no bubble before the reply.
+  it('keeps the boilerplate bubble through the noise filter, between the card and the reply', () => {
+    const folded = foldMobileNativeChatMessages([user('u2', PEER), assistant('a1', 'Here is the diff.')])
+    expect(folded.map((row) => row.id)).toEqual(['u2', 'u2:peer-boilerplate', 'a1'])
+    // The vendored filter WOULD hide it; the fold's exemption is the only reason it is here.
+    expect(isNoiseMessage(folded[1]!)).toBe(true)
+    expect(folded[1]!.blocks[0]).toMatchObject({
+      presentation: 'peer-boilerplate',
+      text: expect.stringMatching(/^Another Claude session sent a message: This came from another Claude session/)
+    })
+  })
+
+  it('draws a prompt sent right after a peer turn below its bubble, not between the card and it', () => {
+    // The send is anchored on the RAW tail id, which is the card's; the bubble
+    // sits after the card and the echo must not split them.
+    const messages = [user('u2', PEER)]
+    const data = build(messages, null, [{ id: 'p1', text: 'thanks', baselineTailMessageId: 'u2' }])
+    expect(data.map((row) => row.id)).toEqual(['u2', 'u2:peer-boilerplate', 'p1'])
   })
 })

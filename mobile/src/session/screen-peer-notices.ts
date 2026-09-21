@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { PEER_MESSAGE_PRESENTATION, peerMessageLabelAndBody } from './mobile-native-chat-peer-messages'
+import { PEER_MESSAGE_PRESENTATION, afterPeerBoilerplate, peerMessageLabelAndBody } from './mobile-native-chat-peer-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 /**
@@ -110,9 +110,11 @@ export function withScreenPeerNotices(
       // everything loaded, so the top is the honest place.
       atTop.push(drawn)
     } else {
-      const list = after.get(anchorAt) ?? []
+      // After the anchor's boilerplate bubble when it has one, never between.
+      const at = afterPeerBoilerplate(folded, anchorAt)
+      const list = after.get(at) ?? []
       list.push(drawn)
-      after.set(anchorAt, list)
+      after.set(at, list)
     }
   }
   if (claimed.size === notices.length) {

@@ -204,6 +204,39 @@ describe('MobileNativeChatMessage', () => {
     expect(control.findByType('Undo2' as never).props.color).toBe(colors.userBubbleText)
   })
 
+  // 2026-09-21, beside the Claude app: it draws the injected peer turn as a
+  // user bubble holding the harness's words, before the reply. The phone's
+  // fold makes that a system row with a hint; it must LOOK like a sent prompt.
+  it.each([
+    ['light', lightColors, darkColors],
+    ['dark', darkColors, lightColors]
+  ] as const)('draws the peer boilerplate as a right-aligned user bubble in the %s ink, with no prompt controls', (preference, colors, other) => {
+    const boilerplate: NativeChatMessage = {
+      id: 'u2:peer-boilerplate',
+      role: 'system',
+      timestamp: null,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Another Claude session sent a message: This came from another Claude session — not typed by your user.', presentation: 'peer-boilerplate' }]
+    }
+    act(() => {
+      renderer = create(
+        createElement(ThemeProvider, { initialPreference: preference }, createElement(MobileNativeChatMessage, { message: boilerplate, onRewindToHere: vi.fn() }))
+      )
+    })
+    const bubble = renderer!.root.findByProps({ testID: 'native-chat-peer-boilerplate' })
+    const bubbleStyle = Object.assign({}, ...([] as unknown[]).concat(bubble.props.style).flat(Infinity).filter(Boolean))
+    expect(bubbleStyle.backgroundColor).toBe(colors.userBubble)
+    expect(bubbleStyle.backgroundColor).not.toBe(other.userBubble)
+    const rowStyle = Object.assign({}, ...([] as unknown[]).concat(bubble.parent!.props.style).flat(Infinity).filter(Boolean))
+    expect(rowStyle.alignItems).toBe('flex-end')
+    const label = bubble.findAllByType('Text' as never).find((node) => String(node.children.join('')).startsWith('Another Claude session'))
+    const textStyle = Object.assign({}, ...([] as unknown[]).concat(label?.props.style).flat(Infinity).filter(Boolean))
+    expect(textStyle.color).toBe(colors.userBubbleText)
+    expect(bubble.props.accessibilityLabel).toBe('Injected by Claude Code')
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })).toHaveLength(0)
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Rewind to here' })).toHaveLength(0)
+  })
+
   it('never offers Rewind to here on an agent reply or a queued echo, even when the lane can rewind', () => {
     const onRewindToHere = vi.fn()
     const reply = render(toolMessage([{ type: 'text', text: 'done' }]), { onRewindToHere })
