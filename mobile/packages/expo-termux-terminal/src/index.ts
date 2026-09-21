@@ -13,7 +13,7 @@ export type TermuxTerminalTheme = {
 
 export type TermuxTerminalModesEvent = {
   altScreen: boolean
-  mouseTrackingMode: 'none' | 'vt200' | 'drag'
+  mouseTrackingMode: 'none' | 'vt200' | 'drag' | 'any'
   sgrMouseMode: boolean
   bracketedPasteMode: boolean
 }

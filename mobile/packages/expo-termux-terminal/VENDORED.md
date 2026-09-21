@@ -17,7 +17,7 @@ view's sixel and top-row APIs, so the two halves must come from one commit.
 | File | Edit |
 | --- | --- |
 | `terminal/TerminalSessionClient.java` | Methods that name `TerminalSession` removed; only the emulator's cursor and log callbacks remain. |
-| `terminal/TerminalEmulator.java` | Public `isBracketedPasteModeActive`, `isMouseButtonEventTrackingActive`, `isSgrMouseProtocolActive` (the DECSET bits are private) for the app's mode mirror. |
+| `terminal/TerminalEmulator.java` | Public `isBracketedPasteModeActive`, `isMouseButtonEventTrackingActive`, `isSgrMouseProtocolActive`, `isMouseAnyEventTrackingActive` (the DECSET bits are private) for the app's mode mirror. DECSET 1003 gets a bit (`DECSET_BIT_MOUSE_TRACKING_ANY_EVENT`) and counts in `isMouseTrackingActive()`: a host snapshot replays xterm's one highest mouse mode, 1003 for Claude Code, and upstream ignores it, which turned a swipe into arrow keys on the device. |
 | `view/TerminalView.java` | `TerminalSession` typed `TerminalViewSession` (field, `attachSession`, `getCurrentSession`); `final` dropped so `HostedTerminalView` can refuse focus. |
 | `view/TerminalViewSession.java` | New: the four things the view needs from a session, so it no longer depends on `TerminalSession`. |
 | `view/TerminalViewClient.java` | `TerminalSession` parameters typed `TerminalViewSession`. |
