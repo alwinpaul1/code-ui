@@ -11,6 +11,8 @@ export type MacHostSheetOptions = {
   /** What the Mac itself reported, or 'checking' while the probe is still out. */
   state: MacHostState | 'checking'
   onAction: (action: MacHostAction) => void
+  /** Hold on Unlock Mac. Forgets the password saved on this phone. */
+  onForgetUnlockPassword?: () => void
 }
 
 const MAC_ACTION_ICONS: Record<MacHostAction, LucideIcon> = {
@@ -68,6 +70,14 @@ export function getMacHostSheetActions(
     icon: MAC_ACTION_ICONS[action],
     ...(index === 0 ? { group: 'Mac' } : {}),
     ...(disabled ? { disabled: true, hint: NO_WORKTREE_HINT } : {}),
+    ...(action === 'unlock' && options.onForgetUnlockPassword && !disabled
+      ? {
+          hint: 'Hold to forget the saved password',
+          onLongPress: () => {
+            options.onForgetUnlockPassword?.()
+          }
+        }
+      : {}),
     // Why deferred: Unlock may open the password drawer, and presenting a second
     // native modal while this sheet's is still up freezes the screen (issue #8791).
     closeBeforePress: true,

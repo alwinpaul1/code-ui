@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
+import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
 import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+
+const ESCAPE = String.fromCharCode(27)
+const CTRL_C = String.fromCharCode(3)
+
+/** Claude and Codex stop on Escape. Grok does not: Escape only tells the
+ *  user to press Ctrl+C, and Ctrl+C is what cancels the turn. A second
+ *  Ctrl+C while the turn is already cancelling escalates toward quit, so
+ *  Grok gets one. */
+export function nativeChatStopKey(agent: string | null | undefined): {
+  text: string
+  second: boolean
+} {
+  if (resolveNativeChatTranscriptAgent(agent) === 'grok') {
+    return { text: CTRL_C, second: false }
+  }
+  return { text: ESCAPE, second: true }
+}
 
 export function useMobileNativeChatStop(args: {
   client: RpcClient | null
@@ -11,11 +29,14 @@ export function useMobileNativeChatStop(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   streamIdentity: string
+  agent: string | null
   cancelPending: () => void
   onSendError: (message: string) => void
 }): () => void {
-  const { client, enabled, handleRef, deviceTokenRef, streamIdentity, cancelPending, onSendError } =
+  const { client, enabled, handleRef, deviceTokenRef, streamIdentity, agent, cancelPending, onSendError } =
     args
+  const agentRef = useRef(agent)
+  agentRef.current = agent
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generationRef = useRef(0)
   /** Settles the paced second Escape when it is cancelled rather than sent, so a
@@ -52,12 +73,14 @@ export function useMobileNativeChatStop(args: {
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
     const deadline = openMobileNativeChatSendBudget()
+    const keys = nativeChatStopKey(agentRef.current)
     // Why: the two paced Escapes are one user action. Reporting the first one's
     // failure the moment it lands told the user a stop failed that the second
     // Escape then completed — and a second Stop press writes into changed prompt
     // state. Hold the verdict until both have settled, then stay quiet if either
     // was accepted. `pending` starts at 1 for the Escape still on its timer.
-    let pending = 1
+    // Grok sends one Ctrl+C and has nothing waiting.
+    let pending = keys.second ? 1 : 0
     let sawAccepted = false
     let sawUnknown = false
     let sawRejected = false
@@ -75,7 +98,7 @@ export function useMobileNativeChatStop(args: {
       // Escape into changed state. Mirrors the cancel/answer wording.
       onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
     }
-    const sendEscape = (): void => {
+    const sendKey = (text: string): void => {
       const activeRoute = activeRouteRef.current
       if (
         !activeRoute.enabled ||
@@ -98,7 +121,7 @@ export function useMobileNativeChatStop(args: {
           client,
           {
             terminal: handle,
-            text: String.fromCharCode(27),
+            text,
             ...(deviceTokenRef.current
               ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
               : {})
@@ -129,7 +152,10 @@ export function useMobileNativeChatStop(args: {
           reportIfSettled()
         })
     }
-    sendEscape()
+    sendKey(keys.text)
+    if (!keys.second) {
+      return
+    }
     dropSecondEscapeRef.current = () => {
       pending -= 1
       reportIfSettled()
@@ -138,7 +164,7 @@ export function useMobileNativeChatStop(args: {
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       dropSecondEscapeRef.current = null
-      sendEscape()
+      sendKey(keys.text)
       pending -= 1
       reportIfSettled()
     }, 80)

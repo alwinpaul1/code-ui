@@ -12,7 +12,7 @@ import {
 import { readMacHostPlatformResult, selectMacHostWorktreeId } from './mac-host-platform'
 import type { MacHostSheetOptions } from './mac-host-sheet-actions'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
-import { readMacUnlockPassword } from './mac-unlock-password-store'
+import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
 import { runMacHostCommand } from './run-mac-host-command'
 
@@ -183,7 +183,12 @@ export function useMacHostControls(args: {
         hostPlatform: platforms[openHostId] ?? null,
         worktreeId: worktreeIdForHost(openHostId),
         state: macState,
-        onAction: (action) => onAction(openHostId, action)
+        onAction: (action) => onAction(openHostId, action),
+        onForgetUnlockPassword: () => {
+          void clearMacUnlockPassword(openHostId)
+            .then(() => showToast('Saved password forgotten. Unlock will ask again.'))
+            .catch(() => showToast('Could not forget the saved password on this phone.'))
+        }
       }
     : undefined
 

@@ -131,6 +131,7 @@ function buildWithMac(mac: {
   hostPlatform: NodeJS.Platform | null
   worktreeId?: string | null
   state?: MacHostState | 'checking'
+  onForgetUnlockPassword?: () => void
 }) {
   const onMacAction = vi.fn()
   const actions = getHostListActionSheetActions({
@@ -147,7 +148,8 @@ function buildWithMac(mac: {
       hostPlatform: mac.hostPlatform,
       worktreeId: mac.worktreeId === undefined ? 'wt-1' : mac.worktreeId,
       state: mac.state ?? UNKNOWN_MAC_HOST_STATE,
-      onAction: onMacAction
+      onAction: onMacAction,
+      onForgetUnlockPassword: mac.onForgetUnlockPassword
     }
   })
   return { actions, onMacAction }
@@ -265,6 +267,23 @@ describe('the Mac controls on the host sheet', () => {
     for (const label of MAC_LABELS) {
       expect(actions.find((action) => action.label === label)?.closeBeforePress).toBe(true)
     }
+  })
+
+  it('forgets the saved password when Unlock Mac is held, and does not unlock', () => {
+    const onForget = vi.fn()
+    const { actions, onMacAction } = buildWithMac({
+      hostPlatform: 'darwin',
+      state: { lock: 'locked', display: 'on', mute: 'unmuted' },
+      onForgetUnlockPassword: onForget
+    })
+    const unlock = actions.find((action) => action.label === 'Unlock Mac')
+    const sleep = actions.find((action) => action.label === 'Sleep display')
+    expect(unlock?.onLongPress).toEqual(expect.any(Function))
+    expect(unlock?.hint).toBe('Hold to forget the saved password')
+    expect(sleep?.onLongPress).toBeUndefined()
+    unlock?.onLongPress?.()
+    expect(onForget).toHaveBeenCalledOnce()
+    expect(onMacAction).not.toHaveBeenCalled()
   })
 
   it('hands each tap its own action', () => {

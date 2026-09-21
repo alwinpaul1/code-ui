@@ -30,10 +30,12 @@ describe('useMobileNativeChatStop', () => {
 
   function Harness({
     enabled,
-    streamIdentity
+    streamIdentity,
+    agent = null
   }: {
     enabled: boolean
     streamIdentity: string
+    agent?: string | null
   }): null {
     stop = useMobileNativeChatStop({
       client: { sendRequest } as unknown as RpcClient,
@@ -41,15 +43,20 @@ describe('useMobileNativeChatStop', () => {
       handleRef: { current: 'terminal-1' },
       deviceTokenRef: { current: 'mobile-1' },
       streamIdentity,
+      agent,
       cancelPending: vi.fn(),
       onSendError
     })
     return null
   }
 
-  async function render(enabled: boolean, streamIdentity: string): Promise<void> {
+  async function render(
+    enabled: boolean,
+    streamIdentity: string,
+    agent: string | null = null
+  ): Promise<void> {
     await act(async () => {
-      const element = createElement(Harness, { enabled, streamIdentity })
+      const element = createElement(Harness, { enabled, streamIdentity, agent })
       if (renderer) {
         renderer.update(element)
       } else {
@@ -146,6 +153,20 @@ describe('useMobileNativeChatStop', () => {
     // so a straggler's failure must not tell the user to press Stop again.
     expect(sendRequest).toHaveBeenCalledTimes(2)
     expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('sends Ctrl+C once to stop Grok, which does not cancel on Escape', async () => {
+    await render(true, 'stream-1', 'grok')
+
+    act(() => stop?.())
+    await act(async () => vi.runAllTimersAsync())
+
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.objectContaining({ text: String.fromCharCode(3) }),
+      expect.anything()
+    )
   })
 
   it('bounds the Escape on a reconnect wait instead of parking forever', async () => {

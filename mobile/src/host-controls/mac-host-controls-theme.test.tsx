@@ -96,6 +96,36 @@ describe('the Mac controls in both themes', () => {
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
+  it('holds Unlock Mac to forget the saved password, in light and dark', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const onForget = vi.fn()
+      const onAction = vi.fn()
+      const onClose = vi.fn()
+      const renderer = renderInScheme(
+        scheme,
+        createElement(ActionSheetContent, {
+          onClose,
+          actions: getMacHostSheetActions({
+            hostPlatform: 'darwin',
+            worktreeId: 'wt-1',
+            state: { lock: 'locked', display: 'on', mute: 'unmuted' },
+            onAction,
+            onForgetUnlockPassword: onForget
+          })
+        })
+      )
+      const unlock = renderer.root.findAllByType('Pressable').find((node) =>
+        node.findAllByType('Text').some((text) => text.children.includes('Unlock Mac'))
+      )
+      expect(unlock?.props.onLongPress).toEqual(expect.any(Function))
+      expect(JSON.stringify(renderer.toJSON())).toContain('Hold to forget the saved password')
+      act(() => unlock?.props.onLongPress())
+      expect(onForget).toHaveBeenCalledOnce()
+      expect(onAction).not.toHaveBeenCalled()
+      expect(onClose).toHaveBeenCalledOnce()
+    }
+  })
+
   it('warns that the password lives on the phone and travels to the Mac', () => {
     const renderer = renderInScheme(
       'light',

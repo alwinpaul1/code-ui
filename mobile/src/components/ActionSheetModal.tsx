@@ -21,6 +21,8 @@ export type ActionSheetAction = {
   skipAutoClose?: boolean
   closeBeforePress?: boolean
   onPress: () => void
+  /** A hold, separate from the tap. The sheet still closes. */
+  onLongPress?: () => void
 }
 
 type Props = {
@@ -139,6 +141,16 @@ export function ActionSheetContent({
                     onClose()
                   }
                 }}
+                onLongPress={
+                  action.onLongPress
+                    ? () => {
+                        action.onLongPress?.()
+                        if (!action.skipAutoClose && onClose) {
+                          onClose()
+                        }
+                      }
+                    : undefined
+                }
               >
                 {customIcon ?? (
                   <Icon
