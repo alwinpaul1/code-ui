@@ -8,6 +8,7 @@ let tokenImpl: () => Promise<{ type: string; data: string }> = async () => ({
 let permissionGranted = true
 
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'background' },
   get Platform() {
     return { OS: platformOS }
   }

@@ -27,6 +27,7 @@ vi.mock('expo-notifications', () => ({
   dismissNotificationAsync: vi.fn()
 }))
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'background' },
   Platform: { OS: 'android', Version: 34 }
 }))
 vi.mock('@react-native-async-storage/async-storage', () => ({

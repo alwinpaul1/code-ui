@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 // Re-exported so the existing importers (and their vi.mock paths) keep working.
 export {
@@ -84,14 +85,15 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
 
   async function deliverLive(
     type: 'notification' | 'dismiss',
-    event: NotificationEvent | DismissNotificationEvent
+    event: NotificationEvent | DismissNotificationEvent,
+    quietUnlessActionable = false
   ): Promise<void> {
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     const epochAtDelivery = session.lastDeliveredEpoch
     if (type === 'notification') {
       // The link this event came over is the one to ask about it on; see
       // presentedNotificationContent.
-      await showLocalNotification(event as NotificationEvent, hostId, { client })
+      await showLocalNotification(event as NotificationEvent, hostId, { client, quietUnlessActionable })
     } else {
       await dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }
@@ -123,7 +125,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // Claimed inline rather than via queueDelivery: the batch is already one queue
   // entry, and re-enqueueing per item is what let a live event cut in.
   async function deliverMissedEvent(
-    event: NotificationEvent | DismissNotificationEvent
+    event: NotificationEvent | DismissNotificationEvent,
+    quietUnlessActionable: boolean
   ): Promise<void> {
     // No pre-marking here either: deliverLive marks the key once the show lands.
     const key = seenKeyForEvent(event)
@@ -135,7 +138,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         return
       }
       try {
-        await deliverLive('notification', event)
+        await deliverLive('notification', event, quietUnlessActionable)
       } finally {
         releaseQueuedShowNotificationId(session, event.notificationId)
       }
@@ -195,6 +198,16 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // request stays OUTSIDE the queue: sendRequest waits up to 30s, and holding the
     // chain for that would stall live delivery on a slow link.
     await enqueueHostDelivery(session, async () => {
+      // A replay drained while the app is open posts nothing the open screen
+      // already shows ("when I open the app suddenly all the notifications come
+      // up", 2026-09-21): the socket died in the background, the reconnect came
+      // with the open, and every missed event became a banner over the app.
+      // Read per event, not per batch: a user who opens the app and leaves it
+      // again while the replay drains must get the rest as banners, or they
+      // are silenced for good (the watermark moves past them). Only 'active'
+      // is quiet; 'unknown' at a cold start shows, the safe side. A replay
+      // while the app is still in the background still shows.
+      const quietUnlessActionable = () => AppState.currentState === 'active'
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
       let contiguousSeq = askFrom
@@ -207,7 +220,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
             return
           }
           const event = raw as NotificationEvent | DismissNotificationEvent
-          await deliverMissedEvent(event)
+          await deliverMissedEvent(event, quietUnlessActionable())
           contiguousSeq = event.notificationSeq ?? contiguousSeq
         }
         drained = true

@@ -12,7 +12,7 @@ vi.mock('expo-notifications', () => ({
   scheduleNotificationAsync: vi.fn(async () => 'id'),
   dismissNotificationAsync: vi.fn(async () => {})
 }))
-vi.mock('react-native', () => ({ Platform: { OS: 'android', Version: 34 } }))
+vi.mock('react-native', () => ({ AppState: { currentState: 'background' }, Platform: { OS: 'android', Version: 34 } }))
 vi.mock('../storage/preferences', () => ({ loadPushNotificationsEnabled: vi.fn(async () => true) }))
 
 const storage = new Map<string, string>()

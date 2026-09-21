@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const dismissed: string[] = []
 const presented: { identifier: string; request: { content: { data?: unknown } } }[] = []
 
-vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+vi.mock('react-native', () => ({ AppState: { currentState: 'background' }, Platform: { OS: 'android' } }))
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4 },
   deleteNotificationChannelAsync: vi.fn(async () => {}),

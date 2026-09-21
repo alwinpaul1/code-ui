@@ -18,6 +18,7 @@ vi.mock('expo-notifications', () => ({
 }))
 
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'background' },
   Platform: { OS: 'ios', Version: 18 }
 }))
 

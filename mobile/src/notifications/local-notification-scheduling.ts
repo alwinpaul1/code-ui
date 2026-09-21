@@ -154,7 +154,19 @@ function sessionBannerIdentifier(hostId: string, worktreeId: string | undefined)
 }
 
 /** The link an event arrived on. Optional because the FCM path has none. */
-export type LocalNotificationLink = { client?: RpcClient | null }
+export type LocalNotificationLink = {
+  client?: RpcClient | null
+  /** A replay drained while the app is open: post nothing the open screen
+   *  already shows. A banner that carries an action (Approve, Deny, a reply
+   *  field) still posts, because the action is the point of it. The event
+   *  still counts as delivered, so the watermark moves past it. */
+  quietUnlessActionable?: boolean
+}
+
+/** Whether a banner's content carries buttons or a reply field. */
+function isActionable(content: { categoryIdentifier?: string }): boolean {
+  return typeof content.categoryIdentifier === 'string' && content.categoryIdentifier.length > 0
+}
 
 async function presentedNotificationContent(
   event: NotificationEvent,
@@ -210,8 +222,12 @@ export async function showLocalNotification(
     }
 
     await ensureNotificationChannel()
+    const content = await presentedNotificationContent(event, hostId, link)
+    if (link.quietUnlessActionable && !isActionable(content)) {
+      return
+    }
     await Notifications.scheduleNotificationAsync({
-      content: await presentedNotificationContent(event, hostId, link),
+      content,
       trigger: notificationTrigger()
     })
     return
@@ -244,6 +260,10 @@ export async function showLocalNotification(
     }
 
     await ensureNotificationChannel()
+    const content = await presentedNotificationContent(event, hostId, link)
+    if (link.quietUnlessActionable && !isActionable(content)) {
+      return null
+    }
     return Notifications.scheduleNotificationAsync({
       // One banner per SESSION, carrying its latest word. Android adds a banner
       // per notification unless they share an identifier, in which case a newer
@@ -253,7 +273,7 @@ export async function showLocalNotification(
       // Per session, not globally: two projects wanting attention are two
       // different things, and collapsing those would hide one of them.
       identifier: sessionBannerIdentifier(hostId, event.worktreeId),
-      content: await presentedNotificationContent(event, hostId, link),
+      content,
       trigger: notificationTrigger()
     })
   })()

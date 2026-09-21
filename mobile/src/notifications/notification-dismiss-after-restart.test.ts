@@ -6,7 +6,7 @@ const dismissed: string[] = []
 // an invented fixture agrees with an invented reader and both stay wrong.
 let presented: { request: { identifier: string; content: { data?: unknown } } }[] = []
 
-vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+vi.mock('react-native', () => ({ AppState: { currentState: 'background' }, Platform: { OS: 'android' } }))
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4 },
   deleteNotificationChannelAsync: vi.fn(async () => {}),

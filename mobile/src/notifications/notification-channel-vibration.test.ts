@@ -22,7 +22,7 @@ vi.mock('expo-notifications', () => ({
   dismissNotificationAsync: vi.fn(async () => {}),
   getAllScheduledNotificationsAsync: vi.fn(async () => [])
 }))
-vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+vi.mock('react-native', () => ({ AppState: { currentState: 'background' }, Platform: { OS: 'android' } }))
 vi.mock('../storage/preferences', () => ({ loadPushNotificationsEnabled: async () => true }))
 vi.mock('./notification-permissions', () => ({ ensureNotificationPermissions: async () => true }))
 
