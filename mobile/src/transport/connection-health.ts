@@ -1,5 +1,4 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
-import { isPrivateLanAddress } from './mobile-direct-endpoint-list'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
@@ -30,10 +29,6 @@ const STALE_SINCE_LAST_CONNECT_MS = 60_000
 // that only a manual toggle fixes) — not that the desktop moved. Say so
 // instead of leaving the user staring at a generic "Can't connect".
 const TAILSCALE_HINT = 'check Tailscale'
-/** A desktop saved by a private network address, once unreachable with no
- *  Relay to fall back to: the advice is the network or Relay, not retrying.
- *  Only at the unreachable stage — a LAN blip at three attempts is not this. */
-const LAN_ONLY_HINT = 'on its Wi‑Fi only; enable Orca Relay on the desktop'
 
 // Label + second line per relay verdict, and the severity each one earns. No
 // Tailscale hint on any of these: it would be wrong advice for a desktop that is
@@ -114,11 +109,6 @@ export function classifyConnection(args: {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
   const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
-  const unreachableHint =
-    hint ??
-    (args.endpoint && isPrivateLanAddress(args.endpoint) && args.pendingPath !== 'relay'
-      ? LAN_ONLY_HINT
-      : undefined)
   const host = args.hostName?.trim() || 'Host'
   const staleReason = lastConnectedAt == null ? 'never-connected' : 'stale'
 
@@ -174,7 +164,7 @@ export function classifyConnection(args: {
         kind: 'unreachable',
         label: "Can't reach desktop",
         reason: 'never-connected',
-        hint: unreachableHint
+        hint
       }
     }
     if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
@@ -182,7 +172,7 @@ export function classifyConnection(args: {
         kind: 'unreachable',
         label: "Can't reach desktop",
         reason: 'stale',
-        hint: unreachableHint
+        hint
       }
     }
   }

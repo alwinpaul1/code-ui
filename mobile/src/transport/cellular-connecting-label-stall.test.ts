@@ -183,7 +183,7 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     // (warning >= 3, unreachable >= 12) are reachable.
     expect(Math.max(...samples.map((s) => s.attempts))).toBeGreaterThanOrEqual(12)
     expect(samples.some((s) => s.label === "Can't connect")).toBe(true)
-    expect(samples.some((s) => s.label.startsWith("Can't reach desktop"))).toBe(true)
+    expect(samples.some((s) => s.label === "Can't reach desktop")).toBe(true)
 
     // Once escalated, no later redial reverts the label to "Connecting…".
     const after = labelsAfterFirstEscalation(samples)
@@ -200,7 +200,7 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     const samples = observe('ws://relay.example:443', 900_000)
 
     expect(Math.max(...samples.map((s) => s.attempts))).toBeGreaterThanOrEqual(12)
-    expect(samples.some((s) => s.label.startsWith("Can't reach desktop"))).toBe(true)
+    expect(samples.some((s) => s.label === "Can't reach desktop")).toBe(true)
 
     const after = labelsAfterFirstEscalation(samples)
     expect(after.every((s) => s.label !== 'Connecting…')).toBe(true)
@@ -223,16 +223,14 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     carrier = { kind: 'blackhole' }
     const samples = observe('ws://192.168.0.56:6769', 900_000)
 
-    // A private-address desktop's label carries the LAN-only hint after the
-    // verdict (2026-09-21); the escalation this pins is the verdict's own words.
-    const firstUnreachable = samples.findIndex((s) => s.label.startsWith("Can't reach desktop"))
+    const firstUnreachable = samples.findIndex((s) => s.label === "Can't reach desktop")
     expect(firstUnreachable).toBeGreaterThan(0)
 
     // The loop has given up internally (attempts held at the cap); the label
     // must say so through the 12s of every 90s trickle dial, not just between them.
     const after = samples.slice(firstUnreachable)
     expect(after.every((s) => s.attempts >= 12)).toBe(true)
-    expect(after.every((s) => s.label.startsWith("Can't reach desktop"))).toBe(true)
+    expect(after.every((s) => s.label === "Can't reach desktop")).toBe(true)
   })
 
   it('resets the failure counter only once a handshake actually completes', () => {
@@ -275,7 +273,7 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     const samples = observe('ws://192.168.0.56:6769', 900_000)
 
     expect(Math.max(...samples.map((s) => s.attempts))).toBeGreaterThanOrEqual(12)
-    expect(samples.some((s) => s.label.startsWith("Can't reach desktop"))).toBe(true)
+    expect(samples.some((s) => s.label === "Can't reach desktop")).toBe(true)
 
     const after = labelsAfterFirstEscalation(samples)
     expect(after.every((s) => s.label !== 'Connecting…')).toBe(true)
