@@ -2,6 +2,13 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import {
+  PRESSABLE_TAGS,
+  readAttribute,
+  roleFixedByComponent,
+  spreadsProps,
+  type Read
+} from './pressable-control-source-reader'
 
 /**
  * A Back control the page serves is reachable by name or not at all. Inside the shell there is no
@@ -52,25 +59,10 @@ const PAGE_SERVED_SCREENS = [
 /** The rule reads whole trees, so a Back added beside a screen is ruled as well as the screen's. */
 const screenTree = (screen: string): string => screen.slice(0, screen.lastIndexOf('/'))
 
-// CODE UI: the fork's Back controls sit behind its own pressables — `IconButton` (src/ui) and the
-// tasks screen's `TasksButton`, a PressFeedback that forwards every prop to a Pressable — so those
-// are read as pressables too. IconButton fixes the role itself; the rule reads that from its source
-// rather than taking it on faith.
-const PRESSABLE_TAGS = new Set(['Pressable', 'TouchableOpacity', 'IconButton', 'TasksButton'])
-const ICON_BUTTON = 'src/ui/IconButton.tsx'
-const ROLE_FIXED_BY_COMPONENT: Record<string, string | undefined> = {
-  IconButton: /accessibilityRole="button"/.test(readFileSync(join(MOBILE_ROOT, ICON_BUTTON), 'utf8'))
-    ? 'button'
-    : undefined
-}
 /** `router.back()`, `goBack()`, `onBack()`; the leading class keeps `callback(` and `rollback(` out. */
 const BACK_CALL = /(?:^|[^A-Za-z0-9_$])(?:back|goBack|onBack)\s*\(/
 const BACK_HANDLER = /^(?:back|[A-Za-z0-9_$]*Back)$/
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
-
-/** A spread hides the props this rule reads, so it answers "unknown" rather than "absent". */
-type Read = { known: true; value: string } | { known: false }
-const UNKNOWN: Read = { known: false }
 
 type BackControl = { path: string; line: number; role: Read; label: Read }
 
@@ -85,32 +77,6 @@ function componentFiles(tree: string): string[] {
     }
   }
   return found
-}
-
-function spreadsProps(element: ts.JsxOpeningLikeElement): boolean {
-  return element.attributes.properties.some((property) => ts.isJsxSpreadAttribute(property))
-}
-
-function readAttribute(element: ts.JsxOpeningLikeElement, name: string): Read {
-  if (spreadsProps(element)) {
-    return UNKNOWN
-  }
-  for (const property of element.attributes.properties) {
-    if (ts.isJsxAttribute(property) && property.name.getText() === name) {
-      const initializer = property.initializer
-      if (!initializer) {
-        return { known: true, value: '' }
-      }
-      if (ts.isStringLiteral(initializer)) {
-        return { known: true, value: initializer.text }
-      }
-      if (ts.isJsxExpression(initializer) && initializer.expression) {
-        return { known: true, value: initializer.expression.getText() }
-      }
-      return { known: true, value: initializer.getText() }
-    }
-  }
-  return { known: true, value: '' }
 }
 
 /** One hop: `onPress={requestBack}` is read through the declaration `requestBack` names here. */
@@ -168,7 +134,7 @@ function backControlsIn(path: string): BackControl[] {
           named ||
           pressGoesBack(source, readAttribute(element, 'onPress'))
         ) {
-          const fixedRole = ROLE_FIXED_BY_COMPONENT[element.tagName.getText()]
+          const fixedRole = roleFixedByComponent(MOBILE_ROOT, element.tagName.getText())
           found.push({
             path,
             line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
