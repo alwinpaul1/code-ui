@@ -25,7 +25,10 @@ export function directEndpointsPlausibleOnNetwork(
   return urls.filter((url) => !isPrivateLanAddress(url))
 }
 
-function isPrivateLanAddress(url: string): boolean {
+/** Whether a direct endpoint names an address that only answers from its own
+ *  network: RFC 1918 IPv4, link-local, or an mDNS `.local` name. The one rule
+ *  for the cellular filter above and for the diagnosis that names it. */
+export function isPrivateLanAddress(url: string): boolean {
   let hostname: string
   try {
     hostname = new URL(url).hostname

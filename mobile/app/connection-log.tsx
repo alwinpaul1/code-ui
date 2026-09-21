@@ -17,6 +17,7 @@ import {
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
 import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
+import { readMobileNetworkType } from '../src/transport/mobile-network-type'
 import {
   readHydratedConnectionLog,
   readConnectionDiagnosticsSnapshot,
@@ -85,8 +86,23 @@ export default function ConnectionLogScreen() {
     [selectedId]
   )
   const entries = useSyncExternalStore(subscribe, getSnapshot)
+  // What the phone is on now, so a private-address desktop is diagnosed as
+  // "on mobile data" rather than "the network changed". Re-read as the log
+  // moves, which is when a network change would have been logged.
+  const [networkType, setNetworkType] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void readMobileNetworkType().then((type) => {
+      if (live) {
+        setNetworkType(type)
+      }
+    })
+    return () => {
+      live = false
+    }
+  }, [entries])
   const diagnosis = selected
-    ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries })
+    ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries, networkType })
     : null
   const copied = copiedHostId === selectedId
 
@@ -111,7 +127,8 @@ export default function ConnectionLogScreen() {
       desktopAppVersion,
       entries: snapshot.entries,
       activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath
+      pendingPath: snapshot.pendingPath,
+      networkType
     })
     await Clipboard.setStringAsync(report)
     setCopiedHostId(selected.id)

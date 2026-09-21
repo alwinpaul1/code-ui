@@ -70,6 +70,32 @@ describe('classifyConnection Tailscale hint', () => {
     })
   })
 
+  // 2026-09-21, a friend's phone: off the desktop's Wi‑Fi, every redial to
+  // 192.168.1.132 failed and the row said "Can't reach desktop" and nothing
+  // more; there was no Relay for that desktop, so nothing else was tried.
+  it('hints that a private-address desktop needs its network or Orca Relay, once unreachable and with no Relay pending', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 12,
+      endpoint: 'ws://192.168.1.132:6768',
+      pendingPath: null
+    })
+    expect(verdict).toMatchObject({
+      kind: 'unreachable',
+      hint: 'on its Wi‑Fi only; enable Orca Relay on the desktop'
+    })
+  })
+
+  it('does not hint LAN-only while Relay recovery is pending for that desktop', () => {
+    const verdict = classifyConnection({
+      ...base,
+      reconnectAttempts: 12,
+      endpoint: 'ws://192.168.1.132:6768',
+      pendingPath: 'relay'
+    })
+    expect('hint' in verdict && verdict.hint).toBeFalsy()
+  })
+
   it('keeps plain labels for LAN endpoints', () => {
     const warning = classifyConnection({
       ...base,

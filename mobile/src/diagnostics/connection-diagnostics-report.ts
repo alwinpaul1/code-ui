@@ -28,6 +28,8 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
+  /** The phone's network type at report time, when known. */
+  networkType?: string | null
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -37,7 +39,8 @@ export function buildConnectionDiagnosticsReport(args: {
     state: args.state,
     activePath: args.activePath,
     pendingPath: args.pendingPath,
-    entries
+    entries,
+    networkType: args.networkType
   })
   const lines: string[] = []
   lines.push('Orca Mobile connection diagnostics')
@@ -49,6 +52,9 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`
   )
+  if (args.networkType) {
+    lines.push(`Phone network: ${args.networkType}`)
+  }
   lines.push(`State: ${args.state} (reconnect attempts: ${args.reconnectAttempts})`)
   if (args.activePath) {
     lines.push(
