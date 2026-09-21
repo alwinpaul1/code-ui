@@ -224,3 +224,45 @@ src/shared/hosted-review-creation-providers.ts: a28085adb
 src/shared/execution-host.ts: 4a86b2dc5
 
 Code UI's own files inside src/shared are listed in src/shared/LOCAL-FILES.md.
+src/shared/agent-detection.ts: b6b974cb8
+src/shared/shell-process-detection.ts: b6b974cb8
+src/shared/ws-outbound-backpressure-queue.ts: a445abadd
+src/shared/agent-session-resume.test.ts: ff934256a
+src/shared/agent-session-resume.ts: c62eca398 (v1.4.206)
+src/shared/agent-process-recognition.ts: c62eca398 (v1.4.206)
+src/shared/agent-process-recognition.test.ts: c62eca398 (v1.4.206)
+src/shared/tui-agent-startup.ts: c62eca398 (v1.4.206)
+src/shared/tui-agent-startup.test.ts: c62eca398 (v1.4.206)
+src/shared/pi-agent-kind.ts: c62eca398 (v1.4.206)
+src/shared/omp-draft-launch-shell.test.ts: c62eca398 (v1.4.206)
+src/shared/omp-draft-launch-windows.test.ts: c62eca398 (v1.4.206)
+src/shared/omp-draft-launch.ts: c62eca398 (v1.4.206)
+src/shared/omp-fresh-config.ts: c62eca398 (v1.4.206)
+src/shared/omp-fresh-launch-shell.test.ts: c62eca398 (v1.4.206)
+src/shared/omp-fresh-launch.test.ts: c62eca398 (v1.4.206)
+src/shared/omp-fresh-launch.ts: c62eca398 (v1.4.206)
+src/shared/agent-hook-listener-transport.test.ts: c62eca398
+src/shared/agent-hook-listener/provider-dispatch.ts: c62eca398
+src/shared/agent-hook-listener/provider-event-routing.ts: c62eca398
+src/shared/agent-hook-listener/providers/opencode-family-events.ts: c62eca398
+src/shared/agent-hook-listener/source-routing.ts: c62eca398
+src/shared/agent-hook-relay.ts: c62eca398
+src/shared/agent-kind.ts: c62eca398
+src/shared/agent-name-token-match.ts: c62eca398
+src/shared/agent-type-label.ts: c62eca398
+src/shared/ai-vault-resume-command.ts: c62eca398
+src/shared/ai-vault-types.ts: c62eca398
+src/shared/commit-message-agent-spec.test.ts: c62eca398
+src/shared/commit-message-agent-specs-primary.ts: c62eca398
+src/shared/opencode-database-name.ts: c62eca398
+src/shared/opencode-launch-command.test.ts: c62eca398
+src/shared/opencode-launch-command.ts: c62eca398
+src/shared/pane-agent-identity-inventory.test.ts: c62eca398
+src/shared/skills-cli-agent-keys.ts: c62eca398
+src/shared/source-control-ai-action-recipes.test.ts: c62eca398
+src/shared/telemetry-property-schemas.ts: c62eca398
+src/shared/terminal-title-agent-type.ts: c62eca398
+src/shared/tui-agent-config.ts: c62eca398
+src/shared/tui-agent-display-names.ts: c62eca398
+src/shared/tui-agent-selection.ts: c62eca398
+src/shared/tui-agent.ts: c62eca398

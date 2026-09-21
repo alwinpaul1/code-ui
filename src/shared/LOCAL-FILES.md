@@ -128,7 +128,8 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
   #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695),
   `AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY` (027acb4ef, #19863) and
-  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601), all in
+  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601) and
+  `AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY` (ee354a35d, #21418), all in
   `RUNTIME_CAPABILITIES` too — the phone advertises the first two through
   `remote-runtime-client-capabilities.ts`, which is re-vendored whole at 2626e2eca,
   and the rest from `mobile-runtime-client-capabilities.ts`;
