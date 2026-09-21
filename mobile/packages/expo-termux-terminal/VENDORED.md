@@ -9,12 +9,6 @@ Source: https://github.com/termux/termux-app, branch `master`, commit
 - `com/termux/view/*` ← `terminal-view/src/main/java/com/termux/view/`, plus `res/drawable`
   and `res/values/strings.xml` for the selection handles and menu.
 
-`android/src/main/assets/fonts/` holds two glyph-fallback fonts: `SymbolsNerdFontMono-Regular.ttf`
-(+ `NERD-FONTS-LICENSE`, MIT), the symbols-only Nerd Font the expo-libghostty package carries,
-subset to drop U+276C..2771 so the prompt's `❯` stays the system glyph; and
-`NotoSansSymbols2-MediaControls.ttf` (+ `NOTO-SANS-SYMBOLS2-LICENSE`, OFL 1.1), Noto Sans
-Symbols 2 v2.008 subset to U+23F4..23FA for Claude Code's `⏵⏵`, which no font on the S23 has.
-
 The JitPack `terminal-emulator:v0.118.3` AAR was tried first and dropped: it predates the
 view's sixel and top-row APIs, so the two halves must come from one commit.
 
