@@ -722,7 +722,7 @@ This came from another Claude session — not typed by your user, but very likel
     expect(folded.map((row) => [row.id, row.role])).toEqual([['u1', 'user'], ['u2', 'system'], ['a1', 'assistant']])
     expect(folded[1]!.blocks[0]).toMatchObject({
       presentation: 'peer-boilerplate',
-      text: expect.stringMatching(/^Another Claude session sent a message: This came from another Claude session/)
+      text: expect.stringMatching(/^Another Claude session sent a message:\nThis came from another Claude session/)
     })
     expect(folded[1]!.blocks[0]!.type === 'text' ? folded[1]!.blocks[0]!.text : '').not.toContain('git diff')
   })
