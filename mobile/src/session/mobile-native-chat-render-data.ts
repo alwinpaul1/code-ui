@@ -12,6 +12,8 @@ import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholder
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import {
   isImageRefBlock,
+  isToolCallBlock,
+  isToolResultBlock,
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
@@ -125,6 +127,32 @@ function stripNoise(messages: readonly NativeChatMessage[]): NativeChatMessage[]
   return messages.filter((message) => isPeerBoilerplateRow(message) || !isNoiseMessage(message))
 }
 
+/** A Read's picture sits with the call: after the tool blocks, before any
+ *  text that was written after them. Text that came before the call stays
+ *  before the picture. With no tool block to anchor on, the picture stays
+ *  at the end. */
+export function withAgentReadImages(
+  blocks: readonly NativeChatBlock[],
+  previews: readonly string[]
+): NativeChatBlock[] {
+  const images: NativeChatBlock[] = previews.map((url) => ({
+    type: 'image-ref',
+    url,
+    alt: 'Image the agent read'
+  }))
+  let lastTool = -1
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
+    if (block && (isToolCallBlock(block) || isToolResultBlock(block))) {
+      lastTool = index
+    }
+  }
+  if (lastTool < 0) {
+    return [...blocks, ...images]
+  }
+  return [...blocks.slice(0, lastTool + 1), ...images, ...blocks.slice(lastTool + 1)]
+}
+
 /** Previews arrive keyed by RAW record id, because the hook that fetches them
  *  cannot see the send boundaries this fold was cut at. Here both sides are
  *  known, so each raw id is moved to the folded row that absorbed it: a row
@@ -203,16 +231,10 @@ export function buildMobileNativeChatTransientData({
       return message
     }
     if (message.role === 'assistant') {
-      // Images the agent read, as host thumbnails: shown under its fold row
-      // the way the Claude app shows them. Appended, since the transcript
-      // carries no image block for a Read.
-      return {
-        ...message,
-        blocks: [
-          ...message.blocks,
-          ...previews.map((url) => ({ type: 'image-ref' as const, url, alt: 'Image the agent read' }))
-        ]
-      }
+      // The transcript has no image block for a Read. Put the picture after
+      // the call and before the words that follow it, so the sentence that
+      // introduced the figure stays above the figure.
+      return { ...message, blocks: withAgentReadImages(message.blocks, previews) }
     }
     if (message.role !== 'user') {
       return message

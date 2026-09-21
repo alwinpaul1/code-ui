@@ -19,6 +19,18 @@ describe('toolRunSentence', () => {
     expect(toolRunSentence([call('Bash'), result(), call('Read'), result()])).toBe('Ran a command, read a file')
   })
 
+  it('names the one file a read opened, in the order the calls happened', () => {
+    const read = (path: string): NativeChatBlock => ({
+      type: 'tool-call',
+      id: 'read-blade',
+      name: 'Read',
+      input: { file_path: path }
+    })
+    expect(toolRunSentence([read('/repo/figures/blade_flow_check.png'), result(), call('Bash'), result()])).toBe(
+      'Read blade_flow_check.png, ran a command'
+    )
+  })
+
   it('counts failures against the kind that failed', () => {
     const blocks: NativeChatBlock[] = []
     for (let i = 0; i < 12; i += 1) {

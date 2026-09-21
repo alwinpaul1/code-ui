@@ -29,7 +29,8 @@ vi.mock('react-native', async () => {
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
-    useColorScheme: () => 'light'
+    useColorScheme: () => 'light',
+    useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
 })
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))

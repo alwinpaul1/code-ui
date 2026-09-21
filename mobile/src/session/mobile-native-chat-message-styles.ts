@@ -32,6 +32,7 @@ export function makeChatMessageStyles(theme: Theme) {
     },
     userBubble: {
       maxWidth: '86%',
+      flexShrink: 1,
       backgroundColor: colors.userBubble,
       borderRadius: radius.lg,
       borderBottomRightRadius: radius.xs,
@@ -42,7 +43,9 @@ export function makeChatMessageStyles(theme: Theme) {
       fontFamily: fonts.regular,
       color: colors.userBubbleText,
       fontSize: TEXT_SIZE,
-      lineHeight: TEXT_SIZE + 7
+      lineHeight: TEXT_SIZE + 7,
+      // A long harness paragraph used to paint past the bubble and get clipped.
+      flexShrink: 1
     },
     controls: {
       flexDirection: 'row',
@@ -237,7 +240,7 @@ export function makeChatMessageStyles(theme: Theme) {
       borderRadius: radius.lg
     },
     imageThumb: {
-      width: 220,
+      width: '100%',
       borderRadius: radius.lg
     },
     // Orca #19226: what the row's own execution details look like — an MCP

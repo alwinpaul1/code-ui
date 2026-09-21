@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Image, Pressable, ScrollView } from 'react-native'
+import { Image, Pressable, ScrollView, useWindowDimensions } from 'react-native'
 import { openImagePreview } from './image-preview-store'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
-const THUMB_WIDTH = 220
-const THUMB_MAX_HEIGHT = 280
-const THUMB_MIN_HEIGHT = 120
+/** A figure the agent read fills the message width, up to most of the screen
+ *  tall, so a diagram stays readable. Taller than that and it scrolls. */
+const FIGURE_MAX_SCREEN = 0.72
+const FIGURE_MIN_HEIGHT = 96
 
 /** The picture itself, rounded, at its own proportions — no frame, no
  *  letterbox (2026-09-12: a bordered 4:3 box around a phone screenshot read
@@ -20,13 +21,32 @@ export function MobileNativeChatImageThumb({
   label: string
   styles: ChatMessageStyles
 }) {
-  const height = useImageHeight(uri)
+  const { height: windowHeight } = useWindowDimensions()
+  const [width, setWidth] = useState(0)
+  const aspect = useImageAspect(uri)
+  const height =
+    width > 0
+      ? Math.min(
+          Math.max(Math.round(width * aspect), FIGURE_MIN_HEIGHT),
+          Math.round(windowHeight * FIGURE_MAX_SCREEN)
+        )
+      : FIGURE_MIN_HEIGHT
   return (
-    <Pressable onPress={() => openImagePreview(uri, label)} accessibilityRole="imagebutton">
+    <Pressable
+      onPress={() => openImagePreview(uri, label)}
+      onLayout={(event) => {
+        const next = Math.round(event.nativeEvent.layout.width)
+        if (next > 0 && next !== width) {
+          setWidth(next)
+        }
+      }}
+      accessibilityRole="imagebutton"
+      style={{ alignSelf: 'stretch' }}
+    >
       <Image
         source={{ uri }}
-        style={[styles.imageThumb, { height }]}
-        resizeMode="cover"
+        style={[styles.imageThumb, { width: '100%', height }]}
+        resizeMode="contain"
         accessibilityLabel={label}
       />
     </Pressable>
@@ -73,8 +93,8 @@ export function MobileNativeChatImageStrip({
   )
 }
 
-function useImageHeight(uri: string): number {
-  const [height, setHeight] = useState((THUMB_WIDTH * 3) / 4)
+function useImageAspect(uri: string): number {
+  const [aspect, setAspect] = useState(3 / 4)
   useEffect(() => {
     let live = true
     // The react-native mock in tests has no getSize; the 4:3 default stands.
@@ -84,8 +104,8 @@ function useImageHeight(uri: string): number {
     Image.getSize(
       uri,
       (w, h) => {
-        if (live && w > 0) {
-          setHeight(Math.min(THUMB_MAX_HEIGHT, Math.max(THUMB_MIN_HEIGHT, (THUMB_WIDTH * h) / w)))
+        if (live && w > 0 && h > 0) {
+          setAspect(h / w)
         }
       },
       () => {}
@@ -94,5 +114,5 @@ function useImageHeight(uri: string): number {
       live = false
     }
   }, [uri])
-  return height
+  return aspect
 }

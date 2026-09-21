@@ -1,7 +1,40 @@
+diff --git a/Libraries/Components/TextInput/TextInput.js b/Libraries/Components/TextInput/TextInput.js
+index adca4e337572e4af879942485172dcd4ebf3dbc2..eedcc77f7a36c75d2ef28cc42b19bc5b16331cc1 100644
+--- a/Libraries/Components/TextInput/TextInput.js
++++ b/Libraries/Components/TextInput/TextInput.js
+@@ -651,7 +651,11 @@ function InternalTextInput(props: TextInputProps): React.Node {
+ 
+   // Keep the original (potentially nested) style when possible, as React can diff these more efficiently
+   let _style = props.style;
+-  const flattenedStyle = flattenStyle<TextStyleProp>(props.style);
++  // Code UI: a field that names no face draws Instrument Sans. Same hook as Text.
++  if (typeof global.__codeUiTextStyle === 'function') {
++    _style = global.__codeUiTextStyle(_style);
++  }
++  const flattenedStyle = flattenStyle<TextStyleProp>(_style);
+   if (flattenedStyle != null) {
+     let overrides: ?{...TextStyleInternal} = null;
+     if (typeof flattenedStyle?.fontWeight === 'number') {
+diff --git a/Libraries/Text/Text.js b/Libraries/Text/Text.js
+index 8e7b29cb609698cbd6a1852a4276fda920f860ba..afd308c678aad664cdac3a5222ef4f7a431f88fa 100644
+--- a/Libraries/Text/Text.js
++++ b/Libraries/Text/Text.js
+@@ -168,6 +168,11 @@ const TextImpl: component(
+     selectionColor != null ? processColor(selectionColor) : undefined;
+ 
+   let _style = style;
++  // Code UI: a Text that names no face draws Instrument Sans. The app installs
++  // global.__codeUiTextStyle from src/theme/fonts.ts before the tree paints.
++  if (typeof global.__codeUiTextStyle === 'function') {
++    _style = global.__codeUiTextStyle(_style);
++  }
+   if (__DEV__) {
+     if (PressabilityDebug.isEnabled() && onPress != null) {
+       _style = [style, {color: 'magenta'}];
 diff --git a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
 index 07fb9c4e7b674182a40d57b7ad5f70fc71503d34..40b4f797e84b54a64113dafe40d1ccc2ca44a18e 100644
 --- a/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
-+++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm	
++++ b/React/Fabric/Mounting/ComponentViews/Text/RCTParagraphComponentView.mm
 @@ -142,6 +142,7 @@ - (void)prepareForRecycle
  {
    [super prepareForRecycle];
@@ -13,7 +46,7 @@ index 07fb9c4e7b674182a40d57b7ad5f70fc71503d34..40b4f797e84b54a64113dafe40d1ccc2
 diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
 index 917dc6d88e2840351f6ca1a3c697ffc467dec933..bf429705370f81a4dea6ef8a7fd95da2c5ed3b0b 100644
 --- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-+++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm	
++++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
 @@ -711,6 +711,7 @@ - (void)handleInputAccessoryDoneButton
  {
    return {
@@ -25,7 +58,7 @@ index 917dc6d88e2840351f6ca1a3c697ffc467dec933..bf429705370f81a4dea6ef8a7fd95da2
 diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
 index 2982b12fe014fa2c6541782ee789237b4f25b2f0..c8563f16dabd92cf0571b4bae922aeb869a50d21 100644
 --- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
-+++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp	
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.cpp
 @@ -24,6 +24,10 @@ static jsi::Value textInputMetricsPayload(
  
    payload.setProperty(runtime, "eventCount", textInputMetrics.eventCount);
@@ -40,7 +73,7 @@ index 2982b12fe014fa2c6541782ee789237b4f25b2f0..c8563f16dabd92cf0571b4bae922aeb8
 diff --git a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
 index a3f2e01c130c1a53aee0b39e72927d21f2a6973d..c9d34f8b42644800b5c85e5be45b6ebfbe94a54d 100644
 --- a/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
-+++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h	
++++ b/ReactCommon/react/renderer/components/textinput/TextInputEventEmitter.h
 @@ -7,6 +7,8 @@
  
  #pragma once

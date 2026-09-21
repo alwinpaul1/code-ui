@@ -146,9 +146,9 @@ describe('a batch of tool calls in one run header', () => {
   it('does not name a tool or its argument in the collapsed row', () => {
     const { texts } = render(PUNCTUATED_RUN)
     expect(texts.join(' ')).not.toContain('browser.open')
-    expect(texts.join(' ')).not.toContain('README.md')
-    // `tools/read` reads; `browser.open` is a tool with no plain-English verb.
-    expect(texts).toContain('Read a file, used a tool')
+    // A single read names the file, the way the Claude app's row does.
+    // `browser.open` still has no plain-English verb, so it stays "a tool".
+    expect(texts).toContain('Used a tool, read README.md')
   })
 
   it('falls back to a plain call count when no call has a name', () => {
@@ -280,7 +280,7 @@ describe('a tool run while the turn is still working', () => {
 
   it('goes back to the batch summary the moment the turn settles', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: false })
-    expect(texts(tree).some((text) => text.startsWith('Ran '))).toBe(true)
+    expect(texts(tree)).toContain('Read a.ts, ran a command')
     expect(texts(tree).some((text) => text.startsWith('Running'))).toBe(false)
   })
 

@@ -19,8 +19,6 @@ const NOUN: Record<Kind, { verb: string; one: string; many: string }> = {
   other: { verb: 'used', one: 'a tool', many: 'tools' }
 }
 
-const ORDER: Kind[] = ['command', 'read', 'edit', 'search', 'agent', 'web', 'other']
-
 export function toolCallKind(name: string): Kind {
   const key = name.trim().toLowerCase().replace(/^.*[./]/, '')
   if (/^(bash|shell|exec|run_command|terminal|command|powershell)$/.test(key)) {
@@ -44,32 +42,54 @@ export function toolCallKind(name: string): Kind {
   return 'other'
 }
 
+function readFileName(block: NativeChatBlock): string | null {
+  if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
+    return null
+  }
+  const input = block.input
+  if (!input || typeof input !== 'object') {
+    return null
+  }
+  const record = input as Record<string, unknown>
+  const path = record.file_path ?? record.path ?? record.filePath
+  if (typeof path !== 'string') {
+    return null
+  }
+  const name = path.split(/[/\\]/).pop()?.trim()
+  return name && name.length > 0 ? name : null
+}
+
 export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
-  const counts = new Map<Kind, { total: number; failed: number }>()
-  const pending: Kind[] = []
+  const groups: { kind: Kind; total: number; failed: number; file: string | null }[] = []
+  const indexByKind = new Map<Kind, number>()
+  const pending: number[] = []
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
       const kind = toolCallKind(block.name)
-      pending.push(kind)
-      const entry = counts.get(kind) ?? { total: 0, failed: 0 }
+      let index = indexByKind.get(kind)
+      if (index === undefined) {
+        index = groups.length
+        indexByKind.set(kind, index)
+        groups.push({ kind, total: 0, failed: 0, file: null })
+      }
+      const entry = groups[index]!
       entry.total += 1
-      counts.set(kind, entry)
+      entry.file = entry.total === 1 ? readFileName(block) : null
+      pending.push(index)
     } else if (isToolResultBlock(block)) {
       // FIFO by ordinal, the pairing rule the fold itself uses.
-      const kind = pending.shift()
-      if (kind && block.isError) {
-        counts.get(kind)!.failed += 1
+      const index = pending.shift()
+      const entry = index === undefined ? undefined : groups[index]
+      if (entry && block.isError) {
+        entry.failed += 1
       }
     }
   }
   const parts: string[] = []
-  for (const kind of ORDER) {
-    const entry = counts.get(kind)
-    if (!entry) {
-      continue
-    }
-    const noun = NOUN[kind]
-    const amount = entry.total === 1 ? noun.one : `${entry.total} ${noun.many}`
+  for (const entry of groups) {
+    const noun = NOUN[entry.kind]
+    const amount =
+      entry.total === 1 ? (entry.file ?? noun.one) : `${entry.total} ${noun.many}`
     const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''
     parts.push(`${noun.verb} ${amount}${failed}`)
   }

@@ -586,6 +586,33 @@ describe('agent-read thumbnails across a mid-turn split', () => {
   const previews = { a2: ['data:image/png;base64,AAAA'] }
   const thumbnail = { type: 'image-ref', url: 'data:image/png;base64,AAAA', alt: 'Image the agent read' }
 
+  it('keeps the words before a read image ahead of it, and the words after it behind', () => {
+    const message = {
+      id: 'a1',
+      role: 'assistant' as const,
+      timestamp: 0,
+      source: 'transcript' as const,
+      blocks: [
+        { type: 'text' as const, text: 'BLADE flow in the HAWX layout.' },
+        { type: 'tool-call' as const, id: 'c1', name: 'Read', input: { file_path: '/repo/blade_flow.png' } },
+        { type: 'text' as const, text: 'Fable rerouted every connector by hand.' }
+      ]
+    }
+    const { data } = buildMobileNativeChatTransientData({
+      messages: [message],
+      folded: [message],
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { a1: ['data:image/png;base64,AAAA'] }
+    })
+    expect(data[0]?.blocks.map((block) => (block.type === 'text' ? block.text : block.type))).toEqual([
+      'BLADE flow in the HAWX layout.',
+      'tool-call',
+      'image-ref',
+      'Fable rerouted every connector by hand.'
+    ])
+  })
+
   it('lands under the assistant turn when the Read folded into it', () => {
     const folded = foldMobileNativeChatMessages(raw)
     const { data } = buildMobileNativeChatTransientData({

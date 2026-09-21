@@ -8,8 +8,13 @@ import {
 // The one weight, from its own entry: the package root requires every weight
 // and Metro bundles what is required, which was 28 files for one face.
 import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular'
+import { installInstrumentSansText } from './instrument-sans-text'
 
 export { fontFamily, type FontWeight } from './tokens'
+
+// Every screen that renders a Text without a face gets Instrument Sans.
+// The root layout imports this module before the tree paints.
+installInstrumentSansText()
 
 /** Loads the four Instrument Sans faces and the one code face. Only the root
  *  layout calls this; every other module reads the family names from
