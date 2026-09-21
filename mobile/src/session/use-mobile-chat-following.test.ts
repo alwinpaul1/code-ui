@@ -32,6 +32,62 @@ describe('chat text selection around a scroll', () => {
     expect(latest!.textSelectable).toBe(true)
   })
 
+  // 2026-09-21, phone recording: a hold on the agent's prose, on a list that
+  // had been still for half a second, selected nothing. The flag is turned
+  // off by a drag or a fling and back on only by the END events, and a fling
+  // that a re-anchor or a nested scroll view interrupts never sends one. The
+  // finger lifting and the samples stopping are evidence enough that the
+  // list is at rest; a missed end event must not cost the reader selection
+  // until their next clean scroll.
+  it('comes back on its own once the finger is up and the list has stopped moving, even with no end event', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => {
+      latest!.touchStart()
+      latest!.beginScroll()
+    })
+    act(() => {
+      latest!.touchEnd()
+    })
+    // A fling: samples keep the window closed while the list still moves.
+    act(() => {
+      vi.advanceTimersByTime(200)
+      latest!.scrollSample()
+      vi.advanceTimersByTime(200)
+      latest!.scrollSample()
+    })
+    expect(latest!.textSelectable).toBe(false)
+    // …and no momentum-end ever arrives.
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(latest!.textSelectable).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('stays off while the finger that stopped a fling is still down, the 2026-09-12 rule', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    act(() => {
+      latest!.touchStart()
+      latest!.beginScroll()
+    })
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+    expect(latest!.textSelectable).toBe(false)
+    act(() => {
+      latest!.touchEnd()
+      vi.advanceTimersByTime(300)
+    })
+    expect(latest!.textSelectable).toBe(true)
+    vi.useRealTimers()
+  })
+
   it('stops following on a drag, so nothing yanks the reader while they scroll', () => {
     act(() => {
       renderer = create(createElement(Probe))

@@ -117,7 +117,8 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     showJumpToLatest,
     setFollowing,
     beginScroll,
-    endScroll
+    endScroll,
+    scrollSample
   } = useMobileChatFollowing()
   followGate.noteData(rows)
 
@@ -226,8 +227,13 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   )
 
   const evaluateEdge = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => applyMetrics(event.nativeEvent),
-    [applyMetrics]
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // Every sample says the list still moves; the gap after the last one
+      // says it stopped (use-mobile-chat-following.ts, the quiet window).
+      scrollSample()
+      applyMetrics(event.nativeEvent)
+    },
+    [applyMetrics, scrollSample]
   )
 
   // FlashList's own end-of-content signal, which in an inverted list is the

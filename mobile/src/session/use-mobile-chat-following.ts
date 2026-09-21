@@ -7,6 +7,12 @@ import { createChatFollowGate } from './mobile-chat-follow-gate'
  *  (screen recording, 2026-09-12 22:49). A shorter touch is a tap. */
 const LONG_PRESS_MS = 400
 
+/** How long the list must go without a scroll sample, with the finger up,
+ *  before it counts as at rest without an end event. Longer than a frame of
+ *  a slow fling (samples arrive every 16 ms while anything moves), shorter
+ *  than a reader's next hold. */
+const QUIET_MS = 250
+
 /** A drag owns scrolling until it settles, even inside the live-edge threshold.
  *  While it does, chat text is not selectable: Android arms a text-selection
  *  long-press under any selectable Text, and a finger put down to stop a fling
@@ -25,15 +31,52 @@ export function useMobileChatFollowing() {
     followingRef.current = next
     setShowJumpToLatest((visible) => (visible === !next ? visible : !next))
   }, [])
+  // The END events are not enough to bring selection back. A fling that a
+  // re-anchor or a nested scroll view interrupts sends no momentum-end, and
+  // the flag then sat false until the reader's next clean scroll: a hold on
+  // a list that had been still for half a second selected nothing (phone
+  // recording, 2026-09-21). The finger lifting and the samples stopping are
+  // the evidence that the list is at rest, so those restore it too. A finger
+  // still down after beginning a drag, or put down to stop a fling, keeps
+  // selection off until it lifts: the 2026-09-12 rule.
+  const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cancelQuiet = useCallback(() => {
+    if (quietTimer.current !== null) {
+      clearTimeout(quietTimer.current)
+      quietTimer.current = null
+    }
+  }, [])
+  const armQuiet = useCallback(() => {
+    cancelQuiet()
+    if (!scrollingRef.current || holdingRef.current) {
+      return
+    }
+    quietTimer.current = setTimeout(() => {
+      quietTimer.current = null
+      if (scrollingRef.current && !holdingRef.current) {
+        scrollingRef.current = false
+        setTextSelectable(true)
+      }
+    }, QUIET_MS)
+  }, [cancelQuiet])
   const beginScroll = useCallback(() => {
     scrollingRef.current = true
+    cancelQuiet()
     setTextSelectable(false)
     setFollowing(false)
-  }, [setFollowing])
+  }, [cancelQuiet, setFollowing])
   const endScroll = useCallback(() => {
     scrollingRef.current = false
+    cancelQuiet()
     setTextSelectable(true)
-  }, [])
+  }, [cancelQuiet])
+  /** A scroll sample while a scroll is in flight: the list is still moving,
+   *  so the quiet window starts over. */
+  const scrollSample = useCallback(() => {
+    if (scrollingRef.current) {
+      armQuiet()
+    }
+  }, [armQuiet])
   // Armed on touch-down, disarmed on release: control passes at the long-press
   // mark while the finger is STILL DOWN, not when it lifts.
   //
@@ -55,6 +98,7 @@ export function useMobileChatFollowing() {
   const touchStart = useCallback(() => {
     holdingRef.current = true
     touchStartedAt.current = Date.now()
+    cancelQuiet()
     disarmLongPress()
     longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null
@@ -63,7 +107,7 @@ export function useMobileChatFollowing() {
         setFollowing(false)
       }
     }, LONG_PRESS_MS)
-  }, [disarmLongPress, setFollowing])
+  }, [cancelQuiet, disarmLongPress, setFollowing])
   const touchEnd = useCallback(() => {
     holdingRef.current = false
     disarmLongPress()
@@ -72,14 +116,23 @@ export function useMobileChatFollowing() {
     if (Date.now() - touchStartedAt.current >= LONG_PRESS_MS) {
       setFollowing(false)
     }
-  }, [disarmLongPress, setFollowing])
-  useEffect(() => disarmLongPress, [disarmLongPress])
+    // The finger is up; if the list is not moving either, selection returns.
+    armQuiet()
+  }, [armQuiet, disarmLongPress, setFollowing])
+  useEffect(
+    () => () => {
+      disarmLongPress()
+      cancelQuiet()
+    },
+    [cancelQuiet, disarmLongPress]
+  )
   return {
     followingRef,
     scrollingRef,
     holdingRef,
     touchStart,
     touchEnd,
+    scrollSample,
     followGate,
     textSelectable,
     showJumpToLatest,
