@@ -31,7 +31,9 @@ const appState = vi.hoisted(() => {
       return { remove: () => listeners.delete(listener) }
     },
     emit(state: string) {
-      for (const listener of listeners) listener(state)
+      for (const listener of listeners) {
+        listener(state)
+      }
     }
   }
 })
