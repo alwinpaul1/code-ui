@@ -216,8 +216,11 @@ export function MobileSourceControlPanel({
   }, [activeTab, isHostedRepo, loadStatus, refetchPr])
   const pullToRefresh = useMemo(() => ({ refreshing, onRefresh }), [refreshing, onRefresh])
 
-  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip safe-area chrome (the dock column owns it).
-  const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
+  // Embedded mode docks beside the terminal: close the dock instead of popping a route; skip
+  // safe-area chrome (the dock column owns it). Two handlers rather than one chosen by mode,
+  // because the header renders a Close or a Back and they are not the same control.
+  const onBack = () => router.back()
+  const onClose = onRequestClose ?? (() => router.back())
   // Chromeless PR body has no header, so surface open-on-web on the hub chrome while the PR segment is active.
   const prWebUrl =
     activeTab === 'pr' &&
@@ -232,6 +235,7 @@ export function MobileSourceControlPanel({
       embedded={embedded}
       worktreeLabel={worktreeLabel}
       onBack={onBack}
+      onClose={onClose}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
     />

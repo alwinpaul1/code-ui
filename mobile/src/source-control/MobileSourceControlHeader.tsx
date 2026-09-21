@@ -6,7 +6,10 @@ import { styles } from './mobile-source-control-styles'
 type Props = {
   embedded: boolean
   worktreeLabel: string
+  /** Pops the route. The embedded dock does not pop anything, which is why `onClose` is separate. */
   onBack: () => void
+  /** Dismisses the dock beside the terminal, which is a close and must not be called Back. */
+  onClose: () => void
   // When set (PR segment ready with a host URL), show open-on-web flush-right of
   // the title so the control stays visible while the PR body scrolls.
   onOpenPrWeb?: () => void
@@ -17,23 +20,35 @@ export function MobileSourceControlHeader({
   embedded,
   worktreeLabel,
   onBack,
+  onClose,
   onOpenPrWeb,
   prNumber = null
 }: Props) {
   return (
     <View style={styles.topBar}>
-      <Pressable
-        style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-        onPress={onBack}
-        hitSlop={8}
-        accessibilityLabel={embedded ? 'Close source control' : 'Back to session'}
-      >
-        {embedded ? (
+      {/* Two controls, not one with a conditional label: the dock's dismiss is a close, and a
+          single control serving both modes has to be named Back in a mode where it closes. */}
+      {embedded ? (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onClose}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close source control"
+        >
           <X size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        ) : (
+        </Pressable>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+          onPress={onBack}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Back to session"
+        >
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-        )}
-      </Pressable>
+        </Pressable>
+      )}
       <View style={styles.titleBlock}>
         <Text style={styles.title} numberOfLines={1}>
           Source Control
