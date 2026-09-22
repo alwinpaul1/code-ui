@@ -27,6 +27,7 @@ import { connectionLogStore } from '../transport/persisted-connection-log-store'
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostProfile } from '../transport/types'
 import { loadBackgroundDeliveryEnabled } from './background-link-preference'
+import { forwardBackgroundClientRevival } from './background-client-revival'
 import {
   createBackgroundNotificationWatcher,
   type BackgroundNotificationWatcher
@@ -48,11 +49,12 @@ function openBackgroundClient(host: HostProfile): RpcClient {
     (entry) => connectionLogStore.append(host.id, entry),
     { backgroundLink: true }
   )
-  // Why: the UI's provider is what normally forwards "network came back"
-  // nudges; with no UI mounted the listener has to subscribe for itself.
-  const unsubscribeRevival = subscribeConnectionRevivalTriggers((reason) =>
-    client.notifyForeground(reason)
-  )
+  // The process-level watcher replaces the relay on a network change.
+  // This subscription is only for the screen coming back, when that watcher
+  // has already handed the socket over.
+  const unsubscribeRevival = subscribeConnectionRevivalTriggers((reason) => {
+    forwardBackgroundClientRevival(reason, (next) => client.notifyForeground(next))
+  })
   const close = client.close
   client.close = () => {
     unsubscribeRevival()
@@ -72,6 +74,14 @@ export function getBackgroundLinkWatcher(): BackgroundNotificationWatcher {
     peekLiveClient: peekLiveHostClient,
     subscribeNotifications: subscribeToDesktopNotifications,
     log
+  })
+  // The screen's own listener is gone once Recents destroys it, and while the
+  // screen is only backgrounded this is the listener that stays scheduled.
+  // A network change replaces the relay here so the next open is already connected.
+  subscribeConnectionRevivalTriggers((reason) => {
+    if (reason === 'network-change') {
+      watcher?.reconnectForNetworkChange()
+    }
   })
   watcher.setUiVisible(AppState.currentState === 'active')
   AppState.addEventListener('change', (state) => {

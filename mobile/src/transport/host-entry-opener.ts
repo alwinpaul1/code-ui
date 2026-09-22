@@ -1,4 +1,10 @@
-import { publishLiveHostClient } from './live-host-clients'
+import {
+  peekLiveHostClient,
+  peekLiveHostClientId,
+  publishLiveHostClient,
+  retireLiveHostClient,
+  reusableParkedHostClient
+} from './live-host-clients'
 import {
   connectionLogStore,
   recordConnectionClientSessionStart
@@ -59,6 +65,7 @@ export async function openHostClientEntry(
   }
   const isCurrent = () => state.pendingOpens.isCurrent(hostId, ticket)
   const isWanted = () => allowUnowned || (state.pendingAcquisitions.get(hostId) ?? 0) > 0
+  let parked = reusableParkedHostClient(peekLiveHostClient(hostId))
   const failCurrentOpen = (category: HostOpenFailureCategory) => {
     if (!isCurrent()) {
       return
@@ -76,7 +83,9 @@ export async function openHostClientEntry(
       detail: `${category}; retry ${retry.nextDelayMs}ms (failure ${retry.failureCount})`
     })
   }
-  state.notifyHostState(hostId, 'connecting')
+  if (!parked) {
+    state.notifyHostState(hostId, 'connecting')
+  }
 
   try {
     let host = state.primedHosts.get(hostId)
@@ -96,6 +105,19 @@ export async function openHostClientEntry(
     if (!isCurrent() || !isWanted()) {
       return null
     }
+    // The catalog read can outlive the socket. Adopting the client captured
+    // before that read stored an auth-failed relay and called it a success.
+    const stillParked = reusableParkedHostClient(peekLiveHostClient(hostId))
+    if (parked && parked !== stillParked) {
+      if (peekLiveHostClient(hostId) === parked) {
+        retireLiveHostClient(hostId, parked)
+      }
+      parked.close()
+      if (!stillParked && isCurrent()) {
+        state.notifyHostState(hostId, 'connecting')
+      }
+    }
+    parked = stillParked
     const published = state.store.get(hostId)
     if (published) {
       settle()
@@ -104,15 +126,21 @@ export async function openHostClientEntry(
     }
 
     let client: RpcClient
-    try {
-      recordConnectionClientSessionStart(hostId)
-      client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
-    } catch {
-      failCurrentOpen('client-construction')
-      return null
+    if (parked) {
+      client = parked
+    } else {
+      try {
+        recordConnectionClientSessionStart(hostId)
+        client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
+      } catch {
+        failCurrentOpen('client-construction')
+        return null
+      }
     }
     if (!isCurrent() || !isWanted() || state.store.has(hostId)) {
-      client.close()
+      if (!parked) {
+        client.close()
+      }
       return state.store.get(hostId) ?? null
     }
     const unsubState = client.onStateChange((next) => {
@@ -141,7 +169,7 @@ export async function openHostClientEntry(
       }) ?? (() => {})
     const entry: HostClientStoreEntry = {
       client,
-      clientId: host.deviceToken,
+      clientId: (parked ? peekLiveHostClientId(hostId) : '') || host.deviceToken,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
       unsubState,
@@ -150,7 +178,7 @@ export async function openHostClientEntry(
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)
-    publishLiveHostClient(hostId, client)
+    publishLiveHostClient(hostId, client, entry.clientId)
     settle()
     const priorFailureCount = state.retryScheduler.recordSuccess(hostId)
     if (priorFailureCount > 0) {

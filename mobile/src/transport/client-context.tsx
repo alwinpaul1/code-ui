@@ -1,11 +1,17 @@
 // Single shared RpcClient per host, collapsing the old per-screen WebSocket connections.
 // Design: docs/mobile-shared-client-per-host.md.
-import { retireLiveHostClient } from './live-host-clients'
+import { isBackgroundRelayListening } from '../background/background-notification-watcher'
+import {
+  peekLiveHostClient,
+  retireLiveHostClient,
+  reusableParkedHostClient
+} from './live-host-clients'
 import {
   createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   type ReactNode
@@ -88,9 +94,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     entry?.unsubState()
     entry?.unsubConnectionPath()
     entry?.unsubLivenessProbing()
-    retireLiveHostClient(hostId, storeRef.current.get(hostId)?.client)
+    // No entry means this host was already parked. Retiring with no client
+    // argument wiped that parked socket, and the next open dialled again.
+    if (entry) {
+      retireLiveHostClient(hostId, entry.client)
+      entry.client.close()
+    }
     storeRef.current.delete(hostId)
-    entry?.client.close()
     notifyHostState(hostId, 'disconnected')
     notifyAllHosts()
   }, [])
@@ -206,8 +216,19 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // Set true from the layout cleanup below, which runs before the screens'
+  // passive cleanups. Home releases with close-if-unused on that same teardown.
+  const retainLiveRelayRef = useRef(false)
+
   const releaseAndCloseIfUnused = useCallback(
     (hostId: string, acquisition: HostClientAcquisition) => {
+      // Home releases with close-if-unused. On a recents swipe that release
+      // runs in the same teardown as the park below; closing here is what
+      // made the next open show Reconnecting on the same Wi-Fi.
+      if (retainLiveRelayRef.current) {
+        release(hostId, acquisition)
+        return
+      }
       const acquisitionCount = acquisitionsRef.current.release(hostId, acquisition)
       if (acquisitionCount === null) {
         if (acquisitionsRef.current.count(hostId) === 0) {
@@ -229,15 +250,27 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         closeEntry(hostId, { forgetPrimedHost: false, preserveAcquisitions: false })
       }
     },
-    [closeEntry]
+    [closeEntry, release]
   )
 
   const closeIfUnused = useCallback(
     (hostId: string) => {
+      if (retainLiveRelayRef.current) {
+        return
+      }
       const entry = storeRef.current.get(hostId)
       const acquisitionCount = acquisitionsRef.current.count(hostId)
       const hasPendingOpen = pendingOpensRef.current.getActivePromise(hostId) !== null
       if (!entry && acquisitionCount === 0 && !hasPendingOpen) {
+        // The watcher can hand back a relay this screen is not acquiring.
+        // It lives only in the parked map, so a store miss used to leave it up.
+        const parked = reusableParkedHostClient(peekLiveHostClient(hostId))
+        if (parked) {
+          retireLiveHostClient(hostId, parked)
+          parked.close()
+          notifyHostState(hostId, 'disconnected')
+          notifyAllHosts()
+        }
         return
       }
       if (acquisitionCount === 0) {
@@ -301,7 +334,16 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     []
   )
 
-  // Close all clients on provider unmount. Empty deps: [closeEntry] would let Fast Refresh tear down all live sockets.
+  useLayoutEffect(() => {
+    return () => {
+      retainLiveRelayRef.current = true
+    }
+  }, [])
+
+  // The activity going away (swipe from Recents) unmounts this tree while the
+  // process, and a connected relay, are still alive. Parking that socket lets
+  // the next open take it back. A dead one is still closed.
+  // Empty deps: [closeEntry] would let Fast Refresh tear down all live sockets.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const store = storeRef.current
@@ -311,7 +353,14 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       acquisitionsRef.current.clearAll()
       manualDemandRef.current.clear()
       pendingAcquisitionsRef.current.clear()
-      for (const [hostId] of store) {
+      for (const [hostId, entry] of store) {
+        if (reusableParkedHostClient(entry.client)) {
+          entry.unsubState()
+          entry.unsubConnectionPath()
+          entry.unsubLivenessProbing()
+          store.delete(hostId)
+          continue
+        }
         closeEntry(hostId, { forgetPrimedHost: true, preserveAcquisitions: false })
       }
     }
@@ -320,6 +369,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: nudge live clients when the OS signals the link may be back so sessions recover without a restart (issue #5049).
   useEffect(() => {
     return subscribeConnectionRevivalTriggers((reason) => {
+      // The background watcher is already replacing the relay. A second nudge
+      // from this tree would start another dial on top of that one.
+      if (reason === 'network-change' && isBackgroundRelayListening()) {
+        return
+      }
       for (const hostId of pendingAcquisitionsRef.current.keys()) {
         retrySchedulerRef.current?.expedite(hostId)
       }

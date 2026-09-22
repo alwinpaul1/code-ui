@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createBackgroundNotificationWatcher } from './background-notification-watcher'
+import {
+  createBackgroundNotificationWatcher,
+  isBackgroundRelayListening
+} from './background-notification-watcher'
 import type { ConnectionState, HostProfile } from '../transport/types'
+import {
+  clearLiveHostClientsForTest,
+  peekLiveHostClient
+} from '../transport/live-host-clients'
 
 // The UI owns the host connections while it is on screen; this watcher owns
 // them while it is not. Android tears the React tree down when the app is
@@ -11,6 +18,7 @@ type FakeClient = {
   getState: () => ConnectionState
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   close: () => void
+  notifyForeground: (reason: string) => void
   setState: (next: ConnectionState) => void
 }
 
@@ -24,6 +32,7 @@ function makeClient(): FakeClient {
       return () => listeners.delete(listener)
     },
     close: vi.fn(),
+    notifyForeground: vi.fn(),
     setState: (next) => {
       state = next
       listeners.forEach((listener) => listener(next))
@@ -102,18 +111,37 @@ describe('background notification watcher', () => {
     expect(watcher.peekClient('h1')).toBeNull()
   })
 
-  it('hands the connections back to the UI when it returns, unsubscribing and closing', async () => {
+  it('gives the background relay back when the app opens, without dialling again', async () => {
+    clearLiveHostClientsForTest()
     const { watcher, clients, unsubscribes } = harness()
     watcher.setEnabled(true)
     watcher.setUiVisible(false)
     await settle()
     clients.get('h1')!.setState('connected')
 
+    // The process stayed up and this dial is the relay. Closing it here made
+    // the screen start a second one and show Reconnecting (device, 2026-09-22).
     watcher.setUiVisible(true)
     await settle()
     expect(unsubscribes.get('h1')).toHaveBeenCalledTimes(1)
-    expect(clients.get('h1')!.close).toHaveBeenCalledTimes(1)
-    expect(clients.get('h2')!.close).toHaveBeenCalledTimes(1)
+    expect(clients.get('h1')!.close).not.toHaveBeenCalled()
+    expect(clients.get('h2')!.close).not.toHaveBeenCalled()
+    expect(peekLiveHostClient('h1')).toBe(clients.get('h1'))
+    expect(peekLiveHostClient('h2')).toBe(clients.get('h2'))
+  })
+
+  it('reconnects the background relay when the network changes', async () => {
+    const live = makeClient()
+    live.setState('connected')
+    const { watcher, openClient } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+
+    watcher.reconnectForNetworkChange()
+
+    expect(live.notifyForeground).toHaveBeenCalledWith('network-change')
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2'])
   })
 
   it('does nothing while delivery is off, and closes everything when it is switched off', async () => {
@@ -186,9 +214,48 @@ describe('sharing the connection the UI already holds', () => {
     expect(live.close).not.toHaveBeenCalled()
   })
 
-  it('dials its own link when the borrowed UI client is suspended in the background', async () => {
-    // Why: the UI suspends its relay 30 s after backgrounding; reviewed
-    // 2026-09-11, the borrowed host stayed listed and notifications stopped.
+  it('drops the background-hold flag when the borrowed socket dies and the screen returns before a replacement opens', async () => {
+    const live = makeClient()
+    live.setState('connected')
+    let releaseSecond: (hosts: HostProfile[]) => void = () => {}
+    let calls = 0
+    const watcher = createBackgroundNotificationWatcher({
+      loadHosts: () => {
+        calls += 1
+        if (calls === 1) {
+          return Promise.resolve([hosts[0]!])
+        }
+        return new Promise((resolve) => {
+          releaseSecond = resolve
+        })
+      },
+      openClient: (() => makeClient()) as never,
+      subscribeNotifications: (() => () => {}) as never,
+      peekLiveClient: ((hostId: string) => (hostId === 'h1' ? live : null)) as never,
+      log: () => {}
+    })
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+    expect(isBackgroundRelayListening()).toBe(true)
+
+    // Wi-Fi dropped the borrowed socket. The replacement host list is still
+    // in flight when the screen comes back (device, 2026-09-22).
+    live.setState('disconnected')
+    await settle()
+    watcher.setUiVisible(true)
+    await settle()
+
+    expect(isBackgroundRelayListening()).toBe(false)
+    releaseSecond([hosts[0]!])
+    await settle()
+    expect(isBackgroundRelayListening()).toBe(false)
+    watcher.stop()
+  })
+
+  it('replaces the borrowed relay when it drops, instead of dialling a second one', async () => {
+    // A second dial connected in the background while the screen kept the
+    // dead socket, so opening the app showed Reconnecting (device, 2026-09-22).
     const live = makeClient()
     live.setState('connected')
     const { watcher, openClient, unsubscribes } = harness(new Map([['h1', live]]))
@@ -200,7 +267,26 @@ describe('sharing the connection the UI already holds', () => {
     live.setState('disconnected')
     await settle()
 
+    expect(live.notifyForeground).toHaveBeenCalledWith('network-change')
+    expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2'])
     expect(unsubscribes.get('h1')).toHaveBeenCalledTimes(1)
+    expect(live.close).not.toHaveBeenCalled()
+
+    live.setState('reconnecting')
+    expect(live.notifyForeground).toHaveBeenCalledTimes(1)
+  })
+
+  it('dials its own link when the borrowed relay is rejected', async () => {
+    const live = makeClient()
+    live.setState('connected')
+    const { watcher, openClient } = harness(new Map([['h1', live]]))
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await settle()
+
+    live.setState('auth-failed')
+    await settle()
+
     expect(openClient.mock.calls.map(([host]) => host.id)).toEqual(['h2', 'h1'])
     expect(live.close).not.toHaveBeenCalled()
   })

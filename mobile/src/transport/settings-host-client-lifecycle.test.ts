@@ -11,6 +11,7 @@ import {
   type RpcClientContextValue
 } from './client-context'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
+import { clearLiveHostClientsForTest } from './live-host-clients'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
@@ -191,6 +192,8 @@ beforeEach(() => {
   routeFocus.effect = null
   connectMock.mockReset()
   loadHostsMock.mockReset()
+  // A live relay now survives the provider unmount. The next test must not adopt it.
+  clearLiveHostClientsForTest()
 })
 
 describe('settings host client lifecycle', () => {
@@ -363,9 +366,11 @@ describe('settings host client lifecycle', () => {
     expect(clients.get(addedHostId)?.closeMock).not.toHaveBeenCalled()
 
     act(() => renderer.unmount())
-    expect(clients.get(retainedHostId)?.closeMock).toHaveBeenCalledOnce()
-    expect(clients.get(sharedHostId)?.closeMock).toHaveBeenCalledOnce()
-    expect(clients.get(addedHostId)?.closeMock).toHaveBeenCalledOnce()
+    // The tree going away is a recents swipe, not a screen change. These
+    // relays are still live, so the process keeps them.
+    expect(clients.get(retainedHostId)?.closeMock).not.toHaveBeenCalled()
+    expect(clients.get(sharedHostId)?.closeMock).not.toHaveBeenCalled()
+    expect(clients.get(addedHostId)?.closeMock).not.toHaveBeenCalled()
   })
 
   it('does not close a settings client still held by an active consumer', async () => {
@@ -385,7 +390,7 @@ describe('settings host client lifecycle', () => {
     expect(clients.get(detailHostId)?.closeMock).not.toHaveBeenCalled()
 
     act(() => renderer.unmount())
-    expect(clients.get(detailHostId)?.closeMock).toHaveBeenCalledOnce()
+    expect(clients.get(detailHostId)?.closeMock).not.toHaveBeenCalled()
   })
 
   it('keeps a reconnect alive when another consumer remains after settings leaves', async () => {
@@ -450,7 +455,7 @@ describe('settings host client lifecycle', () => {
     expect(activeHostIds()).toEqual([retryHost.id])
     expect(retryClient.closeMock).not.toHaveBeenCalled()
     act(() => renderer?.unmount())
-    expect(retryClient.closeMock).toHaveBeenCalledOnce()
+    expect(retryClient.closeMock).not.toHaveBeenCalled()
   })
 
   it('cancels a released open without cancelling a rapid replacement acquisition', async () => {
@@ -583,7 +588,7 @@ describe('settings host client lifecycle', () => {
     expect(activeHostIds()).toEqual([...HOME_HOST_IDS].sort())
     expect(replacementClient?.closeMock).not.toHaveBeenCalled()
     act(() => renderer?.unmount())
-    expect(replacementClient?.closeMock).toHaveBeenCalledOnce()
+    expect(replacementClient?.closeMock).not.toHaveBeenCalled()
   })
 
   it('releases a manual host after Home demotes or stops tracking it', async () => {

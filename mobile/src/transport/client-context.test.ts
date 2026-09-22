@@ -27,6 +27,12 @@ import {
   useForceReconnect,
   useHostClient
 } from './client-context'
+import {
+  clearLiveHostClientsForTest,
+  peekLiveHostClient,
+  publishLiveHostClient
+} from './live-host-clients'
+import { createBackgroundNotificationWatcher } from '../background/background-notification-watcher'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
@@ -143,6 +149,7 @@ async function renderHarness(hostId: string): Promise<Harness> {
 beforeEach(() => {
   connectMock.mockReset()
   loadHostsMock.mockReset()
+  clearLiveHostClientsForTest()
 })
 
 describe('useHostClient', () => {
@@ -230,6 +237,196 @@ describe('useHostClient', () => {
     } finally {
       act(() => renderer?.unmount())
     }
+  })
+
+  it('keeps the connected relay when the screen is torn down and opened again', async () => {
+    const fake = makeFakeClient('connected')
+    connectMock.mockReturnValue(fake)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    const first = await renderHarness(HOST.id)
+    expect(first.hook.state).toBe('connected')
+    expect(connectMock).toHaveBeenCalledOnce()
+
+    // Swiping the app out of Recents destroys the React tree and used to close
+    // the socket. The process is still alive, so the next open dialled again
+    // and the home row said Reconnecting on the same Wi-Fi (device, 2026-09-22).
+    act(() => first.unmount())
+    expect(fake.closeMock).not.toHaveBeenCalled()
+
+    const second = await renderHarness(HOST.id)
+    expect(connectMock).toHaveBeenCalledOnce()
+    expect(second.hook.client).toBe(fake)
+    expect(second.hook.state).toBe('connected')
+    second.unmount()
+  })
+
+  it('keeps the home relay when recents clears the screen, and a network change replaces that same relay', async () => {
+    const fake = makeFakeClient('connected')
+    // A real close publishes disconnected. The background watcher treats that
+    // as the borrowed socket dying and dials another one.
+    fake.closeMock.mockImplementation(() => {
+      fake.emitState('disconnected')
+    })
+    connectMock.mockReturnValue(fake)
+    loadHostsMock.mockResolvedValue([HOST])
+    const openBackgroundClient = vi.fn(() => makeFakeClient('connecting'))
+
+    const seen: Array<ConnectionState | 'absent'> = []
+    function Home(): null {
+      const entries = useAllHostClients([HOST.id], { closeUnusedOnRelease: true })
+      seen.push(entries[0]?.state ?? 'absent')
+      return null
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+      await Promise.resolve()
+    })
+    expect(connectMock).toHaveBeenCalledOnce()
+    expect(seen.at(-1)).toBe('connected')
+
+    const watcher = createBackgroundNotificationWatcher({
+      loadHosts: async () => [HOST],
+      openClient: openBackgroundClient as never,
+      subscribeNotifications: () => () => {},
+      peekLiveClient: (hostId) => peekLiveHostClient(hostId),
+      log: () => {}
+    })
+    watcher.setEnabled(true)
+    watcher.setUiVisible(false)
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(openBackgroundClient).not.toHaveBeenCalled()
+
+    // Swiping the app out of Recents destroys this tree. The process and the
+    // foreground service stay up, on the same Wi-Fi (device, 2026-09-22).
+    seen.length = 0
+    act(() => renderer?.unmount())
+    expect(fake.closeMock).not.toHaveBeenCalled()
+    expect(openBackgroundClient).not.toHaveBeenCalled()
+
+    watcher.reconnectForNetworkChange()
+    expect(fake.notifyForeground).toHaveBeenCalledWith('network-change')
+
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+      await Promise.resolve()
+    })
+    expect(connectMock).toHaveBeenCalledOnce()
+    expect(seen[0]).toBe('connected')
+    expect(seen.every((state) => state === 'connected')).toBe(true)
+    expect(openBackgroundClient).not.toHaveBeenCalled()
+    act(() => {
+      renderer?.unmount()
+      watcher.stop()
+    })
+  })
+
+  it('still closes the home relay when that screen leaves and the app stays open', async () => {
+    const fake = makeFakeClient('connected')
+    connectMock.mockReturnValue(fake)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    function Home(): null {
+      useAllHostClients([HOST.id], { closeUnusedOnRelease: true })
+      return null
+    }
+    function App({ home }: { home: boolean }) {
+      return createElement(RpcClientProvider, null, home ? createElement(Home) : null)
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(App, { home: true }))
+      await Promise.resolve()
+    })
+    expect(connectMock).toHaveBeenCalledOnce()
+
+    act(() => renderer?.update(createElement(App, { home: false })))
+    expect(fake.closeMock).toHaveBeenCalledOnce()
+    act(() => renderer?.unmount())
+  })
+
+  it('closes a dead home relay when recents clears the screen', async () => {
+    const fake = makeFakeClient('connected')
+    connectMock.mockReturnValue(fake)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    function Home(): null {
+      useAllHostClients([HOST.id], { closeUnusedOnRelease: true })
+      return null
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+      await Promise.resolve()
+    })
+    act(() => fake.emitState('disconnected'))
+    act(() => renderer?.unmount())
+    expect(fake.closeMock).toHaveBeenCalledOnce()
+  })
+
+  it('dials again when the parked relay dies while the host catalog is loading', async () => {
+    const parked = makeFakeClient('connected')
+    const replacement = makeFakeClient('connected')
+    connectMock.mockReturnValueOnce(parked).mockReturnValueOnce(replacement)
+    let resolveSecond: ((hosts: (typeof HOST)[]) => void) | null = null
+    const secondLookup = new Promise<(typeof HOST)[]>((resolve) => {
+      resolveSecond = resolve
+    })
+    loadHostsMock.mockResolvedValueOnce([HOST]).mockReturnValueOnce(secondLookup)
+
+    function Home(): null {
+      useAllHostClients([HOST.id], { closeUnusedOnRelease: true })
+      return null
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+      await Promise.resolve()
+    })
+    expect(connectMock).toHaveBeenCalledOnce()
+    act(() => renderer?.unmount())
+    expect(parked.closeMock).not.toHaveBeenCalled()
+
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+    })
+    act(() => parked.emitState('auth-failed'))
+    await act(async () => {
+      resolveSecond?.([HOST])
+      await secondLookup
+    })
+
+    expect(parked.closeMock).toHaveBeenCalled()
+    expect(connectMock).toHaveBeenCalledTimes(2)
+    act(() => renderer?.unmount())
+  })
+
+  it('closes a parked relay the home screen is not keeping', async () => {
+    const parked = makeFakeClient('connected')
+    publishLiveHostClient(HOST.id, parked)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    function Home(): null {
+      useAllHostClients([HOST.id], { autoConnectHostIds: [], closeUnusedOnRelease: true })
+      return null
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Home)))
+      await Promise.resolve()
+    })
+    expect(parked.closeMock).toHaveBeenCalledOnce()
+    expect(peekLiveHostClient(HOST.id)).toBeNull()
+    act(() => renderer?.unmount())
   })
 
   it('drops the closed client when the host entry is removed', async () => {

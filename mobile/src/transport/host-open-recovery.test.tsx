@@ -31,6 +31,7 @@ import {
   useHostClient,
   useRefreshHostClient
 } from './client-context'
+import { clearLiveHostClientsForTest } from './live-host-clients'
 
 const HOST = {
   id: 'host-1',
@@ -65,6 +66,7 @@ beforeEach(() => {
   openHostLogicalClientMock.mockReset()
   loadHostsMock.mockReset()
   revival.callback = null
+  clearLiveHostClientsForTest()
 })
 
 afterEach(() => vi.useRealTimers())

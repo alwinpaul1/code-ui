@@ -26,6 +26,7 @@ vi.mock('../transport/mobile-web-bundle-fetch', () => ({
 }))
 
 import { RpcClientProvider } from '../transport/client-context'
+import { clearLiveHostClientsForTest } from '../transport/live-host-clients'
 import {
   useMobileWebBundleProbe,
   type MobileWebBundleProbeState
@@ -149,6 +150,7 @@ beforeEach(() => {
   connectMock.mockReset().mockReturnValue(fakeClient())
   loadHostsMock.mockReset().mockResolvedValue([HOST])
   fetchMock.mockReset()
+  clearLiveHostClientsForTest()
 })
 
 afterEach(() => {

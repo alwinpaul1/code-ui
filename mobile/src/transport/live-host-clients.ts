@@ -17,9 +17,30 @@ import type { RpcClient } from './rpc-client'
  * connected client when one exists and dials its own only when none does.
  */
 const clients = new Map<string, RpcClient>()
+const clientIds = new Map<string, string>()
 
-export function publishLiveHostClient(hostId: string, client: RpcClient): void {
+export function publishLiveHostClient(hostId: string, client: RpcClient, clientId?: string): void {
   clients.set(hostId, client)
+  if (clientId !== undefined) {
+    clientIds.set(hostId, clientId)
+  }
+}
+
+export function peekLiveHostClientId(hostId: string): string {
+  return clientIds.get(hostId) ?? ''
+}
+
+/** A socket the screen can take back after the React tree was destroyed.
+ *  A dead or rejected one must be dialled again. */
+export function reusableParkedHostClient(client: RpcClient | null): RpcClient | null {
+  if (!client) {
+    return null
+  }
+  const state = client.getState()
+  if (state === 'disconnected' || state === 'auth-failed') {
+    return null
+  }
+  return client
 }
 
 export function retireLiveHostClient(hostId: string, client?: RpcClient): void {
@@ -28,6 +49,7 @@ export function retireLiveHostClient(hostId: string, client?: RpcClient): void {
     return
   }
   clients.delete(hostId)
+  clientIds.delete(hostId)
 }
 
 export function peekLiveHostClient(hostId: string): RpcClient | null {
@@ -37,4 +59,5 @@ export function peekLiveHostClient(hostId: string): RpcClient | null {
 /** Test seam. */
 export function clearLiveHostClientsForTest(): void {
   clients.clear()
+  clientIds.clear()
 }

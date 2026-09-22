@@ -4,7 +4,14 @@ import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
+import {
+  clientActivePath,
+  clientPairingRejected,
+  clientPendingPath,
+  clientRelayHostReachability
+} from './host-client-context-state'
 import type { HostClientAcquisition } from './host-client-acquisition-registry'
+import { peekLiveHostClient, reusableParkedHostClient } from './live-host-clients'
 
 type UseAllHostClientsOptions = {
   autoConnectHostIds?: readonly string[]
@@ -142,21 +149,39 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       relayHostReachability: RelayHostReachability
       livenessProbing: boolean
     }>((hostId) => {
-      const client = clientsByHostId.get(hostId)
-      return client
-        ? [
-            {
-              hostId,
-              client,
-              state: ctx.getState(hostId),
-              path: ctx.getActivePath(hostId),
-              pendingPath: ctx.getPendingPath(hostId),
-              pairingRejected: ctx.isPairingRejected(hostId),
-              relayHostReachability: ctx.getRelayHostReachability(hostId),
-              livenessProbing: ctx.isLivenessProbing(hostId)
-            }
-          ]
-        : []
+      const stored = clientsByHostId.get(hostId)
+      // Recents destroyed the store. The socket is still in the process, and
+      // the row has to say Connected on the first paint, before adopt runs.
+      const client = stored ?? reusableParkedHostClient(peekLiveHostClient(hostId))
+      if (!client) {
+        return []
+      }
+      if (!stored) {
+        return [
+          {
+            hostId,
+            client,
+            state: client.getState(),
+            path: clientActivePath(client),
+            pendingPath: clientPendingPath(client),
+            pairingRejected: clientPairingRejected(client),
+            relayHostReachability: clientRelayHostReachability(client),
+            livenessProbing: client.isLivenessProbing?.() ?? false
+          }
+        ]
+      }
+      return [
+        {
+          hostId,
+          client,
+          state: ctx.getState(hostId),
+          path: ctx.getActivePath(hostId),
+          pendingPath: ctx.getPendingPath(hostId),
+          pairingRejected: ctx.isPairingRejected(hostId),
+          relayHostReachability: ctx.getRelayHostReachability(hostId),
+          livenessProbing: ctx.isLivenessProbing(hostId)
+        }
+      ]
     })
   }, [ctx, hostIds, tick])
 }

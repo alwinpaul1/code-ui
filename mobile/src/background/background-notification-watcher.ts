@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, HostProfile } from '../transport/types'
+import { publishLiveHostClient, reusableParkedHostClient } from '../transport/live-host-clients'
 
 /**
  * Owns the host connections while the UI is not on screen.
@@ -12,8 +13,10 @@ import type { ConnectionState, HostProfile } from '../transport/types'
  * service's headless task, so it survives both.
  *
  * Hand-over rule: it listens only while `enabled && !uiVisible`. When the UI
- * comes back it closes everything and the UI's own reconnect catch-up
- * (`notifications.getMissedSince`) covers the seam.
+ * comes back, a live relay is handed over still open — closing it made the
+ * screen dial again and show Reconnecting. A dead one is closed. A network
+ * change while this watcher is listening replaces that relay here, so the
+ * screen opens already connected.
  */
 export type BackgroundNotificationWatcher = {
   setEnabled(enabled: boolean): void
@@ -25,6 +28,8 @@ export type BackgroundNotificationWatcher = {
    *  one listening (app in the background, 2026-09-18). Borrowed or owned,
    *  it is the link the banner's event came in on. */
   peekClient(hostId: string): RpcClient | null
+  /** Replace the relay this watcher holds. The screen is not up to do it. */
+  reconnectForNetworkChange(): void
   stop(): void
 }
 
@@ -38,10 +43,19 @@ type BackgroundNotificationWatcherDependencies = {
   log: (message: string, detail?: string) => void
 }
 
+let backgroundRelayListening = false
+
+/** True while this process, not the screen, is holding the relay. */
+export function isBackgroundRelayListening(): boolean {
+  return backgroundRelayListening
+}
+
 type HostLink = {
   client: RpcClient
   /** False for a client borrowed from the UI: unsubscribe on hand-back, never close. */
   owned: boolean
+  /** One replace per drop. State events during that replace must not queue another. */
+  replacing: boolean
   unsubscribeState: () => void
   unsubscribeNotifications: (() => void) | null
 }
@@ -57,30 +71,42 @@ export function createBackgroundNotificationWatcher(
 
   const shouldListen = (): boolean => enabled && !uiVisible
 
+  function noteListening(): void {
+    backgroundRelayListening = shouldListen() && links.size > 0
+  }
+
   function wire(host: HostProfile, client: RpcClient, owned: boolean): void {
     const link: HostLink = {
       client,
       owned,
+      replacing: false,
       unsubscribeState: () => {},
       unsubscribeNotifications: null
     }
     const onState = (state: ConnectionState): void => {
       if (state === 'connected') {
+        link.replacing = false
         link.unsubscribeNotifications ??= deps.subscribeNotifications(client, host.id)
         return
       }
       link.unsubscribeNotifications?.()
       link.unsubscribeNotifications = null
-      // Why: a borrowed client is the UI's, and the UI suspends its relay 30 s
-      // into the background. Reviewed 2026-09-11: the host stayed in `links`,
-      // so nothing dialled and notifications stopped after those 30 s. Once
-      // the UI's client is gone, this host needs a link of its own.
-      if (!owned && links.get(host.id) === link) {
+      // The screen still holds this socket. Dialling a second one left the
+      // row on the dead socket while the new one connected in the background
+      // (device, 2026-09-22). Ask this socket to replace itself. A rejected
+      // login cannot, so that one gets a link of its own.
+      if (!owned && links.get(host.id) === link && state === 'auth-failed') {
         link.unsubscribeState()
         links.delete(host.id)
+        noteListening()
         if (shouldListen()) {
           void open()
         }
+        return
+      }
+      if (!owned && links.get(host.id) === link && !link.replacing) {
+        link.replacing = true
+        client.notifyForeground('network-change')
       }
     }
     link.unsubscribeState = client.onStateChange(onState)
@@ -95,9 +121,17 @@ export function createBackgroundNotificationWatcher(
       hosts = await deps.loadHosts()
     } catch (error) {
       deps.log('background link: host list unavailable', error instanceof Error ? error.message : '')
+      if (opened === generation) {
+        noteListening()
+      }
       return
     }
     if (opened !== generation || !shouldListen()) {
+      // A newer close or open owns the flag. Touching it here cleared a
+      // relay the replacement had just borrowed.
+      if (opened === generation) {
+        noteListening()
+      }
       return
     }
     for (const host of hosts) {
@@ -119,21 +153,31 @@ export function createBackgroundNotificationWatcher(
       }
     }
     deps.log('background link: listening', `${links.size} host${links.size === 1 ? '' : 's'}`)
+    noteListening()
   }
 
   function closeAll(): void {
     generation += 1
+    const handOver = uiVisible
     if (links.size === 0) {
+      noteListening()
       return
     }
-    for (const link of links.values()) {
+    for (const [hostId, link] of links) {
       link.unsubscribeNotifications?.()
       link.unsubscribeState()
-      if (link.owned) {
-        link.client.close()
+      if (!link.owned) {
+        continue
       }
+      // The screen adopts this socket. Closing it started a second dial.
+      if (handOver && reusableParkedHostClient(link.client)) {
+        publishLiveHostClient(hostId, link.client)
+        continue
+      }
+      link.client.close()
     }
     links.clear()
+    noteListening()
     deps.log('background link: handed back to the app')
   }
 
@@ -164,6 +208,14 @@ export function createBackgroundNotificationWatcher(
     peekClient(hostId) {
       const link = links.get(hostId)
       return link && link.client.getState() === 'connected' ? link.client : null
+    },
+    reconnectForNetworkChange() {
+      if (!shouldListen()) {
+        return
+      }
+      for (const link of links.values()) {
+        link.client.notifyForeground('network-change')
+      }
     },
     stop() {
       enabled = false

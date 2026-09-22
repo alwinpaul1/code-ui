@@ -1,3 +1,4 @@
+import { peekLiveHostClient, reusableParkedHostClient } from './live-host-clients'
 import type { RpcClient } from './rpc-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostClientStoreEntry } from './host-entry-opener'
@@ -73,6 +74,12 @@ export function createHostClientSelectors(
     const entry = entries.get(hostId)
     if (entry) {
       return entry.state
+    }
+    // The screen was destroyed while this socket stayed up. Report its state
+    // before the next open adopts it, or the row flashes Connecting.
+    const parked = reusableParkedHostClient(peekLiveHostClient(hostId))
+    if (parked) {
+      return parked.getState()
     }
     // Why: the Keychain pass predates the store entry; this window is connecting.
     return pendingOpens.getActivePromise(hostId) ? 'connecting' : null
