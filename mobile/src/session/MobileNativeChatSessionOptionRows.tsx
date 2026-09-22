@@ -40,6 +40,7 @@ export function Pill({
   const { colors, radius, space } = useTheme()
   return (
     <Pressable
+      focusable={false}
       accessibilityLabel={accessibleName}
       accessibilityRole="button"
       accessibilityState={{ disabled }}

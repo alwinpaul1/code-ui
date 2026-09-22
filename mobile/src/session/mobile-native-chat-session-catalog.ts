@@ -27,6 +27,7 @@ import {
   rankSlashCommandSuggestions
 } from './mobile-native-chat-autocomplete'
 import { composerSuggestionInsertText, type ComposerSuggestion } from './composer-suggestion-text'
+import { GROK_SLASH_COMMANDS } from './mobile-native-chat-grok-commands'
 import {
   filterNativeChatSkillsForAgent,
   nativeChatSkillCommandName
@@ -83,7 +84,11 @@ export function mobileNativeChatSlashCatalog(args: {
       // message text, e.g. Codex's `/goal`.
       return { commands: structuredSlashCommands(conversationCommands, agent), skills: scanned }
     }
-    return { commands: agent ? getVerifiedNativeChatCommands(agent) : [], skills: scanned }
+    // Grok's shared catalog is empty. Its menu is the commands Grok Build
+    // documents, plus skills found under a Grok profile that is actually on disk.
+    const commands =
+      agent === 'grok' ? GROK_SLASH_COMMANDS : agent ? getVerifiedNativeChatCommands(agent) : []
+    return { commands, skills: scanned }
   }
   const byToken = new Map<string, DiscoveredSkill>()
   for (const skill of scanned) {

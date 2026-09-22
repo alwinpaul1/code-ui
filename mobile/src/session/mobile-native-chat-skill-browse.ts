@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../src/shared/skills'
+import type { DiscoveredSkill, SkillProvider } from '../../../src/shared/skills'
 
 /**
  * Where Claude Code's `/` menu gets its skills, as directory names the phone
@@ -25,19 +25,47 @@ export type SkillBrowseRoot = {
   path: string
   sourceKind: 'home' | 'repo' | 'plugin'
   sourceLabel: string
+  /** Set when the root is not Claude's. Grok's profiles pass an empty list. */
+  providers?: readonly SkillProvider[]
 }
 
-/** The four roots Claude Code reads for a session in `worktreePath`. */
+/** Claude Code's home profiles and, when a worktree is open, that repo's
+ *  `.claude` roots. A profile directory that is not on disk lists as nothing. */
 export function claudeSkillRoots(home: string, worktreePath: string | null): SkillBrowseRoot[] {
   const roots: SkillBrowseRoot[] = [
     { kind: 'skills', path: `${home}/.claude/skills`, sourceKind: 'home', sourceLabel: 'Home skills' },
-    { kind: 'commands', path: `${home}/.claude/commands`, sourceKind: 'home', sourceLabel: 'Home commands' }
+    { kind: 'commands', path: `${home}/.claude/commands`, sourceKind: 'home', sourceLabel: 'Home commands' },
+    { kind: 'skills', path: `${home}/.claude-work/skills`, sourceKind: 'home', sourceLabel: 'Work skills' },
+    { kind: 'commands', path: `${home}/.claude-work/commands`, sourceKind: 'home', sourceLabel: 'Work commands' }
   ]
   if (worktreePath) {
     roots.push(
       { kind: 'skills', path: `${worktreePath}/.claude/skills`, sourceKind: 'repo', sourceLabel: 'Repo skills' },
       { kind: 'commands', path: `${worktreePath}/.claude/commands`, sourceKind: 'repo', sourceLabel: 'Repo commands' }
     )
+  }
+  return roots
+}
+
+/** Grok Build's skill profile. A directory that is not on disk lists as nothing. */
+export function grokSkillRoots(home: string, worktreePath: string | null): SkillBrowseRoot[] {
+  const roots: SkillBrowseRoot[] = [
+    {
+      kind: 'skills',
+      path: `${home}/.grok/skills`,
+      sourceKind: 'home',
+      sourceLabel: 'Grok skills',
+      providers: []
+    }
+  ]
+  if (worktreePath) {
+    roots.push({
+      kind: 'skills',
+      path: `${worktreePath}/.grok/skills`,
+      sourceKind: 'repo',
+      sourceLabel: 'Grok repo skills',
+      providers: []
+    })
   }
   return roots
 }
@@ -120,7 +148,7 @@ function skill(
     id: `${linked ? 'browse-link' : 'browse'}:${skillFilePath}`,
     name,
     description: null,
-    providers: ['claude'],
+    providers: root.providers ? [...root.providers] : ['claude'],
     sourceKind: root.sourceKind,
     sourceLabel: root.sourceLabel,
     rootPath: root.path,
@@ -136,13 +164,27 @@ export function isLinkedBrowsedSkill(skill: DiscoveredSkill): boolean {
   return skill.id.startsWith('browse-link:')
 }
 
-/** One row per dispatch token: a plugin cached at two versions lists its
- *  skill once, the first listing winning. */
+/** Claude and Grok can both ship a skill with the same directory name. They
+ *  are different commands. Two Claude roots that list the same name are one
+ *  command, the first listing winning, as are two cached versions of a plugin. */
+function browsedSkillDedupeKey(entry: DiscoveredSkill): string {
+  if (entry.sourceKind === 'plugin') {
+    return `${entry.sourceLabel}\0${entry.name}`
+  }
+  const paths = [entry.rootPath, ...(entry.rootPaths ?? [])]
+  const grok =
+    entry.sourceLabel === 'Grok skills' ||
+    entry.sourceLabel === 'Grok repo skills' ||
+    paths.some((path) => path.split(/[\\/]/).includes('.grok'))
+  return `${grok ? 'grok' : ''}\0${entry.name}`
+}
+
+/** One row per dispatch token. */
 export function dedupeBrowsedSkills(skills: readonly DiscoveredSkill[]): DiscoveredSkill[] {
   const seen = new Set<string>()
   const out: DiscoveredSkill[] = []
   for (const entry of skills) {
-    const key = `${entry.sourceKind === 'plugin' ? entry.sourceLabel : ''}\0${entry.name}`
+    const key = browsedSkillDedupeKey(entry)
     if (seen.has(key)) {
       continue
     }

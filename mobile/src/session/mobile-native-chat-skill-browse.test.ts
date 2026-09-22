@@ -3,6 +3,7 @@ import {
   claudePluginCachePath,
   claudeSkillRoots,
   dedupeBrowsedSkills,
+  grokSkillRoots,
   pluginSkillsRoot,
   skillsFromRootListing,
   worktreePathFromId
@@ -16,10 +17,12 @@ const dir = (name: string) => ({ name, isDirectory: true, isSymlink: false })
 const file = (name: string) => ({ name, isDirectory: false, isSymlink: false })
 
 describe('skills the phone lists by directory name', () => {
-  it('reads the four roots Claude Code reads for a worktree', () => {
+  it('reads the Claude profiles that exist for a worktree', () => {
     expect(claudeSkillRoots(HOME, '/Users/alwinpaul/Desktop/Project/Code UI').map((r) => r.path)).toEqual([
       '/Users/alwinpaul/.claude/skills',
       '/Users/alwinpaul/.claude/commands',
+      '/Users/alwinpaul/.claude-work/skills',
+      '/Users/alwinpaul/.claude-work/commands',
       '/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills',
       '/Users/alwinpaul/Desktop/Project/Code UI/.claude/commands'
     ])
@@ -27,6 +30,17 @@ describe('skills the phone lists by directory name', () => {
       '/Users/alwinpaul/Desktop/Project/Code UI'
     )
     expect(worktreePathFromId('w1')).toBeNull()
+  })
+
+  it('reads the Grok profile when that directory is the one that exists', () => {
+    expect(grokSkillRoots(HOME, '/Users/alwinpaul/Desktop/Project/Code UI').map((root) => root.path)).toEqual([
+      '/Users/alwinpaul/.grok/skills',
+      '/Users/alwinpaul/Desktop/Project/Code UI/.grok/skills'
+    ])
+    const [home] = grokSkillRoots(HOME, null)
+    const listed = skillsFromRootListing(home!, [dir('commit'), dir('_sources')])
+    expect(listed.map((entry) => entry.name)).toEqual(['commit'])
+    expect(listed[0]).toMatchObject({ providers: [], sourceLabel: 'Grok skills' })
   })
 
   // 2026-09-20, phone beside the Claude app for "/ani": the Claude app listed
@@ -84,6 +98,15 @@ describe('skills the phone lists by directory name', () => {
     expect(dedupeBrowsedSkills(listed).map((s) => nativeChatSkillCommandName(s))).toEqual([
       'frontend-design:frontend-design',
       'typesafe:typesafe-ai'
+    ])
+  })
+
+  it('keeps a Grok skill that shares its name with a Claude skill', () => {
+    const claude = skillsFromRootListing(claudeSkillRoots(HOME, null)[0]!, [dir('commit')])
+    const grok = skillsFromRootListing(grokSkillRoots(HOME, null)[0]!, [dir('commit')])
+    expect(dedupeBrowsedSkills([...claude, ...grok]).map((entry) => entry.sourceLabel)).toEqual([
+      'Home skills',
+      'Grok skills'
     ])
   })
 })

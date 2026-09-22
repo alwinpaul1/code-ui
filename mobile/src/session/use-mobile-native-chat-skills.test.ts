@@ -101,6 +101,7 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     [`${HOME}/.claude/skills/android-reverse-engineering-skill`]: [file('README.md')],
     // A symlink to a skill folder lists like the folder it points at.
     [`${HOME}/.claude/skills/animation-vocabulary`]: [file('SKILL.md')],
+    [`${HOME}/.claude/commands`]: [file('deploy.md')],
     // `dangling-link` has no listing: a link to nothing, or to a file.
     [`${HOME}/.claude/plugins/cache`]: [dir('typesafe-ai'), file('blocklist.json')],
     [`${HOME}/.claude/plugins/cache/typesafe-ai`]: [dir('typesafe')],
@@ -151,6 +152,7 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     expect(latest!.nativeChatSkills.map((s) => `${s.sourceLabel}:${s.name}`)).toEqual([
       'Home skills:academic-researcher',
       'Home skills:animation-vocabulary',
+      'Home commands:deploy',
       'Claude plugin typesafe:typesafe-ai'
     ])
     // The repo roots were asked for too, and their absence was tolerated.
@@ -158,6 +160,29 @@ describe('the / menu’s skills list, read by directory when the scan is refused
       .filter((call) => call[0] === 'files.browseServerDir')
       .map((call) => (call[1] as { path: string }).path)
     expect(asked).toContain('/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills')
+  })
+
+  it('keeps a command file that exists, instead of dropping it for lack of SKILL.md', async () => {
+    resetConfirmedSkillFilesForTest()
+    const client = browsingClient()
+    let latest: { nativeChatSkills: { name: string; sourceLabel: string }[]; loadNativeChatSkills: () => void } | null = null
+    function Probe(): null {
+      latest = useMobileNativeChatSkills({
+        client: client as never,
+        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((skill) => `${skill.sourceLabel}:${skill.name}`)).toContain(
+      'Home commands:deploy'
+    )
   })
 
 // 2026-09-20: "/anim" typed a second after a tab opened showed no card. The

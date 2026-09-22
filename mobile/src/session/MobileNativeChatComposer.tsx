@@ -18,6 +18,7 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
+import { useRestoreComposerCaret } from './use-restore-composer-caret'
 import { PressScale } from '../ui/PressScale'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
@@ -225,6 +226,7 @@ export function MobileNativeChatComposer({
     popoverSpace,
     dockHeight
   })
+  const caret = useRestoreComposerCaret(textInputRef, suggestions.length > 0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -360,8 +362,11 @@ export function MobileNativeChatComposer({
                 onComposerCursor?.(next)
                 setPendingSelection(null)
               }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onFocus={() => {
+                caret.onFocus()
+                setFocused(true)
+              }}
+              onBlur={() => { setFocused(false); caret.onBlur() }}
               placeholder={placeholder}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accent}
@@ -388,7 +393,7 @@ export function MobileNativeChatComposer({
             testID="native-chat-composer-actions"
           >
             {onAttachImage ? (
-              <Pressable
+              <Pressable focusable={false}
                 accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
                 style={({ pressed }) => [
                   iconButton,
@@ -419,7 +424,7 @@ export function MobileNativeChatComposer({
             <View style={{ flex: 1, minWidth: 0 }} />
             {micActive ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
-              <Pressable
+              <Pressable focusable={false}
                 accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
                 style={({ pressed }) => [
                   iconButton,
@@ -444,7 +449,7 @@ export function MobileNativeChatComposer({
                 )}
               </Pressable>
             ) : null}
-            <PressScale
+            <PressScale focusable={false}
               accessibilityLabel="Send message"
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}

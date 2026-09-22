@@ -57,6 +57,7 @@ export function MobileNativeChatComposerSuggestions({
       <FlatList
         data={suggestions}
         keyExtractor={composerSuggestionKey}
+        focusable={false}
         keyboardShouldPersistTaps="always"
         // Why a measured cap: the dock is absolutely positioned at the bottom
         // and this list sits inside it, so a fixed height grew the dock up
@@ -78,6 +79,7 @@ export function MobileNativeChatComposerSuggestions({
         // what `suggestionDescription` returns for anything that wants it.
         renderItem={({ item: suggestion }) => (
           <Pressable
+            focusable={false}
             accessibilityRole="button"
             accessibilityLabel={composerSuggestionInsertText(suggestion)}
             style={({ pressed }) => ({

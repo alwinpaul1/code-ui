@@ -43,7 +43,11 @@ vi.mock('react-native', async () => {
         )
       ),
     Image: 'Image',
-    Keyboard: { dismiss: vi.fn() },
+    Keyboard: {
+      dismiss: vi.fn(),
+      isVisible: () => false,
+      addListener: () => ({ remove: () => {} })
+    },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -164,6 +168,27 @@ describe('MobileNativeChatComposer', () => {
       borderRadius: radius.xl,
       overflow: 'hidden'
     })
+  })
+
+  it('does not let the attach or send button take the caret when the slash menu opens', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          onAttachImage: vi.fn(),
+          agent: 'grok'
+        })
+      )
+    })
+    const attach = renderer!.root.find(
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Attach image'
+    )
+    expect(attach.props.focusable).toBe(false)
+    expect(sendButton().props.focusable).toBe(false)
   })
 
   it('preserves leading whitespace so prose is not turned into a slash command', async () => {

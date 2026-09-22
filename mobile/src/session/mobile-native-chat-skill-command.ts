@@ -19,8 +19,9 @@ export function nativeChatSkillCommandName(skill: DiscoveredSkill): string {
   return plugin ? `${plugin}:${name}` : name
 }
 
-/** Which scanned skill roots an agent can actually invoke. */
-function skillProvidersForAgent(agent: string): readonly SkillProvider[] | null {
+/** Which scanned skill roots an agent can actually invoke. An agent with none
+ *  of these roots gets no scanned skills — Grok must not list Claude's. */
+function skillProvidersForAgent(agent: string): readonly SkillProvider[] {
   switch (agent) {
     case 'claude':
     case 'openclaude':
@@ -28,24 +29,42 @@ function skillProvidersForAgent(agent: string): readonly SkillProvider[] | null 
     case 'codex':
       return ['codex']
     default:
-      return null
+      return []
   }
+}
+
+/** A skill that lives under a Grok profile (`~/.grok/skills` or a repo `.grok`). */
+function isGrokOwnedSkill(skill: DiscoveredSkill): boolean {
+  if (skill.sourceLabel === 'Grok skills' || skill.sourceLabel === 'Grok repo skills') {
+    return true
+  }
+  const paths = [skill.rootPath, ...(skill.rootPaths ?? [])]
+  return paths.some((path) => path.split(/[\\/]/).includes('.grok'))
 }
 
 /**
  * Drop skills the active agent cannot see.
  *
- * Why: the host scans every agent's roots at once (Codex home, Cursor home, …),
- * so without this a Claude session's `/` menu lists Codex-only skills that
- * Claude Code would reject. Agents with no known root keep the full list.
+ * Why: the host scans every agent's roots at once, so without this a Grok
+ * chat's `/` menu listed `~/.claude/skills`. Only the providers that agent
+ * reads are kept, and only the names the scan found on disk.
  */
 export function filterNativeChatSkillsForAgent(
   skills: readonly DiscoveredSkill[],
   agent: string | null
 ): DiscoveredSkill[] {
-  const providers = agent ? skillProvidersForAgent(agent) : null
-  if (!providers) {
-    return [...skills]
+  if (!agent) {
+    return []
   }
-  return skills.filter((skill) => skill.providers.some((provider) => providers.includes(provider)))
+  if (agent === 'grok') {
+    return skills.filter(isGrokOwnedSkill)
+  }
+  const providers = skillProvidersForAgent(agent)
+  if (providers.length === 0) {
+    return []
+  }
+  return skills.filter(
+    (skill) =>
+      !isGrokOwnedSkill(skill) && skill.providers.some((provider) => providers.includes(provider))
+  )
 }

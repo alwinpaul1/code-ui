@@ -26,6 +26,7 @@ export function ContextWindowRing({
   const { ringProps } = useUsageProgress(pct, circumference)
   return (
     <Pressable
+      focusable={false}
       accessibilityLabel={`Context window ${Math.round(pct)}% used`}
       accessibilityRole="button"
       hitSlop={10}

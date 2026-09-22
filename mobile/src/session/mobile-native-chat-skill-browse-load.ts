@@ -4,6 +4,7 @@ import {
   claudePluginCachePath,
   claudeSkillRoots,
   dedupeBrowsedSkills,
+  grokSkillRoots,
   isLinkedBrowsedSkill,
   pluginSkillsRoot,
   skillsFromRootListing,
@@ -56,11 +57,11 @@ export async function browseClaudeSkills(args: {
   if (!home || !live()) {
     return
   }
-  const roots = claudeSkillRoots(home, worktreePath)
-  // The home and repo roots are four listings and hold most of the menu;
-  // they are reported as soon as they are in, before the plugin cache's
-  // forty-odd listings, so a `/` typed a second after the tab opened is not
-  // an empty card (device, 2026-09-20, "/anim" showing nothing).
+  const roots = [...claudeSkillRoots(home, worktreePath), ...grokSkillRoots(home, worktreePath)]
+  // Home and repo roots (each profile that is actually on disk) hold most of
+  // the menu. They are reported as soon as they are in, before the plugin
+  // cache's forty-odd listings, so a `/` typed a second after the tab opened
+  // is not an empty card (device, 2026-09-20, "/anim" showing nothing).
   const rootListings = await mapLimit(roots, BROWSE_CONCURRENCY, async (root) => ({
     root,
     entries: await browse(root.path)
@@ -88,8 +89,8 @@ export async function browseClaudeSkills(args: {
   onSkills(skills)
   // A skills root can hold folders that are not skills (`_sources` is
   // filtered by name; `android-reverse-engineering-skill`, a folder with no
-  // SKILL.md, is not). Confirm each home and repo skill's file and drop the
-  // ones without. Plugin skills sit under a `skills` folder the plugin
+  // SKILL.md, is not). Confirm each home and repo row's own file and drop the
+  // ones without it. Plugin skills sit under a `skills` folder the plugin
   // shipped and are taken as they are.
   // Confirmed once per launch and remembered by file path: a re-walk ten
   // minutes later asks only about names it has not seen. The first cut
@@ -109,7 +110,12 @@ export async function browseClaudeSkills(args: {
     if (!live()) {
       return
     }
-    const hasSkillFile = entries !== null && entries.some((entry) => !entry.isDirectory && entry.name === 'SKILL.md')
+    // A skill's file is `SKILL.md` inside its folder. A command's file is the
+    // `.md` itself, and the directory listing is the commands root, which has
+    // no `SKILL.md`. The path's last segment is the file either way.
+    const slash = Math.max(skill.skillFilePath.lastIndexOf('/'), skill.skillFilePath.lastIndexOf('\\'))
+    const fileName = skill.skillFilePath.slice(slash + 1)
+    const hasSkillFile = entries !== null && entries.some((entry) => !entry.isDirectory && entry.name === fileName)
     // A folder that would not list is kept (a transient refusal is not a
     // missing skill); a LINK that would not list is dropped — it points at a
     // file, or at nothing.

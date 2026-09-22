@@ -326,7 +326,8 @@
           {
             // 2026-09-22: live dictation paints the open phrase in a lighter
             // color over the composer and reports the caret so words insert there.
-            "max": 415,
+            // Later the same day: the slash menu puts the caret back in the field.
+            "max": 421,
             "skipBlankLines": true,
             "skipComments": true
           }

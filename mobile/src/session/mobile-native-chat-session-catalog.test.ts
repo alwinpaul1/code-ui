@@ -190,6 +190,49 @@ describe('the `/` menu without a session report', () => {
   it('offers no commands when no agent is known', () => {
     expect(mobileNativeChatSlashCatalog({ agent: null, scannedSkills: [] }).commands).toEqual([])
   })
+
+  it('does not list Claude skills in a Grok chat', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'grok',
+      scannedSkills: [
+        skill({ name: 'academic-research-writer' }),
+        skill({ name: 'codex-only', providers: ['codex'] }),
+        skill({
+          name: 'commit',
+          providers: [],
+          sourceLabel: 'Grok skills',
+          rootPath: '/Users/alwinpaul/.grok/skills',
+          directoryPath: '/Users/alwinpaul/.grok/skills/commit',
+          skillFilePath: '/Users/alwinpaul/.grok/skills/commit/SKILL.md'
+        })
+      ]
+    })
+    // Grok Build 1.0.40's own menu (user guide 04-slash-commands.md), not Claude's.
+    expect(catalog.skills.map((entry) => entry.name)).toEqual(['commit'])
+    const names = catalog.commands.map((command) => command.name)
+    expect(names).toContain('model')
+    expect(names).toContain('effort')
+    expect(names).not.toContain('advisor')
+    expect(names).not.toContain('academic-research-writer')
+  })
+
+  it('does not list a Grok profile skill in a Claude chat', () => {
+    const catalog = mobileNativeChatSlashCatalog({
+      agent: 'claude',
+      scannedSkills: [
+        skill({ name: 'unslop' }),
+        skill({
+          name: 'commit',
+          providers: ['claude'],
+          sourceLabel: 'Grok skills',
+          rootPath: '/Users/alwinpaul/.grok/skills',
+          directoryPath: '/Users/alwinpaul/.grok/skills/commit',
+          skillFilePath: '/Users/alwinpaul/.grok/skills/commit/SKILL.md'
+        })
+      ]
+    })
+    expect(catalog.skills.map((entry) => entry.name)).toEqual(['unslop'])
+  })
 })
 
 describe('the `/` menu of a structured chat that has not reported its surface', () => {
