@@ -91,4 +91,25 @@ describe('the free-text box on an ask card', () => {
     // Two borders meeting needs more than a hairline between them.
     expect(below + scrollPad).toBeGreaterThanOrEqual(space.lg + space.sm)
   })
+
+  it('clears the Other row border when the answer box opens', () => {
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatAsk, { prompt, onAnswer: async () => true })
+      )
+    })
+    act(() => {
+      const rows = renderer!.root
+        .findAllByType('Pressable' as never)
+        .filter((node) => node.props.accessibilityRole === 'radio')
+      rows.at(-1)?.props.onPress?.()
+    })
+    const input = renderer!.root.findByType('TextInput' as never)
+    const style = flatten(input.props.style)
+    // The Other row already has a border. With no gap above the field, that
+    // line and the field's own top edge read as one overlapping stroke
+    // (Claude ask card, 2026-09-22).
+    expect(Number(style.marginTop ?? 0)).toBeGreaterThanOrEqual(space.md)
+    expect(input.props.underlineColorAndroid).toBe('transparent')
+  })
 })

@@ -224,6 +224,10 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
               fontSize: type.body.size,
               padding: space.md,
               minHeight: 46,
+              // The Other row's own border is the line above. Without this gap
+              // the field's top edge sits on that stroke (Claude ask card,
+              // 2026-09-22).
+              marginTop: space.md,
               marginBottom: space.sm
             }}
             value={otherText[index]}
@@ -231,6 +235,8 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             placeholder="Type your answer"
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}
+            // Android draws its own underline through the border we just set.
+            underlineColorAndroid="transparent"
             multiline
             autoFocus
           />
