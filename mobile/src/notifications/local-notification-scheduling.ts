@@ -1,6 +1,5 @@
 import * as Notifications from 'expo-notifications'
-import { desktopNotificationLocation, presentDesktopNotification } from './notification-presentation'
-import { projectNotificationIconForLocation } from './project-notification-icon'
+import { presentDesktopNotification } from './notification-presentation'
 import { uniqueWorktreeLaunchAgent } from './worktree-launch-agents'
 import { Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
@@ -174,14 +173,12 @@ async function presentedNotificationContent(
   hostId: string,
   link: LocalNotificationLink
 ) {
-  const data = buildLocalNotificationData(event, hostId)
-  const projectIcon = projectNotificationIconForLocation(desktopNotificationLocation(event.title))
   const content = {
     ...presentDesktopNotification({
       ...event,
       agent: uniqueWorktreeLaunchAgent(event.worktreeId)
     }),
-    data: projectIcon ? { ...data, projectIcon } : data
+    data: buildLocalNotificationData(event, hostId)
   }
   // Why here and not at the caller: every path that shows a banner goes through
   // this, and a permission ask arriving with the previous command's stdout as
