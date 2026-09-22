@@ -1,15 +1,16 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
+import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
-import { applyLiveTranscript } from '../hooks/mobile-live-transcript'
 import { liveDictationDelta } from '../hooks/mobile-live-dictation-delta'
-import { loadLiveTranscriptionEnabled } from '../storage/preferences'
-import { triggerError } from '../platform/haptics'
+import type { DictationPaint } from '../hooks/mobile-live-transcript'
+import { chooseDictationEngine } from '../dictation/dictation-engine'
 import {
-  appendBufferedDictation,
-  routeDictationTranscript
-} from '../terminal/terminal-live-dictation-routing'
+  deliverDesktopDictation,
+  placeSpokenText
+} from '../dictation/place-dictation-transcript'
+import { triggerError } from '../platform/haptics'
 import {
   fetchDictationSetup,
   isDictationSetupRequiredError
@@ -96,79 +97,58 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
-  // Chat dictation transcribes on the phone so the words show up as they are
-  // spoken (Claude Code's own voice input behaves this way); the desktop model
-  // path below stays for the terminal and as the fallback.
-  const [liveTranscriptionEnabled, setLiveTranscriptionEnabled] = useState(true)
+  // Chat dictation uses the phone recognizer so the words show up as they are
+  // spoken. The desktop path is the fallback when the phone has no recognizer.
   const liveBaseTextRef = useRef('')
+  const composerCursorRef = useRef(0)
+  const chatInsertRef = useRef({ prefix: '', suffix: '' })
+  const [dictationPaint, setDictationPaint] = useState<DictationPaint | null>(null)
   // Where a live transcript lands: the chat composer, the buffered command box,
   // or (live terminal input) the PTY line itself, revised with backspaces.
   const liveTargetRef = useRef<{ kind: 'chat' } | { kind: 'buffered' } | { kind: 'pty'; handle: string; typed: string }>({ kind: 'chat' })
+  const onSpoken = (text: string, _final?: boolean, interim = '') => {
+    const { prefix, suffix } = chatInsertRef.current
+    setDictationPaint(placeSpokenText(
+      text,
+      interim,
+      liveTargetRef.current,
+      prefix,
+      suffix,
+      liveBaseTextRef.current,
+      nativeChatController.setChatComposerText,
+      setInput,
+      sendLiveTerminalInput
+    ))
+  }
+  const onSpokenError = (err: Error) => {
+    triggerError()
+    showToast(err.message)
+  }
   const liveTranscription = useMobileLiveTranscription({
-    onTranscript: (text) => {
-      const base = liveBaseTextRef.current
-      const target = liveTargetRef.current
-      if (target.kind === 'chat') {
-        nativeChatController.setChatComposerText(() => applyLiveTranscript(base, text))
-        return
-      }
-      if (target.kind === 'buffered') {
-        setInput(() => applyLiveTranscript(base, text))
-        return
-      }
-      const delta = liveDictationDelta(target.typed, text)
-      target.typed = text
-      if (delta) {
-        void sendLiveTerminalInput(target.handle, delta)
-      }
-    },
-    onError: (err) => {
-      triggerError()
-      showToast(err.message)
-    }
+    onTranscript: onSpoken,
+    onError: onSpokenError
   })
   const desktopDictation = useMobileDictation({
     client,
     enabled: canSend,
     onTranscript: (text) => {
-      // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
-      if (showNativeChatRef.current) {
-        nativeChatController.setChatComposerText((current) =>
-          appendBufferedDictation(current, text)
-        )
-        showToast('Dictation inserted')
-        return
-      }
-      // Live mode inserts the transcript into its PTY as text (no Return); buffered mode appends to the command field.
       const routeContext = dictationRouteContextRef.current
       dictationRouteContextRef.current = null
-      const route = routeDictationTranscript(
+      deliverDesktopDictation({
         text,
-        routeContext?.liveInputEnabled ?? liveInputEnabled
-      )
-      if (route.kind === 'live-insert') {
-        const insertHandle = routeContext?.handle ?? activeHandleRef.current
-        if (!insertHandle) {
-          return
-        }
-        void (async () => {
-          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
-          if (sent) {
-            showToast('Dictation inserted')
-          }
-        })()
-        return
-      }
-      setInput((current) => appendBufferedDictation(current, route.text))
-      showToast('Dictation inserted')
+        showNativeChat: showNativeChatRef.current,
+        setChatComposerText: nativeChatController.setChatComposerText,
+        showToast,
+        routeContext,
+        liveInputEnabled,
+        activeHandle: activeHandleRef.current,
+        flushPending: flushPendingLiveInputBeforeExternalSend,
+        sendLiveTerminalInput,
+        setInput
+      })
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
       if (isDictationSetupRequiredError(err.message)) {
         setShowDictationSetup(true)
         return
@@ -178,14 +158,18 @@ export function useMobileSessionNativeChatDictation(
     }
   })
 
-  const useLiveTranscription = liveTranscriptionEnabled && liveTranscription.available
+  const useLiveTranscription = chooseDictationEngine(liveTranscription.available) === 'live'
   const dictation = useLiveTranscription ? liveTranscription : desktopDictation
 
   const startDictation = useCallback(() => {
     if (useLiveTranscription) {
       if (showNativeChatRef.current) {
+        const draft = nativeChatController.chatComposerText
+        const cursor = Math.max(0, Math.min(composerCursorRef.current, draft.length))
+        chatInsertRef.current = { prefix: draft.slice(0, cursor), suffix: draft.slice(cursor) }
         liveTargetRef.current = { kind: 'chat' }
-        liveBaseTextRef.current = nativeChatController.chatComposerText
+        liveBaseTextRef.current = draft
+        setDictationPaint(null)
       } else if (activeHandle && liveInputTerminalHandles.has(activeHandle)) {
         liveTargetRef.current = { kind: 'pty', handle: activeHandle, typed: '' }
       } else {
@@ -295,11 +279,22 @@ export function useMobileSessionNativeChatDictation(
   }, [client])
 
   // Re-read on focus so a Settings ▸ Voice dictation-mode change is reflected on return.
+  const primeRecognizer = liveTranscription.prime
+  const releaseRecognizer = liveTranscription.release
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') {
+        releaseRecognizer()
+      }
+    })
+    return () => sub.remove()
+  }, [releaseRecognizer])
   useFocusEffect(
     useCallback(() => {
       void refreshDictationMode()
-      void loadLiveTranscriptionEnabled().then(setLiveTranscriptionEnabled)
-    }, [refreshDictationMode])
+      void primeRecognizer()
+      return () => releaseRecognizer()
+    }, [primeRecognizer, refreshDictationMode, releaseRecognizer])
   )
 
   useEffect(() => {
@@ -321,6 +316,8 @@ export function useMobileSessionNativeChatDictation(
     showNativeChat,
     showNativeChatRef,
     dictation,
+    dictationPaint,
+    composerCursorRef,
     startDictation,
     cancelDictation,
     handleDictationToggle,

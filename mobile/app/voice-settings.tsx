@@ -19,10 +19,6 @@ import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import { VoiceSettingsSwitchRow } from '../src/components/VoiceSettingsSwitchRow'
 import { voiceSettingsStyles as styles } from '../src/components/voice-settings-styles'
-import {
-  loadLiveTranscriptionEnabled,
-  saveLiveTranscriptionEnabled
-} from '../src/storage/preferences'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
   deleteDictationModel,
@@ -44,14 +40,6 @@ const DICTATION_MODES = [
 type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete' }
 
 export default function VoiceSettingsScreen(): React.JSX.Element {
-  const [liveOnPhone, setLiveOnPhone] = useState(true)
-  useEffect(() => {
-    void loadLiveTranscriptionEnabled().then(setLiveOnPhone)
-  }, [])
-  const handleToggleLiveOnPhone = useCallback((value: boolean) => {
-    setLiveOnPhone(value)
-    void saveLiveTranscriptionEnabled(value)
-  }, [])
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -140,12 +128,12 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
   const handleUseModel = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
       setBusyAction({ modelId: model.id, type: 'select' })
       setError(null)
       try {
+        if (!client) {
+          return
+        }
         setSetup(await setDictationConfig(client, { enabled: true, modelId: model.id }))
         setModelDrawerOpen(false)
       } catch (err) {
@@ -159,12 +147,12 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
       setBusyAction({ modelId: model.id, type: 'download' })
       setError(null)
       try {
+        if (!client) {
+          return
+        }
         await downloadDictationModel(client, model.id)
         await refreshSetup()
       } catch (err) {
@@ -178,13 +166,13 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
   const handleDelete = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
-        return
-      }
       const deletedSelectedModel = setup?.selectedModelId === model.id
       setBusyAction({ modelId: model.id, type: 'delete' })
       setError(null)
       try {
+        if (!client) {
+          return
+        }
         setSetup(await deleteDictationModel(client, model.id))
         if (deletedSelectedModel) {
           setModelDrawerOpen(false)
@@ -215,17 +203,9 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         <Text style={styles.heading}>Voice</Text>
       </View>
 
-      {!client ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.emptyText}>Connect to a desktop to manage voice settings.</Text>
-        </View>
-      ) : loading && setup === null ? (
+      {loading && setup === null && client ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.textSecondary} />
-        </View>
-      ) : setup === null ? (
-        <View style={[styles.section, styles.sectionTopGap]}>
-          <Text style={styles.errorText}>{error ?? 'Failed to load voice settings.'}</Text>
         </View>
       ) : (
         <ScrollView
@@ -243,15 +223,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
 
             <View style={styles.separator} />
 
-            <VoiceSettingsSwitchRow
-              label="Live transcription on phone"
-              sublabel="In Chat, words appear as you speak using this phone's speech recognizer. Off: audio goes to the desktop model below."
-              value={liveOnPhone}
-              onValueChange={handleToggleLiveOnPhone}
-            />
-
-            <View style={styles.separator} />
-
             <View
               style={[styles.row, !enabled && styles.disabled]}
               pointerEvents={enabled ? 'auto' : 'none'}
@@ -264,7 +235,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
               </View>
               <View style={styles.segmented}>
                 {DICTATION_MODES.map((mode) => {
-                  const active = setup.dictationMode === mode.value
+                  const active = setup?.dictationMode === mode.value
                   return (
                     <Pressable
                       key={mode.value}

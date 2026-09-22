@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition'
 import type { DictationStatus, UseMobileDictationResult } from './mobile-dictation-session-state'
-import { composeLiveTranscript } from './mobile-live-transcript'
+import { composeLiveTranscript, DICTATION_SILENCE_STOP_MS } from './mobile-live-transcript'
 
 export type UseMobileLiveTranscriptionOptions = {
-  /** Fires on every partial and final result with the full transcript so far. */
-  onTranscript: (text: string, final: boolean) => void
+  /** Fires on every partial and final result with the full transcript so far.
+   *  `interim` is the open phrase; empty once those words are finished. */
+  onTranscript: (text: string, final: boolean, interim?: string) => void
   onError?: (error: Error) => void
   lang?: string
 }
@@ -15,10 +16,16 @@ export type UseMobileLiveTranscriptionResult = UseMobileDictationResult & {
   available: boolean
   /** Input level 0..1 while recording (0 when quiet or idle); drives the voice bars. */
   level: number
+  /** Bind the recognizer while the chat screen is open so the first tap is ready. */
+  prime: () => Promise<void>
+  /** Stop a take when the screen goes away. Words already heard stay. */
+  release: () => void
 }
 
 /** No result or speech event for this long means the speaker paused. */
 const SPEECH_IDLE_MS = 900
+
+const QUIET_STOP_ERRORS = new Set(['interrupted', 'audio-capture'])
 
 /** Level above the learned ambient level, stretched back to 0..1. A small
  *  margin keeps a steady hum from registering at all. */
@@ -65,6 +72,30 @@ export function useMobileLiveTranscription(
   const segmentsRef = useRef<string[]>([])
   const interimRef = useRef('')
   const activeRef = useRef(false)
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearSilence = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+  }, [])
+  const publish = useCallback((final: boolean) => {
+    onTranscriptRef.current(
+      composeLiveTranscript(segmentsRef.current, interimRef.current),
+      final,
+      interimRef.current
+    )
+  }, [])
+  const armSilence = useCallback(() => {
+    clearSilence()
+    silenceTimerRef.current = setTimeout(() => {
+      if (!activeRef.current) {
+        return
+      }
+      setStatus('processing')
+      recognizer.stop()
+    }, DICTATION_SILENCE_STOP_MS)
+  }, [clearSilence, recognizer])
   // The meter follows speech, not the room: the recognizer's speechstart /
   // speechend (and each partial result, for platforms without speechend) gate
   // it, and a running estimate of the ambient level is subtracted so a fan or
@@ -106,8 +137,14 @@ export function useMobileLiveTranscription(
       }
       setLevel(speechLevel(raw, noiseFloorRef.current))
     })
-    const speechStarted = recognizer.addListener('speechstart', () => markSpeaking())
-    const speechEnded = recognizer.addListener('speechend', () => markSilent())
+    const speechStarted = recognizer.addListener('speechstart', () => {
+      markSpeaking()
+      armSilence()
+    })
+    const speechEnded = recognizer.addListener('speechend', () => {
+      markSilent()
+      armSilence()
+    })
     const result = recognizer.addListener('result', (event) => {
       if (!activeRef.current) {
         return
@@ -121,20 +158,37 @@ export function useMobileLiveTranscription(
       } else {
         interimRef.current = transcript
       }
-      onTranscriptRef.current(composeLiveTranscript(segmentsRef.current, interimRef.current), false)
+      armSilence()
+      publish(false)
     })
     const ended = recognizer.addListener('end', () => {
       if (!activeRef.current) {
         return
       }
+      clearSilence()
+      const spoken = composeLiveTranscript(segmentsRef.current, interimRef.current)
+      interimRef.current = ''
       activeRef.current = false
       setStatus('idle')
       markSilent()
-      onTranscriptRef.current(composeLiveTranscript(segmentsRef.current, interimRef.current), true)
+      onTranscriptRef.current(spoken, true, '')
     })
     const failed = recognizer.addListener('error', (event) => {
       // "aborted" is our own cancel; "no-speech" on release is a quiet room.
+      // A call taking the mic stops the take and leaves the words already heard.
       if (event.error === 'aborted' || event.error === 'no-speech') {
+        return
+      }
+      if (QUIET_STOP_ERRORS.has(event.error)) {
+        clearSilence()
+        if (activeRef.current) {
+          const spoken = composeLiveTranscript(segmentsRef.current, interimRef.current)
+          interimRef.current = ''
+          activeRef.current = false
+          setStatus('idle')
+          markSilent()
+          onTranscriptRef.current(spoken, true, '')
+        }
         return
       }
       activeRef.current = false
@@ -150,11 +204,12 @@ export function useMobileLiveTranscription(
       if (speechIdleTimerRef.current) {
         clearTimeout(speechIdleTimerRef.current)
       }
+      clearSilence()
       result.remove()
       ended.remove()
       failed.remove()
     }
-  }, [markSilent, markSpeaking, recognizer])
+  }, [armSilence, clearSilence, markSilent, markSpeaking, publish, recognizer])
 
   const start = useCallback(async () => {
     if (activeRef.current) {
@@ -170,6 +225,7 @@ export function useMobileLiveTranscription(
     activeRef.current = true
     setError(null)
     setStatus('starting')
+    armSilence()
     recognizer.start({
       lang,
       interimResults: true,
@@ -178,29 +234,51 @@ export function useMobileLiveTranscription(
       addsPunctuation: true,
       volumeChangeEventOptions: { enabled: true, intervalMillis: 80 },
       // Hold-to-talk: never stop on a pause; the release stops it.
-      androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 60_000 }
+      androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: DICTATION_SILENCE_STOP_MS }
     })
-  }, [lang, recognizer])
+  }, [armSilence, lang, recognizer])
 
   const stop = useCallback(async () => {
     if (!activeRef.current) {
       return
     }
+    clearSilence()
     setStatus('processing')
     recognizer.stop()
-  }, [recognizer])
+  }, [clearSilence, recognizer])
 
   const cancel = useCallback(async () => {
     if (!activeRef.current) {
       return
     }
+    clearSilence()
     activeRef.current = false
     segmentsRef.current = []
     interimRef.current = ''
     setStatus('idle')
     markSilent()
     recognizer.abort()
-  }, [markSilent, recognizer])
+  }, [clearSilence, markSilent, recognizer])
+
+  const prime = useCallback(async () => {
+    try {
+      if (!recognizer.isRecognitionAvailable()) {
+        return
+      }
+      await recognizer.requestPermissionsAsync()
+    } catch {
+      // A missing recognizer stays the desktop fallback. Priming must not toast.
+    }
+  }, [recognizer])
+
+  const release = useCallback(() => {
+    clearSilence()
+    if (!activeRef.current) {
+      return
+    }
+    setStatus('processing')
+    recognizer.stop()
+  }, [clearSilence, recognizer])
 
   return {
     status,
@@ -211,6 +289,8 @@ export function useMobileLiveTranscription(
     start,
     stop,
     cancel,
+    prime,
+    release,
     available,
     level
   }

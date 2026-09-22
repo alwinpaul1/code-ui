@@ -7,7 +7,6 @@ import {
   Info,
   Bell,
   Wrench,
-  Shield,
   LifeBuoy,
   Mic,
   Globe,
@@ -189,14 +188,9 @@ export default function SettingsScreen() {
           />
           <SettingsRow icon={Info} label="About" onPress={() => router.push('/about')} />
           <SettingsRow
-            icon={Shield}
-            label="Privacy policy"
-            onPress={() => void Linking.openURL('https://www.onorca.dev/privacy')}
-          />
-          <SettingsRow
             icon={LifeBuoy}
             label="Report an issue"
-            onPress={() => void Linking.openURL('https://github.com/stablyai/orca/issues')}
+            onPress={() => void Linking.openURL('https://github.com/alwinpaul1/code-ui/issues')}
           />
         </Surface>
 

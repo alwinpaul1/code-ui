@@ -56,7 +56,6 @@ export function MobileSessionActiveContent({
     createError,
     setCreateError,
     setShowCreateTabDrawer,
-    dictationMode,
     toastMessage,
     terminalFrameHeightRef,
     setTerminalFrameWidth,
@@ -68,6 +67,8 @@ export function MobileSessionActiveContent({
     nativeChatController,
     handleAccessoryKey,
     dictation,
+    dictationPaint,
+    composerCursorRef,
     handleDictationToggle,
     finishDictationForSend,
     handleDictationPressIn,
@@ -343,7 +344,11 @@ export function MobileSessionActiveContent({
         onBeforeSend={finishDictationForSend}
         micActive={dictation.isRecording}
         micLevel={(dictation as { level?: number }).level ?? 0}
-        dictationMode={dictationMode}
+        dictationPaint={dictationPaint}
+        onComposerCursor={(cursor) => {
+          composerCursorRef.current = cursor
+        }}
+        dictationMode="toggle"
         onMicPressIn={handleDictationPressIn}
         onMicPressOut={handleDictationPressOut}
         inputLockReason={nativeChatOverlayInputLockReason}

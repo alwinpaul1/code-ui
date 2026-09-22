@@ -65,13 +65,25 @@ export function buildMacHostCommand(action: MacHostPasswordlessAction): string {
   return `${PASSWORDLESS_COMMANDS[action]}${SELF_CLOSE}`
 }
 
-/** Wakes the screen, gives the login window a beat to accept input, then types the
- *  password and Return. The password is only ever interpolated here; it must never
- *  reach a log line, an error message or a toast. */
+/** Delete key. The login field keeps whatever was already typed, and a saved
+ *  password appended to that is the wrong password. Forty deletes clears a
+ *  long mistype; on an empty field each one does nothing. */
+const CLEAR_PASSWORD_FIELD_DELETES = 40
+
+/** Wakes the screen, gives the login window a beat to accept input, clears the
+ *  password field, then types the password and Return. The password is only
+ *  ever interpolated here; it must never reach a log line, an error message
+ *  or a toast. */
 export function buildMacUnlockCommand(password: string): string {
-  const keystroke = `tell application "System Events" to keystroke "${escapeAppleScriptString(password)}"`
-  return (
-    `caffeinate -u -t 2; sleep 1; osascript -e '${escapeShellSingleQuoted(keystroke)}'` +
-    ` -e 'tell application "System Events" to keystroke return'${SELF_CLOSE}`
-  )
+  const lines = [
+    'tell application "System Events"',
+    `repeat ${CLEAR_PASSWORD_FIELD_DELETES} times`,
+    'key code 51',
+    'end repeat',
+    `keystroke "${escapeAppleScriptString(password)}"`,
+    'keystroke return',
+    'end tell'
+  ]
+  const script = lines.map((line) => `-e '${escapeShellSingleQuoted(line)}'`).join(' ')
+  return `caffeinate -u -t 2; sleep 1; osascript ${script}${SELF_CLOSE}`
 }

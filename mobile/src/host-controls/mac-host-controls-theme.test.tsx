@@ -16,6 +16,8 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   Edit3: 'Edit3',
+  Eye: 'Eye',
+  EyeOff: 'EyeOff',
   Lock: 'Lock',
   LockOpen: 'LockOpen',
   MonitorOff: 'MonitorOff',
@@ -69,7 +71,6 @@ describe('the Mac controls in both themes', () => {
   it('paints the password sheet from the live theme too', () => {
     const props = {
       hostId: 'host-1',
-      hostName: 'Studio',
       onClose: vi.fn(),
       onSaved: vi.fn()
     }
@@ -118,7 +119,7 @@ describe('the Mac controls in both themes', () => {
         node.findAllByType('Text').some((text) => text.children.includes('Unlock Mac'))
       )
       expect(unlock?.props.onLongPress).toEqual(expect.any(Function))
-      expect(JSON.stringify(renderer.toJSON())).toContain('Hold to forget the saved password')
+      expect(JSON.stringify(renderer.toJSON())).not.toContain('Hold to forget the saved password')
       act(() => unlock?.props.onLongPress())
       expect(onForget).toHaveBeenCalledOnce()
       expect(onAction).not.toHaveBeenCalled()
@@ -126,18 +127,31 @@ describe('the Mac controls in both themes', () => {
     }
   })
 
-  it('warns that the password lives on the phone and travels to the Mac', () => {
-    const renderer = renderInScheme(
-      'light',
-      createElement(MacUnlockPasswordSheet, {
-        hostId: 'host-1',
-        hostName: 'Studio',
-        onClose: vi.fn(),
-        onSaved: vi.fn()
-      })
-    )
-    const text = JSON.stringify(renderer.toJSON())
-    expect(text).toContain('stored on this phone')
-    expect(text).toContain('sent to the Mac')
+  it('titles the sheet Unlock Mac and reveals what was typed, in light and dark', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const renderer = renderInScheme(
+        scheme,
+        createElement(MacUnlockPasswordSheet, {
+          hostId: 'host-1',
+          onClose: vi.fn(),
+          onSaved: vi.fn()
+        })
+      )
+      const text = JSON.stringify(renderer.toJSON())
+      expect(text).toContain('Unlock Mac')
+      expect(text).not.toContain('Mac unlock password')
+      expect(text).not.toContain('stored on this phone')
+      const field = renderer.root.findByType('TextInput')
+      expect(field.props.secureTextEntry).toBe(true)
+      const reveal = renderer.root
+        .findAllByType('Pressable')
+        .find((node) => node.props.accessibilityLabel === 'Show password')
+      expect(reveal).toBeDefined()
+      act(() => reveal?.props.onPress())
+      expect(renderer.root.findByType('TextInput').props.secureTextEntry).toBe(false)
+      expect(
+        renderer.root.findAllByType('Pressable').some((node) => node.props.accessibilityLabel === 'Hide password')
+      ).toBe(true)
+    }
   })
 })

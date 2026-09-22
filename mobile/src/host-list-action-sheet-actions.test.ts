@@ -279,7 +279,7 @@ describe('the Mac controls on the host sheet', () => {
     const unlock = actions.find((action) => action.label === 'Unlock Mac')
     const sleep = actions.find((action) => action.label === 'Sleep display')
     expect(unlock?.onLongPress).toEqual(expect.any(Function))
-    expect(unlock?.hint).toBe('Hold to forget the saved password')
+    expect(unlock?.hint).toBeUndefined()
     expect(sleep?.onLongPress).toBeUndefined()
     unlock?.onLongPress?.()
     expect(onForget).toHaveBeenCalledOnce()

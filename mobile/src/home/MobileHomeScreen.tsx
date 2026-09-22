@@ -197,9 +197,6 @@ export function MobileHomeScreen() {
       />
       <MacUnlockPasswordSheet
         hostId={mac.passwordHostId}
-        hostName={
-          data.hostCatalog.find((entry) => entry.id === mac.passwordHostId)?.name ?? null
-        }
         onClose={mac.closePasswordSheet}
         onSaved={mac.onPasswordSaved}
       />

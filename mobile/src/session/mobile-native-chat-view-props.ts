@@ -23,6 +23,7 @@ import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-reque
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 
 /** Why the composer input is locked: the transport is disconnected, or the
@@ -112,6 +113,10 @@ export type MobileNativeChatViewProps = {
   onBeforeSend?: () => void
   micActive?: boolean
   micLevel?: number
+  /** Open phrase of a live take, painted lighter than the finished words. */
+  dictationPaint?: DictationPaint | null
+  /** Caret in the composer, so a take inserts there instead of at the end. */
+  onComposerCursor?: (cursor: number) => void
   contextWindow?: TerminalHudContextWindow | null
   permissionMode?: TerminalPermissionMode | null
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void

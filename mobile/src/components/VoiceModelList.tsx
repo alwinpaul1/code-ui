@@ -7,6 +7,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { formatSpeechModelSize } from '../dictation/speech-model-size'
 
 type Props = {
   setup: MobileSpeechSetup
@@ -18,25 +19,18 @@ type Props = {
   onDelete: (model: MobileSpeechModel) => void
 }
 
-function formatSize(bytes: number | null | undefined): string {
-  if (!bytes) {
-    return ''
-  }
-  return `${Math.round(bytes / 1_000_000)} MB`
-}
-
 function modelMeta(model: MobileSpeechModel): string {
   if (model.provider === 'openai') {
     return 'OpenAI API'
   }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {
-    return `${formatSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
+    return `${formatSpeechModelSize(model.sizeBytes)} · ${Math.round(model.progress * 100)}%`
   }
   if (model.status === 'extracting') {
-    return `${formatSize(model.sizeBytes)} · extracting…`
+    return `${formatSpeechModelSize(model.sizeBytes)} · extracting…`
   }
-  return formatSize(model.sizeBytes)
+  return formatSpeechModelSize(model.sizeBytes)
 }
 
 // Renders the speech-model rows shared between the setup sheet and the Voice

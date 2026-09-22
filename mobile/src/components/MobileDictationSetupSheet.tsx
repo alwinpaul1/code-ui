@@ -14,6 +14,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { formatSpeechModelSize } from '../dictation/speech-model-size'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -23,13 +24,6 @@ type Props = {
   onClose: () => void
   // Called after the user reaches a ready+enabled state, so the caller can retry.
   onReady?: () => void
-}
-
-function formatSize(bytes: number | null | undefined): string {
-  if (!bytes) {
-    return ''
-  }
-  return `${Math.round(bytes / 1_000_000)} MB`
 }
 
 // Lets the user enable dictation and download a speech model on the paired
@@ -159,7 +153,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                       ) : null}
                     </View>
                     <Text style={styles.modelMeta}>
-                      {model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes)}
+                      {model.provider === 'openai' ? 'OpenAI API' : formatSpeechModelSize(model.sizeBytes)}
                       {inFlight && model.progress != null
                         ? ` · ${Math.round(model.progress * 100)}%`
                         : model.status === 'extracting'

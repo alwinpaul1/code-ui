@@ -8,6 +8,7 @@ import {
 } from '../terminal/terminal-keyboard-type'
 import { MobileSessionAccessoryStrip } from './MobileSessionAccessoryStrip'
 import { getMobileTerminalLiveInputPlaceholder } from './mobile-terminal-live-input-placeholder'
+import { shouldShowTerminalCommandDock } from './mobile-session-command-dock-visibility'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { useTheme } from '../theme/theme-context'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -49,7 +50,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     nativeChatController,
     showLoadingState
   } = controller
-  const { viewResolved } = nativeChatController
+  const { viewResolved, chatViewSelected } = nativeChatController
   // Tracks the live field's focus so the bar can highlight while the keyboard is open.
   const [liveFocused, setLiveFocused] = useState(false)
   useEffect(() => {
@@ -62,12 +63,14 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   // Same for the tab list itself: no tab yet means no terminal to type into,
   // and the tab about to arrive may open as chat.
   if (
-    activeMarkdownTab ||
-    activeFileTab ||
-    activeBrowserTab ||
-    showNativeChat ||
-    !viewResolved ||
-    showLoadingState
+    !shouldShowTerminalCommandDock({
+      blockedByOtherPanel: Boolean(activeMarkdownTab || activeFileTab || activeBrowserTab),
+      showNativeChat,
+      chatViewSelected,
+      agentSession: activeSessionTab?.type === 'agent-session',
+      viewResolved,
+      loading: showLoadingState
+    })
   ) {
     return null
   }

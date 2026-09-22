@@ -40,9 +40,18 @@ describe('mac host commands', () => {
     expect(buildMacHostCommand('mute')).not.toContain('input')
   })
 
+  it('clears whatever is already in the password field before typing', () => {
+    const command = buildMacUnlockCommand('hunter2')
+    const clearAt = command.indexOf('key code 51')
+    const typeAt = command.indexOf('keystroke "hunter2"')
+    expect(clearAt).toBeGreaterThan(-1)
+    expect(typeAt).toBeGreaterThan(clearAt)
+    expect(command).toContain('repeat 40 times')
+  })
+
   it('wakes the display, waits, then types the password and Return', () => {
     expect(buildMacUnlockCommand('hunter2')).toBe(
-      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events" to keystroke "hunter2"' -e 'tell application "System Events" to keystroke return'; printf 'CUIDONE %s\\n' ok`
+      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events"' -e 'repeat 40 times' -e 'key code 51' -e 'end repeat' -e 'keystroke "hunter2"' -e 'keystroke return' -e 'end tell'; printf 'CUIDONE %s\\n' ok`
     )
   })
 
@@ -58,7 +67,7 @@ describe('mac host commands', () => {
     // The '\'' idiom: close the quote, hand the shell an escaped one, reopen —
     // so the whole -e argument still reaches osascript as one word.
     expect(buildMacUnlockCommand("a'b")).toBe(
-      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events" to keystroke "a'\\''b"' -e 'tell application "System Events" to keystroke return'; printf 'CUIDONE %s\\n' ok`
+      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events"' -e 'repeat 40 times' -e 'key code 51' -e 'end repeat' -e 'keystroke "a'\\''b"' -e 'keystroke return' -e 'end tell'; printf 'CUIDONE %s\\n' ok`
     )
   })
 

@@ -31,6 +31,7 @@ export function useMobileNativeChatActiveResolution(args: {
    *  whichever view it currently shows — drives the header's view toggle. */
   activeChatEligible: boolean
   showNativeChat: boolean
+  chatViewSelected: boolean
   showNativeChatRef: MutableRefObject<boolean>
   activeChatAgent: string | null
   activeChatAgentRef: MutableRefObject<string | null>
@@ -78,6 +79,8 @@ export function useMobileNativeChatActiveResolution(args: {
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat ? chatIdentity : null
   const showNativeChat = activeChatResolution != null
+  // True as soon as this tab is a chat, before its transcript id exists. The
+  // terminal bar uses this so it does not flash under the chat field.
   const activeChatEligible = activeSessionTab != null && activeSessionTabId != null && chatIdentity != null
   const showNativeChatRef = useRef(showNativeChat)
   const activeChatAgent = activeChatResolution?.agent ?? null
@@ -109,6 +112,7 @@ export function useMobileNativeChatActiveResolution(args: {
     viewResolved,
     activeChatEligible,
     showNativeChat,
+    chatViewSelected: tabWantsChat,
     showNativeChatRef,
     activeChatAgent,
     activeChatAgentRef,

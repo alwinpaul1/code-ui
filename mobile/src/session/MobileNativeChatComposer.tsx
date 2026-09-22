@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
+import type { DictationPaint } from '../hooks/mobile-live-transcript'
+import { DictationComposerPaint } from './DictationComposerPaint'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
@@ -73,6 +75,9 @@ type Props = {
   micActive?: boolean
   /** Microphone level 0..1 while `micActive`; shows the voice bars. */
   micLevel?: number
+  /** Finished words in normal color, the open phrase lighter. */
+  dictationPaint?: DictationPaint | null
+  onComposerCursor?: (cursor: number) => void
   /** Context window figure from the desktop status line; shows the ring. */
   contextWindow?: TerminalHudContextWindow | null
   /** Permission mode from the terminal footer; drives the mode sheet. */
@@ -133,6 +138,8 @@ export function MobileNativeChatComposer({
   onBeforeSend,
   micActive = false,
   micLevel = 0,
+  dictationPaint = null,
+  onComposerCursor,
   contextWindow = null,
   permissionMode = null,
   onSelectPermissionMode,
@@ -153,7 +160,10 @@ export function MobileNativeChatComposer({
   dockHeight = 0
 }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
-  const [cursor, setCursor] = useState(0)
+  const [cursor, setCursor] = useState(() => value.length)
+  useEffect(() => {
+    onComposerCursor?.(cursor)
+  }, [cursor, onComposerCursor])
   const [focused, setFocused] = useState(false)
   // Transiently drives the native caret after a mid-text autocomplete insert,
   // then released on the next selection change so manual caret placement still
@@ -277,6 +287,12 @@ export function MobileNativeChatComposer({
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   }
+  const showInterim = micActive && Boolean(dictationPaint?.interim)
+  const composerType = {
+    fontFamily: fonts.regular,
+    fontSize: type.body.size + 1,
+    lineHeight: type.body.lineHeight + 1
+  }
 
   return (
     <View>
@@ -328,10 +344,8 @@ export function MobileNativeChatComposer({
                 width: '100%',
                 maxHeight: 150,
                 minHeight: 44,
-                color: colors.text,
-                fontFamily: fonts.regular,
-                fontSize: type.body.size + 1,
-                lineHeight: type.body.lineHeight + 1,
+                color: showInterim ? 'transparent' : colors.text,
+                ...composerType,
                 paddingHorizontal: space.lg,
                 paddingTop: space.md,
                 paddingBottom: space.xs
@@ -341,7 +355,9 @@ export function MobileNativeChatComposer({
               // Controlled only transiently right after an autocomplete insert.
               selection={pendingSelection ?? undefined}
               onSelectionChange={(e) => {
-                setCursor(e.nativeEvent.selection.end)
+                const next = e.nativeEvent.selection.end
+                setCursor(next)
+                onComposerCursor?.(next)
                 setPendingSelection(null)
               }}
               onFocus={() => setFocused(true)}
@@ -355,6 +371,7 @@ export function MobileNativeChatComposer({
               // The lock gates sending; the draft survives and rides the next send.
               textAlignVertical="top"
             />
+            {showInterim && dictationPaint ? <DictationComposerPaint paint={dictationPaint} /> : null}
           </View>
           <View
             style={{

@@ -318,6 +318,23 @@
     },
     {
       "files": [
+        "src/session/MobileNativeChatComposer.tsx"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-22: live dictation paints the open phrase in a lighter
+            // color over the composer and reports the caret so words insert there.
+            "max": 415,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-session-native-chat-dictation.ts"
       ],
       "rules": {
@@ -327,7 +344,8 @@
             // 2026-09-19: +2 over 300 for Orca #20601's
             // `agentSessionPromptCancelSupported`, the host capability fact
             // threaded from the feedback-capabilities probe to the controller.
-            "max": 302,
+            // 2026-09-22: +1 for stopping a take when a call backgrounds the app.
+            "max": 303,
             "skipBlankLines": true,
             "skipComments": true
           }

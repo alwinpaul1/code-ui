@@ -72,7 +72,6 @@ export function getMacHostSheetActions(
     ...(disabled ? { disabled: true, hint: NO_WORKTREE_HINT } : {}),
     ...(action === 'unlock' && options.onForgetUnlockPassword && !disabled
       ? {
-          hint: 'Hold to forget the saved password',
           onLongPress: () => {
             options.onForgetUnlockPassword?.()
           }

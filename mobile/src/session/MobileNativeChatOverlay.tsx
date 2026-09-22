@@ -1,4 +1,5 @@
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { mobileNativeChatFrameToShow } from './mobile-native-chat-frame-decision'
@@ -55,6 +56,8 @@ type Props = {
   onBeforeSend?: () => void
   micActive: boolean
   micLevel?: number
+  dictationPaint?: DictationPaint | null
+  onComposerCursor?: (cursor: number) => void
   /** Steps the terminal to a permission mode (the mode sheet's pick). */
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
@@ -91,6 +94,8 @@ export function MobileNativeChatOverlay({
   onBeforeSend,
   micActive,
   micLevel,
+  dictationPaint,
+  onComposerCursor,
   onSelectPermissionMode,
   onSelectAgentMode,
   dictationMode,
@@ -263,7 +268,8 @@ export function MobileNativeChatOverlay({
   // A deliberate switch to the terminal keeps the tab eligible for chat; a
   // blink loses the tab or its identity. Only the blink is held.
   const emptyReload = session.transcriptLoading && session.messages.length === 0
-  const blank = !controller.showNativeChat || emptyReload
+  const chatOn = controller.showNativeChat || controller.chatViewSelected
+  const blank = !chatOn || emptyReload
   // The view mode is a placeholder answer of "terminal" until its store is
   // read, and that read re-runs on focus: coming back to the app showed the
   // terminal for a frame while the tab was still a chat tab (2026-09-13,
@@ -275,7 +281,7 @@ export function MobileNativeChatOverlay({
   const held = useHeldChatFrame(blank && blink, sendSurfaceId)
   const frame = mobileNativeChatFrameToShow({
     blank,
-    showNativeChat: controller.showNativeChat,
+    showNativeChat: chatOn,
     hasHeldFrame: held.element != null,
     hasTerminalUnderneath
   })
@@ -351,6 +357,8 @@ export function MobileNativeChatOverlay({
         onBeforeSend={onBeforeSend}
         micActive={micActive}
         micLevel={micLevel}
+        dictationPaint={dictationPaint}
+        onComposerCursor={onComposerCursor}
         contextWindow={controller.nativeChatContextWindow}
         permissionMode={controller.nativeChatPermissionMode}
         onSelectPermissionMode={onSelectPermissionMode}

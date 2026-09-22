@@ -46,6 +46,8 @@ export type MobileNativeChatController = {
   /** Active tab can show chat at all; the header offers a chat/terminal toggle. */
   activeChatEligible: boolean
   showNativeChat: boolean
+  /** The tab is in Chat UI, including the frames before its transcript is ready. */
+  chatViewSelected: boolean
   showNativeChatRef: MutableRefObject<boolean>
   /** Resolved agent for the active chat tab (names the empty-state copy). */
   nativeChatAgent: string | null
