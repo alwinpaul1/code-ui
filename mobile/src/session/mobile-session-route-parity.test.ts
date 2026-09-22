@@ -86,12 +86,15 @@ const HOST_COMPONENT_NAMES = new Set([
 // controller's structuredCancelPrompt, and the tab reconciliation's
 // prompt-cancel capability read; re-pinned again at that merge.
 // 286 since 2026-09-19 (night): terminalHandlesFor and the outside-worktree prefetch effect (readers).
-const HEAD_MAIN_HOOK_SHA256 = '42fb1fdf3c753fdb6d261a3f44bf3d1ca96f1af74aadc19b5e4b0b24d9f65f89'
-const HEAD_HOOK_BINDING_SHA256 = '96c2e7ea211e778ca7be4220ad8b21087c54df95565835391cac4e7db8df0db7'
+// 289 since 2026-09-22: chat dictation's caret ref, insert-range ref, and the
+// paint state for the open phrase.
+const HEAD_MAIN_HOOK_SHA256 = 'b7f8ce4f99d30dcc2fa2586d630129f34c08f9c1cebbcf24cb61ce12e9e2792e'
+// 2026-09-22: the caret and insert-range refs bind into the dictation start.
+const HEAD_HOOK_BINDING_SHA256 = '04f292e0f35cb590be4316450e20409c480652af463f561deca43f6b8f27eba5'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '5b4f48bbf2460bd478d435eb4459914a7a2ea5a566620949649f362db49e7b16'
+  '6bc9145af077063ddee08d159aa4f2614c1eddea3c51fb93e4fa2b2c719c8945'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -159,7 +162,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (the active tab's first) to resolveMobileFileTabDoc, so a desktop-opened
 // tab whose path is outside the worktree reads through a terminal-artifact
 // grant, and names 'outside_worktree' when nothing vouches for the path.
-const HEAD_CALLBACK_BODY_SHA256 = '52beb42c98db4e66abd15dc8fabea98abe61dd6383dad5525e8c6d4a8474e46b'
+const HEAD_CALLBACK_BODY_SHA256 = 'a4ffef37c269e974c1eff74fd1aeaab138efebb5d8d6da19c2480c8f623ec149'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -172,7 +175,7 @@ const HEAD_CALLBACK_BODY_SHA256 = '52beb42c98db4e66abd15dc8fabea98abe61dd6383dad
 // carries both, and this is what the test printed for it.
 // Re-pinned again on the group D merge, 2026-09-19: main's (6121e237) carried
 // #21503's writer, ours (d5529ed9) #21083's worktreeActivate; both now.
-const HEAD_EFFECT_SHA256 = 'a2eb1f03d69306521f517471a24118ca45b528baadccb95003b0241f3d1d7aae'
+const HEAD_EFFECT_SHA256 = 'a0ea481853f9b04acc19d2a9b2754cfe80c4a8915f6e140cfa0416b218476baf'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -224,10 +227,11 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 // now does both — sessionTabCreateTerminal, then the guarded placement.
 const HEAD_NESTED_FUNCTION_SHA256 =
   '8d1508016ebbb37ef43c81c543a0bd7d51cc0ed82c30b07eaf7f7f08a2f625ef'
+// 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 const HEAD_NATIVE_REGISTRATION_SHA256 =
-  'fd43c86a7fb3d12093d24ec695885173488485a29bb587b6facf93ed8af0667e'
+  '9665ccf6550b25a9ac7ade717f4806dd5a0e5ed3e296b7ec2edb982713c0f2c3'
 const HEAD_NATIVE_REMOVAL_SHA256 =
-  'df722f65c9d8a0904786a1d855c80475d85be0d772d9fe6b732e457485e00e9b'
+  '562b70f0c17efd4a0ea39d85e5e1ac7a9bdda2279985e0c24c4934e537e8953a'
 const HEAD_TIMER_CREATION_SHA256 =
   'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
@@ -279,8 +283,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 'agentStatus' key useMobileSessionAttachments reads the tab's agent through,
 // so an image pastes as the agent's own attachment form or as an @file mention.
 // 666 since 2026-09-19 (evening): 'outside_worktree' and its copy in readFileTab.
+// 676 since 2026-09-22: AppState's 'change' event and the 'active' check that
+// stops dictation when a call backgrounds the app.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'e9c71f6e9e73d64ed435e6221ec51e571701b69e4a0e05e78bf261575e93788d'
+  'dd6fb1f741f99f6d291cfce600bfc2f0cdbafff6339503b6a40930e79bef4500'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -347,7 +353,7 @@ const HEAD_HOST_JSX_SHA256 = '0e144db3ff60e989d05f114b28b7f7845add250668ae3d3d89
 // 2026-09-19: FileReader hands readingPositionKey to the PDF and markdown views,
 // and (later) resolveImage to the markdown view; MarkdownReader's Preview
 // hands MobileMarkdown resolveImage too, so a document's figures draw.
-const HEAD_LEAF_JSX_SHA256 = 'b6c8bd98ef2075b8e0f396deea84ed9afeee7497a719d4e50a72aac5b8e94b14'
+const HEAD_LEAF_JSX_SHA256 = '95ccec75c1ae17f96d3f429150419c99aee53bef4fb61d7872f6af06d49cb80e'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -760,7 +766,9 @@ describe('mobile session route extraction parity', () => {
     // 286 since 2026-09-19 (night): terminalHandlesFor (useCallback) and the
     // prefetch effect in useMobileSessionDocumentReaders — a desktop-opened
     // file outside the worktree is read while a terminal still shows its path.
-    expect(main.hooks).toHaveLength(286)
+    // 289 since 2026-09-22: the caret ref, the insert-range ref, and the
+    // dictation paint state.
+    expect(main.hooks).toHaveLength(289)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -768,7 +776,8 @@ describe('mobile session route extraction parity', () => {
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.
-    expect(main.effects).toHaveLength(24)
+    // 25 since 2026-09-22: the dictation take stops when a call backgrounds the app.
+    expect(main.effects).toHaveLength(25)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
@@ -782,9 +791,11 @@ describe('mobile session route extraction parity', () => {
   it('preserves native listeners, timers, identity payloads, and compatibility gates', () => {
     const definitions = readDefinitions()
     const native = readNativeAndTimerFacts(definitions)
-    expect(native.registrations).toHaveLength(6)
+    // 7 since 2026-09-22: AppState.addEventListener on the dictation take.
+    expect(native.registrations).toHaveLength(7)
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
-    expect(native.removals).toHaveLength(8)
+    // 9 since 2026-09-22: the AppState subscription is removed with the dictation effect.
+    expect(native.removals).toHaveLength(9)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
     expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
     expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
@@ -847,7 +858,8 @@ describe('mobile session route extraction parity', () => {
     // 674 since 2026-09-19 (night): the reader's "on Desktop" copy for a file
     // no terminal vouches for (Image/File + the reason), and the prefetch effect's
     // literals (see HEAD_MAIN_HOOK_SHA256).
-    expect(strings).toHaveLength(674)
+    // 676 since 2026-09-22: 'change' and 'active' on the dictation AppState listener.
+    expect(strings).toHaveLength(676)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
