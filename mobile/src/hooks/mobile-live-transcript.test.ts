@@ -47,5 +47,11 @@ describe('dictation inserted at the caret', () => {
       after: '',
       text: 'please fix the bug'
     })
+    expect(paintSpokenAtCursor('hello', '', 'there', 'missing')).toEqual({
+      before: 'hello there',
+      interim: '',
+      after: '',
+      text: 'hello there'
+    })
   })
 })

@@ -59,7 +59,7 @@ export function paintSpokenAtCursor(
   }
   const spokenJoined = joinDictationAtCursor(prefix, '', spoken)
   const at = spokenJoined.lastIndexOf(open)
-  if (at < 0) {
+  if (at === -1) {
     return { before: text, interim: '', after: '', text }
   }
   return {
