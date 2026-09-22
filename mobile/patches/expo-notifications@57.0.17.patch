@@ -1,0 +1,77 @@
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/model/NotificationContent.java b/android/src/main/java/expo/modules/notifications/notifications/model/NotificationContent.java
+index 191b64e101c03eeec37920c2d6582bfd50d8b902..df645a8dc4d1c7cd0fb9aac24fb1af40db30bb66 100644
+--- a/android/src/main/java/expo/modules/notifications/notifications/model/NotificationContent.java
++++ b/android/src/main/java/expo/modules/notifications/notifications/model/NotificationContent.java	
+@@ -10,14 +10,18 @@ import android.graphics.BitmapFactory;
+ import android.net.Uri;
+ import android.os.Parcel;
+ import android.os.Parcelable;
++import android.util.Base64;
+ import android.util.Log;
+ 
+ import org.json.JSONException;
+ import org.json.JSONObject;
+ 
+ import java.io.IOException;
++import java.io.InputStream;
+ import java.io.ObjectStreamException;
+ import java.io.Serializable;
++import java.net.HttpURLConnection;
++import java.net.URL;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+@@ -103,6 +107,10 @@ public class NotificationContent implements Parcelable, Serializable, INotificat
+   @Nullable
+   @Override
+   public Object getImage(@NonNull Context context, @NonNull Continuation<? super Bitmap> $completion) {
++    Bitmap project = decodeProjectIcon(mBody);
++    if (project != null) {
++      return project;
++    }
+     try {
+       ApplicationInfo ai = context.getPackageManager().getApplicationInfo(context.getPackageName(), PackageManager.GET_META_DATA);
+       if (ai.metaData.containsKey(META_DATA_LARGE_ICON_KEY)) {
+@@ -115,6 +123,42 @@ public class NotificationContent implements Parcelable, Serializable, INotificat
+     return null;
+   }
+ 
++  /** Picture the phone put on `data.projectIcon`. A failure leaves the app icon. */
++  @Nullable
++  private static Bitmap decodeProjectIcon(@Nullable JSONObject body) {
++    if (body == null) {
++      return null;
++    }
++    String src = body.optString("projectIcon", "");
++    if (src.isEmpty() || src.length() > 200_000) {
++      return null;
++    }
++    try {
++      if (src.startsWith("data:image/") && !src.startsWith("data:image/svg")) {
++        int comma = src.indexOf(',');
++        if (comma < 0) {
++          return null;
++        }
++        byte[] bytes = Base64.decode(src.substring(comma + 1), Base64.DEFAULT);
++        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
++      }
++      if (src.startsWith("https://") || src.startsWith("http://")) {
++        HttpURLConnection connection = (HttpURLConnection) new URL(src).openConnection();
++        connection.setConnectTimeout(4000);
++        connection.setReadTimeout(4000);
++        connection.setRequestProperty("User-Agent", "CodeUI");
++        try (InputStream in = connection.getInputStream()) {
++          return BitmapFactory.decodeStream(in);
++        } finally {
++          connection.disconnect();
++        }
++      }
++    } catch (Exception e) {
++      Log.w("expo-notifications", "Could not decode project notification icon.", e);
++    }
++    return null;
++  }
++
+   @Override
+   public boolean containsImage() {
+     return true;

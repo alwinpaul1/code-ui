@@ -112,11 +112,11 @@ function questionTitle(
 ): string {
   const header = (question.header ?? '').trim()
   if (header !== '') {
-    return context.location ? `${header} · ${context.location}` : header
+    return context.location ? `${context.location} · ${header}` : header
   }
   const who = agentHeadlineLabel(context.agent) ?? 'Agent'
   const headline = `${who} has a question`
-  return context.location ? `${headline} · ${context.location}` : headline
+  return context.location ? `${context.location} · ${headline}` : headline
 }
 
 /** "1 Label · 2 Label": numbered the way the agent's own selector numbers

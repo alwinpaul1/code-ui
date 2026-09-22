@@ -15,6 +15,9 @@ export type LocalNotificationData = {
   hostId: string
   worktreeId?: string
   notificationId?: string
+  /** Picture the Android shade draws as the large icon. Absent when the
+   *  project has no image icon the phone has seen. */
+  projectIcon?: string
 }
 
 export type NotificationNavigationOptions = {

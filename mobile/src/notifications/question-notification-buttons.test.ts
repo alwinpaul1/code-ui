@@ -136,7 +136,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('Context ring · NexOS / main')
+    expect(content.title).toBe('NexOS / main · Context ring')
     expect(content.body).toBe(
       'Codex only reports context via /status, not continuously. How should the context indicator work?\n' +
         '1 Tap to refresh · 2 Skip it for Codex'
@@ -198,7 +198,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('Cleanup · NexOS / main')
+    expect(content.title).toBe('NexOS / main · Cleanup')
     const category = registeredCategory()
     expect(category.actions).toEqual([
       {
@@ -244,7 +244,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('❓ Claude needs input · NexOS / main')
+    expect(content.title).toBe('NexOS / main · ❓ Claude needs input')
     expect(content).not.toHaveProperty('categoryIdentifier')
     expect(Notifications.setNotificationCategoryAsync).not.toHaveBeenCalled()
   })
@@ -261,7 +261,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('Codex has a question · NexOS / main')
+    expect(content.title).toBe('NexOS / main · Codex has a question')
     expect(content.body).toBe('Which color do you prefer: red or blue?\n1 Blue')
     expect(registeredCategory().actions).toEqual([
       { identifier: 'question:0', buttonTitle: 'Blue', options: { opensAppToForeground: false } },
@@ -290,7 +290,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('❓ Claude needs input · NexOS / main')
+    expect(content.title).toBe('NexOS / main · ❓ Claude needs input')
     expect(content.body).toBe('Using AskUserQuestion')
     expect(content).not.toHaveProperty('categoryIdentifier')
     expect(content.data).not.toHaveProperty('picks')

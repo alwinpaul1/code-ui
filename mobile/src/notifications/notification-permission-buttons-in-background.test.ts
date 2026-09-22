@@ -101,7 +101,7 @@ describe('permission buttons when only the background link is listening', () => 
     deliver({
       type: 'notification',
       source: 'agent-input-needed',
-      title: '❓ Claude needs input · APPLY_JOBS',
+      title: 'APPLY_JOBS · ❓ Claude needs input',
       body: 'Using Bash: cd /d/APPLY_JOBS f=Danial_Monachan_enercity.pdf pdfinfo "$f"',
       worktreeId: 'repo::/d/APPLY_JOBS',
       notificationId: 'agent:apply-jobs'

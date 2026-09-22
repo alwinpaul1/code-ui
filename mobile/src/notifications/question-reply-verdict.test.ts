@@ -21,7 +21,7 @@ const BANNER = {
     request: {
       identifier: 'codeui:host-1:wt-1',
       content: {
-        title: 'Cleanup · NexOS / main',
+        title: 'NexOS / main · Cleanup',
         body: 'Which of these should I delete?\n1 Tier 1 caches · 2 Unreal Engine\nPick any that apply',
         data: { hostId: 'host-1', worktreeId: 'wt-1', questionKey: 'q', picks: {} },
         categoryIdentifier: 'codeui-permission-question:answer=reply(x):Answer'
@@ -58,7 +58,7 @@ describe('re-posting a banner after a reply that was not sent', () => {
     expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith({
       identifier: 'codeui:host-1:wt-1',
       content: {
-        title: 'Cleanup · NexOS / main',
+        title: 'NexOS / main · Cleanup',
         body:
           `${replyVerdictLine('refused')}\n` +
           'Which of these should I delete?\n1 Tier 1 caches · 2 Unreal Engine\nPick any that apply',

@@ -13,7 +13,7 @@ describe('desktop notifications read like a modern app', () => {
       body: 'That lower pane is not a second Orca session.',
       agent: 'grok'
     })
-    expect(presented.title).toBe('✅ Grok finished · Code UI')
+    expect(presented.title).toBe('Code UI · ✅ Grok finished')
   })
 
   it('names Codex the same way when the desktop titled a Codex turn as Claude', () => {
@@ -23,16 +23,16 @@ describe('desktop notifications read like a modern app', () => {
       body: 'Shipped the parser.',
       agent: 'codex'
     })
-    expect(presented.title).toBe('✅ Codex finished · nexos / main')
+    expect(presented.title).toBe('nexos / main · ✅ Codex finished')
   })
 
-  it('leads with the event, names the place once, and keeps a short styled summary', () => {
+  it('leads with the project, then what the agent did, and keeps a short styled summary', () => {
     const presented = presentDesktopNotification({
       source: 'agent-task-complete',
       title: 'Code UI / Code UI - Claude finished',
       body: '**Fixed** the queue parser in `native-queue-input.ts`. Two tests cover it.'
     })
-    expect(presented.title).toBe('✅ Claude finished · Code UI')
+    expect(presented.title).toBe('Code UI · ✅ Claude finished')
     expect(presented.body).toBe(
       `${styleText('Fixed', 'bold')} the queue parser in ${styleText('native-queue-input.ts', 'mono')}. Two tests cover it.`
     )
@@ -44,7 +44,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'nexos / feature/route-planner - Codex needs your input',
       body: 'Allow `rm -rf dist`?'
     })
-    expect(presented.title).toBe('❓ Codex needs your input · nexos / feature/route-planner')
+    expect(presented.title).toBe('nexos / feature/route-planner · ❓ Codex needs your input')
     expect(presented.body).toBe(`Allow ${styleText('rm -rf dist', 'mono')}?`)
   })
 
@@ -54,7 +54,7 @@ describe('desktop notifications read like a modern app', () => {
       title: 'Code UI / Code UI - Claude finished',
       body: 'Claude finished.'
     })
-    expect(presented).toEqual({ title: '✅ Claude finished · Code UI', body: '' })
+    expect(presented).toEqual({ title: 'Code UI · ✅ Claude finished', body: '' })
   })
 
   it('trims a long summary at a sentence boundary', () => {

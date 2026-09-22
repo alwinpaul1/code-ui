@@ -34,9 +34,9 @@ const AT = { agent: 'claude', location: 'NexOS / main' }
  * The question is on the host, verbatim, and is what the shade should say.
  */
 describe('turning a question into what the shade shows', () => {
-  it('leads with the header, then says the question and numbers the choices', () => {
+  it('leads with the project and branch, then the header, and numbers the choices', () => {
     const content = questionNotificationContent(prompt(ASK_USER_QUESTION_CONTEXT_RING), AT)
-    expect(content.title).toBe('Context ring · NexOS / main')
+    expect(content.title).toBe('NexOS / main · Context ring')
     expect(content.body).toBe(
       'Codex only reports context via /status, not continuously. How should the context indicator work?\n' +
         '1 Tap to refresh · 2 Skip it for Codex'
@@ -150,14 +150,14 @@ describe('turning a question into what the shade shows', () => {
         location: 'NexOS / main'
       })
       expect(content.actions).toEqual([])
-      expect(content.title).toBe('Context ring · NexOS / main')
+      expect(content.title).toBe('NexOS / main · Context ring')
     })
 
     // Every question has to be readable from the shade, since the reply
     // answers all of them at once; and the body says the format.
     it('says every question with its choices, and how to reply to them all', () => {
       const content = questionNotificationContent(prompt(ASK_USER_QUESTION_STACK_AND_LOOK), AT)
-      expect(content.title).toBe('Stack · NexOS / main')
+      expect(content.title).toBe('NexOS / main · Stack')
       expect(content.body).toBe(
         "Q1 How should the new Android app be built on top of Orca's relay?\n" +
           '1 Fork Orca mobile (Expo/RN) (Recommended) · 2 Web app + Capacitor with real beUI · 3 Native Kotlin/Compose\n' +
@@ -225,9 +225,9 @@ describe('turning a question into what the shade shows', () => {
       questions: [{ question: 'Deploy now?', options: [{ label: 'Yes' }, { label: 'No' }] }]
     }
 
-    it('names the agent and the worktree', () => {
+    it('names the project and branch, then the agent', () => {
       expect(questionNotificationContent(prompt(noHeader), AT).title).toBe(
-        'Claude has a question · NexOS / main'
+        'NexOS / main · Claude has a question'
       )
     })
 
@@ -235,7 +235,7 @@ describe('turning a question into what the shade shows', () => {
       expect(
         questionNotificationContent(prompt(noHeader), { agent: 'codex', location: 'NexOS / main' })
           .title
-      ).toBe('Codex has a question · NexOS / main')
+      ).toBe('NexOS / main · Codex has a question')
     })
 
     it('does not guess a worktree it was not told', () => {

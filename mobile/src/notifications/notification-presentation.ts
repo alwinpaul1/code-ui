@@ -9,9 +9,9 @@ const BODY_LIMIT = 320
 /**
  * The desktop sends "<repo> / <worktree> - <Agent> <what happened>" as the
  * title and the agent's full Markdown summary as the body. Re-shape that the
- * way a modern app would: the event first ("Claude finished · Code UI"), then
- * a short summary that keeps its emphasis but loses the markup. A worktree
- * named after its repo is said once, not twice.
+ * way a modern app would: the project and branch first ("nexos / main ·
+ * Claude finished"), then a short summary that keeps its emphasis but loses
+ * the markup. A worktree named after its repo is said once, not twice.
  */
 const AGENT_HEADLINE_LABELS: Readonly<Record<string, string>> = {
   claude: 'Claude',
@@ -67,7 +67,9 @@ export function presentDesktopNotification(event: {
     event.agent
   )
   const glyph = statusGlyph(event.source, headline)
-  const title = parsed?.location ? `${glyph}${headline} · ${parsed.location}` : `${glyph}${headline}`
+  const title = parsed?.location
+    ? `${parsed.location} · ${glyph}${headline}`
+    : `${glyph}${headline}`
   const summary = summarize(event.body, parsed?.headline)
   return { title, body: summary }
 }
