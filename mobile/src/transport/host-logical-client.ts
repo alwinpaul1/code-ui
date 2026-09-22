@@ -1,4 +1,4 @@
-import { AppState, Platform } from 'react-native'
+import { Platform } from 'react-native'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
@@ -51,13 +51,11 @@ export function openHostLogicalClient(
   }
 
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
-  endpointLifecycle.setForeground(AppState.currentState === 'active')
-  const appStateSubscription = AppState.addEventListener('change', (state) => {
-    endpointLifecycle.setForeground(state === 'active')
-  })
+  // The process is still running in the background. Marking the relay background
+  // suspended it after 30s, so the next open showed disconnected, then connecting.
+  endpointLifecycle.setForeground(true)
   const closeLogical = logical.close
   logical.close = () => {
-    appStateSubscription.remove()
     endpointLifecycle.stop()
     closeLogical()
   }
