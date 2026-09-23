@@ -30,7 +30,9 @@ describe('an underscore inside a word survives open-and-save', () => {
     ['a dunder path', 'Edit src/__init__.py and src/__main__.py.'],
     ['one identifier at the start of a line', 'snake_case_name'],
     ['two identifiers in a table cell', '| a | b |\n| --- | --- |\n| foo_bar_baz | x_y_z |'],
-    ['an identifier in a list item', '- set LAYER_TYPE_HARDWARE first']
+    ['an identifier in a list item', '- set LAYER_TYPE_HARDWARE first'],
+    ['underscores between CJK characters', '你好_强调_世界'],
+    ['underscores between accented letters', 'café_crème_brûlée']
   ])('%s', (_name, markdown) => {
     const editor = openShippedDocument()
     editor.setMarkdown(markdown, 1)
