@@ -5,7 +5,6 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
-import { absorbedQueueKey, type OwnQueueAbsorption } from './own-queue-absorption'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 
 
@@ -47,7 +46,6 @@ import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
  */
 const anchorByNonce = new Map<string, string | null>()
 const DESKTOP_PROMPT_ANCHOR_CAP = 256
-const NO_ABSORPTION: OwnQueueAbsorption = new Map()
 
 function rawIndex(rawMessages: readonly NativeChatMessage[], id: string): number {
   return rawMessages.findIndex((message) => message.id === id)
@@ -117,10 +115,6 @@ export function useDesktopPromptEchoes(
   // The RAW tail, for the same reason the absorbed-queue echoes use it: a
   // folded run is one row, so folded anchors would stack every echo together.
   rawMessages: readonly NativeChatMessage[] = folded,
-  /** Where the agent's queue box took each of the phone's own sends
-   *  (own-queue-absorption.ts). That is where Claude Code draws the message,
-   *  and it outranks any anchor guessed from the send. */
-  absorbed: OwnQueueAbsorption = NO_ABSORPTION,
   /** Whether rows older than the loaded page exist and are not loaded. A
    *  prompt older than every held row is then a row above the page, not a
    *  bubble to place: it shows when the page that holds it loads, and the
@@ -138,10 +132,12 @@ export function useDesktopPromptEchoes(
     ) {
       continue
     }
-    const taken = absorbed.get(absorbedQueueKey(prompt.text))
-    if (taken !== undefined && rememberedAnchor(prompt.nonce) !== taken && rawIndex(rawMessages, taken) !== -1) {
-      rememberAnchor(prompt.nonce, taken)
-    } else if (timedByNonce.has(prompt.nonce)) {
+    // Where it was SENT, never where the agent took it: the Claude app draws a
+    // mid-turn message at its send, with the calls that ran while it waited
+    // below it, and the user chose that order (2026-09-23). Between 2026-09-20
+    // and then the queue box's release moved it to the take, as the desk's
+    // terminal draws it.
+    if (timedByNonce.has(prompt.nonce)) {
       const at = timedByNonce.get(prompt.nonce)!
       const current = rememberedAnchor(prompt.nonce) ?? null
       const later = lastRowBefore(rawMessages, at)

@@ -30,6 +30,9 @@ import {
  * here and drawn where it was, until the transcript shows it (a prompt sent
  * while the agent is idle does land as a real user turn) or the tab changes.
  */
+/** Queue entries whose first sighting is remembered at once; see `appeared`. */
+const SIGHTING_CAP = 64
+
 export function useAbsorbedQueueEchoes(
   queued: readonly string[],
   /**
@@ -71,7 +74,8 @@ export function useAbsorbedQueueEchoes(
   const held = useRef(new Map<string, HeldEcho>())
   const previous = useRef<readonly string[]>([])
   const previousSent = useRef<readonly string[] | null>(null)
-  /** Screen prompts that appeared while the phone was watching, by key. */
+  /** The raw row that was last when each queue entry was first seen, by key:
+   *  where the message was SENT, which is where it is drawn (2026-09-23). */
   const appeared = useRef(new Map<string, string>())
   const provisional = useRef(new Set<string>())
   const scope = useRef(scopeKey)
@@ -90,6 +94,34 @@ export function useAbsorbedQueueEchoes(
   const live = queued.map(promptKey).filter((text) => text.length > 0)
   const own = ownPrompts.map(promptKey)
   const anchorId = rawMessages.at(-1)?.id ?? null
+  // The first sighting of each entry is its send: the Claude app draws a
+  // mid-turn message there, with the calls that ran while it waited below it,
+  // and the user chose that order over the desk terminal's, which draws it
+  // where the agent took it (2026-09-23). A stub that grows into the full text
+  // keeps the sighting its first reading had.
+  const sightingFor = (key: string): string | undefined => {
+    for (const [seen, sighting] of appeared.current) {
+      if (sameMessage(seen, key) || preferredWitnessReading(seen, key) !== null) {
+        return sighting
+      }
+    }
+    return undefined
+  }
+  if (anchorId !== null) {
+    for (const key of live) {
+      if (sightingFor(key) === undefined) {
+        appeared.current.set(key, anchorId)
+        // Bounded: a sighting is dropped once its message is held, and an entry
+        // that never leaves the box must not grow this for the whole session.
+        if (appeared.current.size > SIGHTING_CAP) {
+          const oldest = appeared.current.keys().next()
+          if (!oldest.done) {
+            appeared.current.delete(oldest.value)
+          }
+        }
+      }
+    }
+  }
   const hold = (text: string, skipOwn: boolean, mayCreate = true): void => {
     const key = promptKey(text)
     // No transcript yet means no row to anchor on, and a null anchor pins
@@ -120,7 +152,17 @@ export function useAbsorbedQueueEchoes(
       return
     }
     counter.current += 1
-    held.current.set(key, { text, anchorId, seq: counter.current, provisional: provisional.current.has(key) })
+    held.current.set(key, {
+      text,
+      anchorId: sightingFor(key) ?? anchorId,
+      seq: counter.current,
+      provisional: provisional.current.has(key)
+    })
+    for (const seen of Array.from(appeared.current.keys())) {
+      if (sameMessage(seen, key) || preferredWitnessReading(seen, key) !== null) {
+        appeared.current.delete(seen)
+      }
+    }
   }
   // The scrollback is a BACKLOG, not an event: every prompt of the session
   // still painted on screen is in it, including ones whose transcript rows

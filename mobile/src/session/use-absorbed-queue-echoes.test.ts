@@ -214,3 +214,64 @@ function ProbeOwn({
   latest = useAbsorbedQueueEchoes(queued, [], folded, 'tab-a', folded, own)
   return null
 }
+
+// 2026-09-23: a message typed on the desktop mid-turn is drawn where it was
+// SENT — the row that was last when it first showed in the agent's queue box —
+// not where the agent took it. The Claude app draws it there, with the calls
+// that ran while it waited below it, and the user chose that order.
+describe('where a queued desktop message is drawn', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    latest = null
+  })
+  const a1 = row('a1', 'assistant', 'working')
+  const a2 = row('a2', 'assistant', 'Created a file')
+  const a3 = row('a3', 'assistant', 'ran a command')
+
+  it('sits after the row that was last when it appeared, with the calls that ran while it waited below it', () => {
+    act(() => {
+      renderer = create(createElement(ProbeRaw, { queued: [], folded: [a1], raw: [a1] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: ['check the dock'], folded: [a1], raw: [a1] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: ['check the dock'], folded: [a1], raw: [a1, a2, a3] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: [], folded: [a1], raw: [a1, a2, a3] }))
+    })
+    expect(latest).toMatchObject([{ text: 'check the dock', baselineTailMessageId: 'a1' }])
+  })
+
+  it('keeps its first sighting while the queue box grows the text from a stub', () => {
+    act(() => {
+      renderer = create(createElement(ProbeRaw, { queued: [], folded: [a1], raw: [a1] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: ['check the…'], folded: [a1], raw: [a1] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: ['check the dock please'], folded: [a1], raw: [a1, a2] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: [], folded: [a1], raw: [a1, a2, a3] }))
+    })
+    expect(latest).toMatchObject([{ baselineTailMessageId: 'a1' }])
+  })
+
+  it('anchors a message already queued when the phone first looked at the row that was last then', () => {
+    act(() => {
+      renderer = create(createElement(ProbeRaw, { queued: ['check the dock'], folded: [a1], raw: [a1, a2] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: ['check the dock'], folded: [a1], raw: [a1, a2, a3] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeRaw, { queued: [], folded: [a1], raw: [a1, a2, a3] }))
+    })
+    expect(latest).toMatchObject([{ baselineTailMessageId: 'a2' }])
+  })
+})

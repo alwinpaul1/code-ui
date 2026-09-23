@@ -5,7 +5,6 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useDesktopPromptEchoes, withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
-import { absorbedQueueKey } from './own-queue-absorption'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -481,8 +480,11 @@ describe('where a waiting prompt sits while rows keep arriving', () => {
 // and the queue absorbed it at 08:24:32.5 — after the tenth. The echo was
 // anchored by its hook time against the rows the phone HELD at first sight
 // (the ninth had not loaded, 1.2 s old), and the anchor was then final.
-// Claude Code draws a queued message where it TOOK it, and the phone can see
-// that moment: the row leaves the agent's queue box.
+// That fix then moved the message to where the agent's queue box let it go,
+// matching the desk's terminal. On 2026-09-23 the user chose the Claude app's
+// order instead: a message sent mid-turn sits where it was SENT, with the calls
+// that ran while it waited below it (their screenshots: the app shows "Created a
+// file, ran a command" between two messages the phone drew back to back).
 describe('where a queued send lands', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -500,38 +502,70 @@ describe('where a queued send lands', () => {
   const text = 'actaully ran 10 shell commands my mobile shows only 8 see what happened and fix that bug confirm with jev'
   const prompts: DesktopPrompt[] = [{ nonce: 'status:s:1789892639646:3', text, at: T('08:23:59.646') }]
 
-  function ProbeAbsorbed({
-    raw,
-    absorbed
-  }: {
-    raw: readonly NativeChatMessage[]
-    absorbed: ReadonlyMap<string, string>
-  }) {
-    latest = useDesktopPromptEchoes(prompts, raw, raw, absorbed)
+  function ProbeAbsorbed({ raw }: { raw: readonly NativeChatMessage[] }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw)
     return null
   }
 
   it('follows a row that loads late but was written before the send', () => {
     act(() => {
-      renderer = create(createElement(ProbeAbsorbed, { raw: first8, absorbed: new Map() }))
+      renderer = create(createElement(ProbeAbsorbed, { raw: first8 }))
     })
     expect(latest[0]!.baselineTailMessageId).toBe('c8')
     act(() => {
-      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9], absorbed: new Map() }))
+      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9] }))
     })
     expect(latest[0]!.baselineTailMessageId).toBe('c9')
   })
 
-  it('moves to where the agent took it once its queue row leaves the box', () => {
+  it('stays where it was sent after its queue row leaves the box, as the Claude app draws it', () => {
     act(() => {
-      renderer = create(createElement(ProbeAbsorbed, { raw: [...first8, c9], absorbed: new Map() }))
+      renderer = create(createElement(ProbeAbsorbed, { raw: [...first8, c9] }))
     })
     expect(latest[0]!.baselineTailMessageId).toBe('c9')
-    const absorbed = new Map([[absorbedQueueKey(text), 'c10']])
+    // The agent takes it after c10; the queue box letting it go must not move it.
     act(() => {
-      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9, c10], absorbed }))
+      renderer!.update(createElement(ProbeAbsorbed, { raw: [...first8, c9, c10] }))
     })
-    expect(latest[0]!.baselineTailMessageId).toBe('c10')
+    expect(latest[0]!.baselineTailMessageId).toBe('c9')
+  })
+})
+
+// 2026-09-23, this very session (Claude Code 2.1.280, 967668df…jsonl): the user
+// sent "I also need this unlock search on web and find a way" at 17:03:39.384,
+// nine seconds after a Bash call; a Write (17:04:03) and a Bash (17:04:05) ran
+// before the agent took it at 17:04:12, with that Bash's result. Its only
+// transcript record is a queued_command attachment, which Orca's reader drops,
+// so the hook's copy is what draws it. It must sit after the first call, with
+// the Write and the Bash below it — the Claude app's order.
+describe('a message sent mid-turn, from this session', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const T = (clock: string) => Date.parse(`2026-09-23T${clock}Z`)
+  const at = (id: string, clock: string): NativeChatMessage => ({ ...assistant(id), timestamp: T(clock) })
+  const readHudTest = at('bash-read-hud', '17:03:30.100')
+  const createTestFile = at('write-windows-test', '17:04:03.000')
+  const runTests = at('bash-vitest', '17:04:05.000')
+  const text = 'I also need this unlock search on web and find a way'
+  const prompts: DesktopPrompt[] = [{ nonce: 'status:s:1790183019384:0', text, at: T('17:03:39.384') }]
+  function ProbeSession({ raw }: { raw: readonly NativeChatMessage[] }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw)
+    return null
+  }
+
+  it('sits after the call it was sent after, not after the calls that ran while it waited', () => {
+    act(() => {
+      renderer = create(createElement(ProbeSession, { raw: [readHudTest] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('bash-read-hud')
+    // The agent takes it with the Bash result; the queue box lets it go then.
+    act(() => {
+      renderer!.update(createElement(ProbeSession, { raw: [readHudTest, createTestFile, runTests] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('bash-read-hud')
   })
 })
 
@@ -558,7 +592,7 @@ describe('a prompt older than the loaded page', () => {
     { nonce: 'status:6116568a:1789895949068:0', text: '<pasted_content id="329c"> Find me a men\'s insulated winter jacket', cut: true, at: T('09:19:09.068') }
   ]
   function ProbeEarlier({ hasEarlier }: { hasEarlier: boolean }) {
-    latest = useDesktopPromptEchoes(prompts, raw, raw, undefined, hasEarlier)
+    latest = useDesktopPromptEchoes(prompts, raw, raw, hasEarlier)
     return null
   }
 
