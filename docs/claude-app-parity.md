@@ -20,7 +20,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 10 | Screenshot markup: draw on a screenshot with a pen, undo and redo, "Discard markup?" on close, attach it with an edit pencil | Not present | open |
 | 11 | A queued message stays queued while Claude Code 2.1.281 draws the queue above its spinner | Drew it as already sent | done (acac520b) |
 | 12 | A reply written just before a phone send stays above the message | Drew it below | done (3ed09620) |
-| 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (this commit) |
+| 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
 | 14 | Where a mid-turn message sits among the rows around it | Two Claude app screenshots disagree under every rule Claude Code's records allow (below) | investigating |
 
 ## Evidence notes
@@ -34,10 +34,6 @@ failing-first test and has been checked on the phone in light and dark.
   both attachment kinds.
 - **Queue (11).** The 2.1.281 layout is in the test fixture beside
   `mobile-terminal-queued-messages.ts`.
-</content>
-</invoke>
-<invoke name="Bash">
-<parameter name="command">cd "/Users/alwinpaul/Desktop/Project/Code UI" && git add docs/claude-app-parity.md && git commit -q -m "List what the Claude app shows that Code UI does not yet" && git log --oneline -1
 - **Mid-turn placement (14).** Session 967668df. "Red." (stamped 22:15:15,
   written after a 22:15:23.873 enqueue) drew ABOVE the message, and so did
   the tool call stamped after the send: the Claude app matched the take
