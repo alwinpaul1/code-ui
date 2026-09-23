@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useMobileDictation } from './use-mobile-dictation'
 
 // 2026-09-23 review of the #21905 port: releasing the dictation button while the OS microphone
 // prompt is still up (or a quick tap in hold mode) cancels the start, but the permission and the
@@ -72,7 +73,6 @@ async function settle(): Promise<void> {
 }
 
 async function mountDictation(): Promise<{ current: () => Dictation; root: ReactTestRenderer }> {
-  const { useMobileDictation } = await import('./use-mobile-dictation')
   let latest: Dictation | null = null
   function Probe(): null {
     latest = useMobileDictation({
@@ -148,6 +148,43 @@ describe('cancelling a dictation while the microphone prompt is up', () => {
     })
 
     expect(rig.log).not.toContain('initialize')
+  })
+
+  it('does not tear down the engine a quick second start is opening, when the first was cancelled at the prompt', async () => {
+    // Batch G review: the cancelled start used to call release() -> tearDown() after open came back
+    // 'cancelled', which lands after the second start's initialize has been dispatched. It never
+    // opened an engine, so it has none to tear down.
+    const answers: ((value: Grant) => void)[] = []
+    rig.permission = () =>
+      new Promise<Grant>((resolve) => {
+        answers.push(resolve)
+      })
+    const dictation = await mountDictation()
+    let first: Promise<void> = Promise.resolve()
+    let second: Promise<void> = Promise.resolve()
+    await act(async () => {
+      first = dictation.current().start().catch(() => undefined)
+      await settle()
+    })
+    await act(async () => {
+      await dictation.current().cancel()
+      await settle()
+    })
+    await act(async () => {
+      second = dictation.current().start().catch(() => undefined)
+      await settle()
+    })
+    await act(async () => {
+      answers[1]!({ granted: true, canAskAgain: true })
+      await settle()
+      answers[0]!({ granted: true, canAskAgain: true })
+      await Promise.all([first, second])
+      await settle()
+    })
+
+    expect(rig.log).not.toContain('tearDown')
+    expect(dictation.current().status).toBe('recording')
+    await act(async () => dictation.root.unmount())
   })
 
   it('still opens the engine and records when nothing cancelled the start', async () => {

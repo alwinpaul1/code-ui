@@ -148,7 +148,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       throw err instanceof Error ? err : new Error(String(err))
     }
     if (generationRef.current !== generation || !enabledRef.current) {
-      capture.release()
+      // A start cancelled at the prompt opened no engine, so it has none to give up. Releasing
+      // anyway tore down the one a quick second start was opening (batch G review, 2026-09-23).
+      if (!(!opened.ok && opened.reason === 'cancelled')) {
+        capture.release()
+      }
       if (generationRef.current === generation) {
         setStatus('idle')
       }
