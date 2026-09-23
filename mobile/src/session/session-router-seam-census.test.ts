@@ -11,18 +11,24 @@ const SESSION_ROOT = import.meta.dirname
 /**
  * Which modules here hold a router, so the census cannot pass by seeing nothing.
  *
- * Three, and each for a different target. The foundation hook bounces a deleted workspace back to
+ * Four, and each for a different target. The foundation hook bounces a deleted workspace back to
  * its host; the file-tap handlers push a preview route from a terminal link or a chat path; the
- * notification hook consumes a pane tap by rewriting this route's own params. Only the first two
- * can leave the page, which is the whole reason the third is in the list anyway — a `setParams` on
- * expo-router's router and a `setParams` on the handoff's are the same call, and listing it here is
- * what stops someone later giving it back its own `useRouter` because "it never navigates".
+ * notification hook consumes a pane tap by rewriting this route's own params; the review route
+ * body replaces to the session screen and pops the stack behind it. Only the first two and the
+ * last can leave the page, which is the whole reason the third is in the list anyway — a
+ * `setParams` on expo-router's router and a `setParams` on the handoff's are the same call, and
+ * listing it here is what stops someone later giving it back its own `useRouter` because "it never
+ * navigates".
  *
- * CODE UI: two here. This fork has no `use-notification-pane-navigation.ts` (its pane-tap push
+ * CODE UI: three here. This fork has no `use-notification-pane-navigation.ts` (its pane-tap push
  * consumer came with upstream's push work, which this fork does not carry), so the third holder
  * does not exist to list.
  */
-const ROUTER_HOLDERS = ['use-mobile-file-tap-handlers.ts', 'use-mobile-session-foundation.ts']
+const ROUTER_HOLDERS = [
+  'MobileDiffReviewRouteScreen.tsx',
+  'use-mobile-file-tap-handlers.ts',
+  'use-mobile-session-foundation.ts'
+]
 
 /**
  * The expo-router names this domain may still import, and why each one is not a router.
