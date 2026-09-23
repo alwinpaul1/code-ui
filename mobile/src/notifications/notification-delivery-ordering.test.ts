@@ -98,6 +98,8 @@ describe('#8591 per-host delivery ordering', () => {
                   type: 'notification',
                   title: 'm6',
                   body: 'b',
+                  // One session per event: a replay posts one banner per session.
+                  worktreeId: 'wt-6',
                   notificationId: 'a:6',
                   notificationSeq: 6
                 },
@@ -105,6 +107,8 @@ describe('#8591 per-host delivery ordering', () => {
                   type: 'notification',
                   title: 'm7',
                   body: 'b',
+                  // One session per event: a replay posts one banner per session.
+                  worktreeId: 'wt-7',
                   notificationId: 'a:7',
                   notificationSeq: 7
                 }

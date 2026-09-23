@@ -312,6 +312,31 @@ export async function showLocalNotification(
   }
 }
 
+/**
+ * Clear a session's banner that a previous process left in the tray, when a
+ * replay shows the session's last word was dismissed at the desk.
+ *
+ * A replay used to post that last word on the session identifier, replacing
+ * whatever sat there, and its dismiss then cleared it: the tray ended empty for
+ * the session, one popup later. Retiring gives the same end state with no popup.
+ *
+ * Only a banner this process has no record of is retired. One it posted itself
+ * (live, or earlier in this replay) belongs to a notification the desk has not
+ * dismissed, and that notification's own dismiss is what retires it.
+ */
+export async function retireSessionBanner(
+  hostId: string,
+  worktreeId: string | undefined
+): Promise<void> {
+  const identifier = sessionBannerIdentifier(hostId, worktreeId)
+  for (const state of scheduledNotificationsByHostAndNotificationId.values()) {
+    if (state.identifier === identifier) {
+      return
+    }
+  }
+  await Notifications.dismissNotificationAsync(identifier).catch(() => {})
+}
+
 /** Drop the identifier from every record except the one that just claimed it.
  *  Their banners no longer exist; only the newest notification is on screen. */
 function forgetSupersededBanners(keepKey: string, identifier: string): void {

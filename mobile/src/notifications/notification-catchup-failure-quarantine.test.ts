@@ -101,11 +101,14 @@ function makeHostClient() {
   }
 }
 
+// Each in its own worktree: a replay posts one banner per session
+// (notification-replay-plan.ts), and these cases count shows to find the gap.
 function notification(seq: number) {
   return {
     type: 'notification',
     title: `m${seq}`,
     body: 'b',
+    worktreeId: `wt-${seq}`,
     notificationId: `agent:${seq}`,
     notificationSeq: seq
   }

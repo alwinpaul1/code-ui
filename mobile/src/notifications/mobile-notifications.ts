@@ -10,10 +10,14 @@ export { setScheduledNotificationsMaxForTests } from './local-notification-sched
 import {
   configureNotificationChannel,
   dismissLocalNotification,
+  retireSessionBanner,
   showLocalNotification,
   type DismissNotificationEvent,
   type NotificationEvent
 } from './local-notification-scheduling'
+import { drainReplayBatch } from './notification-replay-drain'
+import { planReplayPresentation, type ReplayPresentation } from './notification-replay-plan'
+import { persistSeenKeys } from './notification-seen-store'
 import {
   cachedDeliveredPushes,
   reportableDeliveredPushes,
@@ -24,7 +28,9 @@ import {
   catchUpWatermarkSeq,
   enqueueHostDelivery,
   getHostNotificationSession,
+  holdReplayWatermark,
   quarantineCatchUpWatermark,
+  releaseReplayWatermark,
   releaseQueuedShowNotificationId,
   resolveCatchUpQuarantine,
   saveWatermark,
@@ -111,14 +117,23 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   async function deliverLive(
     type: 'notification' | 'dismiss',
     event: NotificationEvent | DismissNotificationEvent,
-    quietUnlessActionable = false
+    presentation: ReplayPresentation = 'show'
   ): Promise<void> {
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     const epochAtDelivery = session.lastDeliveredEpoch
     if (type === 'notification') {
-      // The link this event came over is the one to ask about it on; see
-      // presentedNotificationContent.
-      await showLocalNotification(event as NotificationEvent, hostId, { client, quietUnlessActionable })
+      // 'silent' and 'retire' still fall through to the seen-set and the watermark
+      // below: the event was delivered, it is simply not news any more.
+      if (presentation === 'retire') {
+        await retireSessionBanner(hostId, (event as NotificationEvent).worktreeId)
+      } else if (presentation !== 'silent') {
+        // The link this event came over is the one to ask about it on; see
+        // presentedNotificationContent.
+        await showLocalNotification(event as NotificationEvent, hostId, {
+          client,
+          quietUnlessActionable: presentation === 'quiet'
+        })
+      }
     } else {
       await dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }
@@ -130,7 +145,17 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // A mid-flight epoch adoption already cleared the counter lifetime this key indexes.
     if (key && session.lastDeliveredEpoch === epochAtDelivery) {
       session.seen.add(key)
+      // Kept across a restart, so a replay from a lagging watermark recognises
+      // what this run already showed (notification-seen-store.ts). Without an
+      // epoch the keys cannot be tied to a counter, so they stay in memory.
+      if (session.lastDeliveredEpoch !== null) {
+        persistSeenKeys(hostId, session.lastDeliveredEpoch, session.seen.keys())
+      }
     }
+    advanceWatermark(event)
+  }
+
+  function advanceWatermark(event: NotificationEvent | DismissNotificationEvent): void {
     // Why after the await (#8591): the watermark is a promise that everything up
     // to this seq has been shown. Advancing it before the local notification lands
     // means a process death in between silently drops it — the next launch asks the
@@ -151,11 +176,17 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // entry, and re-enqueueing per item is what let a live event cut in.
   async function deliverMissedEvent(
     event: NotificationEvent | DismissNotificationEvent,
-    quietUnlessActionable: boolean
+    presentation: ReplayPresentation
   ): Promise<void> {
     // No pre-marking here either: deliverLive marks the key once the show lands.
     const key = seenKeyForEvent(event)
     if (key && session.seen.has(key)) {
+      // Shown already, by this run or (through the stored keys) the one before a
+      // restart. It still counts as delivered: left behind, a restart after a
+      // lagging watermark would ask from below it again every time.
+      if (event.notificationEpoch == null || event.notificationEpoch === session.lastDeliveredEpoch) {
+        advanceWatermark(event)
+      }
       return
     }
     if (event.type === 'notification') {
@@ -163,7 +194,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         return
       }
       try {
-        await deliverLive('notification', event, quietUnlessActionable)
+        await deliverLive('notification', event, presentation)
       } finally {
         releaseQueuedShowNotificationId(session, event.notificationId)
       }
@@ -231,34 +262,40 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       // again while the replay drains must get the rest as banners, or they
       // are silenced for good (the watermark moves past them). Only 'active'
       // is quiet; 'unknown' at a cold start shows, the safe side. A replay
-      // while the app is still in the background still shows.
-      const quietUnlessActionable = () => appIsOpen()
+      // while the app is still in the background still shows what is news.
+      //
+      // And only what is still news pops at all: a notification dismissed later
+      // in the batch and a session's superseded words are delivered without a
+      // banner (see planReplayPresentation). Planned once over the whole batch,
+      // because both are facts about events after this one.
+      const events = missed as (NotificationEvent | DismissNotificationEvent)[]
+      const { drained, contiguousSeq } = await drainReplayBatch({
+        events,
+        steps: planReplayPresentation(events),
+        askedFrom: askFrom,
+        presentationFor: (planned) => (planned === 'show' && appIsOpen() ? 'quiet' : planned),
+        deliver: deliverMissedEvent,
+        isDisposed: () => disposed,
+        // Not persisted here: every delivery already writes the clamped value.
+        holdWatermarkAt: (seq) => holdReplayWatermark(session, seq)
+      })
+      // The hold belongs to this batch. Quarantined below if it broke off, at the
+      // point it really reached.
+      if (drained) {
+        releaseReplayWatermark(session, hostId)
+      } else {
+        session.replayHoldSeq = null
+      }
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
-      let contiguousSeq = askFrom
-      let drained = false
-      try {
-        for (const raw of missed) {
-          // Re-checked per event: the batch can start before a teardown and still be
-          // draining after it, and a torn-down host must stop pushing.
-          if (disposed) {
-            return
-          }
-          const event = raw as NotificationEvent | DismissNotificationEvent
-          await deliverMissedEvent(event, quietUnlessActionable())
-          contiguousSeq = event.notificationSeq ?? contiguousSeq
-        }
-        drained = true
-      } finally {
-        if (drained) {
-          resolveCatchUpQuarantine(session, hostId)
-        } else {
-          quarantineCatchUpWatermark(session, hostId, contiguousSeq)
-        }
+      if (drained) {
+        resolveCatchUpQuarantine(session, hostId)
+      } else {
+        quarantineCatchUpWatermark(session, hostId, contiguousSeq)
       }
-      // Why swallowed here: the `finally` above already recorded the contiguous point,
-      // and the only caller is an un-awaited 'ready' continuation — letting a failed
-      // show escape turns every one into an unhandled rejection (a RN redbox).
+      // Why swallowed here: the drain already recorded the contiguous point, and the
+      // only caller is an un-awaited 'ready' continuation — letting a failure escape
+      // turns every one into an unhandled rejection (a RN redbox).
     }).catch(() => {})
   }
 

@@ -954,8 +954,12 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     await flushAsync()
 
     // Every watermark write is a single key carrying both halves together.
-    const watermarkWrites = AsyncStorageMock.setItem.mock.calls.filter((c: unknown[]) =>
-      String(c[0]).startsWith('orca:mobileNotifications')
+    // The seen keys are their own record by design, carrying their own epoch
+    // (notification-seen-store.ts); every other write here must be the pair.
+    const watermarkWrites = AsyncStorageMock.setItem.mock.calls.filter(
+      (c: unknown[]) =>
+        String(c[0]).startsWith('orca:mobileNotifications') &&
+        !String(c[0]).startsWith('orca:mobileNotificationsSeen:')
     )
     expect(watermarkWrites.length).toBeGreaterThan(0)
     for (const [key, value] of watermarkWrites) {
