@@ -40,5 +40,15 @@ failing-first test and has been checked on the phone in light and dark.
   (`queued_command`, written after the tool result). The "mahdi" message
   (enqueued 23:19:27.671) drew ABOVE a thinking block and tool call stamped
   0.2 s before the send but written after it: the Claude app matched the
-  enqueue, not the take. Next: read both in claude.ai/code before choosing.
+  enqueue, not the take. The rule that fits both reports is the user's own
+  choice, "where I sent it", for the phone's own sends (3ed09620 draws a row
+  stamped at least the measured clock slack before the send above it). What
+  broke the mahdi case is which copy was drawn: the Code UI bubble had NO
+  images while the Claude app's had three, so the phone's own echo was not
+  the one on screen. A text-only witness of the same message (the hook's
+  prompt, reported when Claude Code takes it, or the queue box's release)
+  replaced it and sat at the take. Fix: for a message the phone sent, keep
+  the phone's echo, with its images and its send-time place, and retire the
+  hook and queue copies against it, never the other way round. This is also
+  half of item 9 (images missing from the bubble).
 
