@@ -14,6 +14,7 @@ import {
   type DismissNotificationEvent,
   type NotificationEvent
 } from './local-notification-scheduling'
+import { planReplayPresentation, type ReplayPresentation } from './notification-replay-plan'
 import {
   cachedDeliveredPushes,
   reportableDeliveredPushes,
@@ -111,14 +112,21 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   async function deliverLive(
     type: 'notification' | 'dismiss',
     event: NotificationEvent | DismissNotificationEvent,
-    quietUnlessActionable = false
+    presentation: ReplayPresentation = 'show'
   ): Promise<void> {
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     const epochAtDelivery = session.lastDeliveredEpoch
     if (type === 'notification') {
-      // The link this event came over is the one to ask about it on; see
-      // presentedNotificationContent.
-      await showLocalNotification(event as NotificationEvent, hostId, { client, quietUnlessActionable })
+      // 'silent' still falls through to the seen-set and the watermark below: the
+      // event was delivered, it is simply not news any more.
+      if (presentation !== 'silent') {
+        // The link this event came over is the one to ask about it on; see
+        // presentedNotificationContent.
+        await showLocalNotification(event as NotificationEvent, hostId, {
+          client,
+          quietUnlessActionable: presentation === 'quiet'
+        })
+      }
     } else {
       await dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }
@@ -151,7 +159,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // entry, and re-enqueueing per item is what let a live event cut in.
   async function deliverMissedEvent(
     event: NotificationEvent | DismissNotificationEvent,
-    quietUnlessActionable: boolean
+    presentation: ReplayPresentation
   ): Promise<void> {
     // No pre-marking here either: deliverLive marks the key once the show lands.
     const key = seenKeyForEvent(event)
@@ -163,7 +171,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
         return
       }
       try {
-        await deliverLive('notification', event, quietUnlessActionable)
+        await deliverLive('notification', event, presentation)
       } finally {
         releaseQueuedShowNotificationId(session, event.notificationId)
       }
@@ -231,21 +239,34 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       // again while the replay drains must get the rest as banners, or they
       // are silenced for good (the watermark moves past them). Only 'active'
       // is quiet; 'unknown' at a cold start shows, the safe side. A replay
-      // while the app is still in the background still shows.
-      const quietUnlessActionable = () => appIsOpen()
+      // while the app is still in the background still shows what is news.
+      //
+      // And only what is still news pops at all: a dismissed notification, a
+      // session's superseded words and anything long past are delivered
+      // silently or quietly (see planReplayPresentation). Planned once over the
+      // whole batch, because both "dismissed later" and "superseded" are facts
+      // about events after this one.
+      const plan = planReplayPresentation(
+        missed as (NotificationEvent | DismissNotificationEvent)[],
+        Date.now()
+      )
+      const presentationAt = (index: number): ReplayPresentation => {
+        const planned = plan[index] ?? 'show'
+        return planned === 'show' && appIsOpen() ? 'quiet' : planned
+      }
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
       let contiguousSeq = askFrom
       let drained = false
       try {
-        for (const raw of missed) {
+        for (const [index, raw] of missed.entries()) {
           // Re-checked per event: the batch can start before a teardown and still be
           // draining after it, and a torn-down host must stop pushing.
           if (disposed) {
             return
           }
           const event = raw as NotificationEvent | DismissNotificationEvent
-          await deliverMissedEvent(event, quietUnlessActionable())
+          await deliverMissedEvent(event, presentationAt(index))
           contiguousSeq = event.notificationSeq ?? contiguousSeq
         }
         drained = true

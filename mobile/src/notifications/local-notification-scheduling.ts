@@ -22,6 +22,9 @@ export type NotificationEvent = {
   notificationSeq?: number
   // Counter lifetime the seq belongs to (#8591); absent on older runtimes.
   notificationEpoch?: string
+  // Desktop clock (ms) at dispatch; stock Orca stamps it on agent notifications.
+  // A replay reads it to tell news from history (notification-replay-plan.ts).
+  emittedAt?: number
 }
 
 export type DismissNotificationEvent = {

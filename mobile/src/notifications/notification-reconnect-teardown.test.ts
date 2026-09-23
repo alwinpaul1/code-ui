@@ -116,11 +116,14 @@ describe('#8591 reconnect catch-up under the real app teardown lifecycle', () =>
     await flushAsync()
 
     // ── While disconnected the desktop dispatched seq 8 and 9.
+    // Each replayed event names its own worktree: a replay posts one banner per session
+    // (notification-replay-plan.ts), and this test is about every missed session being told.
     host.setMissed([
       {
         type: 'notification',
         title: 'missed-8',
         body: 'b',
+        worktreeId: 'wt-8',
         notificationId: 'agent:m8',
         notificationSeq: 8
       },
@@ -128,6 +131,7 @@ describe('#8591 reconnect catch-up under the real app teardown lifecycle', () =>
         type: 'notification',
         title: 'missed-9',
         body: 'b',
+        worktreeId: 'wt-9',
         notificationId: 'agent:m9',
         notificationSeq: 9
       }
