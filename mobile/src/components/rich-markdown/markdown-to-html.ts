@@ -66,17 +66,17 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         rows.push(splitTableRow(lines[index] ?? ''))
         index += 1
       }
-      // As wide as its widest row, not its header: a cell past the header's count is still the
-      // file's text, and cutting the table to the header deleted it on the next save (every build
-      // before 2026-09-23). The header pads with empty cells, which the writer keeps.
-      const width = Math.max(headers.length, ...rows.map((row) => row.length))
-      const columns = Array.from({ length: width }, (_, cellIndex) => cellIndex)
-      const head = columns.map((cellIndex) => `<th>${renderInline(headers[cellIndex] ?? '')}</th>`).join('')
+      const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
+      // A row keeps a cell past the header's count: it is still the file's text, and cutting rows
+      // to the header deleted it on the next save (every build before 2026-09-23). The header keeps
+      // its own width, so a ragged row stays ragged, which GFM allows, rather than the whole table
+      // gaining an empty column on the desktop. A short row still pads to the header.
       const body = rows
-        .map(
-          (row) =>
-            `<tr>${columns.map((cellIndex) => `<td>${renderInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
-        )
+        .map((row) => {
+          const width = Math.max(headers.length, row.length)
+          const cells = Array.from({ length: width }, (_, cellIndex) => row[cellIndex] ?? '')
+          return `<tr>${cells.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`
+        })
         .join('')
       html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
       continue

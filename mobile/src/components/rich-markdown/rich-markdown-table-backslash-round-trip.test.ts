@@ -36,13 +36,16 @@ describe('a table cell with a backslash survives open-and-save', () => {
     expect(editor.currentMarkdown()).toContain(secondColumnText)
   })
 
-  it('keeps the cells of a row wider than its header, rather than deleting them on save', () => {
+  it('keeps the cells of a row wider than its header, and the table its own width', () => {
     // An unescaped pipe inside a code span splits the cell for every GFM reader; the extra cell is
     // still the file's text (docs/upstream-port-inventory.md's #21298 row lost ~2,700 characters
-    // to a phone save this way in every build before this).
+    // to a phone save this way in every build before this). The row keeps it as a ragged row,
+    // which GFM allows ("the excess is ignored"): widening the header instead added an empty column
+    // to README.md's 19-row table and turned the inventory's 3-column table into 8 on the desktop.
     const editor = openShippedDocument()
-    editor.setMarkdown('| a | b |\n| --- | --- |\n| `x | y` | z |', 1)
-    expect(editor.currentMarkdown()).toBe('| a | b |  |\n| --- | --- | --- |\n| `x | y` | z |')
+    const markdown = '| a | b |\n| --- | --- |\n| `x | y` | z |\n| c | d |'
+    editor.setMarkdown(markdown, 1)
+    expect(editor.currentMarkdown()).toBe(markdown)
   })
 
   it('loses no cell text, whatever the cells hold, and a second save changes nothing', () => {
