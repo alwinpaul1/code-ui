@@ -1,7 +1,9 @@
 // Post-checks for inline markdown tokens that a single-pass tokenizer regex
 // cannot express on its own.
 
-const INTRAWORD_FLANK_PATTERN = /[\w\\/]/
+// Letters, digits and combining marks of every script, not `\w`'s ASCII: `你好_强调_世界` is one
+// word to CommonMark, and reading it as emphasis made the rich editor save `*` in its place.
+const INTRAWORD_FLANK_PATTERN = /[\p{L}\p{N}\p{M}_\\/]/u
 
 /**
  * True when a `_…_` / `__…__` token sits inside a word (snake_case, dunder

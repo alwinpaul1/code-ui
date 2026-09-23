@@ -1,5 +1,7 @@
 import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 
 /** The manifest's route entries, as this shell reads them. */
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
@@ -16,6 +18,13 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   'navigate',
   'storage',
   'externalLink',
+  // The screencast's binary frames, encoded into `event.binary` for a page that subscribed with
+  // `wantsBinary`. Named where the rule that reads it lives, so the two cannot drift.
+  BRIDGE_SCREENCAST_BINARY_GRANT,
+  // The device's own feedback, played by the app's functions on the page's behalf. A token rather
+  // than the notify's dotted name, because a notify is not a verb: the dotted names below are the
+  // verb table's, spread from it.
+  BRIDGE_HAPTICS_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES
@@ -49,11 +58,22 @@ export function matchesRoutePattern(pathname: string, pattern: string): boolean 
   })
 }
 
-/** The patterns this shell will render from the page: listed, and needing nothing it lacks. */
-export function implementedPageRoutes(routes: readonly MobileWebPageRoute[] | undefined): string[] {
-  return (routes ?? [])
-    .filter((route) => route.grants.every(implementsGrant))
-    .map((route) => route.pathname)
+/**
+ * The routes this shell will render from the page: listed, and needing nothing it lacks.
+ *
+ * `every` and not `some`: one grant this build lacks takes the whole route native, so a token every
+ * page route declares couples the whole set to a shell that carries it — `haptics` is the first,
+ * and against a shell without it no page route is served at all.
+ */
+function implementedPageRouteEntries(
+  routes: readonly MobileWebPageRoute[] | undefined
+): MobileWebPageRoute[] {
+  return (routes ?? []).filter((route) => route.grants.every(implementsGrant))
+}
+
+/** The patterns alone, for the readers in this module that only name routes. */
+function implementedPageRoutes(routes: readonly MobileWebPageRoute[] | undefined): string[] {
+  return implementedPageRouteEntries(routes).map((route) => route.pathname)
 }
 
 /**
@@ -88,4 +108,20 @@ export function grantsForRoute(
 ): string[] {
   const declared = (routes ?? []).find((route) => matchesRoutePattern(pathname, route.pathname))
   return declared === undefined ? [] : declared.grants.filter(implementsGrant)
+}
+
+/**
+ * What one bundle's route list says about one session, in the three shapes the reducer needs.
+ *
+ * Derived together because they are one reading of one list: the patterns the page may keep, what
+ * each of them declared, and what this route itself was granted. Three sites used to spell this
+ * out; a fourth spelling is how they drift.
+ */
+export function routeViewOf(routes: readonly MobileWebPageRoute[] | undefined, pathname: string) {
+  const entries = implementedPageRouteEntries(routes)
+  return {
+    pageRoutes: entries.map((route) => route.pathname),
+    pageRouteGrants: entries,
+    routeGrants: grantsForRoute(routes, pathname)
+  }
 }

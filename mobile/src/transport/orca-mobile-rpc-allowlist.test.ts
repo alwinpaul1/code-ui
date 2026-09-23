@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD
@@ -189,15 +190,6 @@ const fixturePath = join(mobileRoot, 'src', 'transport', 'fixtures', FIXTURE_FIL
 /** Nothing in it runs: every line is a tsc assertion. Its literals are not sends. */
 const NEVER_RUNS = new Set(['src/transport/rpc-operation-compile-fence.ts'])
 
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
 
 function parse(path: string, source: string): ts.SourceFile {
   const extension = extname(path)
@@ -355,7 +347,7 @@ export function catalogedMethodLiterals(
 const catalog = readCatalogMethods()
 
 const scanned = scannedRoots
-  .flatMap(sourceFiles)
+  .flatMap(censusSourceFiles)
   .filter((path) => sourceExtensions.has(extname(path)))
   .filter((path) => !/\.test\.tsx?$/.test(path))
   .map((path) => relative(mobileRoot, path).split(/[/\\]/).join('/'))

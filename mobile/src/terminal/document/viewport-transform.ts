@@ -1,0 +1,146 @@
+import { repositionOverlay } from './selection-overlay'
+import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
+import { getSurfaceMetrics } from './fit-scale'
+
+// Why: after init() the initial scrollback applyFitScale may have run
+// against an empty buffer (or one without the widest line yet). Re-fit
+// once when the first live data chunk arrives so a wider line that pushes
+// scrollWidth past the previously-measured value gets re-scaled to fit.
+
+// Diagnostic logger — bridges WebView console.log to RN via postMessage.
+// Tag with [fit] so it's easy to filter in the Expo/Metro logs.
+export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<string, unknown>) {
+  try {
+    scope.postToHost({
+      type: 'log',
+      tag: '[fit]' + tag,
+      payload: payload
+    })
+  } catch {}
+}
+
+// Why: Date.now() only resolves to a millisecond, so at 120 Hz a frame reads
+// as 8, 9 or 0 ms — and a 0 used to drop the whole velocity sample, distance
+// included. Every scroll timing decision reads the high-resolution clock.
+export function nowMs() {
+  if (window.performance && typeof window.performance.now === 'function') {
+    return window.performance.now()
+  }
+  return Date.now()
+}
+
+export function getCellWidth(scope: TerminalDocumentScope) {
+  if (!scope.term || !scope.term._core) {
+    return 0
+  }
+  const core = scope.term._core
+  if (core._renderService && core._renderService.dimensions) {
+    return core._renderService.dimensions.css.cell.width || 0
+  }
+  return 0
+}
+
+// Why: width measurement strategy.
+//   1. Prefer cellWidth × term.cols — this is what xterm's renderer uses
+//      to lay out and is independent of buffer content. It's the "logical
+//      width" of the terminal grid.
+//   2. Fall back to term.element.scrollWidth — the actual rendered DOM
+//      width — only when cellWidth isn't available yet (renderer not
+//      initialized). This is content-dependent (reflects widest row),
+//      but better than nothing.
+//   3. If both are 0, return 1 (no scale change). The retry loop in
+//      applyFitScale will keep trying until one is positive.
+export function computeFitScale(scope: TerminalDocumentScope) {
+  if (!scope.term) {
+    return 1
+  }
+  const cellW = getCellWidth(scope)
+  const termWidth =
+    cellW > 0 ? cellW * scope.term.cols : scope.term.element ? scope.term.element.scrollWidth : 0
+  if (termWidth <= 0) {
+    return 1
+  }
+  const vpWidth = window.innerWidth
+  return Math.min(1, vpWidth / termWidth)
+}
+
+export function getTotalScale(scope: TerminalDocumentScope) {
+  return scope.currentScale * scope.userScale
+}
+
+export function updateTransform(scope: TerminalDocumentScope) {
+  scope.surface!.style.transform =
+    'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
+  scheduleScrollIndicatorUpdate(scope, false)
+  if (scope.selMode === 'select') {
+    repositionOverlay(scope)
+  }
+}
+
+// Why: the indicator used to repaint twice per committed row (term.onScroll
+// and the scroll delta itself), reading window.innerHeight each time. A fling
+// commits several rows a frame, so that was several forced layouts per frame
+// for a 3px-wide thumb. One repaint per frame is more than the thumb can show.
+export function scheduleScrollIndicatorUpdate(scope: TerminalDocumentScope, reveal: boolean) {
+  if (reveal) {
+    scope.pendingScrollIndicatorReveal = true
+  }
+  if (scope.scrollIndicatorFrameId !== null) {
+    return
+  }
+  scope.scrollIndicatorFrameId = scheduleDocumentFrame(scope, function () {
+    scope.scrollIndicatorFrameId = null
+    const pendingReveal = scope.pendingScrollIndicatorReveal
+    scope.pendingScrollIndicatorReveal = false
+    updateScrollIndicator(scope, pendingReveal)
+  })
+}
+
+export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: boolean) {
+  if (
+    !scope.scrollIndicator ||
+    !scope.scrollThumb ||
+    !scope.term ||
+    !scope.term.buffer ||
+    !scope.term.buffer.active
+  ) {
+    return
+  }
+  const buffer = scope.term.buffer.active
+  const maxViewportY = buffer.baseY || 0
+  if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput(scope)) {
+    scope.scrollIndicator.classList.remove('visible')
+    return
+  }
+  const trackHeight = Math.max(0, getSurfaceMetrics(scope).viewportH - 8)
+  const totalRows = maxViewportY + (scope.term.rows || 0)
+  if (trackHeight <= 0 || totalRows <= 0) {
+    return
+  }
+  const thumbHeight = Math.max(24, (trackHeight * (scope.term.rows || 0)) / totalRows)
+  const maxTop = Math.max(0, trackHeight - thumbHeight)
+  const top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0
+  scope.scrollThumb.style.height = thumbHeight + 'px'
+  scope.scrollThumb.style.transform = 'translateY(' + top + 'px)'
+  if (!reveal) {
+    return
+  }
+  scope.scrollIndicator.classList.add('visible')
+  if (scope.scrollIndicatorHideTimer) {
+    clearTimeout(scope.scrollIndicatorHideTimer)
+  }
+  scope.scrollIndicatorHideTimer = setTimeout(function () {
+    scope.scrollIndicator!.classList.remove('visible')
+    scope.scrollIndicatorHideTimer = null
+  }, 550)
+}
+
+/** Ruling 21: the hide timer is the one thing this module schedules. */
+export function stopViewportTransform(scope: TerminalDocumentScope) {
+  if (scope.scrollIndicatorHideTimer) {
+    clearTimeout(scope.scrollIndicatorHideTimer)
+    scope.scrollIndicatorHideTimer = null
+  }
+}

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'rea
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useTheme } from '../theme/theme-context'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
 
@@ -221,7 +222,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
               borderRadius: radius.md,
               color: colors.text,
               fontFamily: fonts.regular,
-              fontSize: type.body.size,
+              fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE),
               padding: space.md,
               minHeight: 46,
               // The Other row's own border is the line above. Without this gap

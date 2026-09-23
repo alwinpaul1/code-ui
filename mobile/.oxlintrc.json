@@ -4,7 +4,8 @@
     "../.oxlintrc.json"
   ],
   "ignorePatterns": [
-    "src/terminal/terminal-webview-engine.generated.ts"
+    "src/terminal/terminal-webview-engine.generated.ts",
+    "src/components/pr-sidebar/mermaid-page-engine.generated.ts"
   ],
   "rules": {
     "react-hooks/exhaustive-deps": "off",
@@ -19,6 +20,26 @@
     "unicorn/prefer-node-protocol": "off"
   },
   "overrides": [
+    {
+      "files": [
+        "src/mobile-web-shell/bridge/bridge-envelope.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-23: 301. Upstream's file sits exactly at the 300 cap after
+            // #21723, and this fork's own 'user-send' foreground-nudge arm costs
+            // one more code line (the literal is two declarations because on one
+            // line it is 109 characters and the formatter wraps it). Drop this
+            // override if that arm ever goes upstream or away.
+            "max": 301,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
     {
       "files": [
         "src/components/MobileMarkdown.tsx"
@@ -42,13 +63,17 @@
     },
     {
       "files": [
-        "src/terminal/TerminalWebView.tsx"
+        "src/terminal/document/surface-touch-gestures.ts"
       ],
       "rules": {
         "max-lines": [
           "error",
           {
-            "max": 379,
+            // 2026-09-23: upstream's file is 258 code lines after C7.5c (#21878). This fork's
+            // gestures carry the per-millisecond fling and the once-per-gesture layout read
+            // (7097feea), the write hold (2a1d1dec) and the scrollback bend (9a6507b6), and
+            // threading the scope through them cost the last few lines: 303.
+            "max": 303,
             "skipBlankLines": true,
             "skipComments": true
           }

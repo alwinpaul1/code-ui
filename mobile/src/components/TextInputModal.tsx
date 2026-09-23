@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { View, TextInput, Platform, type KeyboardTypeOptions } from 'react-native'
 import { useTheme } from '../theme/theme-context'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
 import { BottomDrawer } from './BottomDrawer'
@@ -75,7 +76,7 @@ export function TextInputModal({
           backgroundColor: colors.bgPanel,
           color: colors.text,
           fontFamily: fonts.regular,
-          fontSize: type.body.size,
+          fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE),
           borderRadius: radius.md,
           paddingHorizontal: space.md,
           paddingVertical: Platform.OS === 'ios' ? space.sm + 4 : space.sm + 2,

@@ -1,6 +1,7 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
+import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import type { BridgeNativeVerb } from './bridge-native-verbs'
 import { MOBILE_WEB_SHELL_GRANTS } from '../page-route-policy'
 import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
@@ -44,6 +45,8 @@ export type BridgePortPair<TRpc extends RpcClient = FakeRpcClient> = {
   navigations: string[]
   /** Every URL the page asked the shell to open outside the app, in order. */
   externalLinks: string[]
+  /** Every haptic the page asked the shell to play, in order. */
+  haptics: BridgeHapticsKind[]
   /** One entry per stack pop the page asked for, with what the shell did about it. */
   backPops: BridgeNavigateBackOutcome[]
   /** Every allowlisted key the page wrote through the shell, in order. */
@@ -152,6 +155,31 @@ function readAll<TMessage>(
   })
 }
 
+/** One answer per row of the verb table. Adding a verb without a row here is a refusal a case
+ *  would have to read as a result shape the shell does not declare. */
+function defaultVerbAnswer(verb: BridgeNativeVerb): unknown {
+  switch (verb) {
+    case 'native.clipboard.write':
+      return { written: true }
+    case 'native.clipboard.read':
+      return { value: 'pasteboard' }
+    case 'native.media.pick':
+      return { items: [] }
+    case 'native.media.read':
+      return { base64: '', eof: true }
+    case 'native.media.release':
+      return { released: false }
+    case 'native.audio.start':
+      return { started: true, sampleRate: 16_000, permission: 'granted' }
+    case 'native.audio.read':
+      return { base64: '', droppedBytes: 0, recording: true, interruption: null }
+    case 'native.audio.stop':
+      return { stopped: true }
+    case 'native.wakelock.set':
+      return { active: true }
+  }
+}
+
 export function createBridgePortPair<TRpc extends RpcClient>(
   options: BridgePortPairOptions<TRpc>
 ): BridgePortPair<TRpc> {
@@ -160,6 +188,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
   const hostDiagnostics: BridgeHostDiagnostic[] = []
   const navigations: string[] = []
   const externalLinks: string[] = []
+  const haptics: BridgeHapticsKind[] = []
   const backPops: BridgeNavigateBackOutcome[] = []
   const storageWrites: { key: string; value: string | null }[] = []
   const pageFaults: BridgeErrorCapture[] = []
@@ -185,12 +214,12 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     sessionEstablished: options.sessionEstablished ?? false,
     onNavigate: (href) => navigations.push(href),
     onExternalLink: (url) => externalLinks.push(url),
+    onHaptic: (kind) => haptics.push(kind),
     // The pair has no device: what a test reads here is that the host answered without forwarding.
+    // Each verb gets a shape its own row declares, so a case that calls one it did not configure
+    // reads an answer rather than `native_verb_result`, which is a shell bug's code.
     serveNativeVerb: (verb, params) =>
-      options.serveNativeVerb?.(verb, params) ??
-      Promise.resolve(
-        verb === 'native.clipboard.write' ? { written: true } : { value: 'pasteboard' }
-      ),
+      options.serveNativeVerb?.(verb, params) ?? Promise.resolve(defaultVerbAnswer(verb)),
     onNavigateBack: () => {
       // A pair has no stack, so the pop always lands: what a test reads here is that the host acted.
       backPops.push('popped')
@@ -232,6 +261,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     hostDiagnostics,
     navigations,
     externalLinks,
+    haptics,
     backPops,
     storageWrites,
     pageFaults,

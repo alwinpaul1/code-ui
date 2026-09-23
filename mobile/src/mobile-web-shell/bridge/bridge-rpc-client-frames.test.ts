@@ -127,6 +127,7 @@ describe('bridge client handshake', () => {
       route: null,
       // And one that names no page routes, so the page hands every navigation back.
       pageRoutes: [],
+      pageRouteGrants: null,
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {}
@@ -609,7 +610,7 @@ describe('bridge client binary frames', () => {
     expect(opened[1]).toHaveProperty('wantsBinary', true)
   })
 
-  it('decodes to the frame a native listener would have been handed', () => {
+  it('decodes to the frame a native listener would have been handed, base64 kept beside it', () => {
     const page = createPageClient()
     page.start()
     const onBinaryFrame = vi.fn()
@@ -620,7 +621,10 @@ describe('bridge client binary frames', () => {
       seq: 41,
       format: 'png',
       metadata: { imageWidth: 8 },
-      image
+      image,
+      // The page's data URI wants base64 and this is the base64 the shell sent, so the web frame
+      // path reads it instead of encoding `image` back into the same string every frame.
+      b64
     })
   })
 

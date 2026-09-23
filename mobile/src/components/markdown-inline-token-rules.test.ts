@@ -5,6 +5,15 @@ import {
 } from './markdown-inline-token-rules'
 
 describe('isIntrawordUnderscoreToken', () => {
+  it('treats letters of every script as word characters, not just ASCII', () => {
+    // `\w` is ASCII-only, so `你好_强调_世界` and `café_crème` read as emphasis and the rich editor
+    // saved them back with `*` (review of f7117a1c, 2026-09-23).
+    expect(isIntrawordUnderscoreToken('你好_强调_世界', 2, '_强调_')).toBe(true)
+    expect(isIntrawordUnderscoreToken('café_crème_brûlée', 4, '_crème_')).toBe(true)
+    expect(isIntrawordUnderscoreToken('नमस्ते_दुनिया_ठीक', 6, '_दुनिया_')).toBe(true)
+    expect(isIntrawordUnderscoreToken('say _强调_ now', 4, '_强调_')).toBe(false)
+  })
+
   it('rejects snake_case emphasis spans', () => {
     const text = 'src/foo_bar.ts and src/baz_qux.ts'
     const index = text.indexOf('_')

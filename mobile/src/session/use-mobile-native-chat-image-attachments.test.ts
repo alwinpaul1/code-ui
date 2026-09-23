@@ -13,16 +13,18 @@ import {
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
-// Fully stub the picker so the real expo/react-native chain never loads under
-// the vitest transform (react-native ships Flow syntax rolldown can't parse).
+// Stubbed at the seam the hook now holds, which keeps the real expo/react-native chain out of the
+// vitest transform (react-native ships Flow syntax rolldown cannot parse) and pins the call site:
+// a hook that went back to importing the picker module directly would load that chain and fail.
+const pick = vi.hoisted(() => vi.fn())
+vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
+// CODE UI: the hook still imports the picker module for its own two attach paths (a file the
+// composer holds and a named document), which have no member on the seam, so that module is
+// stubbed too. The image path is the seam's, which the stub above pins.
 vi.mock('./mobile-image-source-picker', () => ({
-  pickMobileImages: vi.fn(),
-  ImageLibraryPermissionError: class ImageLibraryPermissionError extends Error {}
+  pickMobileDocuments: vi.fn(),
+  pickMobileImageFiles: vi.fn()
 }))
-
-import { pickMobileImages } from './mobile-image-source-picker'
-
-const pick = vi.mocked(pickMobileImages)
 
 import {
   baseArgs,

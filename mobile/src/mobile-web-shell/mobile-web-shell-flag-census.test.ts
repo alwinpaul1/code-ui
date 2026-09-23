@@ -1,6 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from '../test-support/census-source-files'
 
 /**
  * The hybrid shell flag is the whole of what keeps this feature dark, so who touches it is a
@@ -19,13 +20,20 @@ const AGENT_HISTORY_ROUTE = 'app/h/[hostId]/agent-history/[worktreeId].tsx'
 const TASKS_ROUTE = 'app/h/[hostId]/tasks.tsx'
 const FILES_ROUTE = 'app/h/[hostId]/files/[worktreeId].tsx'
 const FILES_PREVIEW_ROUTE = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
+const SOURCE_CONTROL_ROUTE = 'app/h/[hostId]/source-control/[worktreeId].tsx'
+const REVIEW_ROUTE = 'app/h/[hostId]/review/[worktreeId].tsx'
+/** The one switch with no native screen behind it; its route file only re-exports this body. */
+const CATCH_ALL_ROUTE = 'src/mobile-web-shell/catch-all-page-route.tsx'
 /** One entry per screen the flag can switch to the page, which is what a review reads. */
 const SWITCHED_ROUTES = [
   HOST_ROUTE,
   AGENT_HISTORY_ROUTE,
   TASKS_ROUTE,
   FILES_ROUTE,
-  FILES_PREVIEW_ROUTE
+  FILES_PREVIEW_ROUTE,
+  SOURCE_CONTROL_ROUTE,
+  REVIEW_ROUTE,
+  CATCH_ALL_ROUTE
 ]
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
 /** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,
@@ -34,16 +42,9 @@ const TREES = { src: 200, app: 10, modules: 1 }
 const SHELL_VIEW = 'modules/orca-mobile-web-shell/src/index.ts'
 
 function sourceFiles(directory: string): string[] {
-  const found: string[] = []
-  for (const entry of readdirSync(join(MOBILE_ROOT, directory), { withFileTypes: true })) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      found.push(...sourceFiles(path))
-    } else if (/\.tsx?$/.test(entry.name) && !entry.name.includes('.test.')) {
-      found.push(path)
-    }
-  }
-  return found
+  return censusSourceFiles(join(MOBILE_ROOT, directory))
+    .map((path) => relative(MOBILE_ROOT, path))
+    .filter((path) => /\.tsx?$/.test(path) && !path.includes('.test.'))
 }
 
 const SOURCES = Object.keys(TREES)

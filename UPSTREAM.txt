@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 8999a0028
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
@@ -98,14 +98,14 @@ src/shared/project-host-setup-projection.ts: c35a47958
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
-src/shared/agent-launch-intent.ts: 0bf815a48
+src/shared/agent-launch-intent.ts: 663d67087 (v1.4.209 shared halves)
 src/shared/github/owner-slug.ts: 85d1ffc07
 src/shared/github/owner-slug.test.ts: 85d1ffc07
 src/shared/pr-comment-audience.ts: dcc1f9012
 src/shared/terminal-query-reply.ts: 09073086a
 src/shared/terminal-selection-gutter.ts: 55b339201
 src/shared/terminal-selection-gutter.test.ts: 55b339201
-src/shared/ai-vault-search-contract.ts: 1f7655f3e (plus a01027697's isolated AiVaultSetSearchEnabledParamsSchema addition, hand-applied — see docs/upstream-port-inventory.md)
+src/shared/ai-vault-search-contract.ts: 1f7655f3e (plus a01027697's isolated AiVaultSetSearchEnabledParamsSchema addition, hand-applied — see docs/upstream-port-inventory.md); plus f07bf8544's AI_VAULT_SEARCH_SORTS import, hand-applied in the v1.4.209 shared halves
 src/shared/ai-vault-search-contract.test.ts: 1f7655f3e
 src/shared/ai-vault-search-limit.ts: 1f7655f3e
 
@@ -142,7 +142,7 @@ src/shared/rpc-contract/files-target-params.ts: c84007c54
 src/shared/rpc-contract/files-terminal-artifact-params.ts: c84007c54
 src/shared/rpc-contract/folder-workspace-params.ts: c84007c54
 src/shared/rpc-contract/git-admission-tier-params.ts: c84007c54
-src/shared/rpc-contract/git-params.ts: c84007c54
+src/shared/rpc-contract/git-params.ts: 253f0e394 (v1.4.209 shared halves)
 src/shared/rpc-contract/github-issue-params.ts: c84007c54
 src/shared/rpc-contract/github-issue-update-params.ts: c84007c54
 src/shared/rpc-contract/github-project-params.ts: c84007c54
@@ -190,7 +190,7 @@ src/shared/rpc-contract/structured-agent-session-params.ts: f55b7ba68
 src/shared/rpc-contract/task-resume-state-params.ts: c84007c54
 src/shared/rpc-contract/terminal-orphan-params.ts: c84007c54
 src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54
-src/shared/rpc-contract/terminal-stream-params.ts: c84007c54
+src/shared/rpc-contract/terminal-stream-params.ts: d5dc7b9cf (the optional `snapshotByteBudget` on terminal.subscribe, OTA C7.3)
 src/shared/rpc-contract/terminal-unary-params.ts: c84007c54
 src/shared/rpc-contract/terminal-viewport-methods-params.ts: c84007c54
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: c84007c54
@@ -206,10 +206,12 @@ The desktop-served mobile web bundle contract (OTA phase A, Orca #21325 + #21348
 `routes` from phase C, #21502; the `native.` grant names from #21623), vendored whole.
 src/shared/mobile-web-bundle/bundle-rpc-contract.ts: 9641a1b54
 src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: ac4dc6599
-src/shared/mobile-web-bundle/manifest-contract.ts: c22c442fd
-src/shared/mobile-web-bundle/manifest-contract.test.ts: c22c442fd
+src/shared/mobile-web-bundle/manifest-contract.ts: 5d13a70ea (exports MobileWebBundleGrantNameSchema for the page's route grants, #21723)
+src/shared/mobile-web-bundle/manifest-contract.test.ts: f5d2d6e75
 src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts: 9641a1b54
 src/shared/zod-salvage.ts: 9641a1b54 (re-vendored for `hostUnionArms`, which bundle-rpc-contract.ts imports; purely additive over the base — `openEnum` from #20950 and `hostUnionArms` from #21269/#21298 — and identical to origin/main. Group D had pinned it at 4a86b2dc5 for the same two exports; #21298's `NoInfer` form of `hostUnionArms` and the `const` generic on `openEnum` are the later commit's, kept on the 2026-09-19 merge)
+src/shared/terminal-stream-json-byte-length.ts: d5dc7b9cf (the shell's held-terminal backlog measures merged output in escaped bytes with it, OTA C7.3)
+src/shared/terminal-stream-json-byte-length.test.ts: d5dc7b9cf
 
 Pulled in only because the catalog above imports them.
 src/shared/mobile-push-contract.ts: c84007c54
@@ -231,8 +233,8 @@ src/shared/agent-session-resume.test.ts: ff934256a
 src/shared/agent-session-resume.ts: c62eca398 (v1.4.206)
 src/shared/agent-process-recognition.ts: c62eca398 (v1.4.206)
 src/shared/agent-process-recognition.test.ts: c62eca398 (v1.4.206)
-src/shared/tui-agent-startup.ts: c62eca398 (v1.4.206)
-src/shared/tui-agent-startup.test.ts: c62eca398 (v1.4.206)
+src/shared/tui-agent-startup.ts: 663d67087 (v1.4.209 shared halves)
+src/shared/tui-agent-startup.test.ts: ac4d6b407 (v1.4.209 shared halves)
 src/shared/pi-agent-kind.ts: c62eca398 (v1.4.206)
 src/shared/omp-draft-launch-shell.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-draft-launch-windows.test.ts: c62eca398 (v1.4.206)
@@ -251,9 +253,9 @@ src/shared/agent-kind.ts: c62eca398
 src/shared/agent-name-token-match.ts: c62eca398
 src/shared/agent-type-label.ts: c62eca398
 src/shared/ai-vault-resume-command.ts: c62eca398
-src/shared/ai-vault-types.ts: c62eca398
-src/shared/commit-message-agent-spec.test.ts: c62eca398
-src/shared/commit-message-agent-specs-primary.ts: c62eca398
+src/shared/ai-vault-types.ts: f07bf8544 (v1.4.209 shared halves)
+src/shared/commit-message-agent-spec.test.ts: 253f0e394 (v1.4.209 shared halves)
+src/shared/commit-message-agent-specs-primary.ts: 4085e1cf6 (v1.4.209 shared halves)
 src/shared/opencode-database-name.ts: c62eca398
 src/shared/opencode-launch-command.test.ts: c62eca398
 src/shared/opencode-launch-command.ts: c62eca398
@@ -262,7 +264,7 @@ src/shared/skills-cli-agent-keys.ts: c62eca398
 src/shared/source-control-ai-action-recipes.test.ts: c62eca398
 src/shared/telemetry-property-schemas.ts: c62eca398
 src/shared/terminal-title-agent-type.ts: c62eca398
-src/shared/tui-agent-config.ts: c62eca398
+src/shared/tui-agent-config.ts: ea5152f1c (v1.4.209 shared halves)
 src/shared/tui-agent-display-names.ts: c62eca398
 src/shared/tui-agent-selection.ts: c62eca398
 src/shared/tui-agent.ts: c62eca398
@@ -275,3 +277,28 @@ src/shared/agent-status-ipc-payload.ts: c62eca398
 src/shared/agent-status-observation.ts: c62eca398
 src/shared/runtime-worktree-contracts.ts: c62eca398
 src/shared/agent-status-run.ts: c62eca398
+
+v1.4.209 shared halves (#21734, #21665, #21577, #21606, #21925, #21891, #21863, #22073), and the
+commit-message aggregator caught up to #20624's OMP spec. New here, or pulled in only because a
+file above imports them:
+src/shared/agent-hook-listener-opencode-reattribution.test.ts: 646fa3645
+src/shared/agent-hook-listener-opencode-session-correlation.test.ts: 646fa3645
+src/shared/agent-hook-listener-opencode-session-registry.test.ts: 646fa3645
+src/shared/agent-hook-listener.ts: 646fa3645
+src/shared/agent-hook-listener/listener-state.ts: 646fa3645
+src/shared/agent-hook-listener/opencode-session-correlation.ts: 646fa3645
+src/shared/agent-hook-listener/opencode-session-registry.ts: 646fa3645
+src/shared/agent-prompt-injection.test.ts: ea5152f1c
+src/shared/agent-prompt-injection.ts: ea5152f1c
+src/shared/agent-status-legacy-adapter.ts: 646fa3645
+src/shared/agent-status-legacy-ingress-manifest.ts: 646fa3645
+src/shared/agent-status-run-capability.ts: 646fa3645
+src/shared/agent-status-serving-readiness.ts: 646fa3645
+src/shared/antigravity-source-control.test.ts: 253f0e394
+src/shared/capability-probe-cache.ts: 4085e1cf6
+src/shared/codex-usage-types.ts: 347d399bb
+src/shared/commit-message-agent-spec.ts: 253f0e394
+src/shared/commit-message-agent-specs-secondary.ts: 253f0e394
+src/shared/commit-message-model-parsers.ts: 253f0e394
+src/shared/tui-agent-permissions.ts: ac4d6b407
+src/shared/tui-agent-prompt-transport.test.ts: 663d67087

@@ -1,4 +1,5 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
+import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -286,7 +287,10 @@ export function parseInline(text: string): InlineToken[] {
       tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
     }
     const token = m[0]
-    if (token.startsWith('`')) {
+    // An underscore inside a word (snake_case, src/__init__.py) is text, as CommonMark reads it.
+    if (isIntrawordUnderscoreToken(plain, m.index, token)) {
+      tokens.push({ kind: 'text', text: token })
+    } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
