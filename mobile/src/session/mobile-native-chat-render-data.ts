@@ -64,6 +64,9 @@ export type MobileNativeChatPendingItem = {
   /** Where to draw an echo that captured no boundary of its own; see
    *  `MobileNativeChatPendingMessage`. Placement only — never reconciliation. */
   placementAnchorId?: string | null
+  /** Where to draw it once a row written before the send loaded below its
+   *  boundary (mid-turn-written-before.ts). Wins over both of the above. */
+  drawAfterId?: string | null
   /** False while the read this send was issued against was still unsettled, so
    *  a missing anchor means "not known yet" rather than "the conversation was
    *  empty". */
@@ -74,7 +77,9 @@ export type MobileNativeChatPendingItem = {
 /** The row an echo is DRAWN after: its own captured boundary when it has one,
  *  otherwise the one the rebase handed it on the first settled read. */
 function pendingPlacementAnchorId(item: MobileNativeChatPendingItem): string | null {
-  return item.baselineTailMessageId ?? item.placementAnchorId ?? null
+  return item.drawAfterId !== undefined
+    ? item.drawAfterId
+    : (item.baselineTailMessageId ?? item.placementAnchorId ?? null)
 }
 
 export function foldMobileNativeChatMessages(
@@ -197,12 +202,18 @@ export function remapPreviewsToFold(
 
 /** The raw rows pending echoes were sent against: fold boundaries. */
 export function pendingFoldBoundaries(
-  pending: readonly { baselineTailMessageId: string | null; baselineResolved?: boolean }[]
+  pending: readonly {
+    baselineTailMessageId: string | null
+    baselineResolved?: boolean
+    drawAfterId?: string | null
+  }[]
 ): Set<string> {
   const ids = new Set<string>()
   for (const item of pending) {
-    if (item.baselineTailMessageId && item.baselineResolved !== false) {
-      ids.add(item.baselineTailMessageId)
+    // The fold breaks where the bubble is drawn, so the calls after it stay after it.
+    const boundary = item.drawAfterId !== undefined ? item.drawAfterId : item.baselineTailMessageId
+    if (boundary && item.baselineResolved !== false) {
+      ids.add(boundary)
     }
   }
   return ids

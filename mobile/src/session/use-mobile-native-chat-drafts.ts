@@ -8,7 +8,6 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
 import { parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
 import {
-  countUserTextOccurrences,
   draftWasSent, findLandedImagePreviewEchoes,
   findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
@@ -24,6 +23,7 @@ import {
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
   removeWaitingSessionPending,
+  captureSendBoundary,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
 } from './mobile-native-chat-pending-echo'
@@ -181,8 +181,7 @@ export function useMobileNativeChatDrafts(args: {
         draftEditGeneration: draftEditGenerationsRef.current.readDraft(draftKey),
         pendingKey,
         normalizedText,
-        baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText),
-        baselineTailMessageId: messagesRef.current.at(-1)?.id ?? null,
+        ...captureSendBoundary(messagesRef.current, normalizedText),
         // Snapshotted at SEND, not at hold: an ack can take 15s to be given up
         // on, and a receipt arriving in that gap is the real confirmation.
         knownReceiptNonces: new Set(receiptNoncesRef.current),

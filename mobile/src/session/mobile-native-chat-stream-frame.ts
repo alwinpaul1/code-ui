@@ -1,6 +1,7 @@
 import { applyAppend, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMerger } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { noteLiveRowsArrived } from './mid-turn-written-before'
 
 export type MobileNativeChatStreamFrame = {
   type?: string
@@ -119,6 +120,10 @@ export function applyMobileNativeChatStreamFrame(args: {
       ...(pending ? { pending: true } : {}),
       ...(frame.beforeOffset == null ? {} : { beforeOffset: frame.beforeOffset })
     }
+  }
+  if (frame.type === 'appended') {
+    // The one door live rows come in by; their arrival bounds the phone's clock lead.
+    noteLiveRowsArrived(frame.messages, Date.now())
   }
   const previousFirstId = merger.list[0]?.id
   // The live window may only GROW. Re-trimming to the subscribe limit on every

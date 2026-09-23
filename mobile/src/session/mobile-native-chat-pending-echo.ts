@@ -1,4 +1,5 @@
-import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 
 export type MobileNativeChatPendingMessage = {
   id: string
@@ -16,6 +17,13 @@ export type MobileNativeChatPendingMessage = {
    *  is the bottom of the conversation, under every reply that answered it.
    *  Nothing that reconciles, glues or retires reads this. */
   placementAnchorId?: string | null
+  /** Where to DRAW a mid-turn send once a row written before it has loaded
+   *  below its boundary (mid-turn-written-before.ts). Placement and folding
+   *  only; nothing that reconciles, glues or retires reads it. */
+  drawAfterId?: string | null
+  /** When the phone sent it, by the phone's clock. Absent on sends restored
+   *  from an older build. */
+  sentAt?: number
   /** Whether the transcript this baseline was captured from was already this
    *  session's own history. A send issued mid-hydration is captured unresolved
    *  and rebased onto the first authoritative read instead of reconciling
@@ -36,9 +44,24 @@ export type MobileNativeChatSendOrigin = {
   baselineOccurrences: number
   baselineTailMessageId: string | null
   baselineResolved: boolean
+  /** When the send left the phone, by the phone's clock. */
+  sentAt?: number
   /** Prompt-receipt nonces already reported when this send left the phone, so a
    *  receipt older than the send cannot later be read as its confirmation. */
   knownReceiptNonces?: ReadonlySet<string>
+}
+
+/** Where and when a send leaves the phone: how often its text already shows,
+ *  the last row the phone holds, and the phone's clock. */
+export function captureSendBoundary(
+  messages: readonly NativeChatMessage[],
+  normalizedText: string
+): Pick<MobileNativeChatSendOrigin, 'baselineOccurrences' | 'baselineTailMessageId' | 'sentAt'> {
+  return {
+    baselineOccurrences: countUserTextOccurrences(messages, normalizedText),
+    baselineTailMessageId: messages.at(-1)?.id ?? null,
+    sentAt: Date.now()
+  }
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>
@@ -87,6 +110,7 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
+        ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {}),
         ...(images?.length ? { images } : {})
       }
     ]

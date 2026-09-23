@@ -3,6 +3,7 @@ import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
+import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
@@ -153,10 +154,15 @@ export function MobileNativeChatOverlay({
   // themselves against; the second breaks the tool fold at those anchors too,
   // so two prompts sent one after another keep the work between them instead
   // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
-  const baseFolded = useMemo(
-    () =>
-      foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(projectedQueue.pending)),
+  // Each of the phone's sends drawn after any row written before it, even one
+  // that loaded after the send did (mid-turn-written-before.ts).
+  const placedOwn = useMemo(
+    () => placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages),
     [projectedQueue.pending, session.messages]
+  )
+  const baseFolded = useMemo(
+    () => foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(placedOwn)),
+    [placedOwn, session.messages]
   )
   // Prompts typed on the desktop never reach the phone through Orca; they
   // ride the HUD beacon instead (2026-09-13).
@@ -207,10 +213,10 @@ export function MobileNativeChatOverlay({
       desktopEchoes.length > 0 || absorbedEchoes.length > 0
         ? foldMobileNativeChatMessages(
             session.messages,
-            pendingFoldBoundaries([...projectedQueue.pending, ...absorbedEchoes, ...desktopEchoes])
+            pendingFoldBoundaries([...placedOwn, ...absorbedEchoes, ...desktopEchoes])
           )
         : baseFolded,
-    [absorbedEchoes, baseFolded, desktopEchoes, projectedQueue.pending, session.messages]
+    [absorbedEchoes, baseFolded, desktopEchoes, placedOwn, session.messages]
   )
   // A message from a subagent or another session mostly never reaches the
   // transcript the phone reads; the agent's screen says one arrived, and
@@ -232,11 +238,11 @@ export function MobileNativeChatOverlay({
     }
   }, [absorbedEchoes, desktopEchoes, rememberEcho])
   const pendingWithDesktopPrompts = useMemo(() => {
-    const own = pendingWithoutTranscriptTwins(projectedQueue.pending, desktopPrompts)
+    const own = pendingWithoutTranscriptTwins(placedOwn, desktopPrompts)
     return desktopEchoes.length > 0 || absorbedEchoes.length > 0
       ? [...own, ...absorbedEchoes, ...desktopEchoes]
       : own
-  }, [absorbedEchoes, desktopEchoes, desktopPrompts, projectedQueue.pending])
+  }, [absorbedEchoes, desktopEchoes, desktopPrompts, placedOwn])
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]

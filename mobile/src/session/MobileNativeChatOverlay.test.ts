@@ -3,6 +3,13 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import {
+  appendMobileNativeChatPending,
+  captureSendBoundary,
+  type MobileNativeChatPendingMessage
+} from './mobile-native-chat-pending-echo'
+import { noteLiveRowsArrived } from './mid-turn-written-before'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 const clipboard = { hasImage: false }
@@ -58,6 +65,8 @@ type Tick = {
   commandSurface?: MobileNativeChatController['nativeChatCommandSurface']
   /** The host's mobile gate lets a phone call agentSession.rewind (default: yes). */
   hostAllowsRewind?: boolean
+  /** The phone's own sends still waiting for a transcript row. */
+  pending?: MobileNativeChatPendingMessage[]
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -72,7 +81,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStreamingText: tick.streamingText,
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
-    chatPending: [],
+    chatPending: tick.pending ?? [],
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
     setChatComposerText: vi.fn(),
@@ -470,5 +479,117 @@ describe('handing the chat list a way to rewind', () => {
   it('offers it, exactly as before, once the gate is known to let the call through', async () => {
     const claude = surface({ supported: true })
     expect(await rewindProp(claude, true)).toBe(claude.rewindToItem)
+  })
+})
+
+// Session 967668df, 2026-09-23 (Claude Code 2.1.280): the reply "Red.
+// Implementing the connecting state:" is stamped 22:15:15.441 but was written to
+// the transcript only after the phone sent a message at 22:15:23.873, so the
+// send's tail was the tool result above it. The Claude app drew the reply above
+// the message; the phone drew it below.
+describe('a message the phone sent mid-turn', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const at = (clock: string) => Date.parse(`2026-09-23T${clock}Z`)
+  // The row that was last when the phone sent: the reply about the failing run.
+  const toolResult = { ...assistantTurn('result', 'Tests  2 failed | 35 passed (37)'), timestamp: at('22:15:14.900') }
+  const reply = { ...assistantTurn('red', 'Red. Implementing the connecting state:'), timestamp: at('22:15:15.441') }
+  const nextCall = { ...assistantTurn('next', 'Waiting for the PC to connect.'), timestamp: at('22:15:25.228') }
+  const send: MobileNativeChatPendingMessage = {
+    id: 'send',
+    text: 'See which message responses had that sideline',
+    expectedOccurrence: 1,
+    baselineTailMessageId: 'result',
+    baselineResolved: true,
+    sentAt: at('22:15:23.873')
+  }
+
+  function drawnOrder(): string[] {
+    const view = renderer!.root.findAll((node) => node.type === 'ChatView')[0]!
+    const { data } = buildMobileNativeChatTransientData({
+      messages: view.props.messages,
+      folded: view.props.folded,
+      streaming: null,
+      pending: view.props.pending
+    })
+    return data.map((message) => (message.role === 'user' ? 'SENT' : message.id))
+  }
+
+  it('draws a reply written before the send below it, not above, once that reply loads', async () => {
+    await act(async () => {
+      renderer = create(overlayElement({ messages: [toolResult], pending: [send] }))
+    })
+    await act(async () => {
+      renderer?.update(overlayElement({ messages: [toolResult, reply, nextCall], pending: [send] }))
+    })
+    const order = drawnOrder()
+    expect(order.indexOf('red')).toBeLessThan(order.indexOf('SENT'))
+    expect(order.indexOf('SENT')).toBeLessThan(order.indexOf('next'))
+  })
+
+  it('keeps a call written a second after the send below it when the phone clock runs 3 s ahead', async () => {
+    // Review, 2026-09-24: with a fixed 1 s margin that call moved above the
+    // bubble. Each live row reached the phone 3.1 s after its stamp.
+    const lead = 3_100
+    const quickCall = { ...assistantTurn('quick', 'Running the gate.'), timestamp: at('22:15:21.900') }
+    const rows = [toolResult, reply, quickCall]
+    for (const row of rows) {
+      noteLiveRowsArrived([row], (row.timestamp ?? 0) + lead)
+    }
+    // The phone's clock read 22:15:23.873 at the send; the desktop's, 22:15:20.773.
+    await act(async () => {
+      renderer = create(overlayElement({ messages: rows, pending: [send] }))
+    })
+    expect(drawnOrder()).toEqual(['result', 'red', 'SENT', 'quick'])
+  })
+
+  it('breaks the tool fold where the bubble is drawn, so a call after the send stays below it', async () => {
+    const call: NativeChatMessage = {
+      id: 'call',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'npx vitest run' } }],
+      timestamp: at('22:15:25.228'),
+      source: 'transcript'
+    }
+    await act(async () => {
+      renderer = create(overlayElement({ messages: [toolResult, reply, call], pending: [send] }))
+    })
+    const order = drawnOrder()
+    expect(order.indexOf('red')).toBeLessThan(order.indexOf('SENT'))
+    expect(order.at(-1)).not.toBe('red')
+    expect(order.indexOf('SENT')).toBeLessThan(order.length - 1)
+  })
+
+  it('records when a send left the phone, and carries it onto the pending message', () => {
+    const before = Date.now()
+    const boundary = captureSendBoundary([toolResult], 'see which')
+    expect(boundary.baselineTailMessageId).toBe('result')
+    expect(boundary.sentAt).toBeGreaterThanOrEqual(before)
+    const origin = {
+      draftKey: 'd',
+      draftEditGeneration: 0,
+      pendingKey: 'key',
+      normalizedText: 'see which',
+      baselineResolved: true,
+      ...boundary
+    }
+    const pending = appendMobileNativeChatPending({}, 'key', 'p1', origin, 'see which')
+    expect(pending.key?.[0]?.sentAt).toBe(boundary.sentAt)
+  })
+
+  it('keeps a row written after the send below it, and a send with no time where it was sent', async () => {
+    const justAfter = { ...assistantTurn('after', 'Starting.'), timestamp: at('22:15:24.100') }
+    await act(async () => {
+      renderer = create(overlayElement({ messages: [toolResult, justAfter], pending: [send] }))
+    })
+    expect(drawnOrder()).toEqual(['result', 'SENT', 'after'])
+    await act(async () => {
+      renderer?.update(overlayElement({ messages: [toolResult, reply], pending: [{ ...send, sentAt: undefined }] }))
+    })
+    expect(drawnOrder()).toEqual(['result', 'SENT', 'red'])
   })
 })
