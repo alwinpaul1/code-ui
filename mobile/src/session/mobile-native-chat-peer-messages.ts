@@ -20,9 +20,11 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  * with no trailing text. Anthropic's Claude app draws the turn verbatim minus
  * the XML and its contents: one user bubble holding the harness's own words,
  * and then the reply. The message itself is not shown. The user put the two
- * apps side by side and asked for exactly that (2026-09-21): the bubble
- * before every subagent reply, and no "From <sender>" card with the message
- * (which is what the 2026-09-20 version drew). The one exception is a lead's
+ * apps side by side and asked for exactly that (2026-09-21), and no "From
+ * <sender>" card with the message (which is what the 2026-09-20 version drew).
+ * A subagent's report back to its own session is not such a turn: it arrives
+ * as a hand-back the Claude app draws nothing for (screen-peer-notices.ts,
+ * 2026-09-24). The one exception is a lead's
  * message in a teammate session, the task and any follow-up, which has no
  * opener and IS the prompt: that is drawn as the user's bubble with the
  * message (teammateTask).
@@ -140,8 +142,7 @@ export function parsePeerMessage(text: string): PeerMessage | null {
  *  (the opener on its own line, the paragraph under it, 2026-09-21). Derived,
  *  so a harness that rewords its paragraph is drawn as it wrote it. A turn
  *  with nothing but the opener (the teammate shape) gets the known wording:
- *  the user wants the same bubble before every subagent reply, and the
- *  opener alone is not it. */
+ *  the opener alone is not the Claude app's bubble. */
 export function peerBoilerplateText(text: string): string {
   const lines = text
     .replace(OUTER_BLOCK, '\n')

@@ -8,11 +8,13 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * A subagent's row says only who wrote (`› Message from @probe (ctrl+o to
  * expand)`); another session's row carries the message too
  * (mobile-terminal-peer-notices.ts). The phone remembers each sighting with
- * the id of the last folded row at that moment and draws it after that row
- * as the same bubble a transcript turn gets: the harness's boilerplate, the
- * way the Claude app shows a peer message, and nothing of the message or the
- * sender (the user's call, 2026-09-21; the earlier card and one-liner are
- * gone). The body is still remembered for what follows. When the transcript
+ * the id of the last folded row at that moment. Another session's message is
+ * drawn after that row as the same bubble a transcript turn gets: the
+ * harness's boilerplate, the way the Claude app shows a peer message, and
+ * nothing of the message or the sender (the user's call, 2026-09-21; the
+ * earlier card and one-liner are gone). A subagent's row draws nothing, as in
+ * the Claude app (drawsPeerBubble). The body is still remembered for what
+ * follows. When the transcript
  * later carries the turn itself (a row Orca did publish, surfaced by
  * mobile-native-chat-peer-messages.ts) at or after that anchor, the notice
  * steps aside for it, one notice per landed bubble in order; every bubble
@@ -69,8 +71,12 @@ export function observeScreenPeerNotices(
  *  landed transcript row has taken over. Same array when there are none. */
 export function withScreenPeerNotices(
   folded: readonly NativeChatMessage[],
-  notices: readonly ScreenPeerNotice[]
+  allNotices: readonly ScreenPeerNotice[]
 ): NativeChatMessage[] {
+  if (allNotices.length === 0) {
+    return folded as NativeChatMessage[]
+  }
+  const notices = allNotices.filter(drawsPeerBubble)
   if (notices.length === 0) {
     return folded as NativeChatMessage[]
   }
@@ -147,3 +153,20 @@ export function withScreenPeerNotices(
   out.push(...atEnd)
   return out
 }
+
+/**
+ * Whether the Claude app draws a peer bubble for what this row announced.
+ *
+ * Only for another session's message, which the screen paints with the message
+ * inline ("› Message from @code-ui-6f: Capture probe…"). A row that names only
+ * the sender ("› Message from @a8f65c53ecfad2908 (ctrl+o to expand)") is a
+ * subagent reporting back to this session: Claude Code records every one of
+ * those since 2.1.272 as a queued_command with origin.kind "peer" and handback
+ * true (22 of 22 on this machine), and the Claude app draws no bubble for it,
+ * only this session's own "Messaged @agent" call (2026-09-24, from the phone,
+ * reversing 2026-09-21's bubble before every subagent reply).
+ */
+function drawsPeerBubble(notice: ScreenPeerNotice): boolean {
+  return notice.body !== undefined
+}
+
