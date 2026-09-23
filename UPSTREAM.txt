@@ -207,7 +207,7 @@ The desktop-served mobile web bundle contract (OTA phase A, Orca #21325 + #21348
 src/shared/mobile-web-bundle/bundle-rpc-contract.ts: 9641a1b54
 src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: ac4dc6599
 src/shared/mobile-web-bundle/manifest-contract.ts: c22c442fd
-src/shared/mobile-web-bundle/manifest-contract.test.ts: c22c442fd
+src/shared/mobile-web-bundle/manifest-contract.test.ts: f5d2d6e75
 src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts: 9641a1b54
 src/shared/zod-salvage.ts: 9641a1b54 (re-vendored for `hostUnionArms`, which bundle-rpc-contract.ts imports; purely additive over the base — `openEnum` from #20950 and `hostUnionArms` from #21269/#21298 — and identical to origin/main. Group D had pinned it at 4a86b2dc5 for the same two exports; #21298's `NoInfer` form of `hostUnionArms` and the `const` generic on `openEnum` are the later commit's, kept on the 2026-09-19 merge)
 
