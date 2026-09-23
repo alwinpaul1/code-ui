@@ -2,9 +2,9 @@ import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-termina
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
-import { mobileNativeChatFrameToShow } from './mobile-native-chat-frame-decision'
+import { useNativeChatFrame } from './use-native-chat-frame'
 import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -265,15 +265,15 @@ export function MobileNativeChatOverlay({
     ? emptyReload
     : !controller.viewResolved ||
       (!controller.activeChatEligible && !controller.terminalPeekActive)
-  const held = useHeldChatFrame(blank && blink, sendSurfaceId)
-  const frame = mobileNativeChatFrameToShow({
+  const { frame, held, remember } = useNativeChatFrame({
     blank,
+    blink,
     showNativeChat: chatOn,
-    hasHeldFrame: held.element != null,
-    hasTerminalUnderneath
+    hasTerminalUnderneath,
+    surfaceId: sendSurfaceId
   })
   if (frame === 'hold') {
-    return held.element
+    return held
   }
   if (frame === 'terminal') {
     return null
@@ -380,39 +380,8 @@ export function MobileNativeChatOverlay({
       />
     </View>
   )
-  held.remember(drawn)
+  remember(drawn)
   return drawn
-}
-
-const CHAT_FRAME_HOLD_MS = 1500
-
-/** The last chat the overlay drew for this surface, replayed while the source
- *  blanks briefly. The hold is decided in the same render that blanks: an
- *  earlier version set it from an effect, so the first blank frame returned
- *  null, the terminal showed for that frame and the whole chat list
- *  remounted — the flash this exists to stop (2026-09-13). Only the expiry
- *  lives in an effect. */
-function useHeldChatFrame(
-  blank: boolean,
-  surfaceId: string
-): { element: React.JSX.Element | null; remember: (element: React.JSX.Element) => void } {
-  const lastRef = useRef<{ surfaceId: string; element: React.JSX.Element } | null>(null)
-  const [expired, setExpired] = useState(false)
-  useEffect(() => {
-    if (!blank) {
-      setExpired(false)
-      return
-    }
-    const timer = setTimeout(() => setExpired(true), CHAT_FRAME_HOLD_MS)
-    return () => clearTimeout(timer)
-  }, [blank, surfaceId])
-  const last = lastRef.current
-  return {
-    element: blank && !expired && last?.surfaceId === surfaceId ? last.element : null,
-    remember: (drawn) => {
-      lastRef.current = { surfaceId, element: drawn }
-    }
-  }
 }
 
 const styles = StyleSheet.create({
