@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileMcpServersPanel } from '../../../../src/project-config/mcp-servers/MobileMcpServersPanel'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 export default function MobileMcpServersScreen() {
   const params = useLocalSearchParams<{

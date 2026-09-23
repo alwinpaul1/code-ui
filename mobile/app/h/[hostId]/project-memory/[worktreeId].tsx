@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router'
 import { MobileProjectMemoryPanel } from '../../../../src/project-config/project-memory/MobileProjectMemoryPanel'
-import { firstParam } from '../../../../src/source-control/mobile-source-control-screen-state'
+import { firstParam } from '../../../../src/navigation/route-param-reader'
 
 export default function MobileProjectMemoryScreen() {
   const params = useLocalSearchParams<{
