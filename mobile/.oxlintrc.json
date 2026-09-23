@@ -22,6 +22,26 @@
   "overrides": [
     {
       "files": [
+        "src/mobile-web-shell/bridge/bridge-envelope.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-23: 301. Upstream's file sits exactly at the 300 cap after
+            // #21723, and this fork's own 'user-send' foreground-nudge arm costs
+            // one more code line (the literal is two declarations because on one
+            // line it is 109 characters and the formatter wraps it). Drop this
+            // override if that arm ever goes upstream or away.
+            "max": 301,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/components/MobileMarkdown.tsx"
       ],
       "rules": {
