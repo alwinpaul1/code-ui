@@ -25,8 +25,11 @@ import { XTERM_HTML } from './terminal-webview-html'
 // reprinted by esbuild, 757055 -> 740521. The program is unchanged: the flip test holds it
 // token for token against this fork's pre-flip script, and the markup around it is
 // byte-identical.
-const EXPECTED_SHA256 = 'fbe80dc60c07da59028bf80ae8cfc6192ce3c14408e817df4e73c34398222d69'
-const EXPECTED_LENGTH = 740521
+// Then (upstream #21809, C7.5): the document's host seams, the per-module start
+// sequence and the scope reset (rulings 19-21), with this fork's own scroll state
+// on the scope and its frames through the document's frame registry, 740521 -> 743416.
+const EXPECTED_SHA256 = '366e879957b01cd5b8d10699fc5ec203e104adb18c90aa79d79b6b59800c12f6'
+const EXPECTED_LENGTH = 743416
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {

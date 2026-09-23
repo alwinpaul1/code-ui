@@ -160,8 +160,6 @@ export type TerminalDocumentThemeTarget = {
   options: { theme?: TerminalDocumentTheme; minimumContrastRatio: number }
 }
 
-let appliedTerminalThemeKey: string | null = null
-
 export function applyTerminalTheme(input: TerminalDocumentThemeMessage) {
   // Why (#17567): the host re-sends the same theme on every snapshot, and each
   // assignment to term.options.theme forces xterm to rebuild its color cache and
@@ -172,15 +170,14 @@ export function applyTerminalTheme(input: TerminalDocumentThemeMessage) {
   } catch {
     themeKey = null
   }
-  if (themeKey !== null && themeKey === appliedTerminalThemeKey) {
+  if (themeKey !== null && themeKey === scope.appliedTerminalThemeKey) {
     return
   }
-  appliedTerminalThemeKey = themeKey
+  scope.appliedTerminalThemeKey = themeKey
   scope.terminalThemeInput = input
   scope.terminalTheme = normalizeTerminalTheme(input)
   const background = scope.terminalTheme.background || terminalBackgroundFallback
-  document.documentElement.style.background = background
-  document.body.style.background = background
+  scope.paintDocumentBackground(background)
   // Why prefer the published value: the desktop user may have lowered or disabled the floor (#10754);
   // an older host omits the field and the luminance gate stays authoritative.
   const publishedFloor = normalizeTerminalContrastOverride(

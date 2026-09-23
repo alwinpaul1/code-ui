@@ -3,41 +3,10 @@ import { notify } from './host-notify'
 import {
   scope,
   type TerminalDocumentDisposable,
+  type TerminalDocumentParser,
   type TerminalDocumentTerminal,
   type TerminalDocumentTerminalOptions
 } from './document-scope'
-
-// Code UI: the xterm shape this fork's DECRQM answer reads. It lives beside its one reader because
-// the scope's file is at its line cap; `document-scope.ts` imports it for the terminal's own type.
-
-/** A CSI handler registration, as xterm's parser takes one. */
-export type TerminalDocumentCsiHandlerId = {
-  prefix?: string
-  intermediates?: string
-  final: string
-}
-
-/** As much of xterm's parser as the document hooks: DECRQM is answered through it. */
-export type TerminalDocumentParser = {
-  registerCsiHandler: (
-    id: TerminalDocumentCsiHandlerId,
-    callback: (params: (number | number[])[]) => boolean
-  ) => TerminalDocumentDisposable
-}
-
-/** xterm's public mode flags. The first three drive the host mirror; the rest answer DECRQM. */
-export type TerminalDocumentPublicModes = {
-  bracketedPasteMode?: boolean
-  mouseTrackingMode?: string
-  applicationCursorKeysMode?: boolean
-  insertMode?: boolean
-  originMode?: boolean
-  wraparoundMode?: boolean
-  reverseWraparoundMode?: boolean
-  applicationKeypadMode?: boolean
-  sendFocusMode?: boolean
-  synchronizedOutputMode?: boolean
-}
 
 /**
  * The gate deciding when xterm's parser replies may reach the native host.
@@ -61,20 +30,16 @@ export type DecrqmTerminal = Partial<
   Pick<TerminalDocumentTerminal, 'modes' | 'options' | '_core' | 'buffer'>
 >
 
-// Written from four places, all of them here, so it is this module's state rather than the
-// document's and stays a local.
-let terminalDataRepliesEnabled = false
-
 export function resetTerminalDataReplyAuthority() {
-  terminalDataRepliesEnabled = false
+  scope.terminalDataRepliesEnabled = false
 }
 
 export function resumeTerminalDataReplyAuthority() {
-  terminalDataRepliesEnabled = true
+  scope.terminalDataRepliesEnabled = true
 }
 
 export function forwardTerminalDataReply(data: string) {
-  if (terminalDataRepliesEnabled) {
+  if (scope.terminalDataRepliesEnabled) {
     notify({ type: 'terminal-data', bytes: data })
   }
 }
@@ -82,7 +47,7 @@ export function forwardTerminalDataReply(data: string) {
 export function enqueueTerminalDataReplyBoundary(gen: number) {
   enqueueWriteBoundary(function () {
     if (gen === scope.terminalGeneration) {
-      terminalDataRepliesEnabled = true
+      scope.terminalDataRepliesEnabled = true
     }
   })
 }

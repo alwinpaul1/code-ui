@@ -1,73 +1,22 @@
-import { terminalDefaultTheme } from './document-constants'
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
-import { scope } from './document-scope'
-import { scrollIndicator, scrollThumb } from './text-scaling'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { getSurfaceMetrics } from './fit-scale'
 
-declare global {
-  interface Window {
-    ReactNativeWebView?: { postMessage: (message: string) => void }
-  }
-}
-
-scope.panX = 0
-scope.panY = 0
-scope.smoothScrollOffsetY = 0
-// Why: the buffer row xterm has actually PAINTED, read back from term.onRender.
-// -1 until the first paint of a terminal; xterm can hold a scroll's repaint for
-// a frame (a write already booked it) or much longer (synchronized output).
-scope.renderedViewportY = -1
-scope.renderedBufferType = ''
-scope.writtenTerminalScreenOffsetY = 0
-// Why: the sub-row scroll remainder is painted as a compositor transform on
-// xterm's own .xterm-screen, one frame behind the delta that produced it —
-// see scheduleTerminalScreenTransform for why the frame of lag is required.
-scope.terminalScreenElement = null
-scope.pendingTerminalScreenOffsetY = 0
-scope.terminalScreenTransformFrameId = null
-scope.smoothScrollSettleFrameId = null
-scope.smoothScrollSettleTimer = null
-scope.smoothScrollSettleTargetY = 0
-scope.smoothScrollSettleTime = 0
-let scrollIndicatorFrameId: number | null = null
-let pendingScrollIndicatorReveal = false
-scope.initRows = 24
-scope.terminalGeneration = 0
-scope.defaultTheme = terminalDefaultTheme
-scope.terminalThemeInput = null
-scope.terminalTheme = scope.defaultTheme
-scope.terminalMinimumContrastRatio = 3
-scope.webglAddon = null
-scope.webglRecoveryTimer = null
-scope.activeAltScreenSnapshot = false
-scope.trackedMouseTrackingMode = 'none'
-scope.sgrMouseMode = false
-scope.sgrMousePixelsMode = false
-scope.initialOscLinks = []
-scope.initialOscLinkRowOffset = 0
-scope.initialOscLinkEvictionReady = false
-scope.mouseModeScanTail = ''
-scope.handledMessageIds = []
 // Why: after init() the initial scrollback applyFitScale may have run
 // against an empty buffer (or one without the widest line yet). Re-fit
 // once when the first live data chunk arrives so a wider line that pushes
 // scrollWidth past the previously-measured value gets re-scaled to fit.
-scope.firstDataPending = false
 
 // Diagnostic logger — bridges WebView console.log to RN via postMessage.
 // Tag with [fit] so it's easy to filter in the Expo/Metro logs.
 export function flog(tag: string, payload: Record<string, unknown>) {
   try {
-    if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(
-        JSON.stringify({
-          type: 'log',
-          tag: '[fit]' + tag,
-          payload: payload
-        })
-      )
-    }
+    scope.postToHost({
+      type: 'log',
+      tag: '[fit]' + tag,
+      payload: payload
+    })
   } catch {}
 }
 
@@ -135,23 +84,23 @@ export function updateTransform() {
 // for a 3px-wide thumb. One repaint per frame is more than the thumb can show.
 export function scheduleScrollIndicatorUpdate(reveal: boolean) {
   if (reveal) {
-    pendingScrollIndicatorReveal = true
+    scope.pendingScrollIndicatorReveal = true
   }
-  if (scrollIndicatorFrameId !== null) {
+  if (scope.scrollIndicatorFrameId !== null) {
     return
   }
-  scrollIndicatorFrameId = requestAnimationFrame(function () {
-    scrollIndicatorFrameId = null
-    const pendingReveal = pendingScrollIndicatorReveal
-    pendingScrollIndicatorReveal = false
+  scope.scrollIndicatorFrameId = scheduleDocumentFrame(function () {
+    scope.scrollIndicatorFrameId = null
+    const pendingReveal = scope.pendingScrollIndicatorReveal
+    scope.pendingScrollIndicatorReveal = false
     updateScrollIndicator(pendingReveal)
   })
 }
 
 export function updateScrollIndicator(reveal: boolean) {
   if (
-    !scrollIndicator ||
-    !scrollThumb ||
+    !scope.scrollIndicator ||
+    !scope.scrollThumb ||
     !scope.term ||
     !scope.term.buffer ||
     !scope.term.buffer.active
@@ -161,7 +110,7 @@ export function updateScrollIndicator(reveal: boolean) {
   const buffer = scope.term.buffer.active
   const maxViewportY = buffer.baseY || 0
   if (maxViewportY <= 0 || shouldRouteScrollToTerminalInput()) {
-    scrollIndicator.classList.remove('visible')
+    scope.scrollIndicator.classList.remove('visible')
     return
   }
   const trackHeight = Math.max(0, getSurfaceMetrics().viewportH - 8)
@@ -172,17 +121,25 @@ export function updateScrollIndicator(reveal: boolean) {
   const thumbHeight = Math.max(24, (trackHeight * (scope.term.rows || 0)) / totalRows)
   const maxTop = Math.max(0, trackHeight - thumbHeight)
   const top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0
-  scrollThumb.style.height = thumbHeight + 'px'
-  scrollThumb.style.transform = 'translateY(' + top + 'px)'
+  scope.scrollThumb.style.height = thumbHeight + 'px'
+  scope.scrollThumb.style.transform = 'translateY(' + top + 'px)'
   if (!reveal) {
     return
   }
-  scrollIndicator.classList.add('visible')
+  scope.scrollIndicator.classList.add('visible')
   if (scope.scrollIndicatorHideTimer) {
     clearTimeout(scope.scrollIndicatorHideTimer)
   }
   scope.scrollIndicatorHideTimer = setTimeout(function () {
-    scrollIndicator!.classList.remove('visible')
+    scope.scrollIndicator!.classList.remove('visible')
     scope.scrollIndicatorHideTimer = null
   }, 550)
+}
+
+/** Ruling 21: the hide timer is the one thing this module schedules. */
+export function stopViewportTransform() {
+  if (scope.scrollIndicatorHideTimer) {
+    clearTimeout(scope.scrollIndicatorHideTimer)
+    scope.scrollIndicatorHideTimer = null
+  }
 }

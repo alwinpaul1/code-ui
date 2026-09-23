@@ -1,4 +1,4 @@
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { getCellHeight } from './fit-scale'
 import {
   SMOOTH_SCROLL_MAX_STEP_MS,
@@ -12,7 +12,8 @@ import { getTotalScale, nowMs } from './viewport-transform'
  * Purely visual: no row is committed, and the spring returns the offset to exactly 0, so the
  * at-rest row-boundary invariant every cell-to-pixel mapping depends on holds. The bent offset is
  * the one piece of state another module reads — `writeTerminalScreenTransform` adds it to the
- * transform it writes — so it is a scope field; the pull and the spring are this module's own.
+ * transform it writes. Ruling 21 puts the pull and the spring on the scope as well, so a remount
+ * starts unbent; `stopOverscrollBend` takes back the spring frame.
  */
 
 // UIScrollView's own resistance curve, f(x, d, c) = x*d*c / (d + c*x) with
@@ -21,10 +22,6 @@ import { getTotalScale, nowMs } from './viewport-transform'
 const OVERSCROLL_RESISTANCE_C = 0.55
 const OVERSCROLL_SPRING_TAU_MS = 26
 const OVERSCROLL_MIN_PX = 0.5
-let overscrollPullY = 0
-scope.overscrollY = 0
-let overscrollSpringFrameId: number | null = null
-let overscrollSpringTime = 0
 
 export function overscrollBend(pullPx: number, dimensionPx: number) {
   if (!(dimensionPx > 0) || pullPx === 0) {
@@ -48,14 +45,14 @@ export function overscrollDimensionPx() {
 }
 
 export function cancelOverscrollSpring() {
-  if (overscrollSpringFrameId !== null) {
-    cancelAnimationFrame(overscrollSpringFrameId)
-    overscrollSpringFrameId = null
+  if (scope.overscrollSpringFrameId !== null) {
+    cancelAnimationFrame(scope.overscrollSpringFrameId)
+    scope.overscrollSpringFrameId = null
   }
 }
 
 export function setOverscrollPull(pullPx: number) {
-  overscrollPullY = pullPx
+  scope.overscrollPullY = pullPx
   const next = overscrollBend(pullPx, overscrollDimensionPx())
   if (next === scope.overscrollY) {
     return
@@ -73,26 +70,26 @@ export function pullOverscroll(deltaY: number) {
     return
   }
   cancelOverscrollSpring()
-  setOverscrollPull(overscrollPullY - deltaY)
+  setOverscrollPull(scope.overscrollPullY - deltaY)
 }
 
 export function releaseOverscroll() {
-  if (overscrollPullY === 0 && scope.overscrollY === 0) {
+  if (scope.overscrollPullY === 0 && scope.overscrollY === 0) {
     return
   }
   cancelOverscrollSpring()
-  overscrollSpringTime = 0
-  overscrollSpringFrameId = requestAnimationFrame(overscrollSpringStep)
+  scope.overscrollSpringTime = 0
+  scope.overscrollSpringFrameId = scheduleDocumentFrame(overscrollSpringStep)
 }
 
 export function overscrollSpringStep(frameTime?: number) {
-  overscrollSpringFrameId = null
+  scope.overscrollSpringFrameId = null
   const now = typeof frameTime === 'number' ? frameTime : nowMs()
-  if (overscrollSpringTime === 0) {
-    overscrollSpringTime = now - 16
+  if (scope.overscrollSpringTime === 0) {
+    scope.overscrollSpringTime = now - 16
   }
-  let elapsed = now - overscrollSpringTime
-  overscrollSpringTime = now
+  let elapsed = now - scope.overscrollSpringTime
+  scope.overscrollSpringTime = now
   if (elapsed <= 0) {
     elapsed = 1
   }
@@ -100,11 +97,16 @@ export function overscrollSpringStep(frameTime?: number) {
     elapsed = SMOOTH_SCROLL_MAX_STEP_MS
   }
   const decay = Math.exp(-elapsed / OVERSCROLL_SPRING_TAU_MS)
-  const next = overscrollPullY * decay
+  const next = scope.overscrollPullY * decay
   if ((next < 0 ? -next : next) <= OVERSCROLL_MIN_PX) {
     setOverscrollPull(0)
     return
   }
   setOverscrollPull(next)
-  overscrollSpringFrameId = requestAnimationFrame(overscrollSpringStep)
+  scope.overscrollSpringFrameId = scheduleDocumentFrame(overscrollSpringStep)
+}
+
+/** Ruling 21: the spring-back frame, which would otherwise bend the next mount's content. */
+export function stopOverscrollBend() {
+  cancelOverscrollSpring()
 }

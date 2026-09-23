@@ -209,3 +209,8 @@ export function afterWritesDrained(callback: () => void) {
   scope.afterDrainCallbacks.push(callback)
   pumpWrites(scope.terminalGeneration)
 }
+
+/** Ruling 21: the held pump's wake timer, which would otherwise pump the next mount's queue. */
+export function stopWriteQueue() {
+  cancelHeldWritePump()
+}

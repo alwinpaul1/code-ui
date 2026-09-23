@@ -1,4 +1,4 @@
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import {
   clampPan,
   contentOverflowsViewportWidth,
@@ -28,7 +28,7 @@ import { beginScrollGestureWriteHold, endScrollGestureWriteHold } from './write-
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
 /** The live touch gesture: the last point, the velocity, and the pinch it may be in. */
-type TerminalTouchState = {
+export type TerminalTouchState = {
   lastX: number
   lastY: number
   lastTime: number
@@ -44,22 +44,6 @@ type TerminalTouchState = {
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
-}
-
-export const ts: TerminalTouchState = {
-  lastX: 0,
-  lastY: 0,
-  lastTime: 0,
-  velY: 0,
-  dragging: false,
-  accumDelta: 0,
-  momentumId: null,
-  isPinching: false,
-  canPanX: false,
-  pinchDist: 0,
-  pinchScale: 0,
-  pinchSurfX: 0,
-  pinchSurfY: 0
 }
 
 // Why: every scroll constant below is per MILLISECOND, not per frame. The old
@@ -81,8 +65,8 @@ export function updateTouchVelocity(deltaY: number, dt: number) {
   if (!Number.isFinite(instantVelocity)) {
     return
   }
-  if (ts.velY === 0) {
-    ts.velY = instantVelocity
+  if (scope.touchGesture.velY === 0) {
+    scope.touchGesture.velY = instantVelocity
     return
   }
   // Why: touchmove cadence is uneven in WebView. Blend recent samples so
@@ -91,7 +75,7 @@ export function updateTouchVelocity(deltaY: number, dt: number) {
   // twice as fast and launch a different velocity from the same finger.
   // oxlint-disable-next-line prefer-exponentiation-operator -- the document's text is pinned token for token; rewriting this changes the native program
   const weight = 1 - Math.pow(1 - VELOCITY_BLEND_WEIGHT, dt / VELOCITY_BLEND_REFERENCE_MS)
-  ts.velY = ts.velY * (1 - weight) + instantVelocity * weight
+  scope.touchGesture.velY = scope.touchGesture.velY * (1 - weight) + instantVelocity * weight
 }
 
 export function getDistance(a: Touch, b: Touch) {
@@ -133,9 +117,9 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
       if (dispatcherShouldBlockSurface()) {
         return
       }
-      if (ts.momentumId) {
-        cancelAnimationFrame(ts.momentumId)
-        ts.momentumId = null
+      if (scope.touchGesture.momentumId) {
+        cancelAnimationFrame(scope.touchGesture.momentumId)
+        scope.touchGesture.momentumId = null
       }
       cancelSmoothScrollSettle()
       // Why: the finger owns the content from here, so stop any settle in
@@ -149,26 +133,26 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
       // while a finger is down, so this is the one place per gesture that pays
       // for a layout read; every touchmove then reads the cache.
       invalidateSurfaceMetrics()
-      ts.canPanX = contentOverflowsViewportWidth()
+      scope.touchGesture.canPanX = contentOverflowsViewportWidth()
       if (e.touches.length === 2) {
-        ts.isPinching = true
+        scope.touchGesture.isPinching = true
         resetSmoothScrollOffset()
-        ts.pinchDist = getDistance(e.touches[0], e.touches[1])
-        ts.pinchScale = scope.userScale
+        scope.touchGesture.pinchDist = getDistance(e.touches[0], e.touches[1])
+        scope.touchGesture.pinchScale = scope.userScale
         const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2
         const my = (e.touches[0].clientY + e.touches[1].clientY) / 2
         const total = getTotalScale()
-        ts.pinchSurfX = (mx - scope.panX) / total
-        ts.pinchSurfY = (my - scope.panY) / total
+        scope.touchGesture.pinchSurfX = (mx - scope.panX) / total
+        scope.touchGesture.pinchSurfY = (my - scope.panY) / total
       } else if (e.touches.length === 1) {
-        ts.isPinching = false
-        ts.dragging = true
+        scope.touchGesture.isPinching = false
+        scope.touchGesture.dragging = true
         beginScrollGestureWriteHold()
-        ts.lastX = e.touches[0].clientX
-        ts.lastY = e.touches[0].clientY
-        ts.lastTime = nowMs()
-        ts.velY = 0
-        ts.accumDelta = 0
+        scope.touchGesture.lastX = e.touches[0].clientX
+        scope.touchGesture.lastY = e.touches[0].clientY
+        scope.touchGesture.lastTime = nowMs()
+        scope.touchGesture.velY = 0
+        scope.touchGesture.accumDelta = 0
       }
     },
     { capture: true, passive: true }
@@ -187,50 +171,53 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
       e.stopPropagation()
 
       if (e.touches.length === 2) {
-        ts.isPinching = true
+        scope.touchGesture.isPinching = true
         const dist = getDistance(e.touches[0], e.touches[1])
         const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2
         const my = (e.touches[0].clientY + e.touches[1].clientY) / 2
 
-        const ratio = dist / ts.pinchDist
+        const ratio = dist / scope.touchGesture.pinchDist
         // Why: userScale is a CSS multiplier on the current font size; bound it so
         // the resulting apparent size (currentTextScale × userScale) stays within
         // the preset range, since release snaps to one of those presets.
         const loScale = scope.MIN_TEXT_SCALE / scope.currentTextScale
         const hiScale = scope.MAX_TEXT_SCALE / scope.currentTextScale
-        scope.userScale = Math.max(loScale, Math.min(hiScale, ts.pinchScale * ratio))
+        scope.userScale = Math.max(
+          loScale,
+          Math.min(hiScale, scope.touchGesture.pinchScale * ratio)
+        )
         const total = getTotalScale()
-        scope.panX = mx - ts.pinchSurfX * total
-        scope.panY = my - ts.pinchSurfY * total
+        scope.panX = mx - scope.touchGesture.pinchSurfX * total
+        scope.panY = my - scope.touchGesture.pinchSurfY * total
         clampPan()
         updateTransform()
-      } else if (e.touches.length === 1 && !ts.isPinching) {
+      } else if (e.touches.length === 1 && !scope.touchGesture.isPinching) {
         const x = e.touches[0].clientX,
           y = e.touches[0].clientY
         const now = nowMs(),
-          dt = now - ts.lastTime
+          dt = now - scope.touchGesture.lastTime
 
         // Why: pan horizontally only when content overflows the viewport (larger
         // than fit) — same check clampPan() uses, decided once at touchstart.
         // Vertical always drives buffer scroll so scrollback stays reachable at
         // any text size; calling the never-defined contentWiderThanViewport()
         // here threw and killed all single-finger scrolling, scrollback included.
-        if (ts.canPanX) {
-          scope.panX += x - ts.lastX
+        if (scope.touchGesture.canPanX) {
+          scope.panX += x - scope.touchGesture.lastX
           clampPan()
           updateTransform()
         }
 
-        const deltaY = ts.lastY - y
-        ts.lastTime = now
+        const deltaY = scope.touchGesture.lastY - y
+        scope.touchGesture.lastTime = now
         if (shouldRouteScrollToTerminalInput()) {
           updateTouchVelocity(deltaY, dt)
           resetSmoothScrollOffset()
           const effectiveCellH = getCellHeight() * getTotalScale()
-          ts.accumDelta += deltaY
-          const lines = Math.trunc(ts.accumDelta / effectiveCellH)
+          scope.touchGesture.accumDelta += deltaY
+          const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
           if (lines !== 0) {
-            ts.accumDelta -= lines * effectiveCellH
+            scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(lines, x, y)
           }
         } else {
@@ -240,11 +227,11 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
             // The buffer end. Let the content follow the finger with rising
             // resistance rather than stopping dead; touchend springs it back.
             pullOverscroll(deltaY)
-            ts.velY = 0
+            scope.touchGesture.velY = 0
           }
         }
-        ts.lastX = x
-        ts.lastY = y
+        scope.touchGesture.lastX = x
+        scope.touchGesture.lastY = y
       }
     },
     { capture: true, passive: false }
@@ -260,8 +247,8 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
         return
       }
 
-      if (ts.isPinching && e.touches.length < 2) {
-        ts.isPinching = false
+      if (scope.touchGesture.isPinching && e.touches.length < 2) {
+        scope.touchGesture.isPinching = false
         // Why: a finished pinch snaps to the nearest preset and becomes the new
         // font size (reflowing the grid), so pinch-to-zoom IS the in-terminal way
         // to set the text size. The CSS pinch zoom (userScale) is reset; the real
@@ -280,20 +267,20 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
         if (e.touches.length === 1) {
           // Why: the pinch changed the scale, so the pan decision taken at
           // touchstart no longer holds for the finger that is still down.
-          ts.canPanX = contentOverflowsViewportWidth()
-          ts.lastX = e.touches[0].clientX
-          ts.lastY = e.touches[0].clientY
-          ts.lastTime = nowMs()
-          ts.velY = 0
-          ts.accumDelta = 0
+          scope.touchGesture.canPanX = contentOverflowsViewportWidth()
+          scope.touchGesture.lastX = e.touches[0].clientX
+          scope.touchGesture.lastY = e.touches[0].clientY
+          scope.touchGesture.lastTime = nowMs()
+          scope.touchGesture.velY = 0
+          scope.touchGesture.accumDelta = 0
         }
         return
       }
 
       if (e.touches.length === 0) {
-        ts.dragging = false
+        scope.touchGesture.dragging = false
         releaseOverscroll()
-        let vel = ts.velY
+        let vel = scope.touchGesture.velY
         let momentumTime = 0
         function momentumStep(frameTime?: number) {
           const now = typeof frameTime === 'number' ? frameTime : nowMs()
@@ -314,7 +301,7 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
           // oxlint-disable-next-line prefer-exponentiation-operator -- the document's text is pinned token for token; rewriting this changes the native program
           vel *= Math.pow(FRICTION_PER_MS, elapsed)
           if (Math.abs(vel) < MIN_VEL) {
-            ts.momentumId = null
+            scope.touchGesture.momentumId = null
             endScrollGestureWriteHold()
             settleSmoothScrollOffset()
             return
@@ -323,26 +310,26 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
           if (shouldRouteScrollToTerminalInput()) {
             resetSmoothScrollOffset()
             const effectiveCellH = getCellHeight() * getTotalScale()
-            ts.accumDelta += delta
-            const lines = Math.trunc(ts.accumDelta / effectiveCellH)
+            scope.touchGesture.accumDelta += delta
+            const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
             if (lines !== 0) {
-              ts.accumDelta -= lines * effectiveCellH
-              routeScrollLines(lines, ts.lastX, ts.lastY)
+              scope.touchGesture.accumDelta -= lines * effectiveCellH
+              routeScrollLines(lines, scope.touchGesture.lastX, scope.touchGesture.lastY)
             }
           } else {
             if (!applyNormalBufferScrollDelta(delta)) {
-              ts.momentumId = null
+              scope.touchGesture.momentumId = null
               endScrollGestureWriteHold()
               releaseOverscroll()
               settleSmoothScrollOffset()
               return
             }
           }
-          ts.momentumId = requestAnimationFrame(momentumStep)
+          scope.touchGesture.momentumId = scheduleDocumentFrame(momentumStep)
         }
         if (Math.abs(vel) > MIN_VEL) {
           cancelSmoothScrollSettle()
-          ts.momentumId = requestAnimationFrame(momentumStep)
+          scope.touchGesture.momentumId = scheduleDocumentFrame(momentumStep)
         } else {
           endScrollGestureWriteHold()
           settleSmoothScrollOffset()
@@ -353,4 +340,14 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
   )
 }
 
-attachSurfaceEventHandlers(scope.surface!)
+export function startSurfaceTouchGestures() {
+  attachSurfaceEventHandlers(scope.surface!)
+}
+
+/** Ruling 21: the momentum loop, which would keep scrolling into the terminal that replaced it. */
+export function stopSurfaceTouchGestures() {
+  if (scope.touchGesture.momentumId !== null) {
+    cancelAnimationFrame(scope.touchGesture.momentumId)
+    scope.touchGesture.momentumId = null
+  }
+}

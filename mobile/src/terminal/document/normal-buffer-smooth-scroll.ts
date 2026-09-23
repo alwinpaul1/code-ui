@@ -1,6 +1,6 @@
 import { getCellHeight } from './fit-scale'
 import { getTotalScale, nowMs, scheduleScrollIndicatorUpdate } from './viewport-transform'
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { flushDeferredKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
 // The settle eases a sub-row remainder onto a boundary over a few frames, so
@@ -41,7 +41,7 @@ export function scheduleTerminalScreenTransform() {
   if (scope.terminalScreenTransformFrameId !== null) {
     return
   }
-  scope.terminalScreenTransformFrameId = requestAnimationFrame(function () {
+  scope.terminalScreenTransformFrameId = scheduleDocumentFrame(function () {
     scope.terminalScreenTransformFrameId = null
     writeTerminalScreenTransform(scope.pendingTerminalScreenOffsetY)
   })
@@ -252,7 +252,7 @@ export function settleSmoothScrollOffset() {
   scope.smoothScrollSettleTargetY =
     scope.smoothScrollOffsetY <= -effectiveCellH / 2 ? -effectiveCellH : 0
   scope.smoothScrollSettleTime = 0
-  scope.smoothScrollSettleFrameId = requestAnimationFrame(smoothScrollSettleStep)
+  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(smoothScrollSettleStep)
 }
 
 export function smoothScrollSettleStep(frameTime?: number) {
@@ -278,5 +278,10 @@ export function smoothScrollSettleStep(frameTime?: number) {
     flushDeferredKeyboardAvoidanceMetrics()
     return
   }
-  scope.smoothScrollSettleFrameId = requestAnimationFrame(smoothScrollSettleStep)
+  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(smoothScrollSettleStep)
+}
+
+/** Ruling 21: the smooth-scroll frame, which would otherwise scroll the next mount's buffer. */
+export function stopNormalBufferSmoothScroll() {
+  resetSmoothScrollOffset()
 }

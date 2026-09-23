@@ -1,6 +1,5 @@
 import { notify } from './host-notify'
 import { scope, type TerminalDocumentCell, type TerminalDocumentLine } from './document-scope'
-import { ts } from './surface-touch-gestures'
 
 export function lineHasVisibleContent(
   line: TerminalDocumentLine,
@@ -70,13 +69,11 @@ export function emitKeyboardAvoidanceMetrics() {
   })
 }
 
-let keyboardAvoidanceMetricsDeferred = false
-
 export function isScrollGestureActive() {
   if (scope.smoothScrollSettleFrameId !== null) {
     return true
   }
-  return !!(ts && (ts.dragging || ts.momentumId))
+  return !!(scope.touchGesture && (scope.touchGesture.dragging || scope.touchGesture.momentumId))
 }
 
 // Why: emitKeyboardAvoidanceMetrics walks rows x cols cells and serializes a
@@ -86,16 +83,16 @@ export function isScrollGestureActive() {
 // is live and emit once at the end — the keyboard cannot open mid-scroll.
 export function requestKeyboardAvoidanceMetrics() {
   if (isScrollGestureActive()) {
-    keyboardAvoidanceMetricsDeferred = true
+    scope.keyboardAvoidanceMetricsDeferred = true
     return
   }
   emitKeyboardAvoidanceMetrics()
 }
 
 export function flushDeferredKeyboardAvoidanceMetrics() {
-  if (!keyboardAvoidanceMetricsDeferred) {
+  if (!scope.keyboardAvoidanceMetricsDeferred) {
     return
   }
-  keyboardAvoidanceMetricsDeferred = false
+  scope.keyboardAvoidanceMetricsDeferred = false
   emitKeyboardAvoidanceMetrics()
 }

@@ -6,7 +6,7 @@ import {
   getTotalScale,
   updateTransform
 } from './viewport-transform'
-import { scope } from './document-scope'
+import { scope, scheduleDocumentFrame } from './document-scope'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 
 export function getCellHeight() {
@@ -34,31 +34,24 @@ export type TerminalSurfaceMetrics = {
 // touchmove, immediately before the style write that dirties layout again —
 // a forced synchronous layout per finger sample. None of these change while a
 // finger is down, so measure once (at touchstart, and after anything that can
-// resize the grid or the window) and read the cache in between.
-const surfaceMetrics: TerminalSurfaceMetrics = {
-  contentH: 0,
-  contentW: 0,
-  valid: false,
-  viewportH: 0,
-  viewportW: 0
-}
-
+// resize the grid or the window) and read the cache in between. The cache is
+// `scope.surfaceMetrics` (ruling 21), so a remount starts from an invalid one.
 export function invalidateSurfaceMetrics() {
-  surfaceMetrics.valid = false
+  scope.surfaceMetrics.valid = false
 }
 
 export function getSurfaceMetrics() {
-  if (surfaceMetrics.valid) {
-    return surfaceMetrics
+  if (scope.surfaceMetrics.valid) {
+    return scope.surfaceMetrics
   }
-  surfaceMetrics.viewportW = window.innerWidth
-  surfaceMetrics.viewportH = window.innerHeight
+  scope.surfaceMetrics.viewportW = window.innerWidth
+  scope.surfaceMetrics.viewportH = window.innerHeight
   if (scope.term && scope.term.element) {
-    surfaceMetrics.contentW = scope.term.element.scrollWidth || 0
-    surfaceMetrics.contentH = scope.term.element.scrollHeight || 0
-    surfaceMetrics.valid = true
+    scope.surfaceMetrics.contentW = scope.term.element.scrollWidth || 0
+    scope.surfaceMetrics.contentH = scope.term.element.scrollHeight || 0
+    scope.surfaceMetrics.valid = true
   }
-  return surfaceMetrics
+  return scope.surfaceMetrics
 }
 
 // Why: pan horizontally only when content overflows the viewport (larger than
@@ -112,16 +105,15 @@ export function adjustRowsForViewport() {}
 // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
-let fitRetryToken = 0
 export function applyFitScale(reason: string) {
   if (!scope.term || !scope.term.element) {
     return
   }
-  const token = ++fitRetryToken
+  const token = ++scope.fitRetryToken
   let attempts = 0
   let lastScrollWidth = -1
   function attempt() {
-    if (token !== fitRetryToken) {
+    if (token !== scope.fitRetryToken) {
       return
     }
     if (!scope.term || !scope.term.element) {
@@ -150,9 +142,9 @@ export function applyFitScale(reason: string) {
       commitFitScale(reason, attempts, 'timeout')
       return
     }
-    requestAnimationFrame(attempt)
+    scheduleDocumentFrame(attempt)
   }
-  requestAnimationFrame(attempt)
+  scheduleDocumentFrame(attempt)
 }
 
 export function commitFitScale(reason: string, attempts: number, gate: string) {
@@ -200,4 +192,12 @@ export function commitFitScale(reason: string, attempts: number, gate: string) {
     })
   }
   repositionOverlay()
+}
+
+/**
+ * Ruling 21: the retry loop is abandoned by bumping the token it compares itself against, which is
+ * how it already abandons a superseded attempt.
+ */
+export function stopFitScale() {
+  scope.fitRetryToken++
 }
