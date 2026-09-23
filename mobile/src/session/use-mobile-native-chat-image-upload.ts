@@ -1,17 +1,16 @@
 import type { UploadingNativeChatImage } from './mobile-native-chat-image-attachment'
-import { resizeMobilePhoto } from './mobile-photo-resize'
-import { readSystemClipboardImage } from './mobile-clipboard-image-reader'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import { useMediaPicker } from '../platform/media-picker'
 import {
   ImageLibraryPermissionError,
-  pickMobileDocuments,
-  pickMobileImageFiles,
-  pickMobileImages,
   type MobileImageSource
-} from './mobile-image-source-picker'
+} from '../platform/media-picker-contract'
+// A file the composer already holds and a named document are this fork's own attach paths, and
+// the media seam's contract has no member for either, so they stay on the phone's picker.
+import { pickMobileDocuments, pickMobileImageFiles } from './mobile-image-source-picker'
 import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
@@ -57,6 +56,7 @@ export function useMobileNativeChatImageUpload(args: {
     structuredNativeChat
   } = args
   const [isAttaching, setIsAttaching] = useState(false)
+  const picker = useMediaPicker()
   const attachingCount = useRef(0)
   const batchCounter = useRef(0)
   const connStateRef = useRef(connState)
@@ -146,13 +146,8 @@ export function useMobileNativeChatImageUpload(args: {
   )
 
   const attachImage = useCallback(
-    (source: MobileImageSource) =>
-      attachWith(
-        (picked) =>
-          pickMobileImages(picked, { readClipboardImage: readSystemClipboardImage, resizeImage: resizeMobilePhoto }),
-        source
-      ),
-    [attachWith]
+    (source: MobileImageSource) => attachWith(picker.pickImages, source),
+    [attachWith, picker]
   )
   const attachImageFile = useCallback(
     (uri: string) => attachWith(() => pickMobileImageFiles([uri]), 'files'),

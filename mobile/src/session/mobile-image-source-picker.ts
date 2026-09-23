@@ -8,33 +8,13 @@ import {
   assertClipboardImageByteLengthWithinLimit
 } from '../../../src/shared/clipboard-image'
 import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
+// The seam's contract, which is where these three now live: a screen that catches the permission
+// error must not import this module for it, or the page bundle gets the native picker chain with it.
+import { ImageLibraryPermissionError } from '../platform/media-picker-contract'
+import type { MobileImageSource, PickedMobileImage } from '../platform/media-picker-contract'
 
-export type MobileImageSource = 'camera' | 'library' | 'files' | 'clipboard'
-
-export type PickedMobileImage = {
-  // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
-  // Empty when the bytes come on demand through `load`: a photo from the
-  // camera or the library is handed over as soon as the picker names it, so
-  // the composer chip shows at once, and its file is read only then — a
-  // 12-megapixel JPEG streamed into base64 on the JS thread took seconds
-  // before the chip appeared (device, 2026-09-20).
-  readonly base64: string
-  readonly load?: () => Promise<string>
-  // Local file URI of the picked asset — used only to render a composer preview
-  // thumbnail (the host upload uses `base64`); absent when the source can't supply one.
-  readonly uri?: string
-  // Set for documents picked through `pickMobileDocuments`: the chip shows the
-  // name, and the sent message tells the agent what the upload actually is.
-  readonly name?: string
-  readonly mimeType?: string
-}
-
-export class ImageLibraryPermissionError extends Error {
-  constructor() {
-    super('Photo library permission denied')
-    this.name = 'ImageLibraryPermissionError'
-  }
-}
+export { ImageLibraryPermissionError }
+export type { MobileImageSource, PickedMobileImage }
 
 const MOBILE_IMAGE_READ_CHUNK_BYTES = 256 * 1024
 

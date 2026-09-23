@@ -82,7 +82,8 @@ type RichMarkdownCommand =
   | 'link'
   | 'image'
 
-type Props = {
+/** Exported so the web sibling answers the same shape and a change to it fails there too. */
+export type MobileRichMarkdownEditorComponentProps = {
   content: string
   editable: boolean
   onChange: (content: string) => void
@@ -124,7 +125,7 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
 ]
 
 function MobileRichMarkdownEditorInner(
-  { content, editable, onChange, onKeyboardInsetChange }: Props,
+  { content, editable, onChange, onKeyboardInsetChange }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const webViewRef = useRef<WebView>(null)
