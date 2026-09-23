@@ -15,6 +15,7 @@ overrides:
 patchedDependencies:
   '@expo/plist@0.8.1': 642ebd3066c236b91ad0bb74496e9fe10d47d7443d29f5be3b6239114eda7603
   expo-libghostty@0.8.1: e91757617336043e9e3396d497e839633529f52d9379d6442ca886a2d613dce1
+  query-string@9.5.1: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
   react-native-webview@13.16.2: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
   react-native@0.86.3: f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559
 
@@ -12242,7 +12243,7 @@ snapshots:
       fast-deep-equal: 3.1.3
       invariant: 2.2.4
       nanoid: 3.3.18
-      query-string: 9.5.1
+      query-string: 9.5.1(patch_hash=8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b)
       react: 19.2.8
       react-fast-compare: 3.2.2
       react-is: 19.2.8
@@ -14153,7 +14154,7 @@ snapshots:
 
   pure-rand@6.1.0: {}
 
-  query-string@9.5.1:
+  query-string@9.5.1(patch_hash=8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b):
     dependencies:
       decode-uri-component: 0.5.0
       filter-obj: 5.1.0
