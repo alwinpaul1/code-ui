@@ -167,7 +167,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (the active tab's first) to resolveMobileFileTabDoc, so a desktop-opened
 // tab whose path is outside the worktree reads through a terminal-artifact
 // grant, and names 'outside_worktree' when nothing vouches for the path.
-const HEAD_CALLBACK_BODY_SHA256 = 'd9ee0d12d1b627eb63c8b85d402d66bb243ce3a5fda33e99c4c5d396e1a58ded'
+// 2026-09-23 (Orca #21790 and #21785 ported): the clipboard seam's writer and
+// reader in the copy, paste and probe bodies, the Markdown copy's failure
+// branch, and the terminal subscribe's snapshotByteBudget spread (nothing on a
+// phone, the bridge frame cap inside the shell's page). Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = 'a2b95e6cd1957be81e38598ce2018acb134bb8e3fe3ca86815b81fa2b2e8d1ed'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
