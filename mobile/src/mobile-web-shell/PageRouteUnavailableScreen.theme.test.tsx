@@ -2,7 +2,6 @@
 // dark palette; this fork draws it from the theme, because on a store build (shell off) it is
 // where any unrouted host path lands natively, so a hardcoded colour would ship the wrong mode.
 
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { darkColors, lightColors } from '../theme/tokens'
@@ -44,16 +43,14 @@ describe('the page-route refusal screen', () => {
   ] as const)('paints its canvas, message and button from the %s theme', (scheme, palette) => {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(PageRouteUnavailableScreen, { hostId: 'host-1' })
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <PageRouteUnavailableScreen hostId="host-1" />
+        </ThemeProvider>
       )
     })
     const root = renderer!.root.findByProps({ testID: 'mobile-web-page-route-unavailable' })
     expect(styleOf(root).backgroundColor).toBe(palette.bg)
-    const [message, label] = renderer!.root.findAllByType('Text')
+    const [message, label] = renderer!.root.findAllByType('Text' as never)
     expect(styleOf(message!).color).toBe(palette.text)
     expect(styleOf(label!).color).toBe(palette.text)
     const button = renderer!.root.findByProps({ accessibilityRole: 'button' })
@@ -63,11 +60,9 @@ describe('the page-route refusal screen', () => {
   it('leaves for the host list when the id is absent, and for the host otherwise', () => {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: 'dark' },
-          createElement(PageRouteUnavailableScreen, { hostId: '' })
-        )
+        <ThemeProvider initialPreference="dark">
+          <PageRouteUnavailableScreen hostId="" />
+        </ThemeProvider>
       )
     })
     const button = renderer!.root.findByProps({ accessibilityRole: 'button' })
