@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardWriter } from '../platform/clipboard'
+import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -34,6 +35,7 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
+  const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
   const canCopy = body.trim().length > 0
@@ -68,15 +70,20 @@ export function QuickCommandRow({
       return
     }
     try {
-      await Clipboard.setStringAsync(body)
+      await clipboard.writeText(body)
       if (!mountedRef.current) {
         return
       }
       setFeedback({ body, status: 'copied' })
     } catch {
+      // The guard first: a row unmounted before the refusal arrives has nothing to explain a buzz
+      // with, and the feedback it would set is read by a component that is gone.
       if (!mountedRef.current) {
         return
       }
+      // The row says so on its own control rather than in a toast; the buzz is the part a thumb
+      // resting on the button it just pressed can notice without looking.
+      triggerError()
       setFeedback({ body, status: 'failed' })
     }
     if (copyResetTimerRef.current) {

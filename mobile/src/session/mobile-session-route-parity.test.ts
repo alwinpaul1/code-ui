@@ -88,13 +88,18 @@ const HOST_COMPONENT_NAMES = new Set([
 // 286 since 2026-09-19 (night): terminalHandlesFor and the outside-worktree prefetch effect (readers).
 // 289 since 2026-09-22: chat dictation's caret ref, insert-range ref, and the
 // paint state for the open phrase.
-const HEAD_MAIN_HOOK_SHA256 = 'b7f8ce4f99d30dcc2fa2586d630129f34c08f9c1cebbcf24cb61ce12e9e2792e'
+// 294 since 2026-09-23 (Orca #21790, C7.2): five clipboard hooks join the
+// expanded route, the same +5 upstream measured — a writer in the diff-note,
+// Markdown and selection actions, a reader in the selection actions and the
+// attachment probe. The hook binding, callback identity and body, effect and
+// leaf-JSX pins moved with them, and only those.
+const HEAD_MAIN_HOOK_SHA256 = '8836577a084f5987c4a110739e0fb9ff2100490b2577da931995a14aa3713ef0'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
-const HEAD_HOOK_BINDING_SHA256 = '04f292e0f35cb590be4316450e20409c480652af463f561deca43f6b8f27eba5'
+const HEAD_HOOK_BINDING_SHA256 = '09f5ce45ecf2178f6596c62dccaa0f83c2149845283f604f8b2a7ba5f761c513'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '6bc9145af077063ddee08d159aa4f2614c1eddea3c51fb93e4fa2b2c719c8945'
+  'e0e7ad5f407afb16a923a065178754ef7f69ae46d1dcd90fd91493b02cc354bd'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -162,7 +167,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (the active tab's first) to resolveMobileFileTabDoc, so a desktop-opened
 // tab whose path is outside the worktree reads through a terminal-artifact
 // grant, and names 'outside_worktree' when nothing vouches for the path.
-const HEAD_CALLBACK_BODY_SHA256 = 'a4ffef37c269e974c1eff74fd1aeaab138efebb5d8d6da19c2480c8f623ec149'
+const HEAD_CALLBACK_BODY_SHA256 = 'd9ee0d12d1b627eb63c8b85d402d66bb243ce3a5fda33e99c4c5d396e1a58ded'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -175,7 +180,7 @@ const HEAD_CALLBACK_BODY_SHA256 = 'a4ffef37c269e974c1eff74fd1aeaab138efebb5d8d6d
 // carries both, and this is what the test printed for it.
 // Re-pinned again on the group D merge, 2026-09-19: main's (6121e237) carried
 // #21503's writer, ours (d5529ed9) #21083's worktreeActivate; both now.
-const HEAD_EFFECT_SHA256 = 'a0ea481853f9b04acc19d2a9b2754cfe80c4a8915f6e140cfa0416b218476baf'
+const HEAD_EFFECT_SHA256 = '5f97caf51bd293b398137c9a518790c9b0da32cafc1909ba6b562930efeb9842'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -285,8 +290,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 666 since 2026-09-19 (evening): 'outside_worktree' and its copy in readFileTab.
 // 676 since 2026-09-22: AppState's 'change' event and the 'active' check that
 // stops dictation when a call backgrounds the app.
+// 678 since 2026-09-23 (Orca #21790, C7.2): the two toasts a refused clipboard
+// write now shows, "Couldn't copy path" in the sheets and "Couldn't copy" in
+// the Markdown copy action.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'dd6fb1f741f99f6d291cfce600bfc2f0cdbafff6339503b6a40930e79bef4500'
+  '30f2bd947ded171ff7a02240df4c6346330c48c25a416067f3b764bdfecb634e'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -353,7 +361,7 @@ const HEAD_HOST_JSX_SHA256 = '0e144db3ff60e989d05f114b28b7f7845add250668ae3d3d89
 // 2026-09-19: FileReader hands readingPositionKey to the PDF and markdown views,
 // and (later) resolveImage to the markdown view; MarkdownReader's Preview
 // hands MobileMarkdown resolveImage too, so a document's figures draw.
-const HEAD_LEAF_JSX_SHA256 = '95ccec75c1ae17f96d3f429150419c99aee53bef4fb61d7872f6af06d49cb80e'
+const HEAD_LEAF_JSX_SHA256 = '9c8bd4e878543f485df51eb84903ff253bb562ac31b57253f7ead5523516a1cb'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -768,7 +776,8 @@ describe('mobile session route extraction parity', () => {
     // file outside the worktree is read while a terminal still shows its path.
     // 289 since 2026-09-22: the caret ref, the insert-range ref, and the
     // dictation paint state.
-    expect(main.hooks).toHaveLength(289)
+    // 294 since 2026-09-23: five clipboard seam hooks (Orca #21790).
+    expect(main.hooks).toHaveLength(294)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -859,7 +868,8 @@ describe('mobile session route extraction parity', () => {
     // no terminal vouches for (Image/File + the reason), and the prefetch effect's
     // literals (see HEAD_MAIN_HOOK_SHA256).
     // 676 since 2026-09-22: 'change' and 'active' on the dictation AppState listener.
-    expect(strings).toHaveLength(676)
+    // 678 since 2026-09-23: the two refused-copy toasts (Orca #21790).
+    expect(strings).toHaveLength(678)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

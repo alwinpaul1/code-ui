@@ -10,7 +10,8 @@ import {
   type ForwardedRef
 } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
-import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Keyboard, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { openExternalLink } from '../platform/external-link'
 import {
   Bold,
   Code2,
@@ -207,7 +208,7 @@ function MobileRichMarkdownEditorInner(
       if (editorMessage.type === 'openLink' && typeof editorMessage.url === 'string') {
         const url = normalizeExternalEditorUrl(editorMessage.url)
         if (url) {
-          void Linking.openURL(url).catch(() => {})
+          openExternalLink(url)
         }
         return
       }

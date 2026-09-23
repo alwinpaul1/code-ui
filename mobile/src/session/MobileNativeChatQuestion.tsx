@@ -3,6 +3,7 @@ import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp, X } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
 import {
@@ -229,7 +230,7 @@ export function MobileNativeChatQuestion({
               maxHeight: 120,
               color: colors.text,
               fontFamily: fonts.regular,
-              fontSize: type.body.size,
+              fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE),
               backgroundColor: colors.bgRaised,
               borderRadius: radius.md,
               borderWidth: 1,

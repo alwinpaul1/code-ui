@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
@@ -97,6 +97,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     openPermissionRules,
     openProjectMemory
   } = controller
+  const clipboard = useClipboardWriter()
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -181,7 +182,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               if (!delivery) {
                 return
               }
-              void Clipboard.setStringAsync(delivery.prompt)
+              void clipboard
+                .writeText(delivery.prompt)
                 .then(() => {
                   triggerSuccess()
                   showToast('Notes copied')
@@ -242,8 +244,13 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void Clipboard.setStringAsync(target.relativePath || target.filePath)
-                showToast('Path copied')
+                void clipboard
+                  .writeText(target.relativePath || target.filePath)
+                  .then(() => showToast('Path copied'))
+                  .catch(() => {
+                    triggerError()
+                    showToast("Couldn't copy path", 1500)
+                  })
               }
             }
           },
@@ -298,7 +305,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const combined = drafts
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
-              void Clipboard.setStringAsync(combined)
+              void clipboard
+                .writeText(combined)
                 .then(() => {
                   setLeaveDrafts(null)
                   leaveSession()

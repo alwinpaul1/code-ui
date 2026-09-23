@@ -15,12 +15,17 @@ import { browserAddressFieldStyles } from '../browser/browser-address-field-styl
 import { mobileBrowserPaneStyles } from '../browser/mobile-browser-pane-styles'
 import { listStyles } from '../source-control/mobile-source-control-list-styles'
 import { mobileDiffReviewControlStyles } from '../components/mobile-diff-review-control-styles'
+import { customKeyModalStyles } from '../components/CustomKeyModal.styles'
+import { mobileSessionCommandInputStyles } from '../session/mobile-session-command-input-styles'
 import { typography } from '../theme/mobile-theme'
 import { TEXT_INPUT_FONT_SIZE } from './text-input-font-size'
-import { TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE } from './text-input-font-size.web'
+import {
+  TEXT_INPUT_FONT_SIZE_FLOOR,
+  TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE
+} from './text-input-font-size.web'
 
 /**
- * The size the two page-served text inputs carry, on each platform.
+ * The size every page-served text input carries, on each platform.
  *
  * Both halves are asserted from here because a node test resolves the native sibling, so the web
  * value cannot be read off the style object: the bundler is what swaps the module, and that swap
@@ -31,7 +36,13 @@ const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
 const STYLE_MODULES = [
   'src/source-control/mobile-source-control-list-styles.ts',
   'src/components/mobile-diff-review-control-styles.ts',
-  'src/browser/mobile-browser-pane-styles.ts'
+  'src/browser/mobile-browser-pane-styles.ts',
+  // The session screen's six, which declare the app's body size and so need no sibling: the
+  // native seam is that size, so the move is the same number and the swap is the whole change.
+  'src/components/CustomKeyModal.styles.ts',
+  'src/session/QuickCommandEditorForm.tsx',
+  'src/session/QuickCommandsList.tsx',
+  'src/session/mobile-session-command-input-styles.ts'
 ]
 
 /**
@@ -43,14 +54,33 @@ const STYLE_MODULES = [
  */
 const SPLIT_STYLE_MODULES = ['src/browser/browser-address-field-styles.web.ts']
 
+/**
+ * CODE UI: the session inputs this fork themes inline, through `useTheme()`, rather than in a
+ * stylesheet. Upstream moved the chat's two 15px fields into a split static-palette module; that
+ * would take them off the appearance setting, so they stay inline and carry
+ * `Math.max(type.body.size, TEXT_INPUT_FONT_SIZE)` instead. Natively that is the theme's 15, since
+ * the seam is 14 there; on the web it is the seam's 16. The same shape keeps the text-entry modal
+ * and the ask card, which upstream moved in place. The composer needs neither: it renders at
+ * `type.body.size + 1`, already 16. Same property-level source read as below, so a site that went
+ * back to a bare `type.body.size` shows up here.
+ */
+const THEMED_INPUT_MODULES = [
+  'src/components/TextInputModal.tsx',
+  'src/session/MobileNativeChatAsk.tsx',
+  'src/session/MobileNativeChatQuestion.tsx'
+]
+const THEMED_SEAM_SIZE = `fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE)`
+
 /** The seam's export, so the source check below looks for a binding rather than for a mention. */
 const SEAM_EXPORT_NAME = 'TEXT_INPUT_FONT_SIZE'
 
 describe('the font size the page-served text inputs carry', () => {
   it('clears the size iOS zooms the page for, on the web', () => {
-    // 16 is the floor; below it a focus zooms the document and the keyboard seam, which reads a
-    // scale other than 1 as no keyboard, stops lifting for the rest of the session.
-    expect(WEB_TEXT_INPUT_FONT_SIZE).toBeGreaterThanOrEqual(16)
+    // Below the floor a focus zooms the document, and the keyboard seam reads a scale other than
+    // 1 as no keyboard and stops lifting for the rest of the session. The number is the seam's
+    // own, read rather than restated, because the census over every page route reads it too.
+    expect(WEB_TEXT_INPUT_FONT_SIZE).toBeGreaterThanOrEqual(TEXT_INPUT_FONT_SIZE_FLOOR)
+    expect(TEXT_INPUT_FONT_SIZE_FLOOR).toBe(16)
   })
 
   it('leaves a phone rendering exactly what it rendered before', () => {
@@ -58,6 +88,13 @@ describe('the font size the page-served text inputs carry', () => {
     expect(listStyles.commitInput.fontSize).toBe(typography.bodySize)
     expect(mobileDiffReviewControlStyles.composerInput.fontSize).toBe(typography.bodySize)
     expect(mobileBrowserPaneStyles.keyboardInput.fontSize).toBe(typography.bodySize)
+    expect(customKeyModalStyles.fieldInput.fontSize).toBe(typography.bodySize)
+    // The capture field beside it, which is the one input on this screen no seam touches.
+    expect(customKeyModalStyles.keyInput.fontSize).toBe(22)
+    expect(customKeyModalStyles.keyInput.fontSize).toBeGreaterThanOrEqual(
+      TEXT_INPUT_FONT_SIZE_FLOOR
+    )
+    expect(mobileSessionCommandInputStyles.textInput.fontSize).toBe(typography.bodySize)
     // The pane's address bar is the one that is split: it keeps the compact size natively, so the
     // seam reaches it through the `.web.ts` sibling rather than through this constant.
     expect(browserAddressFieldStyles.input.fontSize).toBe(typography.metaSize)
@@ -72,6 +109,14 @@ describe('the font size the page-served text inputs carry', () => {
       [...STYLE_MODULES, ...SPLIT_STYLE_MODULES].filter(
         (module) =>
           !readFileSync(join(MOBILE_ROOT, module), 'utf8').includes(`fontSize: ${SEAM_EXPORT_NAME}`)
+      )
+    ).toEqual([])
+  })
+
+  it('takes the themed inputs past the floor on the web through the same seam', () => {
+    expect(
+      THEMED_INPUT_MODULES.filter(
+        (module) => !readFileSync(join(MOBILE_ROOT, module), 'utf8').includes(THEMED_SEAM_SIZE)
       )
     ).toEqual([])
   })
