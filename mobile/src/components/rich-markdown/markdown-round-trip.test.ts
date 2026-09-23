@@ -146,12 +146,14 @@ describe('the editor document, from markdown and back', () => {
   })
 
   it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {
-    // A cell's own pipe is the row separator unless a backslash claims it, and the backslash is
-    // itself a cell character: escaping backslashes before pipes is what keeps the two apart.
+    // A cell's own pipe is the row separator unless a backslash claims it. Code UI: only the pipe's
+    // backslash is the table's; `c\\d` shows as written, as it does in a paragraph (the editor
+    // renders no backslash escapes) and as it did before #22054, which unescaped it here and
+    // doubled every lone backslash on save (markdown-table-rows.ts).
     const markdown = ['| a \\| b | c\\\\d |', '| --- | --- |', '| 1 \\| 2 | 3 |'].join('\n')
     const { scope, html } = surface(markdown)
 
-    expect(html).toContain('<th>a | b</th><th>c\\d</th>')
+    expect(html).toContain('<th>a | b</th><th>c\\\\d</th>')
     expect(html).toContain('<td>1 | 2</td><td>3</td>')
     expect(currentMarkdown(scope)).toBe(markdown)
   })
