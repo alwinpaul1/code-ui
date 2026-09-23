@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import {
   PEER_BOILERPLATE_PRESENTATION,
   PEER_BOILERPLATE_TEXT,
+  TEAMMATE_TASK_PRESENTATION,
   isPeerBoilerplateRow,
   parsePeerMessage,
   peerBoilerplateText,
@@ -131,3 +133,84 @@ describe('a message from another Claude session or a subagent', () => {
     })
   })
 })
+
+// Claude Code 2.1.280, the first turn of a teammate's own session: the lead's
+// task alone, no opener before the block and nothing after it. The envelope is
+// the record's exact bytes (2026-09-23); the body is shortened and reworded.
+const TEAM_LEAD_TASK = `<teammate-message teammate_id="team-lead">
+Build one Slurm job that re-measures the GPU energy of the detector. Build and self-test locally. DO NOT submit.
+
+Report back: files created, the configuration matrix, expected wall time.
+</teammate-message>`
+
+describe("a lead's message in a teammate session", () => {
+  const assistant = (id: string, text: string): NativeChatMessage => ({
+    id,
+    role: 'assistant',
+    timestamp: 2,
+    source: 'transcript',
+    blocks: [{ type: 'text', text }]
+  })
+
+  it('starts the chat with the team lead\'s task, instead of mid-work where it read as history that would not load', () => {
+    const rows = foldMobileNativeChatMessages([
+      user(TEAM_LEAD_TASK, 'task'),
+      assistant('a1', 'Reading the reviews and existing energy code before writing the new job.')
+    ])
+    expect(rows.map((row) => row.id)).toEqual(['task', 'a1'])
+    expect(rows[0]).toMatchObject({ role: 'user' })
+    expect(rows[0]!.blocks).toEqual([
+      {
+        type: 'text',
+        text: 'Build one Slurm job that re-measures the GPU energy of the detector. Build and self-test locally. DO NOT submit.\n\nReport back: files created, the configuration matrix, expected wall time.',
+        presentation: `${TEAMMATE_TASK_PRESENTATION}:team-lead`
+      }
+    ])
+  })
+
+  it('draws two tasks batched into one turn as one bubble, in order', () => {
+    const second = '<teammate-message teammate_id="team-lead" summary="follow-up">\nAlso time the CPU path.\n</teammate-message>'
+    const [row] = surfacePeerMessages([user(`${TEAM_LEAD_TASK}\n\n${second}`)])
+    expect(row!.blocks).toEqual([
+      {
+        type: 'text',
+        text: expect.stringMatching(/expected wall time\.\n\nAlso time the CPU path\.$/),
+        presentation: `${TEAMMATE_TASK_PRESENTATION}:team-lead`
+      }
+    ])
+  })
+
+  it("keeps a lead's shutdown request hidden, instead of drawing its JSON as the user's bubble", () => {
+    // Claude Code 2.1.280, the last turn of a teammate session: the record's
+    // structure with its values replaced.
+    const shutdown =
+      '<teammate-message teammate_id="team-lead">\n' +
+      '{"type":"shutdown_request","requestId":"shutdown-1@worker","from":"team-lead","reason":"Done","timestamp":"2026-09-23T18:00:00.000Z"}\n' +
+      'This is a shutdown request. To approve it, call SendMessage with exactly this input.\n' +
+      '</teammate-message>'
+    const rows = foldMobileNativeChatMessages([
+      user(TEAM_LEAD_TASK, 'task'),
+      assistant('a1', 'Done.'),
+      user(shutdown, 'shut'),
+      assistant('a2', 'Approved.')
+    ])
+    expect(rows.map((row) => row.id)).toEqual(['task', 'a1', 'a2'])
+  })
+
+  it('keeps the 21 Sep peer bubble, message hidden, for a teammate block behind the opener', () => {
+    const [row] = surfacePeerMessages([user(TEAMMATE)])
+    expect(isPeerBoilerplateRow(row!)).toBe(true)
+  })
+
+  it('is not a task when anything else shares the turn, or the block is empty', () => {
+    for (const text of [
+      `${TEAM_LEAD_TASK}\nand a line of my own`,
+      `note first\n${TEAM_LEAD_TASK}`,
+      '<teammate-message teammate_id="team-lead">\n  \n</teammate-message>'
+    ]) {
+      const rows = [user(text)]
+      expect(surfacePeerMessages(rows)).toBe(rows)
+    }
+  })
+})
+

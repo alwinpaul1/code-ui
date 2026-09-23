@@ -22,7 +22,10 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  * and then the reply. The message itself is not shown. The user put the two
  * apps side by side and asked for exactly that (2026-09-21): the bubble
  * before every subagent reply, and no "From <sender>" card with the message
- * (which is what the 2026-09-20 version drew).
+ * (which is what the 2026-09-20 version drew). The one exception is a lead's
+ * message in a teammate session, the task and any follow-up, which has no
+ * opener and IS the prompt: that is drawn as the user's bubble with the
+ * message (teammateTask).
  *
  * Orca's reader classes the whole turn as harness machinery and the fold's
  * noise filter hides it; this runs before that filter and turns the row into
@@ -57,6 +60,65 @@ const TEAMMATE_BODY = /<teammate-message\b[^>]*>([\S\s]*?)<\/teammate-message>/
 const OUTER_BLOCK = /<(cross-session-message|teammate-message)\b[^>]*>[\S\s]*?<\/\1>/
 
 export type PeerMessage = { sender: string; body: string }
+
+const TEAMMATE_BLOCKS = /<teammate-message\b([^>]*)>([\S\s]*?)<\/teammate-message>/g
+const TEAMMATE_ID_ATTRIBUTE = /\bteammate_id="([^"]*)"/
+
+/** The hint on a lead's message drawn as the user's bubble, so the screen's
+ *  sighting of the same message steps aside for it (screen-peer-notices.ts).
+ *  The sender rides after a colon (`teammate-task:team-lead`): a text block
+ *  has no other field to carry it, and only a sighting from that sender may
+ *  step aside, since a different sender's bubble is a different message. */
+export const TEAMMATE_TASK_PRESENTATION = 'teammate-task'
+
+/** Team protocol, not words for a person: Claude Code 2.1.280 sends a
+ *  shutdown request (and its other control messages) as a one-line JSON
+ *  object with a `type`, followed by the harness's instructions to the agent. */
+function isTeamProtocolBody(body: string): boolean {
+  const firstLine = body.split('\n', 1)[0]!.trim()
+  if (!firstLine.startsWith('{')) {
+    return false
+  }
+  try {
+    const parsed: unknown = JSON.parse(firstLine)
+    return typeof parsed === 'object' && parsed !== null && typeof (parsed as { type?: unknown }).type === 'string'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * A lead's message in a teammate's own session, or null for any other turn.
+ *
+ * Claude Code 2.1.280 delivers the lead's messages to a teammate session
+ * alone: `<teammate-message teammate_id="team-lead">…</teammate-message>`,
+ * with no opener before it and nothing after it. The first is the task, and
+ * later ones are follow-ups ("Second pass please…"). Orca's filter hides them
+ * as machinery, so the chat began at the first command group and read as
+ * older history that would not load (2026-09-23). They are the prompts the
+ * conversation answers, so each is drawn as the user's bubble with the message
+ * in it: the user's call, and only for this bare shape. Team protocol inside
+ * the block (a shutdown request) stays hidden, and a block behind the opener
+ * keeps the 21 Sep bubble with its message hidden.
+ */
+export function teammateTask(text: string): { text: string; sender: string } | null {
+  if (!/^\s*<teammate-message\b/.test(text)) {
+    return null
+  }
+  const blocks: { sender: string; body: string }[] = []
+  const rest = text.replace(TEAMMATE_BLOCKS, (_block, attributes: string, body: string) => {
+    blocks.push({ sender: TEAMMATE_ID_ATTRIBUTE.exec(attributes)?.[1] ?? '', body: body.trim() })
+    return ''
+  })
+  if (rest.trim().length > 0) {
+    return null
+  }
+  const shown = blocks.filter((block) => block.body.length > 0 && !isTeamProtocolBody(block.body))
+  if (shown.length === 0) {
+    return null
+  }
+  return { text: shown.map((block) => block.body).join('\n\n'), sender: shown[0]!.sender }
+}
 
 /** The sender and message of an injected peer turn, or null for anything
  *  else — a person's own prompt that merely mentions one, or a shape with no
@@ -95,6 +157,22 @@ export function isPeerBoilerplateRow(message: NativeChatMessage): boolean {
   return message.role === 'system' && block?.type === 'text' && block.presentation === PEER_BOILERPLATE_PRESENTATION
 }
 
+/** Who sent a lead's message drawn as the user's bubble (teammateTask), or
+ *  null for any other row. Any text block counts: a task that quotes an image
+ *  marker gains a chip block in front of its text. */
+export function teammateTaskSender(message: NativeChatMessage): string | null {
+  if (message.role !== 'user') {
+    return null
+  }
+  const prefix = `${TEAMMATE_TASK_PRESENTATION}:`
+  for (const block of message.blocks) {
+    if (block.type === 'text' && block.presentation?.startsWith(prefix)) {
+      return block.presentation.slice(prefix.length)
+    }
+  }
+  return null
+}
+
 /** The bubble row for a message the transcript did not carry (screen witness). */
 export function peerBoilerplateRow(id: string, timestamp: number | null): NativeChatMessage {
   return {
@@ -123,13 +201,22 @@ export function surfacePeerMessages(messages: readonly NativeChatMessage[]): Nat
 }
 
 /** The turn's id stays on the bubble: everything that anchors on a transcript
- *  row (split points, echo placement, screen-read notices) resolves it. */
+ *  row (split points, echo placement, screen-read notices) resolves it. A
+ *  lead's message in a teammate session stays a user row; every other peer
+ *  turn becomes the harness's bubble. */
 function surfacedPeerRow(message: NativeChatMessage): NativeChatMessage | null {
   const texts = message.blocks.filter(isTextBlock)
   if (texts.length !== 1 || message.blocks.length !== 1) {
     return null
   }
   const text = texts[0]!.text
+  const task = teammateTask(text)
+  if (task !== null) {
+    return {
+      ...message,
+      blocks: [{ type: 'text', text: task.text, presentation: `${TEAMMATE_TASK_PRESENTATION}:${task.sender}` }]
+    }
+  }
   if (!parsePeerMessage(text)) {
     return null
   }

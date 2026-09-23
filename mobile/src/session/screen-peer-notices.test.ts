@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
 import { observeScreenPeerNotices, withScreenPeerNotices } from './screen-peer-notices'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 function row(id: string, role: NativeChatMessage['role'], text: string, presentation?: string): NativeChatMessage {
   return { id, role, timestamp: 10, source: 'transcript', blocks: [{ type: 'text', text, ...(presentation ? { presentation } : {}) }] }
@@ -94,3 +95,79 @@ describe('peer message rows read off the screen, placed into the chat', () => {
     expect(textOf(withScreenPeerNotices([], [{ id: 'n', sender: 'x', anchorId: null, sightedAt: 1 }])[0]!)).toBe(PEER_BOILERPLATE_TEXT)
   })
 })
+
+// Claude Code 2.1.280 paints a lead's message in a teammate session as the
+// collapsed `› Message from @team-lead (ctrl+o to expand)` row, and the
+// transcript carries it as a bare <teammate-message> turn the fold draws as the
+// user's bubble. One message, so one bubble: the landed row takes the notice.
+describe("a lead's message the screen and the transcript both carry", () => {
+  const lead = (text: string) => `<teammate-message teammate_id="team-lead">\n${text}\n</teammate-message>`
+
+  it('draws the opening task once, not again as a peer bubble', () => {
+    const folded = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Build the job.')),
+      row('a1', 'assistant', 'Reading the code.')
+    ])
+    const seen = observeScreenPeerNotices([], [{ sender: 'team-lead' }], null, 5)
+    expect(withScreenPeerNotices(folded, seen).map((message) => message.id)).toEqual(['task', 'a1'])
+  })
+
+  it('draws the opening task once when the screen was first read after the chat had moved past it', () => {
+    // Opening a teammate tab soon after it spawned: the snapshot lands before
+    // the first screen read, so the sighting is anchored after the task.
+    const folded = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Build the job.')),
+      row('a1', 'assistant', 'Reading the code.'),
+      row('a2', 'assistant', 'Writing it.')
+    ])
+    const seen = observeScreenPeerNotices([], [{ sender: 'team-lead' }], 'a2', 5)
+    expect(withScreenPeerNotices(folded, seen).map((message) => message.id)).toEqual(['task', 'a1', 'a2'])
+  })
+
+  it('draws the task once when it quotes an image marker the phone turns into a chip', () => {
+    const folded = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Match the layout in [Image #1].')),
+      row('a1', 'assistant', 'Reading the code.')
+    ])
+    const seen = observeScreenPeerNotices([], [{ sender: 'team-lead' }], null, 5)
+    expect(withScreenPeerNotices(folded, seen).map((message) => message.id)).toEqual(['task', 'a1'])
+  })
+
+  it("keeps another session's bubble in a teammate session when a lead's follow-up lands after it", () => {
+    const before = foldMobileNativeChatMessages([row('task', 'user', lead('Build the job.')), row('a1', 'assistant', 'Built.')])
+    const seen = observeScreenPeerNotices([], [{ sender: 'observer-7', body: 'Status?' }], 'a1', 5)
+    const after = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Build the job.')),
+      row('a1', 'assistant', 'Built.'),
+      row('more', 'user', lead('Also time the CPU path.')),
+      row('a2', 'assistant', 'Timing it.')
+    ])
+    expect(withScreenPeerNotices(before, seen).map((message) => message.id)).toEqual([
+      'task',
+      'a1',
+      'peer-notice:observer-7:1'
+    ])
+    expect(withScreenPeerNotices(after, seen).map((message) => message.id)).toEqual([
+      'task',
+      'a1',
+      'peer-notice:observer-7:1',
+      'more',
+      'a2'
+    ])
+  })
+
+  it('draws a follow-up once, when the screen saw it before the transcript landed it', () => {
+    const before = foldMobileNativeChatMessages([row('task', 'user', lead('Build the job.')), row('a1', 'assistant', 'Built.')])
+    const first = observeScreenPeerNotices([], [{ sender: 'team-lead' }], null, 5)
+    const second = observeScreenPeerNotices(first, [{ sender: 'team-lead' }, { sender: 'team-lead' }], 'a1', 6)
+    const after = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Build the job.')),
+      row('a1', 'assistant', 'Built.'),
+      row('more', 'user', lead('Also time the CPU path.')),
+      row('a2', 'assistant', 'Timing it.')
+    ])
+    expect(withScreenPeerNotices(before, first).map((message) => message.id)).toEqual(['task', 'a1'])
+    expect(withScreenPeerNotices(after, second).map((message) => message.id)).toEqual(['task', 'a1', 'more', 'a2'])
+  })
+})
+

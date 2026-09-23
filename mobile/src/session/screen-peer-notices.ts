@@ -1,5 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { isPeerBoilerplateRow, peerBoilerplateRow } from './mobile-native-chat-peer-messages'
+import { isPeerBoilerplateRow, peerBoilerplateRow, teammateTaskSender } from './mobile-native-chat-peer-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 /**
@@ -87,10 +87,28 @@ export function withScreenPeerNotices(
     // At or after the anchor: the poll that first saw the screen row may
     // have run after the transcript already carried the message, in which
     // case the anchor IS the landed row.
-    const landed = folded.findIndex(
+    // A lead's message in a teammate session lands as the user's bubble
+    // rather than the boilerplate one. It is the same message only when the
+    // sender matches: every boilerplate bubble reads the same, a task does not.
+    const isOwnTask = (message: NativeChatMessage) => teammateTaskSender(message) === notice.sender
+    let landed = folded.findIndex(
       (message, position) =>
-        !claimed.has(position) && (anchorAt === null || position >= anchorAt) && isPeerBoilerplateRow(message)
+        !claimed.has(position) &&
+        (anchorAt === null || position >= anchorAt) &&
+        (isPeerBoilerplateRow(message) || isOwnTask(message))
     )
+    if (landed === -1 && anchorAt !== null && anchorAt > 0) {
+      // The screen may be read first after the transcript already moved past
+      // the task: opening a teammate tab soon after it spawned lands the
+      // snapshot before the first screen read, and the sighting is anchored
+      // after the row it saw. The latest unclaimed task from that sender is it.
+      for (let position = anchorAt - 1; position >= 0; position -= 1) {
+        if (!claimed.has(position) && isOwnTask(folded[position]!)) {
+          landed = position
+          break
+        }
+      }
+    }
     if (landed !== -1) {
       claimed.add(landed)
       continue
