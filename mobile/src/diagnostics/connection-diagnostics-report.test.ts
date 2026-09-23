@@ -202,4 +202,40 @@ describe('buildConnectionDiagnosticsReport', () => {
       expect(calls).toBeLessThanOrEqual(2)
     }
   )
+  describe('what keeps the app running with the screen off', () => {
+    const base = {
+      hostName: 'Host 1',
+      endpoint: '100.72.20.78:6768',
+      state: 'connected' as const,
+      reconnectAttempts: 0,
+      lastConnectedAt: NOW - 60_000,
+      platform: 'android 36',
+      appVersion: '0.9.50',
+      entries: [],
+      nowMs: NOW
+    }
+
+    it('says when the battery is optimised, which lets Android pause the app', () => {
+      const report = buildConnectionDiagnosticsReport({
+        ...base,
+        background: { serviceRunning: true, unrestricted: false }
+      })
+      expect(report).toContain(
+        'Background: service running · battery optimised (Android may pause the app)'
+      )
+    })
+
+    it('says when the service is not running on an unrestricted phone', () => {
+      const report = buildConnectionDiagnosticsReport({
+        ...base,
+        background: { serviceRunning: false, unrestricted: true }
+      })
+      expect(report).toContain('Background: service not running · battery unrestricted')
+    })
+
+    it('prints no background line where there is no background service (iOS)', () => {
+      expect(buildConnectionDiagnosticsReport({ ...base, background: null })).not.toContain('Background:')
+      expect(buildConnectionDiagnosticsReport(base)).not.toContain('Background:')
+    })
+  })
 })

@@ -1,6 +1,7 @@
 import { peekLiveHostClient } from '../transport/live-host-clients'
 import { AppState, Platform } from 'react-native'
 import {
+  isBackgroundLinkRunning,
   isBackgroundLinkSupported,
   isBackgroundLinkUnrestricted,
   requestBackgroundLinkUnrestricted,
@@ -33,11 +34,32 @@ import {
   type BackgroundNotificationWatcher
 } from './background-notification-watcher'
 import { releaseBackgroundLinkTask } from './background-link-task-hold'
+import { AppPauseDetector, appPauseLogEntry } from './app-pause-detector'
+import { defaultCancelTimer, defaultScheduleTimer } from '../transport/timer-scheduler'
 
 const SERVICE_TITLE = 'Code UI'
 const SERVICE_TEXT = 'Listening for agent notifications'
 
 let watcher: BackgroundNotificationWatcher | null = null
+
+// Once per process, beside the watcher: a pause is what stops it listening, and
+// nothing else in the log can show one.
+const pauseDetector = new AppPauseDetector({
+  now: Date.now,
+  setTimer: defaultScheduleTimer,
+  clearTimer: defaultCancelTimer,
+  onPause: (pause) => {
+    const entry = appPauseLogEntry(pause, backgroundDeliveryState())
+    log(entry.message, entry.detail)
+    void loadHosts()
+      .then((hosts) => {
+        for (const host of hosts) {
+          connectionLogStore.append(host.id, entry)
+        }
+      })
+      .catch(() => undefined)
+  }
+})
 
 function log(message: string, detail = ''): void {
   console.log(`[background-link] ${message}`, detail)
@@ -87,7 +109,18 @@ export function getBackgroundLinkWatcher(): BackgroundNotificationWatcher {
   AppState.addEventListener('change', (state) => {
     watcher?.setUiVisible(state === 'active')
   })
+  if (isBackgroundDeliveryAvailable()) {
+    pauseDetector.start()
+  }
   return watcher
+}
+
+/** What keeps the app running with the screen off, for the diagnostics report. */
+export function backgroundDeliveryState(): { serviceRunning: boolean; unrestricted: boolean } {
+  return {
+    serviceRunning: isBackgroundLinkRunning(),
+    unrestricted: isBackgroundDeliveryUnrestricted()
+  }
 }
 
 export function isBackgroundDeliveryAvailable(): boolean {

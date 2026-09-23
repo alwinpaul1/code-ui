@@ -16,6 +16,10 @@ import {
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
+import {
+  backgroundDeliveryState,
+  isBackgroundDeliveryAvailable
+} from '../src/background/background-link'
 import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
 import {
   readHydratedConnectionLog,
@@ -111,7 +115,8 @@ export default function ConnectionLogScreen() {
       desktopAppVersion,
       entries: snapshot.entries,
       activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath
+      pendingPath: snapshot.pendingPath,
+      background: isBackgroundDeliveryAvailable() ? backgroundDeliveryState() : null
     })
     await Clipboard.setStringAsync(report)
     setCopiedHostId(selected.id)

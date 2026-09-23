@@ -64,6 +64,7 @@ export type ConnectionDiagnosticCode =
   | 'direct-connected'
   | 'relay-credential-unavailable'
   | 'host-open-failed'
+  | 'app-paused'
 
 export type ConnectionLogEntry = {
   id: string

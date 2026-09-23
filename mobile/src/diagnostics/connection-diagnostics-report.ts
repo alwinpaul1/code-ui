@@ -28,6 +28,8 @@ export function buildConnectionDiagnosticsReport(args: {
   entries: readonly ConnectionLogEntry[]
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
+  /** Android only: what keeps the app running with the screen off. */
+  background?: { serviceRunning: boolean; unrestricted: boolean } | null
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -53,6 +55,15 @@ export function buildConnectionDiagnosticsReport(args: {
   if (args.activePath) {
     lines.push(
       `Path: active=${args.activePath}${args.pendingPath ? `; recovery=${args.pendingPath}` : ''}`
+    )
+  }
+  if (args.background) {
+    // Why: a report once showed three silent hours after a drop and could not
+    // say whether Android had paused the app; these are the two facts that decide it.
+    lines.push(
+      `Background: service ${args.background.serviceRunning ? 'running' : 'not running'} · battery ${
+        args.background.unrestricted ? 'unrestricted' : 'optimised (Android may pause the app)'
+      }`
     )
   }
   lines.push(
