@@ -22,11 +22,13 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '100%',
       gap: space.sm
     },
-    // A note the agent wrote and then worked past: a quote block, after the
-    // Claude app, so the closing answer stands apart from the running notes.
+    // A note the agent wrote and then worked past, set apart from the closing
+    // answer. Thin and faint, the weight of the Claude app's thinking line: the
+    // desktop hands Claude's thinking over as ordinary text, so it lands here
+    // too, and 3 px in the strong colour read heavy beside the app (2026-09-24).
     interimNote: {
-      borderLeftWidth: 3,
-      borderLeftColor: colors.borderStrong,
+      borderLeftWidth: 2,
+      borderLeftColor: colors.border,
       paddingLeft: space.md,
       gap: space.sm
     },
