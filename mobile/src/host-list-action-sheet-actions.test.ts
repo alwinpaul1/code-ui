@@ -170,7 +170,8 @@ describe('the Mac controls on the host sheet', () => {
 
   it.each(['win32', 'linux'] as const)('shows a %s user nothing about a Mac', (hostPlatform) => {
     const labels = buildWithMac({ hostPlatform }).actions.map((action) => action.label)
-    for (const label of MAC_LABELS) {
+    // The display rows are the same words on both hosts; these are the Mac's own.
+    for (const label of MAC_LABELS.filter((macLabel) => macLabel.includes('Mac'))) {
       expect(labels).not.toContain(label)
     }
   })
@@ -187,9 +188,71 @@ describe('the Mac controls on the host sheet', () => {
     expect(actions.find((action) => action.label === 'Reconnect')?.group).toBeUndefined()
   })
 
-  it('leaves the sheet ungrouped when there are no Mac rows to separate', () => {
-    const { actions } = buildWithMac({ hostPlatform: 'win32' })
+  it('leaves the sheet ungrouped when there are no host-control rows to separate', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'linux' })
     expect(actions.every((action) => action.group === undefined)).toBe(true)
+  })
+
+  describe('on a Windows PC', () => {
+    const labelsFor = (state: MacHostState) =>
+      buildWithMac({ hostPlatform: 'win32', state }).actions.map((action) => action.label)
+
+    it('offers lock, both display rows and the mute that applies, under its own group', () => {
+      const { actions } = buildWithMac({
+        hostPlatform: 'win32',
+        state: { lock: 'unlocked', display: 'unknown', mute: 'unmuted' }
+      })
+      expect(actions.map((action) => action.label)).toEqual([
+        'Reconnect',
+        'Disconnect',
+        'Lock PC',
+        'Sleep display',
+        'Wake display',
+        'Mute PC',
+        'Network diagnostics',
+        'Edit host',
+        'Remove'
+      ])
+      expect(actions.find((action) => action.label === 'Lock PC')?.group).toBe('Windows')
+    })
+
+    it('never offers Unlock, and says why when the PC is locked', () => {
+      const labels = labelsFor({ lock: 'locked', display: 'unknown', mute: 'muted' })
+      expect(labels.some((label) => /unlock/i.test(label) && label !== 'Locked · unlock at the PC')).toBe(false)
+      expect(labels).toContain('Locked · unlock at the PC')
+      expect(labels).toContain('Unmute PC')
+      const { actions, onMacAction } = buildWithMac({
+        hostPlatform: 'win32',
+        state: { lock: 'locked', display: 'unknown', mute: 'muted' }
+      })
+      const note = actions.find((action) => action.label === 'Locked · unlock at the PC')
+      expect(note?.disabled).toBe(true)
+      expect(note?.group).toBe('Windows')
+      note?.onPress()
+      expect(onMacAction).not.toHaveBeenCalled()
+    })
+
+    it('offers Lock when the PC would not say whether it is locked', () => {
+      const labels = labelsFor({ lock: 'unknown', display: 'unknown', mute: 'unknown' })
+      expect(labels).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC', 'Unmute PC']))
+      expect(labels).not.toContain('Locked · unlock at the PC')
+    })
+
+    it('says why it cannot act when the PC has no workspace to run in', () => {
+      const { actions, onMacAction } = buildWithMac({ hostPlatform: 'win32', worktreeId: null })
+      const lock = actions.find((action) => action.label === 'Lock PC')
+      expect(lock?.disabled).toBe(true)
+      expect(lock?.hint).toBe('Open a workspace on this PC first')
+      lock?.onPress()
+      expect(onMacAction).not.toHaveBeenCalled()
+    })
+
+    it('shows one checking row while the PC is asked', () => {
+      const { actions } = buildWithMac({ hostPlatform: 'win32', state: 'checking' })
+      const checking = actions.find((action) => action.label === 'Checking the PC…')
+      expect(checking?.loading).toBe(true)
+      expect(checking?.group).toBe('Windows')
+    })
   })
 
   it('says why it cannot act when the Mac has no workspace to run in', () => {

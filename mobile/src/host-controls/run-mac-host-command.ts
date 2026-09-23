@@ -6,6 +6,9 @@ export type MacHostCommandOutcome = { ok: true } | { ok: false; reason: string }
 /** Long enough for `osascript` to finish typing at the login window; after this the
  *  tab is closed whether or not the shell said it was done. */
 export const MAC_HOST_COMMAND_TIMEOUT_MS = 10_000
+/** A cold `powershell` start plus the C# each Windows script compiles; measured on
+ *  nothing yet (no Windows machine has run these), so given half as much again. */
+export const WINDOWS_HOST_COMMAND_TIMEOUT_MS = 15_000
 
 // Why a terminal at all: there is no generic "run this on the host" RPC. A startup
 // command in a throwaway tab is the only route. The command ends by printing a done
@@ -17,12 +20,15 @@ export async function runMacHostCommand(args: {
   command: string
   /** Set for unlock: no host text about this command may be shown. */
   secret?: boolean
+  timeoutMs?: number
+  /** How the host is named in the one failure this can report. */
+  hostNoun?: string
 }): Promise<MacHostCommandOutcome> {
   const outcome = await watchThrowawayTerminal({
     client: args.client,
     worktreeId: args.worktreeId,
     command: args.command,
-    timeoutMs: MAC_HOST_COMMAND_TIMEOUT_MS,
+    timeoutMs: args.timeoutMs ?? MAC_HOST_COMMAND_TIMEOUT_MS,
     secret: args.secret,
     read: (lines) => (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? true : null)
   })
@@ -35,5 +41,5 @@ export async function runMacHostCommand(args: {
   // outcomes ending in silence (2026-09-14 review).
   return outcome.answer === true
     ? { ok: true }
-    : { ok: false, reason: 'The Mac did not finish that. Check the desktop.' }
+    : { ok: false, reason: `The ${args.hostNoun ?? 'Mac'} did not finish that. Check the desktop.` }
 }

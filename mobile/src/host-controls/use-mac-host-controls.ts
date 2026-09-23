@@ -14,7 +14,16 @@ import type { MacHostSheetOptions } from './mac-host-sheet-actions'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
-import { runMacHostCommand } from './run-mac-host-command'
+import { WINDOWS_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
+import {
+  WINDOWS_HOST_ACTION_PROGRESS,
+  buildWindowsHostCommand
+} from './windows-host-commands'
+
+/** The hosts the group appears on: a Mac, and a Windows PC without Unlock. */
+function hasHostControls(platform: NodeJS.Platform | null | undefined): boolean {
+  return platform === 'darwin' || platform === 'win32'
+}
 
 type HostClientEntry = { hostId: string; client: RpcClient; state: ConnectionState }
 
@@ -101,16 +110,16 @@ export function useMacHostControls(args: {
         // Nothing to run the probe in; the rows say so themselves.
         return null
       }
-      return probeMacHostState({ client, worktreeId })
+      return probeMacHostState({ client, worktreeId, platform: platforms[hostId] ?? undefined })
     },
-    [worktreeIdForHost]
+    [platforms, worktreeIdForHost]
   )
 
   // Why on every open and never persisted: the Mac may have been locked or woken from
   // its own keyboard since last time, and a remembered answer would offer Lock to an
   // already-locked Mac.
   useEffect(() => {
-    if (!openHostId || platforms[openHostId] !== 'darwin') {
+    if (!openHostId || !hasHostControls(platforms[openHostId])) {
       return
     }
     let stale = false
@@ -129,18 +138,22 @@ export function useMacHostControls(args: {
     async (hostId: string, action: MacHostAction, command: string) => {
       const client = clientsRef.current.find((entry) => entry.hostId === hostId)?.client
       const worktreeId = worktreeIdForHost(hostId)
+      const windows = platforms[hostId] === 'win32'
       if (!client || !worktreeId) {
-        showToast('Open a workspace on this Mac first')
+        showToast(windows ? 'Open a workspace on this PC first' : 'Open a workspace on this Mac first')
         return
       }
-      showToast(MAC_HOST_ACTION_PROGRESS[action])
+      showToast(
+        windows && action !== 'unlock' ? WINDOWS_HOST_ACTION_PROGRESS[action] : MAC_HOST_ACTION_PROGRESS[action]
+      )
       const outcome = await runMacHostCommand({
         client,
         worktreeId,
         command,
         // The unlock command line carries the password, so nothing the host
         // says about it may reach a toast.
-        secret: action === 'unlock'
+        secret: action === 'unlock',
+        ...(windows ? { timeoutMs: WINDOWS_HOST_COMMAND_TIMEOUT_MS, hostNoun: 'PC' } : {})
       })
       if (!outcome.ok) {
         // The reason comes from the host's own error text, never from the command.
@@ -156,11 +169,18 @@ export function useMacHostControls(args: {
         void probe(hostId).then((state) => setMacState(state ?? 'checking'))
       }, REPROBE_DELAY_MS)
     },
-    [probe, showToast, worktreeIdForHost]
+    [platforms, probe, showToast, worktreeIdForHost]
   )
 
   const onAction = useCallback(
     (hostId: string, action: MacHostAction) => {
+      if (platforms[hostId] === 'win32') {
+        // Windows has no Unlock row (windows-host-commands.ts); refuse one that arrives anyway.
+        if (action !== 'unlock') {
+          void run(hostId, action, buildWindowsHostCommand(action))
+        }
+        return
+      }
       if (action !== 'unlock') {
         void run(hostId, action, buildMacHostCommand(action))
         return
@@ -175,7 +195,7 @@ export function useMacHostControls(args: {
         })
         .catch(() => showToast('Could not read the saved password on this phone.'))
     },
-    [run, showToast]
+    [platforms, run, showToast]
   )
 
   const macOptions: MacHostSheetOptions | undefined = openHostId
