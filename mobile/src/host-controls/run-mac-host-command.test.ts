@@ -155,4 +155,28 @@ describe('running a Mac control on the host', () => {
     await run(fake)
     expect(fake.methods()).toContain('terminal.closeTab')
   })
+
+  // 2026-09-23, from the phone: Wake display on a Windows host that did not
+  // answer said "The Mac did not answer."
+  it('names the PC, not the Mac, in every failure a Windows host can cause', async () => {
+    const silent = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('socket closed')
+      })
+    }
+    const refused = fakeClient([], {
+      'session.tabs.createTerminal': { id: '1', ok: false, error: { code: 'x', message: '' }, _meta: { runtimeId: 'r' } }
+    })
+    const unfinished = fakeClient([['PS C:\\>']])
+    const pending = [silent, refused.client, unfinished.client].map((client) =>
+      runMacHostCommand({ client, worktreeId: 'wt-1', command: COMMAND, hostNoun: 'PC' })
+    )
+    await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS + THROWAWAY_TERMINAL_POLL_MS)
+    const outcomes = await Promise.all(pending)
+    expect(outcomes).toEqual([
+      { ok: false, reason: 'The PC did not answer.' },
+      { ok: false, reason: 'The PC refused the command.' },
+      { ok: false, reason: 'The PC did not finish that. Check the desktop.' }
+    ])
+  })
 })

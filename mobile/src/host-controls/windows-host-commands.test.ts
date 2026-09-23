@@ -12,6 +12,7 @@ import {
   type WindowsHostAction
 } from './windows-host-commands'
 import {
+  WINDOWS_DISPLAY_TYPE,
   WINDOWS_HOST_STATE_PROBE_COMMAND,
   WINDOWS_HOST_STATE_SCRIPT,
   parseWindowsHostState
@@ -56,18 +57,45 @@ describe('the Windows host commands', () => {
     expect(windowsHostScript('unmute')).toContain('SetMute($false)')
   })
 
+  // 2026-09-24 review: adding the display read took the probe to 8,438
+  // characters. cmd.exe refuses a line past 8,191 (Microsoft KB830473), and
+  // Orca offers cmd as a Windows shell, so a cmd user's probe would print no
+  // marker and lose lock and mute along with the display.
+  it("fits cmd.exe's 8,191-character command line, so a PC whose terminal is cmd still answers", () => {
+    const CMD_EXE_MAX = 8191
+    for (const command of [WINDOWS_HOST_STATE_PROBE_COMMAND, ...ACTIONS.map(buildWindowsHostCommand)]) {
+      expect(command.length).toBeLessThanOrEqual(CMD_EXE_MAX)
+    }
+  })
+
   it('keeps the C# inside a single-quoted PowerShell string', () => {
     expect(WINDOWS_AUDIO_TYPE).not.toContain("'")
+    expect(WINDOWS_DISPLAY_TYPE).not.toContain("'")
   })
 })
 
 describe('reading what a Windows PC says about itself', () => {
   it('reads a locked, muted PC', () => {
-    expect(parseWindowsHostState(['CUIWIN lock=1 mute=true'])).toEqual({
+    expect(parseWindowsHostState(['CUIWIN lock=1 mute=true display=on'])).toEqual({
       lock: 'locked',
-      display: 'unknown',
+      display: 'on',
       mute: 'muted'
     })
+  })
+
+  // 2026-09-23, from the phone: both Sleep display and Wake display showed on
+  // a PC whose display was on, because the probe never asked.
+  it('reads the display as on, off, or dimmed (which is on), and unknown when Windows would not say', () => {
+    const display = (value: string) => parseWindowsHostState([`CUIWIN lock=0 mute=false display=${value}`]).display
+    expect(display('on')).toBe('on')
+    expect(display('off')).toBe('off')
+    expect(display('dimmed')).toBe('on')
+    expect(display('unknown')).toBe('unknown')
+  })
+
+  it('asks the power setting that owns the answer: the console display state', () => {
+    expect(WINDOWS_HOST_STATE_SCRIPT).toContain('6FE69556-704A-47A0-8F24-C28D936FDA47')
+    expect(WINDOWS_HOST_STATE_SCRIPT).toContain('PowerSettingRegisterNotification')
   })
 
   it('reads an unlocked PC whose output device would not say', () => {
@@ -137,6 +165,11 @@ describe('the Windows scripts under a real PowerShell', () => {
       .filter((line) => line.startsWith('Add-Type'))
     const unique = [...new Set(declarations)]
     const out = powershell(`$ErrorActionPreference='Stop'\n${unique.join('\n')}\n'compiled'`)
+    expect(out.trim()).toBe('compiled')
+  })
+
+  run('compiles the display power type the probe asks', () => {
+    const out = powershell(`$ErrorActionPreference='Stop'\nAdd-Type -TypeDefinition '${WINDOWS_DISPLAY_TYPE}'\n'compiled'`)
     expect(out.trim()).toBe('compiled')
   })
 

@@ -10,7 +10,7 @@ import {
   type MacHostAction
 } from './mac-host-commands'
 import { readMacHostPlatformResult, selectMacHostWorktreeId } from './mac-host-platform'
-import type { MacHostSheetOptions } from './mac-host-sheet-actions'
+import { macHostSheetState, type MacHostSheetOptions } from './mac-host-sheet-actions'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
@@ -46,6 +46,11 @@ export function useMacHostControls(args: {
   const clientsRef = useRef(args.clients)
   clientsRef.current = args.clients
   const { openHostId } = args
+  // Why read here and not in the probe: a sheet opened on an offline host must say
+  // so at once, and must ask the host again the moment it comes back.
+  const openHostConnection = openHostId
+    ? args.clients.find((entry) => entry.hostId === openHostId)?.state
+    : undefined
 
   const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) {
@@ -122,6 +127,12 @@ export function useMacHostControls(args: {
     if (!openHostId || !hasHostControls(platforms[openHostId])) {
       return
     }
+    if (openHostConnection !== 'connected') {
+      // Forget the last answer now, so the render where the host comes back
+      // shows "checking" and not what an earlier probe said.
+      setMacState('checking')
+      return
+    }
     let stale = false
     setMacState('checking')
     void probe(openHostId).then((state) => {
@@ -132,13 +143,20 @@ export function useMacHostControls(args: {
     return () => {
       stale = true
     }
-  }, [openHostId, platforms, probe])
+  }, [openHostId, openHostConnection, platforms, probe])
 
   const run = useCallback(
     async (hostId: string, action: MacHostAction, command: string) => {
-      const client = clientsRef.current.find((entry) => entry.hostId === hostId)?.client
+      const entry = clientsRef.current.find((candidate) => candidate.hostId === hostId)
+      const client = entry?.client
       const worktreeId = worktreeIdForHost(hostId)
       const windows = platforms[hostId] === 'win32'
+      if (entry?.state !== 'connected') {
+        // The rows say so already; a tap that lands anyway must not wait out a
+        // timeout to report a host that was never reachable.
+        showToast(windows ? 'The PC is offline.' : 'The Mac is offline.')
+        return
+      }
       if (!client || !worktreeId) {
         showToast(windows ? 'Open a workspace on this PC first' : 'Open a workspace on this Mac first')
         return
@@ -202,7 +220,7 @@ export function useMacHostControls(args: {
     ? {
         hostPlatform: platforms[openHostId] ?? null,
         worktreeId: worktreeIdForHost(openHostId),
-        state: macState,
+        state: macHostSheetState(openHostConnection, macState),
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)

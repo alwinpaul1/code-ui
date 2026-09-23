@@ -30,6 +30,7 @@ export async function runMacHostCommand(args: {
     command: args.command,
     timeoutMs: args.timeoutMs ?? MAC_HOST_COMMAND_TIMEOUT_MS,
     secret: args.secret,
+    ...(args.hostNoun ? { hostNoun: args.hostNoun } : {}),
     read: (lines) => (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? true : null)
   })
   if (!outcome.ok) {

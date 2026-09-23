@@ -12,6 +12,9 @@ export type ThrowawayTerminalWatch<T> = {
   /** The command carries a secret, so no host text may be surfaced about it.
    *  The unlock command has the user's password on its own command line. */
   secret?: boolean
+  /** How the host is named when it fails: 'Mac' unless told otherwise. A
+   *  Windows host once answered "The Mac did not answer." (2026-09-23). */
+  hostNoun?: string
   /** Reads the screen after each poll; a non-null answer ends the watch. */
   read: (lines: string[]) => T | null
 }
@@ -39,6 +42,7 @@ export type ThrowawayTerminalOutcome<T> =
 export async function watchThrowawayTerminal<T>(
   args: ThrowawayTerminalWatch<T>
 ): Promise<ThrowawayTerminalOutcome<T>> {
+  const host = args.hostNoun ?? 'Mac'
   let created
   try {
     created = await args.client.sendRequest('session.tabs.createTerminal', {
@@ -51,7 +55,7 @@ export async function watchThrowawayTerminal<T>(
   } catch {
     // Why a fixed string: the thrown error can carry the command, and the unlock
     // command carries the user's password. Nothing derived from it may be shown.
-    return { ok: false, reason: 'The Mac did not answer.' }
+    return { ok: false, reason: `The ${host} did not answer.` }
   }
   if (!created.ok) {
     // The host echoes the rejected request in some errors, and for unlock that
@@ -61,8 +65,8 @@ export async function watchThrowawayTerminal<T>(
     return {
       ok: false,
       reason: args.secret
-        ? 'The Mac refused the command.'
-        : created.error?.message || 'The Mac refused the command.'
+        ? `The ${host} refused the command.`
+        : created.error?.message || `The ${host} refused the command.`
     }
   }
   const tab = (created.result as { tab?: { id?: unknown; terminal?: unknown } } | null)?.tab

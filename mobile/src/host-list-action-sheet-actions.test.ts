@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getHostListActionSheetActions } from './host-list-action-sheet-actions'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './host-controls/mac-host-state'
+import { macHostSheetState } from './host-controls/mac-host-sheet-actions'
 import type { ConnectionState, HostProfile } from './transport/types'
 
 vi.mock('lucide-react-native', () => ({
@@ -12,6 +13,7 @@ vi.mock('lucide-react-native', () => ({
   PowerOff: vi.fn(),
   RefreshCw: vi.fn(),
   Sunrise: vi.fn(),
+  Unplug: vi.fn(),
   Volume2: vi.fn(),
   VolumeX: vi.fn()
 }))
@@ -130,7 +132,7 @@ function macLabelsOf(actions: { label: string }[]): string[] {
 function buildWithMac(mac: {
   hostPlatform: NodeJS.Platform | null
   worktreeId?: string | null
-  state?: MacHostState | 'checking'
+  state?: MacHostState | 'checking' | 'offline' | 'connecting'
   onForgetUnlockPassword?: () => void
 }) {
   const onMacAction = vi.fn()
@@ -247,12 +249,59 @@ describe('the Mac controls on the host sheet', () => {
       expect(onMacAction).not.toHaveBeenCalled()
     })
 
+    // 2026-09-23, from the phone: an offline PC offered all five rows, and
+    // Wake display then said "The Mac did not answer."
+    it('offers no PC action while the PC is offline, and says so, instead of rows that can only fail', () => {
+      const { actions, onMacAction } = buildWithMac({ hostPlatform: 'win32', state: 'offline' })
+      const windows = actions.filter((action) => action.group === 'Windows' || /PC|display/.test(action.label))
+      expect(windows.map((action) => action.label)).toEqual(['PC offline · connect first'])
+      expect(windows[0]).toMatchObject({ disabled: true, group: 'Windows' })
+      windows[0]?.onPress()
+      expect(onMacAction).not.toHaveBeenCalled()
+    })
+
+    it('offers only the display row that applies once the PC says whether its display is on', () => {
+      const on = labelsFor({ lock: 'unlocked', display: 'on', mute: 'unmuted' })
+      expect(on).toContain('Sleep display')
+      expect(on).not.toContain('Wake display')
+      const off = labelsFor({ lock: 'unlocked', display: 'off', mute: 'muted' })
+      expect(off).toContain('Wake display')
+      expect(off).not.toContain('Sleep display')
+      expect(off).toContain('Unmute PC')
+      expect(off).not.toContain('Mute PC')
+    })
+
     it('shows one checking row while the PC is asked', () => {
       const { actions } = buildWithMac({ hostPlatform: 'win32', state: 'checking' })
       const checking = actions.find((action) => action.label === 'Checking the PC…')
       expect(checking?.loading).toBe(true)
       expect(checking?.group).toBe('Windows')
     })
+  })
+
+  it('offers no Mac action while the Mac is offline', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'darwin', state: 'offline' })
+    const mac = actions.filter((action) => action.group === 'Mac' || /Mac|display/.test(action.label))
+    expect(mac.map((action) => action.label)).toEqual(['Mac offline · connect first'])
+  })
+
+  it('reads a host that is not connected as offline or connecting, whatever an earlier probe said', () => {
+    const probed: MacHostState = { lock: 'unlocked', display: 'on', mute: 'unmuted' }
+    for (const connection of ['disconnected', 'auth-failed', undefined] as const) {
+      expect(macHostSheetState(connection, probed)).toBe('offline')
+    }
+    for (const connection of ['reconnecting', 'connecting', 'handshaking'] as const) {
+      expect(macHostSheetState(connection, probed)).toBe('connecting')
+    }
+    expect(macHostSheetState('connected', probed)).toBe(probed)
+    expect(macHostSheetState('connected', 'checking')).toBe('checking')
+  })
+
+  it('says it is waiting, not "offline · connect first", while the host is already connecting', () => {
+    const { actions } = buildWithMac({ hostPlatform: 'win32', state: 'connecting' })
+    const waiting = actions.filter((action) => action.group === 'Windows')
+    expect(waiting.map((action) => action.label)).toEqual(['Waiting for the PC to connect…'])
+    expect(waiting[0]).toMatchObject({ disabled: true, loading: true })
   })
 
   it('says why it cannot act when the Mac has no workspace to run in', () => {

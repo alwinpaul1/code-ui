@@ -118,9 +118,9 @@ describe('asking a Windows PC what state it is in', () => {
   }
 
   it('runs the Windows probe, not the Mac one, and reads its marker', async () => {
-    const { state, calls } = await runWindowsProbe([[], ['CUIWIN lock=1 mute=false']])
+    const { state, calls } = await runWindowsProbe([[], ['CUIWIN lock=1 mute=false display=off']])
     expect(calls[0]?.params).toMatchObject({ command: WINDOWS_HOST_STATE_PROBE_COMMAND })
-    expect(state).toEqual({ lock: 'locked', display: 'unknown', mute: 'unmuted' })
+    expect(state).toEqual({ lock: 'locked', display: 'off', mute: 'unmuted' })
   })
 
   it('does not take a Mac marker for a Windows answer', async () => {

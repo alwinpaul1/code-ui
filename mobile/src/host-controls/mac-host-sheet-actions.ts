@@ -1,8 +1,11 @@
-import { Lock, LockOpen, MonitorOff, Sunrise, Volume2, VolumeX, type LucideIcon } from 'lucide-react-native'
+import { Lock, LockOpen, MonitorOff, Sunrise, Unplug, Volume2, VolumeX, type LucideIcon } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MAC_HOST_ACTION_LABELS, type MacHostAction } from './mac-host-commands'
+import type { ConnectionState } from '../transport/types'
 import type { MacHostState } from './mac-host-state'
 import { WINDOWS_HOST_ACTION_LABELS } from './windows-host-commands'
+
+export type MacHostSheetState = MacHostState | 'checking' | 'offline' | 'connecting'
 
 export type MacHostSheetOptions = {
   /** What the host said it runs. Anything but 'darwin' or 'win32' — including "not asked
@@ -10,8 +13,9 @@ export type MacHostSheetOptions = {
   hostPlatform: NodeJS.Platform | null
   /** The workspace whose terminal carries the command; null when the Mac has none. */
   worktreeId: string | null
-  /** What the Mac itself reported, or 'checking' while the probe is still out. */
-  state: MacHostState | 'checking'
+  /** What the Mac itself reported, 'checking' while the probe is still out, or
+   *  'offline' / 'connecting' while the host is not connected (macHostSheetState). */
+  state: MacHostSheetState
   onAction: (action: MacHostAction) => void
   /** Hold on Unlock Mac. Forgets the password saved on this phone. */
   onForgetUnlockPassword?: () => void
@@ -32,6 +36,8 @@ type HostControlCopy = {
   labels: Partial<Record<MacHostAction, string>>
   noWorktreeHint: string
   checkingLabel: string
+  offlineLabel: string
+  connectingLabel: string
   /** Whether Unlock exists. Windows takes a password only at its own sign-in screen,
    *  so a locked PC gets a row that says so instead (windows-host-commands.ts). */
   canUnlock: boolean
@@ -43,6 +49,8 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
     labels: MAC_HOST_ACTION_LABELS,
     noWorktreeHint: 'Open a workspace on this Mac first',
     checkingLabel: 'Checking the Mac…',
+    offlineLabel: 'Mac offline · connect first',
+    connectingLabel: 'Waiting for the Mac to connect…',
     canUnlock: true
   },
   win32: {
@@ -50,6 +58,8 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
     labels: WINDOWS_HOST_ACTION_LABELS,
     noWorktreeHint: 'Open a workspace on this PC first',
     checkingLabel: 'Checking the PC…',
+    offlineLabel: 'PC offline · connect first',
+    connectingLabel: 'Waiting for the PC to connect…',
     canUnlock: false
   }
 }
@@ -80,6 +90,28 @@ function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction
   return [...lock, ...display, ...mute]
 }
 
+/**
+ * What the sheet shows for a host: its probed state only while it is connected.
+ *
+ * A host that is not connected cannot be asked or told anything, yet its sheet
+ * offered every row (a probe of a dead link answers "unknown", and unknown
+ * offers both halves), and each tap then failed after its timeout: an offline
+ * PC offered Wake display and answered "The Mac did not answer." (2026-09-23).
+ * A link already dialling says it is waiting: "connect first" beside a sheet
+ * offering Disconnect read as the phone not knowing it was connecting.
+ */
+export function macHostSheetState(
+  connection: ConnectionState | undefined,
+  probed: MacHostState | 'checking'
+): MacHostSheetState {
+  if (connection === 'connected') {
+    return probed
+  }
+  return connection === 'connecting' || connection === 'handshaking' || connection === 'reconnecting'
+    ? 'connecting'
+    : 'offline'
+}
+
 /** The Mac or Windows group, or an empty list on every other host — a Linux user must
  *  not see a disabled row, they must see no group at all. */
 export function getMacHostSheetActions(
@@ -97,6 +129,19 @@ export function getMacHostSheetActions(
         group: copy.group,
         disabled: true,
         loading: true,
+        onPress: () => undefined
+      }
+    ]
+  }
+  if (options.state === 'offline' || options.state === 'connecting') {
+    const connecting = options.state === 'connecting'
+    return [
+      {
+        label: connecting ? copy.connectingLabel : copy.offlineLabel,
+        icon: Unplug,
+        group: copy.group,
+        disabled: true,
+        ...(connecting ? { loading: true } : {}),
         onPress: () => undefined
       }
     ]
