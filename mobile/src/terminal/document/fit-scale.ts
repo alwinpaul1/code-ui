@@ -195,9 +195,38 @@ export function commitFitScale(reason: string, attempts: number, gate: string) {
 }
 
 /**
+ * The refit every host needs: the viewport changed, so the scale the fit was computed against is
+ * gone. A keyboard opening or closing, an orientation change, a shell resizing the container.
+ *
+ * Owned here because the refit is this module's own work — it was reached through the WebView's
+ * message bridge only because that was where the listener happened to be installed, and the page
+ * had to copy the five calls into its mount to get it at all (ruling 24).
+ */
+export function startFitScale() {
+  const refit = () => {
+    // Code UI: the surface metrics are cached per gesture (7097feea), and a
+    // resize is exactly when they go stale — the keyboard took the height.
+    invalidateSurfaceMetrics()
+    applyFitScale('window-resize')
+    adjustRowsForViewport()
+    repositionOverlay()
+    clampPan()
+    updateTransform()
+  }
+  window.addEventListener('resize', refit)
+  scope.removeViewportRefit = () => {
+    window.removeEventListener('resize', refit)
+  }
+}
+
+/**
  * Ruling 21: the retry loop is abandoned by bumping the token it compares itself against, which is
  * how it already abandons a superseded attempt.
  */
 export function stopFitScale() {
   scope.fitRetryToken++
+  if (scope.removeViewportRefit) {
+    scope.removeViewportRefit()
+    scope.removeViewportRefit = null
+  }
 }

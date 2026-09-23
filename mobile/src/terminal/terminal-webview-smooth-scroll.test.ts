@@ -6,6 +6,7 @@
 // Verified against xterm 6.1 (mobile/src/terminal/terminal-webview-engine.generated.ts)
 // and the Galaxy S23 (120 Hz) report of jerky scrollback.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { generatedDocumentProgram } from './document/generated-document-region.test-support'
 import { XTERM_HTML } from './terminal-webview-html'
 
 const CELL_HEIGHT = 15
@@ -49,12 +50,6 @@ let renderListeners: (() => void)[] = []
 // releases them on the closing sequence (or a 1 s timeout). Claude Code wraps
 // every frame in it, and the relay can split a frame across chunks.
 let paintWithheld = false
-
-function iifeSource(): string {
-  const start = XTERM_HTML.indexOf('(function() {')
-  const end = XTERM_HTML.lastIndexOf('})();')
-  return XTERM_HTML.slice(start, end + '})();'.length)
-}
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
@@ -292,7 +287,7 @@ function boot(state: Partial<BufferState> = {}): void {
   buffer = { baseY: 5000, type: 'normal', viewportY: 2500, ...state }
   document.body.innerHTML = bodyMarkup()
   // eslint-disable-next-line no-new-func
-  new Function(iifeSource())()
+  new Function(generatedDocumentProgram())()
   window.dispatchEvent(
     new MessageEvent('message', {
       data: JSON.stringify({ cols: 40, initialData: '', rows: 24, type: 'init' })

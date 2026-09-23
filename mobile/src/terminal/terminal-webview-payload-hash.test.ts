@@ -28,8 +28,8 @@ import { XTERM_HTML } from './terminal-webview-html'
 // Then (upstream #21809, C7.5): the document's host seams, the per-module start
 // sequence and the scope reset (rulings 19-21), with this fork's own scroll state
 // on the scope and its frames through the document's frame registry, 740521 -> 743416.
-const EXPECTED_SHA256 = '366e879957b01cd5b8d10699fc5ec203e104adb18c90aa79d79b6b59800c12f6'
-const EXPECTED_LENGTH = 743416
+const EXPECTED_SHA256 = '52a7b2a9a4f2d3e746438e3832e5ed298668df2a1682e26936a958e8e19d2858'
+const EXPECTED_LENGTH = 746253
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {
