@@ -1,8 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { extname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { censusSourceFiles } from './test-support/census-source-files'
 
 // Why: src/shared/rpc-contract/*-params.ts hold the host's zod schemas. Bundling one
 // into the app would let client code call parse(), and requiredString is
@@ -12,16 +13,6 @@ const mobileRoot = fileURLToPath(new URL('..', import.meta.url))
 const contractRoot = resolve(mobileRoot, '..', 'src', 'shared', 'rpc-contract')
 const scannedRoots = ['app', 'src'].map((directory) => join(mobileRoot, directory))
 const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === 'node_modules' ? [] : sourceFiles(path)
-    }
-    return [path]
-  })
-}
 
 function targetsContract(path: string, specifier: string): boolean {
   if (!specifier.startsWith('.')) {
@@ -104,7 +95,7 @@ export function contractValueImports(path: string, source: string): string[] {
 // takes ~3s alone and over 5s under the full suite, which tripped vitest's per-test timeout.
 // Hoisting it out of the test body keeps the assertion identical and off that budget.
 const offenders = scannedRoots
-  .flatMap(sourceFiles)
+  .flatMap(censusSourceFiles)
   .filter((path) => sourceExtensions.has(extname(path)))
   .flatMap((path) =>
     contractValueImports(path, readFileSync(path, 'utf8')).map(
