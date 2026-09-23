@@ -137,8 +137,10 @@ export function claudeQueueViewFromScreen(
 /** Claude Code 2.1.277 closes its queue block with this row instead of putting
  *  "Enter to send them immediately" in the composer placeholder. Its presence
  *  is what tells the 2.1.277 shape from a 2.1.263 transcript echo, which draws
- *  a delivered message with the same column-zero marker. */
-const SEND_NOW_HINT = /^\s*ctrl\+x ctrl\+s to send now\s*$/i
+ *  a delivered message with the same column-zero marker. The chord differs by
+ *  build: "ctrl+x ctrl+s to send now" on 2.1.277, "ctrl+enter to send now" on
+ *  2.1.280 (2026-09-23), so any key chord before "to send now" closes it. */
+const SEND_NOW_HINT = /^\s*(?:(?:ctrl|shift|alt|option|opt|cmd|meta)\+\S+\s+)+to send now\s*$/i
 /** The working spinner Claude draws between the transcript and the queue:
  *  "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)". The glyph rotates; the
  *  ellipsis after the verb does not. */
@@ -149,7 +151,7 @@ function isQueueBound(line: string): boolean {
   return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
 
-/** Index of the "ctrl+x ctrl+s to send now" row directly above the composer,
+/** Index of the "… to send now" row directly above the composer,
  *  looking past the separator and Claude's right-aligned yank hint, or -1. */
 function sendNowHintAbove(lines: readonly string[], footer: number): number {
   for (let i = footer - 1; i >= Math.max(0, footer - 4); i--) {

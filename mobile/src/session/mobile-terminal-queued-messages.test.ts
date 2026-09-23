@@ -501,3 +501,40 @@ it('shows the phone’s own queued send as typed, not as the screen wrapped it',
     queue: [{ text: typed, images: [], caption: painted }, 'typed on the desk']
   })
 })
+
+// Claude Code 2.1.280 (this repo's own session, 2026-09-23, transcribed from the
+// user's screenshot of the terminal): the send-now row under a queued message
+// reads "ctrl+enter to send now", indented with the entry's wrapped lines, where
+// 2.1.277 drew "ctrl+x ctrl+s to send now". The parser knew only the older
+// chord, found no queue, and the chat drew the queued message as sent.
+describe('Claude Code 2.1.280 queue block', () => {
+  const screen = [
+    '  ⎿  $ cd "/Users/alwinpaul/Desktop/Project/Code UI/mobile" && (npx tsc --noEmit && npx vitest run',
+    '     (ctrl+b to run in background)',
+    '',
+    '✻ Gesticulating… (19m 29s · ↓ 51.3k tokens)',
+    '',
+    '❯ [Image #4] [Image #5] Also see here all 9 tests  message response sits above the user prompt in',
+    '  terminal but chatui shows wrong',
+    '  ctrl+enter to send now',
+    '───────────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '───────────────────────────────────────────────────────────────────────────────────────'
+  ]
+
+  it('reads a queued message that ends in the ctrl+enter send-now row', () => {
+    expect(claudeQueueViewFromScreen(screen).entries).toEqual([
+      '[Image #4] [Image #5] Also see here all 9 tests  message response sits above the user prompt in\nterminal but chatui shows wrong'
+    ])
+  })
+
+  it('still reads the 2.1.277 chord', () => {
+    const older = screen.map((line) => line.replace('ctrl+enter', 'ctrl+x ctrl+s'))
+    expect(claudeQueueViewFromScreen(older).entries).toHaveLength(1)
+  })
+
+  it('reads no queue when the send-now row is gone', () => {
+    const without = screen.filter((line) => !line.includes('to send now'))
+    expect(claudeQueueViewFromScreen(without).entries).toEqual([])
+  })
+})
