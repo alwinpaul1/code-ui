@@ -5,7 +5,6 @@
   ],
   "ignorePatterns": [
     "src/terminal/terminal-webview-engine.generated.ts",
-    "src/terminal/terminal-webview-document-factory.generated.ts",
     "src/components/pr-sidebar/mermaid-page-engine.generated.ts"
   ],
   "rules": {
