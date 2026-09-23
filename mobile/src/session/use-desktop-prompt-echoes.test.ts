@@ -611,3 +611,60 @@ describe('a prompt older than the loaded page', () => {
     expect(latest[0]!.baselineTailMessageId).toBeNull()
   })
 })
+
+// 2026-09-23, the same session: the user sent "Also i observed i dont get
+// notifications…" at 17:23:21.228, 1.6 s after the agent's "All 9 tests pass…"
+// row was written (17:23:19.618) and before the phone had loaded it. The chat
+// drew the message above that reply; the terminal drew it below. Anchored by
+// its send time, it follows the late row once it loads.
+describe('a message sent just after a reply the phone had not loaded yet', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const T = (clock: string) => Date.parse(`2026-09-23T${clock}Z`)
+  const toolResult = { ...assistant('bash-result'), timestamp: T('17:23:09.702') }
+  const reply = { ...assistant('all-9-pass'), timestamp: T('17:23:19.618') }
+  const nextCall = { ...assistant('bash-sightings'), timestamp: T('17:23:24.672') }
+  const prompts: DesktopPrompt[] = [
+    {
+      nonce: 'status:s:1790184201228:0',
+      text: 'Also i observed i dont get notifications when code ui is working in bg and not in recent apps',
+      at: T('17:23:21.228')
+    }
+  ]
+  function ProbeLate({ raw }: { raw: readonly NativeChatMessage[] }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw)
+    return null
+  }
+
+  it('sits below the reply written before it, once that reply loads', () => {
+    act(() => {
+      renderer = create(createElement(ProbeLate, { raw: [toolResult] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('bash-result')
+    act(() => {
+      renderer!.update(createElement(ProbeLate, { raw: [toolResult, reply, nextCall] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('all-9-pass')
+  })
+
+  it('still follows that reply when the hook named the row before it', () => {
+    // The hook names the transcript's last record at submit; a reply still
+    // streaming is not one yet, so the row it names is the tool result above.
+    const named = [{ ...prompts[0]!, nonce: 'status:s:1790184201228:1', anchorId: 'bash-result' }]
+    function ProbeNamed({ raw }: { raw: readonly NativeChatMessage[] }) {
+      latest = useDesktopPromptEchoes(named, raw, raw)
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(ProbeNamed, { raw: [toolResult] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('bash-result')
+    act(() => {
+      renderer!.update(createElement(ProbeNamed, { raw: [toolResult, reply, nextCall] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('all-9-pass')
+  })
+})

@@ -181,6 +181,14 @@ export function useDesktopPromptEchoes(
       if (anchorRow) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, anchorRow.id)
+        // The named row is the transcript's last RECORD at submit, and a reply
+        // still streaming is not a record yet: the hook named the tool result
+        // above "All 9 tests pass…", sent 1.6 s after it, and the message drew
+        // above the reply (2026-09-23). Still follow any row written before the
+        // send once it loads — the same clock, the desktop's, on both sides.
+        if (prompt.at !== undefined) {
+          timedByNonce.set(prompt.nonce, prompt.at)
+        }
       } else if (timedRow !== undefined) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, timedRow)
