@@ -8,7 +8,7 @@ failing-first test and has been checked on the phone in light and dark.
 
 | # | What the Claude app shows | Code UI today | Status |
 |---|---|---|---|
-| 1 | Claude's thinking text with a thin, low-contrast line down its left edge | The same paragraphs, with a heavier line | open |
+| 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100); telling thinking from notes needs the desktop to mark it (below) |
 | 2 | Tool-run labels: a single command by its description ("Ran Count K*_F changes in section3 accountings"), "Ran skill", a SendMessage as "Messaged @agent <summary>", a new file as "created a file" | "Ran a command" for every single command; no skill or message wording | open |
 | 3 | A green/red line-count chip on runs that create or edit files ("+292 −0") | No chip | open |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | open |
@@ -25,9 +25,13 @@ failing-first test and has been checked on the phone in light and dark.
 
 ## Evidence notes
 
-- **Thinking (1).** Both apps draw the transcript's `thinking` blocks with the
-  side line; the paragraphs read as rephrasings of the visible reply because
-  they are Claude's own reasoning summary, not the reply.
+- **Thinking (1).** The Claude app draws only `thinking` blocks with the side
+  line; the paragraphs read as rephrasings of the visible reply because they
+  are Claude's reasoning summary. Orca's reader turns a Claude `thinking`
+  block into a text block under the plain `assistant` role
+  (transcript-record-blocks.ts, claudeMessageRole), so the phone cannot tell
+  thinking from a note written between tools, and draws both under the note
+  line. Only an Orca change could mark them apart.
 - **Hand-backs (5).** Since Claude Code 2.1.272 every subagent report is a
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops
