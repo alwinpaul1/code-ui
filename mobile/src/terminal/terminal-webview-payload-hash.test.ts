@@ -21,8 +21,12 @@ import { XTERM_HTML } from './terminal-webview-html'
 // re-serialised buffer could sit in the queue forever and leave a blank view.
 // Then: nextQueuedWrite() clears the slot it consumed, so an already-submitted
 // chunk is not kept reachable until compaction (upstream 42a2c6510).
-const EXPECTED_SHA256 = '702a03ae215fd44f05c506459edd81e4973af1bffdc3cfe9ea401235dcaa69e2'
-const EXPECTED_LENGTH = 757055
+// Then (upstream #21804, C7.1): the script is generated from src/terminal/document/ and
+// reprinted by esbuild, 757055 -> 740521. The program is unchanged: the flip test holds it
+// token for token against this fork's pre-flip script, and the markup around it is
+// byte-identical.
+const EXPECTED_SHA256 = 'fbe80dc60c07da59028bf80ae8cfc6192ce3c14408e817df4e73c34398222d69'
+const EXPECTED_LENGTH = 740521
 
 describe('terminal WebView payload', () => {
   it('composes the expected document', () => {
