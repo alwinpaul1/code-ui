@@ -1,3 +1,4 @@
+import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
 
 /**
@@ -17,6 +18,14 @@ export function renderInline(text: string): string {
   while (match !== null) {
     output += escapeHtml(text.slice(lastIndex, match.index))
     const token = match[0]
+    // An underscore inside a word is text, as CommonMark reads it and as the chat renderer already
+    // did: taking `_case_` in `snake_case_name` for italics saved it back as `snake*case*name`.
+    if (isIntrawordUnderscoreToken(text, match.index, token)) {
+      output += escapeHtml(token)
+      lastIndex = pattern.lastIndex
+      match = pattern.exec(text)
+      continue
+    }
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image && isSafeUrl(image[2])) {

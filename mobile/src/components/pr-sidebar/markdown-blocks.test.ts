@@ -155,6 +155,24 @@ describe('parseMarkdownBlocks tables', () => {
 })
 
 describe('parseInline', () => {
+  it('reads an underscore inside a word as text, not emphasis, as CommonMark does', () => {
+    // PR comments name identifiers constantly: `snake_case_name` rendered with `case` in italics
+    // and `src/__init__.py` with `init` in bold (swept 2026-09-23 with the rich editor's fix).
+    for (const text of ['call snake_case_name now', 'edit src/__init__.py', 'AGENT_LAUNCH_REPLAY']) {
+      expect(parseInline(text).every((token) => token.kind === 'text')).toBe(true)
+      expect(parseInline(text).map((token) => token.text).join('')).toBe(text)
+    }
+  })
+
+  it('still reads underscores around a word as emphasis', () => {
+    expect(parseInline('say _hello_ and __bye__')).toEqual([
+      { kind: 'text', text: 'say ' },
+      { kind: 'italic', text: 'hello' },
+      { kind: 'text', text: ' and ' },
+      { kind: 'bold', text: 'bye' }
+    ])
+  })
+
   it('tokenizes bold, italic, code, and links; leaves plain runs as text', () => {
     expect(parseInline('a **b** c')).toEqual([
       { kind: 'text', text: 'a ' },
