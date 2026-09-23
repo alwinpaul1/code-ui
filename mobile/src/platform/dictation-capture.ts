@@ -18,10 +18,15 @@ import type { DictationCapture } from './dictation-capture-contract'
  * written, so the page can answer the same shape without the flow above knowing which it holds.
  */
 const nativeDictationCapture: DictationCapture = {
-  open: async () => {
+  open: async (options) => {
     const permission = await requestMicrophonePermissionsAsync()
     if (!permission.granted) {
       return { ok: false, reason: 'permission-denied' }
+    }
+    // The prompt can sit open for as long as the user reads it; a start let go of meanwhile must
+    // not take the phone's audio focus. See DictationCaptureOpenOptions.
+    if (options?.stillWanted?.() === false) {
+      return { ok: false, reason: 'cancelled' }
     }
     return (await initialize()) ? { ok: true } : { ok: false, reason: 'unavailable' }
   },

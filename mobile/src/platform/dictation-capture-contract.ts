@@ -39,7 +39,18 @@ export type DictationCaptureChunk = {
  *  the call at all rejects instead, with the reason on it. */
 export type DictationCaptureOpen =
   | { readonly ok: true }
-  | { readonly ok: false; readonly reason: 'permission-denied' | 'unavailable' }
+  | { readonly ok: false; readonly reason: 'permission-denied' | 'unavailable' | 'cancelled' }
+
+export type DictationCaptureOpenOptions = {
+  /**
+   * Asked between the permission and the engine: false means the start was cancelled while the OS
+   * prompt was up, and the engine must not open. Code UI, 2026-09-23 — the two became one call
+   * behind this seam, so the hook's own generation check only ran after the engine had opened, and
+   * on Android that initialize takes exclusive audio focus: background audio paused and resumed for
+   * a dictation the user had already let go of.
+   */
+  readonly stillWanted?: () => boolean
+}
 
 export type DictationCaptureSubscription = { readonly remove: () => void }
 
@@ -52,7 +63,7 @@ export type DictationKeepAwakeDevice = {
 
 export type DictationCapture = {
   /** Runs the OS permission prompt if there is one and brings the engine up. */
-  readonly open: () => Promise<DictationCaptureOpen>
+  readonly open: (options?: DictationCaptureOpenOptions) => Promise<DictationCaptureOpen>
   /** Starts producing chunks. False is a device that would not, which rolls the start back. */
   readonly begin: () => boolean
   /**

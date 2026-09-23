@@ -137,7 +137,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     setStatus('starting')
     let opened
     try {
-      opened = await capture.open()
+      opened = await capture.open({
+        stillWanted: () => generationRef.current === generation && enabledRef.current
+      })
     } catch (err) {
       // A capture the host refused outright, which on the page is a route that was never granted
       // the audio verbs. Back to idle before it is rethrown: the caller toasts the shell's own
