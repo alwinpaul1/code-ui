@@ -144,8 +144,9 @@ describe('agent prose the reader wants to copy', () => {
     // on "Stopped. State of things:" selected down to "Checked on the device:"
     // and the handle would not drag into the bullets below it. Each list item
     // was its own Text in a row View, so the paragraph run ended at the list.
-    // The list, and a quote, now join the run as spans. Lines are from that
-    // screen.
+    // The list now joins the run as spans. A quote did too until 2026-09-24,
+    // when its per-line bar broke on every wrap; it is its own block again,
+    // selectable on its own. Lines are from that screen.
     act(() => {
       renderer = create(
         createElement(MobileMarkdown, {
@@ -167,7 +168,8 @@ describe('agent prose the reader wants to copy', () => {
     const selectableTexts = renderer!.root
       .findAllByType('Text' as never)
       .filter((node) => node.props.selectable === true)
-    expect(selectableTexts).toHaveLength(1)
+    // The paragraphs and the list, then the quote, then the closing line.
+    expect(selectableTexts).toHaveLength(3)
     // In reading order, spans included: what a copy of the selection carries.
     const inOrder = (node: ReactTestInstance): string =>
       node.children
@@ -176,10 +178,10 @@ describe('agent prose the reader wants to copy', () => {
     const flat = inOrder(selectableTexts[0]!)
     expect(flat).toContain('Checked on the device:')
     expect(flat).toContain('left it when the turn took it.')
-    expect(flat).toContain('Not checked live: tapping Send now on the phone.')
-    // The bullets are still bullets, and the quote still a quote, when copied.
+    // The bullets are still bullets when copied.
     expect(flat).toMatch(/•\s+Queue box is empty of the old stale entries\.\n•\s+A phone send/)
-    expect(flat).toMatch(/▎ The row it writes is pinned by a test using the real transcript row\./)
+    expect(inOrder(selectableTexts[1]!)).toBe('The row it writes is pinned by a test using the real transcript row.')
+    expect(inOrder(selectableTexts[2]!)).toContain('Not checked live: tapping Send now on the phone.')
   })
 
   it('starts a new run at a heading once the run behind it is long, and not before', () => {

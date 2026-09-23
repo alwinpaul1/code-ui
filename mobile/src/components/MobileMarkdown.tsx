@@ -72,8 +72,6 @@ const LIST_BULLETS = ['•', '◦', '▪']
  *  size. Narrow on purpose: at ~40 columns a desktop-sized indent leaves a
  *  third-level item too little room to read. */
 const LIST_INDENT_TEXT = '    '
-/** The bar a quote carries on each of its lines inside the prose run. */
-const QUOTE_BAR = '▎ '
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
@@ -377,16 +375,6 @@ function MobileMarkdownInner({
                         </Fragment>
                       )
                     })
-                  ) : member.type === 'quote' ? (
-                    <Text style={styles.quoteText}>
-                      {member.text.split('\n').map((line, lineIndex) => (
-                        <Fragment key={lineIndex}>
-                          {lineIndex > 0 ? '\n' : null}
-                          <Text style={styles.quoteBar}>{QUOTE_BAR}</Text>
-                          {renderInline(styles, line, onOpenFile, chipScale, chipMaxChars)}
-                        </Fragment>
-                      ))}
-                    </Text>
                   ) : member.type === 'image' ? (
                     <MobileMarkdownImage
                       alt={member.alt}
@@ -420,6 +408,17 @@ function MobileMarkdownInner({
                 onOpen={() => openMarkdownHref(block.url, onOpenFile)}
                 styles={styles}
               />
+            </View>
+          )
+        }
+        if (block.type === 'quote') {
+          // One bar down the whole quote, text indented beside it, as the Claude
+          // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
+          return (
+            <View key={index} style={styles.quoteBlock}>
+              <Text selectable={selectable} style={[styles.quoteText, proseScale]}>
+                {renderInline(styles, block.text, onOpenFile, chipScale, chipMaxChars)}
+              </Text>
             </View>
           )
         }

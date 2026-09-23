@@ -15,6 +15,12 @@ import type { MobileMarkdownBlock } from './mobile-markdown-parser'
  * the paragraph above a list stopped at the list's first bullet (2026-09-19,
  * screenshot of the phone). The price is the hanging indent — a span has no
  * margin, so a wrapped item continues under its bullet, as plain text does.
+ * A quote did too, and left it again on 2026-09-24: a span cannot carry a
+ * bar down its full height, so each paragraph got a bar stub on its first
+ * line, each blank `>` line a lone bar, and wrapped lines none (a letter the
+ * agent drafted, from the phone). The Claude app draws one bar with the text
+ * indented beside it; that needs a View, so a quote is a block of its own and
+ * a selection stops at it, as at a fence.
  *
  * An image the phone cannot draw joins as a link span. A drawn figure does
  * NOT: it was tried as an inline view inside the Text (so a selection could
@@ -36,7 +42,7 @@ import type { MobileMarkdownBlock } from './mobile-markdown-parser'
  */
 export type ProseBlock = Extract<
   MobileMarkdownBlock,
-  { type: 'paragraph' | 'heading' | 'rule' | 'image' | 'list' | 'quote' }
+  { type: 'paragraph' | 'heading' | 'rule' | 'image' | 'list' }
 >
 
 export type ProseRun = {
@@ -78,7 +84,6 @@ export function buildProseRuns(
     block.type === 'heading' ||
     block.type === 'rule' ||
     block.type === 'list' ||
-    block.type === 'quote' ||
     (block.type === 'image' && !drawsImage(block.url))
   const runs: ProseRun[] = []
   for (let index = 0; index < blocks.length; index += 1) {

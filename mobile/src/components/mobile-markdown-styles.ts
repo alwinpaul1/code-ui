@@ -112,17 +112,19 @@ export function makeMarkdownStyles(theme: Theme) {
       color: colors.accentText,
       textDecorationLine: 'underline'
     },
-    /** A quote inside the prose run: muted text behind a bar span on each
-     *  line (`quoteBar`). It was a View with a left border; see MobileMarkdown
-     *  for why it is a span now (2026-09-19). */
+    /** A quote: one bar down its whole height and the text indented beside
+     *  it, as the Claude app draws it (2026-09-24). A span-per-line bar broke
+     *  on every wrap; see mobile-markdown-prose-runs.ts. */
+    quoteBlock: {
+      borderLeftWidth: 3,
+      borderLeftColor: colors.borderStrong,
+      paddingLeft: space.md
+    },
     quoteText: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
       lineHeight: MARKDOWN_BASE_SIZE + 10,
-      color: colors.textSecondary
-    },
-    quoteBar: {
-      color: colors.borderStrong
+      color: colors.text
     },
     codeBlock: {
       backgroundColor: colors.codeBg,
