@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 import { Search, X } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
 // Why: toolbar/list chrome paints and settles after the open tap; native
 // autoFocus alone often fails to raise the soft keyboard on iOS/Android.
@@ -122,7 +123,10 @@ export function MobileSearchField({
           margin: 0,
           color: colors.text,
           fontFamily: fonts.regular,
-          fontSize: type.body.size,
+          // Why: the themed body size, raised to the seam's web floor so a focus inside the
+          // page does not zoom it. Natively the seam is the legacy body size, which the themed
+          // one already clears, so the phone renders exactly what it did.
+          fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE),
           // Why: Android TextInput draws extra vertical padding that misaligns the
           // icon/clear chip unless we zero it out.
           includeFontPadding: false,
