@@ -221,9 +221,9 @@ describe('the bundled rich Markdown editor document', () => {
     // three about the artifact that ships rather than about a bundle this case built for itself.
     const { script, inputs } = await richMarkdownEditorBundle()
     expect(inputs.filter((input) => input.includes('node_modules'))).toEqual([])
-    // CODE UI 2026-09-23: 23, upstream's 22 plus `markdown-reflow.ts`, this fork's wrapped-prose
+    // CODE UI 2026-09-23: 24, upstream's 23 plus `markdown-reflow.ts`, this fork's wrapped-prose
     // reflow (it lived in the script strings before #21969 made them modules).
-    expect(inputs).toHaveLength(23)
+    expect(inputs).toHaveLength(24)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.
