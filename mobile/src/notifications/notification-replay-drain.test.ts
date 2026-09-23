@@ -80,6 +80,18 @@ describe('draining a planned replay batch', () => {
     expect(run).toMatchObject({ drained: false, contiguousSeq: 5 })
   })
 
+  it('never falls back to a silenced word the desk dismissed later in the batch', async () => {
+    const dismissed = { type: 'dismiss' as const, notificationId: 'agent:6', notificationSeq: 7 }
+    const events = [note(6, 'w1'), dismissed, note(8, 'w2'), note(9, 'w1')] as NotificationEvent[]
+    const run = await drain(events, { failOn: (seq, presentation) => seq === 8 && presentation === 'show' })
+    // 6 is resolved by its dismiss, so it settled at once and never waited.
+    expect(run.delivered).toEqual([
+      [6, 'silent'],
+      [7, 'show']
+    ])
+    expect(run).toMatchObject({ drained: false, contiguousSeq: 7 })
+  })
+
   it('posts nothing more once the host is torn down mid-batch, and no fallback', async () => {
     const run = await drain([note(6, 'w1'), note(7, 'w2'), note(8, 'w1')], { disposeAfter: 1 })
     expect(run.delivered).toEqual([[7, 'show']])

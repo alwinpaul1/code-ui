@@ -22,8 +22,13 @@ type ReplayEvent = NotificationEvent | DismissNotificationEvent
 
 /** One event's plan. A 'silent' step names the event that supersedes it — its
  *  banner's last event in the batch — because it only counts as delivered once
- *  that one lands (see drainReplayBatch). */
-export type ReplayStep = { presentation: ReplayPresentation; supersededBy: number | null }
+ *  that one lands (see drainReplayBatch). `resolved` says a later dismiss in the
+ *  batch retires it: such a word waits for nothing and may never post. */
+export type ReplayStep = {
+  presentation: ReplayPresentation
+  supersededBy: number | null
+  resolved: boolean
+}
 
 /**
  * Decide, for each event of one catch-up batch, whether it may still pop.
@@ -64,7 +69,8 @@ export function planReplayPresentation(events: readonly ReplayEvent[]): ReplaySt
   const lastOfBanner = new Map<string, number>()
   const plan: ReplayStep[] = Array.from({ length: events.length }, () => ({
     presentation: 'show',
-    supersededBy: null
+    supersededBy: null,
+    resolved: false
   }))
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
@@ -84,14 +90,15 @@ export function planReplayPresentation(events: readonly ReplayEvent[]): ReplaySt
       continue
     }
     const banner = bannerKey(event)
+    const resolved = event.notificationId != null && dismissedLater.has(event.notificationId)
     const last = lastOfBanner.get(banner)
     if (last !== undefined) {
-      plan[index] = { presentation: 'silent', supersededBy: last }
+      plan[index] = { presentation: 'silent', supersededBy: last, resolved }
       continue
     }
     lastOfBanner.set(banner, index)
-    if (event.notificationId != null && dismissedLater.has(event.notificationId)) {
-      plan[index] = { presentation: 'retire', supersededBy: null }
+    if (resolved) {
+      plan[index] = { presentation: 'retire', supersededBy: null, resolved }
     }
   }
   return plan

@@ -40,7 +40,14 @@ export type ReplayDrainResult = {
  * And when the batch does break off on a failed show, the newest silenced word
  * of each session whose superseder never landed gets one try at a banner of its
  * own: the one the old flow would have left on screen. Not after a teardown — a
- * torn-down host must stop pushing.
+ * torn-down host must stop pushing. Never a word dismissed later in the batch:
+ * those settle at once and never wait.
+ *
+ * Accepted limit: if the PROCESS dies mid-batch (no throw to catch) and the
+ * desktop restarts before the next catch-up, a waiting word is gone with the
+ * desktop's buffer, where the old flow had posted it before dying. Closing that
+ * means posting every superseded word eagerly, which is the popup flood this
+ * exists to stop. Without the desktop restart the held watermark replays it.
  */
 export async function drainReplayBatch(deps: ReplayDrainDependencies): Promise<ReplayDrainResult> {
   const { events, steps } = deps
@@ -74,8 +81,12 @@ export async function drainReplayBatch(deps: ReplayDrainDependencies): Promise<R
       if (deps.isDisposed()) {
         return { drained: false, contiguousSeq }
       }
-      const step = steps[index] ?? { presentation: 'show', supersededBy: null }
-      if (step.presentation === 'silent' && step.supersededBy != null) {
+      const step = steps[index] ?? { presentation: 'show', supersededBy: null, resolved: false }
+      // A word the desk dismissed later in this batch is resolved whatever its
+      // superseder does, so it settles now. Left waiting, the fallback below
+      // could post it after its dismiss had already run, and nothing would ever
+      // retire that banner (third review, 2026-09-23).
+      if (step.presentation === 'silent' && step.supersededBy != null && !step.resolved) {
         const list = waiting.get(step.supersededBy) ?? []
         list.push(index)
         waiting.set(step.supersededBy, list)
