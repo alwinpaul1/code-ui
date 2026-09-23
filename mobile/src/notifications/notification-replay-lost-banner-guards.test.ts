@@ -259,7 +259,7 @@ describe('a replay never drops a banner the user needs', () => {
     expect(persistedSeq()).toBe(8)
   })
 
-  it('a failed show after a silent one quarantines at the silent seq, and the next catch-up posts it', async () => {
+  it('a failed show falls back to the older word it silenced, quarantines there, and the next catch-up posts the newer one', async () => {
     const host = makeHost()
     const all = [agentDone(6, 'wt-x', 2, 'x: first'), agentDone(7, 'wt-x', 1, 'x: second')]
     host.setMissed((lastSeen) => all.filter((e) => e.notificationSeq > lastSeen))
@@ -282,7 +282,9 @@ describe('a replay never drops a banner the user needs', () => {
       .mock.calls.filter((c) => c[0] === 'notifications.getMissedSince')
       .map((c) => (c[1] as { lastSeenSeq: number }).lastSeenSeq)
     expect(asked).toEqual([5, 6])
-    expect(postedBodies()).toEqual(['x: second', 'x: second'])
+    // The failed attempt, the older word posted in its place, then the newer word
+    // once the next catch-up brings it back.
+    expect(postedBodies()).toEqual(['x: second', 'x: first', 'x: second'])
     expect(persistedSeq()).toBe(7)
   })
 

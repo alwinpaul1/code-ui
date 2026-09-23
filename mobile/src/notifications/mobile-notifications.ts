@@ -15,6 +15,7 @@ import {
   type DismissNotificationEvent,
   type NotificationEvent
 } from './local-notification-scheduling'
+import { drainReplayBatch } from './notification-replay-drain'
 import { planReplayPresentation, type ReplayPresentation } from './notification-replay-plan'
 import { persistSeenKeys } from './notification-seen-store'
 import {
@@ -27,7 +28,9 @@ import {
   catchUpWatermarkSeq,
   enqueueHostDelivery,
   getHostNotificationSession,
+  holdReplayWatermark,
   quarantineCatchUpWatermark,
+  releaseReplayWatermark,
   releaseQueuedShowNotificationId,
   resolveCatchUpQuarantine,
   saveWatermark,
@@ -265,37 +268,34 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       // in the batch and a session's superseded words are delivered without a
       // banner (see planReplayPresentation). Planned once over the whole batch,
       // because both are facts about events after this one.
-      const plan = planReplayPresentation(missed as (NotificationEvent | DismissNotificationEvent)[])
-      const presentationAt = (index: number): ReplayPresentation => {
-        const planned = plan[index] ?? 'show'
-        return planned === 'show' && appIsOpen() ? 'quiet' : planned
+      const events = missed as (NotificationEvent | DismissNotificationEvent)[]
+      const { drained, contiguousSeq } = await drainReplayBatch({
+        events,
+        steps: planReplayPresentation(events),
+        askedFrom: askFrom,
+        presentationFor: (planned) => (planned === 'show' && appIsOpen() ? 'quiet' : planned),
+        deliver: deliverMissedEvent,
+        isDisposed: () => disposed,
+        // Not persisted here: every delivery already writes the clamped value.
+        holdWatermarkAt: (seq) => holdReplayWatermark(session, seq)
+      })
+      // The hold belongs to this batch. Quarantined below if it broke off, at the
+      // point it really reached.
+      if (drained) {
+        releaseReplayWatermark(session, hostId)
+      } else {
+        session.replayHoldSeq = null
       }
       // Advances only past events this batch settled, so a teardown or a failing show
       // quarantines the true contiguous point instead of the range it never reached.
-      let contiguousSeq = askFrom
-      let drained = false
-      try {
-        for (const [index, raw] of missed.entries()) {
-          // Re-checked per event: the batch can start before a teardown and still be
-          // draining after it, and a torn-down host must stop pushing.
-          if (disposed) {
-            return
-          }
-          const event = raw as NotificationEvent | DismissNotificationEvent
-          await deliverMissedEvent(event, presentationAt(index))
-          contiguousSeq = event.notificationSeq ?? contiguousSeq
-        }
-        drained = true
-      } finally {
-        if (drained) {
-          resolveCatchUpQuarantine(session, hostId)
-        } else {
-          quarantineCatchUpWatermark(session, hostId, contiguousSeq)
-        }
+      if (drained) {
+        resolveCatchUpQuarantine(session, hostId)
+      } else {
+        quarantineCatchUpWatermark(session, hostId, contiguousSeq)
       }
-      // Why swallowed here: the `finally` above already recorded the contiguous point,
-      // and the only caller is an un-awaited 'ready' continuation — letting a failed
-      // show escape turns every one into an unhandled rejection (a RN redbox).
+      // Why swallowed here: the drain already recorded the contiguous point, and the
+      // only caller is an un-awaited 'ready' continuation — letting a failure escape
+      // turns every one into an unhandled rejection (a RN redbox).
     }).catch(() => {})
   }
 

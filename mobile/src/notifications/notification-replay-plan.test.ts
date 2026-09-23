@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planReplayPresentation } from './notification-replay-plan'
+import { planReplayPresentation as planSteps } from './notification-replay-plan'
 import type { DismissNotificationEvent, NotificationEvent } from './local-notification-scheduling'
 
 function note(id: string | undefined, worktreeId: string | undefined, extra: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -22,6 +22,10 @@ function dismiss(id: string): DismissNotificationEvent {
   return { type: 'dismiss', notificationId: id }
 }
 
+function planReplayPresentation(events: (NotificationEvent | DismissNotificationEvent)[]) {
+  return planSteps(events).map((step) => step.presentation)
+}
+
 describe('which replayed notifications may still pop', () => {
   it('plans nothing for an empty replay', () => {
     expect(planReplayPresentation([])).toEqual([])
@@ -37,6 +41,14 @@ describe('which replayed notifications may still pop', () => {
 
   it('does not let a dismiss that came BEFORE a reused id touch the later notification', () => {
     expect(planReplayPresentation([dismiss('a'), note('a', 'w1')])).toEqual(['show', 'show'])
+  })
+
+  it('names, for each silenced word, the last word of its banner that supersedes it', () => {
+    expect(
+      planSteps([note('a', 'w1'), note('b', 'w1'), bell('w1'), note('c', 'w1'), bell('w1')]).map(
+        (step) => step.supersededBy
+      )
+    ).toEqual([3, 3, 4, null, null])
   })
 
   it('keeps only the last word of each session', () => {

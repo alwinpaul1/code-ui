@@ -104,9 +104,33 @@ export function createSeenNotificationGuard(): {
   clear: () => void
   /** Oldest first, as persisted (notification-seen-store.ts). */
   keys: () => string[]
+  /** Merge keys a previous run stored as OLDER than anything this run added.
+   *  A read that lands late (past WATERMARK_SEED_TIMEOUT_MS) otherwise appended
+   *  the previous run's keys after this run's, and the caps — here and in the
+   *  store — then evicted exactly what this run had just shown. */
+  seedOlder: (keys: readonly string[]) => void
 } {
-  const seen = new Set<string>()
+  let seen = new Set<string>()
+  function trim(): void {
+    while (seen.size > RECENTLY_SEEN_CAP) {
+      const first = seen.values().next().value
+      if (first === undefined) {
+        return
+      }
+      seen.delete(first)
+    }
+  }
   return {
+    seedOlder(keys: readonly string[]): void {
+      const merged = new Set<string>(keys)
+      for (const key of seen) {
+        // Re-inserted, so a key both runs hold takes this run's newer position.
+        merged.delete(key)
+        merged.add(key)
+      }
+      seen = merged
+      trim()
+    },
     has(id: string): boolean {
       return seen.has(id)
     },
@@ -146,6 +170,9 @@ export type HostNotificationSession = {
   // Highest seq known delivered CONTIGUOUSLY, frozen here while a catch-up is
   // outstanding; null when none has failed. See quarantineCatchUpWatermark.
   catchUpQuarantineSeq: number | null
+  // Held while a replay batch drains and an earlier event is still waiting on
+  // the one that supersedes it; null otherwise. See holdReplayWatermark.
+  replayHoldSeq: number | null
   seen: ReturnType<typeof createSeenNotificationGuard>
   // False only until the host's first subscription reaches 'ready' — a true cold open.
   connectedBefore: boolean
@@ -173,6 +200,7 @@ export function getHostNotificationSession(hostId: string): HostNotificationSess
       lastDeliveredSeq: 0,
       lastDeliveredEpoch: null,
       catchUpQuarantineSeq: null,
+      replayHoldSeq: null,
       seen: createSeenNotificationGuard(),
       connectedBefore: false,
       hadStoredWatermark: false,
@@ -295,9 +323,36 @@ export function resolveCatchUpQuarantine(session: HostNotificationSession, hostI
  * watermark, clamped to any open gap.
  */
 export function catchUpWatermarkSeq(session: HostNotificationSession): number {
-  return session.catchUpQuarantineSeq == null
-    ? session.lastDeliveredSeq
-    : Math.min(session.catchUpQuarantineSeq, session.lastDeliveredSeq)
+  let seq = session.lastDeliveredSeq
+  if (session.catchUpQuarantineSeq != null) {
+    seq = Math.min(seq, session.catchUpQuarantineSeq)
+  }
+  if (session.replayHoldSeq != null) {
+    seq = Math.min(seq, session.replayHoldSeq)
+  }
+  return seq
+}
+
+/**
+ * Keep the persisted watermark at or below `seq` while the replay batch drains.
+ *
+ * Why (2026-09-23): a replayed word superseded later in the batch is only
+ * delivered once its superseder lands, but the events between them deliver and
+ * advance the watermark as they go. Persisted unclamped, a process death in that
+ * window resumes past the waiting word. Its own field rather than the quarantine,
+ * because it belongs to one batch and must not outlive it.
+ */
+export function holdReplayWatermark(session: HostNotificationSession, seq: number): void {
+  session.replayHoldSeq = session.replayHoldSeq == null ? seq : Math.min(session.replayHoldSeq, seq)
+}
+
+/** End the batch's hold, persisting what it held back. */
+export function releaseReplayWatermark(session: HostNotificationSession, hostId: string): void {
+  if (session.replayHoldSeq == null) {
+    return
+  }
+  session.replayHoldSeq = null
+  void saveWatermark(hostId, { seq: catchUpWatermarkSeq(session), epoch: session.lastDeliveredEpoch })
 }
 
 // Why (#8591): the desktop's seq counter restarts at 0 every launch, so a watermark
@@ -325,6 +380,7 @@ export function adoptNotificationEpoch(
   session.seen.clear()
   // The quarantined gap indexed the dead counter; the watermark it guarded is gone too.
   session.catchUpQuarantineSeq = null
+  session.replayHoldSeq = null
   session.lastDeliveredEpoch = epoch
   void saveWatermark(hostId, { seq: 0, epoch })
 }
@@ -392,9 +448,7 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
     // new counter has never shown, so they are left out.
     const stored = await seenRead
     if (stored && stored.epoch === session.lastDeliveredEpoch) {
-      for (const key of stored.keys) {
-        session.seen.add(key)
-      }
+      session.seen.seedOlder(stored.keys)
     }
   })
   // The late seed still applies when it eventually lands; the timeout only stops it

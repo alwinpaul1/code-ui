@@ -11,13 +11,19 @@ import type { DismissNotificationEvent, NotificationEvent } from './local-notifi
  *   process left in the tray is cleared, because the session's last word in
  *   this replay was dismissed at the desk.
  *
- * Every presentation moves the watermark and the seen-set past the event: a
- * replay's job is to bring them up to date, and a banner is only part of that
- * when it is still news.
+ * Every presentation moves the watermark and the seen-set past the event — a
+ * 'silent' one once the event superseding it lands — because a replay's job is
+ * to bring them up to date, and a banner is only part of that when it is still
+ * news.
  */
 export type ReplayPresentation = 'show' | 'quiet' | 'silent' | 'retire'
 
 type ReplayEvent = NotificationEvent | DismissNotificationEvent
+
+/** One event's plan. A 'silent' step names the event that supersedes it — its
+ *  banner's last event in the batch — because it only counts as delivered once
+ *  that one lands (see drainReplayBatch). */
+export type ReplayStep = { presentation: ReplayPresentation; supersededBy: number | null }
 
 /**
  * Decide, for each event of one catch-up batch, whether it may still pop.
@@ -50,12 +56,16 @@ type ReplayEvent = NotificationEvent | DismissNotificationEvent
  *
  * Only the replay path is planned. A live event is news by definition.
  */
-export function planReplayPresentation(events: readonly ReplayEvent[]): ReplayPresentation[] {
+export function planReplayPresentation(events: readonly ReplayEvent[]): ReplayStep[] {
   // Walked newest-first, so "is there a later dismiss" and "does this banner
   // speak again later" are both one lookup in what was already seen.
   const dismissedLater = new Set<string>()
-  const bannersSpokenLater = new Set<string>()
-  const plan: ReplayPresentation[] = Array.from({ length: events.length }, () => 'show')
+  // Each banner's last event in the batch, by index: what supersedes the rest.
+  const lastOfBanner = new Map<string, number>()
+  const plan: ReplayStep[] = Array.from({ length: events.length }, () => ({
+    presentation: 'show',
+    supersededBy: null
+  }))
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
     // The batch is the desktop's reply, typed by assertion. A malformed entry is
@@ -74,12 +84,14 @@ export function planReplayPresentation(events: readonly ReplayEvent[]): ReplayPr
       continue
     }
     const banner = bannerKey(event)
-    const superseded = bannersSpokenLater.has(banner)
-    bannersSpokenLater.add(banner)
-    if (superseded) {
-      plan[index] = 'silent'
-    } else if (event.notificationId != null && dismissedLater.has(event.notificationId)) {
-      plan[index] = 'retire'
+    const last = lastOfBanner.get(banner)
+    if (last !== undefined) {
+      plan[index] = { presentation: 'silent', supersededBy: last }
+      continue
+    }
+    lastOfBanner.set(banner, index)
+    if (event.notificationId != null && dismissedLater.has(event.notificationId)) {
+      plan[index] = { presentation: 'retire', supersededBy: null }
     }
   }
   return plan
