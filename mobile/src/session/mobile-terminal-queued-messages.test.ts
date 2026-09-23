@@ -538,3 +538,46 @@ describe('Claude Code 2.1.280 queue block', () => {
     expect(claudeQueueViewFromScreen(without).entries).toEqual([])
   })
 })
+
+// Claude Code 2.1.281 (2026-09-24), transcribed from the phone's terminal view:
+// the queue now sits ABOVE the spinner, whose own rows (the verb line and a
+// "⎿ Tip:" under it) stand between the send-now row and the input box. The
+// parser looked for the send-now row just above the input box, found the tip,
+// read no queue, and the chat drew the queued message as already sent.
+describe('Claude Code 2.1.281 queue block, above the spinner', () => {
+  const screen = [
+    '● Running 1 shell command · 14s…',
+    "  ⎿  $ python3 - <<'EOF'",
+    '     (ctrl+b to run in background)',
+    '',
+    '❯ Where does that biolerplate appear then',
+    '  ctrl+x ctrl+s to send now',
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '  ⎿  Tip: Use /clear to start fresh when switching topics and free up context',
+    '',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────────────────────────────────────────────'
+  ]
+
+  it('keeps a message queued while the spinner and its tip sit under it', () => {
+    expect(claudeQueueViewFromScreen(screen).entries).toEqual(['Where does that biolerplate appear then'])
+  })
+
+  it('reads it with no tip under the spinner too', () => {
+    expect(claudeQueueViewFromScreen(screen.filter((line) => !line.includes('Tip:'))).entries).toEqual([
+      'Where does that biolerplate appear then'
+    ])
+  })
+
+  it('reads no queue when the send-now row is gone, spinner or not', () => {
+    expect(claudeQueueViewFromScreen(screen.filter((line) => !line.includes('to send now'))).entries).toEqual([])
+  })
+
+  it('does not skip a ⎿ row that no spinner owns', () => {
+    const orphan = screen.filter((line) => !line.startsWith('✻'))
+    expect(claudeQueueViewFromScreen(orphan).entries).toEqual([])
+  })
+})
+

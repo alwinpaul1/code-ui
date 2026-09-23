@@ -153,13 +153,35 @@ function isQueueBound(line: string): boolean {
 
 /** Index of the "… to send now" row directly above the composer,
  *  looking past the separator and Claude's right-aligned yank hint, or -1. */
+/** A "⎿" row Claude hangs under its spinner ("✻ Incubating… (31m 27s · ↓ 67.8k
+ *  tokens)"), such as a tip. */
+const SPINNER_DETAIL_ROW = /^\s+⎿\s+\S/
+
+/**
+ * The send-now row that closes the queue, or -1.
+ *
+ * Claude Code 2.1.277 and 2.1.280 draw it right above the input box. 2.1.281
+ * (2026-09-24) moved the queue above the spinner, so the spinner and its "⎿
+ * Tip:" row stand between them; not skipping those read no queue, and the chat
+ * drew a queued message as already sent. A "⎿" row is skipped only when a
+ * spinner owns it: anything else there is not this layout, and is refused.
+ */
 function sendNowHintAbove(lines: readonly string[], footer: number): number {
-  for (let i = footer - 1; i >= Math.max(0, footer - 4); i--) {
+  let details = 0
+  for (let i = footer - 1; i >= Math.max(0, footer - 8); i--) {
     const line = lines[i]!
     if (/^[\s─━—-]*$/.test(line) || /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
       continue
     }
-    return SEND_NOW_HINT.test(line) ? i : -1
+    if (SPINNER_DETAIL_ROW.test(line)) {
+      details += 1
+      continue
+    }
+    if (SPINNER_ROW.test(line)) {
+      details = 0
+      continue
+    }
+    return details === 0 && SEND_NOW_HINT.test(line) ? i : -1
   }
   return -1
 }
