@@ -1,22 +1,34 @@
 /**
  * A table row's cells, on both halves of the round trip.
  *
- * The pipe is the row's only separator and also an ordinary character a cell may contain. GFM
- * (cmark-gfm, which GitHub and the desktop render with) settles it one way: a pipe with a backslash
- * right before it belongs to the cell, whatever precedes that backslash, and reading the cell takes
- * exactly that one backslash off. Nothing else about a backslash is the table's business — the cell
- * is inline markdown, and `\s`, `C:\\path` or `\"` mean what they mean there.
+ * The pipe is the row's only separator and also an ordinary character a cell may contain. The
+ * phone splits a row the way the desktop's editor does (tiptap's markdown, which is marked): a pipe
+ * belongs to its cell when an ODD run of backslashes sits right before it, so `\\|` is a
+ * backslash and then a separator. Reading a cell takes one backslash off each such pipe; nothing
+ * else about a backslash is the table's — the cell is inline markdown, and `\s`, `C:\\path` or
+ * `\"` mean what they mean there.
  *
- * So the writer adds one backslash before each pipe and nothing else, and the reader removes one
- * before each pipe and nothing else: a cell of any content comes back byte for byte, because every
- * separator the writer emits has a space before it (`| a | b |`). Code UI, 2026-09-23: upstream's
- * #22054 doubled every backslash on write and undid only `\\` and `\|` on read, so saving any edit
- * rewrote a lone `\s+` in a table to `\\s+`, which renders differently inside a code span.
+ * The writer makes every pipe a cell holds end an odd run: an even run (none included) gains one
+ * backslash, an odd one is already escaped. Every cell the reader produces has even runs, so any
+ * file comes back byte for byte apart from the writer's own spacing (`| a | b |`), which also keeps
+ * a cell's trailing backslash off the separator after it.
+ *
+ * Code UI, 2026-09-23. Upstream's #22054 doubled every backslash on write, so a save rewrote a lone
+ * `\s+` in a table to `\\s+`; a first local fix read `\\|` as content (cmark-gfm's reading),
+ * which merged a no-space header's columns where the desktop sees two, and the save then deleted
+ * the second column. Both reviews are pinned in rich-markdown-table-backslash-round-trip.test.ts.
  */
 
-/** Whether `value[index]` is a pipe that separates cells: one no backslash sits right before. */
+/** Whether `value[index]` is a pipe that separates cells: an even run of backslashes before it. */
 function isSeparatorPipe(value: string, index: number): boolean {
-  return value[index] === '|' && (index === 0 || value[index - 1] !== '\\')
+  if (value[index] !== '|') {
+    return false
+  }
+  let backslashes = 0
+  for (let before = index - 1; before >= 0 && value[before] === '\\'; before -= 1) {
+    backslashes += 1
+  }
+  return backslashes % 2 === 0
 }
 
 /** Splits on the separator pipes, leaving every escaped one in its cell. */
@@ -48,7 +60,9 @@ export function splitTableRow(line: string): string[] {
 
 /** A cell's own pipes, hidden from the row syntax that would split on them. Only the pipes. */
 export function escapeTableCell(cell: string): string {
-  return cell.replace(/\|/g, '\\|')
+  return cell.replace(/(\\*)\|/g, (match, run: string) =>
+    run.length % 2 === 0 ? `${run}\\|` : match
+  )
 }
 
 /** The dashed row under a header, which is what makes the line above it a table rather than text. */

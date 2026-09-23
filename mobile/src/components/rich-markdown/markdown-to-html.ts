@@ -66,11 +66,16 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         rows.push(splitTableRow(lines[index] ?? ''))
         index += 1
       }
-      const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
+      // As wide as its widest row, not its header: a cell past the header's count is still the
+      // file's text, and cutting the table to the header deleted it on the next save (every build
+      // before 2026-09-23). The header pads with empty cells, which the writer keeps.
+      const width = Math.max(headers.length, ...rows.map((row) => row.length))
+      const columns = Array.from({ length: width }, (_, cellIndex) => cellIndex)
+      const head = columns.map((cellIndex) => `<th>${renderInline(headers[cellIndex] ?? '')}</th>`).join('')
       const body = rows
         .map(
           (row) =>
-            `<tr>${headers.map((_, cellIndex) => `<td>${renderInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
+            `<tr>${columns.map((cellIndex) => `<td>${renderInline(row[cellIndex] ?? '')}</td>`).join('')}</tr>`
         )
         .join('')
       html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
