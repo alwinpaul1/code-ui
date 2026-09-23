@@ -134,12 +134,10 @@ function postedBodies(): string[] {
 function useRealTray(): Map<string, { body: string; notificationId?: string }> {
   const tray = new Map<string, { body: string; notificationId?: string }>()
   let n = 0
-  vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: {
-    identifier?: string
-    content: { body?: string; data?: { notificationId?: string } }
-  }) => {
+  vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: Notifications.NotificationRequestInput) => {
     const id = request.identifier ?? `rand-${(n += 1)}`
-    tray.set(id, { body: String(request.content.body ?? ''), notificationId: request.content.data?.notificationId })
+    const data = request.content.data as { notificationId?: string } | undefined
+    tray.set(id, { body: String(request.content.body ?? ''), notificationId: data?.notificationId })
     return id
   })
   vi.mocked(Notifications.dismissNotificationAsync).mockImplementation(async (id: string) => {
@@ -157,8 +155,8 @@ function useRealTray(): Map<string, { body: string; notificationId?: string }> {
 function failShowOf(body: string, times = 1): void {
   const inner = vi.mocked(Notifications.scheduleNotificationAsync).getMockImplementation()!
   let left = times
-  vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: never) => {
-    if ((request as { content: { body?: string } }).content.body === body && left > 0) {
+  vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: Notifications.NotificationRequestInput) => {
+    if (request.content.body === body && left > 0) {
       left -= 1
       throw new Error('post failed')
     }
@@ -241,8 +239,8 @@ describe('draining a replay through a real tray', () => {
     useRealTray()
     let release!: () => void
     const inner = vi.mocked(Notifications.scheduleNotificationAsync).getMockImplementation()!
-    vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: never) => {
-      if ((request as { content: { body?: string } }).content.body === 'a: 2') {
+    vi.mocked(Notifications.scheduleNotificationAsync).mockImplementation(async (request: Notifications.NotificationRequestInput) => {
+      if (request.content.body === 'a: 2') {
         await new Promise<void>((resolve) => {
           release = resolve
         })

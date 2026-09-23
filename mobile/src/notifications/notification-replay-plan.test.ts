@@ -98,8 +98,11 @@ describe('which replayed notifications may still pop', () => {
   })
 
   it('keeps two plugin notifications apart, since neither has a worktree or an id', () => {
-    const ci = note(undefined, undefined, { source: 'plugin', title: 'ci: failed', body: 'x' })
-    const deploy = note(undefined, undefined, { source: 'plugin', title: 'deploy: done', body: 'y' })
+    // Stock Orca's dispatchPlugin sends `source: 'plugin'`, which the phone's
+    // DesktopNotificationSource does not list yet; the wire value is what is tested.
+    const plugin = 'plugin' as NotificationEvent['source']
+    const ci = note(undefined, undefined, { source: plugin, title: 'ci: failed', body: 'x' })
+    const deploy = note(undefined, undefined, { source: plugin, title: 'deploy: done', body: 'y' })
     expect(planReplayPresentation([ci, deploy])).toEqual(['show', 'show'])
   })
 

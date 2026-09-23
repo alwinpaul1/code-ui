@@ -127,10 +127,7 @@ function attempted(N: typeof Notifications = Notifications): string[] {
 function useTray(opts: { fail?: Map<string, number>; hang?: Set<string> } = {}, N: typeof Notifications = Notifications) {
   const tray = new Map<string, string>()
   let n = 0
-  vi.mocked(N.scheduleNotificationAsync).mockImplementation(async (request: {
-    identifier?: string
-    content: { body?: string; data?: { notificationId?: string } }
-  }) => {
+  vi.mocked(N.scheduleNotificationAsync).mockImplementation(async (request: Notifications.NotificationRequestInput) => {
     const body = String(request.content.body ?? '')
     const left = opts.fail?.get(body) ?? 0
     if (left > 0) {
