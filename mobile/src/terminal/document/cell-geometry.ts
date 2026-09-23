@@ -1,17 +1,17 @@
 import { getCellHeight } from './fit-scale'
 import { getCellWidth, getTotalScale } from './viewport-transform'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 
-export function cellToViewportPx(col: number, absRow: number) {
+export function cellToViewportPx(scope: TerminalDocumentScope, col: number, absRow: number) {
   if (!scope.term) {
     return { x: 0, y: 0 }
   }
-  const cellW = getCellWidth()
-  const cellH = getCellHeight()
+  const cellW = getCellWidth(scope)
+  const cellH = getCellHeight(scope)
   const viewportRow = absRow - scope.term.buffer.active.viewportY
   const sx = col * cellW
   const sy = viewportRow * cellH
-  const total = getTotalScale()
+  const total = getTotalScale(scope)
   // Why: the selection overlay lives in unscaled viewport coords OUTSIDE the
   // surface, so it has to add the same sub-row remainder the terminal screen
   // is translated by, or a handle drawn during a scroll sits up to a row away
@@ -22,7 +22,7 @@ export function cellToViewportPx(col: number, absRow: number) {
   }
 }
 
-export function getLineText(absRow: number) {
+export function getLineText(scope: TerminalDocumentScope, absRow: number) {
   if (!scope.term) {
     return ''
   }
@@ -38,7 +38,7 @@ export function getLineText(absRow: number) {
 // Convert by measuring the string length up to the tapped cell (the count of
 // string chars before it). Without this, taps on lines with a leading wide char
 // (e.g. agent output prefixed with ⏺) resolve to the wrong column and miss.
-export function cellColToStringIndex(absRow: number, col: number) {
+export function cellColToStringIndex(scope: TerminalDocumentScope, absRow: number, col: number) {
   if (!scope.term) {
     return col
   }

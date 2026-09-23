@@ -1,4 +1,5 @@
-import { scope, scheduleDocumentFrame } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
 import { getCellHeight } from './fit-scale'
 import {
   SMOOTH_SCROLL_MAX_STEP_MS,
@@ -36,53 +37,55 @@ export function overscrollBend(pullPx: number, dimensionPx: number) {
 // Why not clientHeight: reading it forces layout, and this runs on every
 // frame of a pull and of the spring back. rows x cell height is the same
 // number from geometry this module already tracks, for free.
-export function overscrollDimensionPx() {
+export function overscrollDimensionPx(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term.rows) {
     return 1
   }
-  const height = scope.term.rows * getCellHeight() * getTotalScale()
+  const height = scope.term.rows * getCellHeight(scope) * getTotalScale(scope)
   return height > 0 ? height : 1
 }
 
-export function cancelOverscrollSpring() {
+export function cancelOverscrollSpring(scope: TerminalDocumentScope) {
   if (scope.overscrollSpringFrameId !== null) {
     cancelAnimationFrame(scope.overscrollSpringFrameId)
     scope.overscrollSpringFrameId = null
   }
 }
 
-export function setOverscrollPull(pullPx: number) {
+export function setOverscrollPull(scope: TerminalDocumentScope, pullPx: number) {
   scope.overscrollPullY = pullPx
-  const next = overscrollBend(pullPx, overscrollDimensionPx())
+  const next = overscrollBend(pullPx, overscrollDimensionPx(scope))
   if (next === scope.overscrollY) {
     return
   }
   scope.overscrollY = next
-  scheduleTerminalScreenTransform()
+  scheduleTerminalScreenTransform(scope)
 }
 
 // Why: the buffer end is the one place this scroller still read as a web page
 // — the content simply refused to move. Bending is purely visual: no row is
 // committed, and the spring below returns the offset to exactly 0, so the
 // at-rest row-boundary invariant every cell-to-pixel mapping depends on holds.
-export function pullOverscroll(deltaY: number) {
+export function pullOverscroll(scope: TerminalDocumentScope, deltaY: number) {
   if (deltaY === 0) {
     return
   }
-  cancelOverscrollSpring()
-  setOverscrollPull(scope.overscrollPullY - deltaY)
+  cancelOverscrollSpring(scope)
+  setOverscrollPull(scope, scope.overscrollPullY - deltaY)
 }
 
-export function releaseOverscroll() {
+export function releaseOverscroll(scope: TerminalDocumentScope) {
   if (scope.overscrollPullY === 0 && scope.overscrollY === 0) {
     return
   }
-  cancelOverscrollSpring()
+  cancelOverscrollSpring(scope)
   scope.overscrollSpringTime = 0
-  scope.overscrollSpringFrameId = scheduleDocumentFrame(overscrollSpringStep)
+  scope.overscrollSpringFrameId = scheduleDocumentFrame(scope, (time) =>
+    overscrollSpringStep(scope, time)
+  )
 }
 
-export function overscrollSpringStep(frameTime?: number) {
+export function overscrollSpringStep(scope: TerminalDocumentScope, frameTime?: number) {
   scope.overscrollSpringFrameId = null
   const now = typeof frameTime === 'number' ? frameTime : nowMs()
   if (scope.overscrollSpringTime === 0) {
@@ -99,14 +102,16 @@ export function overscrollSpringStep(frameTime?: number) {
   const decay = Math.exp(-elapsed / OVERSCROLL_SPRING_TAU_MS)
   const next = scope.overscrollPullY * decay
   if ((next < 0 ? -next : next) <= OVERSCROLL_MIN_PX) {
-    setOverscrollPull(0)
+    setOverscrollPull(scope, 0)
     return
   }
-  setOverscrollPull(next)
-  scope.overscrollSpringFrameId = scheduleDocumentFrame(overscrollSpringStep)
+  setOverscrollPull(scope, next)
+  scope.overscrollSpringFrameId = scheduleDocumentFrame(scope, (time) =>
+    overscrollSpringStep(scope, time)
+  )
 }
 
 /** Ruling 21: the spring-back frame, which would otherwise bend the next mount's content. */
-export function stopOverscrollBend() {
-  cancelOverscrollSpring()
+export function stopOverscrollBend(scope: TerminalDocumentScope) {
+  cancelOverscrollSpring(scope)
 }

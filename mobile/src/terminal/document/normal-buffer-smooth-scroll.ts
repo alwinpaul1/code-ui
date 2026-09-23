@@ -1,6 +1,7 @@
 import { getCellHeight } from './fit-scale'
 import { getTotalScale, nowMs, scheduleScrollIndicatorUpdate } from './viewport-transform'
-import { scope, scheduleDocumentFrame } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
 import { flushDeferredKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
 // The settle eases a sub-row remainder onto a boundary over a few frames, so
@@ -18,7 +19,7 @@ export const MOMENTUM_MAX_STEP_MS = 64
 const SMOOTH_SCROLL_SETTLE_TAU_MS = 34
 const SMOOTH_SCROLL_SETTLE_MIN_PX = 1
 const SMOOTH_SCROLL_SETTLE_IDLE_MS = 140
-export function getTerminalScreenElement() {
+export function getTerminalScreenElement(scope: TerminalDocumentScope) {
   if (scope.terminalScreenElement && scope.terminalScreenElement.isConnected) {
     return scope.terminalScreenElement
   }
@@ -36,14 +37,14 @@ export function getTerminalScreenElement() {
 // boundary, which is the shimmer that got fractional transforms banned here.
 // Deferring EVERY write by one frame pairs each remainder with the paint it
 // belongs to, so the content moves by exactly the finger's distance instead.
-export function scheduleTerminalScreenTransform() {
+export function scheduleTerminalScreenTransform(scope: TerminalDocumentScope) {
   scope.pendingTerminalScreenOffsetY = scope.smoothScrollOffsetY
   if (scope.terminalScreenTransformFrameId !== null) {
     return
   }
-  scope.terminalScreenTransformFrameId = scheduleDocumentFrame(function () {
+  scope.terminalScreenTransformFrameId = scheduleDocumentFrame(scope, function () {
     scope.terminalScreenTransformFrameId = null
-    writeTerminalScreenTransform(scope.pendingTerminalScreenOffsetY)
+    writeTerminalScreenTransform(scope, scope.pendingTerminalScreenOffsetY)
   })
 }
 
@@ -55,7 +56,7 @@ export function scheduleTerminalScreenTransform() {
 // xterm parks the repaint entirely until the closing sequence arrives over
 // the relay. So term.onRender is the ground truth: record the row it painted
 // and rewrite the transform right there, in the paint's own frame.
-export function syncTerminalScreenTransformToRender() {
+export function syncTerminalScreenTransformToRender(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active) {
     return
   }
@@ -64,17 +65,17 @@ export function syncTerminalScreenTransformToRender() {
   if (scope.terminalScreenTransformFrameId !== null) {
     cancelAnimationFrame(scope.terminalScreenTransformFrameId)
     scope.terminalScreenTransformFrameId = null
-    writeTerminalScreenTransform(scope.pendingTerminalScreenOffsetY)
+    writeTerminalScreenTransform(scope, scope.pendingTerminalScreenOffsetY)
     return
   }
-  writeTerminalScreenTransform(scope.smoothScrollOffsetY)
+  writeTerminalScreenTransform(scope, scope.smoothScrollOffsetY)
 }
 
 // Why: rows the buffer has scrolled past but xterm has not painted yet must be
 // carried by the transform, or the picture stands still (and later snaps)
 // while the finger keeps moving. Once the paint lands the same call hands the
 // distance back to the rows, so the content never jumps.
-export function unpaintedRowsOffsetY() {
+export function unpaintedRowsOffsetY(scope: TerminalDocumentScope) {
   if (
     scope.renderedViewportY < 0 ||
     !scope.term ||
@@ -92,19 +93,19 @@ export function unpaintedRowsOffsetY() {
   if (unpaintedRows === 0) {
     return 0
   }
-  return -unpaintedRows * getCellHeight() * getTotalScale()
+  return -unpaintedRows * getCellHeight(scope) * getTotalScale(scope)
 }
 
-export function writeTerminalScreenTransform(offsetY: number) {
-  const screenElement = getTerminalScreenElement()
+export function writeTerminalScreenTransform(scope: TerminalDocumentScope, offsetY: number) {
+  const screenElement = getTerminalScreenElement(scope)
   if (!screenElement) {
     return
   }
-  let scale = getTotalScale()
+  let scale = getTotalScale(scope)
   if (!(scale > 0)) {
     scale = 1
   }
-  const visualOffsetY = offsetY + unpaintedRowsOffsetY() + scope.overscrollY
+  const visualOffsetY = offsetY + unpaintedRowsOffsetY(scope) + scope.overscrollY
   if (visualOffsetY === scope.writtenTerminalScreenOffsetY) {
     return
   }
@@ -116,7 +117,7 @@ export function writeTerminalScreenTransform(offsetY: number) {
   screenElement.style.transform = 'translate3d(0,' + visualOffsetY / scale + 'px,0)'
 }
 
-export function clampNormalScrollLines(lines: number) {
+export function clampNormalScrollLines(scope: TerminalDocumentScope, lines: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || lines === 0) {
     return 0
   }
@@ -127,7 +128,7 @@ export function clampNormalScrollLines(lines: number) {
   return Math.max(lines, -buffer.viewportY)
 }
 
-export function canScrollNormalBufferDelta(deltaY: number) {
+export function canScrollNormalBufferDelta(scope: TerminalDocumentScope, deltaY: number) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active || deltaY === 0) {
     return false
   }
@@ -138,16 +139,16 @@ export function canScrollNormalBufferDelta(deltaY: number) {
   return buffer.viewportY > 0
 }
 
-export function applyNormalBufferScrollDelta(deltaY: number) {
+export function applyNormalBufferScrollDelta(scope: TerminalDocumentScope, deltaY: number) {
   if (!scope.term || deltaY === 0) {
     return false
   }
-  const effectiveCellH = getCellHeight() * getTotalScale()
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
   if (effectiveCellH <= 0) {
     return false
   }
-  if (!canScrollNormalBufferDelta(deltaY)) {
-    resetSmoothScrollOffset()
+  if (!canScrollNormalBufferDelta(scope, deltaY)) {
+    resetSmoothScrollOffset(scope)
     return false
   }
   scope.smoothScrollOffsetY -= deltaY
@@ -159,7 +160,7 @@ export function applyNormalBufferScrollDelta(deltaY: number) {
   // cellHeight) already leaves at the bottom.
   const lines = -Math.ceil(scope.smoothScrollOffsetY / effectiveCellH)
   if (lines !== 0) {
-    const applied = clampNormalScrollLines(lines)
+    const applied = clampNormalScrollLines(scope, lines)
     if (applied !== 0) {
       scope.term.scrollLines(applied)
       scope.smoothScrollOffsetY += applied * effectiveCellH
@@ -176,8 +177,8 @@ export function applyNormalBufferScrollDelta(deltaY: number) {
   if (scope.smoothScrollOffsetY < -effectiveCellH) {
     scope.smoothScrollOffsetY = -effectiveCellH
   }
-  scheduleTerminalScreenTransform()
-  scheduleScrollIndicatorUpdate(true)
+  scheduleTerminalScreenTransform(scope)
+  scheduleScrollIndicatorUpdate(scope, true)
   return true
 }
 
@@ -186,29 +187,29 @@ export function applyNormalBufferScrollDelta(deltaY: number) {
 // scrollLines() of a frame into one repaint, so parking the delta in a second
 // animation frame coalesced nothing — it only added a whole frame of lag on
 // top of the one xterm needs to paint: three frames finger-to-glass at 120 Hz.
-export function enqueueNormalBufferScrollDelta(deltaY: number) {
+export function enqueueNormalBufferScrollDelta(scope: TerminalDocumentScope, deltaY: number) {
   if (!scope.term || deltaY === 0) {
     return false
   }
-  if (!applyNormalBufferScrollDelta(deltaY)) {
+  if (!applyNormalBufferScrollDelta(scope, deltaY)) {
     return false
   }
-  armSmoothScrollSettle()
+  armSmoothScrollSettle(scope)
   return true
 }
 
-export function resetSmoothScrollOffset() {
-  cancelSmoothScrollSettle()
-  flushDeferredKeyboardAvoidanceMetrics()
+export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
+  cancelSmoothScrollSettle(scope)
+  flushDeferredKeyboardAvoidanceMetrics(scope)
   if (scope.smoothScrollOffsetY === 0) {
     return
   }
   scope.smoothScrollOffsetY = 0
-  scheduleTerminalScreenTransform()
-  scheduleScrollIndicatorUpdate(false)
+  scheduleTerminalScreenTransform(scope)
+  scheduleScrollIndicatorUpdate(scope, false)
 }
 
-export function cancelSmoothScrollSettle() {
+export function cancelSmoothScrollSettle(scope: TerminalDocumentScope) {
   if (scope.smoothScrollSettleTimer !== null) {
     clearTimeout(scope.smoothScrollSettleTimer)
     scope.smoothScrollSettleTimer = null
@@ -222,13 +223,13 @@ export function cancelSmoothScrollSettle() {
 // Why: an external mouse wheel has no touchend to settle on, so the last
 // scroll of a burst arms the settle on a short idle timer. A touch gesture
 // cancels the timer and settles from touchend/momentum-end instead.
-export function armSmoothScrollSettle() {
+export function armSmoothScrollSettle(scope: TerminalDocumentScope) {
   if (scope.smoothScrollSettleTimer !== null) {
     clearTimeout(scope.smoothScrollSettleTimer)
   }
   scope.smoothScrollSettleTimer = setTimeout(function () {
     scope.smoothScrollSettleTimer = null
-    settleSmoothScrollOffset()
+    settleSmoothScrollOffset(scope)
   }, SMOOTH_SCROLL_SETTLE_IDLE_MS)
 }
 
@@ -238,24 +239,26 @@ export function armSmoothScrollSettle() {
 // row, so ease it onto the NEARER row boundary instead — 0, or one more row in
 // the direction already travelled. That is at most half a row of travel and
 // reads as a snap, never as a rubber band.
-export function settleSmoothScrollOffset() {
-  cancelSmoothScrollSettle()
+export function settleSmoothScrollOffset(scope: TerminalDocumentScope) {
+  cancelSmoothScrollSettle(scope)
   if (!scope.term || scope.smoothScrollOffsetY === 0) {
-    flushDeferredKeyboardAvoidanceMetrics()
+    flushDeferredKeyboardAvoidanceMetrics(scope)
     return
   }
-  const effectiveCellH = getCellHeight() * getTotalScale()
+  const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
   if (!(effectiveCellH > 0)) {
-    resetSmoothScrollOffset()
+    resetSmoothScrollOffset(scope)
     return
   }
   scope.smoothScrollSettleTargetY =
     scope.smoothScrollOffsetY <= -effectiveCellH / 2 ? -effectiveCellH : 0
   scope.smoothScrollSettleTime = 0
-  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(smoothScrollSettleStep)
+  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(scope, (time) =>
+    smoothScrollSettleStep(scope, time)
+  )
 }
 
-export function smoothScrollSettleStep(frameTime?: number) {
+export function smoothScrollSettleStep(scope: TerminalDocumentScope, frameTime?: number) {
   scope.smoothScrollSettleFrameId = null
   const now = typeof frameTime === 'number' ? frameTime : nowMs()
   if (scope.smoothScrollSettleTime === 0) {
@@ -274,14 +277,20 @@ export function smoothScrollSettleStep(frameTime?: number) {
     Math.abs(remaining) <= SMOOTH_SCROLL_SETTLE_MIN_PX
       ? remaining
       : remaining * (1 - Math.exp(-elapsed / SMOOTH_SCROLL_SETTLE_TAU_MS))
-  if (step === 0 || !applyNormalBufferScrollDelta(-step) || scope.smoothScrollOffsetY === 0) {
-    flushDeferredKeyboardAvoidanceMetrics()
+  if (
+    step === 0 ||
+    !applyNormalBufferScrollDelta(scope, -step) ||
+    scope.smoothScrollOffsetY === 0
+  ) {
+    flushDeferredKeyboardAvoidanceMetrics(scope)
     return
   }
-  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(smoothScrollSettleStep)
+  scope.smoothScrollSettleFrameId = scheduleDocumentFrame(scope, (time) =>
+    smoothScrollSettleStep(scope, time)
+  )
 }
 
 /** Ruling 21: the smooth-scroll frame, which would otherwise scroll the next mount's buffer. */
-export function stopNormalBufferSmoothScroll() {
-  resetSmoothScrollOffset()
+export function stopNormalBufferSmoothScroll(scope: TerminalDocumentScope) {
+  resetSmoothScrollOffset(scope)
 }

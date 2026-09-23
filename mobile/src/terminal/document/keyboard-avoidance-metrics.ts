@@ -1,7 +1,12 @@
 import { notify } from './host-notify'
-import { scope, type TerminalDocumentCell, type TerminalDocumentLine } from './document-scope'
+import type {
+  TerminalDocumentCell,
+  TerminalDocumentLine,
+  TerminalDocumentScope
+} from './document-scope'
 
 export function lineHasVisibleContent(
+  scope: TerminalDocumentScope,
   line: TerminalDocumentLine,
   cell: TerminalDocumentCell | null
 ) {
@@ -33,7 +38,7 @@ export function lineHasVisibleContent(
   return false
 }
 
-export function computeContentBottomRow() {
+export function computeContentBottomRow(scope: TerminalDocumentScope) {
   if (!scope.term || !scope.term.buffer || !scope.term.buffer.active) {
     return 0
   }
@@ -43,7 +48,7 @@ export function computeContentBottomRow() {
   for (let y = (scope.term.rows || 0) - 1; y >= 0; y--) {
     try {
       const line = buffer.getLine(top + y)
-      if (line && lineHasVisibleContent(line, cell)) {
+      if (line && lineHasVisibleContent(scope, line, cell)) {
         return y
       }
     } catch {}
@@ -51,7 +56,7 @@ export function computeContentBottomRow() {
   return 0
 }
 
-export function emitKeyboardAvoidanceMetrics() {
+export function emitKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
@@ -60,16 +65,16 @@ export function emitKeyboardAvoidanceMetrics() {
     alt =
       scope.term.buffer && scope.term.buffer.active && scope.term.buffer.active.type === 'alternate'
   } catch {}
-  notify({
+  notify(scope, {
     type: 'keyboard-avoidance-metrics',
     cursorY: scope.term.buffer && scope.term.buffer.active ? scope.term.buffer.active.cursorY : 0,
-    contentBottomRow: alt ? 0 : computeContentBottomRow(),
+    contentBottomRow: alt ? 0 : computeContentBottomRow(scope),
     rows: scope.term.rows || 0,
     altScreen: alt
   })
 }
 
-export function isScrollGestureActive() {
+export function isScrollGestureActive(scope: TerminalDocumentScope) {
   if (scope.smoothScrollSettleFrameId !== null) {
     return true
   }
@@ -81,18 +86,18 @@ export function isScrollGestureActive() {
 // agent therefore lands that work on the same main thread as the frame a
 // 120 Hz scroll is trying to hit. Hold it while the gesture, fling or settle
 // is live and emit once at the end — the keyboard cannot open mid-scroll.
-export function requestKeyboardAvoidanceMetrics() {
-  if (isScrollGestureActive()) {
+export function requestKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
+  if (isScrollGestureActive(scope)) {
     scope.keyboardAvoidanceMetricsDeferred = true
     return
   }
-  emitKeyboardAvoidanceMetrics()
+  emitKeyboardAvoidanceMetrics(scope)
 }
 
-export function flushDeferredKeyboardAvoidanceMetrics() {
+export function flushDeferredKeyboardAvoidanceMetrics(scope: TerminalDocumentScope) {
   if (!scope.keyboardAvoidanceMetricsDeferred) {
     return
   }
   scope.keyboardAvoidanceMetricsDeferred = false
-  emitKeyboardAvoidanceMetrics()
+  emitKeyboardAvoidanceMetrics(scope)
 }

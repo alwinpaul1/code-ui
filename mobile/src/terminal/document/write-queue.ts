@@ -1,20 +1,41 @@
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { C1_CSI, ESC } from './escape-introducers'
 import { nowMs } from './viewport-transform'
 
 // A scroll that outlasts this drains anyway: a reader parked in scrollback
 // must not freeze the live view indefinitely.
 const SCROLL_WRITE_HOLD_MAX_MS = 1200
 
-export function resetWriteQueue() {
+/** Claude's record dot, which iOS WebKit would otherwise promote to a colourful emoji glyph. */
+const CLAUDE_STATUS_DOT = '\u23fa'
+
+/** The variation selector that forces the text glyph. */
+const TEXT_PRESENTATION_SELECTOR = '\ufe0e'
+
+/** The variation selector that forces the emoji glyph. */
+const EMOJI_PRESENTATION_SELECTOR = '\ufe0f'
+
+/**
+ * The dot with any trailing selectors, as one pattern.
+ *
+ * A literal rather than a construction: a `new RegExp` at a module's top level is parse-time work
+ * (ruling 20), and `replace` leaves no `lastIndex` behind for the next document to find.
+ */
+const CLAUDE_STATUS_DOT_PATTERN = /\u23fa[\ufe0e\ufe0f]*/g
+
+/** How far a split DECSET may be carried before the mode scan gives up. */
+const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
+
+export function resetWriteQueue(scope: TerminalDocumentScope) {
   scope.writeQueue = []
   scope.writeQueueHead = 0
   // A replacement terminal owes nothing to the gesture the old one saw.
   scope.scrollGestureActive = false
-  cancelHeldWritePump()
+  cancelHeldWritePump(scope)
 }
 
 export function isStatusDotPresentationSelector(value: string) {
-  return value === scope.TEXT_PRESENTATION_SELECTOR || value === scope.EMOJI_PRESENTATION_SELECTOR
+  return value === TEXT_PRESENTATION_SELECTOR || value === EMOJI_PRESENTATION_SELECTOR
 }
 
 export function endsWithStatusDotPresentationSequence(data: string) {
@@ -22,11 +43,11 @@ export function endsWithStatusDotPresentationSequence(data: string) {
   while (i >= 0 && isStatusDotPresentationSelector(data.charAt(i))) {
     i--
   }
-  return i >= 0 && data.charAt(i) === scope.CLAUDE_STATUS_DOT
+  return i >= 0 && data.charAt(i) === CLAUDE_STATUS_DOT
 }
 
 // Why: iOS WebKit promotes Claude's record/status dot to a colorful emoji glyph.
-export function normalizeStatusDotPresentation(data: string) {
+export function normalizeStatusDotPresentation(scope: TerminalDocumentScope, data: string) {
   if (typeof data !== 'string' || data.length === 0) {
     return data
   }
@@ -43,24 +64,24 @@ export function normalizeStatusDotPresentation(data: string) {
     }
   }
   const normalized = data.replace(
-    scope.CLAUDE_STATUS_DOT_PATTERN,
-    scope.CLAUDE_STATUS_DOT + scope.TEXT_PRESENTATION_SELECTOR
+    CLAUDE_STATUS_DOT_PATTERN,
+    CLAUDE_STATUS_DOT + TEXT_PRESENTATION_SELECTOR
   )
   scope.statusDotPendingSelector = endsWithStatusDotPresentationSequence(data)
   return normalized
 }
 
-export function enqueueWrite(data: string) {
-  scope.writeQueue.push(normalizeStatusDotPresentation(data))
+export function enqueueWrite(scope: TerminalDocumentScope, data: string) {
+  scope.writeQueue.push(normalizeStatusDotPresentation(scope, data))
 }
 
-export function enqueueWriteBoundary(callback: () => void) {
+export function enqueueWriteBoundary(scope: TerminalDocumentScope, callback: () => void) {
   scope.writeQueue.push(callback)
 }
 
-export function nextQueuedWrite() {
+export function nextQueuedWrite(scope: TerminalDocumentScope) {
   if (scope.writeQueueHead >= scope.writeQueue.length) {
-    resetWriteQueue()
+    resetWriteQueue(scope)
     return undefined
   }
   const next = scope.writeQueue[scope.writeQueueHead]
@@ -75,7 +96,7 @@ export function nextQueuedWrite() {
   return next
 }
 
-export function disposeTermObservers() {
+export function disposeTermObservers(scope: TerminalDocumentScope) {
   const disposables = scope.termObserverDisposables
   scope.termObserverDisposables = []
   for (let i = 0; i < disposables.length; i++) {
@@ -87,23 +108,23 @@ export function disposeTermObservers() {
 }
 
 export function extractMouseModeScanTail(input: string) {
-  const start = Math.max(input.lastIndexOf(scope.ESC), input.lastIndexOf(scope.C1_CSI))
+  const start = Math.max(input.lastIndexOf(ESC), input.lastIndexOf(C1_CSI))
   if (start === -1) {
     return ''
   }
   const tail = input.slice(start)
   // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
   // Keep parser state far beyond normal mode lists while still bounding memory.
-  if (tail.length > scope.PRIVATE_MODE_SCAN_TAIL_LIMIT) {
+  if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
     return ''
   }
-  if (tail === scope.ESC || tail === scope.ESC + '[' || tail === scope.C1_CSI) {
+  if (tail === ESC || tail === ESC + '[' || tail === C1_CSI) {
     return tail
   }
-  if (tail.indexOf(scope.ESC + '[?') === 0) {
+  if (tail.indexOf(ESC + '[?') === 0) {
     return /^[0-9;]*$/.test(tail.slice(3)) ? tail : ''
   }
-  if (tail.indexOf(scope.C1_CSI + '?') === 0) {
+  if (tail.indexOf(C1_CSI + '?') === 0) {
     return /^[0-9;]*$/.test(tail.slice(2)) ? tail : ''
   }
   return ''
@@ -123,14 +144,14 @@ export function extractMouseModeScanTail(input: string) {
  * Nothing is dropped. The bytes stay queued and land the moment the gesture
  * settles, and the cap below means a long scroll cannot freeze the view.
  */
-export function writesHeldForScrollGesture() {
+export function writesHeldForScrollGesture(scope: TerminalDocumentScope) {
   if (!scope.scrollGestureActive) {
     return false
   }
   return nowMs() - scope.scrollGestureStartedAt <= SCROLL_WRITE_HOLD_MAX_MS
 }
 
-export function scheduleHeldWritePump(gen: number) {
+export function scheduleHeldWritePump(scope: TerminalDocumentScope, gen: number) {
   if (scope.heldWritePumpTimer !== null) {
     return
   }
@@ -138,13 +159,13 @@ export function scheduleHeldWritePump(gen: number) {
   scope.heldWritePumpTimer = setTimeout(
     function () {
       scope.heldWritePumpTimer = null
-      pumpWrites(gen)
+      pumpWrites(scope, gen)
     },
     remaining > 0 ? remaining + 1 : 1
   )
 }
 
-export function cancelHeldWritePump() {
+export function cancelHeldWritePump(scope: TerminalDocumentScope) {
   if (scope.heldWritePumpTimer === null) {
     return
   }
@@ -152,7 +173,7 @@ export function cancelHeldWritePump() {
   scope.heldWritePumpTimer = null
 }
 
-export function beginScrollGestureWriteHold() {
+export function beginScrollGestureWriteHold(scope: TerminalDocumentScope) {
   if (scope.scrollGestureActive) {
     return
   }
@@ -160,31 +181,31 @@ export function beginScrollGestureWriteHold() {
   scope.scrollGestureStartedAt = nowMs()
 }
 
-export function endScrollGestureWriteHold() {
+export function endScrollGestureWriteHold(scope: TerminalDocumentScope) {
   if (!scope.scrollGestureActive) {
     return
   }
   scope.scrollGestureActive = false
-  cancelHeldWritePump()
-  pumpWrites(scope.terminalGeneration)
+  cancelHeldWritePump(scope)
+  pumpWrites(scope, scope.terminalGeneration)
 }
 
-export function pumpWrites(gen: number): void {
+export function pumpWrites(scope: TerminalDocumentScope, gen: number): void {
   if (!scope.ready || !scope.term || scope.writesDraining || gen !== scope.terminalGeneration) {
     return
   }
-  if (writesHeldForScrollGesture()) {
+  if (writesHeldForScrollGesture(scope)) {
     // Why: the hold can also end by simply timing out, and a terminal with
     // nothing more to say would then never pump again — the queued bytes
     // (a resize's re-serialised buffer, for one) would sit there and the
     // view would stay blank. Wake it when the cap expires.
-    scheduleHeldWritePump(gen)
+    scheduleHeldWritePump(scope, gen)
     return
   }
-  const next = nextQueuedWrite()
+  const next = nextQueuedWrite(scope)
   if (typeof next !== 'string') {
     if (typeof next === 'function') {
-      return (next(), pumpWrites(gen))
+      return (next(), pumpWrites(scope, gen))
     }
     const callbacks = scope.afterDrainCallbacks
     scope.afterDrainCallbacks = []
@@ -201,16 +222,16 @@ export function pumpWrites(gen: number): void {
       return
     }
     scope.writesDraining = false
-    pumpWrites(gen)
+    pumpWrites(scope, gen)
   })
 }
 
-export function afterWritesDrained(callback: () => void) {
+export function afterWritesDrained(scope: TerminalDocumentScope, callback: () => void) {
   scope.afterDrainCallbacks.push(callback)
-  pumpWrites(scope.terminalGeneration)
+  pumpWrites(scope, scope.terminalGeneration)
 }
 
 /** Ruling 21: the held pump's wake timer, which would otherwise pump the next mount's queue. */
-export function stopWriteQueue() {
-  cancelHeldWritePump()
+export function stopWriteQueue(scope: TerminalDocumentScope) {
+  cancelHeldWritePump(scope)
 }

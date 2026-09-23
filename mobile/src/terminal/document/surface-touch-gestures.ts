@@ -1,4 +1,5 @@
-import { scope, scheduleDocumentFrame } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
+import { scheduleDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import {
   clampPan,
@@ -20,7 +21,12 @@ import {
 } from './normal-buffer-smooth-scroll'
 import { pullOverscroll, releaseOverscroll } from './overscroll-bend'
 import { dispatcherShouldBlockSurface } from './tap-dispatch'
-import { applyTextScale, snapToTextScalePreset } from './text-scaling'
+import {
+  applyTextScale,
+  MAX_TEXT_SCALE,
+  MIN_TEXT_SCALE,
+  snapToTextScalePreset
+} from './text-scaling'
 import { getTotalScale, nowMs, updateTransform } from './viewport-transform'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
 import { beginScrollGestureWriteHold, endScrollGestureWriteHold } from './write-queue'
@@ -58,7 +64,7 @@ const FRICTION_PER_MS = 0.998297482
 
 const MIN_VEL = 0.012
 
-export function updateTouchVelocity(deltaY: number, dt: number) {
+export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
   if (!(dt > 0)) {
     return
   }
@@ -85,7 +91,10 @@ export function getDistance(a: Touch, b: Touch) {
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface) {
+export function attachSurfaceEventHandlers(
+  scope: TerminalDocumentScope,
+  targetSurface: TerminalGestureSurface
+) {
   if (!targetSurface || targetSurface.__orcaSurfaceHandlersAttached) {
     return
   }
@@ -109,47 +118,47 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
     true
   )
 
-  attachSurfaceWheelHandler(targetSurface)
-  attachSurfaceMouseClickDragHandler(targetSurface)
+  attachSurfaceWheelHandler(scope, targetSurface)
+  attachSurfaceMouseClickDragHandler(scope, targetSurface)
 
   targetSurface.addEventListener(
     'touchstart',
     function (e) {
-      if (dispatcherShouldBlockSurface()) {
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (scope.touchGesture.momentumId) {
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
       }
-      cancelSmoothScrollSettle()
+      cancelSmoothScrollSettle(scope)
       // Why: the finger owns the content from here, so stop any settle in
       // flight — but re-arm it on the idle timer. Catching a fling and then
       // holding still would otherwise leave the content off the row grid, and
       // a long press (500ms) resolves the cell under the finger from the grid.
       if (scope.smoothScrollOffsetY !== 0) {
-        armSmoothScrollSettle()
+        armSmoothScrollSettle(scope)
       }
       // Why: content width, content height and the window box cannot change
       // while a finger is down, so this is the one place per gesture that pays
       // for a layout read; every touchmove then reads the cache.
-      invalidateSurfaceMetrics()
-      scope.touchGesture.canPanX = contentOverflowsViewportWidth()
+      invalidateSurfaceMetrics(scope)
+      scope.touchGesture.canPanX = contentOverflowsViewportWidth(scope)
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
         scope.touchGesture.isPinching = true
-        resetSmoothScrollOffset()
+        resetSmoothScrollOffset(scope)
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mx = (touches[0].clientX + touches[1].clientX) / 2
         const my = (touches[0].clientY + touches[1].clientY) / 2
-        const total = getTotalScale()
+        const total = getTotalScale(scope)
         scope.touchGesture.pinchSurfX = (mx - scope.panX) / total
         scope.touchGesture.pinchSurfY = (my - scope.panY) / total
       } else if (touches.length === 1) {
         scope.touchGesture.isPinching = false
         scope.touchGesture.dragging = true
-        beginScrollGestureWriteHold()
+        beginScrollGestureWriteHold(scope)
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
         scope.touchGesture.lastTime = nowMs()
@@ -163,7 +172,7 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
   targetSurface.addEventListener(
     'touchmove',
     function (e) {
-      if (dispatcherShouldBlockSurface()) {
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -183,17 +192,17 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
         // Why: userScale is a CSS multiplier on the current font size; bound it so
         // the resulting apparent size (currentTextScale × userScale) stays within
         // the preset range, since release snaps to one of those presets.
-        const loScale = scope.MIN_TEXT_SCALE / scope.currentTextScale
-        const hiScale = scope.MAX_TEXT_SCALE / scope.currentTextScale
+        const loScale = MIN_TEXT_SCALE / scope.currentTextScale
+        const hiScale = MAX_TEXT_SCALE / scope.currentTextScale
         scope.userScale = Math.max(
           loScale,
           Math.min(hiScale, scope.touchGesture.pinchScale * ratio)
         )
-        const total = getTotalScale()
+        const total = getTotalScale(scope)
         scope.panX = mx - scope.touchGesture.pinchSurfX * total
         scope.panY = my - scope.touchGesture.pinchSurfY * total
-        clampPan()
-        updateTransform()
+        clampPan(scope)
+        updateTransform(scope)
       } else if (touches.length === 1 && !scope.touchGesture.isPinching) {
         const x = touches[0].clientX,
           y = touches[0].clientY
@@ -201,35 +210,35 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
           dt = now - scope.touchGesture.lastTime
 
         // Why: pan horizontally only when content overflows the viewport (larger
-        // than fit) — same check clampPan() uses, decided once at touchstart.
+        // than fit) — same check clampPan(scope) uses, decided once at touchstart.
         // Vertical always drives buffer scroll so scrollback stays reachable at
         // any text size; calling the never-defined contentWiderThanViewport()
         // here threw and killed all single-finger scrolling, scrollback included.
         if (scope.touchGesture.canPanX) {
           scope.panX += x - scope.touchGesture.lastX
-          clampPan()
-          updateTransform()
+          clampPan(scope)
+          updateTransform(scope)
         }
 
         const deltaY = scope.touchGesture.lastY - y
         scope.touchGesture.lastTime = now
-        if (shouldRouteScrollToTerminalInput()) {
-          updateTouchVelocity(deltaY, dt)
-          resetSmoothScrollOffset()
-          const effectiveCellH = getCellHeight() * getTotalScale()
+        if (shouldRouteScrollToTerminalInput(scope)) {
+          updateTouchVelocity(scope, deltaY, dt)
+          resetSmoothScrollOffset(scope)
+          const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
           scope.touchGesture.accumDelta += deltaY
           const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
           if (lines !== 0) {
             scope.touchGesture.accumDelta -= lines * effectiveCellH
-            routeScrollLines(lines, x, y)
+            routeScrollLines(scope, lines, x, y)
           }
         } else {
-          if (enqueueNormalBufferScrollDelta(deltaY)) {
-            updateTouchVelocity(deltaY, dt)
+          if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
+            updateTouchVelocity(scope, deltaY, dt)
           } else {
             // The buffer end. Let the content follow the finger with rising
             // resistance rather than stopping dead; touchend springs it back.
-            pullOverscroll(deltaY)
+            pullOverscroll(scope, deltaY)
             scope.touchGesture.velY = 0
           }
         }
@@ -243,7 +252,7 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
   targetSurface.addEventListener(
     'touchend',
     function (e) {
-      if (dispatcherShouldBlockSurface()) {
+      if (dispatcherShouldBlockSurface(scope)) {
         return
       }
       if (!scope.term) {
@@ -262,16 +271,16 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
         scope.userScale = 1
         scope.panX = 0
         scope.panY = 0
-        applyTextScale(target)
-        updateTransform()
-        notify({ type: 'font-scale-changed', fontScale: target })
+        applyTextScale(scope, target)
+        updateTransform(scope)
+        notify(scope, { type: 'font-scale-changed', fontScale: target })
         if (changed) {
-          notify({ type: 'haptic', kind: 'selection' })
+          notify(scope, { type: 'haptic', kind: 'selection' })
         }
         if (touches.length === 1) {
           // Why: the pinch changed the scale, so the pan decision taken at
           // touchstart no longer holds for the finger that is still down.
-          scope.touchGesture.canPanX = contentOverflowsViewportWidth()
+          scope.touchGesture.canPanX = contentOverflowsViewportWidth(scope)
           scope.touchGesture.lastX = touches[0].clientX
           scope.touchGesture.lastY = touches[0].clientY
           scope.touchGesture.lastTime = nowMs()
@@ -283,7 +292,7 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
 
       if (touches.length === 0) {
         scope.touchGesture.dragging = false
-        releaseOverscroll()
+        releaseOverscroll(scope)
         let vel = scope.touchGesture.velY
         let momentumTime = 0
         function momentumStep(frameTime?: number) {
@@ -306,37 +315,37 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
           vel *= Math.pow(FRICTION_PER_MS, elapsed)
           if (Math.abs(vel) < MIN_VEL) {
             scope.touchGesture.momentumId = null
-            endScrollGestureWriteHold()
-            settleSmoothScrollOffset()
+            endScrollGestureWriteHold(scope)
+            settleSmoothScrollOffset(scope)
             return
           }
           const delta = vel * elapsed
-          if (shouldRouteScrollToTerminalInput()) {
-            resetSmoothScrollOffset()
-            const effectiveCellH = getCellHeight() * getTotalScale()
+          if (shouldRouteScrollToTerminalInput(scope)) {
+            resetSmoothScrollOffset(scope)
+            const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
             scope.touchGesture.accumDelta += delta
             const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
             if (lines !== 0) {
               scope.touchGesture.accumDelta -= lines * effectiveCellH
-              routeScrollLines(lines, scope.touchGesture.lastX, scope.touchGesture.lastY)
+              routeScrollLines(scope, lines, scope.touchGesture.lastX, scope.touchGesture.lastY)
             }
           } else {
-            if (!applyNormalBufferScrollDelta(delta)) {
+            if (!applyNormalBufferScrollDelta(scope, delta)) {
               scope.touchGesture.momentumId = null
-              endScrollGestureWriteHold()
-              releaseOverscroll()
-              settleSmoothScrollOffset()
+              endScrollGestureWriteHold(scope)
+              releaseOverscroll(scope)
+              settleSmoothScrollOffset(scope)
               return
             }
           }
-          scope.touchGesture.momentumId = scheduleDocumentFrame(momentumStep)
+          scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
         }
         if (Math.abs(vel) > MIN_VEL) {
-          cancelSmoothScrollSettle()
-          scope.touchGesture.momentumId = scheduleDocumentFrame(momentumStep)
+          cancelSmoothScrollSettle(scope)
+          scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
         } else {
-          endScrollGestureWriteHold()
-          settleSmoothScrollOffset()
+          endScrollGestureWriteHold(scope)
+          settleSmoothScrollOffset(scope)
         }
       }
     },
@@ -344,12 +353,12 @@ export function attachSurfaceEventHandlers(targetSurface: TerminalGestureSurface
   )
 }
 
-export function startSurfaceTouchGestures() {
-  attachSurfaceEventHandlers(scope.surface!)
+export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
+  attachSurfaceEventHandlers(scope, scope.surface!)
 }
 
 /** Ruling 21: the momentum loop, which would keep scrolling into the terminal that replaced it. */
-export function stopSurfaceTouchGestures() {
+export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
   if (scope.touchGesture.momentumId !== null) {
     cancelAnimationFrame(scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null

@@ -6,7 +6,7 @@
 // Verified against xterm 6.1 (mobile/src/terminal/terminal-webview-engine.generated.ts)
 // and the Galaxy S23 (120 Hz) report of jerky scrollback.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { generatedDocumentProgram } from './document/generated-document-region.test-support'
+import { TERMINAL_DOCUMENT_SCRIPT } from './terminal-webview-document-script.generated'
 import { XTERM_HTML } from './terminal-webview-html'
 
 const CELL_HEIGHT = 15
@@ -287,7 +287,7 @@ function boot(state: Partial<BufferState> = {}): void {
   buffer = { baseY: 5000, type: 'normal', viewportY: 2500, ...state }
   document.body.innerHTML = bodyMarkup()
   // eslint-disable-next-line no-new-func
-  new Function(generatedDocumentProgram())()
+  new Function(TERMINAL_DOCUMENT_SCRIPT)()
   window.dispatchEvent(
     new MessageEvent('message', {
       data: JSON.stringify({ cols: 40, initialData: '', rows: 24, type: 'init' })

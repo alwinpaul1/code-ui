@@ -1,6 +1,6 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { scheduleScrollIndicatorUpdate } from './viewport-transform'
-import { scope } from './document-scope'
+import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
 import {
   emitKeyboardAvoidanceMetrics,
@@ -9,18 +9,22 @@ import {
 import { syncTerminalScreenTransformToRender } from './normal-buffer-smooth-scroll'
 import { emitModesIfChanged } from './mode-mirroring'
 
-export function attachTermObservers() {
+export function attachTermObservers(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
-  disposeTermObservers()
+  disposeTermObservers(scope)
   try {
-    scope.termObserverDisposables.push(scope.term.onLineFeed!(logFeedAndEvict))
+    scope.termObserverDisposables.push(
+      scope.term.onLineFeed!(function () {
+        logFeedAndEvict(scope)
+      })
+    )
   } catch {}
   try {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
-        scheduleScrollIndicatorUpdate(false)
+        scheduleScrollIndicatorUpdate(scope, false)
       })
     )
   } catch {}
@@ -28,7 +32,9 @@ export function attachTermObservers() {
   // sub-row remainder may change on. See syncTerminalScreenTransformToRender.
   try {
     if (scope.term.onRender) {
-      scope.termObserverDisposables.push(scope.term.onRender(syncTerminalScreenTransformToRender))
+      scope.termObserverDisposables.push(
+        scope.term.onRender(() => syncTerminalScreenTransformToRender(scope))
+      )
     }
   } catch {}
   // Why: emit modes on every parsed write so RN's mirror stays current
@@ -37,15 +43,15 @@ export function attachTermObservers() {
     if (scope.term.onWriteParsed) {
       scope.termObserverDisposables.push(
         scope.term.onWriteParsed(function () {
-          emitModesIfChanged()
-          requestKeyboardAvoidanceMetrics()
+          emitModesIfChanged(scope)
+          requestKeyboardAvoidanceMetrics(scope)
         })
       )
     }
   } catch {}
   // Initial emit once buffer settles.
-  afterWritesDrained(function () {
-    emitModesIfChanged()
-    emitKeyboardAvoidanceMetrics()
+  afterWritesDrained(scope, function () {
+    emitModesIfChanged(scope)
+    emitKeyboardAvoidanceMetrics(scope)
   })
 }
