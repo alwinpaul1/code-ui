@@ -150,8 +150,8 @@ function useTray(opts: { fail?: Map<string, number>; hang?: Set<string> } = {}, 
   return tray
 }
 
-
-/** A real process death: every module's memory goes, storage stays. */
+/** A real process death: every module's memory goes, storage stays. The imports are inline on
+ *  purpose: only an import made after vi.resetModules returns a fresh module instance. */
 async function freshProcess() {
   vi.resetModules()
   const N = await import('expo-notifications')
