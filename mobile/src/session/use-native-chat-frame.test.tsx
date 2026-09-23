@@ -18,6 +18,8 @@ const CHAT_ON: Moment = { blank: false, blink: false, showNativeChat: true, chat
 const TERMINAL_CHOSEN: Moment = { blank: true, blink: false, showNativeChat: false, chat: '' }
 // Ctrl+C twice ended Claude Code: the tab is no longer chat-eligible, which reads as a blink.
 const AGENT_EXITED: Moment = { blank: true, blink: true, showNativeChat: false, chat: '' }
+// Back to chat from the terminal: the transcript re-reads, empty until it lands.
+const CHAT_RELOADING: Moment = { blank: true, blink: true, showNativeChat: true, chat: '' }
 // A reconnect re-hydrates the tab list for a moment while chat is on screen.
 const RECONNECT_BLIP: Moment = { blank: true, blink: true, showNativeChat: false, chat: '' }
 
@@ -75,6 +77,25 @@ describe('the chat overlay over a terminal tab', () => {
     expect(shown(root)).toBe('terminal')
     act(() => vi.advanceTimersByTime(CHAT_FRAME_HOLD_MS))
     expect(shown(root)).toBe('terminal')
+  })
+
+  it('shows the chat it left, not a spinner, when going back to chat from the terminal', () => {
+    show(TERMINAL_CHOSEN)
+    expect(shown(root)).toBe('terminal')
+    show(CHAT_RELOADING)
+    expect(shown(root)).toBe('old chat')
+    show({ ...CHAT_ON, chat: 'new chat' })
+    expect(shown(root)).toBe('new chat')
+  })
+
+  it('keeps holding the chat through a reconnect blip during the reload after going back to chat', () => {
+    show(TERMINAL_CHOSEN)
+    show(CHAT_RELOADING)
+    expect(shown(root)).toBe('old chat')
+    show(RECONNECT_BLIP)
+    expect(shown(root)).toBe('old chat')
+    show({ ...CHAT_ON, chat: 'new chat' })
+    expect(shown(root)).toBe('new chat')
   })
 
   it('still holds the chat across a reconnect blip while chat is on screen', () => {
