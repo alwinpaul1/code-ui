@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { clearSeenKeys, loadSeenKeys } from './notification-seen-store'
 
 // Why: the reconnect catch-up watermark + dedup helpers for #8129, extracted
 // from mobile-notifications.ts so that file stays under its max-lines budget.
@@ -65,11 +66,13 @@ export async function clearWatermark(hostId: string): Promise<void> {
   // Why both keys: loadWatermark falls back to the legacy one, so removing only the
   // current key would let a re-paired host resurrect a pre-#8591 seq from a counter
   // lifetime that is long gone — the exact stale cut this fix removes.
+  // The stored seen keys go with them: they index the same counter lifetime.
   await Promise.all([
     AsyncStorage.removeItem(watermarkStorageKey(hostId)).catch(() => {}),
     AsyncStorage.removeItem(LEGACY_SEQ_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)).catch(
       () => {}
-    )
+    ),
+    clearSeenKeys(hostId)
   ])
 }
 
@@ -99,11 +102,16 @@ export function createSeenNotificationGuard(): {
   has: (id: string) => boolean
   add: (id: string) => void
   clear: () => void
+  /** Oldest first, as persisted (notification-seen-store.ts). */
+  keys: () => string[]
 } {
   const seen = new Set<string>()
   return {
     has(id: string): boolean {
       return seen.has(id)
+    },
+    keys(): string[] {
+      return [...seen]
     },
     add(id: string): void {
       seen.add(id)
@@ -356,6 +364,9 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
   if (session.watermarkSeeded) {
     return
   }
+  // Started together, not one after the other: every delivery waits on this seed,
+  // and two serial reads double what a slow store costs the catch-up.
+  const seenRead = loadSeenKeys(hostId)
   const seeded = loadWatermark(hostId).then(({ seq, epoch, stored }) => {
     // Why the record's existence and not `seq > 0`: adoptNotificationEpoch persists
     // `{seq: 0, epoch}` when it voids a watermark, so a device that HAS delivered for
@@ -373,6 +384,16 @@ export function seedWatermarkFromStorage(session: HostNotificationSession, hostI
       session.lastDeliveredSeq = Math.max(session.lastDeliveredSeq, seq)
       if (session.lastDeliveredEpoch === null && epoch !== null) {
         session.lastDeliveredEpoch = epoch
+      }
+    }
+  }).then(async () => {
+    // Applied after the watermark so the epoch it compares against is the seeded
+    // one. Keys from any other counter lifetime would dedup notifications the
+    // new counter has never shown, so they are left out.
+    const stored = await seenRead
+    if (stored && stored.epoch === session.lastDeliveredEpoch) {
+      for (const key of stored.keys) {
+        session.seen.add(key)
       }
     }
   })

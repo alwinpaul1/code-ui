@@ -100,6 +100,7 @@ function makeHostClient() {
 
 const WATERMARK_KEY = 'orca:mobileNotificationsWatermark:host-1'
 const LEGACY_KEY = 'orca:mobileNotificationsLastSeq:host-1'
+const SEEN_KEY = 'orca:mobileNotificationsSeen:host-1'
 
 describe('#8591 watermark seeding races a cold open', () => {
   beforeEach(() => {
@@ -196,13 +197,17 @@ describe('#8591 watermark seeding races a cold open', () => {
     // host read a pre-#8591 seq belonging to a counter lifetime that no longer exists.
     storage.set(WATERMARK_KEY, JSON.stringify({ seq: 9, epoch: 'epoch-a' }))
     storage.set(LEGACY_KEY, '57')
+    // The stored seen keys index the same counter lifetime, so they go too: kept,
+    // a re-paired host would dedup replays against a pairing that is gone.
+    storage.set(SEEN_KEY, JSON.stringify({ epoch: 'epoch-a', keys: ['id:agent:x#9'] }))
 
     await clearWatermark('host-1')
 
     expect(vi.mocked(AsyncStorage.removeItem).mock.calls.map((call) => call[0])).toEqual(
-      expect.arrayContaining([WATERMARK_KEY, LEGACY_KEY])
+      expect.arrayContaining([WATERMARK_KEY, LEGACY_KEY, SEEN_KEY])
     )
     expect(storage.has(WATERMARK_KEY)).toBe(false)
     expect(storage.has(LEGACY_KEY)).toBe(false)
+    expect(storage.has(SEEN_KEY)).toBe(false)
   })
 })

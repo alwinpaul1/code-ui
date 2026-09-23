@@ -10,11 +10,13 @@ export { setScheduledNotificationsMaxForTests } from './local-notification-sched
 import {
   configureNotificationChannel,
   dismissLocalNotification,
+  retireSessionBanner,
   showLocalNotification,
   type DismissNotificationEvent,
   type NotificationEvent
 } from './local-notification-scheduling'
 import { planReplayPresentation, type ReplayPresentation } from './notification-replay-plan'
+import { persistSeenKeys } from './notification-seen-store'
 import {
   cachedDeliveredPushes,
   reportableDeliveredPushes,
@@ -117,9 +119,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     adoptNotificationEpoch(session, hostId, event.notificationEpoch)
     const epochAtDelivery = session.lastDeliveredEpoch
     if (type === 'notification') {
-      // 'silent' still falls through to the seen-set and the watermark below: the
-      // event was delivered, it is simply not news any more.
-      if (presentation !== 'silent') {
+      // 'silent' and 'retire' still fall through to the seen-set and the watermark
+      // below: the event was delivered, it is simply not news any more.
+      if (presentation === 'retire') {
+        await retireSessionBanner(hostId, (event as NotificationEvent).worktreeId)
+      } else if (presentation !== 'silent') {
         // The link this event came over is the one to ask about it on; see
         // presentedNotificationContent.
         await showLocalNotification(event as NotificationEvent, hostId, {
@@ -138,7 +142,17 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // A mid-flight epoch adoption already cleared the counter lifetime this key indexes.
     if (key && session.lastDeliveredEpoch === epochAtDelivery) {
       session.seen.add(key)
+      // Kept across a restart, so a replay from a lagging watermark recognises
+      // what this run already showed (notification-seen-store.ts). Without an
+      // epoch the keys cannot be tied to a counter, so they stay in memory.
+      if (session.lastDeliveredEpoch !== null) {
+        persistSeenKeys(hostId, session.lastDeliveredEpoch, session.seen.keys())
+      }
     }
+    advanceWatermark(event)
+  }
+
+  function advanceWatermark(event: NotificationEvent | DismissNotificationEvent): void {
     // Why after the await (#8591): the watermark is a promise that everything up
     // to this seq has been shown. Advancing it before the local notification lands
     // means a process death in between silently drops it — the next launch asks the
@@ -164,6 +178,12 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // No pre-marking here either: deliverLive marks the key once the show lands.
     const key = seenKeyForEvent(event)
     if (key && session.seen.has(key)) {
+      // Shown already, by this run or (through the stored keys) the one before a
+      // restart. It still counts as delivered: left behind, a restart after a
+      // lagging watermark would ask from below it again every time.
+      if (event.notificationEpoch == null || event.notificationEpoch === session.lastDeliveredEpoch) {
+        advanceWatermark(event)
+      }
       return
     }
     if (event.type === 'notification') {
@@ -241,15 +261,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       // is quiet; 'unknown' at a cold start shows, the safe side. A replay
       // while the app is still in the background still shows what is news.
       //
-      // And only what is still news pops at all: a dismissed notification, a
-      // session's superseded words and anything long past are delivered
-      // silently or quietly (see planReplayPresentation). Planned once over the
-      // whole batch, because both "dismissed later" and "superseded" are facts
-      // about events after this one.
-      const plan = planReplayPresentation(
-        missed as (NotificationEvent | DismissNotificationEvent)[],
-        Date.now()
-      )
+      // And only what is still news pops at all: a notification dismissed later
+      // in the batch and a session's superseded words are delivered without a
+      // banner (see planReplayPresentation). Planned once over the whole batch,
+      // because both are facts about events after this one.
+      const plan = planReplayPresentation(missed as (NotificationEvent | DismissNotificationEvent)[])
       const presentationAt = (index: number): ReplayPresentation => {
         const planned = plan[index] ?? 'show'
         return planned === 'show' && appIsOpen() ? 'quiet' : planned
