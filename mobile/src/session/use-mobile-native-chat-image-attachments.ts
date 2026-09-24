@@ -63,8 +63,9 @@ type Args = {
    *  Accepts this action's budget so the text body draws from what the paste left
    *  rather than opening a second one. */
   readonly beforeImagePaste?: () => Promise<void>
-  /** Empties the composer as the send starts (the chips go with it) and returns the undo. */
-  readonly beginImageSend?: (text: string) => (() => void) | null
+  /** Empties the composer as the send starts (the chips go with it) and returns
+   *  the undo. `images` also adds the optimistic bubble in this same call. */
+  readonly beginImageSend?: (text: string, images?: string[]) => (() => void) | null
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -206,14 +207,19 @@ export function useMobileNativeChatImageAttachments({
             onSendError('Message not sent (disconnected)')
             return false
           }
-          const outcome = await baseSend(
-            text,
-            pendingImages.map((attachment) => attachment.previewUri),
-            deadline,
-            pendingImages
-          )
-          if (outcome !== 'rejected') {
-            clearSent()
+          // Empty the composer and add the optimistic bubble now, in the same
+          // tick — not after the RPC settles (2026-09-24: the chips lingered
+          // after the text left, then the bubble popped in once the send
+          // resolved). A definite rejection puts text, chips and the echo back.
+          const previewUris = pendingImages.map((attachment) => attachment.previewUri)
+          const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
+          clearSent()
+          const outcome = await baseSend(text, previewUris, deadline, pendingImages)
+          if (outcome === 'rejected') {
+            undoDraftClear?.()
+            setAttachmentsByScope((prev) =>
+              withScopeAttachments(prev, scope, [...pendingAll, ...(prev[scope] ?? [])])
+            )
           }
           return outcome !== 'rejected'
         }
@@ -270,10 +276,11 @@ export function useMobileNativeChatImageAttachments({
             onSendError('Message not sent (session changed)')
             return false
           }
-          // The box empties now, chips and all, not after the paste and the
-          // settle (2026-09-13: the Claude app sends both at once). A paste
-          // that fails before the text goes puts both back.
-          const undoDraftClear = beginImageSend?.(text) ?? null
+          // The box empties now, chips, echo and all, not after the paste and
+          // the settle (2026-09-13: the Claude app sends both at once). A
+          // paste that fails before the text goes puts all three back.
+          const previewUris = pendingImages.map((attachment) => attachment.previewUri)
+          const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
           clearSent()
           restoreOptimistic = (): void => {
             undoDraftClear?.()
@@ -327,11 +334,7 @@ export function useMobileNativeChatImageAttachments({
             onSendError('Message not sent')
             return false
           }
-          const outcome = await baseSend(
-            text,
-            pendingImages.map((attachment) => attachment.previewUri),
-            textDeadline
-          )
+          const outcome = await baseSend(text, previewUris, textDeadline)
           if (outcome !== 'accepted') {
             // 'rejected' leaves the pasted image path on this input line; 'unknown'
             // may have lost the text+Enter AFTER the paste landed, orphaning the
@@ -339,7 +342,7 @@ export function useMobileNativeChatImageAttachments({
             markMobileNativeChatInputStale(handle)
           }
           if (outcome === 'rejected') {
-            // The chips come back; baseSend already put the text back.
+            // The chips and echo come back; baseSend already put the text back.
             restoreOptimistic()
           }
           return outcome !== 'rejected'

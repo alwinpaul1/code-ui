@@ -71,7 +71,10 @@ export function useMobileStructuredNativeChatSendBridge(args: {
               ? await sendStructured(text, images)
               : await sendStructured(text)
       if (outcome === 'accepted') {
-        if (!isHostCommand) {
+        // An image-carrying send already got its echo from the caller, at the
+        // same moment the composer cleared (clearDraftAtSendStartWith) — not
+        // repeated here, or it would double the bubble.
+        if (!isHostCommand && !images?.length) {
           acceptSend(origin, text.trimEnd(), images)
         }
         return 'accepted'

@@ -92,9 +92,10 @@ export function useMobileNativeChatDrafts(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, unless newer edits exist. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-  /** Clear the composer when an image send starts; returns the undo, or null when there is no draft scope. */
-  clearDraftAtSendStart: (text: string) => (() => void) | null
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
+  /** Clear the composer at send start; `images` also echoes at once — see clearDraftAtSendStartWith. */
+  clearDraftAtSendStart: (text: string, images?: string[]) => (() => void) | null
+  /** Returns the new pending echo's id (for a later removePending), or null if none was added. */
+  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => string | null
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -218,12 +219,10 @@ export function useMobileNativeChatDrafts(args: {
     )
   }, [])
 
-  const clearDraftAtSendStart = useCallback((text: string) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft }, text), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft])
-
   const acceptSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => {
+    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]): string | null => {
       if (!origin.pendingKey && !images?.length) {
-        return
+        return null
       }
       pendingCounter += 1
       const id = `pending-${Date.now()}-${pendingCounter}`
@@ -237,6 +236,7 @@ export function useMobileNativeChatDrafts(args: {
           appendMobileNativeChatPending(previous, origin.draftKey, id, origin, text, images)
         )
       }
+      return id
     },
     []
   )
@@ -377,6 +377,8 @@ export function useMobileNativeChatDrafts(args: {
     setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
     setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
   }, [])
+
+  const clearDraftAtSendStart = useCallback((text: string, images?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',

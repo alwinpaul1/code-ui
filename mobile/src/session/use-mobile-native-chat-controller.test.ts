@@ -326,14 +326,19 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(onSendResolved).not.toHaveBeenCalled()
   })
 
-  it('threads the optimistic-echo image URIs into acceptSend on an accepted send', async () => {
+  // 2026-09-24 (docs/claude-app-parity.md item 8): the caller (the
+  // image-attachments hook, via beginNativeChatImageSend) now echoes an
+  // image-carrying send at the same moment it clears the composer's chips —
+  // before this seam's own RPC ever runs — so this send-seam layer must not
+  // echo it a second time on top, or the bubble would double.
+  it('does not thread image URIs into a second acceptSend on an accepted send', async () => {
     sendWithOutcome.mockResolvedValue('accepted')
     let accepted = false
     await act(async () => {
       accepted = await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
     })
     expect(accepted).toBe(true)
-    expect(acceptSend).toHaveBeenCalledWith(ORIGIN, 'look', ['file:///a.jpg'])
+    expect(acceptSend).not.toHaveBeenCalled()
     // Optimistic clear happens at send time, never a restore on success.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()

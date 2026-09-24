@@ -239,9 +239,14 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       if (classification === 'chat') {
-        // `images` are local preview URIs for the optimistic echo only — the actual
-        // image bytes already rode along as a bracketed paste before this text send.
-        acceptSend(origin, text, images)
+        // `images` are local preview URIs for the optimistic echo — the actual
+        // image bytes already rode along as a bracketed paste before this text
+        // send. An image-carrying send already got its echo from the caller,
+        // at the same moment the composer cleared (clearDraftAtSendStartWith),
+        // so it is not repeated here — only a text-only send echoes at this point.
+        if (!images?.length) {
+          acceptSend(origin, text, images)
+        }
       } else {
         if (recordControlSend) {
           // The session-option catalog can recognize controls omitted from the

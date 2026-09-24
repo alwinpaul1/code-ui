@@ -245,6 +245,18 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
+  // The caller (the image-attachments hook) already echoed this send at the
+  // same moment it cleared the composer, before this RPC ever ran
+  // (mobile-native-chat-draft-send-start.ts). A second acceptSend here would
+  // double the bubble.
+  it('does not echo an image send a second time; the caller already did', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('caption', ['file:///a.png'])
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+  })
+
   it('does not resolve a composer seed from a question-card answer', async () => {
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {

@@ -85,4 +85,17 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
     expect(holdUnconfirmedSend).not.toHaveBeenCalled()
   })
+
+  // The caller (the image-attachments hook) already echoed an image-carrying
+  // send at the same moment it cleared the composer, before this RPC ran
+  // (mobile-native-chat-draft-send-start.ts). A second acceptSend here would
+  // double the bubble the chips already showed at once.
+  it('does not echo an accepted image send a second time; the caller already did', async () => {
+    sendStructured.mockResolvedValue('accepted')
+    mount('claude')
+
+    await expect(sendWithOutcome('a photo', ['file:///a.jpg'])).resolves.toBe('accepted')
+
+    expect(acceptSend).not.toHaveBeenCalled()
+  })
 })
