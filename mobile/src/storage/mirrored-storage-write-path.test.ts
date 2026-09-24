@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import { posix, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
@@ -7,7 +6,7 @@ import {
   PAGE_STORAGE_EXACT_KEYS,
   PAGE_STORAGE_KEY_PREFIXES
 } from '../mobile-web-shell/page-storage-keys'
-import { censusSourceFiles } from '../test-support/census-source-files'
+import { bundledModules, resolveImport, resolveImports } from '../test-support/bundled-module-walk'
 
 /**
  * One owner for the mirror the hybrid shell reads (ruling 35).
@@ -131,6 +130,8 @@ const TEST = /\.test\.tsx?$/
 /** Fixtures only tests import, which may reset the store between cases. */
 const TEST_SUPPORT = /^src\/test-support\/|\.test-support\.tsx?$/
 const STORE_PACKAGE = '@react-native-async-storage/async-storage'
+/** The package reached by a path into `node_modules` rather than by its name: the same store. */
+const STORE_PATH = /(?:^|\/)node_modules\/@react-native-async-storage\/async-storage(?:\/|$)/
 const STORE_WRITES: ReadonlySet<string> = new Set([
   'setItem',
   'removeItem',
@@ -141,19 +142,18 @@ const STORE_WRITES: ReadonlySet<string> = new Set([
   'clear'
 ])
 
-/**
- * Every module the app or the page is built from, the entry included, so a new caller cannot hide
- * in a folder or a JavaScript file.
- */
+let sourcesCache: string[] | null = null
+
+/** Every module the app or the page is built from (test-support/bundled-module-walk.ts). */
 function mobileSources(): string[] {
-  const entry = (JSON.parse(read('package.json')) as { main: string }).main
-  return [
-    ...SOURCE_ROOTS.flatMap((root) => censusSourceFiles(`${MOBILE_DIR}${root}`)),
-    `${MOBILE_DIR}${entry}`
-  ]
-    .filter((path) => SOURCE.test(path))
-    .map((path) => relative(MOBILE_DIR, path).split(sep).join('/'))
-    .sort()
+  sourcesCache ??= bundledModules({
+    mobileDir: MOBILE_DIR,
+    roots: SOURCE_ROOTS,
+    source: SOURCE,
+    isTest: (file) => TEST.test(file) || TEST_SUPPORT.test(file),
+    importsOf: (file) => moduleOf(file).imports
+  })
+  return sourcesCache
 }
 
 /**
@@ -217,7 +217,9 @@ function namesStorePackage(node: ts.Node | undefined): boolean {
   return (
     node !== undefined &&
     ts.isStringLiteralLike(node) &&
-    (node.text === STORE_PACKAGE || node.text.startsWith(`${STORE_PACKAGE}/`))
+    (node.text === STORE_PACKAGE ||
+      node.text.startsWith(`${STORE_PACKAGE}/`) ||
+      STORE_PATH.test(node.text))
   )
 }
 
@@ -546,29 +548,6 @@ function code(file: string): string {
   return moduleOf(file).code
 }
 
-/** What an import may leave off, JavaScript included, since Metro bundles it as readily. */
-const RESOLVED_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
-
-/**
- * The module an import names, or null for a package or anything outside `mobile/`.
- *
- * Resolved the way `tsconfig.json` resolves it: relative to the importer, `@/` from `src/`, and a
- * bare path from `mobile/` itself, which is what its `baseUrl` of `.` allows.
- */
-function resolveImport(from: string, specifier: string, known: ReadonlySet<string>): string | null {
-  const base = specifier.startsWith('.')
-    ? posix.join(posix.dirname(from), specifier)
-    : specifier.startsWith('@/')
-      ? `src/${specifier.slice('@/'.length)}`
-      : specifier
-  const candidates = [
-    base,
-    ...RESOLVED_EXTENSIONS.map((extension) => `${base}${extension}`),
-    ...RESOLVED_EXTENSIONS.map((extension) => `${base}/index${extension}`)
-  ]
-  return candidates.find((candidate) => known.has(candidate)) ?? null
-}
-
 const ROW_FILES: readonly string[] = MIRRORED_WRITERS.map((row) => row.file)
 
 /** Every non-test module that is not the owner, the allowlist or a row. */
@@ -848,7 +827,11 @@ describe('the census reader', () => {
       ])
     )
     // Build and config scripts run where the app is built, and are not what it is built from.
-    expect(sources.filter((file) => /^(scripts|plugins)\//.test(file))).toEqual([])
+    // One the app imports is bundled after all, so the walk reads it, and this names it.
+    expect(
+      sources.filter((file) => /^(scripts|plugins)\//.test(file)),
+      'app code imports a build or config script, which Metro then bundles'
+    ).toEqual([])
   })
 
   it('finds nothing in an empty module', () => {
@@ -944,7 +927,9 @@ describe('the mirrored storage write path', () => {
     const outside = outsideModules()
     const carriers = new Set([...ROW_FILES, ALLOWLIST_MODULE])
     const carries = (file: string, specifiers: readonly string[]): boolean =>
-      specifiers.some((specifier) => carriers.has(resolveImport(file, specifier, known) ?? ''))
+      specifiers.some((specifier) =>
+        resolveImports(file, specifier, known).some((target) => carriers.has(target))
+      )
     // A module that re-exports a carrier is one too, however long the chain of them.
     let grew = true
     while (grew) {
@@ -1015,11 +1000,8 @@ describe('the mirrored storage write path', () => {
     const known = new Set(mobileSources())
     const loadsOf = (file: string): string[] =>
       moduleOf(file)
-        .imports.map((specifier) => resolveImport(file, specifier, known))
-        .filter(
-          (target): target is string =>
-            target !== null && (TEST.test(target) || TEST_SUPPORT.test(target))
-        )
+        .imports.flatMap((specifier) => resolveImports(file, specifier, known))
+        .filter((target) => TEST.test(target) || TEST_SUPPORT.test(target))
     // This file loads it, so the resolver can see test support when something loads it.
     expect(loadsOf('src/storage/mirrored-storage-write-path.test.ts').length).toBeGreaterThan(0)
     const loads = appModules().flatMap((file) =>
