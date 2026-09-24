@@ -33,27 +33,31 @@ import { censusSourceFiles } from '../test-support/census-source-files'
  *   a template, a regex or JSX text is code, and a regex such as `/\/*$/` once blanked every line
  *   after it.
  * - The owner's exports are an exact list, so a second way into the map cannot be exported.
+ * - App code is everything Metro can bundle: `src/`, `app/`, `web-entry/`, the local Expo module
+ *   and packages, and the entry `package.json` names, in TypeScript or JavaScript. A test is what
+ *   vitest collects, `*.test.ts(x)`, which is also all `tsconfig.json` leaves out of the app.
  * - Every direct store write in a row's module must name a key constant the row lists as not
- *   mirrored, and that constant must be a literal outside the page allowlist. So a mirrored key
- *   written around the one path fails whether it is named by a constant or built into a local.
+ *   mirrored, and that name must be bound once in the module, as a top-level literal outside the
+ *   page allowlist. So a mirrored key written around the one path fails whether it is named by a
+ *   constant, built into a local, or bound to a local or a parameter under an unmirrored name.
  * - Outside the rows, no module may spell a page key, and no module that imports a row, the
  *   allowlist, or a module that re-exports either with `export … from` may write the store
  *   directly. That rule is about the import, not the key's spelling, so an aliased, namespaced,
  *   rebound or batched key, or one taken from the allowlist's own lists, fails the same way.
  * - App code reaches the store only by calling a method on the package's default import, so every
  *   write is one the rules above can read. An element access, a destructured or aliased method,
- *   `.call`, the store passed or re-exported as a value, a named or namespace import, or a
- *   `require` of the package all fail.
- * - App code never wipes the store: no `clear()` outside test code, no direct write beyond a row's
- *   own unmirrored keys in a module that lists the store's keys, and no app module loads test
- *   support, which is the code allowed to wipe it. Any of those takes every page key with it,
- *   and the map would keep them all.
+ *   `.call`, the store passed or re-exported as a value, a named or namespace import, any import
+ *   of a path inside the package, or a `require` of either all fail.
+ * - App code never wipes the store: no `clear()` outside test code, the store's keys listed by one
+ *   module only, no direct write there beyond its row's own unmirrored keys, and no app module
+ *   loads a test or test support, which is the code allowed to wipe it. Any of those takes every
+ *   page key with it, and the map would keep them all.
  *
- * What it cannot see: a key assembled at runtime from pieces none of these spell, a store reached
- * without the package at all (the native module underneath it, say), a helper in another module
- * that writes whatever key or list of keys it is handed, or a key a module imports and then
- * re-exports as its own (`export { KEY }` or `export const K = KEY`) rather than with
- * `export … from`.
+ * What it cannot see: a key assembled at runtime from pieces none of these spell (a template's
+ * text after its first hole is one), a store reached without the package at all (the native
+ * module underneath it, say), a helper in another module that writes whatever key or list of keys
+ * it is handed, or a key a module imports and then re-exports as its own (`export { KEY }` or
+ * `export const K = KEY`) rather than with `export … from`.
  * `mirrored-storage-every-key.test.ts` is the behavioural check that each saver the page's keys
  * have, called for real, lands in the map under the key the shell reads for the page's route.
  */
@@ -105,9 +109,25 @@ const MIRRORED_WRITERS = [
  */
 const NOTE_FIRST_CALLER = 'src/mobile-web-shell/use-page-host-snapshot.ts'
 
-const SOURCE_ROOTS = ['src', 'app', 'web-entry']
-const SOURCE = /\.tsx?$/
-const TEST = /\.(test|spec)\.tsx?$/
+/**
+ * The one module that lists the store's keys, to warm its own memory at start, and keeps the list.
+ *
+ * Held to one module for the same reason the note-first path is. A list of every key is a wipe
+ * waiting for a write, and once another module is handed it, the write is one the wipe rule,
+ * which reads a module at a time, never sees.
+ */
+const KEY_LISTER = 'src/storage/session-view-preferences.ts'
+
+/**
+ * The folders Metro bundles from: the router's screens, the page's entry, the app's own modules,
+ * and the local Expo module and packages it links. The build and config scripts beside them run
+ * on the machine that builds the app, never in it.
+ */
+const SOURCE_ROOTS = ['src', 'app', 'web-entry', 'modules', 'packages']
+/** Whatever Metro reads as code, JavaScript and its module flavours included. */
+const SOURCE = /\.[cm]?[jt]sx?$/
+/** What vitest collects as a test, and all `tsconfig.json` leaves out of the app. */
+const TEST = /\.test\.tsx?$/
 /** Fixtures only tests import, which may reset the store between cases. */
 const TEST_SUPPORT = /^src\/test-support\/|\.test-support\.tsx?$/
 const STORE_PACKAGE = '@react-native-async-storage/async-storage'
@@ -121,9 +141,16 @@ const STORE_WRITES: ReadonlySet<string> = new Set([
   'clear'
 ])
 
-/** Every module the app or the page is built from, so a new caller cannot hide in a folder. */
+/**
+ * Every module the app or the page is built from, the entry included, so a new caller cannot hide
+ * in a folder or a JavaScript file.
+ */
 function mobileSources(): string[] {
-  return SOURCE_ROOTS.flatMap((root) => censusSourceFiles(`${MOBILE_DIR}${root}`))
+  const entry = (JSON.parse(read('package.json')) as { main: string }).main
+  return [
+    ...SOURCE_ROOTS.flatMap((root) => censusSourceFiles(`${MOBILE_DIR}${root}`)),
+    `${MOBILE_DIR}${entry}`
+  ]
     .filter((path) => SOURCE.test(path))
     .map((path) => relative(MOBILE_DIR, path).split(sep).join('/'))
     .sort()
@@ -149,6 +176,12 @@ type Found = { at: number; text: string }
 /** A method called on the store, with its name and the first thing it is passed. */
 type StoreCall = Found & { method: string; firstArgument: string }
 
+/**
+ * A name the module binds. `literal` is the string a top-level `const` is set to, and null for
+ * every other binding, a local or a parameter included.
+ */
+type Declaration = Found & { name: string; literal: string | null }
+
 type Module = {
   /**
    * The source with every comment blanked to spaces and every newline kept, so a match's offset
@@ -172,11 +205,73 @@ type Module = {
    * A write made through any of these is one no rule here can read.
    */
   storeReaches: readonly Found[]
+  /**
+   * Every name the module binds, wherever: a variable, a parameter, a destructured binding, an
+   * import, a function, a class or an enum.
+   */
+  declarations: readonly Declaration[]
 }
 
-/** Whether a module specifier names the store package. */
+/** Whether a module specifier names the store package, or any path inside it. */
 function namesStorePackage(node: ts.Node | undefined): boolean {
+  return (
+    node !== undefined &&
+    ts.isStringLiteralLike(node) &&
+    (node.text === STORE_PACKAGE || node.text.startsWith(`${STORE_PACKAGE}/`))
+  )
+}
+
+/** Whether a module specifier names the package's own entry, whose default import is the store. */
+function namesStoreEntry(node: ts.Node | undefined): boolean {
   return node !== undefined && ts.isStringLiteralLike(node) && node.text === STORE_PACKAGE
+}
+
+/** The identifier a declaration binds, if it binds one by name. */
+function declaredName(node: ts.Node): ts.Identifier | undefined {
+  if (
+    ts.isVariableDeclaration(node) ||
+    ts.isParameter(node) ||
+    ts.isBindingElement(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isClassDeclaration(node) ||
+    ts.isClassExpression(node) ||
+    ts.isEnumDeclaration(node) ||
+    ts.isImportClause(node) ||
+    ts.isImportSpecifier(node) ||
+    ts.isNamespaceImport(node) ||
+    ts.isImportEqualsDeclaration(node)
+  ) {
+    return node.name !== undefined && ts.isIdentifier(node.name) ? node.name : undefined
+  }
+  return undefined
+}
+
+/** The string a top-level `const` is set to, or null for any other declaration. */
+function topLevelLiteral(node: ts.Node): string | null {
+  if (
+    !ts.isVariableDeclaration(node) ||
+    node.initializer === undefined ||
+    !ts.isStringLiteralLike(node.initializer)
+  ) {
+    return null
+  }
+  const list = node.parent
+  const statement = list.parent
+  return ts.isVariableDeclarationList(list) &&
+    (list.flags & ts.NodeFlags.Const) !== 0 &&
+    ts.isVariableStatement(statement) &&
+    ts.isSourceFile(statement.parent)
+    ? node.initializer.text
+    : null
+}
+
+/** How the parser should read a module, which for JavaScript is the way Metro does, JSX and all. */
+function scriptKindOf(fileName: string): ts.ScriptKind {
+  if (fileName.endsWith('.tsx')) {
+    return ts.ScriptKind.TSX
+  }
+  return /\.[cm]?ts$/.test(fileName) ? ts.ScriptKind.TS : ts.ScriptKind.JSX
 }
 
 /**
@@ -231,7 +326,7 @@ function parseModule(source: string, fileName: string): Module {
     source,
     ts.ScriptTarget.Latest,
     true,
-    fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    scriptKindOf(fileName)
   )
   const lineOf = (node: ts.Node): number =>
     file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1
@@ -241,7 +336,7 @@ function parseModule(source: string, fileName: string): Module {
   for (const statement of file.statements) {
     if (
       ts.isImportDeclaration(statement) &&
-      namesStorePackage(statement.moduleSpecifier) &&
+      namesStoreEntry(statement.moduleSpecifier) &&
       statement.importClause?.name !== undefined
     ) {
       storeNames.add(statement.importClause.name.text)
@@ -253,7 +348,17 @@ function parseModule(source: string, fileName: string): Module {
   const literals: Found[] = []
   const storeCalls: StoreCall[] = []
   const storeReaches: Found[] = []
+  const declarations: Declaration[] = []
   const visit = (node: ts.Node): void => {
+    const bound = declaredName(node)
+    if (bound !== undefined) {
+      declarations.push({
+        at: lineOf(node),
+        text: textOf(node).slice(0, 120),
+        name: bound.text,
+        literal: topLevelLiteral(node)
+      })
+    }
     if (LITERAL_TOKENS.has(node.kind)) {
       // JSX text has no trivia of its own, so it starts where it sits rather than past a space.
       literalEnds.set(ts.isJsxText(node) ? node.pos : node.getStart(file), node.end)
@@ -272,11 +377,15 @@ function parseModule(source: string, fileName: string): Module {
     ) {
       imports.push(node.moduleSpecifier.text)
       const bindings = node.importClause?.namedBindings
-      if (
-        namesStorePackage(node.moduleSpecifier) &&
+      const bindsNamed =
         bindings !== undefined &&
         (ts.isNamespaceImport(bindings) || bindings.elements.some((element) => !element.isTypeOnly))
-      ) {
+      // The entry's default import is the store every rule reads. A path inside the package is
+      // the store again, or a piece of it, under a name none of them know.
+      const bindsInside =
+        !namesStoreEntry(node.moduleSpecifier) &&
+        (node.importClause?.name !== undefined || bindsNamed)
+      if (namesStorePackage(node.moduleSpecifier) && (bindsNamed || bindsInside)) {
         storeReaches.push({ at: lineOf(node), text: textOf(node) })
       }
     }
@@ -359,7 +468,7 @@ function parseModule(source: string, fileName: string): Module {
     code += source[i]
     i += 1
   }
-  return { code, imports, reExports, literals, storeCalls, storeReaches }
+  return { code, imports, reExports, literals, storeCalls, storeReaches, declarations }
 }
 
 /** A snippet read as the module kind its name says. */
@@ -437,6 +546,9 @@ function code(file: string): string {
   return moduleOf(file).code
 }
 
+/** What an import may leave off, JavaScript included, since Metro bundles it as readily. */
+const RESOLVED_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+
 /**
  * The module an import names, or null for a package or anything outside `mobile/`.
  *
@@ -449,7 +561,11 @@ function resolveImport(from: string, specifier: string, known: ReadonlySet<strin
     : specifier.startsWith('@/')
       ? `src/${specifier.slice('@/'.length)}`
       : specifier
-  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]
+  const candidates = [
+    base,
+    ...RESOLVED_EXTENSIONS.map((extension) => `${base}${extension}`),
+    ...RESOLVED_EXTENSIONS.map((extension) => `${base}/index${extension}`)
+  ]
   return candidates.find((candidate) => known.has(candidate)) ?? null
 }
 
@@ -651,11 +767,96 @@ describe('the census reader', () => {
     )
   })
 
+  it('reads a path inside the store package as a reach, and a type from it as nothing', () => {
+    const { storeCalls, storeReaches } = snippet(
+      [
+        "import Store from '@react-native-async-storage/async-storage/src/AsyncStorage.native'",
+        "import { useAsyncStorage } from '@react-native-async-storage/async-storage/src/hooks'",
+        "import Slash from '@react-native-async-storage/async-storage/'",
+        "require('@react-native-async-storage/async-storage/src/AsyncStorage.native').default.clear()",
+        "export { default } from '@react-native-async-storage/async-storage/src/AsyncStorage'",
+        "import type { AsyncStorageStatic } from '@react-native-async-storage/async-storage/lib/types'",
+        "import { type Hook } from '@react-native-async-storage/async-storage/src/hooks'",
+        "import '@react-native-async-storage/async-storage/jest/setup'",
+        "import AsyncStorage from '@react-native-async-storage/async-storage'",
+        "import { useAsyncStorage as own } from '@react-native-async-storage/async-storage-lookalike'",
+        'Store.clear()'
+      ].join('\n')
+    )
+    expect(storeReaches.map(({ at }) => at)).toEqual([1, 2, 3, 4, 5])
+    // `Store` came from inside the package, so its call is no call on the store the rules read.
+    expect(storeCalls).toEqual([])
+  })
+
+  it('reads JavaScript the way Metro does, JSX in a .js module included', () => {
+    // Read as TypeScript, the URL in the text opens a comment that swallows the write after it.
+    const source = [
+      "import AsyncStorage from '@react-native-async-storage/async-storage'",
+      "export const Row = () => <Text>see https://example.test</Text>; AsyncStorage.removeItem('orca:hostDockWidth')"
+    ].join('\n')
+    for (const fileName of ['snippet.js', 'snippet.jsx', 'snippet.mjs', 'snippet.cjs']) {
+      const parsed = snippet(source, fileName)
+      expect(
+        storeWrites(parsed).map(({ at, method }) => ({ at, method })),
+        fileName
+      ).toEqual([{ at: 2, method: 'removeItem' }])
+      expect(
+        parsed.literals.filter((literal) => isPageKey(literal.text)),
+        fileName
+      ).toEqual([{ at: 2, text: 'orca:hostDockWidth' }])
+    }
+  })
+
+  it('reads every binding a name has, and only a top-level const as its literal', () => {
+    const { declarations } = snippet(
+      [
+        "const KEY = 'orca:scratch'",
+        "let LATER = 'orca:scratch'",
+        'export async function reset(KEY: string) {',
+        "  const LATER = 'orca:hostDockWidth'",
+        '  const { key: KEY_TWO } = { key: LATER }',
+        "  for (const KEY of ['orca:hostDockWidth']) run(KEY)",
+        '  try { run() } catch (KEY) { run(KEY) }',
+        '}',
+        "import { value as KEY_THREE } from './elsewhere'"
+      ].join('\n')
+    )
+    expect(
+      declarations
+        .filter(({ name }) => name.startsWith('KEY') || name === 'LATER')
+        .map(({ at, name, literal }) => ({ at, name, literal }))
+    ).toEqual([
+      { at: 1, name: 'KEY', literal: 'orca:scratch' },
+      { at: 2, name: 'LATER', literal: null },
+      { at: 3, name: 'KEY', literal: null },
+      { at: 4, name: 'LATER', literal: null },
+      { at: 5, name: 'KEY_TWO', literal: null },
+      { at: 6, name: 'KEY', literal: null },
+      { at: 7, name: 'KEY', literal: null },
+      { at: 9, name: 'KEY_THREE', literal: null }
+    ])
+  })
+
+  it('walks every folder the app is bundled from, and the entry', () => {
+    const sources = mobileSources()
+    expect(sources).toEqual(
+      expect.arrayContaining([
+        'index.ts',
+        'app/_layout.tsx',
+        'modules/orca-mobile-web-shell/src/index.ts',
+        'packages/expo-rich-paste/src/index.ts'
+      ])
+    )
+    // Build and config scripts run where the app is built, and are not what it is built from.
+    expect(sources.filter((file) => /^(scripts|plugins)\//.test(file))).toEqual([])
+  })
+
   it('finds nothing in an empty module', () => {
     const empty = snippet('')
     expect(empty.literals).toEqual([])
     expect(empty.storeCalls).toEqual([])
     expect(empty.storeReaches).toEqual([])
+    expect(empty.declarations).toEqual([])
     expect(exportedNames(empty.code)).toEqual([])
   })
 })
@@ -699,11 +900,18 @@ describe('the mirrored storage write path', () => {
         `${row.file} writes the store past the mirror`
       ).toEqual([])
       for (const name of row.unmirrored) {
-        const declared = new RegExp(`\\bconst\\s+${name}\\s*=\\s*(['"\`])([^'"\`]*)\\1`).exec(
-          source
+        // A write reads the name its scope binds, so a local or a parameter under this name is a
+        // key this never read. One binding, and a top-level literal, leaves nothing else to read.
+        const bound = moduleOf(row.file).declarations.filter(
+          (declaration) => declaration.name === name
         )
-        expect(declared?.[2], `${row.file} declares ${name} as a literal`).toBeDefined()
-        expect(isPageKey(declared?.[2] ?? ''), `${name} is a key the page is handed`).toBe(false)
+        expect(
+          bound.map(({ at, text }) => `${row.file}:${at} ${text}`),
+          `${row.file} binds ${name} once`
+        ).toHaveLength(1)
+        const literal = bound[0]?.literal ?? null
+        expect(literal, `${row.file} declares ${name} as a top-level literal`).not.toBeNull()
+        expect(isPageKey(literal ?? ''), `${name} is a key the page is handed`).toBe(false)
       }
     })
   }
@@ -762,8 +970,8 @@ describe('the mirrored storage write path', () => {
 
   it('lets app code reach the store only by calling a method on its default import', () => {
     // Every rule above reads a write as a method called on the store. One made any other way, off
-    // an element access, a destructured method, `.call` or a store passed on, is a write none of
-    // them can see, so the hold itself is what fails.
+    // an element access, a destructured method, `.call`, a store passed on or a path inside the
+    // package, is a write none of them can see, so the hold itself is what fails.
     const calls = appModules().flatMap((file) => moduleOf(file).storeCalls)
     // Over a hundred today; none would mean the walk lost them, and the clean result below too.
     expect(calls.length).toBeGreaterThan(0)
@@ -794,12 +1002,24 @@ describe('the mirrored storage write path', () => {
     expect(wipes).toEqual([])
   })
 
-  it('lets no app module load test support, which is allowed to wipe the store', () => {
+  it(`lists the store's keys in ${KEY_LISTER} and nowhere else`, () => {
+    // The rule above reads a wipe inside the module that takes the list. A list returned from a
+    // helper and removed by its caller is the same wipe across two modules, which it cannot see.
+    const listers = appModules().filter((file) =>
+      moduleOf(file).storeCalls.some((call) => call.method === 'getAllKeys')
+    )
+    expect(listers).toEqual([KEY_LISTER])
+  })
+
+  it('lets no app module load a test or test support, which may wipe the store', () => {
     const known = new Set(mobileSources())
     const loadsOf = (file: string): string[] =>
       moduleOf(file)
         .imports.map((specifier) => resolveImport(file, specifier, known))
-        .filter((target): target is string => target !== null && TEST_SUPPORT.test(target))
+        .filter(
+          (target): target is string =>
+            target !== null && (TEST.test(target) || TEST_SUPPORT.test(target))
+        )
     // This file loads it, so the resolver can see test support when something loads it.
     expect(loadsOf('src/storage/mirrored-storage-write-path.test.ts').length).toBeGreaterThan(0)
     const loads = appModules().flatMap((file) =>
