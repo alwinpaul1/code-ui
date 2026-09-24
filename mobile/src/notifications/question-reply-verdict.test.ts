@@ -62,7 +62,13 @@ describe('re-posting a banner after a reply that was not sent', () => {
         body:
           `${replyVerdictLine('refused')}\n` +
           'Which of these should I delete?\n1 Tier 1 caches · 2 Unreal Engine\nPick any that apply',
-        data: { hostId: 'host-1', worktreeId: 'wt-1', questionKey: 'q', picks: {} },
+        data: {
+          hostId: 'host-1',
+          worktreeId: 'wt-1',
+          questionKey: 'q',
+          picks: {},
+          replyVerdict: replyVerdictLine('refused')
+        },
         categoryIdentifier: 'codeui-permission-question:answer=reply(x):Answer'
       },
       trigger: { channelId: 'orca-desktop-quiet' }
@@ -77,6 +83,17 @@ describe('re-posting a banner after a reply that was not sent', () => {
     expect(replyVerdictLine('refused')).toMatch(/2 or 1,3/)
     expect(replyVerdictLine('stale')).toMatch(/moved on/i)
     expect(replyVerdictLine('offline')).toBe(replyVerdictLine('unroutable'))
+  })
+
+  // 2026-09-24, the user: no emoji in a notification. The verdict line used to
+  // open with a warning sign; it now opens with its words, and the native view
+  // draws the warning icon beside the line it names in `replyVerdict`.
+  it('says why a reply was not sent in words alone, and names the line for its icon', () => {
+    for (const outcome of ['refused', 'stale', 'failed', 'offline', 'unroutable'] as const) {
+      const line = replyVerdictLine(outcome)
+      expect(line).not.toMatch(/\p{Extended_Pictographic}|\u26A0/u)
+      expect(line.startsWith('Reply not sent')).toBe(true)
+    }
   })
 
   // A second refusal replaces the first verdict rather than stacking on it.

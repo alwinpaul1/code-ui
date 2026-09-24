@@ -244,7 +244,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('NexOS / main · ❓ Claude needs input')
+    expect(content.title).toBe('NexOS / main · Claude needs input')
     expect(content).not.toHaveProperty('categoryIdentifier')
     expect(Notifications.setNotificationCategoryAsync).not.toHaveBeenCalled()
   })
@@ -290,7 +290,7 @@ describe('a question in the shade', () => {
     await flush()
 
     const content = scheduled()
-    expect(content.title).toBe('NexOS / main · ❓ Claude needs input')
+    expect(content.title).toBe('NexOS / main · Claude needs input')
     expect(content.body).toBe('Using AskUserQuestion')
     expect(content).not.toHaveProperty('categoryIdentifier')
     expect(content.data).not.toHaveProperty('picks')

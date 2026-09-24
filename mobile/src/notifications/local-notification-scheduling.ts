@@ -173,13 +173,12 @@ async function presentedNotificationContent(
   hostId: string,
   link: LocalNotificationLink
 ) {
-  const content = {
-    ...presentDesktopNotification({
-      ...event,
-      agent: uniqueWorktreeLaunchAgent(event.worktreeId)
-    }),
-    data: buildLocalNotificationData(event, hostId)
-  }
+  const { statusIcon, ...presented } = presentDesktopNotification({
+    ...event,
+    agent: uniqueWorktreeLaunchAgent(event.worktreeId)
+  })
+  const data = buildLocalNotificationData(event, hostId)
+  const content = { ...presented, data: statusIcon ? { ...data, statusIcon } : data }
   // Why here and not at the caller: every path that shows a banner goes through
   // this, and a permission ask arriving with the previous command's stdout as
   // its caption — or a question arriving as "Using AskUserQuestion" — was the

@@ -1,7 +1,13 @@
 import { notificationPlainText } from './notification-plain-text'
 import type { DesktopNotificationSource } from './notification-routing'
+import { NOTIFICATION_STATUS_ICONS, type NotificationStatusIcon } from './notification-status-icon'
 
-export type PresentedNotification = { title: string; body: string }
+export type PresentedNotification = {
+  title: string
+  body: string
+  /** The icon drawn in the title row, where an emoji used to lead the headline. */
+  statusIcon: NotificationStatusIcon | null
+}
 
 /** Longest body Android shows expanded before it truncates on its own. */
 const BODY_LIMIT = 320
@@ -66,31 +72,29 @@ export function presentDesktopNotification(event: {
     parsed?.headline ?? notificationPlainText(event.title),
     event.agent
   )
-  const glyph = statusGlyph(event.source, headline)
-  const title = parsed?.location
-    ? `${parsed.location} · ${glyph}${headline}`
-    : `${glyph}${headline}`
+  const title = parsed?.location ? `${parsed.location} · ${headline}` : headline
   const summary = summarize(event.body, parsed?.headline)
-  return { title, body: summary }
+  return { title, body: summary, statusIcon: statusIcon(event.source, headline) }
 }
 
 /**
- * One glyph up front says what happened before a word is read, the way a
- * status bot does: done, waiting on you, or a plain bell. Nothing else in the
- * title gets an emoji.
+ * One icon beside the headline says what happened before a word is read:
+ * done, waiting on you, or a plain bell. It is drawn by the native view
+ * (notification-status-icon.ts), never typed into the title: the title text
+ * carries no emoji at all.
  */
-function statusGlyph(source: DesktopNotificationSource, headline: string): string {
+function statusIcon(source: DesktopNotificationSource, headline: string): NotificationStatusIcon | null {
   const text = headline.toLowerCase()
   if (/\b(needs?|waiting|approve|permission|question|input)\b/.test(text)) {
-    return '❓ '
+    return NOTIFICATION_STATUS_ICONS.question
   }
   if (source === 'terminal-bell') {
-    return '🔔 '
+    return NOTIFICATION_STATUS_ICONS.bell
   }
   if (/\b(finished|done|complete[d]?)\b/.test(text)) {
-    return '✅ '
+    return NOTIFICATION_STATUS_ICONS.done
   }
-  return ''
+  return null
 }
 
 function parseDesktopTitle(title: string): { headline: string; location: string } | null {

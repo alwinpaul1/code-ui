@@ -5,21 +5,23 @@ import type { PromptAnswerOutcome } from './permission-notification-response'
 /** The ways a typed reply ends without being written. */
 export type ReplyVerdict = Exclude<PromptAnswerOutcome, 'sent' | 'not-an-answer'>
 
-/** Marks the verdict line so a later re-post replaces it instead of stacking. */
-const VERDICT_MARK = '⚠ '
+/** Opens every verdict line, so a later re-post replaces it instead of
+ *  stacking. Words only: the warning icon beside it is drawn by the native
+ *  view from `data.replyVerdict` (notification-status-icon.ts). */
+const VERDICT_MARK = 'Reply not sent — '
 
 /** One line, in the user's terms, for why the reply was not sent. */
 export function replyVerdictLine(outcome: ReplyVerdict): string {
   switch (outcome) {
     case 'refused':
-      return `${VERDICT_MARK}Reply not sent — use a number like 2 or 1,3 (one answer per question, separated by ;), or type words`
+      return `${VERDICT_MARK}use a number like 2 or 1,3 (one answer per question, separated by ;), or type words`
     case 'stale':
-      return `${VERDICT_MARK}Reply not sent — the agent has moved on`
+      return `${VERDICT_MARK}the agent has moved on`
     case 'failed':
-      return `${VERDICT_MARK}Reply not sent — check the session`
+      return `${VERDICT_MARK}check the session`
     case 'offline':
     case 'unroutable':
-      return `${VERDICT_MARK}Reply not sent — not connected`
+      return `${VERDICT_MARK}not connected`
     default: {
       const exhaustive: never = outcome
       return exhaustive
@@ -74,6 +76,7 @@ export async function repostBannerWithReplyVerdict(
 ): Promise<void> {
   const { identifier, content } = response.notification.request
   const body = withoutVerdict(content.body ?? '')
+  const verdict = replyVerdictLine(outcome)
   try {
     // The reply field can be open while the desktop's dismiss lands (the
     // agent was answered at the desk); the reply then ends 'stale', and a
@@ -89,8 +92,8 @@ export async function repostBannerWithReplyVerdict(
       identifier,
       content: {
         ...(content.title ? { title: content.title } : {}),
-        body: `${replyVerdictLine(outcome)}\n${body}`.trimEnd(),
-        ...(content.data ? { data: content.data } : {}),
+        body: `${verdict}\n${body}`.trimEnd(),
+        data: { ...content.data, replyVerdict: verdict },
         ...(content.categoryIdentifier ? { categoryIdentifier: content.categoryIdentifier } : {})
       },
       trigger: notificationTrigger()

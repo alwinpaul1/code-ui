@@ -3,6 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "main": "index.ts",
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": ["expo-notifications"]
+      }
+    }
+  },
   "scripts": {
     "start": "node scripts/start-expo.mjs",
     "android": "expo run:android",

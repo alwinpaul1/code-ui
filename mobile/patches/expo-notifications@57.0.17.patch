@@ -1,0 +1,82 @@
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+index 610d3039cefd589647538ad8ba14587d29fab338..aae8527f8e2e356863c83b427ad23731c8d51a31 100644
+--- a/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
++++ b/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+@@ -10,6 +10,8 @@ import android.os.Bundle
+ import android.os.Parcel
+ import android.provider.Settings
+ import android.util.Log
++import android.view.View
++import android.widget.RemoteViews
+ import androidx.core.app.NotificationCompat
+ import androidx.core.app.RemoteInput
+ import expo.modules.notifications.notifications.SoundResolver
+@@ -153,9 +155,68 @@ open class ExpoNotificationBuilder(
+     } else {
+       builder.setLargeIcon(largeIcon)
+     }
++    applyCodeUiStatusContent(builder, content)
+     return builder.build()
+   }
+ 
++  /**
++   * Code UI: a drawn icon where the phone used to put an emoji (2026-09-24).
++   * `data.statusIcon` names one of the app's drawables, drawn beside the
++   * headline; `data.replyVerdict` is the line a failed shade reply leads the
++   * body with, drawn beside a warning icon. Either one swaps in the app's own
++   * content view (plugins/android-notification-status-icons.js) under the
++   * system's header, buttons and reply field. Anything missing keeps the stock
++   * template: a bad name costs the icon, never the notification.
++   */
++  private fun applyCodeUiStatusContent(builder: NotificationCompat.Builder, content: INotificationContent) {
++    val data = content.body ?: return
++    val res = context.resources
++    val pkg = context.packageName
++    val iconName = data.optString("statusIcon", "")
++    val iconId =
++      if (iconName.startsWith("notification_status_")) res.getIdentifier(iconName, "drawable", pkg) else 0
++    val verdict = data.optString("replyVerdict", "")
++    var text = content.text ?: ""
++    val showVerdict = verdict.isNotEmpty() && text.startsWith(verdict)
++    if (iconId == 0 && !showVerdict) {
++      return
++    }
++    val collapsed = res.getIdentifier("notification_status", "layout", pkg)
++    val expanded = res.getIdentifier("notification_status_big", "layout", pkg)
++    if (collapsed == 0 || expanded == 0) {
++      return
++    }
++    if (showVerdict) {
++      text = text.substring(verdict.length).trimStart('\n')
++    }
++    // The phone titles a banner "<location> · <headline>"; the icon sits
++    // between the two, where the emoji was.
++    val title = content.title ?: ""
++    val split = title.indexOf(" · ")
++    val location = if (split > 0) title.substring(0, split + 3) else ""
++    val headline = if (split > 0) title.substring(split + 3) else title
++    fun id(name: String) = res.getIdentifier(name, "id", pkg)
++    fun shown(visible: Boolean) = if (visible) View.VISIBLE else View.GONE
++    fun views(layout: Int): RemoteViews {
++      val views = RemoteViews(pkg, layout)
++      views.setTextViewText(id("notification_status_location"), location)
++      views.setViewVisibility(id("notification_status_location"), shown(location.isNotEmpty()))
++      if (iconId != 0) {
++        views.setImageViewResource(id("notification_status_icon"), iconId)
++      }
++      views.setViewVisibility(id("notification_status_icon"), shown(iconId != 0))
++      views.setTextViewText(id("notification_status_title"), headline)
++      views.setTextViewText(id("notification_status_verdict"), verdict)
++      views.setViewVisibility(id("notification_status_verdict_row"), shown(showVerdict))
++      views.setTextViewText(id("notification_status_text"), text)
++      views.setViewVisibility(id("notification_status_text"), shown(text.isNotEmpty()))
++      return views
++    }
++    builder.setStyle(NotificationCompat.DecoratedCustomViewStyle())
++    builder.setCustomContentView(views(collapsed))
++    builder.setCustomBigContentView(views(expanded))
++  }
++
+   private fun applySoundsAndVibrations(content: INotificationContent, builder: NotificationCompat.Builder) {
+     val shouldPlaySound = shouldPlaySound()
+     val shouldVibrate = shouldVibrate()
