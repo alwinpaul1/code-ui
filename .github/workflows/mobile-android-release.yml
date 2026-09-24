@@ -27,7 +27,7 @@ on:
         default: true
         type: boolean
       shell:
-        description: 'Which shell the APK boots into: native (the React Native screens) or ota (the hybrid WebView shell)'
+        description: 'Which shell the APK boots into: native (the React Native screens) or ota (the hybrid WebView shell, a test build that is never published)'
         required: false
         default: native
         type: choice
@@ -87,6 +87,7 @@ jobs:
         env:
           MOBILE_ANDROID_RELEASE_VERSION: ${{ github.event.inputs.release_version }}
           MOBILE_ANDROID_PUBLISH_RELEASE: ${{ github.event.inputs.publish_github_release }}
+          MOBILE_ANDROID_SHELL: ${{ github.event.inputs.shell }}
         run: node scripts/prepare-android-release.mjs
 
       - name: Lint and typecheck
@@ -127,12 +128,12 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Build Android release APK
-        # A tag push and a schedule carry no inputs at all, so `inputs.shell || 'native'` yields
-        # native for them — every build here is the app we ship today unless a dispatch changes
-        # this one field. Printed back from the same variable the build used, so the log cannot
-        # claim a shell the build did not.
+        # The shell kind comes from the release step, which reads a tag push's missing input as
+        # native and never publishes an ota build (scripts/prepare-android-release.mjs). Printed
+        # back from the same variable the build used, so the log cannot claim a shell the build
+        # did not.
         env:
-          EXPO_PUBLIC_MOBILE_SHELL: ${{ github.event.inputs.shell || 'native' }}
+          EXPO_PUBLIC_MOBILE_SHELL: ${{ steps.release.outputs.shell }}
         run: |
           echo "Building with EXPO_PUBLIC_MOBILE_SHELL=$EXPO_PUBLIC_MOBILE_SHELL"
           cd android && ./gradlew assembleRelease --no-daemon
