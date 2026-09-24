@@ -135,13 +135,16 @@ describe('the connected flow', () => {
   it('opens the cached generation without paging when the build ids match', () => {
     const step = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: MANIFEST })
     expect(step.session.state).toEqual({ kind: 'activating' })
+    // And it writes the manifest it just matched: the routes are the only thing a same-build read
+    // can have changed, and nothing else on this path touches the disk.
     expect(step.effects).toEqual([
       {
         kind: 'open-generation',
         directory: CACHED.directory,
         buildId: CACHED.buildId,
         totalBytes: CACHED.totalBytes
-      }
+      },
+      { kind: 'persist-manifest', manifest: MANIFEST.wire }
     ])
   })
 
@@ -317,16 +320,11 @@ describe('a read the link cut short falls back to what is on disk', () => {
     expect(step.effects).toEqual([])
   })
 
-  it('fails on a verdict about the bundle even with a generation cached', () => {
-    // A host that refuses the read, or bytes that do not hash, is an answer about the bundle. A
-    // cached generation is no reason to hide it behind a workspace that is merely older.
-    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'bundle' })
-    expect(step.session.state).toEqual({
-      kind: 'failed',
-      reason: 'download-failed',
-      retriedOnce: false
-    })
-    expect(step.effects).toEqual([])
+  it('leaves no notice on it, because nothing says an update was there to fail', () => {
+    // The link went before the host said what it serves. "Update failed" would be a claim about a
+    // generation this phone never heard of.
+    const step = run(manifestInFlight().session, { type: 'download-failed', failure: 'transport' })
+    expect(step.session.updateNotice).toBeNull()
   })
 })
 

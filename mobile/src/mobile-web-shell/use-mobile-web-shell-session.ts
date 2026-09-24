@@ -10,15 +10,16 @@ import {
   PAGE_READY_DEADLINE_MS,
   type MobileWebShellRuntime
 } from './mobile-web-shell-runtime'
+import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
 import {
   createMobileWebShellSession,
-  readMobileWebShellReachability,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
 import type {
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
-  MobileWebShellSessionState
+  MobileWebShellSessionState,
+  MobileWebShellUpdateNotice
 } from './mobile-web-shell-session-contract'
 
 export type MobileWebShellSessionView = {
@@ -27,6 +28,9 @@ export type MobileWebShellSessionView = {
   readonly pageRoutes: readonly string[]
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
+  /** Non-null when this generation is a fallback from an update the shell refused, for the caller
+   *  to say so beside the page rather than instead of it. */
+  readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
   /** B3's failure reasons, forwarded verbatim; the reducer owns what each one means. */
   readonly reportShellFailure: (reason: MobileWebShellFailureReason) => void
@@ -112,6 +116,12 @@ export function useMobileWebShellSession(args: {
           // Reports nothing: the store serialises its own queue, so the sweep and read the reducer
           // queued behind this one already run after it.
           await store.deleteHostCache(hostKey).catch(() => undefined)
+          return
+        case 'persist-manifest':
+          // Nothing is reported back and a failure is swallowed: the routes the page is mounted
+          // under are already on the session, so all a refused or failed write costs is the
+          // freshness of the next offline verdict, never the generation being opened here.
+          await store.persistActiveManifest(hostKey, effect.manifest).catch(() => undefined)
           return
         case 'open-cache':
           send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
@@ -229,6 +239,7 @@ export function useMobileWebShellSession(args: {
     pageRoutes: sessionRef.current.pageRoutes,
     pageRouteGrants: sessionRef.current.pageRouteGrants,
     routeGrants: sessionRef.current.routeGrants,
+    updateNotice: sessionRef.current.updateNotice,
     retry,
     reportShellFailure,
     reportDocumentLoaded,

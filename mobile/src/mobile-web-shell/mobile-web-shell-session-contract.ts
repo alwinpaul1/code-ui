@@ -1,4 +1,5 @@
 import type { MobileWebShellFailureReason } from '../../modules/orca-mobile-web-shell/src/load-state'
+import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
 import type { MobileWebPageRoute } from './page-route-policy'
 import type {
   MobileWebBundleCompatManifest,
@@ -37,6 +38,11 @@ export type MobileWebShellManifestFacts = MobileWebBundleCompatManifest & {
   readonly totalAssets: number
   /** Undefined for a desktop older than the field, which is every route staying native. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
+  /** The manifest as it arrived, which is what a same-build hit writes beside the cached assets.
+   *  Carried whole rather than rebuilt from the fields above: the store compares its asset list
+   *  against the stored one, and a re-serialised projection would drop both what this client reads
+   *  loosely and what a newer desktop added. */
+  readonly wire: MobileWebBundleManifestRead
 }
 
 /** What `readActiveGeneration` found, reduced to what a transition reads. */
@@ -46,6 +52,11 @@ export type CachedGeneration = {
   readonly totalBytes: number
   /** The routes the cached bundle declared, which is what an unreachable host is judged by. */
   readonly routes: readonly MobileWebPageRoute[] | undefined
+  /** What these bytes declare, read off the manifest stored beside them, so a generation served
+   *  while the host is reachable can be judged against it. Never absent: `readActiveGeneration`
+   *  answers null for a generation whose manifest did not parse, and the schema requires all
+   *  three. */
+  readonly compat: MobileWebBundleCompatManifest
 }
 
 export type MobileWebShellBlockedVerdict = Extract<
@@ -63,6 +74,20 @@ export type MobileWebShellFailureCause =
   | MobileWebShellFailureReason
   | 'download-failed'
   | 'status-unreadable'
+
+/**
+ * Why the workspace on screen is not the one this host serves now.
+ *
+ * Set when the shell asked a reachable host for an update and refused the answer — a manifest it
+ * could not read, or assets that did not arrive whole — and opened the last generation it had
+ * accepted instead. A notice beside `ready`, never a state in front of it: the page is running and
+ * nothing about it is blocked.
+ *
+ * Named rather than a flag, and one name rather than two, because one name is all that is verified
+ * from here: both refusals arrive as the same event, and neither proves a newer generation exists.
+ * Nothing about it is persisted, so the next flow asks again.
+ */
+export type MobileWebShellUpdateNotice = 'update-failed'
 
 export type MobileWebShellSessionState =
   /** Gates unsettled, cache being read, or a manifest in flight. Nothing is on screen yet. */
@@ -115,6 +140,10 @@ export type MobileWebShellSessionEffect =
       readonly totalBytes: number
     }
   | { readonly kind: 'delete-cache' }
+  /** Rewrite the manifest stored beside the generation just opened. Only a same-build hit asks for
+   *  it: the assets are the ones the manifest names, and the routes are an edit newer. Nothing is
+   *  reported back, because the fresh routes are already on the session. */
+  | { readonly kind: 'persist-manifest'; readonly manifest: MobileWebBundleManifestRead }
   /** Mint a new session id for the generation already on screen, which is what remounts the view. */
   | { readonly kind: 'remount' }
   /** Start the clock on the page's first word. Expiry arrives as `page-ready-deadline` for the flow
@@ -201,6 +230,9 @@ export type MobileWebShellSession = {
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null
+  /** Null unless the generation on screen is a fallback from an update this shell refused. Cleared
+   *  by every entry into the flow, so it never outlives the screen it explains. */
+  readonly updateNotice: MobileWebShellUpdateNotice | null
   /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
    *  run belongs to, and echoed back on their results. */
   readonly flow: number
