@@ -12,13 +12,19 @@ import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './Mo
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { witnessesToRemember } from './mobile-native-chat-witness-memory'
-import { pendingWithoutTranscriptTwins, textsAlreadyShown } from './desktop-prompt-own-sends'
 import {
+  inSendOrder,
+  pairPendingWithHookPrompts,
+  promptsNoCopyStandsFor
+} from './desktop-prompt-own-sends'
+import {
+  deskEchoId,
   useDesktopPromptEchoes,
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
+import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
 import { openImageMarkup } from './image-markup-store'
 
@@ -28,7 +34,7 @@ import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-reque
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 const CLIPBOARD_POLL_MS = 3000
 
-const NO_PROMPTS: { nonce: string; text: string }[] = []
+const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
 
@@ -169,20 +175,24 @@ export function MobileNativeChatOverlay({
   // ride the HUD beacon instead (2026-09-13).
   const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
   // The hook fires for the phone's own sends too, and those already have a
-  // pending echo, so anything matching one is left out (2026-09-13).
-  // …except a send the transcript itself has a record of: that record says
-  // where the message was taken, the phone's echo only guessed, so the echo
-  // steps aside for it (2026-09-19, see desktop-prompt-own-sends.ts).
+  // pending echo, so the hook's copy of one is left out (2026-09-13). The
+  // phone's send keeps its photos and its send-time place; only a copy with
+  // no send time steps aside for the hook's. One copy each way: a pending
+  // "yes" must not hide a later "yes" typed at the desk (desktop-prompt-own-sends.ts).
+  const hookPairing = useMemo(
+    () => pairPendingWithHookPrompts(controller.chatPending, desktopPrompts),
+    [controller.chatPending, desktopPrompts]
+  )
   // …and a message the agent's queue box still lists is drawn THERE, not as
-  // a bubble above it (2026-09-19, see textsAlreadyShown).
+  // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
   const unlandedPrompts = useMemo(
     () =>
       withoutLandedDesktopPrompts(
-        desktopPrompts,
+        promptsNoCopyStandsFor(desktopPrompts, hookPairing),
         baseFolded,
-        textsAlreadyShown(controller.chatPending, desktopPrompts, queuedMessages ?? [])
+        queuedMessages ?? []
       ),
-    [controller.chatPending, desktopPrompts, baseFolded, queuedMessages]
+    [hookPairing, desktopPrompts, baseFolded, queuedMessages]
   )
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
@@ -239,11 +249,16 @@ export function MobileNativeChatOverlay({
     }
   }, [absorbedEchoes, desktopEchoes, rememberEcho])
   const pendingWithDesktopPrompts = useMemo(() => {
-    const own = pendingWithoutTranscriptTwins(placedOwn, desktopPrompts)
-    return desktopEchoes.length > 0 || absorbedEchoes.length > 0
-      ? [...own, ...absorbedEchoes, ...desktopEchoes]
-      : own
-  }, [absorbedEchoes, desktopEchoes, desktopPrompts, placedOwn])
+    const own = hookPairing.steppedAside.size === 0
+      ? placedOwn
+      : placedOwn.filter((item) => !hookPairing.steppedAside.has(item.id))
+    if (desktopEchoes.length === 0 && absorbedEchoes.length === 0) {
+      return own
+    }
+    // Two bubbles after one row draw in list order, so in the order they were sent.
+    const sentAt = new Map(desktopPrompts.map((prompt) => [deskEchoId(prompt.nonce), prompt.at]))
+    return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
+  }, [absorbedEchoes, desktopEchoes, desktopPrompts, hookPairing, placedOwn])
   const stopBackgroundTask = useCallback(
     (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
     [controller]

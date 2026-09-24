@@ -21,7 +21,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 11 | A queued message stays queued while Claude Code 2.1.281 draws the queue above its spinner | Drew it as already sent | done (acac520b) |
 | 12 | A reply written just before a phone send stays above the message | Drew it below | done (3ed09620) |
 | 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
-| 14 | Where a mid-turn message sits among the rows around it | Two Claude app screenshots disagree under every rule Claude Code's records allow (below) | investigating |
+| 14 | Where a mid-turn message sits among the rows around it: its own sends where it sent them, a message sent elsewhere where the agent took it (below) | A phone text send gave way to the hook's copy and drew under rows written after it | phone sends fixed, not yet checked on the phone; a Claude app send reaches the phone as the hook's text only (below) |
 
 ## Evidence notes
 
@@ -60,15 +60,27 @@ failing-first test and has been checked on the phone in light and dark.
   (`queued_command`, written after the tool result). The "mahdi" message
   (enqueued 23:19:27.671) drew ABOVE a thinking block and tool call stamped
   0.2 s before the send but written after it: the Claude app matched the
-  enqueue, not the take. The rule that fits both reports is the user's own
-  choice, "where I sent it", for the phone's own sends (3ed09620 draws a row
-  stamped at least the measured clock slack before the send above it). What
-  broke the mahdi case is which copy was drawn: the Code UI bubble had NO
-  images while the Claude app's had three, so the phone's own echo was not
-  the one on screen. A text-only witness of the same message (the hook's
-  prompt, reported when Claude Code takes it, or the queue box's release)
-  replaced it and sat at the take. Fix: for a message the phone sent, keep
-  the phone's echo, with its images and its send-time place, and retire the
-  hook and queue copies against it, never the other way round. This is also
-  half of item 9 (images missing from the bubble).
+  enqueue, not the take. The two agree once it is clear who sent what. "Red."
+  was the phone's, typed into the terminal: its `queue-operation` enqueue
+  carries the text, and its photos are `[Image #8]`–`[Image #10]`, the
+  markers a terminal paste leaves. The mahdi message came from the Claude
+  app: its enqueue has no `content`, and its three photos are
+  `inlinedImagePaths` in `~/.claude-work/uploads/<session>/`, the Remote
+  Control upload folder, where every photo the Claude app sent from 22:58 on
+  was saved. The rule that fits both screenshots: the Claude app draws a
+  message it sent itself where it sent it, and one sent elsewhere where the
+  agent took it. Code UI drew the mahdi
+  message from the hook alone (`agentStatus.prompt`, text only), after the
+  rows stamped before the hook's time. The hook fires at the submit: the
+  2026-09-19 capture in desktop-prompt-own-sends.test.ts is timed at the
+  enqueue, 19 s before the take. Code UI never had the photos: Orca's reader
+  drops the `queued_command` that carries them, and the phone has no other
+  path to the files. The user's rule, "where I sent it", holds for the
+  phone's own sends. Before the fix, a text send gave way to the hook's
+  timed copy and drew under the thinking and the call written after it. A
+  photo send was already kept. Now every phone send with a send time keeps
+  its bubble, and the hook's and queue box's copies give way to it. Item 9's
+  message (line 8371, a video and a photo) was a Claude app send too, and it
+  landed as a user row, so what its bubble lacks comes from how a landed row
+  draws, not from the phone's echo.
 

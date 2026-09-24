@@ -222,7 +222,7 @@ export function useDesktopPromptEchoes(
     const placement =
       settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
     echoes.push({
-      id: `desk-${prompt.nonce}`,
+      id: deskEchoId(prompt.nonce),
       // The RAW text, marker and all. It is what this echo is matched against
       // when its transcript row lands — and `normalizeNativeChatUserText`
       // deletes `[Image #N]` from both sides, so the keys agree. Rewriting the
@@ -236,6 +236,11 @@ export function useDesktopPromptEchoes(
     })
   }
   return useStableEchoes(echoes)
+}
+
+/** The bubble id of a hook prompt's echo. */
+export function deskEchoId(nonce: string): string {
+  return `desk-${nonce}`
 }
 
 /** The id of the last row written at or before `at`, null when every held

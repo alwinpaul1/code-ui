@@ -10,6 +10,7 @@ import {
   type MobileNativeChatPendingMessage
 } from './mobile-native-chat-pending-echo'
 import { noteLiveRowsArrived } from './mid-turn-written-before'
+import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 const clipboard = { hasImage: false }
@@ -67,6 +68,10 @@ type Tick = {
   hostAllowsRewind?: boolean
   /** The phone's own sends still waiting for a transcript row. */
   pending?: MobileNativeChatPendingMessage[]
+  /** Prompts Orca's UserPromptSubmit hook reported (`agentStatus.prompt`). */
+  desktopPrompts?: DesktopPrompt[]
+  /** The rows the agent's queue box shows right now. */
+  queued?: string[]
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -82,6 +87,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatStreamLive: tick.streamLive ?? false,
     nativeChatStreamScopeKey: tick.identity ?? 'tab-a',
     chatPending: tick.pending ?? [],
+    nativeChatDesktopPrompts: tick.desktopPrompts,
+    nativeChatQueuedMessages: tick.queued,
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
     setChatComposerText: vi.fn(),
@@ -591,5 +598,214 @@ describe('a message the phone sent mid-turn', () => {
       renderer?.update(overlayElement({ messages: [toolResult, reply], pending: [{ ...send, sentAt: undefined }] }))
     })
     expect(drawnOrder()).toEqual(['result', 'SENT', 'red'])
+  })
+})
+
+// Session 967668df, 0-based lines 8605–8637 (Claude Code 2.1.281, 2026-09-23). The
+// rows and their stamps are the transcript's. A message enqueued at
+// 23:19:27.671 was followed by a thinking row and a call STAMPED 0.2 s before
+// it but written after it, and absorbed at 23:19:28.688 as a `queued_command`
+// Orca's reader drops. The mahdi message itself came from the Claude app (its
+// enqueue has no `content` and its photos are in the Remote Control upload
+// folder); these cases put a PHONE send in the same place. Orca's hook reports
+// every prompt, the phone's too, as a timed `agentStatus.prompt`.
+describe('a message the phone sent mid-turn, beside the hook and queue copies of it', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const at = (clock: string) => Date.parse(`2026-09-23T${clock}Z`)
+  const row = (
+    id: string,
+    role: 'assistant' | 'user',
+    block: NativeChatMessage['blocks'][number],
+    clock: string
+  ): NativeChatMessage => ({ id, role, blocks: [block], timestamp: at(clock), source: 'transcript' })
+  const bash = (description: string) => ({ type: 'tool-call' as const, name: 'Bash', input: { description } })
+  // Held when the send left the phone (8605, 8606, 8608).
+  const held = [
+    row('8605', 'assistant', { type: 'text', text: "I'll look at which hook events Orca installed for this profile." }, '23:19:13.464'),
+    row('8606', 'assistant', bash('List hook events registered in each Claude profile'), '23:19:13.473'),
+    row('8608', 'user', { type: 'tool-result', output: "== /Users/alwinpaul/.claude-work/settings.json\n['PermissionRequest', 'PostCompact']" }, '23:19:14.835')
+  ]
+  // Written after the send, the first two stamped before it (8614, 8615, 8617).
+  const afterSend = [
+    row('8614', 'assistant', { type: 'text', text: 'I confirmed Orca registers `StopFailure`, so the turn-end hook exists.' }, '23:19:27.450'),
+    row('8615', 'assistant', bash('Read turn-boundary and monitoring logic'), '23:19:27.458'),
+    row('8617', 'user', { type: 'tool-result', output: '    // Why: a new process owns the pane' }, '23:19:28.641')
+  ]
+  // The next reply, after the take (8637).
+  const next = row('8637', 'assistant', { type: 'text', text: 'I found another rendering bug: multi-paragraph quotes render broken in Code UI.' }, '23:19:42.309')
+  const text =
+    'See this message to mahdi looked nicely formatted in claude mobile app where as it was broken in our code ui app fix that'
+  const photos = ['e7c39725', '8645a424', '350711b8'].map(
+    (name) => `file:///data/user/0/com.codeui/cache/ImagePicker/${name}.jpg`
+  )
+  const send: MobileNativeChatPendingMessage = {
+    id: 'phone-send',
+    text,
+    expectedOccurrence: 1,
+    baselineTailMessageId: '8608',
+    baselineResolved: true,
+    sentAt: at('23:19:27.671')
+  }
+  const hook = (clock: string, prompt = text): DesktopPrompt => ({
+    nonce: `status:967668df-a7d9-40e7-964b-7812815c010d:${at(clock)}:0`,
+    text: prompt,
+    at: at(clock)
+  })
+
+  /** Each drawn row: a transcript row by id, a bubble as `bubble:<whose>`
+   *  with its picture count. */
+  function drawn(): string[] {
+    const view = renderer!.root.findAll((node) => node.type === 'ChatView')[0]!
+    const pendingIds = new Set((view.props.pending as { id: string }[]).map((item) => item.id))
+    const { data } = buildMobileNativeChatTransientData({
+      messages: view.props.messages,
+      folded: view.props.folded,
+      streaming: null,
+      pending: view.props.pending
+    })
+    return data.map((message) => {
+      if (!pendingIds.has(message.id)) {
+        return message.id
+      }
+      const pictures = message.blocks.filter((block) => block.type === 'image-ref').length
+      const whose = message.id.startsWith('desk-') ? 'hook' : message.id.startsWith('queued-') ? 'queue' : message.id
+      return `bubble:${whose}${pictures ? `+${pictures}` : ''}`
+    })
+  }
+
+  async function play(ticks: Tick[]): Promise<void> {
+    for (const tick of ticks) {
+      await act(async () => {
+        if (renderer) {
+          renderer.update(overlayElement(tick))
+        } else {
+          renderer = create(overlayElement(tick))
+        }
+      })
+    }
+  }
+
+  const bubbles = () => drawn().filter((entry) => entry.startsWith('bubble:'))
+  const before = (a: string, b: string) => drawn().indexOf(a) < drawn().indexOf(b)
+
+  it.each([
+    ['the hook timed at the submit', '23:19:27.700'],
+    ['the hook timed at the take', '23:19:28.688']
+  ])('draws a text send once, as the phone sent it, above the rows written after it, with %s', async (_label, clock) => {
+    const pending = [send]
+    await play([
+      { messages: held, pending },
+      { messages: held, pending, desktopPrompts: [hook(clock)] },
+      { messages: [...held, ...afterSend], pending, desktopPrompts: [hook(clock)] },
+      { messages: [...held, ...afterSend, next], pending, desktopPrompts: [hook(clock)] }
+    ])
+    expect(bubbles()).toEqual(['bubble:phone-send'])
+    expect(before('8608', 'bubble:phone-send')).toBe(true)
+    expect(before('bubble:phone-send', '8614')).toBe(true)
+  })
+
+  it('draws a photo send once, with its photos, above the rows written after it', async () => {
+    const pending = [{ ...send, images: photos }]
+    const prompts = [hook('23:19:27.700', `[Image #20] [Image #21] [Image #22] ${text}`)]
+    await play([
+      { messages: held, pending },
+      { messages: held, pending, desktopPrompts: prompts },
+      { messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts }
+    ])
+    expect(bubbles()).toEqual(['bubble:phone-send+3'])
+    expect(before('bubble:phone-send+3', '8614')).toBe(true)
+  })
+
+  it('shows a send in the queue box alone while it waits, then as the phone sent it once the agent takes it', async () => {
+    const pending = [send]
+    const prompts = [hook('23:19:27.700')]
+    await play([
+      { messages: held, pending },
+      { messages: held, pending, desktopPrompts: prompts, queued: [text] },
+      { messages: [...held, afterSend[0]!, afterSend[1]!], pending, desktopPrompts: prompts, queued: [text] }
+    ])
+    expect(bubbles()).toEqual([])
+    await play([{ messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts, queued: [] }])
+    expect(bubbles()).toEqual(['bubble:phone-send'])
+    expect(before('bubble:phone-send', '8614')).toBe(true)
+  })
+
+  it('still draws a message typed elsewhere, which has no phone copy, from the hook alone', async () => {
+    await play([
+      { messages: held },
+      { messages: held, desktopPrompts: [hook('23:19:27.700')] },
+      { messages: [...held, ...afterSend, next], desktopPrompts: [hook('23:19:27.700')] }
+    ])
+    expect(bubbles()).toEqual(['bubble:hook'])
+  })
+
+  // Review, 2026-09-24: two mid-turn messages with no row written between
+  // them share an anchor, and draw in list order.
+  it('draws a message typed at the desk before a phone send above it when both follow the same row', async () => {
+    const desk = hook('23:19:20.000', 'first, from the desk')
+    const own = hook('23:19:27.700')
+    await play([
+      { messages: held, desktopPrompts: [desk] },
+      { messages: held, pending: [send], desktopPrompts: [desk, own] },
+      { messages: [...held, ...afterSend, next], pending: [send], desktopPrompts: [desk, own] }
+    ])
+    expect(bubbles()).toEqual(['bubble:hook', 'bubble:phone-send'])
+  })
+
+  // Review, 2026-09-24: the phone's send hid every hook prompt with its text,
+  // not just its own copy.
+  it('draws a later message typed elsewhere that repeats the text of a pending phone send', async () => {
+    const yes = { ...send, text: 'yes' }
+    const prompts = [hook('23:19:27.700', 'yes'), hook('23:19:35.000', 'now look at the logs'), hook('23:19:40.000', 'yes')]
+    await play([
+      { messages: held, pending: [yes], desktopPrompts: prompts.slice(0, 1) },
+      { messages: [...held, ...afterSend, next], pending: [yes], desktopPrompts: prompts }
+    ])
+    expect(bubbles()).toEqual(['bubble:phone-send', 'bubble:hook', 'bubble:hook'])
+  })
+
+  it('keeps an earlier message typed elsewhere beside a later phone send of the same text', async () => {
+    const earlier = hook('23:19:10.000', 'yes')
+    // Remembered from the hook before the phone sent its own "yes".
+    const remembered: MobileNativeChatPendingMessage = {
+      id: `desk-${earlier.nonce}`,
+      text: 'yes',
+      expectedOccurrence: 1,
+      baselineTailMessageId: '8606',
+      baselineResolved: true
+    }
+    const yes = { ...send, text: 'yes' }
+    await play([
+      { messages: held, pending: [remembered], desktopPrompts: [earlier] },
+      { messages: [...held, ...afterSend], pending: [remembered, yes], desktopPrompts: [earlier, hook('23:19:27.700', 'yes')] }
+    ])
+    expect(bubbles()).toEqual(['bubble:hook', 'bubble:phone-send'])
+  })
+
+  // The hook reports a photo send with its markers first, so a leading skill
+  // token was not where the short-token rule looks, and the send drew twice.
+  it('draws a photo send that starts with a plugin skill once', async () => {
+    const skill = { ...send, text: '/codeui:review the placement', images: photos.slice(0, 1) }
+    const prompts = [hook('23:19:27.700', '[Image #20] /codeui:review the placement')]
+    await play([
+      { messages: held, pending: [skill], desktopPrompts: prompts },
+      { messages: [...held, ...afterSend], pending: [skill], desktopPrompts: prompts }
+    ])
+    expect(bubbles()).toEqual(['bubble:phone-send+1'])
+  })
+
+  it('still draws a message typed elsewhere from the queue box when no hook reports it', async () => {
+    await play([
+      { messages: held },
+      { messages: held, queued: [text] },
+      { messages: [...held, ...afterSend], queued: [] },
+      { messages: [...held, ...afterSend, next], queued: [] }
+    ])
+    expect(bubbles()).toEqual(['bubble:queue'])
   })
 })

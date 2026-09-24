@@ -1,4 +1,5 @@
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
+import type { DesktopPrompt } from './agent-hud-beacon'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -172,9 +173,10 @@ export type MobileNativeChatController = {
   /** Model/session-option pickers for the composer, or null when the active
    *  agent has no session-option catalog. */
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
-  /** Prompts submitted while a turn ran, from any client: the agent's own
-   *  transcript (tailed on the host) first, the HUD beacon's hook second. */
-  nativeChatDesktopPrompts: { nonce: string; text: string; anchorId?: string }[]
+  /** Prompts from any client, the phone's own included: Orca's hook on the
+   *  tab status (`agentStatus.prompt`) first, the HUD beacon's hook second.
+   *  `at` is the hook's clock. */
+  nativeChatDesktopPrompts: DesktopPrompt[]
   /** Prompts the agent has already accepted, read off its own screen. */
   nativeChatScreenPrompts: string[]
   /** The peer-message rows on the agent's screen, one per row

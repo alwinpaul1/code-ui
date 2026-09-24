@@ -47,6 +47,10 @@ export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
 /** Bounded: what the chat can still anchor; older ones are in the transcript. */
 const PROMPT_CAP = 64
 
+/** Starts the nonce of every prompt read off the tab status, which tells it
+ *  from the beacon's copy of the same submission (desktop-prompt-own-sends.ts). */
+export const STATUS_PROMPT_NONCE_PREFIX = 'status:'
+
 export function observeAgentStatusPrompt(
   state: AgentStatusPromptState,
   sessionKey: string | null,
@@ -100,7 +104,7 @@ export function observeAgentStatusPrompt(
       : status?.updatedAt
   const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
   const prompt: DesktopPrompt = {
-    nonce: `status:${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
+    nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,
     ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
     ...(at !== null ? { at } : {})
