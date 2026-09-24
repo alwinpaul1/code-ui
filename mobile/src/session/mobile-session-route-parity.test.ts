@@ -93,9 +93,12 @@ const HOST_COMPONENT_NAMES = new Set([
 // Markdown and selection actions, a reader in the selection actions and the
 // attachment probe. The hook binding, callback identity and body, effect and
 // leaf-JSX pins moved with them, and only those.
-const HEAD_MAIN_HOOK_SHA256 = '8836577a084f5987c4a110739e0fb9ff2100490b2577da931995a14aa3713ef0'
+// 295 since 2026-09-24: the terminal input's gesture output-window ref, the
+// wheel rows each terminal has had since it last printed.
+const HEAD_MAIN_HOOK_SHA256 = '8036ea582f90f92c132c94640a5f6a9835ac42bf2f688b39a1ff742d3fc84e4a'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
-const HEAD_HOOK_BINDING_SHA256 = '09f5ce45ecf2178f6596c62dccaa0f83c2149845283f604f8b2a7ba5f761c513'
+// 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
+const HEAD_HOOK_BINDING_SHA256 = 'eeece55e48f66921867b97ed17df086a55d6b92694dfca680a09644a27ed34e9'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
@@ -171,7 +174,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // reader in the copy, paste and probe bodies, the Markdown copy's failure
 // branch, and the terminal subscribe's snapshotByteBudget spread (nothing on a
 // phone, the bridge frame cap inside the shell's page). Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = 'a2b95e6cd1957be81e38598ce2018acb134bb8e3fe3ca86815b81fa2b2e8d1ed'
+// 2026-09-24: the gesture gate checks each sequence against the program's
+// modes and encoding, the flush admits a row only inside the terminal's
+// output window (holding the rest on the phone, a reversal let through at
+// once), and the subscribe's data branch notes the output. Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '1c63df1ebe54bd3e650cd39f62c7cdff30174675761ec4adf1e112985e617148'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -241,8 +248,10 @@ const HEAD_NATIVE_REGISTRATION_SHA256 =
   '9665ccf6550b25a9ac7ade717f4806dd5a0e5ed3e296b7ec2edb982713c0f2c3'
 const HEAD_NATIVE_REMOVAL_SHA256 =
   '562b70f0c17efd4a0ea39d85e5e1ac7a9bdda2279985e0c24c4934e537e8953a'
+// 2026-09-24: the gesture flush's re-poll while the output window holds its
+// rows on the phone (8 setTimeout creations, from 7).
 const HEAD_TIMER_CREATION_SHA256 =
-  'a3e52dbf52ebdf78037883906bc29959c52765b59baff9e3b6ee370ca1867c3f'
+  'e9fae480365fdd5acf3191b2c5e45a56a1770a23250d9212deb459e25e93ddc2'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 // 656 since 2026-09-18: askAboutFileLines's "No chat is open to ask about
 // this file" refusal toast, plus the 'terminal' literal in its
@@ -297,8 +306,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 678 since 2026-09-23 (Orca #21790, C7.2): the two toasts a refused clipboard
 // write now shows, "Couldn't copy path" in the sheets and "Couldn't copy" in
 // the Markdown copy action.
+// 2026-09-24: the gesture flush's '' direction fallback (679).
 const HEAD_RUNTIME_STRING_SHA256 =
-  '30f2bd947ded171ff7a02240df4c6346330c48c25a416067f3b764bdfecb634e'
+  '744bcea9eccd752c62a6e39a47511b9e505c44dedf6982ff3cffdf7acdc17aa0'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -784,7 +794,8 @@ describe('mobile session route extraction parity', () => {
     // 289 since 2026-09-22: the caret ref, the insert-range ref, and the
     // dictation paint state.
     // 294 since 2026-09-23: five clipboard seam hooks (Orca #21790).
-    expect(main.hooks).toHaveLength(294)
+    // 295 since 2026-09-24: the gesture output-window ref in the terminal input.
+    expect(main.hooks).toHaveLength(295)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -813,7 +824,8 @@ describe('mobile session route extraction parity', () => {
     // 9 since 2026-09-22: the AppState subscription is removed with the dictation effect.
     expect(native.removals).toHaveLength(9)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
-    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
+    // 8 since 2026-09-24: the gesture flush re-polls a held queue.
+    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(8)
     expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
     expect(
       native.creations.filter((fact) => fact.startsWith('requestAnimationFrame'))
@@ -876,7 +888,9 @@ describe('mobile session route extraction parity', () => {
     // literals (see HEAD_MAIN_HOOK_SHA256).
     // 676 since 2026-09-22: 'change' and 'active' on the dictation AppState listener.
     // 678 since 2026-09-23: the two refused-copy toasts (Orca #21790).
-    expect(strings).toHaveLength(678)
+    // 679 since 2026-09-24: the '' the gesture flush reads the next row's
+    // direction through.
+    expect(strings).toHaveLength(679)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

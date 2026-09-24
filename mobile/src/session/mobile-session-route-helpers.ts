@@ -1,3 +1,7 @@
+import {
+  terminalGestureSequenceKind,
+  wheelSequenceDirection
+} from '../terminal/terminal-gesture-input'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import type { ConnectionState } from '../transport/types'
 
@@ -50,6 +54,43 @@ export function isGestureMouseTrackingMode(
   mode: TerminalModes['mouseTrackingMode'] | undefined
 ): boolean {
   return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'
+}
+
+/**
+ * Whether the program asked for this gesture sequence, in this encoding, going
+ * by the modes the terminal mirror last reported. A mouse report needs mouse
+ * tracking on and the encoding the program chose (1006/1016 SGR, else the
+ * default bytes), and a wheel report a mode that reports the wheel (not X10,
+ * DEC 9, which reports presses only). A scroll as cursor keys is only for a
+ * full-screen program that gets no wheel reports (less, vim, man, or an X10
+ * program). Unknown modes refuse all.
+ */
+export function isGestureSequenceWantedByProgram(
+  sequence: string,
+  modes: TerminalModes | undefined
+): boolean {
+  if (!modes) {
+    return false
+  }
+  const tracking = isGestureMouseTrackingMode(modes.mouseTrackingMode)
+  const wheelTracking = tracking && modes.mouseTrackingMode !== 'x10'
+  const sgr = modes.sgrMouseMode || modes.sgrMousePixelsMode
+  const kind = terminalGestureSequenceKind(sequence)
+  const reported = wheelSequenceDirection(sequence) === null ? tracking : wheelTracking
+  switch (kind) {
+    case 'sgr-mouse':
+      return reported && sgr
+    case 'default-mouse':
+      return reported && !sgr
+    case 'arrow':
+      return modes.altScreen && !wheelTracking
+    case null:
+      return false
+    default: {
+      const unhandled: never = kind
+      return unhandled
+    }
+  }
 }
 
 /** Phone-visible terminals use phone cols. Chat covering the PTY leaves the

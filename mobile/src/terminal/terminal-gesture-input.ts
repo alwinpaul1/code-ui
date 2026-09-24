@@ -128,14 +128,44 @@ export function wheelSequenceDirection(sequence: string): 'up' | 'down' | null {
   if (sequence === `${ESC}[B` || sequence === `${ESC}OB`) {
     return 'down'
   }
+  // Default encoding: button byte 96 is wheel up, 97 wheel down (64/65 + 32).
+  if (isDefaultMouseGestureSequence(sequence, 0) === sequence.length) {
+    const button = sequence.charCodeAt(3)
+    return button === 96 ? 'up' : button === 97 ? 'down' : null
+  }
   return null
 }
 const SGR_WHEEL_DIRECTION_RE = new RegExp(`^${ESC}\\[<(64|65);`)
 
-/** A left-button press or release in SGR form: the two halves of a tap's click. */
+/** A left-button press or release, in SGR form or the default bytes (button
+ *  byte 32 press, 35 release): the two halves of a tap's click. */
 const SGR_MOUSE_CLICK_SEQUENCE_RE = new RegExp(`^${ESC}\\[<0;([0-9]{1,4});([0-9]{1,4})([Mm])$`)
 export function isMouseClickSequence(sequence: string): boolean {
-  return SGR_MOUSE_CLICK_SEQUENCE_RE.test(sequence)
+  if (SGR_MOUSE_CLICK_SEQUENCE_RE.test(sequence)) {
+    return true
+  }
+  const button = sequence.charCodeAt(3)
+  return (
+    (button === 32 || button === 35) &&
+    isDefaultMouseGestureSequence(sequence, 0) === sequence.length
+  )
+}
+
+/** Which encoding one validated gesture sequence speaks: an SGR (1006) mouse
+ *  report, a default-encoded (X10-style) mouse report, or a cursor key. */
+export type TerminalGestureSequenceKind = 'sgr-mouse' | 'default-mouse' | 'arrow'
+
+export function terminalGestureSequenceKind(sequence: string): TerminalGestureSequenceKind | null {
+  if (isArrowScrollSequence(sequence, 0) === sequence.length) {
+    return 'arrow'
+  }
+  if (isSgrMouseGestureSequence(sequence, 0) === sequence.length) {
+    return 'sgr-mouse'
+  }
+  if (isDefaultMouseGestureSequence(sequence, 0) === sequence.length) {
+    return 'default-mouse'
+  }
+  return null
 }
 
 export function isTerminalGestureInput(bytes: string): boolean {

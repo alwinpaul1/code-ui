@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { terminalBufferClear, terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   clearTerminalLiveInputFocusTimer,
@@ -16,7 +16,7 @@ import {
   wheelSequenceDirection
 } from '../terminal/terminal-gesture-input'
 import {
-  isGestureMouseTrackingMode,
+  isGestureSequenceWantedByProgram,
   TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS,
   TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT,
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
@@ -24,6 +24,10 @@ import {
   TERMINAL_GESTURE_INPUT_SEQUENCES_PER_FLUSH
 } from './mobile-session-route-helpers'
 import type { Terminal, TerminalGestureInputQueue } from './mobile-session-route-types'
+import {
+  admitTerminalGestureRow,
+  type TerminalGestureOutputWindow
+} from './terminal-gesture-output-window'
 import type { MobileSessionFileActionsModel } from './use-mobile-session-file-actions'
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
@@ -63,9 +67,13 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     }
   }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])
 
+  // Rows sent per terminal since its last output; see admitTerminalGestureRow.
+  const gestureOutputWindowsRef = useRef(new Map<string, TerminalGestureOutputWindow>())
+
   // Why: a burst of wheel rows goes out one per flush, not as one batch — a
   // TUI repaints once per batch, so batches are jumps. Sends still pipeline
-  // (the reply does not pace them); the timer does.
+  // (the reply does not pace them); the timer does, and the program's own
+  // output bounds how far ahead of it they may run.
   const flushTerminalGestureInput = useCallback(async (handle: string) => {
     const queued = terminalGestureInputQueuesRef.current.get(handle)
     if (!queued) {
@@ -86,6 +94,19 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     const inFlight = terminalGestureInputInFlightRef.current.get(handle) ?? 0
     if (inFlight >= TERMINAL_GESTURE_INPUT_MAX_IN_FLIGHT) {
       // A link that stopped answering: the next reply drains the queue.
+      return
+    }
+    const direction = wheelSequenceDirection(queued.sequences[0] ?? '')
+    if (!admitTerminalGestureRow(gestureOutputWindowsRef.current, handle, Date.now(), direction)) {
+      // Why held on the phone, not sent: the program has not painted since the
+      // last rows, so it may not be reading, and a pty queue that fills cuts a
+      // report in two (terminal-gesture-output-window.ts). The age check above
+      // drops the rows once the finger has been still for the queue's max age;
+      // lastUpdatedMs is left alone so waiting does not count as the finger.
+      queued.timer = setTimeout(() => {
+        queued.timer = null
+        void flushTerminalGestureInput(handle)
+      }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
       return
     }
     const batch = queued.sequences.splice(0, TERMINAL_GESTURE_INPUT_SEQUENCES_PER_FLUSH)
@@ -176,13 +197,15 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
         return
       }
+      // Why: engine gesture bytes become PTY input, so each sequence must be one
+      // the program asked for, in its encoding. The old gate passed any of them
+      // on the alternate screen alone, mouse reporting on or off.
       const modes = ptyModesRef.current.get(handle)
-      // Why: WebView gesture bytes can become PTY input, so gate mouse reports behind validation and SSH-safe rate limiting.
-      if (!modes?.altScreen && !isGestureMouseTrackingMode(modes?.mouseTrackingMode)) {
-        return
-      }
       const sequences = splitTerminalGestureInputSequences(bytes)
-      if (sequences == null) {
+      if (
+        sequences == null ||
+        !sequences.every((sequence) => isGestureSequenceWantedByProgram(sequence, modes))
+      ) {
         return
       }
       // Why: a click is press + release in one payload and must arrive as one

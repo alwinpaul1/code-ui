@@ -4,6 +4,7 @@ import { consumeAgentHudBeacons } from './agent-hud-beacon'
 import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
+import { noteTerminalOutput } from './terminal-gesture-output-window'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
   readTerminalViewportDims,
@@ -133,7 +134,10 @@ export function useMobileSessionTerminalSubscription(
           // needs it. Stripping it here also means the sequence never reaches
           // xterm, covered or not — the terminal shows what it always showed.
           if (data.type === 'data' && typeof data.chunk === 'string') {
-            data.chunk = consumeAgentHudBeacons(handle, data.chunk)
+            const chunk = consumeAgentHudBeacons(handle, data.chunk)
+            data.chunk = chunk
+            // The program painted, so it is reading: wheel rows may follow.
+            noteTerminalOutput(handle, chunk)
           }
           // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.
           if (
