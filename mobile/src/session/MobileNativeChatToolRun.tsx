@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, Text, View } from 'react-native'
-import {
-  ChevronDown,
-  ChevronRight,
-  SquareTerminal,
-  Wrench
-} from 'lucide-react-native'
+import { ChevronDown, ChevronRight, SquareTerminal, Wrench } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
 import {
@@ -27,6 +22,8 @@ import {
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
+import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
@@ -349,6 +346,10 @@ export function ToolRun({
   const { failedCallCount } = nativeChatToolRunOutcome(blocks, {
     activeTurnIsWorking: activeCall !== null
   })
+  // docs/claude-app-parity.md item 3: the run's own "+A −R" chip. Detail
+  // about what the tools did, like the sentence and the plan preview, so
+  // focus view folds it away too.
+  const diffStat = focusView ? null : toolRunDiffStat(blocks)
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -410,6 +411,7 @@ export function ToolRun({
               {`${failedCallCount} failed`}
             </Text>
           ) : null}
+          {diffStat ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
           {open ? (
             <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
           ) : (

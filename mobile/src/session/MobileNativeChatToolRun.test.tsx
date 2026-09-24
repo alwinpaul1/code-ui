@@ -60,6 +60,22 @@ const LONG_RUN: NativeChatBlock[] = [
   { type: 'tool-call', name: 'Read', input: { file_path: 'd.ts' } }
 ]
 
+// docs/claude-app-parity.md item 3: the screenshot's own shape — two plain
+// commands and a Write the result is certain created a new file.
+const RAN_2_COMMANDS_CREATED_FILE: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Bash', input: { command: 'a' } },
+  { type: 'tool-result', output: '' },
+  { type: 'tool-call', name: 'Bash', input: { command: 'b' } },
+  { type: 'tool-result', output: '' },
+  { type: 'tool-call', name: 'Write', input: { file_path: '/repo/NEW.md', content: 'x\ny\n' } },
+  { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
+]
+
+const COMMAND_ONLY_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+  { type: 'tool-result', output: '' }
+]
+
 function Harness({
   blocks,
   activeTurnIsWorking,
@@ -192,6 +208,39 @@ describe('a batch of tool calls in one run header', () => {
   it('says nothing about failures on a clean run', () => {
     expect(render(LONG_RUN).texts.some((text) => text.endsWith(' failed'))).toBe(false)
     expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
+  })
+
+  // docs/claude-app-parity.md item 3: the green/red "+A −R" chip beside a run
+  // that created or edited a file, the way the Claude app's own screenshot
+  // draws "Ran 2 commands, created a file" next to a green "+292" and a red
+  // "−0".
+  it.each(['light', 'dark'] as const)(
+    "draws the run's line-count chip in the diff colours, in %s",
+    (scheme) => {
+      const { texts } = render(RAN_2_COMMANDS_CREATED_FILE, scheme)
+      expect(texts).toContain('Ran 2 commands, created a file')
+      expect(texts).toContain('+2')
+      expect(texts).toContain('−0')
+      const added = renderer!.root.findByProps({ testID: 'tool-run-diff-added' })
+      const removed = renderer!.root.findByProps({ testID: 'tool-run-diff-removed' })
+      const palette = scheme === 'dark' ? darkColors : lightColors
+      expect(flattenColor(added.props.style)).toBe(palette.diffAddText)
+      expect(flattenColor(removed.props.style)).toBe(palette.diffDelText)
+    }
+  )
+
+  it('draws no diff chip on a run that touched no file', () => {
+    const { texts } = render(COMMAND_ONLY_RUN)
+    expect(texts.some((text) => text.startsWith('+') || text.startsWith('−'))).toBe(false)
+    expect(renderer!.root.findAllByProps({ testID: 'tool-run-diff-added' })).toHaveLength(0)
+  })
+
+  it('draws no diff chip when an edit call in the run has no result yet', () => {
+    // LONG_RUN's Edit and Write calls carry no result and no lifecycle state,
+    // so neither the sentence nor the chip can claim what they changed.
+    const { texts } = render(LONG_RUN)
+    expect(texts.some((text) => text.startsWith('+') || text.startsWith('−'))).toBe(false)
+    expect(renderer!.root.findAllByProps({ testID: 'tool-run-diff-added' })).toHaveLength(0)
   })
 })
 

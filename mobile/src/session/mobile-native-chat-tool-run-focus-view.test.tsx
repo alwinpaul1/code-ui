@@ -7,7 +7,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatToolCallBlock
+} from '../../../src/shared/native-chat-types'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -65,6 +68,17 @@ const RUNNING: NativeChatToolCallBlock = {
   input: { command: 'pnpm test' },
   state: 'running'
 }
+
+// docs/claude-app-parity.md item 3's diff chip is detail about what the tools
+// did, same as the sentence and the plan preview, so it folds away too.
+const CREATED_FILE_RUN: NativeChatBlock[] = [
+  {
+    type: 'tool-call',
+    name: 'Write',
+    input: { file_path: '/repo/NEW.md', content: 'a\nb\n' }
+  },
+  { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
+]
 
 type HarnessProps = {
   blocks: NativeChatBlock[]
@@ -196,5 +210,16 @@ describe('Focus view on a run of tool calls', () => {
     expect(light).toBe(lightColors.textSecondary)
     expect(dark).toBe(darkColors.textSecondary)
     expect(light).not.toBe(dark)
+  })
+
+  it('folds away the diff chip along with the sentence', () => {
+    const off = texts(render({ blocks: CREATED_FILE_RUN, focusView: false }).root)
+    expect(off).toContain('+2')
+    act(() => renderer?.unmount())
+    renderer = null
+    const on = texts(render({ blocks: CREATED_FILE_RUN, focusView: true }).root)
+    expect(on).toContain('1 tool call')
+    expect(on).not.toContain('+2')
+    expect(on).not.toContain('−0')
   })
 })
