@@ -320,8 +320,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // write now shows, "Couldn't copy path" in the sheets and "Couldn't copy" in
 // the Markdown copy action.
 // 2026-09-24: the gesture flush's '' direction fallback (679).
-// 673 since 2026-09-24 (Orca #22252): the Keyboard pair's six event-name
-// literals leave with it; useSoftKeyboard owns the listeners now.
+// 673 since 2026-09-24 (Orca #22252): the Keyboard pair's six literals ('ios'
+// twice and its four event names) leave with it; useSoftKeyboard owns the
+// listeners now.
 const HEAD_RUNTIME_STRING_SHA256 =
   '1b02f04c0952cdab94d0ab0902e69ff68f05b176abf8611ccac310b38d65c6a0'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
