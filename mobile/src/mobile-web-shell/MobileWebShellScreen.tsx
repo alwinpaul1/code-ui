@@ -18,6 +18,7 @@ import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type {
   MobileWebShellFailureCause,
   MobileWebShellSessionState,
@@ -38,6 +39,7 @@ import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
+import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -71,8 +73,7 @@ function Centered({ children }: { children: ReactNode }) {
 function Waiting({ label }: { label: string }) {
   return (
     <Centered>
-      <ActivityIndicator color={colors.textSecondary} accessibilityLabel={label} />
-      <Text style={styles.waitingLabel}>{label}</Text>
+      <ShellWaitingFrame label={label} />
     </Centered>
   )
 }
@@ -151,6 +152,12 @@ export type MobileWebShellScreenProps = {
    * the negotiation falls back to, and a shell with nothing behind it would paint a blank instead.
    */
   fallback: ReactNode
+  /**
+   * The page applied a one-shot route param and asks for it to be erased (ruling 34), naming what
+   * it applied. Only a caller that put one on the route ever hears this, and the comparison is
+   * that caller's: it holds the param, and a tap that moved on since leaves a newer value there.
+   */
+  onRouteParamClear?: (param: BridgeClearableRouteParam, value: string) => void
   runtime?: MobileWebShellRuntime
 }
 
@@ -165,6 +172,7 @@ export function MobileWebShellScreen({
   hostId,
   route,
   fallback,
+  onRouteParamClear,
   runtime
 }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
@@ -189,14 +197,20 @@ export function MobileWebShellScreen({
     updateNotice,
     retry,
     reportShellFailure,
+    reportDocumentStarted,
     reportDocumentLoaded,
-    reportPageReady
+    reportPageReady,
+    reportPagePainted,
+    pageReady,
+    pageFrame
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   // Which mount the notice was dismissed on, not whether it was: a later refusal opens its own
   // generation under a new session id, so it is not silenced by a tap on the one before it.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
-  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } =
-    usePageHostSnapshot(hostId)
+  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
+    hostId,
+    route.pathname
+  )
   // Declared before the bridge so the handler it is handed already belongs to this session: the
   // media verbs hold staged files, and a registry born after the host would outlive the page.
   const serveNativeVerb = useNativeDeviceVerbs(state.kind === 'ready' ? state.sessionId : null)
@@ -218,6 +232,7 @@ export function MobileWebShellScreen({
     pageRouteGrants,
     routeGrants,
     session: state,
+    sessionEstablished: pageReady,
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
@@ -235,9 +250,15 @@ export function MobileWebShellScreen({
     // the map as they are made. This re-seats that map on the store afterwards, for the key whose
     // write never persisted, and it runs on every ask because a document that reloads inside this
     // mount asks again.
-    onPageReady: () => {
-      reportPageReady()
+    onPageReady: (reports) => {
+      reportPageReady(reports)
       void refreshStorage()
+    },
+    // The one thing that says the page is something to look at. The cover below stays up until it
+    // lands, for a page that declared it would send one.
+    onPagePainted: reportPagePainted,
+    onRouteParamClear: (param, value) => {
+      onRouteParamClear?.(param, value)
     },
     // `document-load-failed` because that is what happens: the document loads and the page refuses
     // the session, so no tree is ever built. The refetch it costs is wasted on a route this shell
@@ -274,6 +295,17 @@ export function MobileWebShellScreen({
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
 
+  // A route that moved under a screen that stayed mounted: the session switch keeps `paneKey` out
+  // of its key so a notification tap for another pane is a tab switch rather than a page reload,
+  // and this is how the page hears about it. Nothing is tracked here — which route the page has,
+  // and which one is still owed it, belong to the host, which outlives any one run of this effect.
+  // All this says is what the screen is on now: a route that did not move is dropped there, and a
+  // frame in flight when this re-runs is not disturbed by it.
+  const publishRoute = bridge.publishRoute
+  useEffect(() => {
+    publishRoute(route)
+  }, [publishRoute, route])
+
   // A profile read that rejected never becomes a host, so the session would otherwise sit in
   // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
   // `document-load-failed` because that is the outcome: the document loads and no session opens.
@@ -308,7 +340,7 @@ export function MobileWebShellScreen({
     return <Fetching state={state} />
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? 'Opening workspace' : 'Checking host'} />
+    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
   }
   return (
     <View
@@ -356,9 +388,16 @@ export function MobileWebShellScreen({
           // the page's own first frame says its code ran, so this is where the wait for it starts.
           if (parsed?.state === 'ready') {
             reportDocumentLoaded()
+            return
+          }
+          // The view is drawing the document it is leaving until the new one paints, so the cover
+          // goes back up here rather than on the `ready` that follows it.
+          if (parsed?.state === 'loading') {
+            reportDocumentStarted()
           }
         }}
       />
+      <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       <DevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )

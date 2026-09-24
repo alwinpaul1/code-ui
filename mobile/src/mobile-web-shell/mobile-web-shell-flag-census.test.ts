@@ -21,8 +21,10 @@ const BUILD_SWITCH_READ = 'process.env.EXPO_PUBLIC_'
 /** The other spelling Expo's plugin inlines, which is how the rule above would be evaded. */
 const BUILD_SWITCH_BRACKET_READ = "process.env['EXPO_PUBLIC_"
 const DEFINITION = 'src/storage/preferences.ts'
-/** The one product reader. Every route asks it, so the list below stays the whole census. */
+/** The one product reader, which only the shared switch decision asks. */
 const FLAG_HOOK = 'src/mobile-web-shell/use-mobile-web-shell-enabled.ts'
+/** The one caller of that hook: every route asks this instead, so its list is the whole census. */
+const DECISION = 'src/mobile-web-shell/shell-switch-decision.ts'
 const ROUTE = 'app/h/[hostId]/web.tsx'
 const HOST_ROUTE = 'app/h/[hostId]/index.tsx'
 const AGENT_HISTORY_ROUTE = 'app/h/[hostId]/agent-history/[worktreeId].tsx'
@@ -31,8 +33,11 @@ const FILES_ROUTE = 'app/h/[hostId]/files/[worktreeId].tsx'
 const FILES_PREVIEW_ROUTE = 'app/h/[hostId]/files/preview/[worktreeId].tsx'
 const SOURCE_CONTROL_ROUTE = 'app/h/[hostId]/source-control/[worktreeId].tsx'
 const REVIEW_ROUTE = 'app/h/[hostId]/review/[worktreeId].tsx'
+const SESSION_ROUTE = 'app/h/[hostId]/session/[worktreeId].tsx'
 /** The one switch with no native screen behind it; its route file only re-exports this body. */
 const CATCH_ALL_ROUTE = 'src/mobile-web-shell/catch-all-page-route.tsx'
+/** What a switch paints while the decision is `pending`, and the third thing every switch names. */
+const PENDING_SCREEN = 'src/mobile-web-shell/ShellSwitchPendingScreen.tsx'
 /** One entry per screen the flag can switch to the page, which is what a review reads. */
 const SWITCHED_ROUTES = [
   HOST_ROUTE,
@@ -42,6 +47,7 @@ const SWITCHED_ROUTES = [
   FILES_PREVIEW_ROUTE,
   SOURCE_CONTROL_ROUTE,
   REVIEW_ROUTE,
+  SESSION_ROUTE,
   CATCH_ALL_ROUTE
 ]
 const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
@@ -72,11 +78,35 @@ function filesContaining(needle: string): string[] {
     .sort()
 }
 
+/**
+ * The same matches with the line each was read off, as the failure message for the rules below.
+ *
+ * A census that answers only with paths tells a reader which file is wrong and nothing about what
+ * in it is: the needles here are identifiers, and a file can name one in an import, a call or a
+ * comment. The snippet is what turns "this list moved" into the edit that moved it.
+ */
+function matchesOf(needle: string): string {
+  // Sorted by path then by line number, not as text: `:59:` sorts before `:4:` as a string, which
+  // reads as a file whose matches are out of order.
+  return [...SOURCES]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .flatMap((file) =>
+      file.text
+        .split('\n')
+        .flatMap((line, index) =>
+          line.includes(needle) ? [`${file.path}:${index + 1}: ${line.trim()}`] : []
+        )
+    )
+    .join('\n')
+}
+
 describe('who touches the hybrid shell flag', () => {
   it('reaches every shipped tree, so the absence assertions below cannot pass vacuously', () => {
     const paths = SOURCES.map((file) => file.path)
     expect(paths).toContain(DEFINITION)
     expect(paths).toContain(FLAG_HOOK)
+    expect(paths).toContain(DECISION)
+    expect(paths).toContain(PENDING_SCREEN)
     expect(paths).toContain(ROUTE)
     for (const route of SWITCHED_ROUTES) {
       expect(paths).toContain(route)
@@ -103,12 +133,17 @@ describe('who touches the hybrid shell flag', () => {
     //
     // Prose is not a read: the docblocks that name the variable are how a reader finds this
     // module, and pinning them would make every wording change a census failure.
-    expect(filesContaining(BUILD_SWITCH_READ)).toEqual([DEFINITION])
-    expect(filesContaining(BUILD_SWITCH_BRACKET_READ)).toEqual([])
+    expect(filesContaining(BUILD_SWITCH_READ), matchesOf(BUILD_SWITCH_READ)).toEqual([DEFINITION])
+    expect(
+      filesContaining(BUILD_SWITCH_BRACKET_READ),
+      matchesOf(BUILD_SWITCH_BRACKET_READ)
+    ).toEqual([])
   })
 
   it('answers the build kind through one named function, asked by the flag and the row label', () => {
-    expect(filesContaining('mobileShellBuildKind')).toEqual([DEFINITION, DEVELOPER_ROW].sort())
+    expect(filesContaining('mobileShellBuildKind'), matchesOf('mobileShellBuildKind')).toEqual(
+      [DEFINITION, DEVELOPER_ROW].sort()
+    )
   })
 
   it('is read by one hook and by the developer row that writes it, and nowhere else', () => {
@@ -117,29 +152,57 @@ describe('who touches the hybrid shell flag', () => {
     )
   })
 
-  it('reaches the switched routes through that hook and no others', () => {
+  it('is read by the shared switch decision and by nothing else', () => {
+    // The narrowest this has ever been, and the reason the rule below is total: a route cannot
+    // hold a private opinion about the flag — including about the window where it is still `null`
+    // — without reading it, and this is the only place that reads it.
+    expect(
+      filesContaining('useMobileWebShellEnabled'),
+      matchesOf('useMobileWebShellEnabled')
+    ).toEqual([DECISION, FLAG_HOOK].sort())
+  })
+
+  it('reaches the switched routes through that decision and no others', () => {
     // Each switched route is a screen the flag decides the renderer of, and one more is one more
     // place a dark feature could turn itself on. The list grows once per domain series, in the PR
     // that switches the route file to MobileWebShellScreen, and never as a side effect of anything
     // else. A switched route is inert until MOBILE_WEB_PAGE_ROUTES lists it as well, so an entry
     // here can land a PR ahead of that one.
-    expect(filesContaining('useMobileWebShellEnabled')).toEqual(
-      [FLAG_HOOK, ROUTE, ...SWITCHED_ROUTES].sort()
+    expect(filesContaining('useShellSwitchDecision'), matchesOf('useShellSwitchDecision')).toEqual(
+      [DECISION, ROUTE, ...SWITCHED_ROUTES].sort()
     )
+  })
+
+  it('gives every one of them the same neutral state to paint while the flag is unresolved', () => {
+    // The rule a sixth switch would otherwise regress past. Reading the flag through the decision
+    // is not on its own enough: a switch that ignored `pending` and fell through to its native
+    // screen would satisfy the rule above and still flash native in front of a flag-on user. This
+    // one says every switch names the neutral screen, which is existence rather than shape — where
+    // it names it is the route test's business, and `shell-switch-null-flag.test.tsx` drives all
+    // nine through the states themselves.
+    expect(
+      filesContaining('ShellSwitchPendingScreen'),
+      matchesOf('ShellSwitchPendingScreen')
+    ).toEqual([PENDING_SCREEN, ROUTE, ...SWITCHED_ROUTES].sort())
+  })
+
+  it('fences the build kind in one place, which the read, the hook and the row gate ask', () => {
+    // The test that makes a native store build unable to turn the flag on: `__DEV__`, or a binary
+    // built with the switch set to `ota`. The hook starts its state on it so a native release
+    // build never reaches the neutral state, which is the same answer `loadMobileWebShellEnabled`
+    // gives one render later — and two spellings of one build-kind test are two things to keep
+    // true, where this feature's darkness rests on exactly one.
+    //
+    // The Troubleshoot route asks the same question to decide whether to mount the toggle, which
+    // is the one place a user can switch an OTA build back to the native screens. Asking it rather
+    // than re-deriving it is why that row and the flag can never disagree about the build.
+    expect(
+      filesContaining('mobileWebShellFlagCanBeOn'),
+      matchesOf('mobileWebShellFlagCanBeOn')
+    ).toEqual([DEFINITION, FLAG_HOOK, TROUBLESHOOT_ROUTE].sort())
   })
 
   it('is written only by the developer row', () => {
     expect(filesContaining('saveMobileWebShellEnabled')).toEqual([DEFINITION, DEVELOPER_ROW].sort())
-  })
-
-  it('fences the build kind in one place, which the read and the Troubleshoot mount gate ask', () => {
-    // The test that makes a native store build unable to turn the flag on: `__DEV__`, or a binary
-    // built with the switch set to `ota`. `loadMobileWebShellEnabled` asks it, and so does the
-    // Troubleshoot route to decide whether to mount the toggle at all, which is the one place a
-    // user can switch an OTA build back to the native screens. Asking it rather than re-deriving
-    // it is why the route and the flag can never disagree about the build.
-    expect(filesContaining('mobileWebShellFlagCanBeOn')).toEqual(
-      [DEFINITION, TROUBLESHOOT_ROUTE].sort()
-    )
   })
 })

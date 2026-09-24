@@ -249,6 +249,7 @@ describe('the switches that hand a route to the shell', () => {
       'files/preview/[worktreeId].tsx',
       'index.tsx',
       'review/[worktreeId].tsx',
+      'session/[worktreeId].tsx',
       'source-control/[worktreeId].tsx',
       'tasks.tsx',
       'web.tsx'

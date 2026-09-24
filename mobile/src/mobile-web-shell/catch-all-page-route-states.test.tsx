@@ -121,7 +121,7 @@ vi.mock('./use-page-host-snapshot', () => ({
   usePageHostSnapshot: () => ({
     snapshot: SNAPSHOT,
     unreadable: false,
-    readStorage: () => ({}),
+    readStorage: () => ({ storage: {}, storageOversize: [] }),
     refreshStorage: () => {},
     writeStorage: () => {}
   })

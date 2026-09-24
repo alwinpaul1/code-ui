@@ -29,7 +29,12 @@ vi.mock('./mobile-held-floor-store', async (importOriginal) => ({
 }))
 
 const backHandlers = new Set<() => boolean>()
+// Annotated rather than asserted: the literal alone narrows to 'android' and a case reassigns it.
+const platform = vi.hoisted((): { os: 'android' | 'ios' | 'web' } => ({ os: 'android' }))
 vi.mock('react-native', () => ({
+  get Platform() {
+    return { OS: platform.os }
+  },
   BackHandler: {
     addEventListener: (_event: string, listener: () => boolean) => {
       backHandlers.add(listener)
@@ -48,6 +53,7 @@ vi.mock('react-native', () => ({
 }))
 
 beforeEach(() => {
+  platform.os = 'android'
   backHandlers.clear()
   appState.listeners.clear()
   appState.current = 'active'
@@ -254,6 +260,21 @@ describe('hardware back inside the session', () => {
     })
     expect(toggleTabChatView).toHaveBeenCalledWith('tab-1::leaf-1', null)
     expect(requestLeaveSession).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  // Upstream #21977 (C7.7) put the session in the shell's page, where react-native-web answers
+  // `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be
+  // used." and an inert subscription. The page has no hardware back to intercept: the shell owns
+  // the phone's. Upstream guards its own registration in the markdown actions; this fork's single
+  // registration is here, so the guard is too.
+  it('never arms hardware back inside the web page, where it is inert and says so', () => {
+    platform.os = 'web'
+    const { unmount } = mountViewSwitch('term-1', undefined, {
+      activeSessionTabId: 'tab-1::leaf-1',
+      requestLeaveSession: vi.fn()
+    })
+    expect(backHandlers.size).toBe(0)
     unmount()
   })
 

@@ -162,6 +162,7 @@ export function QuickCommandsSheet({
             hitSlop={tapTargetHitSlop(styles.backButton)}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             onPress={() => setView(view === 'agent' ? 'editor' : 'list')}
+            accessibilityRole="button"
             accessibilityLabel="Back"
           >
             <ChevronLeft size={18} color={colors.textSecondary} />

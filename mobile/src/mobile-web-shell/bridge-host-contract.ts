@@ -2,10 +2,12 @@ import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-termina
 import type { RpcClient } from '../transport/rpc-client'
 import type { BridgeRefusal } from './bridge/bridge-caps'
 import type { BridgeInitHost, BridgeInitRoute } from './bridge/bridge-envelope'
+import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
+import type { PageStorageForInit } from './page-storage-keys'
 
 /**
  * What the shell did with a `navigate-back`. Only `popped` moved the stack, and the other two are
@@ -42,6 +44,10 @@ export type BridgeHostDiagnostic =
   /** The shell asked this host to open a screen the protocol does not allow. The host serves no
    *  session at all in that state: an `init` the page refuses is worse than no `init`. */
   | { kind: 'route-refused'; issue: string }
+  /** A rewritten route this host would not hand its page: a different screen, or a shape the
+   *  page's own reader would refuse. Local only — nothing crosses, and the tap it came from is
+   *  then the lost repeat tap it was before ruling 33.1. */
+  | { kind: 'route-update-refused'; issue: string }
   /** A page subscribed with `wantsBinary` on a session whose route was never granted the lane.
    *  Local only: the subscription proceeds and its JSON events cross, so nothing crosses back and
    *  this line is the only thing that can say why the frames never became binary. */
@@ -112,11 +118,18 @@ export type BridgeHostOptions = {
   /** The host the page is showing, minus the credential the bridge already carries for it. */
   host: BridgeInitHost
   /**
+   * This device's identity to that host, as the native screens already send it, swapped in for the
+   * page's placeholder on the way out. Read at forward time rather than captured: the host outlives
+   * every render after the one that built it. Required, because `init` tells the page the swap
+   * happens and a page that believed it and was not served would have its sends refused as spoofs.
+   */
+  readClientIdentity: () => string | null
+  /**
    * The allowlisted keys as the app holds them, asked for on every `init` rather than captured at
    * mount: a document that reloads inside one mount has to be primed from after its own writes.
    * Synchronous, because `init` is — see `sendInit`.
    */
-  readStorage: () => Readonly<Record<string, string>>
+  readStorage: () => PageStorageForInit
   /** One allowlisted key written, or removed when the value is null. */
   onStorageWrite: (key: string, value: string | null) => void
   /**
@@ -173,7 +186,19 @@ export type BridgeHostOptions = {
    * the same reason as the fault: the shell bounds the wait for it, and a host built without this
    * would leave a document that never spoke looking exactly like one still starting up.
    */
-  onPageReady: () => void
+  onPageReady: (reports: readonly string[]) => void
+  /**
+   * The page has a frame on screen. Only pages whose `ready` listed `BRIDGE_PAGE_PAINTED` post it,
+   * which is why `onPageReady` carries that list: a caller covering the view until this arrives
+   * has to know whether it is coming, and a page served from an older desktop never sends one.
+   */
+  onPagePainted: () => void
+  /**
+   * The page applied a one-shot route param and is asking for it to be erased (ruling 34), naming
+   * the value it applied. The holder of that param compares before it clears: a tap that has moved
+   * on since leaves a newer value here, and a clear naming the older one is not for it.
+   */
+  onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   /**
    * The route this shell was built with is not one the protocol allows, so no honest `init` can be
    * sent and the page will never mount. Loud on purpose: the page's own refusal is a `console.warn`

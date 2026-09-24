@@ -1,4 +1,4 @@
-import { BackHandler } from 'react-native'
+import { BackHandler, Platform } from 'react-native'
 import { hardwareBackAction } from './mobile-session-hardware-back'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
@@ -69,6 +69,13 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
   // Hardware back / back gesture: from the terminal view of a tab that has a
   // chat view, show the chat (what the header toggle does); otherwise leave.
   useEffect(() => {
+    // Native only (upstream #21977, C7.7): inside the shell's page react-native-web answers
+    // `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be
+    // used." and an inert subscription. The page has no hardware back to intercept; the shell
+    // owns the phone's.
+    if (Platform.OS === 'web') {
+      return
+    }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       const action = hardwareBackAction({
         activeTabId: activeSessionTabId,
