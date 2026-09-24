@@ -9,6 +9,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * take. Before #21977 that was every one of these savers. The source census beside this file
  * counts the modules; this is the check that each saver, called for real, lands in the map.
  *
+ * Read back the way the shell reads it, through `pageStorageKeysForRoute` for the session route,
+ * so the key a saver writes and the key `init` asks for are held to be the same. The two escape
+ * the ids in them separately, which is why the ids below both need escaping: with `host-1` and
+ * `wt-1` a saver and the shell could disagree about escaping and still build the same key.
+ *
  * One case per allowlisted exact key and per prefix, and the first case holds the table to the
  * allowlist, so a key added to `page-storage-keys.ts` without a row here fails by name.
  */
@@ -46,7 +51,8 @@ vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 import { saveCustomKeys } from '../components/CustomKeyModal'
 import {
   PAGE_STORAGE_EXACT_KEYS,
-  PAGE_STORAGE_KEY_PREFIXES
+  PAGE_STORAGE_KEY_PREFIXES,
+  pageStorageKeysForRoute
 } from '../mobile-web-shell/page-storage-keys'
 import {
   getOrCreateMobileStructuredSendOperation,
@@ -72,6 +78,11 @@ import {
 
 const NOW = 1_900_000_000_000
 
+/** A host and a workspace whose ids both change under escaping, and the page the shell opens. */
+const HOST = 'host 1'
+const WORKTREE = 'folder:/tmp/a'
+const SESSION_ROUTE = `/h/${encodeURIComponent(HOST)}/session/${encodeURIComponent(WORKTREE)}`
+
 /** Lets a fire-and-forget saver's write and read-back settle before the case looks. */
 async function settle(): Promise<void> {
   for (let turn = 0; turn < 5; turn += 1) {
@@ -92,7 +103,7 @@ const ROWS: readonly Row[] = [
     allowlisted: 'orca:last-visited-worktree',
     written: 'orca:last-visited-worktree',
     save: async () => {
-      writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'repo-1::/work/tree' })
+      writeLastVisitedWorktree({ hostId: HOST, worktreeId: WORKTREE })
       await settle()
     }
   },
@@ -152,18 +163,18 @@ const ROWS: readonly Row[] = [
   },
   {
     allowlisted: 'orca:pins:',
-    written: 'orca:pins:host-1',
-    save: () => savePinnedIds('host-1', new Set(['wt-a', 'wt-b']))
+    written: 'orca:pins:host 1',
+    save: () => savePinnedIds(HOST, new Set(['wt-a', 'wt-b']))
   },
   {
     allowlisted: 'orca:nativeChatTabs:',
-    written: 'orca:nativeChatTabs:host-1:wt-1',
-    save: () => updateSessionViewOverride('host-1', 'wt-1', 'tab-1', 'chat')
+    written: 'orca:nativeChatTabs:host%201:folder%3A%2Ftmp%2Fa',
+    save: () => updateSessionViewOverride(HOST, WORKTREE, 'tab-1', 'chat')
   },
   {
     allowlisted: 'orca:terminalLiveInputDisabled:',
-    written: 'orca:terminalLiveInputDisabled:host-1:wt-1',
-    save: () => saveDisabledTerminalLiveInputHandles('host-1', 'wt-1', new Set(['handle-1']))
+    written: 'orca:terminalLiveInputDisabled:host%201:folder%3A%2Ftmp%2Fa',
+    save: () => saveDisabledTerminalLiveInputHandles(HOST, WORKTREE, new Set(['handle-1']))
   }
 ]
 
@@ -187,9 +198,15 @@ describe('a page-visible setting saved on the phone', () => {
       expect([...store.held.keys()]).toEqual([row.written])
       const stored = store.held.get(row.written)
       expect(stored).toBeDefined()
-      expect(readMirroredStorage([row.written]), `${row.written} was stored past the mirror`).toEqual(
-        { [row.written]: stored }
+      // What the next load of this page is handed: the keys the shell asks for, out of the map.
+      const keys = pageStorageKeysForRoute(HOST, SESSION_ROUTE)
+      expect(keys, `the shell never asks for ${row.written} on ${SESSION_ROUTE}`).toContain(
+        row.written
       )
+      expect(
+        readMirroredStorage(keys)[row.written],
+        `${row.written} was stored past the mirror`
+      ).toBe(stored)
     })
   }
 })

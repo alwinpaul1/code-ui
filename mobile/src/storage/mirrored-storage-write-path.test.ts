@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { relative, sep } from 'node:path'
+import { posix, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
   PAGE_STORAGE_EXACT_KEYS,
@@ -26,18 +27,27 @@ import { censusSourceFiles } from '../test-support/census-source-files'
  * lives here and runs in the mobile gate. What this fork adds:
  *
  * - Comments are blanked before anything is matched, and a call may wrap across lines. These
- *   modules explain the rule in prose that names the very calls it counts.
+ *   modules explain the rule in prose that names the very calls it counts. What is a comment is
+ *   the TypeScript parser's answer, not a character scan's: a `//` or `/*` inside a string, a
+ *   template, a regex or JSX text is code, and a regex such as `/\/*$/` once blanked every line
+ *   after it.
  * - The owner's exports are an exact list, so a second way into the map cannot be exported.
  * - Every direct store write in a row's module must name a key constant the row lists as not
  *   mirrored, and that constant must be a literal outside the page allowlist. So a mirrored key
  *   written around the one path fails whether it is named by a constant or built into a local.
- * - Outside the rows, no module may spell a page key or write the store with a key constant a row
- *   exports, so a new module cannot write a mirrored key past the map by either route.
+ * - Outside the rows, no module may spell a page key, and no module that imports a row, the
+ *   allowlist, or a module that re-exports either with `export … from` may write the store
+ *   directly. That rule is about the import, not the key's spelling, so an aliased, namespaced,
+ *   rebound or batched key, or one taken from the allowlist's own lists, fails the same way.
+ * - Nothing but test code wipes the whole store, since `clear()` takes every page key with it and
+ *   the map would keep them all.
  *
  * What it cannot see: a key assembled at runtime from pieces none of these spell, a store reached
- * through something other than the package's default import, or a helper in another module that
- * writes whatever key it is handed. `mirrored-storage-every-key.test.ts` is the behavioural check
- * that each saver the page's keys have, called for real, lands in the map.
+ * through something other than the package's default import, a helper in another module that
+ * writes whatever key it is handed, or a key a module imports and then re-exports as its own
+ * (`export { KEY }` or `export const K = KEY`) rather than with `export … from`.
+ * `mirrored-storage-every-key.test.ts` is the behavioural check that each saver the page's keys
+ * have, called for real, lands in the map under the key the shell reads for the page's route.
  */
 
 const MOBILE_DIR = fileURLToPath(new URL('../../', import.meta.url))
@@ -90,6 +100,8 @@ const NOTE_FIRST_CALLER = 'src/mobile-web-shell/use-page-host-snapshot.ts'
 const SOURCE_ROOTS = ['src', 'app', 'web-entry']
 const SOURCE = /\.tsx?$/
 const TEST = /\.(test|spec)\.tsx?$/
+/** Fixtures only tests import, which may reset the store between cases. */
+const TEST_SUPPORT = /^src\/test-support\/|\.test-support\.tsx?$/
 const STORE_PACKAGE = '@react-native-async-storage/async-storage'
 const STORE_WRITES = 'setItem|removeItem|mergeItem|multiSet|multiRemove|multiMerge|clear'
 
@@ -102,52 +114,117 @@ function mobileSources(): string[] {
 }
 
 /**
- * The source with every comment blanked to spaces and every newline kept, so a match's offset
- * still names its line. Strings are kept, because the keys this counts are string literals, and a
- * `//` inside one is not a comment.
+ * The tokens whose text is the program's own. Outside them, a `//` or `/*` can only open a
+ * comment; inside them it is a URL, a glob, a regex or a line of JSX text.
  */
-function codeOnly(source: string): string {
-  let out = ''
-  let quote: string | null = null
+const LITERAL_TOKENS: ReadonlySet<ts.SyntaxKind> = new Set([
+  ts.SyntaxKind.StringLiteral,
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+  ts.SyntaxKind.TemplateHead,
+  ts.SyntaxKind.TemplateMiddle,
+  ts.SyntaxKind.TemplateTail,
+  ts.SyntaxKind.RegularExpressionLiteral,
+  ts.SyntaxKind.JsxText
+])
+
+type Module = {
+  /**
+   * The source with every comment blanked to spaces and every newline kept, so a match's offset
+   * still names its line. Strings are kept, because the keys this counts are string literals.
+   */
+  code: string
+  /** Every module this one loads at runtime, as written: imports, `export … from`, `require`. */
+  imports: readonly string[]
+  /** The modules this one re-exports with `export … from`, which makes it a barrel for them. */
+  reExports: readonly string[]
+}
+
+/**
+ * A module read by the TypeScript parser, because only the parser knows where a regex ends.
+ *
+ * A character scan tracking quotes, which is what this used before, cannot tell `/\/*$/` from the
+ * start of a block comment, and read everything after that regex as prose: one plant hid a bare
+ * write of a page key on the line below it. It read the rest of a line after `/^https?:\/\//` as a
+ * comment too, which cost 19 of this tree's non-test modules part of a line of code, and in nine
+ * modules it lost its place the other way and read real comments as code.
+ */
+function parseModule(source: string, fileName: string): Module {
+  const file = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  )
+  const literalEnds = new Map<number, number>()
+  const imports: string[] = []
+  const reExports: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (LITERAL_TOKENS.has(node.kind)) {
+      // JSX text has no trivia of its own, so it starts where it sits rather than past a space.
+      literalEnds.set(ts.isJsxText(node) ? node.pos : node.getStart(file), node.end)
+    }
+    if (
+      ts.isImportDeclaration(node) &&
+      node.importClause?.isTypeOnly !== true &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      imports.push(node.moduleSpecifier.text)
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      !node.isTypeOnly &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      imports.push(node.moduleSpecifier.text)
+      reExports.push(node.moduleSpecifier.text)
+    }
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      imports.push(node.moduleReference.expression.text)
+    }
+    if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) && node.expression.text === 'require')) &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      imports.push(node.arguments[0].text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  let code = ''
   let i = 0
   while (i < source.length) {
-    const ch = source[i]
-    const next = source[i + 1]
-    if (quote !== null) {
-      out += ch
-      if (ch === '\\' && next !== undefined) {
-        out += next
-        i += 2
-        continue
-      }
-      // A quote that never closes ends at the line, so a regex literal holding one costs a line.
-      if (ch === quote || (ch === '\n' && quote !== '`')) {
-        quote = null
-      }
-      i += 1
+    const literalEnd = literalEnds.get(i)
+    if (literalEnd !== undefined) {
+      code += source.slice(i, literalEnd)
+      i = literalEnd
       continue
     }
-    if (ch === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') {
-        out += ' '
-        i += 1
-      }
-      continue
-    }
-    if (ch === '/' && next === '*') {
-      const end = source.indexOf('*/', i + 2)
-      const stop = end === -1 ? source.length : end + 2
-      out += source.slice(i, stop).replace(/[^\n]/g, ' ')
+    if (source[i] === '/' && (source[i + 1] === '/' || source[i + 1] === '*')) {
+      const close = source[i + 1] === '/' ? source.indexOf('\n', i) : source.indexOf('*/', i + 2)
+      const stop =
+        close === -1 ? source.length : source[i + 1] === '/' ? close : close + '*/'.length
+      code += source.slice(i, stop).replace(/[^\n]/g, ' ')
       i = stop
       continue
     }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      quote = ch
-    }
-    out += ch
+    code += source[i]
     i += 1
   }
-  return out
+  return { code, imports, reExports }
+}
+
+/** A snippet's code, read as the module kind its name says. */
+function codeOnly(source: string, fileName = 'snippet.ts'): string {
+  return parseModule(source, fileName).code
 }
 
 type Found = { at: number; text: string }
@@ -164,7 +241,9 @@ function matchesIn(code: string, pattern: RegExp): Found[] {
 function storeNames(code: string): string[] {
   const escaped = STORE_PACKAGE.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
   const imported = [
-    ...code.matchAll(new RegExp(`\\bimport\\s+([A-Za-z_$][\\w$]*)\\s+from\\s+['"]${escaped}['"]`, 'g'))
+    ...code.matchAll(
+      new RegExp(`\\bimport\\s+([A-Za-z_$][\\w$]*)\\s+from\\s+['"]${escaped}['"]`, 'g')
+    )
   ].map((match) => match[1])
   return [...new Set(['AsyncStorage', ...imported])]
 }
@@ -175,9 +254,7 @@ type StoreWrite = Found & { method: string; firstArgument: string }
 function storeWrites(code: string): StoreWrite[] {
   return storeNames(code).flatMap((name) =>
     [
-      ...code.matchAll(
-        new RegExp(`\\b${name}\\s*\\.\\s*(${STORE_WRITES})\\s*\\(\\s*([^,)]*)`, 'g')
-      )
+      ...code.matchAll(new RegExp(`\\b${name}\\s*\\.\\s*(${STORE_WRITES})\\s*\\(\\s*([^,)]*)`, 'g'))
     ].map((match) => ({
       at: code.slice(0, match.index).split('\n').length,
       text: match[0].replace(/\s+/g, ' ').trim(),
@@ -214,7 +291,10 @@ function exportedNames(code: string): string[] {
   names.push(...[...code.matchAll(/\bexport\s+default\b/g)].map(() => 'default'))
   for (const match of code.matchAll(/\bexport\s+(?:type\s+)?\{([^}]*)\}/g)) {
     for (const part of match[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()
+      const name = part
+        .trim()
+        .split(/\s+as\s+/)
+        .pop()
       if (name) {
         names.push(name)
       }
@@ -228,19 +308,50 @@ function read(file: string): string {
   return readFileSync(`${MOBILE_DIR}${file}`, 'utf8')
 }
 
-const codeByFile = new Map<string, string>()
+const moduleByFile = new Map<string, Module>()
 
-function code(file: string): string {
-  const cached = codeByFile.get(file)
+function moduleOf(file: string): Module {
+  const cached = moduleByFile.get(file)
   if (cached !== undefined) {
     return cached
   }
-  const blanked = codeOnly(read(file))
-  codeByFile.set(file, blanked)
-  return blanked
+  const parsed = parseModule(read(file), file)
+  moduleByFile.set(file, parsed)
+  return parsed
+}
+
+function code(file: string): string {
+  return moduleOf(file).code
+}
+
+/**
+ * The module an import names, or null for a package or anything outside `mobile/`.
+ *
+ * Resolved the way `tsconfig.json` resolves it: relative to the importer, `@/` from `src/`, and a
+ * bare path from `mobile/` itself, which is what its `baseUrl` of `.` allows.
+ */
+function resolveImport(from: string, specifier: string, known: ReadonlySet<string>): string | null {
+  const base = specifier.startsWith('.')
+    ? posix.join(posix.dirname(from), specifier)
+    : specifier.startsWith('@/')
+      ? `src/${specifier.slice('@/'.length)}`
+      : specifier
+  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]
+  return candidates.find((candidate) => known.has(candidate)) ?? null
 }
 
 const ROW_FILES: readonly string[] = MIRRORED_WRITERS.map((row) => row.file)
+
+/** Every non-test module that is not the owner, the allowlist or a row. */
+function outsideModules(): string[] {
+  return mobileSources().filter(
+    (file) =>
+      !TEST.test(file) &&
+      file !== MIRROR_MODULE &&
+      file !== ALLOWLIST_MODULE &&
+      !ROW_FILES.includes(file)
+  )
+}
 
 describe('the census reader', () => {
   it('reads a call a comment names as prose, and a call behind a block comment as code', () => {
@@ -256,6 +367,89 @@ describe('the census reader', () => {
     expect(blanked).toContain("'https://example.test'")
     expect(storeWrites(blanked).map(({ at, firstArgument }) => ({ at, firstArgument }))).toEqual([
       { at: 2, firstArgument: 'DOCK_WIDTH_KEY' }
+    ])
+  })
+
+  it('reads the code after a regex that holds a comment opener, which is not a comment', () => {
+    const source = [
+      "export const trimSlashes = (url: string) => url.replace(/\\/*$/, '')",
+      "export const reset = () => AsyncStorage.removeItem('orca:hostDockWidth')",
+      "export const save = (url: string) => /^https?:\\/\\//.test(url) && AsyncStorage.setItem('k', url)"
+    ].join('\n')
+    expect(storeWrites(codeOnly(source)).map(({ at, method }) => ({ at, method }))).toEqual([
+      { at: 2, method: 'removeItem' },
+      { at: 3, method: 'setItem' }
+    ])
+  })
+
+  it('reads a comment after a regex, or in an empty block, as prose', () => {
+    const source = [
+      '/a\\/\\/b/.test(s) // AsyncStorage.setItem(DOCK_WIDTH_KEY, v)',
+      'try { run() } catch { // AsyncStorage.clear()',
+      '}',
+      'call(a, /* AsyncStorage.removeItem(K) */)'
+    ].join('\n')
+    const blanked = codeOnly(source)
+    expect(blanked.split('\n')).toHaveLength(4)
+    expect(storeWrites(blanked)).toEqual([])
+  })
+
+  it('reads JSX text as text, so a URL in it hides nothing after it', () => {
+    const source = [
+      'export const Link = () => <Text>see https://example.test</Text>; AsyncStorage.setItem(K, v)',
+      'export const Note = () => <Text>{/* AsyncStorage.clear() */}</Text>'
+    ].join('\n')
+    expect(
+      storeWrites(codeOnly(source, 'snippet.tsx')).map(({ at, method }) => ({ at, method }))
+    ).toEqual([{ at: 1, method: 'setItem' }])
+  })
+
+  it('reads a whole-store wipe as a write with no key', () => {
+    expect(
+      storeWrites(codeOnly('await AsyncStorage.clear()')).map(({ method, firstArgument }) => ({
+        method,
+        firstArgument
+      }))
+    ).toEqual([{ method: 'clear', firstArgument: '' }])
+  })
+
+  it('reads every way a module can load another, and none a type import is', () => {
+    const { imports, reExports } = parseModule(
+      [
+        "import type { A } from './types-only'",
+        "import { b } from './named'",
+        "import * as c from '@/namespaced'",
+        "import './side-effect'",
+        "export { d } from './barrel'",
+        "export type { E } from './type-barrel'",
+        "const f = require('./required')",
+        "const g = import('./dynamic')"
+      ].join('\n'),
+      'src/storage/snippet.ts'
+    )
+    expect(imports).toEqual([
+      './named',
+      '@/namespaced',
+      './side-effect',
+      './barrel',
+      './required',
+      './dynamic'
+    ])
+    expect(reExports).toEqual(['./barrel'])
+    const known = new Set([
+      'src/storage/named.ts',
+      'src/namespaced/index.tsx',
+      'src/storage/barrel.ts'
+    ])
+    expect(
+      imports.map((specifier) => resolveImport('src/storage/snippet.ts', specifier, known))
+    ).toEqual([
+      'src/storage/named.ts',
+      'src/namespaced/index.tsx',
+      null,
+      'src/storage/barrel.ts',
+      null,
+      null
     ])
   })
 
@@ -337,14 +531,7 @@ describe('the mirrored storage write path', () => {
     )
     // Two today; zero would mean the scan above lost them, not that none are exported.
     expect(exportedKeys.length).toBeGreaterThan(0)
-    const outside = mobileSources().filter(
-      (file) =>
-        !TEST.test(file) &&
-        file !== MIRROR_MODULE &&
-        file !== ALLOWLIST_MODULE &&
-        !ROW_FILES.includes(file)
-    )
-    const found = outside.flatMap((file) => {
+    const found = outsideModules().flatMap((file) => {
       const source = code(file)
       const spelled = literals(source)
         .filter((literal) => isPageKey(literal.text))
@@ -355,5 +542,50 @@ describe('the mirrored storage write path', () => {
       return [...spelled, ...written]
     })
     expect(found).toEqual([])
+  })
+
+  it('lets no module that imports a page key write the store around the one path', () => {
+    // Held by the import rather than by how the key is spelled, since a key can arrive renamed,
+    // under a namespace, rebound to a local, inside an array or as the allowlist's own list, and a
+    // spelling rule has to be taught each one after it has already got through.
+    const known = new Set(mobileSources())
+    const outside = outsideModules()
+    const carriers = new Set([...ROW_FILES, ALLOWLIST_MODULE])
+    const carries = (file: string, specifiers: readonly string[]): boolean =>
+      specifiers.some((specifier) => carriers.has(resolveImport(file, specifier, known) ?? ''))
+    // A module that re-exports a carrier is one too, however long the chain of them.
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const file of outside) {
+        if (!carriers.has(file) && carries(file, moduleOf(file).reExports)) {
+          carriers.add(file)
+          grew = true
+        }
+      }
+    }
+    const importers = outside.filter((file) => carries(file, moduleOf(file).imports))
+    // Dozens today; none would mean the resolver lost them, and the clean result below with it.
+    expect(importers.length).toBeGreaterThan(0)
+    const found = importers.flatMap((file) =>
+      storeWrites(code(file)).map(({ at, text }) => `${file}:${at} ${text}`)
+    )
+    expect(
+      found,
+      'a module that imports a page key writes the store itself, so the map would keep the old value'
+    ).toEqual([])
+  })
+
+  it('lets nothing but test code wipe the whole store', () => {
+    // `clear()` takes every page key with it and the map keeps them all, so the next page load is
+    // handed everything the wipe was meant to remove.
+    const wipes = mobileSources()
+      .filter((file) => !TEST.test(file) && !TEST_SUPPORT.test(file) && file !== MIRROR_MODULE)
+      .flatMap((file) =>
+        storeWrites(code(file))
+          .filter((write) => write.method === 'clear')
+          .map(({ at, text }) => `${file}:${at} ${text}`)
+      )
+    expect(wipes).toEqual([])
   })
 })
