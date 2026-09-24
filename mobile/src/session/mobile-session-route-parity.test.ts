@@ -365,7 +365,10 @@ const HEAD_HOST_JSX_SHA256 = '0e144db3ff60e989d05f114b28b7f7845add250668ae3d3d89
 // 2026-09-19: FileReader hands readingPositionKey to the PDF and markdown views,
 // and (later) resolveImage to the markdown view; MarkdownReader's Preview
 // hands MobileMarkdown resolveImage too, so a document's figures draw.
-const HEAD_LEAF_JSX_SHA256 = '9c8bd4e878543f485df51eb84903ff253bb562ac31b57253f7ead5523516a1cb'
+// 2026-09-24: MobileSessionHeader's <TabActivityBadge> call gained
+// `leadTurnEnded` (e9df676a), so the active tab's pill stops spinning once
+// Claude's own turn has ended. Same record count; only that record moved.
+const HEAD_LEAF_JSX_SHA256 = 'c03d428389ac79ff3c0badba4ffc1ea437781c0d3c6b3ee8e1897b869b814c25'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
