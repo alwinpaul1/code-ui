@@ -6,9 +6,16 @@
 // so it arrives in the system's colours whatever theme the reader has chosen.
 import { useSyncExternalStore } from 'react'
 
-export type BackgroundPowerPromptKind = 'ask' | 'not-taken'
+export type BackgroundPowerPromptKind = 'ask' | 'not-taken' | 'paused'
 
 let open: BackgroundPowerPromptKind | null = null
+/** How long Android paused the app, for the 'paused' message. */
+let pausedForMs = 0
+
+/** How long the pause the 'paused' prompt reports lasted. */
+export function backgroundPowerPromptPausedMs(): number {
+  return pausedForMs
+}
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -17,11 +24,12 @@ function emit(): void {
   }
 }
 
-export function openBackgroundPowerPrompt(kind: BackgroundPowerPromptKind = 'ask'): void {
+export function openBackgroundPowerPrompt(kind: BackgroundPowerPromptKind = 'ask', pausedMs = 0): void {
   if (open === kind) {
     return
   }
   open = kind
+  pausedForMs = pausedMs
   emit()
 }
 
@@ -45,9 +53,10 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-/** Which prompt is showing, or null. Two kinds, because "we are asking" and
- *  "that did not work" are different messages and one must not be mistaken for
- *  the other — repeating the ask reads as the app not having noticed. */
+/** Which prompt is showing, or null. Separate kinds, because "we are asking",
+ *  "that did not work" and "Android just paused the app" are different messages
+ *  and one must not be mistaken for another; repeating the ask reads as the app
+ *  not having noticed. */
 export function useBackgroundPowerPromptOpen(): BackgroundPowerPromptKind | null {
   return useSyncExternalStore(
     subscribe,

@@ -35,6 +35,7 @@ import {
 } from './background-notification-watcher'
 import { releaseBackgroundLinkTask } from './background-link-task-hold'
 import { AppPauseDetector, appPauseLogEntry } from './app-pause-detector'
+import { promptAfterPause } from './background-power-after-pause'
 import { defaultCancelTimer, defaultScheduleTimer } from '../transport/timer-scheduler'
 
 const SERVICE_TITLE = 'Code UI'
@@ -49,7 +50,12 @@ const pauseDetector = new AppPauseDetector({
   setTimer: defaultScheduleTimer,
   clearTimer: defaultCancelTimer,
   onPause: (pause) => {
-    const entry = appPauseLogEntry(pause, backgroundDeliveryState())
+    const background = backgroundDeliveryState()
+    const entry = appPauseLogEntry(pause, background)
+    // Say so now, while the cost is concrete; shown when the screen is up.
+    if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: background.unrestricted })) {
+      openBackgroundPowerPrompt('paused', pause.to - pause.from)
+    }
     log(entry.message, entry.detail)
     void loadHosts()
       .then((hosts) => {

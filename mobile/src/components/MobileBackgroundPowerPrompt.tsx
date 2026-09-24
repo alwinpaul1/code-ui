@@ -6,9 +6,11 @@ import {
 import { requestBackgroundDeliveryUnrestricted } from '../background/background-link'
 import { saveBackgroundPowerRequestedNow } from '../storage/preferences'
 import {
+  backgroundPowerPromptPausedMs,
   closeBackgroundPowerPrompt,
   useBackgroundPowerPromptOpen
 } from '../background/background-power-prompt-store'
+import { backgroundPowerPausedPrompt } from '../background/background-power-after-pause'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
@@ -29,7 +31,12 @@ export function MobileBackgroundPowerPrompt() {
   // Two messages, because "we are asking" and "that did not work" are different
   // things to say. Repeating the ask after a failed grant reads as the app not
   // having noticed, which is exactly what people reported.
-  const copy = open === 'not-taken' ? BACKGROUND_POWER_NOT_TAKEN_PROMPT : BACKGROUND_POWER_PROMPT
+  const copy =
+    open === 'not-taken'
+      ? BACKGROUND_POWER_NOT_TAKEN_PROMPT
+      : open === 'paused'
+        ? backgroundPowerPausedPrompt(backgroundPowerPromptPausedMs())
+        : BACKGROUND_POWER_PROMPT
 
   return (
     <BottomDrawer visible={open !== null} onClose={closeBackgroundPowerPrompt}>
