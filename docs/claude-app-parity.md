@@ -17,7 +17,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 7 | After an API error ends the turn, no "Working" and no Stop | Still showed "Working ••• " and Stop under the error | open |
 | 8 | A message with images or video leaves the composer text and media together | The text leaves first, the media lingers, then both reappear pinned together after a refresh | merged (3248a41b); phone check pending |
 | 9 | A sent message with an image and a video shows the image thumbnail and a file card ("MP4", the file name) | Showed only the video's path text, `@"/Users/…/….mp4"`, and no image | open |
-| 10 | Screenshot markup: draw on a screenshot with a pen, undo and redo, "Discard markup?" on close, attach it with an edit pencil | Not present | open |
+| 10 | Screenshot markup: draw on a screenshot with a pen, undo and redo, "Discard markup?" on close, attach it with an edit pencil | Not present | merged (cb571619); drawing feel and the flattened image need a phone check |
 | 11 | A queued message stays queued while Claude Code 2.1.281 draws the queue above its spinner | Drew it as already sent | done (acac520b) |
 | 12 | A reply written just before a phone send stays above the message | Drew it below | done (3ed09620) |
 | 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
