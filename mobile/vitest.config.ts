@@ -21,6 +21,16 @@ export default defineConfig({
       ),
       // Why: react-native-svg's entry is TypeScript the Node runtime cannot parse.
       'react-native-svg': fileURLToPath(new URL('./src/test/react-native-svg-mock.ts', import.meta.url)),
+      // Why: gesture-handler and safe-area-context require real 'react-native'
+      // (Flow). Tool rows reach both through the detail sheet, so without these
+      // every chat-message test failed at import with "Unexpected token
+      // 'typeof'" and no stack.
+      'react-native-gesture-handler': fileURLToPath(
+        new URL('./src/test/react-native-gesture-handler-mock.ts', import.meta.url)
+      ),
+      'react-native-safe-area-context': fileURLToPath(
+        new URL('./src/test/react-native-safe-area-context-mock.ts', import.meta.url)
+      ),
       // Why: expo-image-manipulator's entry pulls Flow-typed RN internals; the
       // composer's photo resizer (mobile-photo-resize.ts) is reached by the
       // attachment hooks' tests.

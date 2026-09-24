@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import { DraggableDetailSheet } from '../components/DraggableDetailSheet'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -117,7 +118,8 @@ function OutputSection({ output, isError }: { output: string; isError: boolean }
   const { colors } = useTheme()
   const isJson = toolDetailOutputIsJson(output)
   const [pretty, setPretty] = useState(false)
-  const text = pretty && isJson ? prettifyToolDetailOutput(output) : output
+  // Capped after prettifying, so both views stop at the same length (see boundedRow).
+  const text = truncateToolDetail(pretty && isJson ? prettifyToolDetailOutput(output) : output)
   return (
     <View style={{ gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

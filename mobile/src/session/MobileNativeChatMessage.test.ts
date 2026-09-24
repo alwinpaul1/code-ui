@@ -6,6 +6,16 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 
+// A tapped row opens the real detail sheet in a bare shell: the draggable one
+// needs RN exports this mock leaves out, and what matters here is what the
+// tap shows (the same stand-in MobileNativeChatToolDetailSheet.test.tsx uses).
+vi.mock('../components/DraggableDetailSheet', async () => {
+  const React = await import('react')
+  return {
+    DraggableDetailSheet: ({ visible, header, children }: { visible: boolean; header?: unknown; children?: unknown }) =>
+      visible ? React.createElement('DraggableDetailSheet', null, header, children) : null
+  }
+})
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
@@ -334,19 +344,25 @@ describe('MobileNativeChatMessage', () => {
     expect(texts.some((text) => text.includes('"file_path":"src/index.ts"'))).toBe(false)
   })
 
-  it('bounds expanded diff-less tool input before native text layout', () => {
+  // The Tools toggle no longer expands a row that opens the detail sheet
+  // (docs/claude-app-parity.md item 4), so the cap moved with the detail.
+  it('draws a 100 KB tool input only through the sheet, capped before native text layout', () => {
     const tree = render(
       toolMessage([
         { type: 'tool-call', name: 'CustomTool', input: { payload: 'x'.repeat(100_000) } }
       ]),
       { toolsExpanded: true }
     )
-    const detail = textIn(tree.root).find((text) => text.startsWith('{\n'))
+    const longest = () => Math.max(...textIn(tree.root).map((text) => text.length))
+    expect(longest()).toBeLessThan(MAX_TOOL_DETAIL_LENGTH)
+    act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    const detail = textIn(tree.root).find((text) => text.startsWith('xxx'))
     expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(detail?.endsWith('…')).toBe(true)
+    expect(longest()).toBe(MAX_TOOL_DETAIL_LENGTH + 1)
   })
 
-  it('expands formatted detail for a collapsed JSON-string tool input', () => {
+  it('opens a JSON-string tool input in the sheet as named fields', () => {
     const tree = render(
       toolMessage([
         {
@@ -356,23 +372,12 @@ describe('MobileNativeChatMessage', () => {
         }
       ])
     )
-    // Innermost match, not the first: the run header now prints each member's
-    // name as its own text node (#19372), so it answers to a tool name too. The
-    // header comes first in tree order and the tool line after it.
-    const pressableWith = (label: string): ReactTestInstance =>
-      tree.root
-        .findAllByType('Pressable' as never)
-        .findLast((node) => textIn(node).includes(label))!
-
-    act(() => pressableWith('Used a tool').props.onPress())
-    // The row label is the command, and the detail stays closed until tapped.
-    expect(textIn(tree.root)).toContain('git status')
-    expect(textIn(tree.root).some((text) => text.startsWith('{\n'))).toBe(false)
-
-    act(() => pressableWith('CustomTool').props.onPress())
-    expect(textIn(tree.root)).toContain(
-      '{\n  "cmd": "git status",\n  "description": "Inspect changes"\n}'
-    )
+    // Closed, the row says only what ran: no field of the input is drawn yet.
+    expect(textIn(tree.root)).not.toContain('Inspect changes')
+    act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    const shown = textIn(tree.root)
+    expect(shown).toEqual(expect.arrayContaining(['cmd', 'git status', 'description', 'Inspect changes']))
+    expect(shown.indexOf('cmd')).toBeLessThan(shown.indexOf('description'))
   })
 
   it('does not echo the row label as detail when a row has nothing to expand', () => {

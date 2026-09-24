@@ -6,6 +6,9 @@ import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-j
 import { projectStructuredItemToNativeChat } from '../../../src/shared/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
+// The detail sheet a tool row opens mounts closed on every run, and it needs
+// RN exports this mock leaves out; this suite is about the row, not the sheet.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>

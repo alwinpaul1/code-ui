@@ -18,6 +18,16 @@ import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 
+// A tapped row opens the real detail sheet in a bare shell: the draggable one
+// needs RN exports this mock leaves out, and what matters here is what the
+// tap shows (the same stand-in MobileNativeChatToolDetailSheet.test.tsx uses).
+vi.mock('../components/DraggableDetailSheet', async () => {
+  const React = await import('react')
+  return {
+    DraggableDetailSheet: ({ visible, header, children }: { visible: boolean; header?: unknown; children?: unknown }) =>
+      visible ? React.createElement('DraggableDetailSheet', null, header, children) : null
+  }
+})
 vi.mock('react-native', () => ({
   Animated: {
     Text: 'Text',
@@ -266,10 +276,18 @@ describe('an agent plan in the chat transcript', () => {
     expect(texts).toContain('Reading the parser')
   })
 
-  it('keeps the provider error visible when the plan call failed', () => {
+  // A failed plan has no checklist to draw, so its row opens the detail sheet
+  // (docs/claude-app-parity.md item 4): the error is one tap away, never lost.
+  it('keeps the provider error one tap away when the plan call failed', () => {
     const { texts, tasks } = render(FAILED_PLAN)
     expect(tasks).toEqual([])
-    expect(texts).toContain('InputValidationError: todos is required')
+    expect(texts).toContain('1 failed')
+    act(() => renderer!.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    const shown = renderer!.root
+      .findAllByType('Text')
+      .map((node) => node.props.children)
+      .filter((children): children is string => typeof children === 'string')
+    expect(shown).toContain('InputValidationError: todos is required')
   })
 
   it('tints a finished step for the theme in use, in light and in dark', () => {

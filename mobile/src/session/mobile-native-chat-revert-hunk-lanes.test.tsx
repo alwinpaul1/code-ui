@@ -13,6 +13,9 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { HunkRevertOutcome } from './mobile-diff-hunk-revert-request'
 import { resetHunkRevertMarksForTests } from './mobile-diff-hunk-revert-marks'
 
+// The detail sheet a tool row opens mounts closed on every run, and it needs
+// RN exports this mock leaves out; this suite is about the row, not the sheet.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>

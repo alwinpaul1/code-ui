@@ -12,6 +12,16 @@ import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 
+// A tapped row opens the real detail sheet in a bare shell: the draggable one
+// needs RN exports this mock leaves out, and what matters here is what the
+// tap shows (the same stand-in MobileNativeChatToolDetailSheet.test.tsx uses).
+vi.mock('../components/DraggableDetailSheet', async () => {
+  const React = await import('react')
+  return {
+    DraggableDetailSheet: ({ visible, header, children }: { visible: boolean; header?: unknown; children?: unknown }) =>
+      visible ? React.createElement('DraggableDetailSheet', null, header, children) : null
+  }
+})
 vi.mock('react-native', () => ({
   Animated: {
     Text: 'Text',
@@ -231,10 +241,14 @@ describe('an agent file edit in the chat transcript', () => {
     ])
   })
 
-  it('keeps the provider error visible when the edit did not land', () => {
+  // The row opens the detail sheet now (docs/claude-app-parity.md item 4), so
+  // the error is one tap away rather than inline — but never lost.
+  it('keeps the provider error one tap away when the edit did not land', () => {
     const { rows, texts } = render(FAILED_EDIT)
     expect(rows).toEqual([])
-    expect(texts).toContain('String to replace not found in file.')
+    expect(texts).toContain('1 failed')
+    act(() => renderer!.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    expect(readTree(renderer!).texts).toContain('String to replace not found in file.')
   })
 
   it('tints an added row for the theme in use, in light and in dark', () => {

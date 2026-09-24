@@ -1,5 +1,6 @@
 import { isEditToolName, editFilesFromToolPair } from '../../../src/shared/native-chat-edit-normalize'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 
@@ -153,12 +154,20 @@ export function toolDetailInputRows(input: unknown): ToolDetailInputRow[] {
   if (record) {
     return Object.keys(record)
       .sort((a, b) => a.localeCompare(b))
-      .map((name) => ({ name, ...formatInputValue(record[name]) }))
+      .map((name) => boundedRow(name, record[name]))
   }
   if (input === null || input === undefined || input === '') {
     return []
   }
-  return [{ name: 'input', ...formatInputValue(input) }]
+  return [boundedRow('input', input)]
+}
+
+// Why: the inline row capped a call's detail before native text layout, and a
+// tap now opens this sheet instead; one 100 KB string in an Android Text
+// stalls the UI thread. Same cap, same ellipsis.
+function boundedRow(name: string, raw: unknown): ToolDetailInputRow {
+  const { value, isObject } = formatInputValue(raw)
+  return { name, value: truncateToolDetail(value), isObject }
 }
 
 /** Whether the call's raw output parses as JSON, which is what earns the

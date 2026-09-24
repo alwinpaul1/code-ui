@@ -14,6 +14,9 @@ import { ToolRun } from './MobileNativeChatToolRun'
 
 const openURL = vi.fn(async () => true)
 
+// The detail sheet a tool row opens mounts closed on every run, and it needs
+// RN exports this mock leaves out; this suite is about the row, not the sheet.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('react-native', () => ({
   Animated: {
     Text: 'Text',

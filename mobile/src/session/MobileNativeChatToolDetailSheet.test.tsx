@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { ToolDetailBody, ToolDetailHeader } from './MobileNativeChatToolDetailSheet'
@@ -157,5 +158,48 @@ describe('tool detail body: Inputs and Output', () => {
     }
     renderer = renderTree(createElement(ToolDetailBody, { pair: running }))
     expect(renderer.root.findAllByProps({ testID: 'tool-detail-output' })).toHaveLength(0)
+  })
+
+  // The inline row capped both before native text layout; a 100 KB string in
+  // one Android Text stalls the UI thread, and a tap now lands here instead.
+  it('does not freeze on a 100 KB input: each value stops at the detail cap', () => {
+    const huge: NativeChatToolPair = {
+      call: { type: 'tool-call', name: 'CustomTool', input: { payload: 'x'.repeat(100_000) } },
+      result: { type: 'tool-result', output: 'ok' }
+    }
+    renderer = renderTree(createElement(ToolDetailBody, { pair: huge }))
+    const value = renderer.root
+      .findByProps({ testID: 'tool-detail-input-row' })
+      .findAllByType('Text')[1]!.props.children as string
+    expect(value).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+    expect(value.endsWith('…')).toBe(true)
+  })
+
+  it('does not freeze on a 100 KB output, raw or prettified: it stops at the detail cap', () => {
+    const json = JSON.stringify({ rows: Array.from({ length: 5000 }, (_, i) => `row ${i}`) })
+    const huge: NativeChatToolPair = {
+      call: { type: 'tool-call', name: 'Bash', input: { command: 'cat big.json' } },
+      result: { type: 'tool-result', output: json }
+    }
+    expect(json.length).toBeGreaterThan(MAX_TOOL_DETAIL_LENGTH * 10)
+    renderer = renderTree(createElement(ToolDetailBody, { pair: huge }))
+    const raw = findText(renderer, 'tool-detail-output')
+    expect(raw).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+    expect(raw.endsWith('…')).toBe(true)
+    act(() => {
+      renderer!.root.findByProps({ testID: 'tool-detail-prettify' }).props.onPress()
+    })
+    const pretty = findText(renderer, 'tool-detail-output')
+    expect(pretty).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+    expect(pretty.startsWith('{\n  "rows": [\n')).toBe(true)
+  })
+
+  it('keeps an output of exactly the cap whole, with no ellipsis', () => {
+    const exact: NativeChatToolPair = {
+      call: { type: 'tool-call', name: 'Bash', input: { command: 'yes' } },
+      result: { type: 'tool-result', output: 'y'.repeat(MAX_TOOL_DETAIL_LENGTH) }
+    }
+    renderer = renderTree(createElement(ToolDetailBody, { pair: exact }))
+    expect(findText(renderer, 'tool-detail-output')).toBe('y'.repeat(MAX_TOOL_DETAIL_LENGTH))
   })
 })
