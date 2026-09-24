@@ -30,6 +30,7 @@ import { repostBannerWithReplyVerdict } from '../src/notifications/question-repl
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { ImagePreviewModal } from '../src/components/ImagePreviewModal'
+import { MobileImageMarkupEditor } from '../src/components/MobileImageMarkupEditor'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
@@ -326,6 +327,9 @@ function ThemedRoot() {
         {/* Likewise the full-screen image viewer: a chat thumbnail, a
             markdown figure and an image file all open it (2026-09-19). */}
         <ImagePreviewModal />
+        {/* And the markup editor: the composer's attachment pencil and the
+            preview's own pencil both open it (2026-09-24). */}
+        <MobileImageMarkupEditor />
       </View>
     </RpcClientProvider>
   )

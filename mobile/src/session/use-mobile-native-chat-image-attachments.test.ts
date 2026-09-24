@@ -43,6 +43,10 @@ vi.mock('expo-clipboard', () => ({
   setStringAsync: vi.fn()
 }))
 
+function failed(id: string, message: string): RpcResponse {
+  return { id, ok: false, error: { code: 'failed', message }, _meta: { runtimeId: 'r' } }
+}
+
 describe('useMobileNativeChatImageAttachments', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: Hook | null = null
@@ -934,5 +938,72 @@ describe('useMobileNativeChatImageAttachments', () => {
       await attach
     })
     expect(showToast).toHaveBeenCalledWith('Attach failed (disconnected)', 1500)
+  })
+
+  // The markup editor's Done: it hands back flattened bytes for one chip,
+  // which must reach the host and take that chip's place without touching
+  // any other pending attachment.
+  describe('replaceAttachment', () => {
+    it('uploads the marked-up bytes and swaps the chip in place, keeping its id', async () => {
+      pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+      const client = makeClient([
+        methodNotFound('start'),
+        ok('save', '/tmp/a.png'),
+        methodNotFound('start-2'),
+        ok('save-2', '/tmp/a-marked.png')
+      ])
+      mount(
+        baseArgs({
+          client: client as unknown as RpcClient,
+          getActiveWorktreeConnectionId: async () => 'conn-1'
+        })
+      )
+      await act(async () => {
+        await hook!.attachImage('library')
+      })
+      expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])
+
+      await act(async () => {
+        await hook!.replaceAttachment('img-1', 'ZZZZ')
+      })
+
+      expect(hook!.attachments).toMatchObject([
+        { id: 'img-1', path: '/tmp/a-marked.png', previewUri: 'data:image/png;base64,ZZZZ' }
+      ])
+      const saveCalls = client.calls.filter((c) => c.params?.connectionId === 'conn-1')
+      expect(saveCalls.length).toBeGreaterThan(0)
+    })
+
+    it('does nothing when there is no active scope to hold the replaced chip', async () => {
+      const client = makeClient([])
+      mount(baseArgs({ client: client as unknown as RpcClient, scopeKey: null }))
+
+      await act(async () => {
+        await hook!.replaceAttachment('img-1', 'ZZZZ')
+      })
+
+      expect(client.calls).toEqual([])
+    })
+
+    it('rejects and leaves the chip untouched when the re-upload fails', async () => {
+      pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+      const client = makeClient([
+        methodNotFound('start'),
+        ok('save', '/tmp/a.png'),
+        methodNotFound('start-2'),
+        failed('save-2', 'disk full')
+      ])
+      mount(baseArgs({ client: client as unknown as RpcClient }))
+      await act(async () => {
+        await hook!.attachImage('library')
+      })
+
+      await expect(
+        act(async () => {
+          await hook!.replaceAttachment('img-1', 'ZZZZ')
+        })
+      ).rejects.toThrow('disk full')
+      expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])
+    })
   })
 })

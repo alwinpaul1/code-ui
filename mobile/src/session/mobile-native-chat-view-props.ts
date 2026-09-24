@@ -107,6 +107,9 @@ export type MobileNativeChatViewProps = {
   /** Pending image attachments shown as composer thumbnails until the next send. */
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
+  /** Opens the markup editor on a photo chip (the Claude app's pencil,
+   *  2026-09-24). */
+  onEditAttachment?: (id: string, uri: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
   /** Runs before a composer send goes out (ends live dictation). */

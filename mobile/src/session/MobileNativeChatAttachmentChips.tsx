@@ -1,4 +1,4 @@
-import { FileText, X } from 'lucide-react-native'
+import { FileText, Pencil, X } from 'lucide-react-native'
 import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -9,10 +9,15 @@ import { openImagePreview } from './image-preview-store'
  *  chips, each with its remove badge. */
 export function MobileNativeChatAttachmentChips({
   attachments,
-  onRemoveAttachment
+  onRemoveAttachment,
+  onEditAttachment
 }: {
   attachments: readonly PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
+  /** Opens the markup editor on a photo chip (the Claude app's pencil,
+   *  2026-09-24). Undefined for a document chip, which has nothing to draw
+   *  on, and this file never passes it for one. */
+  onEditAttachment?: (id: string, uri: string) => void
 }) {
   const { colors, radius, space } = useTheme()
   if (attachments.length === 0) {
@@ -66,7 +71,16 @@ export function MobileNativeChatAttachmentChips({
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
                 style={{ flex: 1 }}
-                onPress={() => openImagePreview(attachment.previewUri, attachment.name ?? 'Image')}
+                onPress={() =>
+                  openImagePreview(
+                    attachment.previewUri,
+                    attachment.name ?? 'Image',
+                    0,
+                    onEditAttachment
+                      ? () => onEditAttachment(attachment.id, attachment.previewUri)
+                      : undefined
+                  )
+                }
               >
                 <Image
                   source={{ uri: attachment.previewUri }}
@@ -118,6 +132,26 @@ export function MobileNativeChatAttachmentChips({
                 hitSlop={8}
               >
                 <X size={12} color={colors.textInverse} strokeWidth={2.6} />
+              </Pressable>
+            ) : null}
+            {!isFile && onEditAttachment && !attachment.uploading ? (
+              <Pressable
+                accessibilityLabel="Edit image"
+                style={{
+                  position: 'absolute',
+                  bottom: 3,
+                  right: 3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.text
+                }}
+                onPress={() => onEditAttachment(attachment.id, attachment.previewUri)}
+                hitSlop={8}
+              >
+                <Pencil size={12} color={colors.textInverse} strokeWidth={2.4} />
               </Pressable>
             ) : null}
           </View>

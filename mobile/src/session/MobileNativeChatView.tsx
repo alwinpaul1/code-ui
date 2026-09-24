@@ -89,6 +89,7 @@ export function MobileNativeChatView({
   onAttachFile,
   attachments,
   onRemoveAttachment,
+  onEditAttachment,
   isAttaching,
   onMicPress,
   onBeforeSend,
@@ -459,6 +460,7 @@ export function MobileNativeChatView({
         onAttachFile={onAttachFile}
         attachments={attachments}
         onRemoveAttachment={onRemoveAttachment}
+        onEditAttachment={onEditAttachment}
         isAttaching={isAttaching}
         onMicPress={onMicPress}
         onBeforeSend={onBeforeSend}

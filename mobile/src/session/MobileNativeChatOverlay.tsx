@@ -20,6 +20,7 @@ import {
 import { useScreenPeerNotices } from './use-screen-peer-notices'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
+import { openImageMarkup } from './image-markup-store'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -345,6 +346,11 @@ export function MobileNativeChatOverlay({
         onAttachFile={() => void images.attachDocument()}
         attachments={images.attachments}
         onRemoveAttachment={images.removeAttachment}
+        onEditAttachment={(id, uri) =>
+          openImageMarkup(uri, {
+            onDone: (result) => void images.replaceAttachment(id, result.base64)
+          })
+        }
         isAttaching={images.isAttaching}
         onMicPress={onMicPress}
         onBeforeSend={onBeforeSend}

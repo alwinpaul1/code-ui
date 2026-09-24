@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import { useNativeChatAttachmentScopeWriters } from './use-native-chat-attachment-scope-writers'
+import { useMobileNativeChatImageMarkup } from './use-mobile-native-chat-image-markup'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -94,6 +95,9 @@ export type MobileNativeChatImageAttachments = {
   /** Any document via the file picker; described to the agent in the message text. */
   readonly attachDocument: () => Promise<void>
   readonly removeAttachment: (id: string) => void
+  /** The markup editor's Done: uploads a flattened photo and swaps it into
+   *  the chip at `id` (use-mobile-native-chat-image-markup.ts). */
+  readonly replaceAttachment: (id: string, base64: string) => Promise<void>
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
   readonly sendNativeChat: (text: string) => Promise<boolean>
@@ -123,8 +127,19 @@ export function useMobileNativeChatImageAttachments({
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
   const attachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.byScope)
-  const { setAttachmentsByScope, addUploadedImages, addUploadingImage, settleUploads } =
-    useNativeChatAttachmentScopeWriters()
+  const {
+    setAttachmentsByScope,
+    addUploadedImages,
+    addUploadingImage,
+    settleUploads,
+    replaceAttachmentImage
+  } = useNativeChatAttachmentScopeWriters()
+  const replaceAttachment = useMobileNativeChatImageMarkup({
+    client,
+    getActiveWorktreeConnectionId,
+    scopeKey,
+    replaceAttachmentImage
+  })
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
 
@@ -381,5 +396,14 @@ export function useMobileNativeChatImageAttachments({
     ]
   )
 
-  return { attachments, isAttaching, attachImage, attachImageFile, attachDocument, removeAttachment, sendNativeChat }
+  return {
+    attachments,
+    isAttaching,
+    attachImage,
+    attachImageFile,
+    attachDocument,
+    removeAttachment,
+    replaceAttachment,
+    sendNativeChat
+  }
 }

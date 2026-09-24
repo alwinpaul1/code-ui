@@ -3,6 +3,7 @@ import {
   addUploadingNativeChatImage,
   appendPendingNativeChatImages,
   dropUploadingNativeChatImages,
+  replaceNativeChatImageAttachment,
   type PendingNativeChatImage,
   type UploadingNativeChatImage
 } from './mobile-native-chat-image-attachment'
@@ -41,5 +42,26 @@ export function useNativeChatAttachmentScopeWriters() {
     },
     [setAttachmentsByScope]
   )
-  return { setAttachmentsByScope, addUploadedImages, addUploadingImage, settleUploads }
+  // The markup editor's Done: swaps one chip's bytes for a marked-up version
+  // once the re-upload finishes (use-mobile-native-chat-image-markup.ts owns
+  // the upload itself, split out for the same reason this file is).
+  const replaceAttachmentImage = useCallback(
+    (
+      scope: string,
+      id: string,
+      next: { path: string; previewUri: string; contentFingerprint?: string }
+    ) => {
+      setAttachmentsByScope((prev) =>
+        withScopeAttachments(prev, scope, replaceNativeChatImageAttachment(prev[scope] ?? [], id, next))
+      )
+    },
+    [setAttachmentsByScope]
+  )
+  return {
+    setAttachmentsByScope,
+    addUploadedImages,
+    addUploadingImage,
+    settleUploads,
+    replaceAttachmentImage
+  }
 }

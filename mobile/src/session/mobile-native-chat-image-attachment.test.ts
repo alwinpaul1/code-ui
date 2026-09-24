@@ -5,6 +5,8 @@ import {
   addUploadingNativeChatImage,
   appendPendingNativeChatImages,
   dropUploadingNativeChatImages,
+  replaceNativeChatImageAttachment,
+  uploadMarkedUpNativeChatImage,
   uploadMobileNativeChatImages
 } from './mobile-native-chat-image-attachment'
 
@@ -244,6 +246,70 @@ it('sweeps only the selection that finished, leaving another still uploading', (
   ]
   expect(dropUploadingNativeChatImages(chips, 'batch-2').map((c) => c.id)).toEqual(['a'])
   expect(dropUploadingNativeChatImages(chips).map((c) => c.id)).toEqual([])
+})
+
+// The markup editor's Done flattens strokes onto a copy of the attachment
+// and re-uploads just the bytes — the chip's id, kind and name (a document's
+// label, were it one) must survive so the strip does not reshuffle or forget
+// what the chip was.
+describe('replaceNativeChatImageAttachment', () => {
+  it('swaps one chip\'s bytes in place, keeping its id and position', () => {
+    const current = [
+      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' },
+      { id: 'img-2', path: '/tmp/b.png', previewUri: 'file:///b.jpg' }
+    ]
+    const next = replaceNativeChatImageAttachment(current, 'img-2', {
+      path: '/tmp/b-marked.png',
+      previewUri: 'data:image/png;base64,ZZZZ',
+      contentFingerprint: 'fp-2'
+    })
+    expect(next).toEqual([
+      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' },
+      {
+        id: 'img-2',
+        path: '/tmp/b-marked.png',
+        previewUri: 'data:image/png;base64,ZZZZ',
+        contentFingerprint: 'fp-2'
+      }
+    ])
+  })
+
+  it('leaves the list untouched when the chip was already removed or sent', () => {
+    const current = [{ id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }]
+    const next = replaceNativeChatImageAttachment(current, 'img-9', {
+      path: '/tmp/x.png',
+      previewUri: 'file:///x.jpg'
+    })
+    expect(next).toEqual(current)
+    expect(next).not.toBe(current)
+  })
+})
+
+describe('uploadMarkedUpNativeChatImage', () => {
+  it('uploads the flattened bytes the same way the original picker upload did', async () => {
+    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/marked.png')])
+
+    const result = await uploadMarkedUpNativeChatImage('AAAA', {
+      client,
+      getConnectionId: async () => 'conn-9'
+    })
+
+    expect(result).toEqual({
+      path: '/tmp/marked.png',
+      previewUri: 'data:image/png;base64,AAAA',
+      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+    })
+    const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
+    expect(saveCall?.params).toMatchObject({ connectionId: 'conn-9' })
+  })
+
+  it('rejects when the host upload fails, leaving the caller\'s attachment untouched', async () => {
+    const client = clientWithResponses([methodNotFound('start'), failed('save', 'disk full')])
+
+    await expect(
+      uploadMarkedUpNativeChatImage('AAAA', { client, getConnectionId: async () => null })
+    ).rejects.toThrow('disk full')
+  })
 })
 
 // The chip must not wait for the file: the picker hands the image over with

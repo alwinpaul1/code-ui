@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   closeImagePreview,
   openImagePreview,
+  openImagePreviewSources,
   peekImagePreview,
   resetImagePreviewForTests,
   setImagePreviewIndex
@@ -33,5 +34,24 @@ describe('image preview store', () => {
     expect(peekImagePreview()?.index).toBe(2)
     setImagePreviewIndex(-1)
     expect(peekImagePreview()?.index).toBe(0)
+  })
+
+  // The composer's attachment chip opens the fullscreen preview with an edit
+  // handle so the viewer can offer the Claude app's pencil (2026-09-24); a
+  // sent bubble or a markdown figure opens the same viewer with none, and
+  // must not gain a pencil it has no editor behind.
+  it('carries an optional onEdit for a photo that can be marked up', () => {
+    openImagePreview('file:///a.png', 'a photo')
+    expect(peekImagePreview()?.onEdit).toBeUndefined()
+
+    const onEdit = vi.fn()
+    openImagePreviewSources([{ kind: 'bitmap', uri: 'file:///b.png' }], 'a photo', 0, onEdit)
+    expect(peekImagePreview()?.onEdit).toBe(onEdit)
+  })
+
+  it('carries the same optional onEdit through the plain openImagePreview call', () => {
+    const onEdit = vi.fn()
+    openImagePreview('file:///a.png', 'a photo', 0, onEdit)
+    expect(peekImagePreview()?.onEdit).toBe(onEdit)
   })
 })

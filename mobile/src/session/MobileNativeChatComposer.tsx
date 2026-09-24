@@ -69,6 +69,9 @@ type Props = {
    *  and ridden along on the next send (desktop native-chat parity). */
   attachments?: PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
+  /** Opens the markup editor on a photo chip (the Claude app's pencil,
+   *  2026-09-24). */
+  onEditAttachment?: (id: string, uri: string) => void
   isAttaching?: boolean
   onMicPress?: () => void
   /** Runs before `onSend`: ends live dictation so the sent words do not come back. */
@@ -135,6 +138,7 @@ export function MobileNativeChatComposer({
   onAttachFile,
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
+  onEditAttachment,
   onMicPress,
   onBeforeSend,
   micActive = false,
@@ -325,6 +329,7 @@ export function MobileNativeChatComposer({
           <MobileNativeChatAttachmentChips
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
+            onEditAttachment={onEditAttachment}
           />
           {/* While the `/` or `@` menu is up the draft folds to its last two
               lines, so a long prompt leaves the menu its rows, as the Claude

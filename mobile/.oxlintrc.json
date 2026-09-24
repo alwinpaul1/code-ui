@@ -275,7 +275,9 @@
             // and the dock height threaded to the composer; the rule and its hooks
             // live in mobile-native-chat-suggestion-popover.ts.
             // 2026-09-20, later: +1 for the dock's pointerEvents.
-            "max": 419,
+            // 2026-09-24: +2 for onEditAttachment, threaded from the overlay
+            // to the composer for the markup editor's pencil.
+            "max": 421,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -352,7 +354,9 @@
             // 2026-09-22: live dictation paints the open phrase in a lighter
             // color over the composer and reports the caret so words insert there.
             // Later the same day: the slash menu puts the caret back in the field.
-            "max": 421,
+            // 2026-09-24: +2 for onEditAttachment, threaded to the attachment
+            // chips for the markup editor's pencil.
+            "max": 423,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -411,7 +415,13 @@
             // Upstream's copy sits well under the ceiling; this fork's carries
             // the keyboard image paste (attachImageFile) on top of it, which
             // is why three lines tip it over.
-            "max": 303,
+            // 2026-09-24: +22 more for `replaceAttachment` — the markup
+            // editor's Done swaps a chip's bytes for a flattened photo. The
+            // upload itself lives in use-mobile-native-chat-image-markup.ts
+            // (split out the same way use-native-chat-attachment-scope-writers
+            // already is), so this file only gains the wiring: one import, the
+            // type's field, the hook call, and the field in the return.
+            "max": 325,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -432,7 +442,11 @@
             // document cases on top of upstream's, which is why it is at the
             // ceiling at all. Later that day +1 for Orca e7da72c3d: the ride-
             // along case now runs per agent and passes `agent` to the hook.
-            "max": 807,
+            // 2026-09-24: +59 for `replaceAttachment` (the markup editor's
+            // Done): a `failed` RPC-response builder and three cases covering
+            // the upload-and-swap, the no-scope no-op, and the reject-leaves-
+            // the-chip-untouched path.
+            "max": 866,
             "skipBlankLines": true,
             "skipComments": true
           }

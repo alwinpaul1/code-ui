@@ -16,6 +16,10 @@ type ImagePreviewState = {
   sources: ImagePreviewSource[]
   index: number
   label: string
+  /** Present only when the viewer was opened on a photo that can still be
+   *  marked up (the composer's own attachment, not a sent bubble or a
+   *  markdown figure) — draws the Claude app's pencil in the top bar. */
+  onEdit?: () => void
 } | null
 
 let state: ImagePreviewState = null
@@ -27,12 +31,18 @@ function emit(): void {
   }
 }
 
-export function openImagePreview(uri: string | string[], label = 'Image', index = 0): void {
+export function openImagePreview(
+  uri: string | string[],
+  label = 'Image',
+  index = 0,
+  onEdit?: () => void
+): void {
   const uris = Array.isArray(uri) ? uri : [uri]
   openImagePreviewSources(
     uris.map((uri) => ({ kind: 'bitmap', uri })),
     label,
-    index
+    index,
+    onEdit
   )
 }
 
@@ -41,11 +51,12 @@ export function openImagePreview(uri: string | string[], label = 'Image', index 
 export function openImagePreviewSources(
   sources: ImagePreviewSource[],
   label = 'Image',
-  index = 0
+  index = 0,
+  onEdit?: () => void
 ): void {
   const uris = sources.map((source) => (source.kind === 'bitmap' ? source.uri : ''))
   const at = Math.min(Math.max(index, 0), Math.max(uris.length - 1, 0))
-  state = { uri: uris[at] ?? '', uris, sources, index: at, label }
+  state = { uri: uris[at] ?? '', uris, sources, index: at, label, onEdit }
   emit()
 }
 

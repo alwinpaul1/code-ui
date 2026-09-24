@@ -82,6 +82,45 @@ export function dropUploadingNativeChatImages(
   return current.some(stranded) ? current.filter((chip) => !stranded(chip)) : [...current]
 }
 
+/** Swaps one attachment's bytes for a marked-up version, keeping its id,
+ *  kind and name so the chip's position and label do not change. Used by the
+ *  markup editor's Done; a stale id (the chip was removed or already sent
+ *  while the editor was open) is a no-op rather than resurrecting it. */
+export function replaceNativeChatImageAttachment(
+  current: readonly PendingNativeChatImage[],
+  id: string,
+  next: { path: string; previewUri: string; contentFingerprint?: string }
+): PendingNativeChatImage[] {
+  const index = current.findIndex((attachment) => attachment.id === id)
+  if (index === -1) {
+    return [...current]
+  }
+  const updated = [...current]
+  updated[index] = { ...updated[index]!, ...next }
+  return updated
+}
+
+export type UploadMarkedUpImageDeps = {
+  readonly client: MobileClipboardImageRpcSender
+  readonly getConnectionId: () => Promise<string | null>
+}
+
+/** Re-uploads a flattened markup PNG the same way the original picker upload
+ *  did (`uploadMobileNativeChatImages`'s per-image step), so what rides to
+ *  the agent on send is the marked-up bytes, not the original photo. */
+export async function uploadMarkedUpNativeChatImage(
+  base64: string,
+  { client, getConnectionId }: UploadMarkedUpImageDeps
+): Promise<{ path: string; previewUri: string; contentFingerprint: string }> {
+  const connectionId = await getConnectionId()
+  const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
+  return {
+    path,
+    previewUri: `data:image/png;base64,${base64}`,
+    contentFingerprint: mobileNativeChatImageContentFingerprint(base64)
+  }
+}
+
 export type UploadNativeChatImagesDeps = {
   readonly client: MobileClipboardImageRpcSender
   readonly getConnectionId: () => Promise<string | null>

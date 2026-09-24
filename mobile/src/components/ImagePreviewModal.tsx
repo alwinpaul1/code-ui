@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Image, Modal, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { X } from 'lucide-react-native'
+import { Pencil, X } from 'lucide-react-native'
 import {
   closeImagePreview,
   setImagePreviewIndex,
@@ -50,20 +50,55 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             would also fire on the first tap of a double tap. The bar and the
             caption close on a tap; the picture closes itself at fit. */}
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)' }}>
-          {/* The close button owns a bar of its own above the picture, so it
-              never sits on top of the image. */}
-          <Pressable
-            onPress={closeImagePreview}
-            accessibilityRole="button"
-            accessibilityLabel="Close image preview"
+          {/* The close (and, on an editable photo, edit) buttons own a bar of
+              their own above the picture, so neither ever sits on top of the
+              image. Tapping the bar's own background still closes, same as
+              before; the buttons are later siblings so they win the touch
+              over that background without any z-index. */}
+          <View
             style={{
               height: barHeight,
               paddingTop: space.xl + space.lg,
-              paddingRight: space.md,
-              alignItems: 'flex-end',
-              justifyContent: 'flex-start'
+              paddingHorizontal: space.md,
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between'
             }}
           >
+            <Pressable
+              onPress={closeImagePreview}
+              accessibilityRole="button"
+              accessibilityLabel="Close image preview"
+              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+            />
+            {/* The composer's own attachment: reopens the markup editor on
+                this exact photo (the Claude app's pencil, 2026-09-24). Absent
+                for a sent bubble or a markdown figure, which have no editor
+                behind them. */}
+            {preview.onEdit ? (
+              <Pressable
+                onPress={() => {
+                  const onEdit = preview.onEdit
+                  closeImagePreview()
+                  onEdit?.()
+                }}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Edit image"
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
+                })}
+              >
+                <Pencil size={20} color="#fff" strokeWidth={2.2} />
+              </Pressable>
+            ) : (
+              <View />
+            )}
             <Pressable
               onPress={closeImagePreview}
               hitSlop={12}
@@ -80,7 +115,7 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             >
               <X size={20} color="#fff" strokeWidth={2.2} />
             </Pressable>
-          </Pressable>
+          </View>
           {/* Why a paged ScrollView: the Claude app's viewer swipes through the
               message's images and counts them ("5 of 6", 2026-09-12). Paging
               stops while a picture is zoomed in, so a pan moves the picture. */}
