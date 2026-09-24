@@ -30,6 +30,7 @@ import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useExpandableBottomDrawer } from './use-expandable-bottom-drawer'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -51,6 +52,8 @@ export type MountedBottomDrawerProps = {
   // Why: outer sheets pinned under an inner fill picker stay laid out (size
   // preserved) but must not take touches, stack backdrops, or keyboard-lift.
   interactive?: boolean
+  /** Opens part way and drags up to full screen (bottom-drawer-expandable.ts). */
+  expandable?: boolean
   zIndex?: number
 }
 
@@ -63,6 +66,7 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
+  expandable = false,
   zIndex = 1000
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
@@ -88,6 +92,7 @@ export function MountedBottomDrawer({
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useInsideBottomDrawerModalHost()
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, onClose })
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
         screenHeight,
@@ -123,6 +128,7 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
+      sheet.reset()
       progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
@@ -225,15 +231,22 @@ export function MountedBottomDrawer({
   const handlePanGesture = Gesture.Pan()
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
+    .onBegin(() => {
+      sheet.begin()
+    })
     .onUpdate((e) => {
-      if (e.translationY > 0) {
+      if (expandable) {
+        sheet.drag(e.translationY)
+      } else if (e.translationY > 0) {
         translateY.value = e.translationY
       } else {
         translateY.value = e.translationY * RUBBER_BAND_FACTOR
       }
     })
     .onEnd((e) => {
-      if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
+      if (expandable) {
+        sheet.release(e.velocityY)
+      } else if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
         const velocity = Math.max(e.velocityY, 800)
         const remaining = screenHeight - e.translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
@@ -251,6 +264,7 @@ export function MountedBottomDrawer({
     .onBegin(() => {
       contentDragStartY.value = 0
       contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
+      sheet.begin()
     })
     .onUpdate((e) => {
       // Why: action-sheet content can be taller than the drawer; downward drags
@@ -270,7 +284,9 @@ export function MountedBottomDrawer({
       }
 
       const translationY = e.translationY - contentDragStartY.value
-      if (translationY > 0) {
+      if (expandable) {
+        sheet.drag(translationY)
+      } else if (translationY > 0) {
         translateY.value = translationY
       } else {
         translateY.value = translationY * RUBBER_BAND_FACTOR
@@ -282,7 +298,9 @@ export function MountedBottomDrawer({
       }
 
       const translationY = e.translationY - contentDragStartY.value
-      if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
+      if (expandable) {
+        sheet.release(e.velocityY)
+      } else if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
         const velocity = Math.max(e.velocityY, 800)
         const remaining = screenHeight - translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
@@ -356,9 +374,11 @@ export function MountedBottomDrawer({
     <>
       {handle}
       <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false}>
+        <Animated.View collapsable={false} style={expandable ? styles.staticContentFill : undefined}>
           <GestureDetector gesture={scrollGesture}>
             <Animated.ScrollView
+              style={expandable ? styles.staticContentFill : undefined}
+              scrollEnabled={!expandable || sheet.expanded}
               bounces={false}
               keyboardShouldPersistTaps="handled"
               onScroll={scrollHandler}
@@ -412,7 +432,7 @@ export function MountedBottomDrawer({
             testID="bottom-drawer-sheet"
             style={[
               styles.drawer,
-              fillAvailable ? styles.drawerFill : null,
+              fillAvailable || expandable ? styles.drawerFill : null,
               {
                 backgroundColor: colors.bgPanel,
                 borderTopLeftRadius: 24,
@@ -429,7 +449,8 @@ export function MountedBottomDrawer({
                 paddingBottom:
                   fillAvailable && keyboardInset > 0 ? spacing.sm : insets.bottom + spacing.lg
               },
-              drawerStyle
+              drawerStyle,
+              sheet.style
             ]}
           >
             {body}

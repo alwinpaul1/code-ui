@@ -1,30 +1,21 @@
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { Pressable, View } from 'react-native'
-import {
-  Activity,
-  ChevronDown,
-  ChevronRight,
-  Diamond,
-  ListTree,
-  Square,
-  Terminal
-} from 'lucide-react-native'
+import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
-import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   deriveBackgroundTasks,
   type BackgroundTaskHostStatus,
-  type BackgroundTaskKind,
   type BackgroundTask
 } from './mobile-background-tasks'
+import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
+import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
-import { formatBackgroundTaskElapsed, backgroundTaskKindLabel, backgroundTaskStatusLabel } from './mobile-background-task-labels'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
 import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -61,8 +52,10 @@ export function MobileBackgroundTasksSheet({
   onClose: () => void
 }) {
   return (
-    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
+    // Opens part way and drags up to full screen, as the Claude app's does.
+    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss expandable>
       <MobileBackgroundTasksSheetBody
+        onClose={onClose}
         messages={messages}
         agent={agent}
         agentStatus={agentStatus ?? null}
@@ -82,7 +75,8 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask
+  onStopTask,
+  onClose
 }: {
   messages: readonly NativeChatMessage[]
   agent?: string | null
@@ -90,6 +84,7 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
+  onClose?: () => void
 }) {
   const { space } = useTheme()
   // Where the parent transcript is, from the agent's own hook. Null leaves the
@@ -133,10 +128,8 @@ export function MobileBackgroundTasksSheetBody({
   }, [ticking])
 
   return (
-    <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.sm }}>
-      <Txt variant="body" weight="medium">
-        Background tasks
-      </Txt>
+    <View style={{ paddingBottom: space.md, gap: space.sm }}>
+      <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
       <BackgroundTasksSection
         title="Running"
         open={runningOpen}
@@ -177,7 +170,7 @@ export function MobileBackgroundTasksSheetBody({
           ) : null}
         </BackgroundTasksSection>
       ) : null}
-    </Surface>
+    </View>
   )
 }
 
@@ -205,156 +198,17 @@ function BackgroundTasksSection({
         hitSlop={10}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
       >
-        {open ? (
-          <ChevronDown size={16} color={colors.textSecondary} />
-        ) : (
-          <ChevronRight size={16} color={colors.textSecondary} />
-        )}
-        <Txt variant="label" weight="medium" tone="secondary">
+        <Txt variant="label" tone="muted">
           {heading}
         </Txt>
+        {open ? (
+          <ChevronDown size={16} color={colors.textMuted} />
+        ) : (
+          <ChevronRight size={16} color={colors.textMuted} />
+        )}
       </Pressable>
       {open ? <View style={{ gap: space.sm }}>{children}</View> : null}
     </View>
-  )
-}
-
-/** One task. A Claude subagent's card is a tap target that opens what the
- *  agent did (`onOpen`); every other kind is a plain row, because there is
- *  nothing behind a shell to open. The stop control stays its own button. */
-function BackgroundTaskCard({
-  task,
-  onStop,
-  onOpen
-}: {
-  task: BackgroundTask
-  onStop?: (taskId: string) => void
-  onOpen?: () => void
-}) {
-  const { colors, radius, space } = useTheme()
-  const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
-  const frame = (pressed: boolean) => ({
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: space.sm,
-    padding: space.sm + 2,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: pressed ? colors.bgSunken : colors.bgRaised
-  })
-  const Shell = onOpen ? Pressable : View
-  return (
-    <Shell
-      {...(onOpen
-        ? {
-            accessibilityRole: 'button' as const,
-            accessibilityLabel: `Open ${task.title}`,
-            accessibilityHint: 'Shows what this agent did',
-            onPress: onOpen,
-            style: ({ pressed }: { pressed: boolean }) => frame(pressed)
-          }
-        : { style: frame(false) })}
-    >
-      <View
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: radius.sm,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.bgSunken
-        }}
-      >
-        <BackgroundTaskGlyph kind={task.kind} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="body" numberOfLines={2}>
-          {task.title}
-        </Txt>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-          <Txt variant="caption" tone="muted">
-            {backgroundTaskKindLabel(task.kind)}
-          </Txt>
-          {task.status === 'running' ? (
-            elapsed ? (
-              <Txt variant="caption" tone="secondary">
-                {elapsed}
-              </Txt>
-            ) : null
-          ) : (
-            <Txt
-              variant="caption"
-              weight="medium"
-              tone={task.status === 'failed' ? 'danger' : 'secondary'}
-            >
-              {backgroundTaskStatusLabel(task.status)}
-            </Txt>
-          )}
-        </View>
-      </View>
-      {onStop && task.status === 'running' && task.stoppable !== false ? (
-        <StopTaskButton taskId={task.id} title={task.title} onStop={onStop} />
-      ) : null}
-      {onOpen ? (
-        <View style={{ alignSelf: 'center' }}>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </View>
-      ) : null}
-    </Shell>
-  )
-}
-
-/** One glyph per kind, so a monitor and a workflow do not both read as a
- *  shell. Only the agent glyph takes the accent; the rest are plain markers. */
-function BackgroundTaskGlyph({ kind }: { kind: BackgroundTaskKind }) {
-  const { colors } = useTheme()
-  switch (kind) {
-    case 'agent':
-      return <Diamond size={14} color={colors.accentText} />
-    case 'monitor':
-      return <Activity size={14} color={colors.textSecondary} />
-    case 'workflow':
-      return <ListTree size={14} color={colors.textSecondary} />
-    case 'shell':
-    case 'unknown':
-      return <Terminal size={14} color={colors.textSecondary} />
-    default: {
-      const exhaustive: never = kind
-      return exhaustive
-    }
-  }
-}
-
-function StopTaskButton({
-  taskId,
-  title,
-  onStop
-}: {
-  taskId: string
-  title: string
-  onStop: (taskId: string) => void
-}) {
-  const { colors, radius } = useTheme()
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Stop ${title}`}
-      onPress={() => onStop(taskId)}
-      hitSlop={8}
-      style={({ pressed }) => ({
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 28,
-        height: 28,
-        borderRadius: radius.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: pressed ? colors.bgSunken : 'transparent'
-      })}
-    >
-      <Square size={12} color={colors.textSecondary} fill={colors.textSecondary} />
-    </Pressable>
   )
 }
 

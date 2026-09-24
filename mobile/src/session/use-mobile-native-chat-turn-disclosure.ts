@@ -21,7 +21,7 @@ export type MobileNativeChatTurnRow = {
 
 /** Owns the transcript's per-turn status rows and their disclosure state, and
  *  resolves what one list row needs. Bridge-lane chats pass `enabled: false` and
- *  keep their single three-dot working indicator instead. */
+ *  keep the status line's single "Working…" instead. */
 export function useMobileNativeChatTurnDisclosure({
   messages,
   enabled,

@@ -675,7 +675,7 @@ describe('background tasks retired by the beacon', () => {
   })
 })
 
-// The row under the last message and the background-tasks sheet must never
+// The status line's count and the background-tasks sheet must never
 // disagree about how many tasks are running. On screen they did: the sheet
 // listed sec4-opus and sec4-sonnet while the row said one. The derivations were
 // always identical — the row is fed a `now` of 0 because only the sheet draws a

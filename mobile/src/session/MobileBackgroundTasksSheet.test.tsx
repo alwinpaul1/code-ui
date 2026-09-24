@@ -36,11 +36,13 @@ vi.mock('lucide-react-native', () => ({
   Activity: 'Activity',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
   Sparkles: 'Sparkles',
   Square: 'Square',
-  Terminal: 'Terminal'
+  Terminal: 'Terminal',
+  X: 'X'
 }))
 
 const T0 = Date.UTC(2026, 8, 9, 12, 0, 0)
@@ -558,7 +560,6 @@ describe('tapping a subagent on the roster', () => {
     await renderWith({ agent: 'claude' })
     expect(cardStyle(false).backgroundColor).toBe(lightColors.bgRaised)
     expect(cardStyle(true).backgroundColor).toBe(lightColors.bgSunken)
-    expect(cardStyle(false).borderColor).toBe(lightColors.border)
     act(() => renderer?.unmount())
     renderer = null
     await act(async () => {
@@ -572,7 +573,38 @@ describe('tapping a subagent on the roster', () => {
     })
     expect(cardStyle(false).backgroundColor).toBe(darkColors.bgRaised)
     expect(cardStyle(true).backgroundColor).toBe(darkColors.bgSunken)
-    expect(cardStyle(false).borderColor).toBe(darkColors.border)
+  })
+
+  // The Claude app, 2026-09-24: a running agent's card reads "Agent  39s",
+  // then "View transcript" in the link colour; a finished one has a chevron.
+  it('says View transcript in the link colour on a running agent, in light and dark', async () => {
+    const light = await renderWith({ agent: 'claude' })
+    expect(light.texts).toEqual(expect.arrayContaining(['Audit the release notes', 'Agent', 'View transcript']))
+    expect(light.colors).toContain(lightColors.info)
+    act(() => renderer?.unmount())
+    renderer = null
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'dark' },
+          createElement(MobileBackgroundTasksSheetBody, { messages: withSubagent(), agent: 'claude' })
+        )
+      )
+    })
+    expect(readTree(renderer!).colors).toContain(darkColors.info)
+    expect(readTree(renderer!).colors).not.toContain(lightColors.info)
+  })
+
+  it('offers no View transcript where there is nothing to open', async () => {
+    expect((await renderWith({ agent: 'codex' })).texts).not.toContain('View transcript')
+  })
+
+  it('closes from the cross in its title bar', async () => {
+    const onClose = vi.fn()
+    await renderWith({ agent: 'claude', onClose })
+    await press(renderer!, 'Close')
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   // The stop control sits inside the card that is now itself a Pressable. On

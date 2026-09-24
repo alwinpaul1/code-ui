@@ -46,7 +46,7 @@ export type MobileNativeChatViewProps = {
    *  journalled send, seconds before there is a turn to interrupt. */
   canStop?: boolean
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
-   *  replacing the bridge lane's static three-dot working row (desktop parity). */
+   *  in place of the bridge lane's status-line "Working…" (desktop parity). */
   structuredActivityUi?: boolean
   /** Provider-authored copy for the live turn tail (Orca #19055). */
   turnActivity?: { kind: 'description'; text: string } | null

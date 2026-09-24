@@ -16,6 +16,8 @@ type Props = {
   // Why: pin an outer content-sized sheet under an inner fill picker without
   // letting it take touches, draw a second backdrop, or keyboard-lift.
   interactive?: boolean
+  /** Opens part way and drags up to full screen, like the Claude app's sheets. */
+  expandable?: boolean
   zIndex?: number
 }
 
@@ -28,6 +30,7 @@ export function BottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
+  expandable = false,
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
@@ -85,6 +88,7 @@ export function BottomDrawer({
       contentScrollable={contentScrollable}
       fillAvailable={fillAvailable}
       interactive={interactive}
+      expandable={expandable}
       zIndex={zIndex}
     >
       {children}

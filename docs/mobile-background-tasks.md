@@ -1,7 +1,11 @@
 # Background tasks pill and sheet (chat mode)
 
-Shows the agent's background shells and subagents under the newest message
-("N running tasks") with a sheet of Running and Finished rows.
+Shows the agent's background shells and subagents as "N running tasks" on
+the status line above the composer (beside the agent's own spinner verb, as
+the Claude app draws it since 2026-09-24), with a sheet of Running and
+Finished rows that opens part way and drags up to full screen. A run of Agent
+calls in the conversation reads "Running agent" while any of its agents is
+still in the running list below, and "Ran N agents" after.
 
 **Two readers, one row.** Which one runs is decided by the lane, not by the
 agent:

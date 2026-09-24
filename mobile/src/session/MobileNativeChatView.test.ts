@@ -634,7 +634,7 @@ describe('MobileNativeChatView', () => {
       })
     })
 
-    it('gives the live user turn a status row and drops the three-dot indicator', async () => {
+    it('gives the live user turn a status row and says Working nowhere else', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       const props = rowProps('u1')

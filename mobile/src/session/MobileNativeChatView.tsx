@@ -216,7 +216,7 @@ export function MobileNativeChatView({
   )
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
-  // owns them; the bridge lane keeps its three-dot indicator.
+  // owns them; the bridge lane says Working on the status line above the composer.
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
@@ -426,7 +426,7 @@ export function MobileNativeChatView({
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}
         // The structured lane says "Working for N" per turn; a second, static
-        // three-dot row under it would report the same fact twice.
+        // "Working…" on the status line would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
         onStop={onStop}

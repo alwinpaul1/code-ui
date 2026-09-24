@@ -13,7 +13,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 3 | A green/red line-count chip on runs that create or edit files ("+292 −0") | No chip | done (7816f8c5) |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards; drag feel needs a phone check |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
-| 6 | An animated "N running tasks" row in the conversation; a Background tasks sheet with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | Has a background-task sheet and a subagent transcript modal; gaps not yet listed | open |
+| 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a breathing label; parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
 | 7 | After an API error ends the turn, no "Working" and no Stop; the same after a normal finish while an agent runs in the background | Still showed "Working ••• " and Stop under the ended turn | fixed (85ee85d0, and the active tab's pill in e9df676a), not yet checked on the phone; an inactive tab's pill still follows the desktop, which the phone holds no transcript for |
 | 8 | A message with images or video leaves the composer text and media together | The text leaves first, the media lingers, then both reappear pinned together after a refresh | merged (3248a41b); phone check pending |
 | 9 | A sent message with an image and a video shows the image thumbnail and a file card ("MP4", the file name) | Showed only the video's path text, `@"/Users/…/….mp4"`, and no image | file card merged (ddfb8945); photos of a message sent from the Claude app itself live only in a `queued_command` attachment Orca drops, so the phone cannot show them |
@@ -36,6 +36,17 @@ failing-first test and has been checked on the phone in light and dark.
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops
   both attachment kinds.
+- **Background work (6).** Not drawn because the phone cannot know it:
+  a finished shell's output (the Claude app's chevron on a Shell card opens
+  it; the output file sits outside the worktree `files.read` is jailed to),
+  so a finished shell has no chevron; Stop on a terminal tab (no host call
+  stops one Claude Code task, and driving its task dialog by keys is not
+  verified), so Stop shows only on a structured tab whose host says
+  `supportsTaskStop`; the thinking status "almost done thinking", which the
+  Claude app showed but Claude Code 2.1.281 does not paint (its words are
+  read when they are). Codex's spinner is not read, so a Codex tab says
+  "Working…". The drag-to-full-screen sheet and the breathing label have not
+  run on the device yet.
 - **Working after the turn ended (7).** Session 967668df. Claude Code
   2.1.281 fires StopFailure, not Stop, when a turn's last record is an API
   error (a safeguards refusal is one, with no status code). Orca then holds a

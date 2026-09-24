@@ -21,7 +21,7 @@ const BASE = {
 describe('what the chat list header depends on outside its data', () => {
   it('changes when the agent reports a different set of running tasks', () => {
     // The symptom this exists for: two agent tasks running, the sheet listing
-    // both, and the row under the last message still saying one.
+    // both, and the count on screen still saying one.
     const before = nativeChatListHeaderExtraData(BASE)
     const after = nativeChatListHeaderExtraData({
       ...BASE,
