@@ -193,3 +193,24 @@ neither carries the other's fields.
 launch flags are fixed when the agent starts, so a session already running
 keeps the old settings, hook and all, until its tab is opened again.
 
+## Parallel agents are paired by what Claude Code says, not by order
+
+The reader pairs a call with its result first-in-first-out, because Orca's
+reader drops the tool_use ids. For agents launched side by side that is
+wrong: Claude Code 2.1.281 writes each launch result when the launch is
+acknowledged. Five agents launched on 2026-09-23 had their results written
+4th, 2nd, 1st, 3rd, 5th, so three rows carried another agent's title and
+time, and "View transcript" opened another agent's file under the wrong
+name (`fixtures/claude-parallel-agents-2.1.281.ts`).
+
+Claude Code names each id's description in two places the phone reads: the
+host roster (`agentStatus.subagents`, filled from Claude's own
+`background_tasks`) and an agent's finished notification (`Agent "<description>"
+finished`). Where either names an id, the launch takes the call with that
+description (`mobile-background-task-agent-titles.ts`). Where neither does,
+the first-in-first-out pairing stands; nothing better is in hand.
+
+A foreground agent's result is its report followed by `agentId: …` and a
+`<usage>subagent_tokens: …` block, which is written only once the run is
+over. Such a launch is filed under Finished at once instead of waiting for a
+roster that may never come.

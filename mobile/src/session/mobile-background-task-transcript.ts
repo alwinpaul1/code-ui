@@ -93,7 +93,7 @@ export function foldWhitespace(value: string): string {
   return value.replaceAll(/\s+/g, ' ').trim()
 }
 
-function agentTitle(input: unknown): string {
+export function agentTitle(input: unknown): string {
   const named =
     readString(input, 'description') ?? readString(input, 'name') ?? readString(input, 'subagent_type')
   return named ? truncate(named) : 'Agent'

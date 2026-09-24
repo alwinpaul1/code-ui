@@ -37,6 +37,7 @@ import {
   type Notification,
   type PendingCall
 } from './mobile-background-task-transcript'
+import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 
 /**
  * What Orca's hooks know about the pane, to reconcile against the transcript.
@@ -201,6 +202,9 @@ export function deriveBackgroundTasks(
       notifications.set(notification.id, notification.value)
     }
   }
+  // Results land in the order launches were acknowledged, not the order of
+  // the calls, so parallel agents are re-paired by what Claude Code says.
+  settleAgentLaunches(launches, notifications, messages, hostStatus?.subagents, position + 1)
   for (const id of options.finishedTaskIds ?? []) {
     if (!notifications.has(id)) {
       notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
