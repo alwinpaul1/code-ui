@@ -5,7 +5,7 @@ import {
   richMarkdownEditorThemeVariables,
   type RichMarkdownEditorTheme
 } from './document-style'
-import { scopeDocumentStyleToHost } from '../../terminal/terminal-webview-html/document-style-scoping'
+import { scopeDocumentStyleToHost } from '../../style-scoping/document-style-scoping'
 import type { RichMarkdownEditorApi, RichMarkdownUrlPromptKind } from './document-host-seams'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
 

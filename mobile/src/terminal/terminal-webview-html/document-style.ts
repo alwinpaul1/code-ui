@@ -6,9 +6,9 @@ import { colors } from '../../theme/mobile-theme'
  * Inside the WebView this is the terminal's own page and these say so. On the page the document
  * is a guest in a React Native Web application, and the same three selectors would set that
  * application's background, its overflow and every element's box model — and keep doing it after
- * the terminal is gone. So the page never injects them; `document-style-scoping.ts` is what
- * separates them from the rules below, and it recognises them by their selectors rather than by
- * this split, so a fourth one added here is still caught there.
+ * the terminal is gone. So the page never injects them; `style-scoping/document-style-scoping.ts`
+ * is what separates them from the rules below, and it recognises them by their selectors rather
+ * than by this split, so a fourth one added here is still caught there.
  */
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
