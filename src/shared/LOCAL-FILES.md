@@ -62,6 +62,13 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
   five-entry catalogs, and added `opensOverlay`, `isSlashCommandToken` and
   `slashCommandOpensOverlay`. Upstream has none of it. A whole-file re-vendor
   would delete the catalogs the `/` menu is built from.
+- `native-chat-tool-summary.ts` — on its 91e6e1f355 pin (#22029, v1.4.209..v1.4.210
+  shared halves), except that `countToolCalls` stays in its c1e15c400 form,
+  `blocks.filter(isToolCallBlock).length`, marked `CODE UI KEPT AT c1e15c400` in the
+  source. Upstream's #20328 rewrote it as a `forEach` counter so it builds no array,
+  and #22029 left that form alone. It is not taken: nothing in `mobile/` or
+  `src/shared/` calls `countToolCalls`, and both forms return the same count. Recorded here 2026-09-24; before
+  that the exception was only in UPSTREAM.txt.
 
 ## Vendored files carrying a hand-applied upstream hunk
 
@@ -142,7 +149,15 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   6da72383d (#19849), at its 4b87bc718 (#20999) value `agent.launch.v2`, and
   `AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES` entry)
   from 0bf815a48 (#21106), with its comment and the sibling
-  `AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY` from abc8386e1 (#21137). The file
+  `AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY` from abc8386e1 (#21137), and
+  `AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY` (constant, its doc comment, and its
+  `RUNTIME_CAPABILITIES` entry) from 2739246058 (#21924, v1.4.209..v1.4.210 shared
+  halves) — its entry only; the wire types it gates
+  (`AgentSessionTurnCompletion`/`AgentSessionTurnCompletionEvent`/`agentSessionTurnCompletionKey`
+  in `agent-session-wire.ts`) are NOT taken, because they need `AgentJournalTurnOutcome`,
+  which predates v1.4.209 and was never forward-ported into this fork's
+  `agent-session-journal-types.ts` (itself already six hand-applied hunks deep, see
+  below); nothing on the phone reads this stream either way. The file
   otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
@@ -158,7 +173,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   which the phone never calls.
   It also carries the two `mobileWeb.bundle.*` rows and their import from 9641a1b54
   (#21348, OTA phase A 3/5); this fork cannot run the generator, so the rows are
-  hand-kept until the catalog is re-vendored at or past 9641a1b54.
+  hand-kept until the catalog is re-vendored at or past 9641a1b54. It also carries the
+  `agentSession.subscribeTurnCompletions: null` row from 2739246058 (#21924,
+  v1.4.209..v1.4.210 shared halves), hand-kept for the same reason.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
   `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
   (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional

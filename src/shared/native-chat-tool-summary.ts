@@ -1,5 +1,6 @@
 import {
   collapsedToolInputPrefix,
+  unwrapLoginShellCommand,
   MAX_TOOL_PREVIEW_LENGTH
 } from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
@@ -37,7 +38,9 @@ export type ToolInputDisplay = {
 }
 
 export function summarizeToolInput(input: unknown): string {
-  const collapsed = collapsedToolInputPrefix(toRawPreview(input))
+  // Unwrap before clipping: the closing quote is what proves the wrapper, and an
+  // 80-character prefix has already dropped it. Non-shell input is untouched.
+  const collapsed = collapsedToolInputPrefix(unwrapLoginShellCommand(toRawPreview(input)))
   return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
     : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
@@ -300,6 +303,8 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     .join('  ·  ')
 }
 
+// CODE UI KEPT AT c1e15c400: upstream's #20328 array-free rewrite (forEach + counter) is not
+// taken here; unreachable from mobile, and filter().length reads the same. See LOCAL-FILES.md.
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
   return blocks.filter(isToolCallBlock).length
 }

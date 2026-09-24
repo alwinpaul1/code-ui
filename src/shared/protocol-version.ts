@@ -165,6 +165,16 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 // advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
 // probe before subscribing or they reconnect forever and never show any status at all.
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #21924, 2739246058): the turn-completion capability
+// constant only. The wire types it gates (`AgentSessionTurnCompletion` etc. in
+// agent-session-wire.ts) are NOT taken — they need `AgentJournalTurnOutcome`, which predates
+// v1.4.209 and was never forward-ported into this fork's hand-hunked agent-session-journal-types.ts.
+// Nothing on the phone reads this capability; it is listed for parity only. See LOCAL-FILES.md.
+// Why separate from the status feed: a host can carry the status feed and not this stream, and a
+// decoder drops an unknown stream opcode in silence. A client that subscribed without probing
+// would wait forever for completions the host never sends and report nothing wrong.
+export const AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY =
+  'agent-session.turn-completion.v1' as const
 // CODE UI HAND-APPLIED UPSTREAM HUNKS (Orca #19346 5868fdc9e, #19705 f2af92b2f, #19695 2626e2eca):
 // the two background-task capabilities and the turn item. The file otherwise sits at its
 // d07c47593 pin; see LOCAL-FILES.md.
@@ -326,6 +336,7 @@ export const RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,

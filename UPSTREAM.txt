@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 8999a0028
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
@@ -22,7 +22,8 @@ src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk 
 src/shared/native-chat-session-option-snapshot.test.ts: c287a5d9b
 src/shared/native-chat-session-option-state.ts: ae9c06c94 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/native-chat-session-option-state.test.ts: ae9c06c94
-src/shared/agent-session-option-catalog.ts: ae9c06c94
+src/shared/agent-session-option-catalog.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; adds Antigravity to the catalog map)
+src/shared/agent-session-option-catalog-antigravity.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; new, pulled in because agent-session-option-catalog.ts imports it)
 src/shared/agent-session-option-catalog-omp.ts: ae9c06c94
 src/shared/agent-session-option-catalog-omp.test.ts: ae9c06c94
 src/shared/omp-model-list-probe.ts: ae9c06c94
@@ -71,11 +72,12 @@ src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02
 src/shared/native-chat-turn-status.test.ts: 533b0bd02
-src/shared/structured-agent-session-live-turn.ts: fab78c766
+src/shared/structured-agent-session-live-turn.ts: 2739246058 (v1.4.209..v1.4.210 shared halves; #21924's newestStructuredAgentSessionTurnBySequence refactor)
 src/shared/structured-agent-session-live-turn.test.ts: fab78c766
-src/shared/native-chat-tool-summary.ts: 2d1bd1eb4 (except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile)
+src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
-src/shared/native-chat-tool-preview-prefix.ts: 2d1bd1eb4
+src/shared/native-chat-tool-preview-prefix.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; adds unwrapLoginShellCommand)
+src/shared/native-chat-tool-preview-prefix.test.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; new)
 src/shared/native-chat-tool-preview-scan.test.ts: 2d1bd1eb4
 src/shared/native-chat-edit-lcs.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-edit-model.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
@@ -98,7 +100,7 @@ src/shared/project-host-setup-projection.ts: c35a47958
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
-src/shared/agent-launch-intent.ts: 663d67087 (v1.4.209 shared halves)
+src/shared/agent-launch-intent.ts: 60c43695e5 (v1.4.209..v1.4.210 shared halves; #22037's agentArgs/cwd/launchSource plus #22108's paneKey)
 src/shared/github/owner-slug.ts: 85d1ffc07
 src/shared/github/owner-slug.test.ts: 85d1ffc07
 src/shared/pr-comment-audience.ts: dcc1f9012
@@ -108,6 +110,12 @@ src/shared/terminal-selection-gutter.test.ts: 55b339201
 src/shared/ai-vault-search-contract.ts: 1f7655f3e (plus a01027697's isolated AiVaultSetSearchEnabledParamsSchema addition, hand-applied — see docs/upstream-port-inventory.md); plus f07bf8544's AI_VAULT_SEARCH_SORTS import, hand-applied in the v1.4.209 shared halves
 src/shared/ai-vault-search-contract.test.ts: 1f7655f3e
 src/shared/ai-vault-search-limit.ts: 1f7655f3e
+src/shared/crash-reporting.ts: 90d363afc9 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base — adds the 'code-editor' ReactErrorBoundarySurface member)
+src/shared/daemon-adoption-telemetry.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
+src/shared/daemon-adoption-telemetry.test.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves)
+src/shared/developer-permissions-types.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
+src/shared/telemetry-daemon-event-schemas.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
+src/shared/telemetry-event-registry.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -118,7 +126,8 @@ The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018)
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
 src/shared/rpc-contract/accounts-params.ts: c84007c54
 src/shared/rpc-contract/agent-hooks-params.ts: c84007c54
-src/shared/rpc-contract/agent-launch-params.ts: abc8386e1
+src/shared/rpc-contract/agent-launch-params.ts: d60043787b (v1.4.209..v1.4.210 shared halves; #22037's agentArgs/cwd/launchSource)
+src/shared/rpc-contract/agent-launch-params.test.ts: d60043787b (v1.4.209..v1.4.210 shared halves; new)
 src/shared/rpc-contract/agent-session-params.ts: c84007c54
 src/shared/rpc-contract/ai-vault-params.ts: c84007c54
 src/shared/rpc-contract/artifacts-params.ts: c84007c54
@@ -178,7 +187,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, see LOCAL-FILES.md)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md)
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
@@ -233,7 +242,8 @@ src/shared/agent-session-resume.test.ts: ff934256a
 src/shared/agent-session-resume.ts: c62eca398 (v1.4.206)
 src/shared/agent-process-recognition.ts: c62eca398 (v1.4.206)
 src/shared/agent-process-recognition.test.ts: c62eca398 (v1.4.206)
-src/shared/tui-agent-startup.ts: 663d67087 (v1.4.209 shared halves)
+src/shared/tui-agent-startup.ts: cd59678394 (v1.4.209..v1.4.210 shared halves; buildAgentDraftLaunchPlan's sessionOptionsOverrideAgentArgs passthrough)
+src/shared/tui-agent-startup-session-options.test.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; was still at vendor base, now carries #21705's Antigravity case and #22082's override case)
 src/shared/tui-agent-startup.test.ts: ac4d6b407 (v1.4.209 shared halves)
 src/shared/pi-agent-kind.ts: c62eca398 (v1.4.206)
 src/shared/omp-draft-launch-shell.test.ts: c62eca398 (v1.4.206)
@@ -264,7 +274,7 @@ src/shared/skills-cli-agent-keys.ts: c62eca398
 src/shared/source-control-ai-action-recipes.test.ts: c62eca398
 src/shared/telemetry-property-schemas.ts: c62eca398
 src/shared/terminal-title-agent-type.ts: c62eca398
-src/shared/tui-agent-config.ts: ea5152f1c (v1.4.209 shared halves)
+src/shared/tui-agent-config.ts: 4a5afd70a3 (the v1.4.210 tag; v1.4.209..v1.4.210 shared halves; #21705's Antigravity preflightTrust, taken at the release tag rather than at eb92222e7f because the unassigned #18790/its same-range revert also touch this file — see docs/upstream-port-inventory.md)
 src/shared/tui-agent-display-names.ts: c62eca398
 src/shared/tui-agent-selection.ts: c62eca398
 src/shared/tui-agent.ts: c62eca398
@@ -296,7 +306,7 @@ src/shared/agent-status-run-capability.ts: 646fa3645
 src/shared/agent-status-serving-readiness.ts: 646fa3645
 src/shared/antigravity-source-control.test.ts: 253f0e394
 src/shared/capability-probe-cache.ts: 4085e1cf6
-src/shared/codex-usage-types.ts: 347d399bb
+src/shared/codex-usage-types.ts: 347d399bb (297cfe0cf3, the v1.4.209..v1.4.210 range's own #22073, is the identical change under a second commit hash; already here, no diff)
 src/shared/commit-message-agent-spec.ts: 253f0e394
 src/shared/commit-message-agent-specs-secondary.ts: 253f0e394
 src/shared/commit-message-model-parsers.ts: 253f0e394

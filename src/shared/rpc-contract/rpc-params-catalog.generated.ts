@@ -580,6 +580,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.setOption': SetOptionParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeStatus': null,
+  // CODE UI HAND-KEPT (Orca #21924, 2739246058): the method is registered so a catalog-driven
+  // caller never mis-shapes it, though nothing on the phone calls it. See LOCAL-FILES.md.
+  'agentSession.subscribeTurnCompletions': null,
   'agentSession.unsubscribe': UnsubscribeParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
