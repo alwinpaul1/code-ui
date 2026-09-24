@@ -225,6 +225,26 @@
     },
     {
       "files": [
+        "src/session/use-mobile-native-chat-session.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-09-24: 305. This fork's live-update merge had the file at
+            // exactly the 300 cap (upstream's is well under it), and Orca
+            // #22179's older-history guard adds five code lines: the null or
+            // non-object return and the catch around the page read. Taken as
+            // written so the next port of this hook stays a clean merge.
+            "max": 305,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-native-chat-session-options.ts"
       ],
       "rules": {
