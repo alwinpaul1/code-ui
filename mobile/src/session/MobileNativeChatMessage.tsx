@@ -15,10 +15,9 @@ import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { Prose } from './MobileNativeChatProse'
 import { triggerSuccess } from '../platform/haptics'
-import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
 import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
+import { renderProseGroup } from './mobile-native-chat-prose-group-view'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -381,27 +380,13 @@ function MobileNativeChatMessageImpl({
                 key={`p${segmentIndex}`}
                 style={interim && isAgent ? styles.interimNote : null}
               >
-                {groupProseBlocks(segment.blocks).map((group, index, groups) => (
+                {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
                   // Air between a picture and the caption under it.
                   <View
                     key={index}
                     style={imageLeadsText(groups, index) ? styles.imageLead : null}
                   >
-                    {group.type === 'image-strip' ? (
-                      <MobileNativeChatImageStrip
-                        uris={group.uris}
-                        label={group.alt}
-                        styles={styles}
-                      />
-                    ) : (
-                      <Prose
-                        block={group.block}
-                        invert={isUser}
-                        fontScale={fontScale}
-                        onOpenFile={onOpenFile}
-                        styles={styles}
-                      />
-                    )}
+                    {renderProseGroup(group, { isUser, fontScale, onOpenFile, styles })}
                   </View>
                 ))}
               </View>

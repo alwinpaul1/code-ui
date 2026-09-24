@@ -1,17 +1,37 @@
-import { isImageRefBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { parseFileMentionText, type FileMentionCard } from './mobile-native-chat-file-mentions'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 
 export type ProseGroup =
   | { type: 'block'; block: NativeChatBlock }
   | { type: 'image-strip'; uris: string[]; alt: string }
+  | { type: 'file-cards'; cards: FileMentionCard[] }
 
 /** Fold a run of two or more loadable images into one sideways-scrolling
  *  strip, the way the Claude app lays out a multi-image upload (2026-09-12).
  *  A lone image, a text block, or an image the phone cannot load stays its
- *  own block, so the placeholder chip and single thumbnail are unchanged. */
-export function groupProseBlocks(blocks: NativeChatBlock[]): ProseGroup[] {
+ *  own block, so the placeholder chip and single thumbnail are unchanged.
+ *
+ *  `isUser` scopes file-mention detection to the user's own turn: the
+ *  `@"<path>"` marker is Claude Code's record of what the user attached
+ *  (docs/claude-app-parity.md item 9), and an agent's reply is free to quote
+ *  an unrelated path in the same shape. */
+export function groupProseBlocks(
+  blocks: NativeChatBlock[],
+  options?: { isUser?: boolean }
+): ProseGroup[] {
   const groups: ProseGroup[] = []
   for (const block of blocks) {
+    if (options?.isUser && isTextBlock(block)) {
+      const { cards, caption } = parseFileMentionText(block.text)
+      if (cards.length > 0) {
+        groups.push({ type: 'file-cards', cards })
+        if (caption) {
+          groups.push({ type: 'block', block: { ...block, text: caption } })
+        }
+        continue
+      }
+    }
     const uri = isImageRefBlock(block) ? (block.url ?? block.path) : undefined
     const last = groups[groups.length - 1]
     if (uri && isRenderableImageUri(uri)) {
@@ -48,5 +68,8 @@ export function imageLeadsText(groups: readonly ProseGroup[], index: number): bo
   if (!group || !next || next.type !== 'block' || isImageRefBlock(next.block)) {
     return false
   }
-  return group.type === 'image-strip' || renderableImageUri(group.block) !== undefined
+  return (
+    group.type === 'image-strip' ||
+    (group.type === 'block' && renderableImageUri(group.block) !== undefined)
+  )
 }

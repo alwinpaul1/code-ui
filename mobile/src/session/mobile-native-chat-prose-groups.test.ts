@@ -39,4 +39,35 @@ describe('groupProseBlocks', () => {
     expect(imageLeadsText(strip, 0)).toBe(true)
     expect(imageLeadsText(groupProseBlocks([text('a'), img('file:///a.png')]), 0)).toBe(false)
   })
+
+  // docs/claude-app-parity.md item 9: Claude Code's own `@"<path>"` file
+  // mention, only read on the user's side of the turn.
+  describe('a file mention in the text', () => {
+    it('splits it into a file-cards group ahead of the remaining caption', () => {
+      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf" see this')], {
+        isUser: true
+      })
+      expect(groups).toEqual([
+        { type: 'file-cards', cards: [{ path: '/tmp/uploads/abcdef01-notes.pdf', name: 'notes', ext: 'PDF' }] },
+        { type: 'block', block: text('see this') }
+      ])
+    })
+
+    it('drops the caption block entirely when the mention was the whole message', () => {
+      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf"')], { isUser: true })
+      expect(groups).toEqual([
+        { type: 'file-cards', cards: [{ path: '/tmp/uploads/abcdef01-notes.pdf', name: 'notes', ext: 'PDF' }] }
+      ])
+    })
+
+    it('leaves the text alone when isUser is not set, even with the same marker', () => {
+      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf" see this')])
+      expect(groups).toEqual([{ type: 'block', block: text('@"/tmp/uploads/abcdef01-notes.pdf" see this') }])
+    })
+
+    it('leaves ordinary user text with no mention untouched', () => {
+      const groups = groupProseBlocks([text('run the full gate')], { isUser: true })
+      expect(groups).toEqual([{ type: 'block', block: text('run the full gate') }])
+    })
+  })
 })

@@ -521,4 +521,109 @@ describe('MobileNativeChatMessage', () => {
       }
     })
   })
+
+  // docs/claude-app-parity.md item 9. Real text of session
+  // 967668df-a7d9-40e7-964b-7812815c010d's "76514539-Screen_Recording" row
+  // (Claude Code 2.1.281): Claude Code's own `@"<path>"` mention for a
+  // dropped file, byte for byte including the doubled space before "in that
+  // sheet".
+  const REAL_MENTION_TEXT =
+    '@"/Users/alwinpaul/.claude-work/uploads/967668df-a7d9-40e7-964b-7812815c010d/76514539-Screen_Recording_20260924_010304_Claude.mp4" See when a agent is running i can see that running using clicking on running task then  in that sheet there is a view transcript option to see the running agents transcript and in the conversation I can see animation an agent is running we need this all'
+
+  describe('a file Claude Code mentioned in the prompt', () => {
+    it('draws it as a card and drops the marker from the bubble, keeping the caption', () => {
+      const tree = render(userMessage([{ type: 'text', text: REAL_MENTION_TEXT }]))
+      const texts = textIn(tree.root)
+      expect(texts.some((text) => text.includes('@"'))).toBe(false)
+      expect(texts.some((text) => text.includes('.claude-work/uploads'))).toBe(false)
+      expect(texts).toContain('MP4')
+      expect(texts).toContain('Screen_Recording_20260924_010304_Claude')
+      expect(
+        texts.some((text) =>
+          text.includes(
+            'See when a agent is running i can see that running using clicking on running task'
+          )
+        )
+      ).toBe(true)
+    })
+
+    it('leaves an ordinary sent prompt with no mention exactly as it was', () => {
+      const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
+      expect(textIn(tree.root)).toContain('run the full gate')
+      expect(tree.root.findAllByProps({ accessibilityLabel: /^Attached file/ })).toHaveLength(0)
+    })
+
+    it('cards a mention with no caption after it, without a dangling empty line', () => {
+      const tree = render(
+        userMessage([
+          { type: 'text', text: '@"/tmp/uploads/abcdef01-notes.pdf"' }
+        ])
+      )
+      const texts = textIn(tree.root)
+      expect(texts).toContain('PDF')
+      expect(texts).toContain('notes')
+      expect(texts.some((text) => text.trim() === '')).toBe(false)
+    })
+
+    it('cards every file a message names more than one of', () => {
+      const tree = render(
+        userMessage([
+          {
+            type: 'text',
+            text: '@"/tmp/uploads/abcdef01-a.pdf" and @"/tmp/uploads/12345678-b.png" please'
+          }
+        ])
+      )
+      const texts = textIn(tree.root)
+      expect(texts).toContain('PDF')
+      expect(texts).toContain('a')
+      expect(texts).toContain('PNG')
+      expect(texts).toContain('b')
+      expect(texts).toContain('and please')
+    })
+
+    it('never turns the same-looking text in an agent reply into a card', () => {
+      // The marker is Claude Code's own record of what THE USER attached; an
+      // agent quoting a path in its own prose is not that, and must not be
+      // read as one. Agent prose renders through MobileMarkdown (mocked to a
+      // bare tag here), so the untouched text shows up in its `content` prop
+      // rather than as a Text child — read the serialized tree instead.
+      const tree = render(toolMessage([{ type: 'text', text: REAL_MENTION_TEXT }]))
+      const serialized = JSON.stringify(tree.toJSON())
+      expect(serialized).toContain('/Users/alwinpaul/.claude-work/uploads')
+      expect(serialized).not.toContain('MP4')
+    })
+
+    it('does nothing on a tap, with no failing file-open call wired to a card nothing on the phone can preview', () => {
+      const onOpenFile = vi.fn()
+      const tree = render(userMessage([{ type: 'text', text: REAL_MENTION_TEXT }]), { onOpenFile })
+      const card = tree.root.findByProps({ accessibilityLabel: 'Attached file Screen_Recording_20260924_010304_Claude' })
+      expect(card.props.onPress).toBeUndefined()
+      expect(onOpenFile).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['light', lightColors, darkColors],
+      ['dark', darkColors, lightColors]
+    ] as const)('draws the card from the live theme in %s, not a fixed colour', (preference, colors, other) => {
+      act(() => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: preference },
+            createElement(MobileNativeChatMessage, { message: userMessage([{ type: 'text', text: REAL_MENTION_TEXT }]) })
+          )
+        )
+      })
+      const card = renderer!.root.findByProps({
+        accessibilityLabel: 'Attached file Screen_Recording_20260924_010304_Claude'
+      })
+      const cardStyle = Object.assign(
+        {},
+        ...([] as unknown[]).concat(card.props.style).flat(Infinity).filter(Boolean)
+      )
+      expect(cardStyle.backgroundColor).toBe(colors.bgRaised)
+      expect(cardStyle.backgroundColor).not.toBe(other.bgRaised)
+    })
+  })
 })
