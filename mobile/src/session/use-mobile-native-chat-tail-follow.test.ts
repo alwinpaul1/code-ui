@@ -189,6 +189,40 @@ describe('the chat transcript has one owner for its scroll position', () => {
     }
   })
 
+  // 2026-09-24, device: a long session showed only its last folded run and
+  // one message, blank above. The loaded rows fit on one screen, so nothing
+  // could scroll, the reader never stopped following, and both paths that
+  // page in history waited for exactly that. The list's end-reached signal
+  // fired and was dropped.
+  it('fills a short conversation from history on its own, and keeps following the newest message', () => {
+    const onLoadEarlier = vi.fn()
+    render({ rows: [{ id: 'a1' }, { id: 'a2' }], hasMore: true, onLoadEarlier })
+    act(() => latest!.onEndReached())
+    expect(onLoadEarlier).toHaveBeenCalledOnce()
+    // Still following: a resize re-pins the newest message.
+    act(() => latest!.pinToTail())
+    expect(list.scrollToOffset).toHaveBeenCalledWith(expect.objectContaining({ offset: 0 }))
+  })
+
+  it('does not fill from history under a held finger, or with nothing more to load', () => {
+    const onLoadEarlier = vi.fn()
+    render({ rows: [{ id: 'a1' }], hasMore: true, onLoadEarlier })
+    act(() => latest!.touchStart())
+    act(() => latest!.onEndReached())
+    expect(onLoadEarlier).not.toHaveBeenCalled()
+    act(() => latest!.touchEnd())
+    act(() => renderer?.unmount())
+    render({ rows: [{ id: 'a1' }], hasMore: false, onLoadEarlier })
+    act(() => latest!.onEndReached())
+    act(() => renderer?.unmount())
+    render({ rows: [{ id: 'a1' }], hasMore: true, loadingEarlier: true, onLoadEarlier })
+    act(() => latest!.onEndReached())
+    act(() => renderer?.unmount())
+    render({ rows: [], hasMore: true, onLoadEarlier })
+    act(() => latest!.onEndReached())
+    expect(onLoadEarlier).toHaveBeenCalledOnce()
+  })
+
   // The dock's height is the spacer at the list's end; when it grows, the
   // newest row ends up underneath it. That re-pin is the same command as every
   // other, so it goes through the same owner and obeys the same refusal.

@@ -240,11 +240,26 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // start of history. The scroll-sample check above missed a fast fling that
   // came to rest on the last loaded row (2026-09-13, on the device: the list
   // stopped dead until the invisible row was tapped).
+  //
+  // It also fires while the reader is FOLLOWING, when every loaded row fits on
+  // one screen: the start of history is already in view and no scroll will
+  // ever reach it. That signal used to be dropped, so a long session whose
+  // tail page folded into a run or two sat blank above them for good
+  // (2026-09-24, device). It pages in without detaching: older rows land past
+  // the far end of an inverted list, so the newest message stays pinned.
+  // Never under a held finger, for the reason `applyMetrics` gives.
   const onEndReached = useCallback(() => {
-    if (!followingRef.current && hasMore && !loadingEarlier) {
-      loadEarlier()
+    if (!hasMore || loadingEarlier) {
+      return
     }
-  }, [followingRef, hasMore, loadEarlier, loadingEarlier])
+    if (!followingRef.current) {
+      loadEarlier()
+      return
+    }
+    if (!holdingRef.current) {
+      onLoadEarlier?.()
+    }
+  }, [followingRef, hasMore, holdingRef, loadEarlier, loadingEarlier, onLoadEarlier])
 
   // The reader took control: stop following immediately, on the same frame as
   // the drag, not after the next scroll sample lands.
