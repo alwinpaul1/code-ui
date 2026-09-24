@@ -1,5 +1,6 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import { splitTableRow } from '../rich-markdown/markdown-table-rows'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -209,36 +210,6 @@ function parseLines(content: string): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
-}
-
-// Splits a `| a | b |` table row into trimmed cells. Tolerates missing outer
-// pipes and escaped `\|` inside cells. Total: never throws on odd input.
-function splitTableRow(line: string): string[] {
-  const cells: string[] = []
-  let cell = ''
-  let trimmed = line.trim()
-  if (trimmed.startsWith('|')) {
-    trimmed = trimmed.slice(1)
-  }
-  if (trimmed.endsWith('|')) {
-    trimmed = trimmed.slice(0, -1)
-  }
-  for (let j = 0; j < trimmed.length; j += 1) {
-    const ch = trimmed[j]
-    if (ch === '\\' && trimmed[j + 1] === '|') {
-      cell += '|'
-      j += 1
-      continue
-    }
-    if (ch === '|') {
-      cells.push(cell.trim())
-      cell = ''
-      continue
-    }
-    cell += ch
-  }
-  cells.push(cell.trim())
-  return cells
 }
 
 // A GFM table delimiter row: cells of dashes with optional leading/trailing
