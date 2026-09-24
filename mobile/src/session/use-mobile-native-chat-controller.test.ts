@@ -171,6 +171,7 @@ import {
 } from './use-mobile-native-chat-controller'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
+import { API_ERROR_HOST_STATUS, API_ERROR_TURN, CONTINUE_PROMPT, STOP_HOST_STATUS, STOP_TURN } from './fixtures/claude-turn-end-2.1.281'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
 
@@ -958,6 +959,24 @@ describe('useMobileNativeChatController streaming scope', () => {
     renderer = null
     controller = null
     viewMode.isTabChatView = () => true
+    sessionState.messages = []
+    Object.assign(workingTab.agentStatus, { lastAssistantMessage: 'Partial reply', lastAssistantMessageIsToolOutput: undefined, subagents: undefined })
+  })
+
+  // docs/claude-app-parity.md item 7, session 967668df: after the lead's own
+  // StopFailure or Stop, Orca keeps the pane `working` (no monitoring mode) for
+  // a background agent; Code UI drew "Working" and Stop under the ended turn.
+  it.each([
+    ['an API error ended the turn', API_ERROR_TURN, API_ERROR_HOST_STATUS, false],
+    ["Claude's Stop reported the reply", STOP_TURN, STOP_HOST_STATUS, false],
+    ['a prompt followed the API error', [...API_ERROR_TURN, CONTINUE_PROMPT], API_ERROR_HOST_STATUS, true]
+  ])('shows Working and Stop only while the lead works, with a background agent running: %s', (_label, messages, status, working) => {
+    Object.assign(workingTab.agentStatus, status)
+    sessionState.messages = messages
+    act(() => renderer?.update(createElement(Harness)))
+    expect(controller?.nativeChatAgentWorking).toBe(working)
+    expect(controller?.nativeChatCanStop).toBe(working)
+    expect(controller?.nativeChatStreamLive).toBe(working)
   })
 
   it('holds the stream scope and liveness while the user peeks at the terminal', () => {

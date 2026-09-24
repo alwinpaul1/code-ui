@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { interimAssistantMessageIds } from './mobile-native-chat-interim'
+import { SAFEGUARDS_API_ERROR_TEXT } from './fixtures/claude-turn-end-2.1.281'
 
 function user(id: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text: 'go' }], timestamp: 0, source: 'transcript' }
@@ -47,6 +48,19 @@ describe('interim assistant notes', () => {
       tools('t1'),
       prose('a2', 'You were right twice, and I was wrong on both counts.'),
       prose('e1', 'Please run /login · API Error: 401 OAuth access token has expired. Re-authenticate to continue.')
+    ])
+    expect([...ids]).toEqual(['a1'])
+  })
+
+  // Session 967668df, 2026-09-23: a safeguards refusal is an `isApiErrorMessage`
+  // record with no status code, which the 401-shaped pattern did not know.
+  it('leaves the answer plain when a safeguards API error with no status code follows it', () => {
+    const ids = interimAssistantMessageIds([
+      user('u1'),
+      prose('a1'),
+      tools('t1'),
+      prose('a2', 'You were right twice, and I was wrong on both counts.'),
+      prose('e1', SAFEGUARDS_API_ERROR_TEXT)
     ])
     expect([...ids]).toEqual(['a1'])
   })

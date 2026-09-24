@@ -394,7 +394,10 @@
             // structuredCancelPrompt mock and the case that pins the bridge
             // lane offering no prompt cancel. This fork's copy carries its
             // own queue-editor and tail cases on top of upstream's.
-            "max": 805,
+            // 2026-09-24: +15 for the cases that pin Working and Stop to the
+            // lead's own turn while a background agent runs (parity item 7);
+            // the rule is claude-lead-turn-ended.ts, tested beside it.
+            "max": 820,
             "skipBlankLines": true,
             "skipComments": true
           }

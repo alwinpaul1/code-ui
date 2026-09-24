@@ -14,7 +14,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | open |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
 | 6 | An animated "N running tasks" row in the conversation; a Background tasks sheet with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | Has a background-task sheet and a subagent transcript modal; gaps not yet listed | open |
-| 7 | After an API error ends the turn, no "Working" and no Stop | Still showed "Working ••• " and Stop under the error | open |
+| 7 | After an API error ends the turn, no "Working" and no Stop; the same after a normal finish while an agent runs in the background | Still showed "Working ••• " and Stop under the ended turn | fixed, not yet checked on the phone |
 | 8 | A message with images or video leaves the composer text and media together | The text leaves first, the media lingers, then both reappear pinned together after a refresh | merged (3248a41b); phone check pending |
 | 9 | A sent message with an image and a video shows the image thumbnail and a file card ("MP4", the file name) | Showed only the video's path text, `@"/Users/…/….mp4"`, and no image | open |
 | 10 | Screenshot markup: draw on a screenshot with a pen, undo and redo, "Discard markup?" on close, attach it with an edit pencil | Not present | merged (cb571619); drawing feel and the flattened image need a phone check |
@@ -36,6 +36,22 @@ failing-first test and has been checked on the phone in light and dark.
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops
   both attachment kinds.
+- **Working after the turn ended (7).** Session 967668df. Claude Code
+  2.1.281 fires StopFailure, not Stop, when a turn's last record is an API
+  error (a safeguards refusal is one, with no status code). Orca then holds a
+  Claude pane `working` for any subagent or teammate it still counts as
+  working, and gives that no `monitoring` mode (`resolveClaudePaneStatus`), so
+  the phone read a running background agent as the lead still at work. That
+  happened at 23:01:14 and 23:01:48 while reviewer `a77d87fe` ran, and after
+  the normal Stop at 21:57:09 while `a8f65c53` ran. The thesis "Paper review
+  council" tab reported the same after a normal finish; its transcript was not
+  read. The screenshot sent with the report (Request ID `req_011CfMD2X…`,
+  23:05:06) was taken after 23:06:22 with the list scrolled up, while the
+  "Continue" turn that followed the error was running, so the Working row in
+  it was true. The phone now takes the lead's end from the transcript: an API
+  error with nothing after it, or the reply the host says the Stop hook
+  reported (`claude-lead-turn-ended.ts`). The tab pill still copies the
+  desktop's dot, which keeps its spinner in that state.
 - **Queue (11).** The 2.1.281 layout is in the test fixture beside
   `mobile-terminal-queued-messages.ts`.
 - **Mid-turn placement (14).** Session 967668df. "Red." (stamped 22:15:15,

@@ -4,6 +4,7 @@ import {
   type NativeChatMessage,
   type NativeChatTextBlock
 } from '../../../src/shared/native-chat-types'
+import { isClaudeApiErrorText } from './claude-api-error-text'
 
 /**
  * Which assistant messages are interim notes — prose the agent wrote and then
@@ -39,13 +40,11 @@ export function interimAssistantMessageIds(messages: readonly NativeChatMessage[
   return interim
 }
 
-/** An API-error line ("Please run /login · API Error: 401 …") or a toned host
+/** An API-error record ("Please run /login · API Error: 401 …") or a toned host
  *  notice is not the agent working past its answer, so it neither closes a
  *  note nor opens one (2026-09-12: a 401 after the answer put the whole
- *  answer in a quote block). Claude Code writes the error as an assistant
- *  record with `isApiErrorMessage`; the phone only sees its text. */
+ *  answer in a quote block). The shapes, a safeguards refusal with no status
+ *  code among them, are in claude-api-error-text.ts. */
 function isHostNotice(block: NativeChatTextBlock): boolean {
-  return block.tone !== undefined || API_ERROR_LINE.test(block.text)
+  return block.tone !== undefined || isClaudeApiErrorText(block.text)
 }
-
-const API_ERROR_LINE = /(^|·\s*)API Error:\s*\d{3}/

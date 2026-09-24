@@ -39,6 +39,7 @@ import { useActiveTabScreenCompletions } from './use-active-tab-screen-completio
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
+import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -159,9 +160,11 @@ export function useMobileNativeChatController(
 
   const backgroundTaskReport = useActiveTabBackgroundTaskReport({ handle: activeHandle, sessionId: activeChatSessionId, beacon: hudBeacon })
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
+  // Orca's `working` outlives the lead's turn while a background agent runs,
+  // and the transcript is what says that turn is over (claude-lead-turn-ended.ts).
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
-    : activeTabAgentWorking
+    : activeTabAgentWorking && !claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeSessionTab?.agentStatus)
   const nativeChatAgentWorking =
     nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   const streamPreview = useMobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking)
