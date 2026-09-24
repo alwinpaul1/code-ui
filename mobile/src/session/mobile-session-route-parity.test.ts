@@ -191,7 +191,10 @@ const HEAD_CALLBACK_BODY_SHA256 = '1c63df1ebe54bd3e650cd39f62c7cdff30174675761ec
 // carries both, and this is what the test printed for it.
 // Re-pinned again on the group D merge, 2026-09-19: main's (6121e237) carried
 // #21503's writer, ours (d5529ed9) #21083's worktreeActivate; both now.
-const HEAD_EFFECT_SHA256 = '5f97caf51bd293b398137c9a518790c9b0da32cafc1909ba6b562930efeb9842'
+// 2026-09-24 (Orca #22111 ported, 0b1567a7b): the diff-comments mount effect
+// now ends in `.catch(() => undefined)`, so a rejected worktree.show is no longer
+// an unhandled rejection on every mount. Only that effect's body moved; still 25.
+const HEAD_EFFECT_SHA256 = 'efa79c08091f12f73057b87ffef88755c76cafdcfa007ce0ca055aab5a23f0ab'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
