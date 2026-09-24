@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, SquareTerminal, Wrench } from 'lucide-react-native'
+import { useState } from 'react'
+import { Pressable, Text, View } from 'react-native'
+import {
+  ChevronDown,
+  ChevronRight,
+  SquareTerminal,
+  Wrench
+} from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
 import {
@@ -24,6 +29,8 @@ import {
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
+import { toolPairOpensDetailSheet } from './mobile-native-chat-tool-detail'
+import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
@@ -37,8 +44,8 @@ import type {
   NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
-import { useReducedMotion } from '../ui/use-reduced-motion'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import { PulsingText } from './MobileNativeChatToolPulsingText'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -118,6 +125,7 @@ function ToolLine({
   defaultExpanded,
   diffLineLimit,
   onOpenFile,
+  onOpenDetail,
   onRevertHunk,
   revertScope,
   styles
@@ -129,6 +137,10 @@ function ToolLine({
   defaultExpanded: boolean
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
+  /** Opens the Claude-app-style detail sheet for this call instead of the
+   *  inline expand, for every row that has no richer inline card of its own
+   *  (a plan checklist, an edit's diff card, a web search's result list). */
+  onOpenDetail: (pair: ToolPair) => void
   onRevertHunk?: MobileNativeChatRevertHunk
   /** This line's place in its message, for the diff card's identity. */
   revertScope?: string
@@ -163,17 +175,34 @@ function ToolLine({
   const hasResults = (searchResults?.length ?? 0) > 0
   const hasDetail =
     callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true || hasResults
+  // A row with no richer inline card (a plan checklist, an edit's diff card, a
+  // web search's result list) opens the Claude-app detail sheet instead of
+  // expanding in place — the sheet is where its inputs/output now live, so it
+  // never shows both. Because of that, the global "expand all tools" toggle
+  // has nothing to expand on these rows: there is no inline detail left to
+  // reveal, only a sheet, and opening N sheets at once for one tap makes no
+  // sense.
+  const opensSheet = toolPairOpensDetailSheet(pair, { isTaskList: taskList !== null })
   // The group toggle opens every line at once, bypassing the tap guard, so the
   // panel has to consult it too — else a detail-less row echoes its own label
   // under itself and no tap can dismiss it.
-  const showDetail = hasDetail && expanded
+  const showDetail = !opensSheet && hasDetail && expanded
   const filePath = inputDisplay?.filePath ?? null
   const openable = filePath !== null && onOpenFile !== undefined
   return (
     <View>
       <Pressable
+        testID="tool-line"
         style={styles.toolLine}
-        onPress={() => hasDetail && setExpanded((v) => !v)}
+        onPress={() => {
+          if (opensSheet) {
+            onOpenDetail(pair)
+            return
+          }
+          if (hasDetail) {
+            setExpanded((v) => !v)
+          }
+        }}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ expanded: showDetail }}
@@ -235,46 +264,6 @@ function ToolLine({
   )
 }
 
-/** Breathing label for a still-running tool, matching desktop's `animate-pulse`. */
-function PulsingText({
-  style,
-  numberOfLines,
-  testID,
-  children
-}: {
-  style?: React.ComponentProps<typeof Animated.Text>['style']
-  numberOfLines?: number
-  testID?: string
-  children: React.ReactNode
-}) {
-  const pulse = useRef(new Animated.Value(1)).current
-  const reducedMotion = useReducedMotion()
-  useEffect(() => {
-    // Motion reduced, or not yet known: the label stands at full opacity.
-    if (reducedMotion !== false) {
-      pulse.setValue(1)
-      return undefined
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true })
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [pulse, reducedMotion])
-  return (
-    <Animated.Text
-      style={[style, { opacity: pulse }]}
-      numberOfLines={numberOfLines}
-      testID={testID}
-    >
-      {children}
-    </Animated.Text>
-  )
-}
-
 /** A run of a message's tool calls/results, collapsed to a one-line summary
  *  ("2×  Read src/app.ts · Edit …", Codex-app style) that expands to the inline
  *  tool lines. `defaultExpanded` lets the global toolbar toggle drive every run. */
@@ -318,6 +307,11 @@ export function ToolRun({
 }) {
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
+  // The Claude-app detail sheet for whichever call was tapped, in this run or
+  // one of its lines; null closes it. Kept local to the run rather than
+  // threaded up through the message/view props that already carry
+  // `onOpenFile` — nothing outside a run needs to know a sheet is open.
+  const [detailPair, setDetailPair] = useState<ToolPair | null>(null)
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
   // Cheap enough to run collapsed: a plan row says how far along it is
   // before anyone opens it ("1/3 · Writing the test", beside the sentence).
@@ -354,11 +348,25 @@ export function ToolRun({
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
   const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
+  // A run of exactly one call IS that call's row — the Claude app shows a
+  // run's calls first and opens the sheet per call, but with only one call
+  // there is nothing to disclose first, so its header opens the sheet
+  // directly instead of revealing a single child line to tap again. A call
+  // still claimed by "… N more tool calls" (pairs.length < callCount) keeps
+  // the old reveal-first behaviour: there is more than one call, it is just
+  // not all shown.
+  const singlePair = pairs.length === 1 && callCount === pairs.length ? pairs[0]! : null
+  const singlePairOpensSheet =
+    singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
+  const detailSheet = (
+    <MobileNativeChatToolDetailSheet pair={detailPair} onClose={() => setDetailPair(null)} />
+  )
   if (activeCall) {
     return (
       <View style={styles.toolRun}>
         <View style={styles.toolRunHeader}>
           <Pressable
+            testID="tool-run-active-header"
             style={styles.toolRunActive}
             onPress={() => setOpen((v) => !v)}
             hitSlop={6}
@@ -380,6 +388,7 @@ export function ToolRun({
           {trailing}
         </View>
         {open ? renderBody() : null}
+        {detailSheet}
       </View>
     )
   }
@@ -387,8 +396,15 @@ export function ToolRun({
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
         <Pressable
+          testID="tool-run-header"
           style={styles.toolRunToggle}
-          onPress={() => setOpen((v) => !v)}
+          onPress={() => {
+            if (singlePairOpensSheet && singlePair) {
+              setDetailPair(singlePair)
+              return
+            }
+            setOpen((v) => !v)
+          }}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
@@ -421,6 +437,7 @@ export function ToolRun({
         {trailing}
       </View>
       {open ? renderBody() : null}
+      {detailSheet}
     </View>
   )
 
@@ -435,6 +452,7 @@ export function ToolRun({
             defaultExpanded={expandChildren ?? defaultExpanded}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}
+            onOpenDetail={setDetailPair}
             onRevertHunk={onRevertHunk}
             revertScope={`${revertScope ?? ''}:${i}`}
             styles={styles}

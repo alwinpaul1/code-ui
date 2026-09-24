@@ -16,7 +16,7 @@ const MOTION_SITES = [
   'components/RightDrawer.tsx',
   'session/MobileAgentWorkingIndicator.tsx',
   'session/MobileBackgroundTasksPulse.tsx',
-  'session/MobileNativeChatToolRun.tsx',
+  'session/MobileNativeChatToolPulsingText.tsx',
   'session/MobileNativeChatTurnStatus.tsx',
   'ui/StatusPulse.tsx',
   // The two onboarding sites already honoured the setting through a hook of

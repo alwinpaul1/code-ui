@@ -35,9 +35,18 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  Circle: 'Circle',
+  CircleCheck: 'CircleCheck',
+  CircleDot: 'CircleDot',
+  ListChecks: 'ListChecks',
   SquareChevronRight: 'SquareChevronRight',
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
+}))
+// The detail sheet pulls in gesture-handler/reanimated (via DraggableDetailSheet),
+// which Node cannot parse; the run's own tests never open it.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({
+  MobileNativeChatToolDetailSheet: 'MobileNativeChatToolDetailSheet'
 }))
 // The run's tests are about the run; the OS setting is stubbed to an answer
 // so the render stays synchronous.
@@ -365,5 +374,88 @@ describe('a tool run while the turn is still working', () => {
     // itself has not disclosed its result.
     expect(texts(tree)).toContain('a.ts')
     expect(texts(tree)).not.toContain('ok')
+  })
+})
+
+// A run of one generic call, the shape the evidence's SendMessage sheet used.
+const SINGLE_BASH_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+  { type: 'tool-result', output: 'a.ts\nb.ts' }
+]
+const SINGLE_PLAN_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'TodoWrite', input: { todos: [{ content: 'Write the test' }] } },
+  { type: 'tool-result', output: 'ok' }
+]
+
+describe('tapping a tool row opens the Claude-app detail sheet', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function render(blocks: NativeChatBlock[]): ReactTestRenderer {
+    act(() => {
+      renderer = create(
+        createElement(ThemeProvider, { initialPreference: 'light' }, createElement(Harness, { blocks }))
+      )
+    })
+    return renderer!
+  }
+
+  function sheetPair(tree: ReactTestRenderer) {
+    return tree.root.findByType('MobileNativeChatToolDetailSheet').props.pair
+  }
+
+  it('opens the sheet straight from a single-call run\'s header — nothing to reveal first', () => {
+    const tree = render(SINGLE_BASH_RUN)
+    expect(sheetPair(tree)).toBeNull()
+    const header = tree.root.findByProps({ testID: 'tool-run-header' })
+    act(() => header.props.onPress())
+    expect(sheetPair(tree)?.call?.name).toBe('Bash')
+    // No inline body was ever revealed — the header opened the sheet, not the
+    // old reveal-first row.
+    expect(tree.root.findAllByProps({ testID: 'tool-line' })).toHaveLength(0)
+  })
+
+  it('closes the sheet when the run hands back onClose', () => {
+    const tree = render(SINGLE_BASH_RUN)
+    act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    expect(sheetPair(tree)).not.toBeNull()
+    act(() => tree.root.findByType('MobileNativeChatToolDetailSheet').props.onClose())
+    expect(sheetPair(tree)).toBeNull()
+  })
+
+  it("keeps a single plan run's old reveal-first header — a checklist has its own card", () => {
+    const tree = render(SINGLE_PLAN_RUN)
+    const header = tree.root.findByProps({ testID: 'tool-run-header' })
+    act(() => header.props.onPress())
+    // The sheet never opened; the header instead revealed the one child row.
+    expect(sheetPair(tree)).toBeNull()
+    expect(tree.root.findAllByProps({ testID: 'tool-line' })).toHaveLength(1)
+  })
+
+  it('keeps a multi-call run\'s header as reveal-first, then opens the sheet per call', () => {
+    const tree = render(LONG_RUN)
+    const header = tree.root.findByProps({ testID: 'tool-run-header' })
+    act(() => header.props.onPress())
+    expect(sheetPair(tree)).toBeNull()
+    const lines = tree.root.findAllByProps({ testID: 'tool-line' })
+    expect(lines.length).toBeGreaterThan(1)
+    act(() => lines[0]!.props.onPress())
+    expect(sheetPair(tree)?.call?.name).toBe('Bash')
+  })
+
+  it("does not open the sheet for a plan call inside an expanded multi-call run", () => {
+    const tree = render([...SINGLE_PLAN_RUN, ...SINGLE_BASH_RUN])
+    act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
+    const lines = tree.root.findAllByProps({ testID: 'tool-line' })
+    act(() => lines[0]!.props.onPress())
+    // The plan row's own tap expanded its checklist inline; it did not open a
+    // sheet, which the second call in the same run still can.
+    expect(sheetPair(tree)).toBeNull()
+    act(() => lines[1]!.props.onPress())
+    expect(sheetPair(tree)?.call?.name).toBe('Bash')
   })
 })

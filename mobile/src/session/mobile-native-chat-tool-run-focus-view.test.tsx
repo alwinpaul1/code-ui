@@ -46,6 +46,9 @@ vi.mock('lucide-react-native', () => ({
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
 }))
+// The detail sheet pulls in gesture-handler and reanimated; this suite is
+// about what the collapsed row shows, not the sheet a tap opens.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 
 const THREE_CALLS: NativeChatBlock[] = [
