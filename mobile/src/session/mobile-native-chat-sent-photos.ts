@@ -1,5 +1,5 @@
 import { isImageRefBlock, isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { SENT_PHOTO_REF } from './mobile-desktop-prompt-images'
+import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 
 const NONE: ReadonlyMap<string, number> = new Map()
@@ -55,8 +55,9 @@ export function rememberScreenSentPhotos(
   return next ?? (known.size === 0 ? NONE : known)
 }
 
-/** One "Photo" chip per photo, above the words, as a send with pictures is
- *  laid out. A row that already draws an image is left as it is. */
+/** One "Image on Desktop" chip per photo, the chip a desktop-pasted image
+ *  already gets (the user, 2026-09-24), above the words as a send with
+ *  pictures is laid out. A row that already draws an image is left alone. */
 export function withScreenSentPhotos(
   messages: readonly NativeChatMessage[],
   known: ReadonlyMap<string, number>
@@ -69,7 +70,7 @@ export function withScreenSentPhotos(
     if (photos === 0 || message.role !== 'user' || message.blocks.some(isImageRefBlock)) {
       return message
     }
-    const chips = Array.from({ length: photos }, () => ({ type: 'image-ref' as const, path: SENT_PHOTO_REF }))
+    const chips = Array.from({ length: photos }, () => ({ type: 'image-ref' as const, path: DESKTOP_PROMPT_IMAGE_REF }))
     return { ...message, blocks: [...chips, ...message.blocks] }
   })
 }

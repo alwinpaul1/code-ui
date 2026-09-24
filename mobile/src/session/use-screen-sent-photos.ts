@@ -6,7 +6,7 @@ import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 const NONE: ReadonlyMap<string, number> = new Map()
 
 /**
- * The chat with a "Photo" chip on each message the agent's screen showed
+ * The chat with an "Image on Desktop" chip on each message the agent's screen showed
  * photos for. Remembered per stream scope, which carries the session id, so a
  * chip outlives the message scrolling off Claude's screen and never follows
  * a `/clear` into the next conversation.

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { SENT_PHOTO_REF } from './mobile-desktop-prompt-images'
+import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import { rememberScreenSentPhotos, withScreenSentPhotos } from './mobile-native-chat-sent-photos'
 import { sentPhotosFromScreen } from './mobile-terminal-sent-photos'
 
@@ -19,7 +19,7 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 function photoCount(message: NativeChatMessage | undefined): number {
-  return message?.blocks.filter((block) => block.type === 'image-ref' && block.path === SENT_PHOTO_REF).length ?? 0
+  return message?.blocks.filter((block) => block.type === 'image-ref' && block.path === DESKTOP_PROMPT_IMAGE_REF).length ?? 0
 }
 
 // 2026-09-24, the user: the terminal and the VS Code extension both show that
@@ -67,11 +67,11 @@ describe('the photo placeholders a Claude-app message gets in the chat', () => {
     user('u3', 'No photos on this one')
   ]
 
-  it('puts one Photo chip per photo above the words, on the row the screen names', () => {
+  it('puts one Image on Desktop chip per photo above the words, on the row the screen names', () => {
     const known = rememberScreenSentPhotos(new Map(), messages, sentPhotosFromScreen(screen))
     const drawn = withScreenSentPhotos(messages, known)
     expect(drawn.map(photoCount)).toEqual([1, 2, 0])
-    expect(drawn[0]!.blocks[0]).toEqual({ type: 'image-ref', path: SENT_PHOTO_REF })
+    expect(drawn[0]!.blocks[0]).toEqual({ type: 'image-ref', path: DESKTOP_PROMPT_IMAGE_REF })
     expect(drawn[0]!.blocks.at(-1)).toEqual({ type: 'text', text: 'See this photo from the Claude app please' })
   })
 
