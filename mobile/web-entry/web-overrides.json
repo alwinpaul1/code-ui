@@ -136,6 +136,14 @@
     {
       "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
+    },
+    {
+      "file": "src/transport/host-app-version-store.web.ts",
+      "reason": "The page keeps no record of the host's status.get app version because nothing in it reads one — the reader is the native troubleshoot screen's — and a key the page only writes is not page state, so it is not admitted through page-storage-keys.ts and every mount's write was refused and logged instead."
+    },
+    {
+      "file": "src/notifications/push-token.web.ts",
+      "reason": "The page holds no device push token and cannot register one, and the import is the defect rather than the call: expo-notifications runs DevicePushTokenAutoRegistration.fx at import, which reads the persisted registration behind a typeof localStorage === 'undefined' guard that the shell's DOM-storage-off WebView walks through with null, raising \"Cannot read properties of null (reading 'getItem')\" on every page load."
     }
   ]
 }
