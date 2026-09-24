@@ -95,14 +95,18 @@ const HOST_COMPONENT_NAMES = new Set([
 // leaf-JSX pins moved with them, and only those.
 // 295 since 2026-09-24: the terminal input's gesture output-window ref, the
 // wheel rows each terminal has had since it last printed.
-const HEAD_MAIN_HOOK_SHA256 = '8036ea582f90f92c132c94640a5f6a9835ac42bf2f688b39a1ff742d3fc84e4a'
+// 2026-09-24: reportDictationFailure (Orca #22256), and useSoftKeyboard with its two
+// effects in place of the Keyboard.addListener pair (Orca #22252).
+const HEAD_MAIN_HOOK_SHA256 = 'c10e21f1f200f07412f65934054ad0980f7ceea653421ac5f418af3ddf03c5b6'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
-const HEAD_HOOK_BINDING_SHA256 = 'eeece55e48f66921867b97ed17df086a55d6b92694dfca680a09644a27ed34e9'
+// 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
+const HEAD_HOOK_BINDING_SHA256 = '56aaed5528daf2d10cb7f6584a285dc1be1b2c679559ad3a14cc1bef6181e152'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
+// 83 since 2026-09-24: reportDictationFailure (Orca #22256).
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'e0e7ad5f407afb16a923a065178754ef7f69ae46d1dcd90fd91493b02cc354bd'
+  'fde290c3ce9a5da035c980daff2f82e2f4d51f85267a9d33a749c58fd81e3000'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -178,7 +182,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // modes and encoding, the flush admits a row only inside the terminal's
 // output window (holding the rest on the phone, a reversal let through at
 // once), and the subscribe's data branch notes the output. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '1c63df1ebe54bd3e650cd39f62c7cdff30174675761ec4adf1e112985e617148'
+// 2026-09-24 (Orca #22256): both dictation failure paths call reportDictationFailure.
+const HEAD_CALLBACK_BODY_SHA256 = '30c85c78c0b224074c0e834ce61bd0745a58ee53e700e3d73db977ecfa0f853b'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -194,7 +199,9 @@ const HEAD_CALLBACK_BODY_SHA256 = '1c63df1ebe54bd3e650cd39f62c7cdff30174675761ec
 // 2026-09-24 (Orca #22111 ported, 0b1567a7b): the diff-comments mount effect
 // now ends in `.catch(() => undefined)`, so a rejected worktree.show is no longer
 // an unhandled rejection on every mount. Only that effect's body moved; still 25.
-const HEAD_EFFECT_SHA256 = 'efa79c08091f12f73057b87ffef88755c76cafdcfa007ce0ca055aab5a23f0ab'
+// 2026-09-24 (Orca #22252): the Keyboard listener effect became two effects off
+// useSoftKeyboard, visibility and height (26).
+const HEAD_EFFECT_SHA256 = '45fd88101543aa8e804103aafbb6bd7c1cedffbcfc9f3676e087dcc2394769a4'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -247,10 +254,13 @@ const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d
 const HEAD_NESTED_FUNCTION_SHA256 =
   '8d1508016ebbb37ef43c81c543a0bd7d51cc0ed82c30b07eaf7f7f08a2f625ef'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
+// 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
+// keyboard state now reads useSoftKeyboard from the platform seam.
 const HEAD_NATIVE_REGISTRATION_SHA256 =
-  '9665ccf6550b25a9ac7ade717f4806dd5a0e5ed3e296b7ec2edb982713c0f2c3'
+  '9f7c866c750c575c75a430cd1c663e231920fdb563cb4bd8ef720d7a0bd3e9a0'
+// 2026-09-24 (Orca #22252): the Keyboard pair's two remove() calls leave with it.
 const HEAD_NATIVE_REMOVAL_SHA256 =
-  '562b70f0c17efd4a0ea39d85e5e1ac7a9bdda2279985e0c24c4934e537e8953a'
+  '40a1ad5717c027fcf93188541ede2dbc82d6dee40e948e9c5c8bb4b7fb15da20'
 // 2026-09-24: the gesture flush's re-poll while the output window holds its
 // rows on the phone (8 setTimeout creations, from 7).
 const HEAD_TIMER_CREATION_SHA256 =
@@ -310,8 +320,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // write now shows, "Couldn't copy path" in the sheets and "Couldn't copy" in
 // the Markdown copy action.
 // 2026-09-24: the gesture flush's '' direction fallback (679).
+// 673 since 2026-09-24 (Orca #22252): the Keyboard pair's six event-name
+// literals leave with it; useSoftKeyboard owns the listeners now.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '744bcea9eccd752c62a6e39a47511b9e505c44dedf6982ff3cffdf7acdc17aa0'
+  '1b02f04c0952cdab94d0ab0902e69ff68f05b176abf8611ccac310b38d65c6a0'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -798,16 +810,23 @@ describe('mobile session route extraction parity', () => {
     // dictation paint state.
     // 294 since 2026-09-23: five clipboard seam hooks (Orca #21790).
     // 295 since 2026-09-24: the gesture output-window ref in the terminal input.
-    expect(main.hooks).toHaveLength(295)
+    // 296 since 2026-09-24: reportDictationFailure, the one policy both dictation failure entry
+    // points now call (Orca #22256).
+    // 298 since 2026-09-24 (later): useSoftKeyboard replaces the route's own Keyboard.addListener
+    // pair, and its visibility and height now each own a separate effect (Orca #22252).
+    expect(main.hooks).toHaveLength(298)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
-    expect(main.callbacks).toHaveLength(82)
+    // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
+    expect(main.callbacks).toHaveLength(83)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.
     // 25 since 2026-09-22: the dictation take stops when a call backgrounds the app.
-    expect(main.effects).toHaveLength(25)
+    // 26 since 2026-09-24: the keyboard's visibility and height each own their own effect off
+    // useSoftKeyboard, where one effect drove both off the raw Keyboard events (Orca #22252).
+    expect(main.effects).toHaveLength(26)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
@@ -822,10 +841,14 @@ describe('mobile session route extraction parity', () => {
     const definitions = readDefinitions()
     const native = readNativeAndTimerFacts(definitions)
     // 7 since 2026-09-22: AppState.addEventListener on the dictation take.
-    expect(native.registrations).toHaveLength(7)
+    // 5 since 2026-09-24: the route's own Keyboard.addListener pair moves into useSoftKeyboard,
+    // which the platform seam owns instead (Orca #22252).
+    expect(native.registrations).toHaveLength(5)
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
     // 9 since 2026-09-22: the AppState subscription is removed with the dictation effect.
-    expect(native.removals).toHaveLength(9)
+    // 7 since 2026-09-24: showSub.remove / hideSub.remove leave with the Keyboard pair
+    // (Orca #22252).
+    expect(native.removals).toHaveLength(7)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
     // 8 since 2026-09-24: the gesture flush re-polls a held queue.
     expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(8)
@@ -893,7 +916,9 @@ describe('mobile session route extraction parity', () => {
     // 678 since 2026-09-23: the two refused-copy toasts (Orca #21790).
     // 679 since 2026-09-24: the '' the gesture flush reads the next row's
     // direction through.
-    expect(strings).toHaveLength(679)
+    // 673 since 2026-09-24: the Keyboard pair's event names ('ios' twice,
+    // keyboardWill/DidShow, keyboardWill/DidHide) leave with it (Orca #22252).
+    expect(strings).toHaveLength(673)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

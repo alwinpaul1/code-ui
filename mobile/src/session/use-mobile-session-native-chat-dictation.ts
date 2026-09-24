@@ -97,6 +97,26 @@ export function useMobileSessionNativeChatDictation(
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
 
+  /**
+   * One policy for every dictation failure, whichever entry point sees it: `onError` for a
+   * dictation already underway, `start`'s rejection for the tap that never got one. Written twice,
+   * only the first knew about the setup sheet, so a desktop refusing the start with
+   * `voice_dictation_disabled` showed the user that code as a toast.
+   */
+  const reportDictationFailure = useCallback(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
+      if (isDictationSetupRequiredError(message)) {
+        setShowDictationSetup(true)
+        return
+      }
+      triggerError()
+      showToast(message)
+    },
+    [setShowDictationSetup, showToast]
+  )
+
   // Chat dictation uses the phone recognizer so the words show up as they are
   // spoken. The desktop path is the fallback when the phone has no recognizer.
   const liveBaseTextRef = useRef('')
@@ -149,12 +169,7 @@ export function useMobileSessionNativeChatDictation(
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(err.message)
+      reportDictationFailure(err)
     }
   })
 
@@ -193,8 +208,7 @@ export function useMobileSessionNativeChatDictation(
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
-      triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      reportDictationFailure(err)
     })
   }, [
     activeHandle,
@@ -202,6 +216,7 @@ export function useMobileSessionNativeChatDictation(
     liveInputTerminalHandles,
     liveTranscription,
     nativeChatController,
+    reportDictationFailure,
     setInput,
     showNativeChatRef,
     triggerError,

@@ -414,7 +414,10 @@
             // `agentSessionPromptCancelSupported`, the host capability fact
             // threaded from the feedback-capabilities probe to the controller.
             // 2026-09-22: +1 for stopping a take when a call backgrounds the app.
-            "max": 303,
+            // 2026-09-24: +7 for Orca #22256's reportDictationFailure, the one
+            // policy both desktop-dictation failure paths now call, so a refused
+            // start opens the setup sheet instead of toasting the host's code.
+            "max": 310,
             "skipBlankLines": true,
             "skipComments": true
           }
