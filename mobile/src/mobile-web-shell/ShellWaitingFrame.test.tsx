@@ -24,7 +24,7 @@ vi.mock('react-native', () => ({
   },
   StyleSheet: {
     create: (styles: unknown) => styles,
-    absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
+    absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
   },
   Text: 'Text'
 }))
@@ -46,10 +46,15 @@ function cover(tree: ReactTestRenderer) {
   return tree.root.findAllByProps({ testID: 'mobile-web-shell-cover' })[0] ?? null
 }
 
+/** The cover's own style, the first of its style prop, without assuming anything else of it. */
+function coverBase(tree: ReactTestRenderer): unknown {
+  const style: unknown = cover(tree)?.props.style
+  return Array.isArray(style) ? style[0] : null
+}
+
 /** The colour the cover fills with, read out of its style prop rather than assumed of its shape. */
 function coverBackground(tree: ReactTestRenderer): unknown {
-  const style: unknown = cover(tree)?.props.style
-  const base: unknown = Array.isArray(style) ? style[0] : null
+  const base = coverBase(tree)
   return typeof base === 'object' && base !== null && 'backgroundColor' in base
     ? base.backgroundColor
     : null
@@ -66,6 +71,20 @@ describe('the frame the shell keeps over an unpainted page', () => {
     const background = coverBackground(render(true))
     expect(background).toBe(colors.bgBase)
     expect(background).not.toBe('#000000')
+  })
+
+  it('fills the whole page rather than a box around its label', () => {
+    // This fork's divergence: the cover spreads `StyleSheet.absoluteFill`, where upstream spreads
+    // `absoluteFillObject`, which RN 0.86.3 neither types nor exports. Whichever side names the
+    // other, the spread is of nothing, the cover shrinks to its label, and every other case here
+    // stays green.
+    expect(coverBase(render(true))).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0
+    })
   })
 
   it('never takes a touch, so a report that never lands leaves a usable page under it', () => {
