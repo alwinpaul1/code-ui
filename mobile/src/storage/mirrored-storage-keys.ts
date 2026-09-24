@@ -78,8 +78,10 @@ function note(key: string, value: string | null): void {
  * refused page write left this map holding a value no store had taken and the next `init` handed
  * the page exactly that. There is nothing to undo, because nothing is written until the answer.
  *
- * Returns the store's own promise, so a caller that has something to say about a refusal — the
- * durable send journal is the one — still hears it, and a caller that has not is unchanged.
+ * Rejects when the store refuses the write, so a caller that has something to say about a
+ * refusal — the durable send journal is the one — still hears it, and a caller that has not is
+ * unchanged. A write the store took and a read-back that then failed is not a refusal: the value
+ * is on disk, so the save resolves and the map takes the value that was written.
  */
 export function persistMirrored(key: string, value: string | null): Promise<void> {
   const write = value === null ? AsyncStorage.removeItem(key) : AsyncStorage.setItem(key, value)
@@ -87,11 +89,24 @@ export function persistMirrored(key: string, value: string | null): Promise<void
   // refusal is not always a rejection: the page's adapter resolves a `not-allowed` write and logs
   // it, so a page-closure writer that awaits with no catch does not raise an unhandled rejection
   // in the document. Reading back is what makes the note the store's answer instead of a guess.
-  return write
-    .then(() => AsyncStorage.getItem(key))
-    .then((stored) => {
-      note(key, stored)
-    })
+  return write.then(() =>
+    Promise.resolve(AsyncStorage.getItem(key)).then(
+      (stored) => {
+        note(key, stored)
+      },
+      (error: unknown) => {
+        // Only the device's AsyncStorage can get here (the page's adapter never rejects a read),
+        // and it refuses no write, so what it took is what was asked for. Failing the save instead
+        // tells the caller a stored value was lost: upstream reports "Message not sent" for a
+        // journal entry that is on disk. This fork's divergence; the test beside this module pins it.
+        console.warn('[mirrored-storage] read-back failed after an accepted write', {
+          key,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        note(key, value)
+      }
+    )
+  )
 }
 
 /**
