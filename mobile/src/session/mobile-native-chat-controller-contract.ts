@@ -1,5 +1,6 @@
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
+import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
@@ -185,6 +186,8 @@ export type MobileNativeChatController = {
   /** The peer-message rows on the agent's screen, one per row
    *  (mobile-terminal-peer-notices.ts). */
   nativeChatScreenPeerNotices: ScreenPeerRow[]
+  /** Photos Claude painted above a prompt it took (mobile-terminal-sent-photos.ts). */
+  nativeChatScreenSentPhotos: ScreenSentPhotos[]
   /** Whether this tab was launched with the prompt hook; null until a beacon lands. */
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */

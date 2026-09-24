@@ -1,0 +1,45 @@
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+  ▝▝ ▝▝    /private/tmp/claude-501/img-repro
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+[Image #1]
+
+❯ See this photo from the Claude app please
+
+⏺ Got the photo.
+
+[Image #1]
+  ⎿  [Image #1]
+
+❯ Two photos here, what do you think
+
+⏺ Seen both.
+
+❯ [Image #1] pasted in the terminal
+  ⎿  [Image #1]
+
+⏺ Pasted one seen.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ░░░░░░░░░░ 0% (1/200k) | img-repro | 1 CLAUDE.md | 4 rules | 6 MCPs
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

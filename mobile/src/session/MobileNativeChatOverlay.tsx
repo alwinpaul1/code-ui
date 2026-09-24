@@ -23,6 +23,8 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
+import { useScreenSentPhotos } from './use-screen-sent-photos'
+import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
@@ -37,6 +39,7 @@ const CLIPBOARD_POLL_MS = 3000
 const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
+const NO_SENT_PHOTOS: ScreenSentPhotos[] = []
 
 type Props = {
   controller: MobileNativeChatController
@@ -232,9 +235,16 @@ export function MobileNativeChatOverlay({
   // A message from a subagent or another session mostly never reaches the
   // transcript the phone reads; the agent's screen says one arrived, and
   // from whom, so that is drawn where it was seen (2026-09-20).
-  const folded = useScreenPeerNotices(
+  const foldedWithoutPhotos = useScreenPeerNotices(
     controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
     foldedWithoutPeers,
+    controller.nativeChatStreamScopeKey
+  )
+  // A photo from the Claude app never reaches the transcript the phone reads;
+  // Claude's own `[Image #N]` rows say it was there (2026-09-24).
+  const folded = useScreenSentPhotos(
+    controller.nativeChatScreenSentPhotos ?? NO_SENT_PHOTOS,
+    foldedWithoutPhotos,
     controller.nativeChatStreamScopeKey
   )
   // Witnessed messages are remembered with the phone's own sends, so they

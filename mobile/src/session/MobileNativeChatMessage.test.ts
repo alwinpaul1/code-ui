@@ -59,7 +59,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
+import { DESKTOP_PROMPT_IMAGE_REF, SENT_PHOTO_REF } from './mobile-desktop-prompt-images'
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'u1', role: 'user', blocks, timestamp: null, source: 'transcript' }
@@ -332,6 +332,44 @@ describe('MobileNativeChatMessage', () => {
         .filter((node) => node.props.onPress && node.props.accessibilityLabel !== 'Sent prompt')
     ).toHaveLength(0)
     expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  // 2026-09-24: a photo sent from the Claude app reached the phone as words
+  // alone. Claude's screen says it was there, and it is drawn as a chip that
+  // says so, in the theme in use, and opens nothing (there is no file to open).
+  it('draws a photo sent from the Claude app as a Photo chip, not tappable, in light and dark', () => {
+    const colors: unknown[] = []
+    for (const scheme of ['light', 'dark'] as const) {
+      const onOpenFile = vi.fn()
+      act(() => {
+        renderer?.unmount()
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatMessage, {
+              message: userMessage([
+                { type: 'image-ref', path: SENT_PHOTO_REF },
+                { type: 'text', text: 'See this photo from the Claude app please' }
+              ]),
+              onOpenFile
+            })
+          )
+        )
+      })
+      const tree = renderer!
+      expect(textIn(tree.root)).toContain('Photo')
+      expect(textIn(tree.root)).not.toContain('Image on Desktop')
+      const chip = tree.root.findAll((node) => node.props.accessibilityLabel === 'Photo. Preview unavailable.')
+      expect(chip.length).toBeGreaterThan(0)
+      expect(chip[0]!.props.disabled).toBe(true)
+      expect(onOpenFile).not.toHaveBeenCalled()
+      const label = tree.root.findAllByType('Text' as never).find((node) => textIn(node).includes('Photo'))!
+      const style = [label.props.style].flat(Infinity) as { color?: string }[]
+      colors.push(style.find((entry) => entry?.color)?.color)
+    }
+    expect(colors[0]).toBeDefined()
+    expect(colors[0]).not.toBe(colors[1])
   })
 
   it('labels a tool row with the target path instead of raw input JSON', () => {

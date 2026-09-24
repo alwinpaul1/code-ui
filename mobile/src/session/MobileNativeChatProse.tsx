@@ -2,7 +2,7 @@ import { Pressable, Text } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
-import { isDesktopImageRef } from './mobile-desktop-prompt-images'
+import { SENT_PHOTO_REF, isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
 import { TEXT_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -57,6 +57,8 @@ export function Prose({
     // bytes available on the phone; don't expose an action that only produces
     // a path error. A real URI above still wins.
     const desktopPaste = isDesktopImageRef(block)
+    // A photo from the Claude app, known only from Claude's `[Image #N]` row.
+    const label = block.path === SENT_PHOTO_REF ? 'Photo' : 'Image on Desktop'
     const hostPath = block.path
     return (
       <Pressable
@@ -64,13 +66,13 @@ export function Prose({
         disabled={desktopPaste}
         accessibilityRole={desktopPaste ? 'image' : 'button'}
         accessibilityLabel={
-          desktopPaste ? 'Image on Desktop. Preview unavailable.' : (block.alt ?? 'Attached image')
+          desktopPaste ? `${label}. Preview unavailable.` : (block.alt ?? 'Attached image')
         }
         style={styles.imageChip}
       >
         <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
         <Text style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]}>
-          {desktopPaste ? 'Image on Desktop' : 'Image'}
+          {desktopPaste ? label : 'Image'}
         </Text>
       </Pressable>
     )

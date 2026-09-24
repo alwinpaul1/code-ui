@@ -12,6 +12,7 @@ import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
+import { sentPhotosFromScreen, type ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import { taskCompletionsFromScreen } from './mobile-terminal-task-completions'
 import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
@@ -45,6 +46,9 @@ export function useMobileTerminalHudObservation(args: {
   queuedMessages: string[]
   /** Prompts the agent has already accepted, read off its scrollback. */
   sentPrompts: string[]
+  /** Photos Claude painted above an accepted prompt, which the transcript
+   *  the phone reads has lost (`mobile-terminal-sent-photos.ts`). */
+  sentPhotos: ScreenSentPhotos[]
   /** Background-task completions the agent has stated on its scrollback,
    *  as this read saw them (`mobile-terminal-task-completions.ts`). */
   taskCompletions: ScreenTaskCompletion[]
@@ -65,6 +69,7 @@ export function useMobileTerminalHudObservation(args: {
   const [permissionDismissed, setPermissionDismissed] = useState(false)
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
+  const [sentPhotos, setSentPhotos] = useState<ScreenSentPhotos[]>([])
   const [taskCompletions, setTaskCompletions] = useState<ScreenTaskCompletion[]>([])
   const [peerNotices, setPeerNotices] = useState<ScreenPeerRow[]>([])
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
@@ -153,6 +158,8 @@ export function useMobileTerminalHudObservation(args: {
         setTaskCompletions((current) =>
           JSON.stringify(current) === JSON.stringify(completions) ? current : completions
         )
+        const photos = agent === 'claude' || agent === 'openclaude' ? sentPhotosFromScreen(lines) : []
+        setSentPhotos((current) => (JSON.stringify(current) === JSON.stringify(photos) ? current : photos))
         const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines) : []
         setPeerNotices((current) => (JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
@@ -228,6 +235,7 @@ export function useMobileTerminalHudObservation(args: {
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
+    sentPhotos: enabled && queueScopeRef.current === handleKey ? sentPhotos : [],
     taskCompletions: enabled && queueScopeRef.current === handleKey ? taskCompletions : [],
     peerNotices: enabled && queueScopeRef.current === handleKey ? peerNotices : [],
     spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,

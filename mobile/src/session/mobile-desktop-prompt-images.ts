@@ -16,6 +16,14 @@ const IMAGE_PROMPT_MARKERS = /[^\S\r\n]*\[Image #\d+\]/g
 export const DESKTOP_PROMPT_IMAGE_REF = 'desktop-image'
 
 /**
+ * The `path` of an image block standing in for a photo sent from the Claude
+ * app. Its bytes reach Claude Code inline and Orca's reader drops them, so the
+ * phone knows only that Claude painted `[Image #N]` for it
+ * (mobile-terminal-sent-photos.ts). Drawn as a "Photo" chip, never opened.
+ */
+export const SENT_PHOTO_REF = 'sent-photo'
+
+/**
  * Keep a desktop-pasted image VISIBLE in the prompt the phone draws, as a
  * chip rather than the picture itself.
  *
@@ -55,5 +63,9 @@ export function isDesktopImageRef(block: NativeChatImageRefBlock): boolean {
     return false
   }
   const path = block.path ?? ''
-  return path === DESKTOP_PROMPT_IMAGE_REF || splitOrcaPastedImagePaths(path).paths.length > 0
+  return (
+    path === DESKTOP_PROMPT_IMAGE_REF ||
+    path === SENT_PHOTO_REF ||
+    splitOrcaPastedImagePaths(path).paths.length > 0
+  )
 }

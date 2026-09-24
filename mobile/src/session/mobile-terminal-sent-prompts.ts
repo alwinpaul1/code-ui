@@ -64,7 +64,13 @@ function endsCut(text: string): boolean {
 }
 
 export function sentPromptsFromScreen(screen: readonly string[]): string[] {
-  const prompts: string[] = []
+  return sentPromptRowsFromScreen(screen).map((row) => row.text)
+}
+
+/** The same prompts, with the screen row each was read from, for readers that
+ *  look at what Claude painted around a prompt (mobile-terminal-sent-photos.ts). */
+export function sentPromptRowsFromScreen(screen: readonly string[]): { index: number; text: string }[] {
+  const prompts: { index: number; text: string }[] = []
   const limit = composerIndex(screen)
   let index = 0
   while (index < limit) {
@@ -107,7 +113,7 @@ export function sentPromptsFromScreen(screen: readonly string[]): string[] {
     // supersedes it when it lands.
     const text = (head[1] ?? '').trim()
     if (text.length > 0 && !LOCAL_COMMAND.test(text) && !HARNESS_NOTICE.test(text)) {
-      prompts.push(text)
+      prompts.push({ index, text })
     }
     index += 1
   }
