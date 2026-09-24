@@ -6,6 +6,7 @@ import {
   isTerminalLiveCursorRepositionBytes
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
+import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
 
 export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'allow-raw' }
@@ -99,7 +100,7 @@ export function useTerminalLiveAccessoryInputCommit({
           // Why: accessory buttons do not emit native TextInput edits, so the
           // field is edited here and the mirror diff syncs the PTY echo.
           setLiveInputCapture(editedText)
-          liveInputRef.current?.setNativeProps({ text: editedText })
+          writeTerminalLiveInputText(liveInputRef, editedText)
           // Preserve undefined so Android's heuristic hold still settles on its timer.
           const sent = await applyLiveInputMirror(
             activeHandle,
