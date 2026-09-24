@@ -86,14 +86,10 @@ describe('the chat list declares what its header depends on', () => {
     )
 
     // Everything the header reads that is not `messages` has to be in the
-    // marker, or that one prop silently stops repainting the row.
-    for (const prop of [
-      'agentStatus',
-      'backgroundTaskReport',
-      'hostBackgroundTasks',
-      'queuedMessages',
-      'turnActivity'
-    ]) {
+    // marker, or that one prop silently stops repainting the row. The
+    // running-tasks count left the header for the status line above the
+    // composer on 2026-09-24; it reads a context, which reaches it anyway.
+    for (const prop of ['queuedMessages', 'turnActivity']) {
       expect(headerProps).toContain(prop)
       expect(markerBlock).toContain(prop)
     }

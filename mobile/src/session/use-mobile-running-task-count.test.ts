@@ -2,11 +2,11 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
-import { useMobileRunningTaskCount } from './use-mobile-running-task-count'
+import { useMobileRunningTasks } from './use-mobile-running-task-count'
 
 let latest = -1
 function Probe({ roster }: { roster: AgentSessionBackgroundTaskState | null }) {
-  latest = useMobileRunningTaskCount({ messages: [], hostBackgroundTasks: roster })
+  latest = useMobileRunningTasks({ messages: [], hostBackgroundTasks: roster }).length
   return null
 }
 
@@ -19,7 +19,7 @@ function roster(
 // 2026-09-15 regression review: this hook feeds the running-tasks number the
 // user reads, and nothing in the repo tested it — including when the agent
 // filter was added to its host-roster branch.
-describe('the running-tasks number under the last message', () => {
+describe('the running-tasks number on the status line', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
     act(() => renderer?.unmount())

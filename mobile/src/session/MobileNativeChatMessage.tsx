@@ -27,7 +27,7 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
-import { ToolRun } from './MobileNativeChatToolRun'
+import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -391,7 +391,7 @@ function MobileNativeChatMessageImpl({
                 ))}
               </View>
             ) : showToolRun ? (
-              <ToolRun
+              <MobileNativeChatToolSegment
                 // Why: a global toggle intentionally resets all per-run/per-line
                 // overrides in one remount, avoiding an effect-driven second render.
                 // Focus view is such a toggle: switching it folds every run back.

@@ -13,10 +13,10 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
-// The indicator animates through reanimated's native module; the row under
-// test only needs to know whether it rendered.
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'MobileAgentWorkingIndicator'
+// The status line breathes through Animated; the row under test only needs
+// to know whether it rendered.
+vi.mock('./MobileNativeChatStatusLine', () => ({
+  MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
 }))
 vi.mock('lucide-react-native', () => ({
   ChevronsDownUp: 'ChevronsDownUp',

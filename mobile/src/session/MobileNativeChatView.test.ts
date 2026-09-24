@@ -69,6 +69,9 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./MobileBackgroundTasksSheet', () => ({
   MobileBackgroundTasksSheet: 'BackgroundTasksSheet'
 }))
+vi.mock('./MobileNativeChatAgentRunSheet', () => ({
+  MobileNativeChatAgentRunSheet: 'AgentRunSheet'
+}))
 // The Rewind confirm sheet reaches the same drawer; its rows are covered in
 // MobileNativeChatView-rewind.test.ts.
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
@@ -78,9 +81,6 @@ vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentI
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
-vi.mock('./MobileAgentWorkingIndicator', () => ({
-  MobileAgentWorkingIndicator: 'WorkingIndicator'
-}))
 
 // Stand-in composer: exposes the view's `handleSend` through a pressable, which is
 // the only composer behaviour these banner tests exercise.
@@ -119,6 +119,7 @@ type Overrides = {
   question?: Parameters<typeof MobileNativeChatView>[0]['question']
   permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
+  spinner?: { verb: string; elapsed: string | null; thinking: string | null } | null
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -580,8 +581,9 @@ describe('MobileNativeChatView', () => {
       return (renderedRow(id) as { props: Record<string, unknown> }).props
     }
 
-    function workingIndicators(): ReactTestInstance[] {
-      return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
+    /** The status line above the composer, which says Working on the bridge lane. */
+    function workingLines(): ReactTestInstance[] {
+      return renderer!.root.findAll((node) => node.props?.testID === 'native-chat-status-line')
     }
 
     // Claude app, 2026-09-13: "Found the bug: …" kept its quote bar even though
@@ -641,7 +643,7 @@ describe('MobileNativeChatView', () => {
       // "Thinking" from the turn having produced nothing yet (Orca #19977).
       expect(props.turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
       expect(props.activeTurnIsWorking).toBe(true)
-      expect(workingIndicators()).toHaveLength(0)
+      expect(workingLines()).toHaveLength(0)
     })
 
     it('says Thinking only when the journal says the live turn is reasoning', async () => {
@@ -670,14 +672,14 @@ describe('MobileNativeChatView', () => {
       expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
     })
 
-    it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
+    it('keeps the bridge lane on the status line above the composer, with no turn status', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(false)
       expect(props.turnStatus).toBeNull()
       expect(props.activeTurnIsWorking).toBe(false)
-      expect(workingIndicators()).toHaveLength(1)
+      expect(workingLines()).toHaveLength(1)
     })
 
     it('settles the finished turn to a tappable duration', async () => {
@@ -889,41 +891,3 @@ function headerChild(
   act(() => rendered.unmount())
   return { props }
 }
-
-it('counts a running background task under the last message, from the unfiltered transcript', async () => {
-  let instance!: ReturnType<typeof create>
-  const messages: NativeChatMessage[] = [
-    {
-      id: 'a1',
-      role: 'assistant',
-      timestamp: 1_000,
-      source: 'transcript',
-      blocks: [
-        {
-          type: 'tool-call',
-          name: 'Bash',
-          input: { command: 'pnpm build', description: 'Build the APK', run_in_background: true }
-        }
-      ]
-    },
-    {
-      id: 'r1',
-      role: 'user',
-      timestamp: 1_100,
-      source: 'transcript',
-      blocks: [
-        {
-          type: 'tool-result',
-          output:
-            'Command running in background with ID: bpz1skord. Output is being written to: /private/tmp/tasks/bpz1skord.output. You will be notified when it completes.'
-        }
-      ]
-    }
-  ]
-  await act(async () => {
-    // `folded` drops the harness turns; the count must come off `messages`.
-    instance = create(chatViewElement({ messages, folded: [] }))
-  })
-  expect(headerChild(instance, 'runningCount').props.runningCount).toBe(1)
-  await act(async () => instance.unmount())
-})

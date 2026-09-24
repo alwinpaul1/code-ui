@@ -1,3 +1,4 @@
+import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type {
@@ -66,6 +67,8 @@ export type MobileNativeChatViewProps = {
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   /** Stops one named background task; omitted when the host accepts no stop. */
   onStopBackgroundTask?: (taskId: string) => void
+  /** Claude Code's spinner line as its screen paints it, for the status line. */
+  spinner?: ClaudeSpinner | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated

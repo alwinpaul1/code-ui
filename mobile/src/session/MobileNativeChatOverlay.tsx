@@ -318,6 +318,7 @@ export function MobileNativeChatOverlay({
         agentStatus={controller.nativeChatAgentStatus}
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
+        spinner={controller.nativeChatSpinner ?? null}
         onStopBackgroundTask={
           controller.nativeChatBackgroundTasks?.supportsTaskStop === true
             ? stopBackgroundTask

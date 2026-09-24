@@ -2,16 +2,18 @@ import { Pressable, View } from 'react-native'
 import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
+import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
+import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ChatViewStyles } from './mobile-native-chat-view-styles'
 
-/** Chrome row above the composer: the working indicator and the global
- *  tool-calls expand/collapse toggle on the left, Stop in the far corner, and
+/** Chrome row above the composer: the status line (what the agent is doing,
+ *  how many tasks run) and the global tool-calls toggle on the left, Stop in the far corner, and
  *  the send-failure banner beneath. */
 export function MobileNativeChatChromeRow({
   agentWorking,
   canStop,
   showWorkingIndicator = true,
+  spinner = null,
   onStop,
   toolsExpanded,
   onToggleTools,
@@ -27,6 +29,8 @@ export function MobileNativeChatChromeRow({
   /** False on the structured lane, whose per-turn status row already says the
    *  agent is working — a second static row would report it twice. */
   showWorkingIndicator?: boolean
+  /** The agent's own spinner line, read off its screen, when one is up. */
+  spinner?: ClaudeSpinner | null
   onStop?: () => void
   toolsExpanded: boolean
   onToggleTools: () => void
@@ -40,7 +44,7 @@ export function MobileNativeChatChromeRow({
           (see the dock in MobileNativeChatView); the toggle and Stop keep theirs. */}
       <View style={styles.chromeRow} pointerEvents="box-none">
         <View style={styles.chromeLeft} pointerEvents="box-none">
-          {agentWorking && showWorkingIndicator ? <MobileAgentWorkingIndicator /> : null}
+          <MobileNativeChatStatusLine working={agentWorking === true && showWorkingIndicator} spinner={spinner} />
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
             onPress={onToggleTools}

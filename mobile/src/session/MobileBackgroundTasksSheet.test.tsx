@@ -6,7 +6,6 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
-import { MobileBackgroundTasksRow } from './MobileBackgroundTasksRow'
 import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
@@ -269,46 +268,6 @@ describe('the background tasks sheet', () => {
     expect(dark.colors).toContain(darkColors.danger)
     expect(dark.colors).not.toContain(lightColors.text)
     expect(light.colors).not.toContain(darkColors.text)
-  })
-})
-
-describe('the running tasks row', () => {
-  let renderer: ReactTestRenderer | null = null
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  async function renderRow(runningCount: number, scheme: 'light' | 'dark'): Promise<Rendered> {
-    await act(async () => {
-      renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(MobileBackgroundTasksRow, { runningCount, onPress: () => {} })
-        )
-      )
-    })
-    return readTree(renderer!)
-  }
-
-  it('says "1 running task" for one and "2 running tasks" for two', async () => {
-    expect((await renderRow(1, 'light')).texts).toContain('1 running task')
-    act(() => renderer?.unmount())
-    renderer = null
-    expect((await renderRow(2, 'light')).texts).toContain('2 running tasks')
-  })
-
-  it('stays away entirely when nothing is running, as on a Codex tab', async () => {
-    expect((await renderRow(0, 'light')).texts).toEqual([])
-  })
-
-  it('uses the accent of whichever theme is on', async () => {
-    expect((await renderRow(1, 'light')).colors).toContain(lightColors.accentText)
-    act(() => renderer?.unmount())
-    renderer = null
-    expect((await renderRow(1, 'dark')).colors).toContain(darkColors.accentText)
   })
 })
 

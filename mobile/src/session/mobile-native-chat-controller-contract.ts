@@ -1,3 +1,4 @@
+import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
@@ -197,6 +198,9 @@ export type MobileNativeChatController = {
   nativeChatPermissionMode: TerminalPermissionMode | null
   /** Codex collaboration mode (Default / Plan) from its footer, or null. */
   nativeChatAgentMode: TerminalAgentMode | null
+  /** Claude Code's spinner line off the screen, for the status line; null on
+   *  the structured lane and when no spinner is painted. */
+  nativeChatSpinner?: ClaudeSpinner | null
   /** Re-read the terminal screen now (after a Shift+Tab, so the mode pill follows). */
   refreshNativeChatHud: () => Promise<TerminalHudObservation | null>
 }

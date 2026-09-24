@@ -16,6 +16,7 @@ import { taskCompletionsFromScreen } from './mobile-terminal-task-completions'
 import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
+import { parseClaudeSpinnerLine, sameSpinner, type ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 const HUD_POLL_MS = 5_000
@@ -50,6 +51,8 @@ export function useMobileTerminalHudObservation(args: {
   /** The peer-message rows on its scrollback, one per row, as this read saw
    *  them (`mobile-terminal-peer-notices.ts`). */
   peerNotices: ScreenPeerRow[]
+  /** Claude Code's spinner line as this read saw it, or null when none is up. */
+  spinner: ClaudeSpinner | null
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -64,6 +67,7 @@ export function useMobileTerminalHudObservation(args: {
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [taskCompletions, setTaskCompletions] = useState<ScreenTaskCompletion[]>([])
   const [peerNotices, setPeerNotices] = useState<ScreenPeerRow[]>([])
+  const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
@@ -73,6 +77,7 @@ export function useMobileTerminalHudObservation(args: {
     setPermissionDismissed(false)
     setQueuedMessages((current) => (current.length ? [] : current))
     setObservation(null)
+    setSpinner(null)
     setDialogOptions(null)
     setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
@@ -150,6 +155,8 @@ export function useMobileTerminalHudObservation(args: {
         )
         const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines) : []
         setPeerNotices((current) => (JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
+        const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
+        setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
         // The screen parser names only Claude's Bash dialog, so tracking
         // dismissal by it alone meant an Edit or MCP approval was never seen
@@ -223,6 +230,7 @@ export function useMobileTerminalHudObservation(args: {
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     taskCompletions: enabled && queueScopeRef.current === handleKey ? taskCompletions : [],
     peerNotices: enabled && queueScopeRef.current === handleKey ? peerNotices : [],
+    spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,
     permissionDismissed
   }
 }

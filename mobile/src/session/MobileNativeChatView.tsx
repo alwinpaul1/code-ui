@@ -38,7 +38,7 @@ import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
-import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
+import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { composerPlaceholder, useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
 import {
@@ -67,6 +67,7 @@ export function MobileNativeChatView({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopBackgroundTask,
+  spinner = null,
   onStop,
   streaming,
   hasMore,
@@ -138,7 +139,6 @@ export function MobileNativeChatView({
   // Focus view is a device preference (Settings → Chat UI); the store notifies,
   // so a toggle made while this chat was open lands on its rows at once.
   const focusView = useMobileChatFocusView()
-  const [backgroundTasksOpen, setBackgroundTasksOpen] = useState(false)
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
@@ -302,6 +302,12 @@ export function MobileNativeChatView({
   const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
   return (
+    <MobileNativeChatTasksProvider
+      messages={messages} agent={agent} agentStatus={agentStatus}
+      backgroundTaskReport={backgroundTaskReport} hostBackgroundTasks={hostBackgroundTasks}
+      agentWorking={agentWorking === true}
+      onStopTask={onStopBackgroundTask}
+    >
     <View style={styles.root} onLayout={onRootLayout}>
       {showLoading ? (
         <View style={styles.center}>
@@ -362,18 +368,13 @@ export function MobileNativeChatView({
             ListHeaderComponent={
               <>
               <MobileNativeChatListHeader
-                messages={messages}
                 agent={agent}
-                agentStatus={agentStatus}
-                backgroundTaskReport={backgroundTaskReport}
-                hostBackgroundTasks={hostBackgroundTasks}
                 queuedMessages={queuedMessages}
                 onEditQueue={onEditQueue}
                 onSendQueueNow={onSendQueueNow}
                 agentWorking={agentWorking === true}
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
-                onOpenBackgroundTasks={() => setBackgroundTasksOpen(true)}
               />
               {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
               <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
@@ -396,16 +397,6 @@ export function MobileNativeChatView({
           <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}
-      <MobileBackgroundTasksSheet
-        visible={backgroundTasksOpen}
-        messages={messages}
-        agent={agent}
-        agentStatus={agentStatus ?? null}
-        backgroundTaskReport={backgroundTaskReport}
-        hostBackgroundTasks={hostBackgroundTasks}
-        onStopTask={onStopBackgroundTask}
-        onClose={() => setBackgroundTasksOpen(false)}
-      />
       <MobileNativeChatQueueEditor editor={queueEditor} />
       {rewindSheet}
       <View
@@ -437,6 +428,7 @@ export function MobileNativeChatView({
         // The structured lane says "Working for N" per turn; a second, static
         // three-dot row under it would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
+        spinner={spinner}
         onStop={onStop}
         toolsExpanded={toolsExpanded}
         onToggleTools={() => setToolsExpanded((v) => !v)}
@@ -487,5 +479,6 @@ export function MobileNativeChatView({
       />
       </View>
     </View>
+    </MobileNativeChatTasksProvider>
   )
 }

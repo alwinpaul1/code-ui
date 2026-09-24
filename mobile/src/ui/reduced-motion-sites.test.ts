@@ -14,7 +14,7 @@ const MOTION_SITES = [
   'components/AgentStateDot.tsx',
   'components/mounted-bottom-drawer.tsx',
   'components/RightDrawer.tsx',
-  'session/MobileAgentWorkingIndicator.tsx',
+  'session/MobileNativeChatAgentRun.tsx',
   'session/MobileBackgroundTasksPulse.tsx',
   'session/MobileNativeChatToolPulsingText.tsx',
   'session/MobileNativeChatTurnStatus.tsx',

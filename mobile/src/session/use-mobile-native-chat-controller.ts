@@ -184,7 +184,7 @@ export function useMobileNativeChatController(
     queuedMessages: visibleQueuedMessages,
     sentPrompts: screenSentPrompts,
     taskCompletions: screenTaskCompletions,
-    peerNotices: screenPeerNotices
+    peerNotices: screenPeerNotices, spinner: screenSpinner
   } = useMobileNativeChatHud({
     client,
     enabled: showNativeChat && !activeChatStructured && connState === 'connected',
@@ -581,6 +581,6 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
     nativeChatContextWindow: liveHud.context, nativeChatLiveModel: { model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
-    refreshNativeChatHud: refreshTerminalHud
+    refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }

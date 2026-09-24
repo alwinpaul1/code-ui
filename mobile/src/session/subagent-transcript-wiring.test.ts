@@ -46,8 +46,13 @@ describe('the subagent transcript viewer is reachable from the session screen', 
   })
 
   it('is told which agent owns the tab, or every row stays a plain row', () => {
-    const sheets = jsxElements(parse('MobileNativeChatView.tsx'), 'MobileBackgroundTasksSheet')
+    const sheets = jsxElements(parse('MobileNativeChatTasksProvider.tsx'), 'MobileBackgroundTasksSheet')
     expect(sheets).toHaveLength(1)
     expect(sheets[0]).toContain('agent')
+    // The provider owns the sheet and the conversation's agent rows; the chat
+    // has to hand it the agent too, or neither can open a transcript.
+    const providers = jsxElements(parse('MobileNativeChatView.tsx'), 'MobileNativeChatTasksProvider')
+    expect(providers).toHaveLength(1)
+    expect(providers[0]).toEqual(expect.arrayContaining(['agent', 'agentStatus', 'messages']))
   })
 })
