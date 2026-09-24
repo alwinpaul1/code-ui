@@ -1,6 +1,10 @@
 import { createRichMarkdownEditorDocument } from './create-rich-markdown-editor-document'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './document-markup'
-import { richMarkdownEditorStyle } from './document-style'
+import {
+  richMarkdownEditorStyle,
+  richMarkdownEditorThemeVariables,
+  type RichMarkdownEditorTheme
+} from './document-style'
 import { scopeDocumentStyleToHost } from '../../terminal/terminal-webview-html/document-style-scoping'
 import type { RichMarkdownEditorApi, RichMarkdownUrlPromptKind } from './document-host-seams'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
@@ -47,17 +51,29 @@ export const RICH_MARKDOWN_HOST_CLASS = 'orca-rich-markdown-document-host'
  * Left in the head after unmount, like the terminal's: it matches nothing once the host has
  * dropped the class, and the next mount wants it back.
  */
-function ensureDocumentStyle() {
+function ensureDocumentStyle(theme: RichMarkdownEditorTheme) {
   if (document.getElementById(STYLE_ELEMENT_ID)) {
     return
   }
   const style = document.createElement('style')
   style.id = STYLE_ELEMENT_ID
   style.textContent = scopeDocumentStyleToHost(
-    richMarkdownEditorStyle(),
+    richMarkdownEditorStyle(theme),
     `.${RICH_MARKDOWN_HOST_CLASS}`
   )
   document.head.appendChild(style)
+}
+
+/**
+ * The theme in use, on the host itself. The sheet in the head is written once
+ * per page, in whichever theme the first editor opened in; the host's own
+ * variables win over it, so every editor draws, and keeps drawing across a
+ * switch, in the theme the app is in now.
+ */
+export function applyRichMarkdownWebDocumentTheme(host: HTMLElement, theme: RichMarkdownEditorTheme) {
+  for (const [name, value] of richMarkdownEditorThemeVariables(theme)) {
+    host.style.setProperty(name, value)
+  }
 }
 
 /**
@@ -68,9 +84,11 @@ function ensureDocumentStyle() {
  */
 export function mountRichMarkdownWebDocument(
   host: HTMLElement,
-  hooks: RichMarkdownWebDocumentHooks
+  hooks: RichMarkdownWebDocumentHooks,
+  theme: RichMarkdownEditorTheme
 ): RichMarkdownWebDocument {
-  ensureDocumentStyle()
+  ensureDocumentStyle(theme)
+  applyRichMarkdownWebDocumentTheme(host, theme)
   host.classList.add(RICH_MARKDOWN_HOST_CLASS)
   host.innerHTML = RICH_MARKDOWN_EDITOR_MARKUP
   const started = startDocumentOrGiveTheHostBack(host, hooks)

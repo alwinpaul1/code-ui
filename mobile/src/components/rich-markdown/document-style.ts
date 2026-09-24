@@ -1,5 +1,27 @@
-import { colors } from '../../theme/mobile-theme'
+import type { ThemeColors, ThemeScheme } from '../../theme/tokens'
 import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+
+/** What the editor document is drawn in: the app's live theme. The upstream
+ *  editor read a fixed dark palette, so a phone set to Light opened a dark
+ *  editor in a light app (2026-09-24); light and dark are both required. */
+export type RichMarkdownEditorTheme = { colors: ThemeColors; scheme: ThemeScheme }
+
+/** The theme as the document's variables: the one list the stylesheet writes
+ *  when the document is built and a theme switch writes into the live one. */
+export function richMarkdownEditorThemeVariables({ colors, scheme }: RichMarkdownEditorTheme): [string, string][] {
+  return [
+    ['color-scheme', scheme],
+    ['--background', colors.bg],
+    ['--editor-surface', colors.bg],
+    ['--foreground', colors.text],
+    ['--muted-foreground', colors.textSecondary],
+    ['--muted', colors.bgRaised],
+    ['--border', colors.border],
+    ['--primary', colors.text],
+    ['--primary-foreground', colors.bg],
+    ['--accent-link', colors.accent]
+  ]
+}
 
 /**
  * The editor document's stylesheet: the theme variables and every rule that reads them.
@@ -14,18 +36,12 @@ import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
  * never zooms back, and `keyboard-occlusion.web.ts` reads that scale as "no keyboard" for the rest
  * of the session. One binding, so a floor that moved would move both halves together.
  */
-export function richMarkdownEditorStyle(): string {
+export function richMarkdownEditorStyle(theme: RichMarkdownEditorTheme): string {
+  const variables = richMarkdownEditorThemeVariables(theme)
+    .map(([name, value]) => `      ${name}: ${value};`)
+    .join('\n')
   return `    :root {
-      color-scheme: dark;
-      --background: ${colors.bgBase};
-      --editor-surface: ${colors.bgBase};
-      --foreground: ${colors.textPrimary};
-      --muted-foreground: ${colors.textSecondary};
-      --muted: ${colors.bgRaised};
-      --border: ${colors.borderSubtle};
-      --primary: ${colors.textPrimary};
-      --primary-foreground: ${colors.bgBase};
-      --accent-link: ${colors.accentBlue};
+${variables}
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       --font-sans: Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }

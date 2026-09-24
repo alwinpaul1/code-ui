@@ -17,7 +17,8 @@ import {
   Quote,
   Strikethrough
 } from 'lucide-react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import type { MobileRichMarkdownCommand } from './mobile-rich-markdown-editor-contract'
 
@@ -62,6 +63,8 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   editable: boolean
   onCommand: (command: MobileRichMarkdownCommand) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(createStyles)
   return (
     <View style={styles.toolbar}>
       <ScrollView
@@ -86,7 +89,7 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
                 !editable ? styles.toolbarButtonDisabled : null
               ]}
             >
-              <Icon size={15} color={editable ? colors.textPrimary : colors.textMuted} />
+              <Icon size={15} color={editable ? colors.text : colors.textMuted} />
             </Pressable>
           )
         })}
@@ -95,31 +98,33 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   )
 })
 
-const styles = StyleSheet.create({
-  toolbar: {
-    minHeight: 42,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  toolbarContent: {
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6
-  },
-  toolbarButton: {
-    minWidth: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xs
-  },
-  toolbarButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  toolbarButtonDisabled: {
-    opacity: 0.55
-  }
-})
+function createStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    toolbar: {
+      minHeight: 42,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.bgPanel
+    },
+    toolbarContent: {
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6
+    },
+    toolbarButton: {
+      minWidth: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.xs
+    },
+    toolbarButtonPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    toolbarButtonDisabled: {
+      opacity: 0.55
+    }
+  })
+}

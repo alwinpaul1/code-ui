@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { scopeDocumentStyleToHost } from '../../terminal/terminal-webview-html/document-style-scoping'
 import { richMarkdownEditorStyle } from './document-style'
+import { darkColors } from '../../theme/tokens'
+
+const DARK = { colors: darkColors, scheme: 'dark' as const }
 
 /**
  * The editor's sheet, held under the element the page mounts it in.
@@ -27,13 +30,13 @@ function selectorsOf(css: string): string[] {
 
 describe('the editor stylesheet on the page', () => {
   it('reaches nothing outside the host', () => {
-    const selectors = selectorsOf(scopeDocumentStyleToHost(richMarkdownEditorStyle(), PREFIX))
+    const selectors = selectorsOf(scopeDocumentStyleToHost(richMarkdownEditorStyle(DARK), PREFIX))
     expect(selectors.length).toBeGreaterThan(40)
     expect(selectors.filter((one) => one !== PREFIX && !one.startsWith(`${PREFIX} `))).toEqual([])
   })
 
   it('moves the document’s own rules onto the host rather than dropping them', () => {
-    const scoped = scopeDocumentStyleToHost(richMarkdownEditorStyle(), PREFIX)
+    const scoped = scopeDocumentStyleToHost(richMarkdownEditorStyle(DARK), PREFIX)
     // The variables every other rule reads. Dropped, the sheet would render unstyled while every
     // selector in it still looked correctly scoped.
     expect(scoped).toContain('--foreground:')

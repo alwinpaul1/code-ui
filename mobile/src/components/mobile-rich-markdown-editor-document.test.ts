@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { buildMobileRichMarkdownEditorHtml } from './mobile-rich-markdown-editor-html'
 import { RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT } from './rich-markdown-editor-document-script.generated'
+import { darkColors } from '../theme/tokens'
+
+const DARK = { colors: darkColors, scheme: 'dark' as const }
 
 /**
  * Everything of the WebView's page that is not the document itself, pinned byte for byte.
@@ -45,13 +48,13 @@ function documentShell(html: string): string {
 
 describe('mobile rich markdown editor document', () => {
   it('reproduces the page around the document byte for byte', () => {
-    const shell = documentShell(buildMobileRichMarkdownEditorHtml())
+    const shell = documentShell(buildMobileRichMarkdownEditorHtml(DARK))
     expect(Buffer.byteLength(shell, 'utf8')).toBe(DOCUMENT_SHELL_BYTES)
     expect(createHash('sha256').update(shell, 'utf8').digest('hex')).toBe(DOCUMENT_SHELL_SHA256)
   })
 
   it('carries the bundled document, whole, as its only script', () => {
-    const html = buildMobileRichMarkdownEditorHtml()
+    const html = buildMobileRichMarkdownEditorHtml(DARK)
     expect(html).toContain(`${SCRIPT_OPEN}${RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT}${SCRIPT_CLOSE}`)
     // One script, so the digest above is over the whole of what is not the document.
     expect(html.split('<script>')).toHaveLength(2)

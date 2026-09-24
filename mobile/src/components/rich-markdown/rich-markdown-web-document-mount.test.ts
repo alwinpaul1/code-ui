@@ -2,10 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RICH_MARKDOWN_HOST_CLASS,
+  applyRichMarkdownWebDocumentTheme,
   mountRichMarkdownWebDocument,
   type RichMarkdownWebDocument
 } from './rich-markdown-web-document-mount'
 import type { MobileRichMarkdownEditorMessage } from '../mobile-rich-markdown-editor-contract'
+import { darkColors, lightColors } from '../../theme/tokens'
+
+const DARK = { colors: darkColors, scheme: 'dark' as const }
 
 /**
  * The page's mount of the editor document, as a unit.
@@ -24,10 +28,14 @@ const mounted: RichMarkdownWebDocument[] = []
 function mount(posts: MobileRichMarkdownEditorMessage[] = [], url: string | null = null) {
   const host = document.createElement('div')
   document.body.appendChild(host)
-  const live = mountRichMarkdownWebDocument(host, {
-    postToHost: (message) => posts.push(message),
-    promptForUrl: () => Promise.resolve(url)
-  })
+  const live = mountRichMarkdownWebDocument(
+    host,
+    {
+      postToHost: (message) => posts.push(message),
+      promptForUrl: () => Promise.resolve(url)
+    },
+    DARK
+  )
   mounted.push(live)
   return { host, live, posts }
 }
@@ -47,6 +55,18 @@ afterEach(() => {
 })
 
 describe('the editor document mounted in the page', () => {
+  // 2026-09-24: the page editor read the static dark palette. The page's one
+  // sheet is written in whichever theme the first editor opened in, so each
+  // host carries the theme in use itself, and follows a switch.
+  it('draws in the theme in use, and follows a switch while open', () => {
+    const { host } = mount()
+    expect(host.style.getPropertyValue('--background')).toBe(darkColors.bg)
+    applyRichMarkdownWebDocumentTheme(host, { colors: lightColors, scheme: 'light' })
+    expect(host.style.getPropertyValue('--background')).toBe(lightColors.bg)
+    expect(host.style.getPropertyValue('--foreground')).toBe(lightColors.text)
+    expect(host.style.getPropertyValue('color-scheme')).toBe('light')
+  })
+
   it('plants the markup in the host and reports itself ready through the seam', () => {
     const { host, posts } = mount()
     expect(surfaceIn(host)?.getAttribute('contenteditable')).toBe('true')
@@ -115,10 +135,14 @@ describe('the editor document mounted in the page', () => {
     vi.spyOn(host, 'querySelector').mockReturnValue(null)
 
     expect(() =>
-      mountRichMarkdownWebDocument(host, {
-        postToHost: () => {},
-        promptForUrl: () => Promise.resolve(null)
-      })
+      mountRichMarkdownWebDocument(
+        host,
+        {
+          postToHost: () => {},
+          promptForUrl: () => Promise.resolve(null)
+        },
+        DARK
+      )
     ).toThrow()
     expect(host.innerHTML).toBe('')
     expect(host.classList.contains(RICH_MARKDOWN_HOST_CLASS)).toBe(false)
@@ -139,7 +163,7 @@ describe('the editor document mounted in the page', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const promptForUrl = vi.fn(() => Promise.resolve('https://example.com/a'))
-    const live = mountRichMarkdownWebDocument(host, { postToHost: () => {}, promptForUrl })
+    const live = mountRichMarkdownWebDocument(host, { postToHost: () => {}, promptForUrl }, DARK)
     mounted.push(live)
 
     await live.send.runCommand('image')

@@ -10,11 +10,12 @@ import {
   type ForwardedRef
 } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { openExternalLink } from '../platform/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import { TextInputModal } from './TextInputModal'
 import {
+  applyRichMarkdownWebDocumentTheme,
   mountRichMarkdownWebDocument,
   type RichMarkdownWebDocument
 } from './rich-markdown/rich-markdown-web-document-mount'
@@ -59,6 +60,10 @@ function MobileRichMarkdownEditorWebInner(
 ) {
   const hostRef = useRef<View>(null)
   const documentRef = useRef<RichMarkdownWebDocument | null>(null)
+  const theme = useTheme()
+  const styles = useThemedStyles(createStyles)
+  // Read by the mount, which runs once; the effect below carries later switches.
+  const themeRef = useRef(theme)
   // The document reports itself ready from inside the mount call, so the controller answers it —
   // setting the content and the editable flag — while the effect below is still on the line that
   // built the document and `documentRef` is null. Those are the calls this holds, replayed the
@@ -173,10 +178,14 @@ function MobileRichMarkdownEditorWebInner(
     if (!host) {
       return
     }
-    const live = mountRichMarkdownWebDocument(host, {
-      postToHost: (message) => receiveRef.current?.(message),
-      promptForUrl
-    })
+    const live = mountRichMarkdownWebDocument(
+      host,
+      {
+        postToHost: (message) => receiveRef.current?.(message),
+        promptForUrl
+      },
+      themeRef.current
+    )
     documentRef.current = live
     for (const call of beforeMountRef.current) {
       call(live.send)
@@ -194,6 +203,16 @@ function MobileRichMarkdownEditorWebInner(
     // re-running this would throw away a live document and the caret in it, and every callback
     // prop above changes identity on each render.
   }, [])
+
+  // A theme switch while the editor is open, written onto the live document's host.
+  useEffect(() => {
+    themeRef.current = theme
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
+    const host = hostRef.current as unknown as HTMLElement | null
+    if (host && documentRef.current) {
+      applyRichMarkdownWebDocumentTheme(host, theme)
+    }
+  }, [theme])
 
   return (
     <View style={styles.container}>
@@ -216,7 +235,9 @@ function MobileRichMarkdownEditorWebInner(
 export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorWebInner))
 
 // The native component's own frame, so the editor sits where the editor sat.
-const styles = StyleSheet.create({
-  container: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase },
-  host: { flex: 1, minHeight: 0, backgroundColor: colors.bgBase }
-})
+function createStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: { flex: 1, minHeight: 0, backgroundColor: colors.bg },
+    host: { flex: 1, minHeight: 0, backgroundColor: colors.bg }
+  })
+}

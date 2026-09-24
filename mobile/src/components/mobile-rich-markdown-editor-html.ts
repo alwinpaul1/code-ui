@@ -1,6 +1,10 @@
 import { RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT } from './rich-markdown-editor-document-script.generated'
 import { RICH_MARKDOWN_EDITOR_MARKUP } from './rich-markdown/document-markup'
-import { richMarkdownEditorStyle } from './rich-markdown/document-style'
+import {
+  richMarkdownEditorStyle,
+  richMarkdownEditorThemeVariables,
+  type RichMarkdownEditorTheme
+} from './rich-markdown/document-style'
 
 export { escapeInjectedJavaScriptString } from './mobile-rich-markdown-editor-script-string'
 
@@ -13,14 +17,14 @@ export { escapeInjectedJavaScriptString } from './mobile-rich-markdown-editor-sc
  * text that crosses into this document at runtime is the markdown the host injects, which
  * `escapeInjectedJavaScriptString` handles at the call.
  */
-export function buildMobileRichMarkdownEditorHtml(): string {
+export function buildMobileRichMarkdownEditorHtml(theme: RichMarkdownEditorTheme): string {
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
-${richMarkdownEditorStyle()}
+${richMarkdownEditorStyle(theme)}
   </style>
 </head>
 <body>
@@ -30,4 +34,14 @@ ${RICH_MARKDOWN_EDITOR_DOCUMENT_SCRIPT}
   </script>
 </body>
 </html>`
+}
+
+/** A theme switch written into the live document: the same variables the
+ *  stylesheet opened with, set on the root, so the editor never reloads and
+ *  keeps its caret. */
+export function buildRichMarkdownEditorThemeScript(theme: RichMarkdownEditorTheme): string {
+  const writes = richMarkdownEditorThemeVariables(theme)
+    .map(([name, value]) => `style.setProperty(${JSON.stringify(name)}, ${JSON.stringify(value)});`)
+    .join(' ')
+  return `(() => { const style = document.documentElement.style; ${writes} })();`
 }

@@ -3,6 +3,9 @@ import {
   buildMobileRichMarkdownEditorHtml,
   escapeInjectedJavaScriptString
 } from './mobile-rich-markdown-editor-html'
+import { darkColors } from '../theme/tokens'
+
+const DARK = { colors: darkColors, scheme: 'dark' as const }
 
 /**
  * The page the WebView loads, as a page.
@@ -15,7 +18,7 @@ import {
  * code it is about, which is where the readers of this file would look for them anyway.
  */
 function editorScript(): string {
-  const script = buildMobileRichMarkdownEditorHtml().match(/<script>([\s\S]*)<\/script>/)?.[1]
+  const script = buildMobileRichMarkdownEditorHtml(DARK).match(/<script>([\s\S]*)<\/script>/)?.[1]
   expect(script).toBeTruthy()
   return script ?? ''
 }
@@ -26,7 +29,7 @@ describe('mobile rich markdown editor HTML', () => {
   })
 
   it('carries the editable surface the document reaches for, once', () => {
-    const html = buildMobileRichMarkdownEditorHtml()
+    const html = buildMobileRichMarkdownEditorHtml(DARK)
     expect(html).toContain('<main id="editor" contenteditable="true"')
     expect(html.split('id="editor"')).toHaveLength(2)
   })
@@ -34,7 +37,7 @@ describe('mobile rich markdown editor HTML', () => {
   it('declares the theme variables its stylesheet reads', () => {
     // The document's colours are the app's own, interpolated when the page is built; a variable
     // the stylesheet uses and the `:root` block never declares renders as nothing at all.
-    const style = buildMobileRichMarkdownEditorHtml().match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
+    const style = buildMobileRichMarkdownEditorHtml(DARK).match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? ''
     const declared = new Set([...style.matchAll(/^\s*(--[a-z-]+):/gm)].map((match) => match[1]))
     const used = new Set([...style.matchAll(/var\((--[a-z-]+)\)/g)].map((match) => match[1]))
     expect([...used].filter((name) => !declared.has(name))).toEqual([])

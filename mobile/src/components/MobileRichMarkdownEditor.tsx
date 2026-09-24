@@ -2,15 +2,17 @@ import {
   forwardRef,
   memo,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
   type ForwardedRef
 } from 'react'
 import { Keyboard, StyleSheet, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
 import WebView, { type WebViewMessageEvent } from 'react-native-webview'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
 import type {
   MobileRichMarkdownCommand,
@@ -20,6 +22,7 @@ import type {
 import { useMobileRichMarkdownEditorController } from './use-mobile-rich-markdown-editor-controller'
 import {
   buildMobileRichMarkdownEditorHtml,
+  buildRichMarkdownEditorThemeScript,
   escapeInjectedJavaScriptString
 } from './mobile-rich-markdown-editor-html'
 
@@ -49,11 +52,24 @@ function MobileRichMarkdownEditorInner(
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
   const webViewRef = useRef<WebView>(null)
-  const html = useMemo(() => buildMobileRichMarkdownEditorHtml(), [])
+  const theme = useTheme()
+  const styles = useThemedStyles(createStyles)
+  // Built once, in the theme the editor opened in: a rebuilt document reloads
+  // and drops the caret. A later switch is written into the live one instead.
+  const [openedIn] = useState(() => ({ colors: theme.colors, scheme: theme.scheme }))
+  const html = useMemo(() => buildMobileRichMarkdownEditorHtml(openedIn), [openedIn])
 
   const inject = useCallback((script: string) => {
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`)
   }, [])
+  const themeRef = useRef(theme)
+  // Also run on every load, so a reloaded WebView cannot come back in the
+  // theme it first opened in.
+  const applyTheme = useCallback(() => inject(buildRichMarkdownEditorThemeScript(themeRef.current)), [inject])
+  useEffect(() => {
+    themeRef.current = theme
+    applyTheme()
+  }, [applyTheme, theme])
 
   const transport = useMemo(
     () => ({
@@ -140,6 +156,7 @@ function MobileRichMarkdownEditorInner(
         hideKeyboardAccessoryView
         keyboardDisplayRequiresUserAction={false}
         onMessage={handleWebViewMessage}
+        onLoadEnd={applyTheme}
         onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         style={styles.webView}
         scrollEnabled
@@ -154,15 +171,17 @@ function MobileRichMarkdownEditorInner(
 
 export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorInner))
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.bgBase
-  },
-  webView: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.bgBase
-  }
-})
+function createStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      minHeight: 0,
+      backgroundColor: colors.bg
+    },
+    webView: {
+      flex: 1,
+      minHeight: 0,
+      backgroundColor: colors.bg
+    }
+  })
+}
