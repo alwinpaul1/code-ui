@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sessionTabActivity } from './session-tab-activity'
+import { sessionTabActivity, tabDotStateAfterLeadTurn } from './session-tab-activity'
 
 const S1 = '77954fea-1013-4225-b187-a8b3162a04ce'
 const S2 = '8b19cb22-996c-40e5-a887-a5323a9845e1'
@@ -106,5 +106,23 @@ describe('what a tab pill shows about background shells', () => {
 
   it('shows plain working while the turn itself is still running', () => {
     expect(sessionTabActivity({ state: 'working' }, null, false, S1)).toBe('working')
+  })
+})
+
+// 2026-09-24, from the phone: the thesis tab's own turn had ended ("session:ok")
+// while its reviewer agents ran, and its pill kept the working spinner. The
+// desktop holds a Claude pane `working` for a live subagent with no monitoring
+// mode; the chat knows the lead's turn ended (claude-lead-turn-ended.ts), so
+// the pill shows the heartbeat the desktop uses for work left in the background.
+describe("the pill once the lead's own turn has ended", () => {
+  it('shows the background heartbeat, not the working spinner, while agents it launched still run', () => {
+    expect(tabDotStateAfterLeadTurn('working', true)).toBe('monitoring')
+  })
+
+  it('keeps the spinner while the lead is still working, and leaves every other state alone', () => {
+    expect(tabDotStateAfterLeadTurn('working', false)).toBe('working')
+    for (const state of ['idle', 'done', 'waiting', 'blocked', 'monitoring'] as const) {
+      expect(tabDotStateAfterLeadTurn(state, true)).toBe(state)
+    }
   })
 })

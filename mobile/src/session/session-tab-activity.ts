@@ -1,6 +1,7 @@
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { AgentHudBeacon } from './agent-hud-beacon'
 import { agentHudBeaconSpeaksFor } from './hud-beacon-fields'
+import type { AgentDotState } from '../worktree/agent-row-display'
 
 /**
  * What a tab pill says about its agent's work, for every tab in the strip,
@@ -56,3 +57,17 @@ export function sessionTabActivity(
   }
   return 'background'
 }
+
+/**
+ * The active tab's dot once the chat knows the lead's own turn has ended.
+ *
+ * Orca holds a Claude pane `working`, with no monitoring mode, for as long as a
+ * subagent or teammate it launched still runs, so the pill kept the working
+ * spinner under a turn that had ended (the thesis tab, 2026-09-24). What is
+ * left is work in the background, which the desktop draws as the monitoring
+ * heartbeat. Only the active tab knows: the ending is read from its transcript.
+ */
+export function tabDotStateAfterLeadTurn(state: AgentDotState, leadTurnEnded: boolean): AgentDotState {
+  return leadTurnEnded && state === 'working' ? 'monitoring' : state
+}
+

@@ -81,6 +81,8 @@ export type MobileNativeChatController = {
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
   nativeChatAgentWorking: boolean
+  /** Claude's own turn is over by its transcript, whatever the desktop's status says (claude-lead-turn-ended.ts). */
+  nativeChatLeadTurnEnded: boolean
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */
   nativeChatCanStop: boolean

@@ -18,7 +18,7 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
-import { sessionTabActivity } from './session-tab-activity'
+import { sessionTabActivity, tabDotStateAfterLeadTurn } from './session-tab-activity'
 import { AgentStateDot } from '../components/AgentStateDot'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { agentDotState } from '../worktree/agent-row-display'
@@ -281,6 +281,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                       handle={t.terminal}
                       status={t.agentStatus ?? null}
                       active={active}
+                      leadTurnEnded={active && controller.nativeChatController.nativeChatLeadTurnEnded}
                     />
                   ) : null}
                   {t.type === 'browser' && <Globe size={13} color={iconColor} strokeWidth={2.1} />}
@@ -350,11 +351,14 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
 function TabActivityBadge({
   handle,
   status,
-  active
+  active,
+  leadTurnEnded
 }: {
   handle: string | null
   status: AgentStatusEntry | null
   active: boolean
+  /** The active tab's chat says the lead's own turn is over. */
+  leadTurnEnded: boolean
 }) {
   const { isDark } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
@@ -364,7 +368,7 @@ function TabActivityBadge({
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)
-  const state = status ? agentDotState({ ...status, interrupted: false }, now) : 'idle'
+  const state = tabDotStateAfterLeadTurn(status ? agentDotState({ ...status, interrupted: false }, now) : 'idle', leadTurnEnded)
   if (state === 'idle' || (state === 'monitoring' && activity === null)) {
     return null
   }

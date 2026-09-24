@@ -162,9 +162,8 @@ export function useMobileNativeChatController(
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   // Orca's `working` outlives the lead's turn while a background agent runs,
   // and the transcript is what says that turn is over (claude-lead-turn-ended.ts).
-  const nativeChatStreamLive = activeChatStructured
-    ? structuredNativeChat.isWorking
-    : activeTabAgentWorking && !claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeSessionTab?.agentStatus)
+  const nativeChatLeadTurnEnded = claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeSessionTab?.agentStatus)
+  const nativeChatStreamLive = activeChatStructured ? structuredNativeChat.isWorking : activeTabAgentWorking && !nativeChatLeadTurnEnded
   const nativeChatAgentWorking =
     nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   const streamPreview = useMobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking)
@@ -536,6 +535,7 @@ export function useMobileNativeChatController(
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
     nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatAgentWorking,
+    nativeChatLeadTurnEnded,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
     nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
