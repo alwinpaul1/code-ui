@@ -85,6 +85,16 @@ const provisionalByNonce = new Map<string, string | null>()
  *  later turn cannot drag it. */
 const timedByNonce = new Map<string, number>()
 const TIMED_ANCHOR_OPEN_MS = 10 * 60_000
+/** How long before a send a row must be stamped to count as written before it.
+ *
+ *  Claude Code writes a thinking block or a tool call once it is complete, and
+ *  its stamp can lead the write by a moment: a thinking block and a call stamped
+ *  a fifth of a second before a send from the Claude app were written after the
+ *  enqueue, and the Claude app drew them below the message (session 967668df,
+ *  2026-09-23, "See this message to mahdi…"). A reply the reader saw before
+ *  sending is older than that ("All 9 tests pass…" was 1.6 s). The phone's own
+ *  sends allow the same second (mid-turn-written-before.ts). */
+const WRITTEN_BEFORE_SLACK_MS = 1000
 
 function rememberedAnchor(nonce: string): string | null | undefined {
   if (!anchorByNonce.has(nonce)) {
@@ -140,7 +150,7 @@ export function useDesktopPromptEchoes(
     if (timedByNonce.has(prompt.nonce)) {
       const at = timedByNonce.get(prompt.nonce)!
       const current = rememberedAnchor(prompt.nonce) ?? null
-      const later = lastRowBefore(rawMessages, at)
+      const later = lastRowBefore(rawMessages, at - WRITTEN_BEFORE_SLACK_MS)
       // Closed by the transcript's own clock, not the phone's: once a held
       // row was written this long after the prompt, the rows before it are
       // all in and there is nothing left to load.

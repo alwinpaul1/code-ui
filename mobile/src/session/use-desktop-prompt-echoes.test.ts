@@ -668,3 +668,44 @@ describe('a message sent just after a reply the phone had not loaded yet', () =>
     expect(latest[0]!.baselineTailMessageId).toBe('all-9-pass')
   })
 })
+
+// Session 967668df, 2026-09-23 (Claude Code 2.1.281): the user sent "See this
+// message to mahdi…" from the Claude app at 23:19:27.671. A thinking block and
+// a tool call stamped 23:19:27.450 and .458, a fifth of a second earlier, were
+// written after the enqueue. The Claude app drew them below the message, since
+// they appear when written and not as they stream; Code UI pulled them above
+// because they were stamped first. Only a row stamped a second or more before
+// the send ("All 9 tests", 1.6 s) is the reply the reader saw before sending.
+describe('a message sent a moment before the rows under it were written', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const T = (clock: string) => Date.parse(`2026-09-23T${clock}Z`)
+  const listed = { ...assistant('list-hook-events'), timestamp: T('23:19:14.200') }
+  const thinking = { ...assistant('i-confirmed-orca'), timestamp: T('23:19:27.450') }
+  const call = { ...assistant('read-turn-boundary'), timestamp: T('23:19:27.458') }
+  const prompts: DesktopPrompt[] = [
+    {
+      nonce: 'status:s:1790205567671:0',
+      text: 'See this message to mahdi looked nicely formatted in claude mobile app',
+      at: T('23:19:27.671'),
+      anchorId: 'list-hook-events'
+    }
+  ]
+  function ProbeJustBefore({ raw }: { raw: readonly NativeChatMessage[] }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw)
+    return null
+  }
+
+  it('stays above a thinking block and a call stamped a fifth of a second before the send', () => {
+    act(() => {
+      renderer = create(createElement(ProbeJustBefore, { raw: [listed] }))
+    })
+    act(() => {
+      renderer!.update(createElement(ProbeJustBefore, { raw: [listed, thinking, call] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('list-hook-events')
+  })
+})
