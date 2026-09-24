@@ -1,7 +1,7 @@
 import { View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
-import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
+import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 
 // Why: auth-failed is no longer necessarily terminal (issue #5200) — a
 // transient rejection can latch it even though the desktop still lists this
@@ -35,9 +35,12 @@ export function AuthFailedBanner({
         desktop.
       </Txt>
       <View style={{ flexDirection: 'row', gap: space.sm }}>
-        {canRetry && <Button label="Retry" size="sm" variant="primary" onPress={onRetry} />}
-        <Button label="Re-pair" size="sm" variant="secondary" onPress={onRepair} />
-        <Button label="Remove" size="sm" variant="ghost" onPress={onRemove} />
+        <AuthFailedBannerActions
+          canRetry={canRetry}
+          onRetry={onRetry}
+          onRepair={onRepair}
+          onRemove={onRemove}
+        />
       </View>
     </View>
   )

@@ -18,6 +18,10 @@
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },
     {
+      "file": "src/transport/host-removal-lifecycle.web.ts",
+      "reason": "Removing a host is pairing work and the page holds neither the host list nor the credential, so the real lifecycle's removeHost resolved without doing anything and the screen reported success for a host that was still paired. This one refuses with PageHostRemovalUnavailableError, whose message names the app's host list."
+    },
+    {
       "file": "src/transport/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
@@ -120,6 +124,10 @@
     {
       "file": "src/session/mobile-clipboard-image-resize.web.ts",
       "reason": "expo-image-manipulator is a native module with no browser counterpart, and the two expo-file-system writes its native path makes exist to work around an iOS loader that cannot decode a large base64 data URI, which a browser does not need. img-src 'self' data: https: already admits the source, so this file decodes one <img>, draws it into a canvas at the target size and reads the PNG back out of toDataURL, with no file anywhere in it. It reads the size back off the canvas rather than echoing the size asked for; the two are the same number, because a browser reflects the width it was assigned, and reading it back keeps the dimensions and the bytes coming from one element. Measured in a real browser under the shipped header: a 1400x1000 noise PNG of 5,476,032 base64 characters converges in one pass to 368x263 and 397,220 characters, 75.8% of the upload path's 512 KiB chunk."
+    },
+    {
+      "file": "src/components/AuthFailedBannerActions.web.tsx",
+      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and the page can honour none of them: forceReconnect is () => Promise.resolve() there (client-context.web.tsx), /pair-scan sits outside the page's route root of app/h, and removal refuses (page-host-removal-refusal.ts). The banner itself is reachable on the page — the shell forwards the native client's connection state, and auth-failed is one of its values — so this one renders no control and one line naming the app, because a banner that reports a failure and offers no way out reads as a dead end."
     },
     {
       "file": "src/components/MobileRichMarkdownEditor.web.tsx",
