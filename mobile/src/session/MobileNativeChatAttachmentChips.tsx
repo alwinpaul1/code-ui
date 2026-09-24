@@ -1,4 +1,4 @@
-import { FileText, Pencil, X } from 'lucide-react-native'
+import { FileText, X } from 'lucide-react-native'
 import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -14,9 +14,9 @@ export function MobileNativeChatAttachmentChips({
 }: {
   attachments: readonly PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
-  /** Opens the markup editor on a photo chip (the Claude app's pencil,
-   *  2026-09-24). Undefined for a document chip, which has nothing to draw
-   *  on, and this file never passes it for one. */
+  /** Opens the markup editor on a photo chip. A tap on the photo itself
+   *  opens it: the user asked for no pencil over the picture (2026-09-24).
+   *  Never used for a document chip, which has nothing to draw on. */
   onEditAttachment?: (id: string, uri: string) => void
 }) {
   const { colors, radius, space } = useTheme()
@@ -65,21 +65,17 @@ export function MobileNativeChatAttachmentChips({
                 </Txt>
               </View>
             ) : (
-              // Why: the picture is already on the phone, so a tap opens it
-              // full-screen at once, same as a thumbnail in a sent bubble.
+              // A tap opens markup, the way the pencil used to. The picture is
+              // already on the phone, so with no editor to hand, or an upload
+              // not yet settled, it opens full-screen instead.
               <Pressable
                 accessibilityRole="imagebutton"
-                accessibilityLabel="Preview image"
+                accessibilityLabel={onEditAttachment && !attachment.uploading ? 'Mark up image' : 'Preview image'}
                 style={{ flex: 1 }}
                 onPress={() =>
-                  openImagePreview(
-                    attachment.previewUri,
-                    attachment.name ?? 'Image',
-                    0,
-                    onEditAttachment
-                      ? () => onEditAttachment(attachment.id, attachment.previewUri)
-                      : undefined
-                  )
+                  onEditAttachment && !attachment.uploading
+                    ? onEditAttachment(attachment.id, attachment.previewUri)
+                    : openImagePreview(attachment.previewUri, attachment.name ?? 'Image', 0)
                 }
               >
                 <Image
@@ -132,26 +128,6 @@ export function MobileNativeChatAttachmentChips({
                 hitSlop={8}
               >
                 <X size={12} color={colors.textInverse} strokeWidth={2.6} />
-              </Pressable>
-            ) : null}
-            {!isFile && onEditAttachment && !attachment.uploading ? (
-              <Pressable
-                accessibilityLabel="Edit image"
-                style={{
-                  position: 'absolute',
-                  bottom: 3,
-                  right: 3,
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.text
-                }}
-                onPress={() => onEditAttachment(attachment.id, attachment.previewUri)}
-                hitSlop={8}
-              >
-                <Pencil size={12} color={colors.textInverse} strokeWidth={2.4} />
               </Pressable>
             ) : null}
           </View>
