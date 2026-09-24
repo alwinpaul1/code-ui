@@ -1,6 +1,5 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
-import { splitTableRow } from '../rich-markdown/markdown-table-rows'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -210,6 +209,40 @@ function parseLines(content: string): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
+}
+
+// Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a
+// pipe inside the cell, however many backslashes come before it, so a row ending in `\|`
+// has no closing pipe to strip. Upstream #22114 moved this parser onto the editor's
+// splitTableRow (rich-markdown/markdown-table-rows.ts), which follows marked and ends a
+// cell at the pipe after `\\`; GitHub keeps that pipe in the cell, and PR comment bodies
+// are GitHub markdown. Total: never throws on odd input.
+function splitTableRow(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  let trimmed = line.trim()
+  if (trimmed.startsWith('|')) {
+    trimmed = trimmed.slice(1)
+  }
+  if (trimmed.endsWith('|') && !trimmed.endsWith('\\|')) {
+    trimmed = trimmed.slice(0, -1)
+  }
+  for (let j = 0; j < trimmed.length; j += 1) {
+    const ch = trimmed[j]
+    if (ch === '\\' && trimmed[j + 1] === '|') {
+      cell += '|'
+      j += 1
+      continue
+    }
+    if (ch === '|') {
+      cells.push(cell.trim())
+      cell = ''
+      continue
+    }
+    cell += ch
+  }
+  cells.push(cell.trim())
+  return cells
 }
 
 // A GFM table delimiter row: cells of dashes with optional leading/trailing

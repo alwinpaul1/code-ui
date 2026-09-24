@@ -147,20 +147,40 @@ describe('parseMarkdownBlocks tables', () => {
     ])
   })
 
-  it('ends a cell at the pipe following an escaped backslash', () => {
+  // Upstream #22114 has "ends a cell at the pipe following an escaped backslash" here, which
+  // splits `x\\|y` into `x\` and `y`: its splitter is the editor's, and marked ends a cell at a
+  // pipe after an even backslash run. GitHub does not. Rendered through `gh api markdown`
+  // (mode gfm) on 2026-09-24, `| x\\|y |` is ONE cell reading `x|y`, and `` `foo\\|bar` `` is one
+  // code span reading `foo\|bar`: every `\|` in a GFM row is cell text, whatever precedes it.
+  // PR comment bodies are GitHub markdown, so these cases pin GitHub's rendering instead.
+  it('keeps a pipe after a doubled backslash in its cell, as GitHub draws it', () => {
     const md = ['| A | B |', '| --- | --- |', '| x\\\\|y |'].join('\n')
-    // Adapted: upstream's splitTableRow also collapses a bare `\\` to `\`, which is exactly the
-    // silent backslash rewrite 509d183b stopped this fork's own table splitter from doing (a
-    // Windows path's `C:\Users` must not become `C:\\Users` on a pass through this code, and vice
-    // versa). markdown-table-rows.ts only ever touches a backslash run immediately before the
-    // separator pipe it decides; every other backslash in the cell is passed through as written.
     expect(parseMarkdownBlocks(md)).toEqual([
       {
         kind: 'table',
         headers: ['A', 'B'],
         align: ['left', 'left'],
-        rows: [['x\\\\', 'y']]
+        rows: [['x\\|y']]
       }
+    ])
+  })
+
+  it('keeps a code span holding a doubled backslash and a pipe in one cell', () => {
+    const md = ['| Pattern | Meaning |', '| --- | --- |', '| `foo\\\\|bar` | either |'].join('\n')
+    expect(parseMarkdownBlocks(md)).toEqual([
+      {
+        kind: 'table',
+        headers: ['Pattern', 'Meaning'],
+        align: ['left', 'left'],
+        rows: [['`foo\\|bar`', 'either']]
+      }
+    ])
+  })
+
+  it('keeps a row that is nothing but an escaped pipe as one cell', () => {
+    const md = ['| A |', '| --- |', '| \\| |'].join('\n')
+    expect(parseMarkdownBlocks(md)).toEqual([
+      { kind: 'table', headers: ['A'], align: ['left'], rows: [['|']] }
     ])
   })
 
