@@ -716,6 +716,40 @@ describe('persisting a fresh manifest onto the active generation', () => {
     expect((await store.readActiveGeneration(HOST))?.manifest.routes).toEqual(ROUTES)
   })
 
+  // Why: most same-build launches carry the manifest already on disk, and every rewrite deletes
+  // manifest.json before the fresh one is moved in. The native view reads that file as it mounts
+  // (MobileWebShellGeneration.load), right beside this persist, and a read in the gap answers
+  // GENERATION_UNREADABLE, which costs the cache and a full re-download.
+  it('leaves the manifest on disk alone when the fresh one says nothing new', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    const fresh = freshManifest()
+    expect(await store.persistActiveManifest(HOST, fresh)).toBe('persisted')
+    const writesBefore = fs.writes.length
+    fs.failDeletesAt(MANIFEST_PATH)
+
+    expect(await store.persistActiveManifest(HOST, { ...fresh })).toBe('unchanged')
+
+    fs.failDeletesAt(null)
+    expect(fs.writes.length).toBe(writesBefore)
+    expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(fresh))
+  })
+
+  it('still rewrites a manifest that differs only in a route grant', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    await store.persistActiveManifest(HOST, freshManifest())
+    const widened = freshManifest({
+      routes: [{ pathname: '/h/[hostId]', grants: ['navigate', 'externalNavigation'] }]
+    })
+
+    expect(await store.persistActiveManifest(HOST, widened)).toBe('persisted')
+
+    expect(fs.text(MANIFEST_PATH)).toBe(JSON.stringify(widened))
+  })
+
   it('refuses a manifest that names other bytes under the same build id', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })

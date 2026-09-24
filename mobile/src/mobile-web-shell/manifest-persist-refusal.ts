@@ -8,7 +8,8 @@ export type ManifestPersistRefusal =
   | 'refused-build-mismatch'
   | 'refused-asset-mismatch'
 
-export type ManifestPersistOutcome = 'persisted' | ManifestPersistRefusal
+/** `unchanged`: the manifest on disk already says exactly this, so nothing was written. */
+export type ManifestPersistOutcome = 'persisted' | 'unchanged' | ManifestPersistRefusal
 
 /**
  * Why this manifest may not be written onto the generation on disk, or null when it may.

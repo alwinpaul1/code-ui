@@ -278,6 +278,18 @@ export function createGenerationStore(options: {
     if (refusal !== null) {
       return refusal
     }
+    // Why: most same-build launches carry the very manifest already on disk, and the swap deletes
+    // manifest.json before the fresh one moves in. The native view reads that file as it mounts
+    // (MobileWebShellGeneration.load), so a read in that gap fails GENERATION_UNREADABLE and costs
+    // the cache. Skipping an identical write closes the gap for every launch that changes nothing;
+    // one that really edits the manifest still swaps. A failed read falls through to the swap.
+    const serialized = JSON.stringify(manifest)
+    const stored = await fs
+      .readText(joinUri(active.directory, MANIFEST_FILE_NAME))
+      .catch(() => null)
+    if (stored === serialized) {
+      return 'unchanged'
+    }
     await swapInFreshManifest(fs, active.directory, manifest)
     return 'persisted'
   }
