@@ -38,6 +38,9 @@ export function useMobileNativeChatActiveResolution(args: {
   activeChatSessionId: string | null
   activeChatStructured: boolean
   activeChatResolution: ReturnType<typeof resolveMobileNativeChat>
+  /** The active tab's chat identity whichever view it shows; null for a tab
+   *  with no chat. `activeChatResolution` is this while the chat is on screen. */
+  activeChatIdentity: ReturnType<typeof resolveMobileNativeChat>
   activeTabAgentWorking: boolean
   nativeChatStatus: MobileNativeChatTab['agentStatus'] | null
   sourceIdentity: string
@@ -119,6 +122,7 @@ export function useMobileNativeChatActiveResolution(args: {
     activeChatSessionId,
     activeChatStructured,
     activeChatResolution,
+    activeChatIdentity: chatIdentity,
     activeTabAgentWorking,
     nativeChatStatus,
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),

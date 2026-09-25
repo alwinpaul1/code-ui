@@ -112,7 +112,10 @@ const ABSOLUTE_PATH = /^(?:\/|[A-Za-z]:\/)/
  *  `~/.claude` when unset), in the host's own spelling: the transcript path
  *  minus `projects/<project>/<session>.jsonl`. Claude Code loads the user's
  *  skills, commands and plugins from that dir alone (2.1.282). Null for a
- *  path not named Claude above, and for a relative one the host cannot list. */
+ *  path not named Claude above, and for a relative path. An absolute dir on
+ *  another filesystem (a WSL guest's `/home/…`, an SSH target's) is returned
+ *  as is; the host then fails to list it and the menu has no home skills,
+ *  rather than the host's own profile, which that session does not load. */
 export function claudeConfigDirFromTranscriptPath(transcriptPath: string | null | undefined): string | null {
   if (!transcriptPath || nativeChatAgentFromTranscriptPath(transcriptPath) !== 'claude') {
     return null

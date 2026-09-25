@@ -451,7 +451,12 @@
             // composer send for the link and checks the reason it gives. The
             // stub's live state now follows the rendered one, and the
             // structured mock gains sendConditions.
-            "max": 836,
+            // 2026-09-25 (later): +11 for a stand-in for the composer catalogs
+            // that records what the `/` menu is told (it replaces the
+            // file-search stand-in, which only the catalogs mount), and the
+            // case that pins the menu to the tab's own chat while the tab
+            // shows its terminal.
+            "max": 847,
             "skipBlankLines": true,
             "skipComments": true
           }

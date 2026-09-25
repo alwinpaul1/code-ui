@@ -151,8 +151,14 @@ vi.mock('./mobile-native-chat-permission-send', () => ({
 vi.mock('./use-mobile-native-chat-stop', () => ({
   useMobileNativeChatStop: () => vi.fn()
 }))
-vi.mock('./use-mobile-native-chat-file-search', () => ({
-  useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
+// Records what the `/` menu is told about the chat on the active tab. Stands
+// in for the `@` file search too, which only these catalogs mount.
+const catalogsArgs: Record<string, unknown>[] = []
+vi.mock('./use-mobile-native-chat-composer-catalogs', () => ({
+  useMobileNativeChatComposerCatalogs: (args: Record<string, unknown>) => {
+    catalogsArgs.push(args)
+    return { nativeChatFilePaths: [], loadNativeChatFiles: vi.fn(), nativeChatSkills: [], loadNativeChatSkills: vi.fn() }
+  }
 }))
 // Partial: the stale-input heal reaches the real transport through image-send,
 // which must read the REAL timeout constant, not a copy that can silently drift.
@@ -637,6 +643,17 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       launchDraft: 'https://github.com/o/r/issues/12',
       chatActive: false
     })
+  })
+
+  // Review, 2026-09-25: the `/` menu was told the chat's transcript only while
+  // the chat was on screen, so a peek at its terminal read both profiles'
+  // skills again two seconds later, for a menu nobody could see.
+  it('tells the / menu the chat’s transcript while the tab shows its terminal', () => {
+    viewMode.isTabChatView = () => false
+    const transcriptPath = '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-Project-Code-UI/967668df-a7d9-40e7-964b-7812815c010d.jsonl'
+    const providerSession = { key: 'session_id', id: '967668df', transcriptPath }
+    render({ ...chatTab, agentStatus: { state: 'idle', updatedAt: 1, agentType: 'claude', providerSession } })
+    expect(catalogsArgs.at(-1)).toMatchObject({ chatIdentity: { agent: 'claude', transcriptPath } })
   })
 
   it('forwards the session hook’s transcriptLoading, not its status', () => {

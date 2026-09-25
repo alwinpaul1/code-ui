@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../src/shared/skills'
 import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
 import type { RpcClient } from '../transport/rpc-client'
@@ -18,17 +19,41 @@ const SKILLS_STALE_MS = 3_000
 const BROWSED_SKILLS_STALE_MS = 10 * 60_000
 
 /** How long after the chat opens, or reconnects, the skills read starts on
- *  its own, so the first `/` of a launch finds the list already read. Why: it
- *  used to start at that first `/`, exactly while the user was typing, and its
- *  replies shared the JS thread with the controlled input: the next keys
- *  landed two seconds late in one lump (phone recording, 2026-09-20). Two
- *  seconds lets the chat's own first reads, the session and the screen, land
- *  first. */
+ *  its own, so the first `/` of a launch finds the list already read. A menu
+ *  read by directory also reads a newly named Claude config dir this long
+ *  after the chat names it. Why: it used to start at that first `/`, exactly
+ *  while the user was typing, and its replies shared the JS thread with the
+ *  controlled input: the next keys landed two seconds late in one lump (phone
+ *  recording, 2026-09-20). Two seconds lets the chat's own first reads, the
+ *  session and the screen, land first. */
 const PRIME_SKILLS_DELAY_MS = 2_000
 
 /** The last browsed list per worktree and Claude config dir, kept across
  *  reconnects for this launch. */
 const browsedByKey = new Map<string, DiscoveredSkill[]>()
+
+/** The chat on the active tab, whichever view the tab shows. */
+export type SkillsMenuChat = { agent: string; transcriptPath: string | null }
+
+/**
+ * The Claude config dir the `/` menu lists, or null for both of this
+ * machine's profiles: a Claude chat's own dir when its transcript names one,
+ * null while it has not. While the tab holds no Claude chat (a shell, or a
+ * Codex or Grok chat) the last dir stands. Those menus show no Claude rows,
+ * and reading another profile for them was a walk nobody saw (review,
+ * 2026-09-25).
+ */
+function useMenuClaudeConfigDir(chat: SkillsMenuChat | null): string | null {
+  const own =
+    chat && resolveNativeChatTranscriptAgent(chat.agent) === 'claude'
+      ? claudeConfigDirFromTranscriptPath(chat.transcriptPath)
+      : undefined
+  const [last, setLast] = useState<string | null>(own ?? null)
+  if (own !== undefined && own !== last) {
+    setLast(own)
+  }
+  return own === undefined ? last : own
+}
 
 /**
  * Installed skills and plugin commands for the `/` menu.
@@ -54,17 +79,16 @@ const browsedByKey = new Map<string, DiscoveredSkill[]>()
  * Claude config dir, read off its transcript path (2026-09-25: a
  * ~/.claude-work session listed ~/.claude's skills and plugins). Each dir is
  * walked on its own clock, so switching between two tabs of one worktree
- * shows each its last list instead of walking again; the scan's latch does
- * not depend on the dir and is left alone.
+ * shows each its last list instead of walking again. The scan does not depend
+ * on the dir: a new dir neither re-asks it nor re-arms the chat's first read.
  */
 export function useMobileNativeChatSkills(args: {
   client: Pick<RpcClient, 'sendRequest'> | null
   worktreeId: string
-  /** The chat's hook-reported transcript path; null until the session reports one. */
-  transcriptPath: string | null
+  chatIdentity: SkillsMenuChat | null
 }): { nativeChatSkills: DiscoveredSkill[]; loadNativeChatSkills: () => void } {
   const { client, worktreeId } = args
-  const claudeConfigDir = claudeConfigDirFromTranscriptPath(args.transcriptPath)
+  const claudeConfigDir = useMenuClaudeConfigDir(args.chatIdentity)
   const browseKey = `${worktreeId}\0${claudeConfigDir ?? ''}`
   const [nativeChatSkills, setNativeChatSkills] = useState<DiscoveredSkill[]>([])
   const loadedAtRef = useRef<number | null>(null)
@@ -75,9 +99,10 @@ export function useMobileNativeChatSkills(args: {
    *  walks are in flight. */
   const browsedAtRef = useRef(new Map<string, number>())
   const browsingRef = useRef(new Set<string>())
-  /** The key the menu is showing, so a walk for a tab the user has left
-   *  fills its own cache and not this tab's menu. */
-  const shownKeyRef = useRef(browseKey)
+  /** What the menu is for now. Read when a walk starts and when it reports, so
+   *  a scan refusal or a timer that lands after a switch walks the dir on
+   *  screen, and a walk for a tab the user has left fills only its own cache. */
+  const shownRef = useRef({ key: browseKey, configDir: claudeConfigDir })
 
   useEffect(() => {
     generationRef.current++
@@ -92,17 +117,8 @@ export function useMobileNativeChatSkills(args: {
     setNativeChatSkills(browsedByKey.get(browseKey) ?? [])
   }, [client, worktreeId])
 
-  useEffect(() => {
-    shownKeyRef.current = browseKey
-    // Another config dir in the same worktree: that dir's last list, when the
-    // menu is the browsed one. A scanned list does not depend on the dir.
-    if (unsupportedRef.current) {
-      setNativeChatSkills(browsedByKey.get(browseKey) ?? [])
-    }
-  }, [browseKey])
-
   const browseSkills = useCallback(() => {
-    const key = browseKey
+    const { key, configDir } = shownRef.current
     if (!client || browsingRef.current.has(key)) {
       return
     }
@@ -116,11 +132,11 @@ export function useMobileNativeChatSkills(args: {
     void browseClaudeSkills({
       client,
       worktreePath: worktreePathFromId(worktreeId),
-      claudeConfigDir,
+      claudeConfigDir: configDir,
       live: () => generationRef.current === generation,
       onSkills: (skills) => {
         browsedByKey.set(key, skills)
-        if (shownKeyRef.current === key) {
+        if (shownRef.current.key === key) {
           setNativeChatSkills(skills)
         }
       }
@@ -129,7 +145,28 @@ export function useMobileNativeChatSkills(args: {
         browsingRef.current.delete(key)
       }
     })
-  }, [browseKey, claudeConfigDir, client, worktreeId])
+  }, [client, worktreeId])
+
+  useEffect(() => {
+    shownRef.current = { key: browseKey, configDir: claudeConfigDir }
+    // Until a scan has answered, the list on screen is a listing, and a
+    // listing belongs to one config dir: show this dir's, not the last one's.
+    if (loadedAtRef.current === null) {
+      setNativeChatSkills(browsedByKey.get(browseKey) ?? [])
+    }
+    if (!unsupportedRef.current) {
+      return
+    }
+    // Only on this connection: a reconnect first has its own read, and this
+    // one would walk the dead client and mark the dir as freshly walked.
+    const generation = generationRef.current
+    const timer = setTimeout(() => {
+      if (generationRef.current === generation) {
+        browseSkills()
+      }
+    }, PRIME_SKILLS_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [browseKey])
 
   const loadNativeChatSkills = useCallback(() => {
     if (unsupportedRef.current) {

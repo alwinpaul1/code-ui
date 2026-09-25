@@ -70,7 +70,7 @@ export function useMobileNativeChatController(
   const {
     activeChatAgent,
     activeChatAgentRef,
-    activeChatResolution,
+    activeChatResolution, activeChatIdentity,
     activeChatSessionId,
     activeChatStructured,
     activeTabAgentWorking,
@@ -326,7 +326,7 @@ export function useMobileNativeChatController(
   })
 
   const { nativeChatFilePaths, loadNativeChatFiles, nativeChatSkills, loadNativeChatSkills } =
-    useMobileNativeChatComposerCatalogs({ client, worktreeId, transcriptPath: activeChatResolution?.transcriptPath ?? null })
+    useMobileNativeChatComposerCatalogs({ client, worktreeId, chatIdentity: activeChatIdentity })
 
   // Why a ref: the send seam reports catalog commands to option tracking, and
   // the options hook needs the seam's dispatcher; a ref breaks the cycle.
