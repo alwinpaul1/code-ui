@@ -1,4 +1,7 @@
-import { forgetHostUpdateFailures } from '../mobile-web-shell/forget-host-update-failures'
+import {
+  deleteHostPageCache,
+  forgetHostUpdateFailures
+} from '../mobile-web-shell/removed-host-shell-cache'
 import {
   clearWatermark,
   forgetHostNotificationSession
@@ -24,7 +27,8 @@ export async function removeHostAndCloseClient(
   // send notifications it has never sent.
   void clearDeliveredPushes(hostId)
   forgetPushRegistrationOutcome(hostId)
-  // Why after the commit and not awaited: evidence about a host that is gone, never a reason to
-  // hold the removal or fail it.
+  // Why after the commit and not awaited: state about a host that is gone, never a reason to hold
+  // the removal or fail it. A cache that fails to delete is reclaimed by the next eviction.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
+  void deleteHostPageCache(hostId).catch(() => undefined)
 }
