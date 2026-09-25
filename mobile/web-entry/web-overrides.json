@@ -135,7 +135,7 @@
     },
     {
       "file": "src/components/AuthFailedBannerActions.web.tsx",
-      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and the page can honour none of them: forceReconnect is () => Promise.resolve() there (client-context.web.tsx), /pair-scan sits outside the page's route root of app/h, and removal refuses (page-host-removal-refusal.ts). The banner itself is reachable on the page — the shell forwards the native client's connection state, and auth-failed is one of its values — so this one renders no control and one line naming the app, because a banner that reports a failure and offers no way out reads as a dead end."
+      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and the page can honour none of them: forceReconnect is null there (client-context.web.tsx), /pair-scan sits outside the page's route root of app/h, and removal refuses (page-host-removal-refusal.ts). The banner itself is reachable on the page — the shell forwards the native client's connection state, and auth-failed is one of its values — so this one renders no control and one line naming the app, because a banner that reports a failure and offers no way out reads as a dead end."
     },
     {
       "file": "src/components/MobileRichMarkdownEditor.web.tsx",

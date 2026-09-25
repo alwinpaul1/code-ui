@@ -67,11 +67,15 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
     ...relayRecovery
   })
   // Why: auth-failed has its own banner, so suppress the Reconnect button for that verdict.
-  const showReconnectButton =
+  // Null on the page, where the shell owns the connection and nothing here re-dials.
+  const reconnect =
     connState !== 'connected' &&
     isErrorVerdict(headerVerdict) &&
-    !!hostId &&
-    headerVerdict.kind !== 'auth-failed'
+    hostId &&
+    headerVerdict.kind !== 'auth-failed' &&
+    forceReconnectHost !== null
+      ? () => void forceReconnectHost(hostId)
+      : null
   const online = connState === 'connected'
   const filterCount = settings.activeFilterCount
 
@@ -117,13 +121,8 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             </Txt>
           </View>
         </View>
-        {showReconnectButton ? (
-          <Button
-            label="Reconnect"
-            size="sm"
-            variant="secondary"
-            onPress={() => void forceReconnectHost(hostId!)}
-          />
+        {reconnect ? (
+          <Button label="Reconnect" size="sm" variant="secondary" onPress={reconnect} />
         ) : null}
         {!embedded && floatingWorkspaceEnabled ? (
           <IconButton

@@ -132,7 +132,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}
             disabled={!showConnectionRetry}
             onPress={() => {
-              if (hostId) {
+              if (hostId && forceReconnectHost) {
                 void forceReconnectHost(hostId)
               }
             }}

@@ -362,7 +362,11 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // props; FileReader and MarkdownReader take readingPositionKey.
 // 2026-09-25 (Orca #22300): both of the dock's fields take their ref from the submit binding,
 // and the live one's onSubmitEditing is submitLiveInput. Same host record COUNT (99).
-const HEAD_HOST_JSX_SHA256 = '53613ac8c06b2104e830be99b2de1804f8e145cfd51fc6fbc6cf1e96e7a95790'
+// 2026-09-25 (Orca #22326): the header's "tap to retry" press also checks the
+// re-dial exists, because the page's provider hands out none. Same host record
+// COUNT (99); that one Pressable's captured onPress moved. Nothing a phone
+// renders or does changed.
+const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b203a8e228be3df57'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.

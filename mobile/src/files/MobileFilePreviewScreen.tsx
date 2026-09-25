@@ -6,6 +6,7 @@ import { ChevronLeft, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import {
   createStaleAfterReconnectLedger,
@@ -163,21 +164,19 @@ export function MobileFilePreviewScreen({ route }: Props) {
     void loadPreview()
   }, [loadPreview])
 
-  const retry = useCallback(async () => {
-    if (!previewParams) {
-      void loadPreview()
-      return
-    }
-    if (
-      preview.status === 'waiting' ||
-      (preview.status === 'error' && preview.reconnect) ||
-      connState !== 'connected'
-    ) {
-      await forceReconnect(previewParams.hostId)
-      return
-    }
-    void loadPreview()
-  }, [connState, forceReconnect, loadPreview, preview, previewParams])
+  const retry = useMemo(
+    () =>
+      connectionRetryAction({
+        hostId: previewParams?.hostId,
+        needsReconnect:
+          preview.status === 'waiting' ||
+          (preview.status === 'error' && preview.reconnect) ||
+          connState !== 'connected',
+        forceReconnect,
+        reload: () => void loadPreview()
+      }),
+    [connState, forceReconnect, loadPreview, preview, previewParams]
+  )
 
   // The same rule the session tabs follow: a preview opened before the relay
   // connected must not sit on its failure until someone taps Retry. One refetch
