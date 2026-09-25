@@ -14,9 +14,10 @@ export function MobileNativeChatAttachmentChips({
 }: {
   attachments: readonly PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
-  /** Opens the markup editor on a photo chip. A tap on the photo itself
-   *  opens it: the user asked for no pencil over the picture (2026-09-24).
-   *  Never used for a document chip, which has nothing to draw on. */
+  /** Opens the markup editor on a photo chip, from the pencil in the
+   *  full-screen preview a tap on the photo opens. The chip itself carries no
+   *  pencil (2026-09-24). Never used for a document chip, which has nothing
+   *  to draw on. */
   onEditAttachment?: (id: string, uri: string) => void
 }) {
   const { colors, radius, space } = useTheme()
@@ -65,17 +66,23 @@ export function MobileNativeChatAttachmentChips({
                 </Txt>
               </View>
             ) : (
-              // A tap opens markup, the way the pencil used to. The picture is
-              // already on the phone, so with no editor to hand, or an upload
-              // not yet settled, it opens full-screen instead.
+              // A tap opens the photo full-screen, the way the Claude app does,
+              // and markup is the pencil there (2026-09-26; from 360ef269 a tap
+              // went straight into markup). No pencil while an upload has not
+              // settled, or with no editor to hand.
               <Pressable
                 accessibilityRole="imagebutton"
-                accessibilityLabel={onEditAttachment && !attachment.uploading ? 'Mark up image' : 'Preview image'}
+                accessibilityLabel="Preview image"
                 style={{ flex: 1 }}
                 onPress={() =>
-                  onEditAttachment && !attachment.uploading
-                    ? onEditAttachment(attachment.id, attachment.previewUri)
-                    : openImagePreview(attachment.previewUri, attachment.name ?? 'Image', 0)
+                  openImagePreview(
+                    attachment.previewUri,
+                    attachment.name ?? 'Image',
+                    0,
+                    onEditAttachment && !attachment.uploading
+                      ? () => onEditAttachment(attachment.id, attachment.previewUri)
+                      : undefined
+                  )
                 }
               >
                 <Image

@@ -45,8 +45,9 @@ type NaturalSize = { width: number; height: number }
 /** Full-screen markup editor: draw red pen strokes over an attached photo,
  *  undo/redo them, and either discard the marks or flatten them onto the
  *  photo on Done. Mounted once in the root layout; opened with
- *  `openImageMarkup(uri, { onDone, onDiscard })` from wherever a photo can be
- *  edited — the composer's attachment chip, its fullscreen preview.
+ *  `openImageMarkup(uri, { onDone, onDiscard })` by the pencil in a composer
+ *  photo's full-screen preview, the one way in (a tap on the chip opens that
+ *  preview, 2026-09-26).
  *
  *  Flattening uses react-native-svg's native `toDataURL`, not a screenshot
  *  library: the photo and the strokes are both drawn inside one `<Svg>` (the

@@ -29,8 +29,9 @@ vi.mock('lucide-react-native', () => ({ Pencil: 'Pencil', X: 'X' }))
 
 vi.mock('./ZoomableImage', () => ({ ZoomableImage: 'ZoomableImage' }))
 
-// The composer's attachment preview offers the Claude app's pencil to reopen
-// the markup editor (2026-09-24); every other opener of this same viewer —
+// The composer's attachment preview offers the Claude app's pencil, the one
+// way into the markup editor (2026-09-24; a tap on the chip opens this preview
+// first, 2026-09-26); every other opener of this same viewer —
 // a sent bubble, a markdown figure, a queued image — has no editor behind it
 // and must keep showing only the close button it always has.
 

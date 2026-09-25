@@ -71,8 +71,10 @@ export function ImagePreviewModal(): React.JSX.Element | null {
               accessibilityLabel="Close image preview"
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
             />
-            {/* The composer's own attachment: reopens the markup editor on
-                this exact photo (the Claude app's pencil, 2026-09-24). Absent
+            {/* The composer's own attachment: opens the markup editor on
+                this exact photo, the one way into it (the Claude app's
+                pencil, 2026-09-24; a tap on the chip opens this preview
+                first, 2026-09-26). Absent
                 for a sent bubble or a markdown figure, which have no editor
                 behind them. */}
             {preview.onEdit ? (

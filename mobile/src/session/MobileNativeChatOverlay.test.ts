@@ -10,6 +10,8 @@ import {
   type MobileNativeChatPendingMessage
 } from './mobile-native-chat-pending-echo'
 import { noteLiveRowsArrived } from './mid-turn-written-before'
+import { peekImageMarkup, resetImageMarkupForTests } from './image-markup-store'
+import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
@@ -72,6 +74,8 @@ type Tick = {
   desktopPrompts?: DesktopPrompt[]
   /** The rows the agent's queue box shows right now. */
   queued?: string[]
+  /** The composer's chips and their actions; nothing by default. */
+  images?: Partial<MobileNativeChatImageAttachments>
 }
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
@@ -99,7 +103,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     // These cases model a terminal tab, which always has a pane underneath.
     hasTerminalUnderneath: true,
     hostAllowsRewind: tick.hostAllowsRewind ?? true,
-    images: {} as never,
+    images: (tick.images ?? {}) as never,
     onMicPress: vi.fn(),
     micActive: false,
     dictationMode: 'toggle',
@@ -808,4 +812,31 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
     ])
     expect(bubbles()).toEqual(['bubble:queue'])
   })
+})
+
+// The chip's preview hands its pencil to this wiring, and the markup editor's
+// Done comes back through it (2026-09-26 review: every test drove a copy of
+// it, so deleting it here, or making Done a no-op, failed nothing).
+it('opens markup on the photo the preview\'s pencil was for, and brings Done back to that chip', async () => {
+  const replaceAttachment = vi.fn(async () => {})
+  let renderer: ReactTestRenderer | null = null
+  await act(async () => {
+    renderer = create(overlayElement({ images: { replaceAttachment } }))
+  })
+  try {
+    const onEditAttachment = renderer!.root.findAllByType('ChatView' as never)[0]?.props.onEditAttachment as
+      | ((id: string, uri: string) => void)
+      | undefined
+    expect(onEditAttachment).toBeTypeOf('function')
+    act(() => onEditAttachment!('img-2', 'file:///b.jpg'))
+    const editor = peekImageMarkup()
+    expect(editor?.uri).toBe('file:///b.jpg')
+    expect(replaceAttachment).not.toHaveBeenCalled()
+
+    act(() => editor!.onDone({ base64: 'ZZZZ' }))
+    expect(replaceAttachment).toHaveBeenCalledExactlyOnceWith('img-2', 'ZZZZ')
+  } finally {
+    act(() => renderer!.unmount())
+    resetImageMarkupForTests()
+  }
 })

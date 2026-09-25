@@ -327,8 +327,9 @@ function ThemedRoot() {
         {/* Likewise the full-screen image viewer: a chat thumbnail, a
             markdown figure and an image file all open it (2026-09-19). */}
         <ImagePreviewModal />
-        {/* And the markup editor: the composer's attachment pencil and the
-            preview's own pencil both open it (2026-09-24). */}
+        {/* And the markup editor: the pencil in a composer photo's preview
+            opens it, the one way in (2026-09-26; the chip's own pencil went
+            on 2026-09-24). */}
         <MobileImageMarkupEditor />
       </View>
     </RpcClientProvider>
