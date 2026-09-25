@@ -33,6 +33,7 @@ import {
   splitInlineCodeChips
 } from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 
@@ -218,13 +219,10 @@ function renderInline(
           ? () => onOpenFile(normalizeFilePath(code.trim()))
           : undefined
       if (isInlineCodeChip(code)) {
-        // A real inline View: the only way Android rounds and borders a chip.
-        // It cannot break across lines, so a long span is several pills that
-        // wrap. Its text is outside a press-and-hold selection of the prose;
-        // the message copy button still carries it.
+        // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
         splitInlineCodeChips(code, chipMaxChars).forEach((piece, pieceIndex) => {
           parts.push(
-            <View
+            <MobileMarkdownCodeChip
               // The paragraph's length is in the key on purpose. Android
               // positions an inline View from the paragraph's layout and does
               // not move it when the paragraph re-wraps unless the View itself
@@ -237,34 +235,11 @@ function renderInline(
               // changed key is a remount, and a remounted View is placed from
               // the current layout.
               key={`${key}c${pieceIndex}:${text.length}`}
-              // A plain object when the reader has not zoomed: an array per
-              // chip costs an allocation on every render of every message, and
-              // it hides `borderRadius` from anything reading the style.
-              style={
-                chipScale
-                  ? [
-                      styles.inlineCodeChip,
-                      {
-                        paddingVertical: chipScale.paddingVertical,
-                        borderRadius: chipScale.borderRadius
-                      }
-                    ]
-                  : styles.inlineCodeChip
-              }
-            >
-              <Text
-                style={[
-                  styles.inlineCodeChipText,
-                  chipScale
-                    ? { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
-                    : null,
-                  openFile ? styles.inlineCodeLink : null
-                ]}
-                onPress={openFile}
-              >
-                {piece}
-              </Text>
-            </View>
+              piece={piece}
+              styles={styles}
+              chipScale={chipScale}
+              onPress={openFile}
+            />
           )
         })
       } else {

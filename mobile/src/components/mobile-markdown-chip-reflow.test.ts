@@ -42,12 +42,16 @@ describe('an inline code chip follows the paragraph it sits in', () => {
       renderer = create(createElement(MobileMarkdown, { content }))
     })
     // A test instance does not expose its key; the fiber underneath does.
-    // Chips are told from other Views by the rounding only they carry.
+    // Chips are told from other Views by the rounding only they carry. The key
+    // sits on the pill component around the View (MobileMarkdownCodeChip), and
+    // a changed key remounts that component, View and all.
     return renderer!.root
       .findAll(
         (node: ReactTestInstance) => node.type === 'View' && node.props.style?.borderRadius === 7
       )
-      .map((node) => String((node as unknown as { _fiber: { key: string | null } })._fiber.key))
+      .map((node) =>
+        String((node.parent as unknown as { _fiber: { key: string | null } })._fiber.key)
+      )
   }
 
   it('remounts the chip when the text around it grows', () => {

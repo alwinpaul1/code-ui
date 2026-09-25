@@ -263,3 +263,79 @@ describe('while the list is scrolling', () => {
     expect(selectableTexts(true).selectable).toBeGreaterThan(0)
   })
 })
+
+// A hold on inline code selected nothing, mid-turn or not (2026-09-25: the
+// reader holds prose with a pill in it and wants the Claude app's Copy).
+// The pill is a View drawn over the prose, and on Android a React view
+// consumes every touch that lands on it (ReactViewGroup.onTouchEvent), so
+// the prose Text under it never sees the hold. The pill's own Text is a
+// separate native view (the View breaks the text ancestry), so it is the
+// one that has to be selectable. What only the device shows: Android
+// selecting inside the pill, with handles and Copy / Select all.
+describe('holding a code pill', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function pillTexts(
+    content: string,
+    selectable: boolean,
+    onOpenFile?: (path: string) => void
+  ): ReactTestInstance[] {
+    act(() => {
+      renderer = create(
+        createElement(
+          ChatTextSelectableContext.Provider,
+          { value: selectable },
+          createElement(MobileMarkdown, { content, onOpenFile })
+        )
+      )
+    })
+    // A pill is a View whose nearest host ancestor is a Text; the Text inside
+    // it is its own native text view. Components between them are skipped.
+    const hostParent = (node: ReactTestInstance): ReactTestInstance | null => {
+      let parent = node.parent
+      while (parent && typeof parent.type !== 'string') {
+        parent = parent.parent
+      }
+      return parent
+    }
+    return renderer!.root
+      .findAll((node) => node.type === ('View' as never) && hostParent(node)?.type === ('Text' as never))
+      .map((pill) => pill.findByType('Text' as never))
+  }
+
+  it('selects the code inside the pill, as the prose around it does', () => {
+    const [pill] = pillTexts('Run `pnpm install --frozen-lockfile` from the repo root.', true)
+    expect(pill!.children.join('')).toBe('pnpm install --frozen-lockfile')
+    expect(pill!.props.selectable).toBe(true)
+  })
+
+  it('selects a pill in a bullet and in a table cell too', () => {
+    const pills = pillTexts(
+      ['- run `orca search` on the desktop', '', '| Stage | Resolver |', '| --- | --- |', '| base | `pip` |'].join('\n'),
+      true
+    )
+    expect(pills.map((pill) => [pill.children.join(''), pill.props.selectable])).toEqual([
+      ['orca search', true],
+      ['pip', true]
+    ])
+  })
+
+  it('still opens a file named in a pill on a tap, and selects it on a hold', () => {
+    const opened: string[] = []
+    const [pill] = pillTexts('See `mobile/src/session/use-mobile-chat-following.ts` for the rule.', true, (path) =>
+      opened.push(path)
+    )
+    expect(pill!.props.selectable).toBe(true)
+    act(() => pill!.props.onPress())
+    expect(opened).toEqual(['mobile/src/session/use-mobile-chat-following.ts'])
+  })
+
+  it('is not selectable while a fling is in flight, the 2026-09-12 rule', () => {
+    const [pill] = pillTexts('Run `pnpm install` from the repo root.', false)
+    expect(pill!.props.selectable).toBe(false)
+  })
+})
