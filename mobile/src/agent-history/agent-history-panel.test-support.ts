@@ -1,5 +1,6 @@
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
@@ -51,26 +52,21 @@ export function historyReplies(
   }
 }
 
+/**
+ * The bridge suites' fake client, answering through `responder`. Built on that fake rather than a
+ * client of its own, because an object that satisfies `RpcClient` declares the raw request port,
+ * and the port's inventory only shrinks (unvalidated-rpc-request-port-boundary.test.ts).
+ */
 export function createAnsweringClient(responder: Responder): AnsweringClient {
-  const requests: SentRequest[] = []
-  const client: RpcClient = {
-    sendRequest: (method: string, params?: unknown) => {
-      requests.push({ method, params })
-      return Promise.resolve(responder(method, params))
-    },
-    subscribe: () => () => {},
-    updateTerminalSubscriptionViewport: () => {},
-    getState: () => 'connected',
-    getReconnectAttempt: () => 0,
-    getLastConnectedAt: () => null,
-    onStateChange: () => () => {},
-    notifyForeground: () => {},
-    close: () => {}
-  }
+  const client = createFakeRpcClient({}, responder)
+  const sentSoFar = (): SentRequest[] =>
+    client.requests.map((request) => ({ method: request.method, params: request.args[1] }))
   return {
     client,
-    requests,
-    sent: (method) => requests.filter((request) => request.method === method)
+    get requests() {
+      return sentSoFar()
+    },
+    sent: (method) => sentSoFar().filter((request) => request.method === method)
   }
 }
 

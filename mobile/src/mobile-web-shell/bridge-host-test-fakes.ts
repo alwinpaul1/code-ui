@@ -36,8 +36,18 @@ type ClientGetters = Partial<
   >
 >
 
-/** Every call the host can make, recorded; nothing settles until the test says so. */
-export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient {
+/** Answers a request the moment it is sent, from the method and params the caller passed. */
+export type FakeRpcAnswer = (method: string, params: unknown) => RpcResponse | Promise<RpcResponse>
+
+/**
+ * Every call the host can make, recorded. Nothing settles until the test says so, unless `answer`
+ * is given: then each request is answered as it arrives, and a suite parks one by returning a
+ * promise it settles later.
+ */
+export function createFakeRpcClient(
+  getters: ClientGetters = {},
+  answer?: FakeRpcAnswer
+): FakeRpcClient {
   const requests: SentRequest[] = []
   const streams: OpenStream[] = []
   const foregroundCalls: (readonly unknown[])[] = []
@@ -47,6 +57,9 @@ export function createFakeRpcClient(getters: ClientGetters = {}): FakeRpcClient 
     sendRequest: (...args: [string, unknown?, SendRequestOptions?]) =>
       new Promise<RpcResponse>((resolve, reject) => {
         requests.push({ method: args[0], args, resolve, reject })
+        if (answer) {
+          Promise.resolve(answer(args[0], args[1])).then(resolve, reject)
+        }
       }),
     subscribe: (method, params, onData, options) => {
       const stream: OpenStream = {

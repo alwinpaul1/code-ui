@@ -37,7 +37,9 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // The far end of that transport: it offers the port to the page and posts what it is handed,
   // reading neither the method nor the reply.
   { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
-  // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
+  // Fakes the port for the bridge host suites, and answers it for the agent-history panel's
+  // (agent-history-panel.test-support.ts builds on it); a non-test file only because tsconfig
+  // excludes tests.
   { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/direct-rpc-client.ts', references: 3 },
