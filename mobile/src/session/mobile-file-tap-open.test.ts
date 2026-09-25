@@ -484,6 +484,7 @@ describe('openMobileFileTap', () => {
     await Promise.resolve()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(onOpenFailed).toHaveBeenCalledWith({ kind: 'refused', message: 'nope' })
   })
 
   it('reports an unsupported file when files.open declines it', async () => {
@@ -529,6 +530,7 @@ describe('openMobileFileTap', () => {
     await Promise.resolve()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(onOpenFailed).toHaveBeenCalledWith({ kind: 'not-openable', fileKind: 'binary' })
     expect(scheduleDelayedAction).not.toHaveBeenCalled()
   })
 

@@ -36,24 +36,26 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     nativeChatTranscriptIsLocalReadable,
     visitedSessionTabIdsRef
   } = scope
-  // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
-  const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
-    client,
-    hostId,
-    worktreeId,
-    worktreeName: routeWorktreeName,
-    nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
-    activeHandleRef,
-    terminalCwdRef,
-    openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
-    fetchSessionTabs,
-    getSessionTabs: () => sessionTabsRef.current,
-    getActiveSessionTabId: () => activeSessionTabIdRef.current,
-    getActiveSessionTabType: () => activeSessionTabTypeRef.current,
-    switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
-    scheduleDelayedAction,
-    reportChatTapFailure: nativeChatSendError.show
-  })
+  // Tap a terminal or chat file path → resolve on host, open as file tab/preview. A bare chat name
+  // found in several folders is offered in fileTapMatchPicker, which the surface mounts.
+  const { handleFileTap, handleNativeChatFileTap, fileTapMatchPicker } =
+    useMobileFileTapHandlers<MobileSessionTab>({
+      client,
+      hostId,
+      worktreeId,
+      worktreeName: routeWorktreeName,
+      nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+      activeHandleRef,
+      terminalCwdRef,
+      openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
+      fetchSessionTabs,
+      getSessionTabs: () => sessionTabsRef.current,
+      getActiveSessionTabId: () => activeSessionTabIdRef.current,
+      getActiveSessionTabType: () => activeSessionTabTypeRef.current,
+      switchSessionTab: (tab) => switchSessionTabRef.current?.(tab),
+      scheduleDelayedAction,
+      reportChatTapFailure: nativeChatSendError.show
+    })
   // "Revert this hunk" on a landed-edit card: the same worktree and chat
   // provenance a tapped path resolves with, so the two cannot disagree about
   // which file a card names. Undefined until this host is known to let a
@@ -206,6 +208,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   return {
     handleFileTap,
     handleNativeChatFileTap,
+    fileTapMatchPicker,
     handleNativeChatRevertHunk,
     handleOpenedFileDiffActivationSeqRef,
     fileOpenStartActiveTabIdRef,

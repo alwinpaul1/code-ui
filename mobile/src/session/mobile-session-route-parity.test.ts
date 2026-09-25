@@ -112,7 +112,9 @@ const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e12
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
 // 2026-09-25: bindLiveInputField and bindCommandField bind (Orca #22300).
 // 2026-09-25: hasDirtyDraft binds for the Markdown actions' page Back claim (Orca #22362).
-const HEAD_HOOK_BINDING_SHA256 = '57078a3ef7cf4e18632858ecdd26bb35a3f84950009c790d59a1390966912fdb'
+// 2026-09-25 (later): the file actions also take fileTapMatchPicker out of
+// useMobileFileTapHandlers, the drawer for a bare chat name found in several folders.
+const HEAD_HOOK_BINDING_SHA256 = 'cbcf879f60bbe699a6c3a437c4643e08750e61936f1b7d254e516ab393c506b9'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -416,7 +418,9 @@ const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b20
 // 2026-09-24: MobileSessionHeader's <TabActivityBadge> call gained
 // `leadTurnEnded` (e9df676a), so the active tab's pill stops spinning once
 // Claude's own turn has ended. Same record count; only that record moved.
-const HEAD_LEAF_JSX_SHA256 = 'c03d428389ac79ff3c0badba4ffc1ea437781c0d3c6b3ee8e1897b869b814c25'
+// 2026-09-25: MobileSessionSurface's <MobileFileTapMatchPicker picker=...> is
+// the one new record (74).
+const HEAD_LEAF_JSX_SHA256 = '7bdcc51255e964754a7b069eff41ff04c6a0164780a20c818f29667bb14831dc'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
@@ -960,7 +964,9 @@ describe('mobile session route extraction parity', () => {
     // 72 since 2026-09-18: the file reader's line-selection action bar.
     // 73 since 2026-09-18 (later): the subagent transcript modal mounted by the
     // session content.
-    expect(jsx.leaf).toHaveLength(73)
+    // 74 since 2026-09-25: the surface mounts MobileFileTapMatchPicker, the
+    // drawer a bare chat file name found in several folders is offered in.
+    expect(jsx.leaf).toHaveLength(74)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     expect(jsx.styleReferences).toHaveLength(92)

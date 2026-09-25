@@ -1,12 +1,34 @@
-import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject
+} from 'react'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { triggerSelection } from '../platform/haptics'
+import { describeFileTapOpenFailure } from './mobile-file-tap-failure'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
-import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { openMobileNativeChatFileTap, type FileTapMatchOffer } from './mobile-native-chat-open-file'
+import type { RpcClient } from '../transport/rpc-client'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
+/** The drawer that asks which of several same-named files a chat tap meant. */
+export type FileTapMatchPickerModel = {
+  /** What the drawer lists. Kept while it animates closed, so the rows do not blank out. */
+  offer: FileTapMatchOffer | null
+  visible: boolean
+  /** A row was pressed. The file opens once the drawer has finished closing. */
+  pick: (relativePath: string) => void
+  close: () => void
+  /** The drawer finished hiding: open what was picked, if anything, and forget the offer. */
+  afterClose: () => void
+}
+
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
-  client: RpcOperationSender | null
+  /** `getState` says whether a failed request met a dead link or a silent desktop. */
+  client: (RpcOperationSender & Partial<Pick<RpcClient, 'getState'>>) | null
   hostId: string
   worktreeId: string
   worktreeName?: string
@@ -40,6 +62,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     column: number | null
   ) => void
   handleNativeChatFileTap: (pathText: string) => void
+  fileTapMatchPicker: FileTapMatchPickerModel
 } {
   const {
     activeHandleRef,
@@ -62,6 +85,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   const routerRef = useRef(router)
   const optionsRef = useRef(options)
   const activationSeqRef = useRef(0)
+  const [matchOffer, setMatchOffer] = useState<FileTapMatchOffer | null>(null)
+  const [matchPickerVisible, setMatchPickerVisible] = useState(false)
+  const matchOfferRef = useRef<FileTapMatchOffer | null>(null)
+  const pickedMatchRef = useRef<string | null>(null)
 
   useLayoutEffect(() => {
     routerRef.current = router
@@ -177,9 +204,51 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       }),
       switchSessionTab: current.switchSessionTab,
       scheduleDelayedAction: current.scheduleDelayedAction,
-      onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
+      onOpenFailed: (failure) => {
+        const state = current.client?.getState?.()
+        current.reportChatTapFailure(
+          describeFileTapOpenFailure(pathText, failure, {
+            worktreeName: current.worktreeName,
+            connected: state === undefined ? null : state === 'connected'
+          })
+        )
+      },
+      offerFileTapMatches: (offer) => {
+        matchOfferRef.current = offer
+        pickedMatchRef.current = null
+        setMatchOffer(offer)
+        setMatchPickerVisible(true)
+      }
     })
   }, [])
 
-  return { handleFileTap, handleNativeChatFileTap }
+  const pickMatch = useCallback((relativePath: string) => {
+    pickedMatchRef.current = relativePath
+  }, [])
+  const closeMatchPicker = useCallback(() => setMatchPickerVisible(false), [])
+  const afterMatchPickerClose = useCallback(() => {
+    const offer = matchOfferRef.current
+    const picked = pickedMatchRef.current
+    matchOfferRef.current = null
+    pickedMatchRef.current = null
+    setMatchOffer(null)
+    // Why after the hide and not on the press: the open can push the preview route, and a route
+    // should not change under a sheet still on screen. PickerListDrawer waits out its hide before
+    // it selects for the same reason.
+    if (offer && picked && offer.paths.includes(picked)) {
+      offer.open(picked)
+    }
+  }, [])
+  const fileTapMatchPicker = useMemo(
+    () => ({
+      offer: matchOffer,
+      visible: matchPickerVisible,
+      pick: pickMatch,
+      close: closeMatchPicker,
+      afterClose: afterMatchPickerClose
+    }),
+    [afterMatchPickerClose, closeMatchPicker, matchOffer, matchPickerVisible, pickMatch]
+  )
+
+  return { handleFileTap, handleNativeChatFileTap, fileTapMatchPicker }
 }

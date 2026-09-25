@@ -5,6 +5,7 @@ import type {
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
+import { refusalFailure, thrownFailure, type FileTapOpenFailure } from './mobile-file-tap-failure'
 import { fileTapOpenRun, fileTapPathResolve } from './mobile-session-launch-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
@@ -43,60 +44,87 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   }
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
-  /** Invoked when the tap cannot open anything (resolve miss, directory, or a
-   *  failed open). Omitted on surfaces that keep the historical silent miss. */
-  onOpenFailed?: () => void
+  /** Invoked, with the reason, when the tap cannot open anything — and only while the source tab
+   *  is still the active one. Omitted on surfaces that keep the historical silent miss. */
+  onOpenFailed?: (failure: FileTapOpenFailure) => void
 }
 
 export function openMobileFileTap<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): void {
-  void openMobileFileTapAsync(options).catch(() => {
+  void openMobileFileTapAsync(options).catch((error: unknown) => {
     // File taps are best-effort: a failed host resolution should leave terminal
     // focus/input untouched. Surfaces that want feedback pass onOpenFailed.
-    reportOpenFailure(options)
+    reportOpenFailure(options, thrownFailure(error))
   })
 }
 
 function reportOpenFailure<T extends FileTapSessionTab>(
-  options: OpenMobileFileTapOptions<T>
+  options: OpenMobileFileTapOptions<T>,
+  failure: FileTapOpenFailure
 ): void {
   if (
     options.onOpenFailed &&
     shouldActivateOpenedMobileSessionTab(options.getActivationState(false))
   ) {
-    options.onOpenFailed()
+    options.onOpenFailed(failure)
   }
+}
+
+/**
+ * What an unopenable resolution says about itself (Orca's resolveTerminalPath, read at
+ * ac675ded6e): it names a relative path only where it looked, and the workspace it looked in.
+ */
+function unopenedResolutionFailure(
+  resolved: RuntimeTerminalPathResolution,
+  worktreeId: string
+): FileTapOpenFailure {
+  if (resolved.isDirectory) {
+    return { kind: 'folder' }
+  }
+  if (resolved.relativePath == null) {
+    // An absolute path with no relative one is outside every workspace the host knows, answered
+    // without a look. Neither path is the host declining to place it at all (`~` on SSH).
+    return resolved.absolutePath ? { kind: 'outside-workspace' } : { kind: 'unreachable' }
+  }
+  const owner = resolved.worktree?.trim()
+  return owner && owner !== worktreeId ? { kind: 'not-found-elsewhere' } : { kind: 'not-found' }
 }
 
 async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const worktree = `id:${options.worktreeId}`
-  const response = await fileTapPathResolve.request(
-    options.client,
-    {
-      worktree,
-      pathText: options.pathText,
-      // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
-      crossWorkspace: true,
-      ...(options.terminalHandle && options.terminalHandle.trim().length > 0
-        ? { terminal: options.terminalHandle }
-        : {}),
-      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
-      ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
-    },
-    { timeoutMs: 10_000 }
-  )
+  let response
+  try {
+    response = await fileTapPathResolve.request(
+      options.client,
+      {
+        worktree,
+        pathText: options.pathText,
+        // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
+        crossWorkspace: true,
+        ...(options.terminalHandle && options.terminalHandle.trim().length > 0
+          ? { terminal: options.terminalHandle }
+          : {}),
+        ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
+        ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
+      },
+      { timeoutMs: 10_000 }
+    )
+  } catch {
+    reportOpenFailure(options, { kind: 'no-answer' })
+    return
+  }
   const accepted = fileTapPathResolve.interpret(response)
   if (!accepted.accepted) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, refusalFailure(response))
     return
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const resolved = accepted.value as RuntimeTerminalPathResolution
   if (!resolved.exists || resolved.isDirectory) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, unopenedResolutionFailure(resolved, options.worktreeId))
     return
   }
   // Not a failure: the user moved off the source tab mid-resolve.
@@ -142,7 +170,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
       ? resolved.openTarget.relativePath
       : resolved.relativePath
   if (!openedPath) {
-    reportOpenFailure(options)
+    // Exists, but with neither a workspace path nor a grant to read it by.
+    reportOpenFailure(options, { kind: 'outside-workspace' })
     return
   }
   options.triggerOpenFeedback()
@@ -173,18 +202,24 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
     return
   }
-  const openResponse = await fileTapOpenRun.request(
-    options.client,
-    { worktree: resolvedWorktree, relativePath: openedPath },
-    { timeoutMs: 15_000 }
-  )
+  let openResponse
+  try {
+    openResponse = await fileTapOpenRun.request(
+      options.client,
+      { worktree: resolvedWorktree, relativePath: openedPath },
+      { timeoutMs: 15_000 }
+    )
+  } catch {
+    reportOpenFailure(options, { kind: 'no-answer' })
+    return
+  }
   const opened = fileTapOpenRun.interpret(openResponse)
   if (!opened.accepted) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, refusalFailure(openResponse))
     return
   }
   if (!opened.value.opened) {
-    reportOpenFailure(options)
+    reportOpenFailure(options, { kind: 'not-openable', fileKind: opened.value.kind ?? null })
     return
   }
   scheduleOpenedWorktreeTabActivation(options, openedPath)

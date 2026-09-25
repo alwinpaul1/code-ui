@@ -30,7 +30,8 @@ function baseOptions(client: { sendRequest: ReturnType<typeof vi.fn> }) {
     getActivationState: activationState,
     switchSessionTab: vi.fn(),
     scheduleDelayedAction: vi.fn(),
-    onOpenFailed: vi.fn()
+    onOpenFailed: vi.fn(),
+    offerFileTapMatches: vi.fn()
   }
 }
 
@@ -139,11 +140,13 @@ describe('openMobileNativeChatFileTap', () => {
   })
 
   it('surfaces a resolve miss instead of a silent no-op', async () => {
+    // What the host answers for a path inside the workspace that is not there: the paths it
+    // looked at, and exists false (resolveTerminalPath's ENOENT branch).
     const sendRequest = vi.fn(async () =>
       ok({
         worktree: 'wt-1',
-        relativePath: null,
-        absolutePath: null,
+        relativePath: 'gone/missing.ts',
+        absolutePath: '/repo/gone/missing.ts',
         exists: false,
         isDirectory: false
       })
@@ -155,6 +158,8 @@ describe('openMobileNativeChatFileTap', () => {
     await Promise.resolve()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFailed).toHaveBeenCalledWith({ kind: 'not-found' })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(options.pushPreviewRoute).not.toHaveBeenCalled()
     expect(options.triggerOpenFeedback).not.toHaveBeenCalled()
   })
@@ -170,6 +175,7 @@ describe('openMobileNativeChatFileTap', () => {
     await Promise.resolve()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFailed).toHaveBeenCalledWith({ kind: 'no-answer' })
   })
 
   it('opens a plain path through files.open with tab activation', async () => {

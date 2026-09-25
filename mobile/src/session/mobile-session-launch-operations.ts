@@ -3,6 +3,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   aiVaultResumePreparationSchema,
   browserTabCreatedSchema,
+  fileTapNameMatchesSchema,
   fileTapOpenedSchema,
   sessionLaunchUnreadReplySchema
 } from './session-launch-reply-schema'
@@ -17,10 +18,11 @@ import {
 export { terminalArtifactPathResolve as fileTapPathResolve } from '../files/mobile-file-preview-operations'
 
 /**
- * The worktree open a tap leads to. Its own skip: the tap is best-effort and a refusal is the same
- * silent miss as a path that resolved to nothing. `sourceFileOpenRun` is the Changes screen's read
- * of the same method and raises the host's message instead, because there the user asked for a tab
- * and has nothing otherwise.
+ * The worktree open a tap leads to. Its own skip: the tap is best-effort, so a refusal never
+ * throws. A terminal tap drops it silently, and a chat tap reads the host's message off the raw
+ * reply for the line it shows. `sourceFileOpenRun` is the Changes screen's read of the same method
+ * and throws the host's message instead, because there the user asked for a tab and has nothing
+ * otherwise.
  */
 export const fileTapOpenRun = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -29,6 +31,35 @@ export const fileTapOpenRun = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('tapped-file-opened', fileTapOpenedSchema)
+  })
+)
+
+const fileTapNameMatchesReader = rpcResultVariant('tapped-name-matches', fileTapNameMatchesSchema)
+
+/**
+ * The workspace search a chat tap runs when a bare name (`index.ts`, no folder) misses at the
+ * worktree root. Same host search as the composer's `@` menu, a second reader because the tap needs
+ * `truncated` (fileTapNameMatchesSchema says why). A skip, because a refusal is what sends the
+ * lookup to the inventory below.
+ */
+export const fileTapNameSearchRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.search-tapped-name-or-skip',
+    method: 'files.searchPaths',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: fileTapNameMatchesReader
+  })
+)
+
+/** The whole-workspace inventory the lookup falls back to, as the composer does on an older host. */
+export const fileTapNameInventoryRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.list-for-tapped-name-or-skip',
+    method: 'files.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: fileTapNameMatchesReader
   })
 )
 

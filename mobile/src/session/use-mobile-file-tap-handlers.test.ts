@@ -121,7 +121,15 @@ describe('useMobileFileTapHandlers', () => {
   })
 
   it('resolves chat taps against the worktree root and reports a miss', async () => {
-    const sendRequest = vi.fn(async () => ok({ exists: false, isDirectory: false }))
+    const sendRequest = vi.fn(async () =>
+      ok({
+        worktree: 'wt-1',
+        relativePath: 'mobile/src/x.ts',
+        absolutePath: '/repo/mobile/src/x.ts',
+        exists: false,
+        isDirectory: false
+      })
+    )
     const options = createOptions(sendRequest)
     act(() => {
       renderer = create(createElement(Harness, { options }))
@@ -140,7 +148,9 @@ describe('useMobileFileTapHandlers', () => {
       },
       { timeoutMs: 10_000 }
     )
-    expect(options.reportChatTapFailure).toHaveBeenCalledWith("Couldn't open mobile/src/x.ts:12")
+    expect(options.reportChatTapFailure).toHaveBeenCalledWith(
+      "Couldn't open mobile/src/x.ts:12: no such file in Orca"
+    )
   })
 
   it('lets structured chat file taps resolve without a backing terminal handle', async () => {
