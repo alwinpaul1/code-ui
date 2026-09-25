@@ -89,14 +89,30 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
     expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
   })
 
-  it('writes the PowerShell notify command to a Windows host', async () => {
+  // 2026-09-25, a Windows user: every Claude launch failed with "Error:
+  // Invalid JSON provided to --settings". Windows PowerShell 5.1 strips the
+  // double quotes inside an argument it hands a native program, so the
+  // settings JSON reached Claude Code without them. The Windows path had never
+  // run on Windows. Until an encoding survives 5.1, a Windows host gets no flag.
+  it('writes no beacon flag to a Windows host, even with the switch on', async () => {
     const host = fakeHost({}, 'win32')
+    expect(await syncAgentHudDesktopLaunchArgs(host.client, true)).toBeNull()
+    expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
+    expect(host.stored()).toEqual({})
+  })
+
+  it('takes a flag already saved on a Windows host back out, keeping the user\'s own args', async () => {
+    const host = fakeHost(
+      {
+        claude: `--verbose ${agentHudLaunchFlag('claude', 'win32')}`,
+        codex: agentHudLaunchFlag('codex', 'win32')
+      },
+      'win32'
+    )
     const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
-    expect(written?.codex).toContain('powershell')
-    expect(written?.codex).not.toContain('"sh"')
-    // A Windows host gets the PowerShell status line, base64-encoded.
-    expect(written?.claude).toBe(agentHudLaunchFlag('claude', 'win32'))
-    expect(written?.claude).toContain('-EncodedCommand')
+    expect(written?.claude).toBe('--verbose')
+    expect(written && 'codex' in written).toBe(false)
+    expect(host.stored()).toEqual({ claude: '--verbose' })
   })
 
   it('gives the profile back exactly as it was when the switch is turned off', async () => {

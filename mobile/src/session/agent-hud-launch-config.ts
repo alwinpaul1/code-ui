@@ -39,8 +39,8 @@ export async function resolveAgentHudLaunchConfig(
   const agentArgs = buildAgentHudLaunchArgs({
     agent,
     hostDefaultArgs: resolveTuiAgentLaunchArgs(agent, hostSettings.agentDefaultArgs),
-    // Codex's notify command differs on Windows: Git for Windows puts no
-    // sh.exe on PATH, and Codex spawns notify with no shell.
+    // A Windows host takes no flag (`hostTakesAgentHudFlag`), so it launches
+    // exactly as the desktop would.
     hostPlatform: readMobileRuntimeHostPlatform(resultOf(status))
   })
   if (agentArgs === null) {

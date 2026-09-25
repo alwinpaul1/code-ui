@@ -339,7 +339,9 @@
             // beat for Windows where each run is a PowerShell process.
             // 2026-09-25: 316. The POSIX writer is the C0 channel's `v`
             // (agent-hud-channel.ts), beside the OSC `w` the Windows branch keeps.
-            "max": 316,
+            // +3 the same day for `hostTakesAgentHudFlag`: no flag reaches a
+            // Windows host, whose PowerShell 5.1 broke the `--settings` JSON.
+            "max": 319,
             "skipBlankLines": true,
             "skipComments": true
           }

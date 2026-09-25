@@ -143,8 +143,8 @@ checked against both parsers' source. The reasons every other C0 byte is out,
 and the splices no byte choice fixes (right after `ESC[`, where xterm.js drops
 a private-mode CSI; inside a UTF-8 character; before a combining mark), are
 in `docs/mobile-agent-hud.md`. The phone still reads the old `ESC ] 7777 ; … BEL`
-frame from tabs launched before the change, and the Windows writers still
-write it, because ConPTY's handling of these bytes is unknown.
+frame from tabs launched before the change, and the parked Windows writers
+still write it, because ConPTY's handling of these bytes is unknown.
 
 Claude's command also runs the user's own status line and prints its output
 verbatim, so a user with one keeps exactly their bar, and a
@@ -155,11 +155,14 @@ picker), and while it works the beacon is a heartbeat the phone can time
 (2026-09-18: a rule timed on the agent WORKING with no heartbeat behind it
 blanked a live pill 30 s into any tool call, because the status line does not
 repaint during one). A user's own bar repaints on that beat too; that is their
-bar, not a row of ours. Windows takes a different route: hook
-children there sit in a hidden console, so both agents get a PowerShell script
-that attaches to the agent's console via P/Invoke and writes there. It runs
-for real under PowerShell 7 in tests but **has not run on a Windows machine**
-— do not report it as working. The design, the verified field
+bar, not a row of ours. **A Windows host gets no beacon flag at all**, and the
+desktop sync takes back out one it already saved there. On 2026-09-25 a Windows
+user's Claude would not start ("Error: Invalid JSON provided to --settings"):
+Windows PowerShell 5.1 strips the double quotes inside an argument it passes
+to a native program. The PowerShell writers (they attach to the agent's
+console via P/Invoke) are kept and still run under PowerShell 7 in tests, but
+nothing reaches a Windows host until a launch encoding is proven on a real
+Windows machine (`hostTakesAgentHudFlag` in `agent-hud-launch-args.ts`). The design, the verified field
 shapes and what is still unproven are in `docs/mobile-agent-hud.md`; the code
 is `mobile/src/session/agent-hud-*`. Orca's hooks (`agentStatus.model`) and
 `accounts.subscribe` remain the fallback sources, and the screen still owns the

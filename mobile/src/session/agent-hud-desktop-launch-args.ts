@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import type { RpcClient } from '../transport/rpc-client'
-import { agentHudLaunchFlag } from './agent-hud-launch-args'
+import { agentHudLaunchFlag, hostTakesAgentHudFlag } from './agent-hud-launch-args'
 
 /**
  * Agents started on the DESKTOP get the HUD beacon the same way the phone's
@@ -87,15 +87,17 @@ export async function syncAgentHudDesktopLaunchArgs(
   if (!settings) {
     return null
   }
-  // Codex's notify command differs on Windows; Claude's flag does not.
+  // A Windows host takes no flag, and one this app already saved there is
+  // taken back out even while the switch is on: it stops Claude from starting.
   const hostPlatform = readMobileRuntimeHostPlatform(resultOf(statusResponse))
+  const writeFlag = enabled && hostTakesAgentHudFlag(hostPlatform)
   const current = ((settings as HostSettingsLike).agentDefaultArgs ?? {}) as Partial<
     Record<TuiAgent, string>
   >
   const next: Partial<Record<TuiAgent, string>> = { ...current }
   let changed = false
   for (const agent of HUD_AGENTS) {
-    const value = enabled
+    const value = writeFlag
       ? withAgentHudDesktopFlag(agent, current[agent], hostPlatform)
       : withoutAgentHudDesktopFlag(agent, current[agent])
     if (value !== (current[agent] ?? '')) {

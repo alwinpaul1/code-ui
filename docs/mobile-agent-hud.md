@@ -2,7 +2,7 @@
 
 Verified against Orca 1.4.197, Claude Code 2.1.266 and codex-cli 0.153.4 on
 macOS; the heartbeat (`refreshInterval`) and the session id against Claude
-Code 2.1.276; the C0 channel against Claude Code 2.1.281 (2026-09-25). The Windows path is written but unrun; see below.
+Code 2.1.276; the C0 channel against Claude Code 2.1.281 (2026-09-25). A Windows host gets no flag: the first real Windows run failed (see below).
 
 **The rule this is built to:** a Code UI user sets up nothing on their desktop.
 No status line, no plugin, no config, no Orca change — and no code written to
@@ -306,7 +306,19 @@ stdout is printed verbatim — a user with claude-hud keeps seeing exactly their
 bar. Found nothing, print nothing, draw no row. Codex's own single-line
 `notify = [...]` from `config.toml` is run too, best effort.
 
-### Windows takes a different route (untested)
+### Windows takes a different route (switched off)
+
+**2026-09-25: a Windows host gets no beacon flag, from the phone or through
+the desktop sync, and the sync takes back out one it already saved.** The
+first report from a real Windows machine was Claude refusing to start at all:
+"Error: Invalid JSON provided to --settings". Windows PowerShell 5.1 strips
+the double quotes inside an argument it passes to a native program, so
+`claude --settings '{"statusLine":…}'` reached Claude Code as JSON with no
+quotes in it. Orca launches through PowerShell there, and the sync had saved
+the flag in `agentDefaultArgs`, so every Claude launch on that host failed,
+not only the phone's. `hostTakesAgentHudFlag` in `agent-hud-launch-args.ts`
+is the switch. Everything below is kept, and its size ceiling still tested,
+for the day a launch encoding survives 5.1 on a real machine.
 
 Windows has no PTY device path to walk to, so both halves change — and Codex's
 flag itself differs, which is why the phone reads `hostPlatform` from

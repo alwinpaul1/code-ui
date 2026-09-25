@@ -793,9 +793,21 @@ export function agentHudLaunchFlag(
 }
 
 /**
+ * No beacon flag for a Windows host (2026-09-25: its Claude would not start,
+ * "Error: Invalid JSON provided to --settings", because Windows PowerShell 5.1
+ * strips the double quotes inside a native program's argument). The writers
+ * above stay, tested under PowerShell 7, until a launch encoding is proven on
+ * a real Windows machine. A missing HUD beats an agent that will not start.
+ */
+export function hostTakesAgentHudFlag(hostPlatform: NodeJS.Platform | null): boolean {
+  return hostPlatform !== 'win32'
+}
+
+/**
  * The launch arguments for one agent: the host's own defaults kept in front,
- * ours appended. Null for an agent with no beacon channel, so the host
- * launches exactly as it always did.
+ * ours appended. Null for an agent with no beacon channel, or on a host that
+ * takes no flag (`hostTakesAgentHudFlag`), so the host launches exactly as it
+ * always did.
  *
  * A null platform is treated as POSIX: an older host that does not report one
  * is a host the phone has only ever seen on macOS and Linux.
@@ -807,7 +819,7 @@ export function buildAgentHudLaunchArgs(args: {
   /** From `status.get`; decides which Codex notify command the host can run. */
   hostPlatform: NodeJS.Platform | null
 }): string | null {
-  if (args.agent !== 'claude' && args.agent !== 'codex') {
+  if ((args.agent !== 'claude' && args.agent !== 'codex') || !hostTakesAgentHudFlag(args.hostPlatform)) {
     return null
   }
   const base = args.hostDefaultArgs.trim()

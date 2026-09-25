@@ -482,11 +482,7 @@ describe('the flags survive the trip through Orca to the host shell', () => {
 
   it('rides through the tokenizer as one -c value, with no single quote in it', () => {
     expect(CODEX_HUD_NOTIFY_POWERSHELL).not.toContain("'")
-    const args = buildAgentHudLaunchArgs({
-      agent: 'codex',
-      hostDefaultArgs: '',
-      hostPlatform: 'win32'
-    })!
+    const args = agentHudLaunchFlag('codex', 'win32')
     const tokens = tokenizeStartupCommand(args, 'posix')
     expect(tokens.ok).toBe(true)
     if (tokens.ok) {
@@ -993,18 +989,13 @@ describe('the Windows command line has a ceiling, and the flags must stay under 
   const HOST_RESERVE = 2000
 
   it('leaves the Windows launch room for the host to add the binary and its own flags', () => {
-    const claude = buildAgentHudLaunchArgs({
-      agent: 'claude',
-      hostDefaultArgs: '',
-      hostPlatform: 'win32'
-    })!
+    const claude = agentHudLaunchFlag('claude', 'win32')
     expect(claude.length + HOST_RESERVE).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
   })
 
   it('keeps every Windows agent under the ceiling, not just the one that nearly fills it', () => {
     for (const agent of ['claude', 'codex'] as const) {
-      const args = buildAgentHudLaunchArgs({ agent, hostDefaultArgs: '', hostPlatform: 'win32' })!
-      expect(args.length).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
+      expect(agentHudLaunchFlag(agent, 'win32').length).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
     }
   })
 
@@ -1012,8 +1003,27 @@ describe('the Windows command line has a ceiling, and the flags must stay under 
    *  carries its own long default args spends the same budget we do. */
   it('counts the host default args against the same ceiling', () => {
     const hostDefaultArgs = '--model claude-opus-5 --resume 5d877e39-1867-424f-86b5-c080713c1563'
-    const claude = buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs, hostPlatform: 'win32' })!
-    expect(claude).toContain(hostDefaultArgs)
+    const claude = `${hostDefaultArgs} ${agentHudLaunchFlag('claude', 'win32')}`
     expect(claude.length).toBeLessThan(WINDOWS_COMMAND_LINE_MAX)
+  })
+})
+
+// 2026-09-25, a Windows user: "Error: Invalid JSON provided to --settings" on
+// every Claude launch. Windows PowerShell 5.1 strips the double quotes inside
+// an argument passed to a native program; the path was only ever run under
+// PowerShell 7. No flag goes to a Windows host until an encoding survives 5.1.
+describe('a Windows host launches its agents exactly as it always did', () => {
+  it('gets no beacon flag for Claude or Codex', () => {
+    for (const agent of ['claude', 'codex'] as const) {
+      expect(buildAgentHudLaunchArgs({ agent, hostDefaultArgs: '--verbose', hostPlatform: 'win32' })).toBeNull()
+    }
+  })
+
+  it('still gets the flag on macOS and Linux, and on a host that reports no platform', () => {
+    for (const hostPlatform of ['darwin', 'linux', null] as const) {
+      expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform })).toBe(
+        agentHudLaunchFlag('claude', hostPlatform)
+      )
+    }
   })
 })
