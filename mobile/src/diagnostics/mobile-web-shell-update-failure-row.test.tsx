@@ -23,7 +23,7 @@ vi.mock('../mobile-web-shell/generation-store-file-system', () => ({
   createExpoGenerationFileSystem: () => ({})
 }))
 vi.mock('../transport/host-store', () => ({ loadHosts: async () => doubles.hosts }))
-vi.mock('./troubleshoot-screen-styles', () => ({ troubleshootScreenStyles: {} }))
+vi.mock('./troubleshoot-screen-styles', () => ({ useTroubleshootScreenStyles: () => ({}) }))
 
 import { MobileWebShellUpdateFailureRow } from './mobile-web-shell-update-failure-row'
 

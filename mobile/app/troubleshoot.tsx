@@ -12,7 +12,8 @@ import {
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
+import { spacing } from '../src/theme/mobile-theme'
+import { useTheme } from '../src/theme/theme-context'
 import { loadHosts } from '../src/transport/host-store'
 import { readMobileLocalAddress } from '../src/transport/mobile-network-type'
 import {
@@ -25,7 +26,7 @@ import {
   unreachableHostDetail
 } from '../src/diagnostics/host-reachability'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
-import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
+import { useTroubleshootScreenStyles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
 import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
 import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
@@ -49,17 +50,20 @@ type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  const { colors } = useTheme()
   switch (status) {
     case 'pass':
-      return <CheckCircle2 size={14} color={colors.statusGreen} />
+      return <CheckCircle2 size={14} color={colors.success} />
     case 'fail':
-      return <XCircle size={14} color={colors.statusRed} />
+      return <XCircle size={14} color={colors.danger} />
     case 'warn':
       return <AlertTriangle size={14} color={colors.textMuted} />
   }
 }
 
 export default function TroubleshootScreen() {
+  const styles = useTroubleshootScreenStyles()
+  const { colors } = useTheme()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -208,9 +212,9 @@ export default function TroubleshootScreen() {
           disabled={diagnosticStatus === 'running'}
         >
           {diagnosticStatus === 'running' ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
+            <ActivityIndicator size="small" color={colors.text} />
           ) : (
-            <Activity size={16} color={colors.textPrimary} />
+            <Activity size={16} color={colors.text} />
           )}
           <Text style={styles.diagnosticButtonLabel}>
             {diagnosticStatus === 'running'
@@ -228,7 +232,7 @@ export default function TroubleshootScreen() {
           ]}
           onPress={() => router.push('/connection-log')}
         >
-          <ScrollText size={16} color={colors.textPrimary} />
+          <ScrollText size={16} color={colors.text} />
           <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
 
@@ -272,7 +276,7 @@ export default function TroubleshootScreen() {
                 style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
                 onPress={() => toggleSection(section.id)}
               >
-                {section.icon}
+                <section.Icon size={16} color={colors.textSecondary} />
                 <Text style={styles.accordionTitle}>{section.title}</Text>
                 {expandedId === section.id ? (
                   <ChevronUp size={16} color={colors.textMuted} />

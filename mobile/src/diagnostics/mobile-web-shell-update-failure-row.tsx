@@ -4,7 +4,7 @@ import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web
 import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
 import { loadHosts } from '../transport/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useTroubleshootScreenStyles } from './troubleshoot-screen-styles'
 
 type Line = { readonly hostId: string; readonly text: string }
 
@@ -31,6 +31,7 @@ export function updateFailureLines(
  * that can run the shell.
  */
 export function MobileWebShellUpdateFailureRow() {
+  const styles = useTroubleshootScreenStyles()
   const [lines, setLines] = useState<readonly Line[]>([])
 
   useEffect(() => {

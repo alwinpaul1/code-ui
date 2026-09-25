@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
-import { colors } from '../theme/mobile-theme'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useTheme } from '../theme/theme-context'
+import { useTroubleshootScreenStyles } from './troubleshoot-screen-styles'
 import {
   useMobileWebBundleProbe,
   type MobileWebBundleProbeState
@@ -20,6 +20,7 @@ function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): s
 
 /** One `label — detail` line in the same row shape the diagnostic checks use. */
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
+  const styles = useTroubleshootScreenStyles()
   return (
     <View style={styles.checkRow}>
       <Text style={styles.checkLabel}>{label}</Text>
@@ -29,6 +30,7 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
+  const styles = useTroubleshootScreenStyles()
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
@@ -66,6 +68,8 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
  * result rather than implying it speaks for all of them.
  */
 export function MobileWebBundleProbeRow() {
+  const styles = useTroubleshootScreenStyles()
+  const { colors } = useTheme()
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false
@@ -94,9 +98,9 @@ export function MobileWebBundleProbeRow() {
         disabled={state.status === 'running'}
       >
         {state.status === 'running' ? (
-          <ActivityIndicator size="small" color={colors.textPrimary} />
+          <ActivityIndicator size="small" color={colors.text} />
         ) : (
-          <Package size={16} color={colors.textPrimary} />
+          <Package size={16} color={colors.text} />
         )}
         <Text style={styles.diagnosticButtonLabel}>{buttonLabel(state, awaitingHost)}</Text>
       </Pressable>

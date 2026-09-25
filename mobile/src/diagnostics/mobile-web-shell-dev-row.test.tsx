@@ -51,7 +51,7 @@ vi.mock('../storage/preferences', () => ({
       })
     })
 }))
-vi.mock('./troubleshoot-screen-styles', () => ({ troubleshootScreenStyles: {} }))
+vi.mock('./troubleshoot-screen-styles', () => ({ useTroubleshootScreenStyles: () => ({}) }))
 
 import { MobileWebShellDevRow } from './mobile-web-shell-dev-row'
 

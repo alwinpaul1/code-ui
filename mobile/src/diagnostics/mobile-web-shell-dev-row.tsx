@@ -8,8 +8,8 @@ import {
   mobileShellBuildKind,
   saveMobileWebShellEnabled
 } from '../storage/preferences'
-import { colors } from '../theme/mobile-theme'
-import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
+import { useTheme } from '../theme/theme-context'
+import { useTroubleshootScreenStyles } from './troubleshoot-screen-styles'
 
 /**
  * The one caller of `saveMobileWebShellEnabled`, and the one way into the hybrid shell route that
@@ -30,6 +30,8 @@ const HYBRID_SHELL_LABELS = {
 } as const
 
 export function MobileWebShellDevRow() {
+  const styles = useTroubleshootScreenStyles()
+  const { colors } = useTheme()
   const router = useRouter()
   const [enabled, setEnabled] = useState<boolean | null>(null)
   const [saving, setSaving] = useState(false)
@@ -90,7 +92,7 @@ export function MobileWebShellDevRow() {
           }
         }}
       >
-        <LayoutTemplate size={16} color={colors.textPrimary} />
+        <LayoutTemplate size={16} color={colors.text} />
         <Text style={styles.diagnosticButtonLabel}>
           Open hybrid shell for the first paired host
         </Text>

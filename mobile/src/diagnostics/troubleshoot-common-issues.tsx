@@ -1,9 +1,9 @@
-import { WifiOff, Shield, Monitor, Clock, Globe } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { WifiOff, Shield, Monitor, Clock, Globe, type LucideIcon } from 'lucide-react-native'
 
 export type TroubleshootSection = {
   id: string
-  icon: React.ReactNode
+  /** The component, not an element: the screen colours it from the live theme when it draws it. */
+  Icon: LucideIcon
   title: string
   steps: string[]
 }
@@ -11,7 +11,7 @@ export type TroubleshootSection = {
 export const troubleshootCommonIssues: TroubleshootSection[] = [
   {
     id: 'wifi',
-    icon: <WifiOff size={16} color={colors.textSecondary} />,
+    Icon: WifiOff,
     title: 'Different WiFi Networks',
     steps: [
       'Both devices must be on the same LAN (unless connected through Tailscale).',
@@ -21,7 +21,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'firewall',
-    icon: <Shield size={16} color={colors.textSecondary} />,
+    Icon: Shield,
     title: 'Firewall Blocking Port 6768',
     steps: [
       'macOS: System Settings → Network → Firewall — allow Orca.',
@@ -32,7 +32,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'desktop',
-    icon: <Monitor size={16} color={colors.textSecondary} />,
+    Icon: Monitor,
     title: 'Desktop App Not Running',
     steps: [
       'Orca must be open on your desktop to accept connections.',
@@ -42,7 +42,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'timeout',
-    icon: <Clock size={16} color={colors.textSecondary} />,
+    Icon: Clock,
     title: 'Connection Timeout',
     steps: [
       'Check WiFi signal strength on your phone.',
@@ -52,7 +52,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'tailscale',
-    icon: <Globe size={16} color={colors.textSecondary} />,
+    Icon: Globe,
     title: 'Tailscale Host Unreachable',
     steps: [
       'Host addresses like 100.x.x.x or *.ts.net connect through Tailscale — keep it ON.',
@@ -63,7 +63,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
   },
   {
     id: 'vpn',
-    icon: <Shield size={16} color={colors.textSecondary} />,
+    Icon: Shield,
     title: 'Other VPN Interference',
     steps: [
       'Check the DESKTOP first: a work or university VPN in full-tunnel mode routes even the local subnet into its tunnel, so the desktop stops answering its own LAN address.',
