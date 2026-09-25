@@ -132,14 +132,16 @@ export function useMobileNativeChatQueueEditor(args: {
     const handle = start.handleRef.current
     const agent = start.agent
     const generation = lifetime.current
-    if (
-      inFlight.current ||
-      editing ||
-      !start.enabled ||
-      !start.tabId ||
-      !handle ||
-      (agent !== 'claude' && agent !== 'codex')
-    ) {
+    // A tap while a recall or an edit is already writing is answered by that one.
+    if (inFlight.current || editing || (agent !== 'claude' && agent !== 'codex')) {
+      return
+    }
+    // The pencil is drawn whatever the connection is doing, so turning a tap
+    // away without a word left a dead pencil (2026-09-25 sweep).
+    if (!start.enabled || !start.tabId || !handle) {
+      start.onError(
+        `Could not open the queue editor (${start.enabled ? 'terminal not ready' : 'disconnected'}).`
+      )
       return
     }
     inFlight.current = true
@@ -262,7 +264,15 @@ export function useMobileNativeChatQueueEditor(args: {
   const sendNow = async (): Promise<boolean> => {
     const current = latest.current
     const handle = current.handleRef.current
-    if (!current.client || !current.enabled || !handle || inFlight.current) {
+    // Same as the pencil: "Send now" is drawn whatever the connection is doing.
+    if (inFlight.current) {
+      current.onError('Another input is still being sent. Try again.')
+      return false
+    }
+    if (!current.client || !current.enabled || !handle) {
+      current.onError(
+        `Queued messages not sent (${current.client && current.enabled ? 'terminal not ready' : 'disconnected'})`
+      )
       return false
     }
     const accepted = await sendClaudeQueueNow({
