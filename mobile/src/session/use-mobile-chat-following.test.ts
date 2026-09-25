@@ -3,6 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 
+// The system interrupting a touch is not what these tests are about; see
+// use-mobile-native-chat-tail-follow.selection.test.ts for that.
+vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
+
 type Api = ReturnType<typeof useMobileChatFollowing>
 let latest: Api | null = null
 function Probe() {

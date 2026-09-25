@@ -10,6 +10,10 @@ import {
   type MobileNativeChatTailFollow
 } from './use-mobile-native-chat-tail-follow'
 
+// The system interrupting a touch is not what these tests are about; see
+// use-mobile-native-chat-tail-follow.selection.test.ts for that.
+vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
+
 type Row = { id: string }
 type Api = MobileNativeChatTailFollow<Row>
 

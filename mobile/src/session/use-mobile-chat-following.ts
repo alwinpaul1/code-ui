@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createChatFollowGate } from './mobile-chat-follow-gate'
 import { isReaderScrollMotion, type ChatScrollGeometry } from './mobile-chat-scroll-motion'
+import { useAppInterruptions } from './use-app-interruptions'
 
 /** A finger held this long is a long-press — Android's text-selection
  *  timeout is 400 ms — and from then on the reader owns the list, as with a
@@ -164,6 +165,18 @@ export function useMobileChatFollowing() {
     // The finger is up; if the list is not moving either, selection returns.
     armQuiet()
   }, [armQuiet, disarmLongPress, setFollowing])
+  // The system took the touch: a home swipe, a call, the screen locking. A
+  // drag it cancels sends no end event, so without this the text stayed
+  // unselectable and the first hold back in the app selected nothing (third
+  // review, 2026-09-25). No finger survives it; if the list is not moving,
+  // selection returns.
+  const interruptGesture = useCallback(() => {
+    holdingRef.current = false
+    draggingRef.current = false
+    disarmLongPress()
+    armQuiet()
+  }, [armQuiet, disarmLongPress])
+  useAppInterruptions(interruptGesture)
   useEffect(
     () => () => {
       disarmLongPress()

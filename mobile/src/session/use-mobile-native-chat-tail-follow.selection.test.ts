@@ -8,6 +8,27 @@ import {
   type MobileNativeChatTailFollow
 } from './use-mobile-native-chat-tail-follow'
 
+/** React Native's AppState, as far as the chat reads it: the app leaving the
+ *  foreground, and its window losing focus (Android's `blur`). */
+const appState = vi.hoisted(() => {
+  const listeners = new Map<string, Set<(state?: string) => void>>()
+  return {
+    listeners,
+    addEventListener(type: string, listener: (state?: string) => void) {
+      const set = listeners.get(type) ?? new Set()
+      set.add(listener)
+      listeners.set(type, set)
+      return { remove: () => set.delete(listener) }
+    },
+    emit(type: string, state?: string) {
+      for (const listener of listeners.get(type) ?? []) {
+        listener(state)
+      }
+    }
+  }
+})
+vi.mock('react-native', () => ({ AppState: { addEventListener: appState.addEventListener } }))
+
 // Hold to copy, while the agent is working (2026-09-25, phone recording):
 // the reader held a paragraph and a bullet of the agent's reply for seconds
 // and got nothing. No handles, no Copy bar. The Claude app selects the word.
@@ -377,6 +398,47 @@ describe('holding the agent’s reply to copy it while the reply streams in', ()
     expect(pins.length - pinsBefore).toBe(0)
     expect(world.y).toBeGreaterThan(300)
     expect(latest!.showJumpToLatest).toBe(true)
+  })
+
+  // Third review, 2026-09-25: a drag lasts until its end event, and Android
+  // sends none when the system takes the touch mid-drag (ACTION_CANCEL: a
+  // home swipe, a call, the screen locking) and JS gets no touch event
+  // either. The text then stayed unselectable, and the first hold back in
+  // the app selected nothing. Each of those takes the app out of the
+  // foreground or its window's focus, which AppState reports.
+  for (const [label, interrupt] of [
+    ['the app goes to the background', () => appState.emit('change', 'background')],
+    ['the app’s window loses focus', () => appState.emit('blur')]
+  ] as const) {
+    it(`gives selection back to the first hold after the system takes a drag mid-way, when ${label}`, () => {
+      mount(600)
+      drag(120)
+      // The system took the touch: no end drag, no touch event, nothing.
+      act(() => interrupt())
+      runFor(300)
+      act(() => appState.emit('change', 'active'))
+      runFor(STREAM_TICK_MS)
+      expect(latest!.textSelectable).toBe(true)
+      // The first hold back in the app, probed a frame at a time.
+      act(() => latest!.touchStart())
+      const held: boolean[] = []
+      runFor(900, [], true, () => held.push(latest!.textSelectable))
+      expect(held.length).toBeGreaterThan(50)
+      expect(held.filter((selectable) => !selectable)).toEqual([])
+      act(() => latest!.touchEnd())
+    })
+  }
+
+  it('costs at most the next touch when a drag’s end never comes and nothing reports why', () => {
+    mount(600)
+    drag(120)
+    runFor(1_000)
+    // Stranded: nothing says the finger is gone. The next touch does.
+    expect(latest!.textSelectable).toBe(false)
+    act(() => latest!.touchStart())
+    act(() => latest!.touchEnd())
+    runFor(300)
+    expect(latest!.textSelectable).toBe(true)
   })
 
   it('keeps selection on through the re-pins while a hold starts on the streaming reply at the live edge', () => {
