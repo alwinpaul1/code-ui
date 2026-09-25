@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useDebouncedPersist } from './use-debounced-persist'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   rememberEchoInPending,
+  rememberHeldWitnesses,
   sweepWitnessedEchoes,
-  withoutWitnessesOfSends
+  withoutWitnessesOfSends,
+  type HeldWitness
 } from './mobile-native-chat-remember-echo'
 import {
   readNativeChatPendingEchoes,
@@ -41,30 +43,32 @@ export function useMobileNativeChatPendingPersistence(
   sessionKeyRef.current = sessionKey
   const memoryRef = useRef(memory)
   memoryRef.current = memory
-  /** The session whose stored echoes have been read back. Until then no
-   *  witness is remembered: the phone's own sends are not in the store yet,
-   *  so the hook's copy of one looks like someone else's message, and stored
-   *  as that it can never be paired with the send again. After a remount the
-   *  hook's copy of a send Claude took mid-turn is first seen in exactly that
-   *  moment, timed by the pane's state, which began when the turn ended, and it
-   *  drew under the reply that ended the turn beside the send's own bubble
-   *  (reported 2026-09-25, Claude Code 2.1.282). The id changes once the read
-   *  is back, so a witness still drawn then is remembered. */
+  /** The session whose stored echoes have been read back. A witness seen
+   *  before then is held, not stored: the phone's own sends are not in the
+   *  store yet, so the hook's copy of one looks like someone else's message
+   *  (rememberHeldWitnesses says what becomes of it). */
   const hydratedRef = useRef<string | null>(null)
-  const [hydrated, setHydrated] = useState<string | null>(null)
+  const heldRef = useRef(new Map<string, HeldWitness[]>())
   const rememberEcho = useCallback(
     (id: string, text: string, anchorId: string | null) => {
       const key = sessionKeyRef.current
       const draftKey = memoryRef.current?.draftKey
       const messages = memoryRef.current?.messagesRef.current
-      if (!key || !draftKey || !anchorId || !messages || hydratedRef.current !== key) {
+      if (!key || !draftKey || !anchorId || !messages) {
+        return
+      }
+      if (hydratedRef.current !== key) {
+        const held = heldRef.current.get(key) ?? []
+        if (!held.some((witness) => witness.id === id)) {
+          heldRef.current.set(key, [...held, { id, text, anchorId, messages, draftKey, at: Date.now() }])
+        }
         return
       }
       setPendingBySession((previous) =>
         rememberEchoInPending(previous, key, id, text, anchorId, messages, draftKey)
       )
     },
-    [setPendingBySession, hydrated]
+    [setPendingBySession]
   )
   const takeSends = useCallback(
     (ids: readonly string[]) => {
@@ -83,38 +87,44 @@ export function useMobileNativeChatPendingPersistence(
       return
     }
     let cancelled = false
-    const settle = () => {
-      hydratedRef.current = sessionKey
-      setHydrated(sessionKey)
-    }
     void readNativeChatPendingEchoes(sessionKey).then((stored) => {
+      const held = heldRef.current.get(sessionKey) ?? []
+      heldRef.current.delete(sessionKey)
       if (cancelled) {
+        // Gone before the read came back: keep what the chat saw rather than
+        // lose it (review, 2026-09-25). Read again, behind any write the
+        // unmount flushed, so that write is not undone.
+        if (held.length > 0) {
+          void readNativeChatPendingEchoes(sessionKey).then((fresh) => {
+            const list = rememberHeldWitnesses({}, sessionKey, held, fresh ?? [])[sessionKey] ?? []
+            if (list.length > 0) {
+              void writeNativeChatPendingEchoes(sessionKey, [...(fresh ?? []), ...list])
+            }
+          })
+        }
         return
       }
-      if (!stored || stored.length === 0) {
-        settle()
-        return
-      }
+      hydratedRef.current = sessionKey
       // Sends made meanwhile come after the stored ones, in send order.
       setPendingBySession((previous) => {
-        if (previous[sessionKey]?.length === 0) {
-          return previous
-        }
         const live = previous[sessionKey] ?? []
         const liveIds = new Set(live.map((item) => item.id))
         // A send acknowledged while another tab was on screen dropped its
         // witness in memory, not on disk (withoutWitnessesOfSends).
-        return {
-          ...previous,
-          [sessionKey]: [
-            ...withoutWitnessesOfSends(sweepWitnessedEchoes(stored), live)
-              .filter((item) => !liveIds.has(item.id))
-              .map((item) => ({ ...item, restored: true })),
-            ...live
-          ]
-        }
+        const merged =
+          !stored || stored.length === 0 || previous[sessionKey]?.length === 0
+            ? previous
+            : {
+                ...previous,
+                [sessionKey]: [
+                  ...withoutWitnessesOfSends(sweepWitnessedEchoes(stored), live)
+                    .filter((item) => !liveIds.has(item.id))
+                    .map((item) => ({ ...item, restored: true })),
+                  ...live
+                ]
+              }
+        return held.length === 0 ? merged : rememberHeldWitnesses(merged, sessionKey, held, stored ?? [])
       })
-      settle()
     })
     return () => {
       cancelled = true

@@ -133,6 +133,62 @@ export function withoutWitnessesOfSends(
   return kept.length === list.length ? list : kept
 }
 
+/** A witness seen before the session's stored echoes were read back
+ *  (use-mobile-native-chat-pending-persistence.ts), with what it was seen
+ *  against. */
+export type HeldWitness = {
+  id: string
+  text: string
+  anchorId: string
+  messages: readonly NativeChatMessage[]
+  draftKey: string
+  /** When the phone saw it, by the phone's clock. */
+  at: number
+}
+
+/**
+ * The witnesses held until the session's stored echoes were read back, stored
+ * now, except a copy of a stored send: the same message, seen at or after the
+ * send left the phone. That is the hook's copy of a send Claude took mid-turn,
+ * first seen after a remount; stored as someone else's message it could never
+ * be paired with the send again, and it drew under the reply that ended the
+ * turn beside the send's own bubble (reported 2026-09-25, Claude Code 2.1.282).
+ * acceptOwnSendInPending applies the same rule when the send is the later of
+ * the two. A message typed since with the same text is found again by the
+ * pairing while the chat is open (promptTakenBetween, desktop-prompt-own-sends.ts).
+ */
+export function rememberHeldWitnesses(
+  previous: PendingByKey,
+  key: string,
+  held: readonly HeldWitness[],
+  stored: readonly MobileNativeChatPendingMessage[]
+): PendingByKey {
+  let next = previous
+  for (const witness of held) {
+    const copyOfSend = stored.some(
+      (send) =>
+        !isWitnessed(send.id) &&
+        typeof send.sentAt === 'number' &&
+        Number.isFinite(send.sentAt) &&
+        witness.at >= send.sentAt &&
+        preferredWitnessReading(send.text, witness.text) !== null
+    )
+    if (!copyOfSend) {
+      next = rememberEchoInPending(
+        next,
+        key,
+        witness.id,
+        witness.text,
+        witness.anchorId,
+        witness.messages,
+        witness.draftKey,
+        witness.at
+      )
+    }
+  }
+  return next
+}
+
 function isWitnessed(id: string): boolean {
   return id.startsWith('absorbed-') || id.startsWith('desk-')
 }

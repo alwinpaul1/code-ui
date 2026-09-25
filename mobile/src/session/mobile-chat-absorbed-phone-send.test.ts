@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
@@ -591,6 +592,72 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       await show('17:14:05.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
       await show('17:14:06.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
       expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
+    })
+
+    // Third round of the same review.
+    it('draws a dequeued send and a resend of its text once each even when the resend went out a moment after the row was stamped', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      await ack('17:08:23.300', await tap('17:08:23.000', 'yes'), 'yes')
+      await show('17:08:24.000', { messages: turnEnded, queued: claudeBox(['yes']) })
+      // Stamped 0.3 s before the resend left the phone.
+      const firstRow = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.700'), call('0741e6f4', '17:08:23.500')]
+      await show('17:08:25.000', { messages: firstRow, queued: claudeBox(['yes']) })
+      const absorbed = [...firstRow, result('0741e6f5', '17:08:40.000'), text('0741e6f6', 'Done with both.', '17:09:00.000')]
+      await show('17:08:41.000', { messages: absorbed.slice(0, -1), queued: claudeBox([]) })
+      await show('17:09:01.000', { messages: absorbed, queued: [], working: false })
+      await show('17:09:02.000', { messages: absorbed, queued: [], working: false })
+      expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'phone', 'row', '0741e6f4', '0741e6f6'])
+    })
+
+    it('shows a second send of the same text once on a phone whose clock runs two seconds ahead', async () => {
+      await sendAndLetClaudeTakeIt()
+      // Sent at 17:09:02 by the phone's clock, 17:09:00 by the desktop's.
+      await ack('17:09:02.300', await tap('17:09:02.000'))
+      const landed = [...turnEnded, user('b1c2d3e4', TEXT, '17:09:00.500')]
+      await show('17:09:03.000', { messages: landed, queued: [] })
+      await show('17:09:04.000', { messages: landed, queued: [] })
+      expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103', 'row'])
+    })
+
+    it('still hides the hook copy of a send when another prompt started a turn while the send was on its way', async () => {
+      await show('17:08:30.000', { messages: turnEnded, working: false })
+      const origin = await tap('17:09:00.000')
+      const deskTurn = [...turnEnded, user('x0000001', 'run the migration', '17:09:01.500'), call('x0000002', '17:09:02.000')]
+      let state = EMPTY_AGENT_STATUS_PROMPTS
+      state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at('17:08:30.000') })
+      state = observeAgentStatusPrompt(state, SESSION, { prompt: 'run the migration', updatedAt: at('17:09:01.500') })
+      await show('17:09:02.000', { messages: deskTurn, prompts: [...state.prompts] })
+      state = observeAgentStatusPrompt(state, SESSION, { prompt: TEXT, updatedAt: at('17:09:03.000') })
+      await ack('17:09:03.200', origin)
+      await show('17:09:03.500', { messages: deskTurn, queued: claudeBox([TEXT]), prompts: [...state.prompts] })
+      const absorbed = [...deskTurn, result('x0000003', '17:09:30.000'), text('x0000004', 'Migrated.', '17:10:00.000')]
+      await show('17:09:31.000', { messages: absorbed.slice(0, -1), queued: claudeBox([]), prompts: [...state.prompts] })
+      await show('17:10:01.000', { messages: absorbed, working: false, queued: [], prompts: [...state.prompts] })
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone'])
+    })
+
+    it('keeps a message typed at the desk when the chat went away before its stored echoes were read back', async () => {
+      const read = AsyncStorage.getItem.bind(AsyncStorage)
+      const slow = vi.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key: string) => {
+        if (key.startsWith('orca:chatPendingEchoes:')) {
+          await new Promise((resolve) => setTimeout(resolve, 3000))
+        }
+        return read(key)
+      })
+      const deskCopy = hookCopy('17:05:00.000', 'typed at the desk')
+      await show('17:05:00.500', { messages: afterTake, queued: [], prompts: deskCopy })
+      await show('17:05:02.000', { messages: afterTake, queued: [], prompts: deskCopy })
+      act(() => renderer?.unmount())
+      renderer = null
+      await clockTo('17:05:10.000')
+      slow.mockRestore()
+      // Back after the status moved on: the stored echoes are all it has.
+      await show('17:06:00.000', { messages: afterTake, queued: [], prompts: [] })
+      await show('17:06:01.000', { messages: afterTake, queued: [], prompts: [] })
+      expect(drawn()).toContain('hook')
     })
 
     describe('on Codex', () => {

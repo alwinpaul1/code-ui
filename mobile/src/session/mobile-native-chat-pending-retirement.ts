@@ -5,14 +5,16 @@ import {
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { phoneClockLeadMs } from './mid-turn-written-before'
 
 const SPACE = ' '
-/** How long before a send a row may be stamped and still be that send's own,
- *  when no live row has shown how far the phone's clock leads the desktop's.
- *  A send's own row is stamped after Claude takes it, which is after the send
- *  reached the desktop. */
-const OWN_ROW_CLOCK_MARGIN_MS = 500
+/** How long before, and after, the phone saw a taken send leave the queue box
+ *  a row of its text may be stamped and be the row Claude wrote as it dequeued
+ *  it. Claude writes that row as the prompt leaves the queue, and the phone
+ *  sees the box without it only at a later screen read (one a second, each
+ *  given 2.5 s, over the relay), so the row leads by up to that; it trails
+ *  only by however far the phone's clock runs behind the desktop's. */
+const DEQUEUED_ROW_LEADS_MS = 10_000
+const DEQUEUED_ROW_TRAILS_MS = 1_000
 const NO_PENDING_IDS: ReadonlySet<string> = new Set()
 // Slack the cursor slide may spend re-trying later start positions, on top of
 // one free pass over the run. Nothing bounds how many sends accumulate on the
@@ -238,21 +240,22 @@ function gluedLanded(text: string, landedCounts: ReadonlyMap<string, number>): b
   return false
 }
 
-/** Whether every user row of `key` was stamped before `sentAt - marginMs`.
- *  No when a row carries no time or the send none: nothing to order by. */
-function noRowSince(
+/** Whether a user row of `key` was stamped as a send taken at `takenAt` left
+ *  the queue box: the row Claude writes when it dequeues a prompt. */
+function dequeuedRowLanded(
   messages: readonly NativeChatMessage[],
   key: string,
-  sentAt: number | undefined,
-  marginMs: number
+  takenAt: number | undefined
 ): boolean {
-  if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+  if (typeof takenAt !== 'number' || !Number.isFinite(takenAt)) {
     return false
   }
-  return messages.every(
+  return messages.some(
     (message) =>
-      normalizedUserText(message) !== key ||
-      (message.timestamp !== null && message.timestamp < sentAt - marginMs)
+      message.timestamp !== null &&
+      message.timestamp >= takenAt - DEQUEUED_ROW_LEADS_MS &&
+      message.timestamp <= takenAt + DEQUEUED_ROW_TRAILS_MS &&
+      normalizedUserText(message) === key
   )
 }
 
@@ -279,7 +282,6 @@ export function retireLandedMobileNativeChatPending(
     item.expectedOccurrence + (bumps.get(item.id) ?? 0)
   const bump = (item: MobileNativeChatPendingMessage) => bumps.set(item.id, (bumps.get(item.id) ?? 0) + 1)
   const taken: number[] = []
-  const ownRowMargin = Math.max(OWN_ROW_CLOCK_MARGIN_MS, phoneClockLeadMs(messages) ?? 0)
   for (const [index, item] of current.entries()) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
@@ -307,16 +309,18 @@ export function retireLandedMobileNativeChatPending(
       continue
     }
     const key = normalizeReconcileText(item.text)
-    // A row of its text stamped before this copy left the phone cannot be its
-    // own. With a send before it the agent took, that row is the taken send's,
-    // dequeued at the end of the turn after all, and the pass below gives it
-    // there: taken by this copy, the taken one waited for a second row, and
-    // this one, absorbed next, was drawn nowhere (review, 2026-09-25).
-    const afterTaken = taken.some((earlier) => normalizeReconcileText(current[earlier]!.text) === key)
-    const byCount =
-      captioned &&
-      (landedCounts.get(key) ?? 0) >= item.expectedOccurrence &&
-      !(afterTaken && noRowSince(messages, key, item.sentAt, ownRowMargin))
+    // A row of its text stamped as a taken send ahead of it left the box is
+    // that send's own, dequeued at the end of the turn after all, and the pass
+    // below gives it there. Taken by this copy instead, the taken one waited
+    // for a second row, and this one, taken mid-turn next, was drawn nowhere
+    // (review, 2026-09-25). Judged by the taken send's time, not this copy's:
+    // a margin on this copy's send time failed a resend made within it, and a
+    // phone clock running ahead lost the first message the other way.
+    const deferred = taken.some((earlier) => {
+      const other = current[earlier]!
+      return normalizeReconcileText(other.text) === key && dequeuedRowLanded(messages, key, other.takenAt)
+    })
+    const byCount = captioned && (landedCounts.get(key) ?? 0) >= item.expectedOccurrence && !deferred
     const landed = !captioned
       ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >= item.expectedOccurrence
       : byCount || stubLanded(item.id, item.text, landedCounts) || gluedLanded(item.text, landedCounts)

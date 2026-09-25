@@ -162,6 +162,11 @@ export function pairPendingWithHookPrompts(
   return { steppedAside, standIns }
 }
 
+/** How long after a send the hook's copy of it can be timed: twice the 15 s
+ *  budget a chat send has, link wait included (MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS,
+ *  pinned beside it in the test). */
+export const OWN_COPY_WINDOW_MS = 30_000
+
 /**
  * Whether the session took a newer prompt between a send and a hook copy's
  * time: a user row stamped after the send by more than `marginMs` and no
@@ -185,6 +190,13 @@ export function promptTakenBetween(
 ): boolean {
   const sentAt = send.sentAt
   if (at === undefined || typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+    return false
+  }
+  // The hook reports a send within the send's own budget, so a copy timed that
+  // close is the send's, whatever the desk submitted while it was on its way
+  // (review, 2026-09-25: a desk prompt started a turn 1.5 s after a phone send
+  // and the send drew twice).
+  if (at - sentAt <= OWN_COPY_WINDOW_MS) {
     return false
   }
   const own = key(send.text)

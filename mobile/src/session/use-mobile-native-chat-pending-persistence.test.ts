@@ -127,7 +127,7 @@ describe('useMobileNativeChatPendingPersistence', () => {
       return { release: () => release() }
     }
 
-    it('is not remembered then, and is once the read is back', async () => {
+    it('drops one that copies a stored send once the read is back, and stores the next one at once', async () => {
       await writeNativeChatPendingEchoes('s1', [send])
       const read = holdTheRead()
       await mount('s1')
@@ -140,6 +140,34 @@ describe('useMobileNativeChatPendingPersistence', () => {
       act(() => remember('desk-status:s1:2:0', 'typed at the desk', 'm9'))
       await flush()
       expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:2:0'])
+    })
+
+    it('keeps one of another message, held while the read was out, once it is back', async () => {
+      await writeNativeChatPendingEchoes('s1', [send])
+      const read = holdTheRead()
+      await mount('s1')
+      act(() => remember('desk-status:s1:1:0', 'typed at the desk', 'm9'))
+      read.release()
+      await flush()
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+    })
+
+    // Review, 2026-09-25: the route went away before a slow read came back, and
+    // the desk's message, seen only then, was never kept.
+    it('writes one held while the read was out through to the store when the chat goes away first', async () => {
+      await writeNativeChatPendingEchoes('s1', [send])
+      const read = holdTheRead()
+      await mount('s1')
+      act(() => remember('desk-status:s1:1:0', 'typed at the desk', 'm9'))
+      act(() => renderer?.unmount())
+      renderer = null
+      read.release()
+      await flush()
+      await flush()
+      expect((await readNativeChatPendingEchoes('s1'))?.map((item) => item.id)).toEqual([
+        'pending-1',
+        'desk-status:s1:1:0'
+      ])
     })
 
     it('is remembered once a session with nothing stored has been read', async () => {

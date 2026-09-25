@@ -57,11 +57,15 @@ failing-first test and has been checked on the phone in light and dark.
   (Codex CLI 0.153.4 rollouts: `response_item` message role `user` and
   `event_msg` item_completed `UserMessage`), so a Codex send always leaves on
   its row. After a remount the hook's copy of such a send is first seen timed
-  by the pane's state, which began when the turn ended, so no witness is
-  remembered until the stored echoes are read back, and the send claims that
-  copy unless a user row stamped between them shows the session took a newer
-  prompt (`promptTakenBetween`). Two review rounds on 2026-09-25 drove the
-  same-text cases through the real overlay; these stay open, all rare: a
+  by the pane's state, which began when the turn ended, so a witness seen
+  before the stored echoes are read back is held until they are, and dropped
+  then if it copies a stored send (`rememberHeldWitnesses`). The send claims
+  that copy unless the copy is timed more than twice a send's 15 s budget
+  after it and a user row stamped between them shows the session took a newer
+  prompt (`promptTakenBetween`). A row Claude wrote as it dequeued a send the
+  box let go goes to that send, not to a later copy of its text. Three review
+  rounds on 2026-09-25 drove the same-text cases through the real overlay;
+  these stay open, all rare: a
   message typed at the desk or in the Claude app that the phone first sees
   after the turn draws under the reply that ended it
   (`agent-status-prompts.ts`), since the tab status carries no time for a

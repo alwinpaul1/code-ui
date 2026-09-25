@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import {
+  OWN_COPY_WINDOW_MS,
   inSendOrder,
   pairPendingWithHookPrompts,
   promptTakenBetween,
   promptsNoCopyStandsFor
 } from './desktop-prompt-own-sends'
+import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
 
 type Copy = { id: string; text: string; images?: string[]; sentAt?: number }
@@ -285,6 +287,19 @@ describe('promptTakenBetween', () => {
     expect(promptTakenBetween([row('after the copy', at + 1)], send, at, 1000)).toBe(false)
     expect(promptTakenBetween([row('untimed', null)], send, at, 1000)).toBe(false)
     expect(promptTakenBetween([], send, at, 1000)).toBe(false)
+  })
+
+  // Review, 2026-09-25: a desk prompt started a turn 1.5 s after a phone send,
+  // and the hook's copy of the send, timed 3 s after it, drew beside it.
+  it('says no for a copy timed within the send budget, whatever landed in between', () => {
+    const racing = [row('run the migration', sentAt + 1_500)]
+    expect(promptTakenBetween(racing, send, sentAt + 3_000, 1000)).toBe(false)
+    expect(promptTakenBetween(racing, send, sentAt + OWN_COPY_WINDOW_MS, 1000)).toBe(false)
+    expect(promptTakenBetween(racing, send, sentAt + OWN_COPY_WINDOW_MS + 1, 1000)).toBe(true)
+  })
+
+  it('keeps the copy window wider than a chat send can take, link wait included', () => {
+    expect(OWN_COPY_WINDOW_MS).toBeGreaterThanOrEqual(2 * MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
   })
 
   it('says no when there is nothing to order by: no send time, or a copy with no time', () => {
