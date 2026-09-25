@@ -1,0 +1,143 @@
+# Claude Code 2.1.281, AskUserQuestion: one single-select question, answered with its option number, then a second number.
+# Captured 2026-09-25 with `tmux capture-pane -p` from a private tmux server
+# (120x45, TERM=xterm-256color), keys driven with `tmux send-keys`, one step
+# at least 1 s apart as the phone paces them. Each screen below is verbatim and
+# follows a `=== screen: <what was just sent> ===` line.
+=== screen: ask ===
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+  ▝▝ ▝▝    /private/tmp/claude-501/cui-ask-281
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test. Call AskUserQuestion exactly once with one question: question "Push the branch?", header "Push", multiSelect
+  false, options "Yes, push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local").
+  No other tools. Reply "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Push
+
+Push the branch?
+
+❯ 1. Yes, push to PR 1100
+     Push now
+  2. No, keep it local
+     Stay local
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 1 ===
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+  ▝▝ ▝▝    /private/tmp/claude-501/cui-ask-281
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test. Call AskUserQuestion exactly once with one question: question "Push the branch?", header "Push", multiSelect
+  false, options "Yes, push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local").
+  No other tools. Reply "done" after the answer.
+
+⏺ User answered Claude's questions:
+  ⎿  · Push the branch? → Yes, push to PR 1100
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✳ Dilly-dallying… (5s · ↓ 137 tokens)
+                                                                                                     ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ██░░░░░░░░ 15% (31k/200k) | cui-ask-281 | 1 CLAUDE.md | 4 rules | 6 MCPs | 12 hooks | ⏱️…
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────…
+  ◐ AskUserQuestion
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
+=== screen: after a second 1, eight seconds later ===
+
+ ▐▛███▛█   Claude Code v2.1.281
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+  ▝▝ ▝▝    /private/tmp/claude-501/cui-ask-281
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test. Call AskUserQuestion exactly once with one question: question "Push the branch?", header "Push", multiSelect
+  false, options "Yes, push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local").
+  No other tools. Reply "done" after the answer.
+
+⏺ User answered Claude's questions:
+  ⎿  · Push the branch? → Yes, push to PR 1100
+
+⏺ done
+
+  session:ok
+
+✻ Worked for 7s · done 3:22 PM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 1
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ██░░░░░░░░ 16% (31k/200k) | cui-ask-281 | 1 CLAUDE.md | 4 rules | 6 MCPs | 12 hooks | ⏱️…
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────…
+  ✓ AskUserQuestion ×1
+  ⏵⏵ auto mode on (shift+tab to cycle)

@@ -1,0 +1,235 @@
+# Claude Code 2.1.282, AskUserQuestion: one multi-select question: two toggles, Right to the Submit tab, Enter.
+# Captured 2026-09-25 with `tmux capture-pane -p` from a private tmux server
+# (120x45, TERM=xterm-256color), keys driven with `tmux send-keys`, one step
+# at least 1 s apart as the phone paces them. Each screen below is verbatim and
+# follows a `=== screen: <what was just sent> ===` line.
+=== screen: ask ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 4. Call AskUserQuestion exactly once with one question: question "Which checks should run?", header "Checks",
+  multiSelect true, options "Unit tests" (description "Fast suite"), "Lint" (description "oxlint"), "Typecheck"
+  (description "tsc"). No other tools. Reply "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Checks  ✔ Submit  →
+
+Which checks should run?
+
+❯ 1. [ ] Unit tests
+         Fast suite
+  2. [ ] Lint
+         oxlint
+  3. [ ] Typecheck
+         tsc
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 1 ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 4. Call AskUserQuestion exactly once with one question: question "Which checks should run?", header "Checks",
+  multiSelect true, options "Unit tests" (description "Fast suite"), "Lint" (description "oxlint"), "Typecheck"
+  (description "tsc"). No other tools. Reply "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Checks  ✔ Submit  →
+
+Which checks should run?
+
+❯ 1. [✔] Unit tests
+         Fast suite
+  2. [ ] Lint
+         oxlint
+  3. [ ] Typecheck
+         tsc
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 3 ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 4. Call AskUserQuestion exactly once with one question: question "Which checks should run?", header "Checks",
+  multiSelect true, options "Unit tests" (description "Fast suite"), "Lint" (description "oxlint"), "Typecheck"
+  (description "tsc"). No other tools. Reply "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Checks  ✔ Submit  →
+
+Which checks should run?
+
+❯ 1. [✔] Unit tests
+         Fast suite
+  2. [ ] Lint
+         oxlint
+  3. [✔] Typecheck
+         tsc
+  4. [ ] Type something
+     Submit
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after Right ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 4. Call AskUserQuestion exactly once with one question: question "Which checks should run?", header "Checks",
+  multiSelect true, options "Unit tests" (description "Fast suite"), "Lint" (description "oxlint"), "Typecheck"
+  (description "tsc"). No other tools. Reply "done" after the answer.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Checks  ✔ Submit  →
+
+Review your answers
+
+ ● Which checks should run?
+   → Unit tests, Typecheck
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after Enter ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 4. Call AskUserQuestion exactly once with one question: question "Which checks should run?", header "Checks",
+  multiSelect true, options "Unit tests" (description "Fast suite"), "Lint" (description "oxlint"), "Typecheck"
+  (description "tsc"). No other tools. Reply "done" after the answer.
+
+⏺ User answered Claude's questions:
+  ⎿  · Which checks should run? → Unit tests, Typecheck
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+· Composing… (4s · ↓ 153 tokens)
+                                                                                                     ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ██░░░░░░░░ 15% (31k/200k) | cui-ask-282 | 1 CLAUDE.md | 4 rules | 6 MCPs | 12 hooks | ⏱️…
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────…
+  ◐ AskUserQuestion
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

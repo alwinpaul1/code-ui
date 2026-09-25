@@ -1,0 +1,97 @@
+# Claude Code 2.1.282, AskUserQuestion: one single-select question, answered with its option number.
+# Captured 2026-09-25 with `tmux capture-pane -p` from a private tmux server
+# (120x45, TERM=xterm-256color), keys driven with `tmux send-keys`, one step
+# at least 1 s apart as the phone paces them. Each screen below is verbatim and
+# follows a `=== screen: <what was just sent> ===` line.
+=== screen: ask ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ This is a UI test. Call the AskUserQuestion tool exactly once, right now, with exactly one question: question "Push
+  the branch?", header "Push", multiSelect false, options "Yes, push to PR 1100" (description "Push now") and "No, keep
+  it local" (description "Stay local"). Do not run any other tool. After the answer, reply with one word: done.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Push
+
+Push the branch?
+
+❯ 1. Yes, push to PR 1100
+     Push now
+  2. No, keep it local
+     Stay local
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 2 ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ This is a UI test. Call the AskUserQuestion tool exactly once, right now, with exactly one question: question "Push
+  the branch?", header "Push", multiSelect false, options "Yes, push to PR 1100" (description "Push now") and "No, keep
+  it local" (description "Stay local"). Do not run any other tool. After the answer, reply with one word: done.
+
+⏺ User answered Claude's questions:
+  ⎿  · Push the branch? → No, keep it local
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✳ Flambéing… (9s · ↓ 490 tokens)
+                                                                                                     ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ██░░░░░░░░ 15% (31k/200k) | cui-ask-282 | 1 CLAUDE.md | 4 rules | 6 MCPs | 12 hooks | ⏱️…
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────…
+  ◐ AskUserQuestion
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents

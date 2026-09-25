@@ -152,23 +152,50 @@ export function useMobileNativeChatAnswerSend(args: {
       let sawUnknownOutcome = false
       let sawAcceptedGroup = false
       let predecessorSafe = true
+      // Whether a failure of this chain is still this chain's to report. The card
+      // re-enables on any false result, so a false result that says nothing is a
+      // dead Submit: the first tap looks like it did nothing and the second works
+      // (device, 2026-09-25). Only a newer answer takes that away: it holds the
+      // turn slot and reports for itself. Gate on the slot, not the generation:
+      // Stop, ask-cancel and a dropped input lease bump the generation and hand
+      // the surface to nobody, and a dropped lease writes no Escape, so the card
+      // is still up with Submit re-enabled. Nor on the route: a failure raised
+      // after the user left this chat still has to reach them, and
+      // `use-mobile-native-chat-send-error.ts` turns it into a toast there.
+      const ownsErrorSurface = (): boolean => writeTurnsRef.current.get(handle) === turn
+      const fail = (): false => {
+        if (ownsErrorSurface()) {
+          // Why: keystrokes that may have landed (ack lost / path cutover) must
+          // not read as a definite failure — a blind resend could double-step
+          // the selector. An earlier group that WAS accepted is the same hazard
+          // in definite form: a multi-question answer whose shared budget ran out
+          // mid-sequence left the remote selector half-stepped, and telling the
+          // user nothing was sent invites a retry on top of the advanced state.
+          onSendError(
+            sawAcceptedGroup
+              ? 'Answer partly sent — check chat before retrying'
+              : sawUnknownOutcome
+                ? 'Answer unconfirmed — check chat before retrying'
+                : 'Answer not sent'
+          )
+        }
+        return false
+      }
       try {
         predecessorSafe = await previousTurn
         if (!predecessorSafe) {
-          // Fenced. Report it: the card re-enables on a false result, so silence
-          // here is indistinguishable from a dead button. "Check chat" rather than
-          // a bare "not sent" because the PREVIOUS answer's keys may have landed.
-          // Gate on the turn slot, not the generation: a dropped input lease bumps
-          // the generation without writing the Escape that Stop and ask-cancel do,
-          // so the card is still up and silence there strands an advanced selector.
-          if (writeTurnsRef.current.get(handle) === turn) {
+          // Fenced. Report it: silence here strands an advanced selector behind a
+          // re-enabled card. "Check chat" rather than a bare "not sent" because
+          // the PREVIOUS answer's keys may have landed.
+          if (ownsErrorSurface()) {
             onSendError('Answer not sent — check chat before retrying')
           }
           return false
         }
-        // Superseded by a newer answer, which owns the error surface from here.
+        // Cancelled while it waited its turn. A newer answer owns the surface
+        // from here; after Stop or a dropped lease nothing was written, say so.
         if (generationRef.current !== generation) {
-          return false
+          return fail()
         }
         // One budget for the whole answer instead of a fresh timeout per keystroke
         // group, which let an N-group selector hold the card for N × the send timeout.
@@ -225,24 +252,6 @@ export function useMobileNativeChatAnswerSend(args: {
             delaysRef.current.add(delay)
           })
         }
-        const fail = (): false => {
-          if (generationRef.current === generation) {
-            // Why: keystrokes that may have landed (ack lost / path cutover) must
-            // not read as a definite failure — a blind resend could double-step
-            // the selector. An earlier group that WAS accepted is the same hazard
-            // in definite form: a multi-question answer whose shared budget ran out
-            // mid-sequence left the remote selector half-stepped, and telling the
-            // user nothing was sent invites a retry on top of the advanced state.
-            onSendError(
-              sawAcceptedGroup
-                ? 'Answer partly sent — check chat before retrying'
-                : sawUnknownOutcome
-                  ? 'Answer unconfirmed — check chat before retrying'
-                  : 'Answer not sent'
-            )
-          }
-          return false
-        }
         // Grok commits pasted labels; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
         if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
@@ -262,13 +271,10 @@ export function useMobileNativeChatAnswerSend(args: {
               deadline
             }))
           ) {
-            if (generationRef.current === generation) {
-              onSendError('Answer not sent')
-            }
-            return false
+            return fail()
           }
           if (generationRef.current !== generation) {
-            return false
+            return fail()
           }
           // A chain a successor took over from must not report success either: an
           // accepted answer retires the shared send-error banner, wiping the
@@ -308,10 +314,9 @@ export function useMobileNativeChatAnswerSend(args: {
         }
         switch (stepped.kind) {
           case 'failed':
-            return fail()
           case 'cancelled':
           case 'nothing-to-send':
-            return false
+            return fail()
           case 'sent':
             // Taken over on the last key: same as above, the successor owns the surface.
             return writeTurnsRef.current.get(handle) === turn

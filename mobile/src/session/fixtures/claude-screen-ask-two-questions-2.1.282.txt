@@ -1,0 +1,189 @@
+# Claude Code 2.1.282, AskUserQuestion: two single-select questions: an option number each, Enter on the review.
+# Captured 2026-09-25 with `tmux capture-pane -p` from a private tmux server
+# (120x45, TERM=xterm-256color), keys driven with `tmux send-keys`, one step
+# at least 1 s apart as the phone paces them. Each screen below is verbatim and
+# follows a `=== screen: <what was just sent> ===` line.
+=== screen: ask ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 5. Call AskUserQuestion exactly once with two questions. Question 1: "Where should the Hours view go?",
+  header "Placement", multiSelect false, options "Tab in Fleet" (description "A new tab") and "New sidebar page"
+  (description "Its own item"). Question 2: "Push after the change?", header "Push", multiSelect false, options "Yes,
+  push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local"). No other tools. Reply
+  "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Placement  ☐ Push  ✔ Submit  →
+
+Where should the Hours view go?
+
+❯ 1. Tab in Fleet
+     A new tab
+  2. New sidebar page
+     Its own item
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 1 ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 5. Call AskUserQuestion exactly once with two questions. Question 1: "Where should the Hours view go?",
+  header "Placement", multiSelect false, options "Tab in Fleet" (description "A new tab") and "New sidebar page"
+  (description "Its own item"). Question 2: "Push after the change?", header "Push", multiSelect false, options "Yes,
+  push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local"). No other tools. Reply
+  "done" after the answer.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Placement  ☐ Push  ✔ Submit  →
+
+Push after the change?
+
+❯ 1. Yes, push to PR 1100
+     Push now
+  2. No, keep it local
+     Stay local
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · Tab/Arrow keys to navigate · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after 1 ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 5. Call AskUserQuestion exactly once with two questions. Question 1: "Where should the Hours view go?",
+  header "Placement", multiSelect false, options "Tab in Fleet" (description "A new tab") and "New sidebar page"
+  (description "Its own item"). Question 2: "Push after the change?", header "Push", multiSelect false, options "Yes,
+  push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local"). No other tools. Reply
+  "done" after the answer.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☒ Placement  ☒ Push  ✔ Submit  →
+
+Review your answers
+
+ ● Where should the Hours view go?
+   → Tab in Fleet
+ ● Push after the change?
+   → Yes, push to PR 1100
+
+Ready to submit your answers?
+
+❯ 1. Submit answers
+  2. Cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=== screen: after Enter ===
+
+ ▐▛███▛█   Claude Code v2.1.282
+▝▜██████▀  Opus 5.5 with xhigh effort · Amazon Bedrock
+ ▝▝   ▝▝   /private/tmp/claude-501/cui-ask-282
+
+⚠ 3 MCP servers need authentication · run /mcp
+
+❯ /clear
+
+❯ UI test 5. Call AskUserQuestion exactly once with two questions. Question 1: "Where should the Hours view go?",
+  header "Placement", multiSelect false, options "Tab in Fleet" (description "A new tab") and "New sidebar page"
+  (description "Its own item"). Question 2: "Push after the change?", header "Push", multiSelect false, options "Yes,
+  push to PR 1100" (description "Push now") and "No, keep it local" (description "Stay local"). No other tools. Reply
+  "done" after the answer.
+
+⏺ User answered Claude's questions:
+  ⎿  · Where should the Hours view go? → Tab in Fleet
+     · Push after the change? → Yes, push to PR 1100
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+· Bloviating… (6s · ↓ 287 tokens)
+                                                                                                     ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  [Opus 5.5 xhigh | Bedrock] ██░░░░░░░░ 15% (31k/200k) | cui-ask-282 | 1 CLAUDE.md | 4 rules | 6 MCPs | 12 hooks | ⏱️…
+  ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────…
+  ◐ AskUserQuestion
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
