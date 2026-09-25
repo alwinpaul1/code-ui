@@ -295,7 +295,8 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
   /** Claude takes the phone's message out of its queue box mid-turn, then
    *  works on and ends the turn, as in the report. */
   async function sendAndLetClaudeTakeIt(extra: Partial<Tick> = {}): Promise<void> {
-    await show('17:04:10.000', { messages: beforeSend, ...extra })
+    // `extra` from the tap on: the hook copy cannot exist before the Enter.
+    await show('17:04:10.000', { messages: beforeSend })
     const origin = await tap('17:04:15.000')
     await ack('17:04:15.300', origin)
     await show('17:04:16.000', { messages: beforeSend, queued: claudeBox([TEXT]), ...extra })
@@ -387,6 +388,7 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
   it('draws it once, where it was sent, when the chat comes back after the turn and first sees the hook copy then', async () => {
     const atEnter = hookCopy('17:04:15.110')
     await sendAndLetClaudeTakeIt({ prompts: atEnter })
+    expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103'])
     // Back after the turn: the tab status is read afresh, and a prompt first
     // seen then is timed by the pane's current state, which began at the end.
     // The stored echoes come back a moment after the first render, and the
@@ -478,6 +480,111 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       await show('17:08:43.000', { messages: both, agent: 'codex', queued: [] })
       expect(drawn()).toEqual(['msg_0ddffecfe356', 'msg_0ddffecfe358', 'row', 'msg_0ddffecfe359', 'row'])
       expect(drafts!.pending).toEqual([])
+    })
+  })
+
+  // A second review (2026-09-25) drove these through the same harness. Each
+  // drew a message twice, or not at all, on the first version of the take.
+  describe('found in review', () => {
+    it('draws two identical sends once each when a relay drop blanked the box before both rows landed', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: beforeSend, queued: claudeBox(['yes']) })
+      // The relay is down: the controller hands the chat no queue at all.
+      await show('17:04:20.000', { messages: beforeSend, queued: [] })
+      await show('17:04:30.000', { messages: beforeSend, queued: claudeBox(['yes']) })
+      await ack('17:05:00.300', await tap('17:05:00.000', 'yes'), 'yes')
+      await show('17:05:01.000', { messages: afterTake, queued: claudeBox(['yes', 'yes']) })
+      const dequeued = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050'), user('0741e6f3', 'yes', '17:08:22.060')]
+      await show('17:08:22.300', { messages: dequeued, queued: claudeBox(['yes', 'yes']) })
+      await show('17:08:23.000', { messages: dequeued, queued: claudeBox([]) })
+      await show('17:08:24.000', { messages: dequeued, queued: [] })
+      expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'row', 'row'])
+      expect(drafts!.pending).toEqual([])
+    })
+
+    it('draws a send Claude dequeued at the end of the turn once, when its text was sent again before its row arrived', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      await ack('17:08:23.300', await tap('17:08:23.000', 'yes'), 'yes')
+      await show('17:08:24.000', { messages: turnEnded, queued: claudeBox(['yes']) })
+      const firstRow = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050')]
+      await show('17:08:25.000', { messages: firstRow, queued: claudeBox(['yes']) })
+      const reply = [...firstRow, text('aa000001', 'ok', '17:08:30.000')]
+      await show('17:08:40.500', { messages: reply, queued: claudeBox([]) })
+      const secondRow = [...reply, user('0741e6f3', 'yes', '17:08:40.060')]
+      await show('17:08:41.000', { messages: secondRow, queued: [] })
+      await show('17:08:42.000', { messages: secondRow, queued: [] })
+      expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'row', 'aa000001', 'row'])
+      expect(drafts!.pending).toEqual([])
+    })
+
+    it('still draws a message typed at the desk in a later turn that repeats a stored phone send, when the chat comes back', async () => {
+      await sendAndLetClaudeTakeIt({ prompts: hookCopy('17:04:15.110') })
+      act(() => renderer?.unmount())
+      renderer = null
+      // A later turn, started from the desk; then the same text typed there
+      // mid-turn, taken with no row, and first seen when the chat comes back.
+      const secondTurn = [
+        ...turnEnded,
+        user('d0000001', 'now run the tests', '17:11:00.000'),
+        call('d0000002', '17:11:05.000'),
+        result('d0000003', '17:12:30.000'),
+        text('d0000004', 'All tests pass.', '17:13:00.000')
+      ]
+      const firstSight = [
+        ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+          prompt: TEXT,
+          updatedAt: at('17:13:00.100'),
+          stateStartedAt: at('17:13:00.050')
+        }).prompts
+      ]
+      await show('17:14:00.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
+      await show('17:14:01.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
+    })
+
+    describe('on Codex', () => {
+      const codexTurn = [
+        text('msg_0ddffecfe356', 'Running the deploy check.', '17:03:30.106'),
+        call('ctc_0ddffecfe357', '17:03:33.195')
+      ]
+      const codexEnded = [
+        ...codexTurn,
+        result('ctco_01a07666289b', '17:04:46.455'),
+        text('msg_0ddffecfe358', 'Deploy is green.', '17:08:21.651')
+      ]
+      async function queueTwoYes(): Promise<void> {
+        await show('17:04:10.000', { messages: codexTurn, agent: 'codex' })
+        await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+        await ack('17:04:20.300', await tap('17:04:20.000', 'yes'), 'yes')
+        await show('17:04:21.000', { messages: codexTurn, agent: 'codex', queued: codexBox(['yes', 'yes']) })
+      }
+
+      it('keeps the second of two identical follow-ups on screen until its own row lands', async () => {
+        await queueTwoYes()
+        await show('17:08:22.000', { messages: codexEnded, agent: 'codex', queued: codexBox([]) })
+        const first = [...codexEnded, user('01a07666-28b6-0001', 'yes', '17:08:22.100')]
+        await show('17:08:23.000', { messages: first, agent: 'codex', queued: [] })
+        await show('17:08:24.000', { messages: first, agent: 'codex', queued: [] })
+        expect(drawn().filter((entry) => entry === 'row' || entry === 'phone')).toHaveLength(2)
+      })
+
+      it('draws two identical follow-ups once each when Codex submits them a turn apart', async () => {
+        await queueTwoYes()
+        await show('17:08:22.000', { messages: codexEnded, agent: 'codex', queued: codexBox(['yes']) })
+        const first = [...codexEnded, user('01a07666-28b6-0001', 'yes', '17:08:22.100')]
+        await show('17:08:23.000', { messages: first, agent: 'codex', queued: codexBox(['yes']) })
+        const done = [...first, text('msg_0ddffecfe359', 'Done.', '17:08:40.000')]
+        await show('17:08:41.500', { messages: done, agent: 'codex', queued: codexBox([]) })
+        const both = [...done, user('01a07666-28b6-0002', 'yes', '17:08:41.000')]
+        await show('17:08:42.000', { messages: both, agent: 'codex', queued: [] })
+        await show('17:08:43.000', { messages: both, agent: 'codex', queued: [] })
+        expect(drawn()).toEqual(['msg_0ddffecfe356', 'msg_0ddffecfe358', 'row', 'msg_0ddffecfe359', 'row'])
+        expect(drafts!.pending).toEqual([])
+      })
     })
   })
 })

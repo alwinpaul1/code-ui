@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } fr
 import { useDebouncedPersist } from './use-debounced-persist'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
+  promptTakenSince,
   rememberEchoInPending,
   sweepWitnessedEchoes,
   withoutWitnessesOfSends
 } from './mobile-native-chat-remember-echo'
+import { phoneClockAllowanceMs } from './mid-turn-written-before'
 import {
   readNativeChatPendingEchoes,
   writeNativeChatPendingEchoes
@@ -94,10 +96,14 @@ export function useMobileNativeChatPendingPersistence(
         // mid-turn is first seen then, timed by the pane's state, which began
         // when the turn ended; remembered as another message, it drew under
         // the reply that ended the turn, beside the send's own bubble
-        // (reported 2026-09-25, Claude Code 2.1.282).
+        // (reported 2026-09-25, Claude Code 2.1.282). Not once the session has
+        // taken a prompt since the send: the status then holds a newer one.
+        const messages = memoryRef.current?.messagesRef.current ?? []
+        const margin = phoneClockAllowanceMs(messages)
+        const latest = restored.filter((item) => !promptTakenSince(messages, item, margin))
         return {
           ...previous,
-          [sessionKey]: [...restored, ...withoutWitnessesOfSends(live, restored)]
+          [sessionKey]: [...restored, ...withoutWitnessesOfSends(live, latest)]
         }
       })
     })

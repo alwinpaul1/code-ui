@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   acceptOwnSendInPending,
   echoMemoryId,
+  promptTakenSince,
   rememberEchoInPending,
   sweepWitnessedEchoes
 } from './mobile-native-chat-remember-echo'
@@ -115,5 +116,37 @@ describe('a phone send acknowledged after a witness of it was stored', () => {
     expect(accept([]).map((item) => item.id)).toEqual(['pending-1'])
     const earlierSend = { id: 'pending-0', text: 'Working W capital', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true, sentAt: tapAt + 1 }
     expect(accept([earlierSend]).map((item) => item.id)).toEqual(['pending-0', 'pending-1'])
+  })
+})
+
+// Review, 2026-09-25: reading a tab's echoes back dropped a hook copy with the
+// text of a stored phone send even when the session had taken a newer prompt,
+// so a message typed at the desk in a later turn was never drawn.
+describe('promptTakenSince', () => {
+  const sentAt = Date.parse('2026-09-25T17:04:15.000Z')
+  const stamped = (id: string, text: string, at: number | null): NativeChatMessage => ({
+    ...user(id, text),
+    timestamp: at
+  })
+
+  it('says so for a user row stamped after the send', () => {
+    expect(promptTakenSince([stamped('u1', 'now run the tests', sentAt + 400_000)], { sentAt }, 1000)).toBe(true)
+  })
+
+  it('says no for rows before the send or within the clock margin, and for an empty window', () => {
+    expect(promptTakenSince([stamped('u1', 'earlier', sentAt - 60_000)], { sentAt }, 1000)).toBe(false)
+    expect(promptTakenSince([stamped('u1', 'close', sentAt + 900)], { sentAt }, 1000)).toBe(false)
+    expect(promptTakenSince([stamped('u1', 'untimed', null)], { sentAt }, 1000)).toBe(false)
+    expect(promptTakenSince([], { sentAt }, 1000)).toBe(false)
+  })
+
+  it('says no for a row the harness injected, which leaves the tab status on the old prompt', () => {
+    const notice = stamped('u1', '<task-notification><task-id>t1</task-id></task-notification>', sentAt + 400_000)
+    expect(promptTakenSince([notice], { sentAt }, 1000)).toBe(false)
+  })
+
+  it('says no for a send with no time, since nothing can be ordered against it', () => {
+    expect(promptTakenSince([stamped('u1', 'later', sentAt + 400_000)], {}, 1000)).toBe(false)
+    expect(promptTakenSince([stamped('u1', 'later', sentAt + 400_000)], { sentAt: Number.NaN }, 1000)).toBe(false)
   })
 })

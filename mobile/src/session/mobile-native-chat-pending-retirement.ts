@@ -249,10 +249,13 @@ export function retireLandedMobileNativeChatPending(
   // row. An image landing can share its row with the send glued after it, so treating it
   // as a barrier would strand that send in a run of one and keep its echo forever.
   const exactLandedIds = new Set<string>()
-  // Texts a copy still waiting for its row retired on in this pass.
-  const claimed = new Set<string>()
-  const taken: MobileNativeChatPendingMessage[] = []
-  for (const item of current) {
+  // How far this pass moves a surviving copy's ordinal (the taken sends below).
+  const bumps = new Map<string, number>()
+  const ordinalOf = (item: MobileNativeChatPendingMessage) =>
+    item.expectedOccurrence + (bumps.get(item.id) ?? 0)
+  const bump = (item: MobileNativeChatPendingMessage) => bumps.set(item.id, (bumps.get(item.id) ?? 0) + 1)
+  const taken: number[] = []
+  for (const [index, item] of current.entries()) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
       continue
@@ -263,7 +266,7 @@ export function retireLandedMobileNativeChatPending(
       continue
     }
     if (isTakenSend(item)) {
-      taken.push(item)
+      taken.push(index)
       continue
     }
     // Image echoes are held back so their local preview can reach the
@@ -278,47 +281,52 @@ export function retireLandedMobileNativeChatPending(
     if (item.images?.length && !captioned) {
       continue
     }
-    const landed =
-      item.text.trim() === ''
-        ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >=
-          item.expectedOccurrence
-        : (landedCounts.get(normalizeReconcileText(item.text)) ?? 0) >= item.expectedOccurrence ||
-          stubLanded(item.id, item.text, landedCounts) ||
-          gluedLanded(item.text, landedCounts)
+    const key = normalizeReconcileText(item.text)
+    const byCount = captioned && (landedCounts.get(key) ?? 0) >= item.expectedOccurrence
+    const landed = !captioned
+      ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >= item.expectedOccurrence
+      : byCount || stubLanded(item.id, item.text, landedCounts) || gluedLanded(item.text, landedCounts)
     if (landed) {
       landedPendingIds.add(item.id)
       exactLandedIds.add(item.id)
-      claimed.add(normalizeReconcileText(item.text))
+    }
+    if (byCount) {
+      // The row went to this copy, whose ordinal leaves out the sends before it
+      // the agent took (isTakenSend). So each of those needs one row more.
+      for (const earlier of taken) {
+        if (normalizeReconcileText(current[earlier]!.text) === key) {
+          bump(current[earlier]!)
+        }
+      }
     }
   }
-  // A send the agent took is owed no row (isTakenSend). It still leaves on one,
-  // since Claude may have dequeued it as a queued user row after all, but only
-  // until a copy still waiting claims a row of its text: from then on such a
-  // row is that copy's, and this one is sealed and stays. Without the seal the
-  // pass after that copy retired read the same row again and took this one too.
-  const sealed = new Set<string>()
-  for (const item of taken) {
-    const text = normalizeReconcileText(item.text)
-    if (item.takenSealed === true || claimed.has(text)) {
-      sealed.add(item.id)
-    } else if ((landedCounts.get(text) ?? 0) >= item.expectedOccurrence) {
-      landedPendingIds.add(item.id)
-      exactLandedIds.add(item.id)
+  // A send the agent took is owed no row, but still leaves on one: Claude may
+  // have dequeued it as a queued user row after all, or the queue box only
+  // looked empty (a relay drop hands the chat no queue). It takes a row only
+  // past the ordinal every copy still waiting has left it, and once it has, every
+  // later copy of its text, which left it out, needs one more. The ordinals are
+  // kept, so the next pass cannot read the same row for a second copy: the first
+  // version sealed a taken send for good instead, and a second copy of its text
+  // then drew twice (review, 2026-09-25).
+  for (const index of taken) {
+    const item = current[index]!
+    const key = normalizeReconcileText(item.text)
+    if (key === '' || (landedCounts.get(key) ?? 0) < ordinalOf(item)) {
+      continue
+    }
+    landedPendingIds.add(item.id)
+    exactLandedIds.add(item.id)
+    for (const later of current.slice(index + 1)) {
+      if (!landedPendingIds.has(later.id) && normalizeReconcileText(later.text) === key) {
+        bump(later)
+      }
     }
   }
-  const glued = selectGluedPendingIds(
-    messages,
-    current,
-    sealed.size === 0 ? exactLandedIds : new Set([...exactLandedIds, ...sealed]),
-    landedImagePendingIds
-  )
-  const newlySealed = taken.some((item) => sealed.has(item.id) && item.takenSealed !== true)
-  if (landedPendingIds.size === 0 && glued.size === 0 && !newlySealed) {
+  const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)
+  if (landedPendingIds.size === 0 && glued.size === 0 && bumps.size === 0) {
     return current
   }
   return current
     .filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
-    .map((item) =>
-      sealed.has(item.id) && item.takenSealed !== true ? { ...item, takenSealed: true as const } : item
-    )
+    .map((item) => (bumps.has(item.id) ? { ...item, expectedOccurrence: ordinalOf(item) } : item))
 }

@@ -1,7 +1,12 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
-import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import {
+  countUserTextOccurrences,
+  normalizeReconcileText,
+  normalizedUserText
+} from './mobile-native-chat-draft-reconcile'
+import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import {
   appendMobileNativeChatPending,
   type MobileNativeChatPendingMessage,
@@ -131,6 +136,34 @@ export function withoutWitnessesOfSends(
       )
   )
   return kept.length === list.length ? list : kept
+}
+
+/**
+ * Whether the session took a prompt after this send left the phone: a user
+ * row stamped later than the send by more than `marginMs`, not one the harness
+ * injects (Orca's hook keeps the tab status's prompt through those). The tab
+ * status then carries a newer submission than the send, so a hook copy with
+ * the send's text is a message typed since, not the send (review, 2026-09-25:
+ * a message typed at the desk in a later turn was hidden as a copy of an older
+ * phone send). Rows the phone does not hold say nothing, so a window with none
+ * after the send answers no.
+ */
+export function promptTakenSince(
+  messages: readonly NativeChatMessage[],
+  send: { sentAt?: number },
+  marginMs: number
+): boolean {
+  const sentAt = send.sentAt
+  if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+    return false
+  }
+  return messages.some((message) => {
+    if (message.role !== 'user' || message.timestamp === null || message.timestamp <= sentAt + marginMs) {
+      return false
+    }
+    const text = normalizedUserText(message)
+    return Boolean(text) && !isKnownHarnessInjectedUserTurnText(text!)
+  })
 }
 
 function isWitnessed(id: string): boolean {

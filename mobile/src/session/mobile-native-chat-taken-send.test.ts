@@ -79,14 +79,35 @@ describe('a send the agent took out of its queue box', () => {
     expect(retireLandedMobileNativeChatPending(landed, taken[KEY]!, NONE)).toEqual([])
   })
 
-  it('stays, sealed, once a later copy claimed a row of its text, on that pass and every pass after', () => {
+  it('stays once a later copy took the row, on that pass and every pass after', () => {
     const taken = takeMobileNativeChatPending(send({}, 'pending-1', 'yes', history), KEY, ['pending-1'], TAKEN_AT)
     const both = send(taken, 'pending-2', 'yes', history)
     const landed = [...history, row('u1', 'user', 'yes')]
     const first = retireLandedMobileNativeChatPending(landed, both[KEY]!, NONE)
-    expect(first).toEqual([expect.objectContaining({ id: 'pending-1', takenSealed: true })])
+    // It now needs a second row of its text: the first was the later copy's.
+    expect(first).toEqual([expect.objectContaining({ id: 'pending-1', expectedOccurrence: 2 })])
     // The next frame: the copy that owned the row is gone, the row is not.
     expect(retireLandedMobileNativeChatPending(landed, first, NONE)).toBe(first)
+  })
+
+  it('still leaves on its own row when that row lands beside the row of the later copy', () => {
+    // The box only looked empty (a relay drop), so it was taken, and both
+    // messages were in fact dequeued.
+    const taken = takeMobileNativeChatPending(send({}, 'pending-1', 'yes', history), KEY, ['pending-1'], TAKEN_AT)
+    const both = send(taken, 'pending-2', 'yes', history)
+    const landed = [...history, row('u1', 'user', 'yes'), row('u2', 'user', 'yes')]
+    expect(retireLandedMobileNativeChatPending(landed, both[KEY]!, NONE)).toEqual([])
+  })
+
+  it('lets two taken copies of one text take one row each, a row at a time', () => {
+    const queued = send(send({}, 'pending-1', 'yes', history), 'pending-2', 'yes', history)
+    const taken = takeMobileNativeChatPending(queued, KEY, ['pending-1', 'pending-2'], TAKEN_AT)
+    const one = [...history, row('u1', 'user', 'yes')]
+    const first = retireLandedMobileNativeChatPending(one, taken[KEY]!, NONE)
+    expect(ids(first)).toEqual(['pending-2'])
+    expect(retireLandedMobileNativeChatPending(one, first, NONE)).toBe(first)
+    const two = [...one, row('u2', 'user', 'yes')]
+    expect(retireLandedMobileNativeChatPending(two, first, NONE)).toEqual([])
   })
 
   it('leaves the list as it was when nothing is left to do', () => {

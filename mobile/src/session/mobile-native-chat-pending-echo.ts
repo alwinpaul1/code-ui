@@ -43,9 +43,6 @@ export type MobileNativeChatPendingMessage = {
    *  out of its queue box. Claude Code writes no row for a prompt it takes
    *  mid-turn (see `isTakenSend`), so from then on the send waits for none. */
   takenAt?: number
-  /** A taken send whose text a later copy's own row has since landed for: a
-   *  row of that text is that copy's, never this one's, so it stays. */
-  takenSealed?: true
 }
 
 /**
@@ -57,11 +54,13 @@ export type MobileNativeChatPendingMessage = {
  * `user` row with `promptSource: "queued"`. On this machine, from 2.1.205 to
  * 2.1.282, 1,998 human prompts were written the first way and 378 the second
  * (65 and 16 on 2.1.280 to 2.1.282). The phone cannot tell which it will be
- * from the box letting go, so a taken send still leaves on its own row if one
- * lands; what changes is that it no longer counts as a send still waiting,
- * which put a later send of the same text one ordinal past its own row, so the
- * later one drew twice and this one was retired by that row (2026-09-25).
- * The pending store does not check the field it reads back.
+ * from the box letting go, and the box also looks empty when a relay drop
+ * hands the chat no queue, so a taken send still leaves on its own row if one
+ * lands (retireLandedMobileNativeChatPending). What changes is that it no
+ * longer counts as a send still waiting, which put a later send of the same
+ * text one ordinal past its own row, so the later one drew twice and this one
+ * was retired by that row (2026-09-25). The pending store does not check the
+ * field it reads back.
  */
 export function isTakenSend(item: Pick<MobileNativeChatPendingMessage, 'takenAt'>): boolean {
   return typeof item.takenAt === 'number' && Number.isFinite(item.takenAt)

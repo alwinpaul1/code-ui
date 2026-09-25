@@ -203,6 +203,26 @@ describe('a send whose read settled after the replies to it', () => {
     expect(rebased[0]?.baselineTailMessageId).toBe('m1')
   })
 
+  // Review, 2026-09-25: the phone's clock margin moved a row written in the
+  // second before the send below it, where the old tail rule kept it above.
+  it('keeps a row written just before the send above it when the read settles a moment later', () => {
+    const justBefore = [assistantTurn('m1', 'first', sentAt - 5000), assistantTurn('m2', 'second', sentAt - 500)]
+    expect(
+      rebaseMobileNativeChatPendingBaselines(justBefore, [sent('check the menu')])[0]?.baselineTailMessageId
+    ).toBe('m2')
+  })
+
+  it('keeps rows that carry no time above the send when nothing timed came after it', () => {
+    const untimedTail = [
+      ...settledLate.slice(0, 1),
+      { ...assistantTurn('u1', 'streamed', 0), timestamp: null },
+      { ...assistantTurn('u2', 'streamed', 0), timestamp: null }
+    ]
+    expect(
+      rebaseMobileNativeChatPendingBaselines(untimedTail, [sent('check the menu')])[0]?.baselineTailMessageId
+    ).toBe('u2')
+  })
+
   it('keeps the old tail rule for a send with no time, or a read whose rows carry none', () => {
     expect(
       rebaseMobileNativeChatPendingBaselines(settledLate, [unresolved('p1', 'check the menu')])[0]

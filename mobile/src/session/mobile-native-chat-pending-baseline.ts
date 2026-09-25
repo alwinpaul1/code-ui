@@ -1,8 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { phoneClockAllowanceMs } from './mid-turn-written-before'
-import { lastRowBefore } from './use-desktop-prompt-echoes'
 
 /**
  * Give the sends that never saw a transcript the boundary they lack, on the
@@ -42,17 +40,18 @@ import { lastRowBefore } from './use-desktop-prompt-echoes'
  * stacked under the first (2026-09-15). The placement anchor is where the send
  * happened; no reconciler reads it.
  *
- * Where the send happened is the last row written before it, by its own send
- * time, not this read's tail. The two agree when the read settles a moment
- * after the send, which is the case all of the above was written for. They do
- * not when it settles later: a message sent from a chat whose read was still
- * in flight, mid-turn, was drawn under the reply that ended the turn, as the
- * last row of the chat, and since Claude writes no row for a message it takes
- * mid-turn, it stayed there (reported 2026-09-25, Claude Code 2.1.282). The
- * rows carry the desktop's clock and the send the phone's, so the same margin
- * the phone's mid-turn sends are placed by applies
- * (mid-turn-written-before.ts). A send with no time, or a read whose rows
- * carry none, keeps the tail as before.
+ * Where the send happened is judged by its own send time, not this read's
+ * tail. The two agree when the read settles a moment after the send, which is
+ * the case all of the above was written for. They do not when it settles
+ * later: a message sent from a chat whose read was still in flight, mid-turn,
+ * was drawn under the reply that ended the turn, as the last row of the chat,
+ * and since Claude writes no row for a message it takes mid-turn, it stayed
+ * there (reported 2026-09-25, Claude Code 2.1.282). So the boundary is the
+ * row before the first one stamped after the send: every row the tail rule
+ * put above the bubble stays above it but those. No clock margin: the old rule
+ * put every row above, and a margin moved a row written in the second before
+ * the send below it (review, 2026-09-25). A row with no time goes with the
+ * rows before it. A send with no time keeps the tail as before.
  */
 export function rebaseMobileNativeChatPendingBaselines(
   messages: readonly NativeChatMessage[],
@@ -62,13 +61,18 @@ export function rebaseMobileNativeChatPendingBaselines(
     return current
   }
   const tail = messages.at(-1)?.id ?? null
-  const allowance = phoneClockAllowanceMs(messages)
   const sentAfter = (item: MobileNativeChatPendingMessage): string | null => {
-    if (typeof item.sentAt !== 'number' || !Number.isFinite(item.sentAt)) {
+    const sentAt = item.sentAt
+    if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
       return tail
     }
-    const written = lastRowBefore(messages, item.sentAt - allowance)
-    return written === undefined ? tail : written
+    const firstLater = messages.findIndex(
+      (message) => message.timestamp !== null && message.timestamp > sentAt
+    )
+    if (firstLater === -1) {
+      return tail
+    }
+    return firstLater === 0 ? null : messages[firstLater - 1]!.id
   }
   return current.map((item) => {
     if (item.baselineResolved) {
