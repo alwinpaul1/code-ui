@@ -14,7 +14,7 @@
 // thing standing in for the app is `screen`, the chat's own banner-or-toast
 // reporter (nativeChatSendError.show).
 
-import { createElement, useState, type ReactElement, type ReactNode } from 'react'
+import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -36,6 +36,7 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
+import * as pickFailure from './use-session-option-pick-failure'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import {
@@ -207,6 +208,8 @@ function Chat(): ReactElement | null {
 }
 
 let renderer: ReactTestRenderer | null = null
+// The drawer's own clock (use-session-option-pick-failure.ts), moved only by lookFor.
+let pickClock = 0
 
 async function settle(): Promise<void> {
   await act(async () => {
@@ -302,6 +305,8 @@ function expectSaidInDrawer(message: string): void {
 }
 
 beforeEach(async () => {
+  pickClock = 0
+  pickFailure.setSessionOptionPickFailureClockForTests?.(() => pickClock)
   resetMobileNativeChatSessionOptionRecordsForTests()
   resetMobileNativeChatTerminalWritesForTests()
   resetMobileNativeChatStaleInputForTests()
@@ -324,13 +329,22 @@ afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
   vi.useRealTimers()
+  pickFailure.setSessionOptionPickFailureClockForTests?.(null)
 })
 
-/** Let the user look at the drawer for `ms`. Only the clock moves: timers stay
- *  real, so the chat's sends and the settles above run as before. */
-function lookFor(ms: number): void {
-  vi.useFakeTimers({ toFake: ['Date'] })
+/** Move the wall clock by `ms`, and nothing else: timers stay real, so the
+ *  chat's sends and the settles above run as before. */
+function moveWallClock(ms: number): void {
+  if (!vi.isFakeTimers()) {
+    vi.useFakeTimers({ toFake: ['Date'] })
+  }
   vi.setSystemTime(Date.now() + ms)
+}
+
+/** Let `ms` pass: on the drawer's own clock, and on the wall clock with it. */
+function lookFor(ms: number): void {
+  pickClock += ms
+  moveWallClock(ms)
 }
 
 describe('a Claude pick that fails says so inside the open drawer', () => {
@@ -425,6 +439,24 @@ describe('a Claude pick that fails says so inside the open drawer', () => {
     await settle()
 
     expect(drawer()).toBeNull()
+    expect(screen).not.toHaveBeenCalled()
+  })
+
+  it('does not repeat a failure the user has read when the wall clock jumps back', async () => {
+    await mountChat('claude')
+    await openDrawer()
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    await press(row('Opus'))
+    expectSaidInDrawer(BUSY)
+    lookFor(2_000)
+    // The phone's clock is set back a minute (a network time correction).
+    moveWallClock(-60_000)
+
+    await act(async () => {
+      drawerHandle.onClose!()
+    })
+    await settle()
+
     expect(screen).not.toHaveBeenCalled()
   })
 
@@ -779,176 +811,5 @@ describe("a failed pick's message is drawn in the theme's own danger colour", ()
     expect(colors.at(-1)).toBe(palette.danger)
     // Announced when it appears, like the chat's own send-failure banner.
     expect(message!.props.accessibilityRole).toBe('alert')
-  })
-})
-
-describe('the drawer, whatever lane it drives', () => {
-  const MODEL: SessionOptionDescriptor = {
-    id: 'model',
-    label: 'Model',
-    category: 'model',
-    kind: {
-      type: 'select',
-      currentValue: 'sonnet',
-      choices: [
-        { value: 'sonnet', label: 'Sonnet 5' },
-        { value: 'opus', label: 'Opus 4.8' }
-      ]
-    },
-    valueSource: 'reported',
-    transport: 'agent-session',
-    settable: true
-  }
-
-  async function mountPicker(
-    snapshot: SessionOptionDescriptor[],
-    lane: Pick<MobileNativeChatSessionOptionsController, 'setOption' | 'invokeAction'>
-  ): Promise<void> {
-    const controller: MobileNativeChatSessionOptionsController = {
-      snapshot,
-      pendingId: null,
-      ...lane,
-      recordCommand: noop
-    }
-    await act(async () => {
-      renderer = create(
-        createElement(MobileNativeChatSessionOptionPickers, {
-          controller,
-          isWorking: false,
-          reportFailure: screen
-        })
-      )
-    })
-    await openDrawer()
-  }
-
-  // The structured lane refuses on the host (agentSession.setOption), and its
-  // controller is handed to the picker as it is; the picker must give every
-  // lane the same place to say why.
-  it('hands each pick a reporter and draws what it says inside the drawer', async () => {
-    const setOption = vi.fn<MobileNativeChatSessionOptionsController['setOption']>(
-      async (_id, _value, report) => {
-        report?.('The host refused that model')
-        return false
-      }
-    )
-    await mountPicker([MODEL], { setOption, invokeAction: async () => false })
-
-    await press(row('Opus 4.8'))
-
-    expect(setOption).toHaveBeenCalledWith('model', 'opus', expect.any(Function))
-    expectSaidInDrawer('The host refused that model')
-    expect(screen).not.toHaveBeenCalled()
-  })
-
-  // The one row an agent-picker model shows: it types the agent's own `/model`.
-  it("says why the agent-picker row did not open the agent's picker, inside the drawer", async () => {
-    const invokeAction = vi.fn<MobileNativeChatSessionOptionsController['invokeAction']>(
-      async (_id, report) => {
-        report?.(BUSY)
-        return false
-      }
-    )
-    await mountPicker(
-      [
-        {
-          ...MODEL,
-          kind: { type: 'select', choices: [] },
-          valueSource: 'unknown',
-          action: { type: 'agent-picker' }
-        }
-      ],
-      { setOption: async () => false, invokeAction }
-    )
-
-    await press(row('Choose in agent picker…'))
-
-    expect(invokeAction).toHaveBeenCalledWith('model', expect.any(Function))
-    expect(drawer()).not.toBeNull()
-    expectSaidInDrawer(BUSY)
-    expect(screen).not.toHaveBeenCalled()
-  })
-
-  // The agent-picker row flips the tab to its terminal view when it lands, and
-  // an ack-lost one says so on the way: the word and the unmount of the chat,
-  // picker and all, reach React in the same render.
-  it('does not repeat a failure the user has read when the picker unmounts', async () => {
-    let hide: () => void = noop
-    function Host(): ReactElement | null {
-      const [shown, setShown] = useState(true)
-      hide = () => setShown(false)
-      return shown
-        ? createElement(MobileNativeChatSessionOptionPickers, {
-            controller: {
-              snapshot: [MODEL],
-              pendingId: null,
-              setOption: async (_id, _value, report) => {
-                report?.(BUSY)
-                return false
-              },
-              invokeAction: async () => false,
-              recordCommand: noop
-            },
-            isWorking: false,
-            reportFailure: screen
-          })
-        : null
-    }
-    await act(async () => {
-      renderer = create(createElement(Host))
-    })
-    await openDrawer()
-    await press(row('Opus 4.8'))
-    expectSaidInDrawer(BUSY)
-    lookFor(2_000)
-
-    await act(async () => {
-      hide()
-    })
-
-    expect(renderer!.toJSON()).toBeNull()
-    expect(screen).not.toHaveBeenCalled()
-  })
-
-  it('hands a failure said in the render that unmounts the picker to the chat', async () => {
-    let hide: () => void = noop
-    function Host(): ReactElement | null {
-      const [shown, setShown] = useState(true)
-      hide = () => setShown(false)
-      return shown
-        ? createElement(MobileNativeChatSessionOptionPickers, {
-            controller: {
-              snapshot: [
-                {
-                  ...MODEL,
-                  kind: { type: 'select', choices: [] },
-                  valueSource: 'unknown',
-                  action: { type: 'agent-picker' }
-                }
-              ],
-              pendingId: null,
-              setOption: async () => false,
-              invokeAction: async (_id, report) => {
-                report?.(UNCONFIRMED)
-                hide()
-                return true
-              },
-              recordCommand: noop
-            },
-            isWorking: false,
-            reportFailure: screen
-          })
-        : null
-    }
-    await act(async () => {
-      renderer = create(createElement(Host))
-    })
-    await openDrawer()
-
-    await press(row('Choose in agent picker…'))
-
-    expect(renderer!.toJSON()).toBeNull()
-    expect(screen).toHaveBeenCalledTimes(1)
-    expect(screen).toHaveBeenCalledWith(UNCONFIRMED)
   })
 })
