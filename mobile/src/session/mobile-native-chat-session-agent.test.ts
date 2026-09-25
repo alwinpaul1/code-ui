@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-agent'
+import {
+  claudeConfigDirFromTranscriptPath,
+  nativeChatAgentFromTranscriptPath
+} from './mobile-native-chat-session-agent'
 
 // Real paths, copied off this machine 2026-09-14 rather than invented: an
 // invented fixture agrees with an invented matcher and both stay wrong.
@@ -202,5 +205,56 @@ describe('naming Codex from a rollout under a Codex home other than ~/.codex', (
   it('refuses a Codex home directory, or a rollout with no home above its sessions folder', () => {
     expect(nativeChatAgentFromTranscriptPath(`${ORCA_USER_DATA}/codex-runtime-home/home/sessions`)).toBeNull()
     expect(nativeChatAgentFromTranscriptPath(`sessions/2026/09/05/${ROLLOUT_NAME}`)).toBeNull()
+  })
+})
+
+// Claude Code loads a session's skills, commands and plugins from its config
+// dir, and the transcript path is the session saying which dir that is. This
+// one is the path Orca 1.4.211 saved for a Code UI pane here on 2026-09-25.
+const CODE_UI_TRANSCRIPT =
+  '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-Project-Code-UI/' +
+  '967668df-a7d9-40e7-964b-7812815c010d.jsonl'
+
+describe('reading the config dir a Claude session runs under off its transcript', () => {
+  it('names the ~/.claude-work profile for a session that writes there', () => {
+    expect(claudeConfigDirFromTranscriptPath(CODE_UI_TRANSCRIPT)).toBe('/Users/alwinpaul/.claude-work')
+    expect(claudeConfigDirFromTranscriptPath(PROFILE_TRANSCRIPT)).toBe('/Users/alwinpaul/.claude-work')
+  })
+
+  it('names ~/.claude for a session in the default config dir', () => {
+    expect(claudeConfigDirFromTranscriptPath(CLAUDE_TRANSCRIPT)).toBe('/Users/alwinpaul/.claude')
+  })
+
+  it("keeps a Windows profile in the host's own spelling", () => {
+    expect(
+      claudeConfigDirFromTranscriptPath(
+        `C:\\Users\\alwinpaul\\.claude-work\\projects\\C--Users-alwinpaul-repo\\${SESSION}.jsonl`
+      )
+    ).toBe('C:\\Users\\alwinpaul\\.claude-work')
+  })
+
+  it('names no config dir for a transcript it does not take for Claude', () => {
+    expect(claudeConfigDirFromTranscriptPath(CODEX_TRANSCRIPT)).toBeNull()
+    expect(claudeConfigDirFromTranscriptPath(RUNTIME_HOME_ROLLOUT)).toBeNull()
+    expect(
+      claudeConfigDirFromTranscriptPath(`/Users/alwinpaul/.openclaude/projects/${NEXOS}/${SESSION}.jsonl`)
+    ).toBeNull()
+    expect(
+      claudeConfigDirFromTranscriptPath(
+        `/Users/alwinpaul/.codex/sessions/2026/09/25/projects/${NEXOS}/${SESSION}.jsonl`
+      )
+    ).toBeNull()
+    expect(
+      claudeConfigDirFromTranscriptPath(
+        `/Users/alwinpaul/.claude-work/projects/${NEXOS}/${SESSION}/subagents/agent-ac783102d52898c35.jsonl`
+      )
+    ).toBeNull()
+    expect(claudeConfigDirFromTranscriptPath(null)).toBeNull()
+    expect(claudeConfigDirFromTranscriptPath('')).toBeNull()
+  })
+
+  it('names no config dir for a relative path, which the host could not list', () => {
+    expect(claudeConfigDirFromTranscriptPath(`.claude-work/projects/${NEXOS}/${SESSION}.jsonl`)).toBeNull()
+    expect(claudeConfigDirFromTranscriptPath(`.claude/projects/${NEXOS}/${SESSION}.jsonl`)).toBeNull()
   })
 })

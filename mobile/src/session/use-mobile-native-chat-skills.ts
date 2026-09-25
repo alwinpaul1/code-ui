@@ -4,6 +4,7 @@ import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
 import type { RpcClient } from '../transport/rpc-client'
 import { browseClaudeSkills } from './mobile-native-chat-skill-browse-load'
 import { worktreePathFromId } from './mobile-native-chat-skill-browse'
+import { claudeConfigDirFromTranscriptPath } from './mobile-native-chat-session-agent'
 
 /** Re-scan when the `/` menu opens and the last scan is older than this, so a
  *  skill added or removed on the desktop shows up on the next `/` without
@@ -25,8 +26,9 @@ const BROWSED_SKILLS_STALE_MS = 10 * 60_000
  *  first. */
 const PRIME_SKILLS_DELAY_MS = 2_000
 
-/** The last browsed list per worktree, kept across reconnects for this launch. */
-const browsedByWorktree = new Map<string, DiscoveredSkill[]>()
+/** The last browsed list per worktree and Claude config dir, kept across
+ *  reconnects for this launch. */
+const browsedByKey = new Map<string, DiscoveredSkill[]>()
 
 /**
  * Installed skills and plugin commands for the `/` menu.
@@ -48,59 +50,86 @@ const browsedByWorktree = new Map<string, DiscoveredSkill[]>()
  * Claude Code's skills are directories, so the phone lists them itself — the
  * home and repo skill and command roots, and every cached plugin's skills —
  * names only, the way the Claude app's `/` menu shows them (2026-09-20; see
- * mobile-native-chat-skill-browse.ts).
+ * mobile-native-chat-skill-browse.ts). The home roots are the session's own
+ * Claude config dir, read off its transcript path (2026-09-25: a
+ * ~/.claude-work session listed ~/.claude's skills and plugins). Each dir is
+ * walked on its own clock, so switching between two tabs of one worktree
+ * shows each its last list instead of walking again; the scan's latch does
+ * not depend on the dir and is left alone.
  */
 export function useMobileNativeChatSkills(args: {
   client: Pick<RpcClient, 'sendRequest'> | null
   worktreeId: string
+  /** The chat's hook-reported transcript path; null until the session reports one. */
+  transcriptPath: string | null
 }): { nativeChatSkills: DiscoveredSkill[]; loadNativeChatSkills: () => void } {
   const { client, worktreeId } = args
+  const claudeConfigDir = claudeConfigDirFromTranscriptPath(args.transcriptPath)
+  const browseKey = `${worktreeId}\0${claudeConfigDir ?? ''}`
   const [nativeChatSkills, setNativeChatSkills] = useState<DiscoveredSkill[]>([])
   const loadedAtRef = useRef<number | null>(null)
   const inFlightRef = useRef(false)
   const unsupportedRef = useRef(false)
   const generationRef = useRef(0)
-  const browsedAtRef = useRef<number | null>(null)
-  const browsingRef = useRef(false)
+  /** Per browse key, on this connection: when it was last walked, and which
+   *  walks are in flight. */
+  const browsedAtRef = useRef(new Map<string, number>())
+  const browsingRef = useRef(new Set<string>())
+  /** The key the menu is showing, so a walk for a tab the user has left
+   *  fills its own cache and not this tab's menu. */
+  const shownKeyRef = useRef(browseKey)
 
   useEffect(() => {
     generationRef.current++
     loadedAtRef.current = null
     inFlightRef.current = false
     unsupportedRef.current = false
-    browsedAtRef.current = null
-    browsingRef.current = false
+    browsedAtRef.current = new Map()
+    browsingRef.current = new Set()
     // A reconnect is a new client. The skills it listed last time are still
     // on the desktop's disk; showing them until the fresh listing lands beats
     // an empty `/` menu for the seconds the listing takes (2026-09-20).
-    setNativeChatSkills(browsedByWorktree.get(worktreeId) ?? [])
+    setNativeChatSkills(browsedByKey.get(browseKey) ?? [])
   }, [client, worktreeId])
 
+  useEffect(() => {
+    shownKeyRef.current = browseKey
+    // Another config dir in the same worktree: that dir's last list, when the
+    // menu is the browsed one. A scanned list does not depend on the dir.
+    if (unsupportedRef.current) {
+      setNativeChatSkills(browsedByKey.get(browseKey) ?? [])
+    }
+  }, [browseKey])
+
   const browseSkills = useCallback(() => {
-    if (!client || browsingRef.current) {
+    const key = browseKey
+    if (!client || browsingRef.current.has(key)) {
       return
     }
-    const browsedAt = browsedAtRef.current
-    if (browsedAt !== null && Date.now() - browsedAt < BROWSED_SKILLS_STALE_MS) {
+    const browsedAt = browsedAtRef.current.get(key)
+    if (browsedAt !== undefined && Date.now() - browsedAt < BROWSED_SKILLS_STALE_MS) {
       return
     }
     const generation = generationRef.current
-    browsingRef.current = true
-    browsedAtRef.current = Date.now()
+    browsingRef.current.add(key)
+    browsedAtRef.current.set(key, Date.now())
     void browseClaudeSkills({
       client,
       worktreePath: worktreePathFromId(worktreeId),
+      claudeConfigDir,
       live: () => generationRef.current === generation,
       onSkills: (skills) => {
-        browsedByWorktree.set(worktreeId, skills)
-        setNativeChatSkills(skills)
+        browsedByKey.set(key, skills)
+        if (shownKeyRef.current === key) {
+          setNativeChatSkills(skills)
+        }
       }
     }).finally(() => {
       if (generationRef.current === generation) {
-        browsingRef.current = false
+        browsingRef.current.delete(key)
       }
     })
-  }, [client, worktreeId])
+  }, [browseKey, claudeConfigDir, client, worktreeId])
 
   const loadNativeChatSkills = useCallback(() => {
     if (unsupportedRef.current) {

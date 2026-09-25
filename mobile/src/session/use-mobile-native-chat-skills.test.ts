@@ -10,7 +10,11 @@ function Harness(props: {
   client: Pick<RpcClient, 'sendRequest'>
   onLoad: (load: () => void) => void
 }): null {
-  const { loadNativeChatSkills } = useMobileNativeChatSkills({ client: props.client, worktreeId: 'w1' })
+  const { loadNativeChatSkills } = useMobileNativeChatSkills({
+    client: props.client,
+    worktreeId: 'w1',
+    transcriptPath: null
+  })
   props.onLoad(loadNativeChatSkills)
   return null
 }
@@ -138,7 +142,8 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     function Probe(): null {
       latest = useMobileNativeChatSkills({
         client: client as never,
-        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI',
+        transcriptPath: null
       })
       return null
     }
@@ -169,7 +174,8 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     function Probe(): null {
       latest = useMobileNativeChatSkills({
         client: client as never,
-        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+        worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI',
+        transcriptPath: null
       })
       return null
     }
@@ -193,7 +199,8 @@ describe('the / menu’s skills list, read by directory when the scan is refused
   function Probe({ token }: { token: number }): null {
     latest = useMobileNativeChatSkills({
       client: (token === 1 ? client : { sendRequest: client.sendRequest }) as never,
-      worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+      worktreeId: 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI',
+      transcriptPath: null
     })
     return null
   }
@@ -231,7 +238,8 @@ describe('the / menu’s skills list, read by directory when the scan is refused
     function Probe(): null {
       useMobileNativeChatSkills({
         client: client as never,
-        worktreeId: 'w-prime::/Users/alwinpaul/Desktop/Project/Code UI'
+        worktreeId: 'w-prime::/Users/alwinpaul/Desktop/Project/Code UI',
+        transcriptPath: null
       })
       return null
     }
@@ -265,7 +273,8 @@ describe('the / menu’s skills list, read by directory when the scan is refused
       function Probe({ token }: { token: number }): null {
         latest = useMobileNativeChatSkills({
           client: (token === 1 ? client : { sendRequest: client.sendRequest }) as never,
-          worktreeId: 'w-confirm::/Users/alwinpaul/Desktop/Project/Code UI'
+          worktreeId: 'w-confirm::/Users/alwinpaul/Desktop/Project/Code UI',
+          transcriptPath: null
         })
         return null
       }
@@ -291,5 +300,250 @@ describe('the / menu’s skills list, read by directory when the scan is refused
       expect(asks()).toBe(1)
       act(() => renderer!.unmount())
     })
+  })
+})
+
+// 2026-09-25: this machine runs Claude Code with CLAUDE_CONFIG_DIR=~/.claude-work,
+// and Claude Code 2.1.282 loads a session's skills, commands and plugins from
+// that dir alone. The phone listed ~/.claude/skills and ~/.claude/plugins/cache
+// for every session: 27 skills a ~/.claude-work session cannot run
+// (`/notebooklm` among them), and none of the plugins only ~/.claude-work has
+// (`/claude-security:claude-security`). The names below are real, from both
+// profiles on this machine.
+describe('the / menu lists the skills of the Claude profile its session runs under', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const HOME = '/Users/alwinpaul'
+  const WORKTREE = 'a91672c3::/Users/alwinpaul/Desktop/Project/Code UI'
+  const WORK_TRANSCRIPT =
+    `${HOME}/.claude-work/projects/-Users-alwinpaul-Desktop-Project-Code-UI/` +
+    '967668df-a7d9-40e7-964b-7812815c010d.jsonl'
+  const dir = (name: string) => ({ name, isDirectory: true, isSymlink: false })
+  const file = (name: string) => ({ name, isDirectory: false, isSymlink: false })
+  const listings: Record<string, ReturnType<typeof dir>[]> = {
+    '': [dir('.claude'), dir('.claude-work'), dir('Desktop')],
+    [`${HOME}/.claude/skills`]: [dir('notebooklm')],
+    [`${HOME}/.claude/skills/notebooklm`]: [file('SKILL.md')],
+    [`${HOME}/.claude-work/skills`]: [dir('find-skills')],
+    [`${HOME}/.claude-work/skills/find-skills`]: [file('SKILL.md')],
+    [`${HOME}/.claude/plugins/cache`]: [dir('railway-skills')],
+    [`${HOME}/.claude/plugins/cache/railway-skills`]: [dir('railway')],
+    [`${HOME}/.claude/plugins/cache/railway-skills/railway`]: [dir('1.2.3')],
+    [`${HOME}/.claude/plugins/cache/railway-skills/railway/1.2.3/skills`]: [dir('use-railway')],
+    [`${HOME}/.claude-work/plugins/cache`]: [dir('claude-plugins-official')],
+    [`${HOME}/.claude-work/plugins/cache/claude-plugins-official`]: [dir('claude-security')],
+    [`${HOME}/.claude-work/plugins/cache/claude-plugins-official/claude-security`]: [dir('0.10.0')],
+    [`${HOME}/.claude-work/plugins/cache/claude-plugins-official/claude-security/0.10.0/skills`]: [
+      dir('claude-security')
+    ],
+    ['/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills']: [dir('repo-skill')],
+    ['/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills/repo-skill']: [file('SKILL.md')]
+  }
+  function browsingClient() {
+    const sendRequest = vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
+      if (method === 'files.browseServerDir') {
+        const path = (params as { path: string }).path
+        const entries = listings[path]
+        if (!entries) {
+          return refused('not_found', `ENOENT ${path}`)
+        }
+        return { id: 'rpc', ok: true, result: { resolvedPath: path || HOME, entries }, _meta: { runtimeId: 'r' } }
+      }
+      return refused('forbidden', `Method '${method}' is not available to mobile clients`)
+    })
+    return { sendRequest }
+  }
+
+  type Latest = { nativeChatSkills: { name: string; sourceLabel: string }[]; loadNativeChatSkills: () => void }
+  async function menuFor(client: ReturnType<typeof browsingClient>, transcriptPath: string | null): Promise<string[]> {
+    resetConfirmedSkillFilesForTest()
+    let latest: Latest | null = null
+    function Probe(): null {
+      latest = useMobileNativeChatSkills({ client: client as never, worktreeId: WORKTREE, transcriptPath })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      for (let i = 0; i < 80; i += 1) {
+        await Promise.resolve()
+      }
+    })
+    return latest!.nativeChatSkills.map((skill) => `${skill.sourceLabel}:${skill.name}`)
+  }
+
+  it("offers a ~/.claude-work session its own skills and plugins, not ~/.claude's", async () => {
+    const menu = await menuFor(browsingClient(), WORK_TRANSCRIPT)
+    expect(menu).toEqual([
+      'Home skills:find-skills',
+      'Repo skills:repo-skill',
+      'Claude plugin claude-security:claude-security'
+    ])
+  })
+
+  it('offers a ~/.claude session its own skills, not the ~/.claude-work ones', async () => {
+    const menu = await menuFor(
+      browsingClient(),
+      `${HOME}/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/a10fe5ce-0066-4188-b686-bb6062c3d4d9.jsonl`
+    )
+    expect(menu).toEqual(['Home skills:notebooklm', 'Repo skills:repo-skill', 'Claude plugin railway:use-railway'])
+  })
+
+  it('lists both profiles, as before, while the session has not said where it writes', async () => {
+    const client = browsingClient()
+    expect(await menuFor(client, null)).toEqual([
+      'Home skills:notebooklm',
+      'Work skills:find-skills',
+      'Repo skills:repo-skill',
+      'Claude plugin railway:use-railway'
+    ])
+    act(() => renderer?.unmount())
+    // A Codex rollout names no Claude profile either.
+    expect(
+      await menuFor(
+        browsingClient(),
+        `${HOME}/.codex/sessions/2026/09/11/rollout-2026-09-11T02-42-13-01a08dea-3c89-78e0-b629-04a87f33c43e.jsonl`
+      )
+    ).toContain('Home skills:notebooklm')
+  })
+
+  it("lists no home skills when the session's profile will not list, rather than another profile's", async () => {
+    // The listing is refused, the way `files.browseServerDir` answers a
+    // directory that is not on disk. The repo's own skills still come through.
+    const menu = await menuFor(
+      browsingClient(),
+      `${HOME}/.claude-gone/projects/-Users-alwinpaul-Desktop-Project-Code-UI/967668df-a7d9-40e7-964b-7812815c010d.jsonl`
+    )
+    expect(menu).toEqual(['Repo skills:repo-skill'])
+  })
+
+  it('walks again with the profile the session names once its transcript arrives', async () => {
+    resetConfirmedSkillFilesForTest()
+    const client = browsingClient()
+    let latest: Latest | null = null
+    function Probe({ transcriptPath }: { transcriptPath: string | null }): null {
+      latest = useMobileNativeChatSkills({ client: client as never, worktreeId: WORKTREE, transcriptPath })
+      return null
+    }
+    const settle = async () => {
+      for (let i = 0; i < 80; i += 1) {
+        await Promise.resolve()
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Probe, { transcriptPath: null }))
+    })
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((skill) => skill.name)).toContain('notebooklm')
+    act(() => renderer!.update(createElement(Probe, { transcriptPath: WORK_TRANSCRIPT })))
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['find-skills', 'repo-skill', 'claude-security'])
+  })
+
+  // One worktree can hold a Claude tab and a Codex tab; the chat's transcript
+  // path moves with the tab. A walk is a few dozen listings over the relay.
+  it('shows a tab its profile’s skills again after a tab switch without walking them twice', async () => {
+    resetConfirmedSkillFilesForTest()
+    const client = browsingClient()
+    let latest: Latest | null = null
+    function Probe({ transcriptPath }: { transcriptPath: string | null }): null {
+      latest = useMobileNativeChatSkills({ client: client as never, worktreeId: 'w-switch::/tmp/none', transcriptPath })
+      return null
+    }
+    const open = async (transcriptPath: string | null) => {
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(Probe, { transcriptPath }))
+        } else {
+          renderer = create(createElement(Probe, { transcriptPath }))
+        }
+      })
+      await act(async () => {
+        latest!.loadNativeChatSkills()
+        for (let i = 0; i < 80; i += 1) {
+          await Promise.resolve()
+        }
+      })
+      return latest!.nativeChatSkills.map((skill) => skill.name)
+    }
+    const CODEX_ROLLOUT = `${HOME}/.codex/sessions/2026/09/11/rollout-2026-09-11T02-42-13-01a08dea-3c89-78e0-b629-04a87f33c43e.jsonl`
+    expect(await open(WORK_TRANSCRIPT)).toEqual(['find-skills', 'claude-security'])
+    expect(await open(CODEX_ROLLOUT)).toEqual(['notebooklm', 'find-skills', 'use-railway'])
+    expect(await open(WORK_TRANSCRIPT)).toEqual(['find-skills', 'claude-security'])
+    const listed = (path: string) =>
+      client.sendRequest.mock.calls.filter(
+        (call) => call[0] === 'files.browseServerDir' && (call[1] as { path: string }).path === path
+      ).length
+    expect(listed(`${HOME}/.claude-work/plugins/cache`)).toBe(1)
+    // The refused scan stays refused across the switch: asked once.
+    expect(client.sendRequest.mock.calls.filter((call) => call[0] === 'skills.discover')).toHaveLength(1)
+  })
+
+  it('keeps a walk that finishes after the user left its tab out of the tab they are on', async () => {
+    resetConfirmedSkillFilesForTest()
+    const inner = browsingClient()
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let heldOnce = false
+    // The first listing of ~/.claude-work/plugins/cache, which only the
+    // ~/.claude-work walk asks for, answers late.
+    const sendRequest = vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
+      if (
+        !heldOnce &&
+        method === 'files.browseServerDir' &&
+        (params as { path: string }).path === `${HOME}/.claude-work/plugins/cache`
+      ) {
+        heldOnce = true
+        await held
+      }
+      return inner.sendRequest(method, params)
+    })
+    // One object for the whole test: a new client is a reconnect.
+    const client = { sendRequest }
+    let latest: Latest | null = null
+    function Probe({ transcriptPath }: { transcriptPath: string | null }): null {
+      latest = useMobileNativeChatSkills({ client: client as never, worktreeId: 'w-late::/tmp/none', transcriptPath })
+      return null
+    }
+    const settle = async () => {
+      for (let i = 0; i < 80; i += 1) {
+        await Promise.resolve()
+      }
+    }
+    act(() => {
+      renderer = create(createElement(Probe, { transcriptPath: WORK_TRANSCRIPT }))
+    })
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    act(() => renderer!.update(createElement(Probe, { transcriptPath: null })))
+    await act(async () => {
+      latest!.loadNativeChatSkills()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['notebooklm', 'find-skills', 'use-railway'])
+    await act(async () => {
+      release()
+      await settle()
+    })
+    expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['notebooklm', 'find-skills', 'use-railway'])
+    // And the late walk is what that tab shows when the user goes back.
+    act(() => renderer!.update(createElement(Probe, { transcriptPath: WORK_TRANSCRIPT })))
+    expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['find-skills', 'claude-security'])
   })
 })

@@ -6,8 +6,12 @@ import { useMobileNativeChatSkills } from './use-mobile-native-chat-skills'
 export function useMobileNativeChatComposerCatalogs(args: {
   client: RpcClient | null
   worktreeId: string
+  /** The chat's transcript path, which names the Claude config dir whose
+   *  skills the `/` menu lists. */
+  transcriptPath: string | null
 }) {
-  const files = useMobileNativeChatFileSearch(args)
+  const { client, worktreeId } = args
+  const files = useMobileNativeChatFileSearch({ client, worktreeId })
   const skills = useMobileNativeChatSkills(args)
   return { ...files, ...skills }
 }

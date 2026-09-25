@@ -29,15 +29,28 @@ export type SkillBrowseRoot = {
   providers?: readonly SkillProvider[]
 }
 
-/** Claude Code's home profiles and, when a worktree is open, that repo's
- *  `.claude` roots. A profile directory that is not on disk lists as nothing. */
-export function claudeSkillRoots(home: string, worktreePath: string | null): SkillBrowseRoot[] {
-  const roots: SkillBrowseRoot[] = [
-    { kind: 'skills', path: `${home}/.claude/skills`, sourceKind: 'home', sourceLabel: 'Home skills' },
-    { kind: 'commands', path: `${home}/.claude/commands`, sourceKind: 'home', sourceLabel: 'Home commands' },
-    { kind: 'skills', path: `${home}/.claude-work/skills`, sourceKind: 'home', sourceLabel: 'Work skills' },
-    { kind: 'commands', path: `${home}/.claude-work/commands`, sourceKind: 'home', sourceLabel: 'Work commands' }
-  ]
+/** The session's Claude config dir, or both profiles on this machine when the
+ *  session has not said which it runs under, and, when a worktree is open,
+ *  that repo's `.claude` roots. Claude Code 2.1.282 reads the user's skills
+ *  and commands from `CLAUDE_CONFIG_DIR` (or `~/.claude`) alone, so a known
+ *  config dir is the only home root: listing the other profile offered skills
+ *  the session cannot run. A directory that is not on disk lists as nothing. */
+export function claudeSkillRoots(
+  home: string,
+  worktreePath: string | null,
+  configDir: string | null = null
+): SkillBrowseRoot[] {
+  const roots: SkillBrowseRoot[] = configDir
+    ? [
+        { kind: 'skills', path: `${configDir}/skills`, sourceKind: 'home', sourceLabel: 'Home skills' },
+        { kind: 'commands', path: `${configDir}/commands`, sourceKind: 'home', sourceLabel: 'Home commands' }
+      ]
+    : [
+        { kind: 'skills', path: `${home}/.claude/skills`, sourceKind: 'home', sourceLabel: 'Home skills' },
+        { kind: 'commands', path: `${home}/.claude/commands`, sourceKind: 'home', sourceLabel: 'Home commands' },
+        { kind: 'skills', path: `${home}/.claude-work/skills`, sourceKind: 'home', sourceLabel: 'Work skills' },
+        { kind: 'commands', path: `${home}/.claude-work/commands`, sourceKind: 'home', sourceLabel: 'Work commands' }
+      ]
   if (worktreePath) {
     roots.push(
       { kind: 'skills', path: `${worktreePath}/.claude/skills`, sourceKind: 'repo', sourceLabel: 'Repo skills' },
@@ -70,8 +83,10 @@ export function grokSkillRoots(home: string, worktreePath: string | null): Skill
   return roots
 }
 
-export function claudePluginCachePath(home: string): string {
-  return `${home}/.claude/plugins/cache`
+/** Claude Code keeps its plugin cache in the config dir too; with none known,
+ *  `~/.claude`'s. */
+export function claudePluginCachePath(home: string, configDir: string | null = null): string {
+  return `${configDir ?? `${home}/.claude`}/plugins/cache`
 }
 
 /** The skills root of one cached plugin version. The label carries the plugin

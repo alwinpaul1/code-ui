@@ -43,11 +43,14 @@ export async function browseClaudeSkills(args: {
   /** Whatever the browse operation sends through; the hook's client qualifies. */
   client: Parameters<typeof serverDirectoryBrowse.request>[0]
   worktreePath: string | null
+  /** The session's Claude config dir, read off its transcript path; null
+   *  lists both of this machine's profiles and `~/.claude`'s plugin cache. */
+  claudeConfigDir: string | null
   onSkills: (skills: DiscoveredSkill[]) => void
   /** False once the caller has moved on; nothing is reported after that. */
   live: () => boolean
 }): Promise<void> {
-  const { client, worktreePath, onSkills, live } = args
+  const { client, worktreePath, claudeConfigDir, onSkills, live } = args
   const list = async (path: string) => {
     const reply = await serverDirectoryBrowse.request(client, { path }).catch(() => null)
     return reply ? serverDirectoryBrowse.interpret(reply) : null
@@ -57,7 +60,7 @@ export async function browseClaudeSkills(args: {
   if (!home || !live()) {
     return
   }
-  const roots = [...claudeSkillRoots(home, worktreePath), ...grokSkillRoots(home, worktreePath)]
+  const roots = [...claudeSkillRoots(home, worktreePath, claudeConfigDir), ...grokSkillRoots(home, worktreePath)]
   // Home and repo roots (each profile that is actually on disk) hold most of
   // the menu. They are reported as soon as they are in, before the plugin
   // cache's forty-odd listings, so a `/` typed a second after the tab opened
@@ -74,7 +77,7 @@ export async function browseClaudeSkills(args: {
   )
   let skills = fromRoots
   onSkills(skills)
-  const pluginRoots = await pluginSkillRoots(browse, claudePluginCachePath(home))
+  const pluginRoots = await pluginSkillRoots(browse, claudePluginCachePath(home, claudeConfigDir))
   const pluginListings = await mapLimit(pluginRoots, BROWSE_CONCURRENCY, async (root) => ({
     root,
     entries: await browse(root.path)

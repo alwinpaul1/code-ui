@@ -32,6 +32,27 @@ describe('skills the phone lists by directory name', () => {
     expect(worktreePathFromId('w1')).toBeNull()
   })
 
+  // Claude Code 2.1.282 reads the user's skills, commands and plugin cache
+  // from its config dir alone (`CLAUDE_CONFIG_DIR ?? ~/.claude`, read out of
+  // the bundle 2026-09-25), so a session under ~/.claude-work does not load
+  // ~/.claude/skills and a session under ~/.claude does not load ~/.claude-work's.
+  it("reads only the profile a session runs under once its config dir is known", () => {
+    const work = `${HOME}/.claude-work`
+    expect(claudeSkillRoots(HOME, '/Users/alwinpaul/Desktop/Project/Code UI', work).map((r) => r.path)).toEqual([
+      '/Users/alwinpaul/.claude-work/skills',
+      '/Users/alwinpaul/.claude-work/commands',
+      '/Users/alwinpaul/Desktop/Project/Code UI/.claude/skills',
+      '/Users/alwinpaul/Desktop/Project/Code UI/.claude/commands'
+    ])
+    expect(claudeSkillRoots(HOME, null, `${HOME}/.claude`).map((r) => r.path)).toEqual([
+      '/Users/alwinpaul/.claude/skills',
+      '/Users/alwinpaul/.claude/commands'
+    ])
+    expect(claudePluginCachePath(HOME, work)).toBe('/Users/alwinpaul/.claude-work/plugins/cache')
+    // Unknown: both profiles and ~/.claude's cache, as before.
+    expect(claudePluginCachePath(HOME, null)).toBe('/Users/alwinpaul/.claude/plugins/cache')
+  })
+
   it('reads the Grok profile when that directory is the one that exists', () => {
     expect(grokSkillRoots(HOME, '/Users/alwinpaul/Desktop/Project/Code UI').map((root) => root.path)).toEqual([
       '/Users/alwinpaul/.grok/skills',

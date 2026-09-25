@@ -105,3 +105,21 @@ export function nativeChatAgentFromTranscriptPath(
   }
   return codex ? 'codex' : null
 }
+
+const ABSOLUTE_PATH = /^(?:\/|[A-Za-z]:\/)/
+
+/** The config dir a Claude session writes under (`CLAUDE_CONFIG_DIR`, or
+ *  `~/.claude` when unset), in the host's own spelling: the transcript path
+ *  minus `projects/<project>/<session>.jsonl`. Claude Code loads the user's
+ *  skills, commands and plugins from that dir alone (2.1.282). Null for a
+ *  path not named Claude above, and for a relative one the host cannot list. */
+export function claudeConfigDirFromTranscriptPath(transcriptPath: string | null | undefined): string | null {
+  if (!transcriptPath || nativeChatAgentFromTranscriptPath(transcriptPath) !== 'claude') {
+    return null
+  }
+  const posix = toPosix(transcriptPath)
+  // Separators are swapped one for one, so an index into one spelling is an
+  // index into the other.
+  const configDir = posix.split('/').slice(0, -3).join('/')
+  return ABSOLUTE_PATH.test(configDir) ? transcriptPath.slice(0, configDir.length) : null
+}
