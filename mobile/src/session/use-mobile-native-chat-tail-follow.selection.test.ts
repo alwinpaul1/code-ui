@@ -479,6 +479,33 @@ describe('holding the agent’s reply to copy it while the reply streams in', ()
     expect(latest!.textSelectable).toBe(true)
   })
 
+  // Fourth review, 2026-09-25: a focus loss ended the hold too. A hold is
+  // not a drag: the scroll view never took it, so JS still owns that touch
+  // and gets its end. Ending it early disarmed the long-press hand-over and
+  // left the list following, re-pinned by every stream tick under the held
+  // finger: the 2026-09-15 drift, back. Only a drag's end is lost to the
+  // system, so only a drag ends on a blur.
+  it('keeps a hold on the text when the window loses focus in the middle of it', () => {
+    mount()
+    runFor(200)
+    act(() => latest!.touchStart())
+    runFor(200)
+    act(() => appState.emit('blur'))
+    const pinsBefore = pins.length
+    runFor(600)
+    // Handed over at the long-press mark, finger still down: nothing re-pins
+    // under it, and a sample at the live edge does not hand the list back.
+    expect(latest!.showJumpToLatest).toBe(true)
+    expect(pins.length - pinsBefore).toBe(0)
+    act(() => {
+      world.y = 2
+      latest!.evaluateEdge(sample(world.y, world.height))
+    })
+    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
+    act(() => latest!.touchEnd())
+  })
+
   // The jump control sits outside the list, so its tap reaches no touch
   // handler of the list's; the jump is the reader saying no finger drags it.
   it('comes back when the reader jumps to the newest message after a drag whose end never came', () => {
