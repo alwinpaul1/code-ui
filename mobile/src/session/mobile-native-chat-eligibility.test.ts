@@ -224,6 +224,25 @@ describe('resolveMobileNativeChat', () => {
     ).toEqual({ agent: 'claude', source: 'transcript', sessionId: 'sess-1', transcriptPath })
   })
 
+  // 2026-09-25 (Orca 1.4.211, Claude Code 2.1.282): the same hand-started
+  // pane, but this machine runs Claude with CLAUDE_CONFIG_DIR=~/.claude-work,
+  // so the transcript is not under ~/.claude and the pane got no chat.
+  it('offers chat for a hand-started Claude whose config dir is not ~/.claude', () => {
+    const transcriptPath =
+      '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-NexDash-NexOS/' +
+      'ad1e3053-f9ac-40be-80be-8f33a800e9b1.jsonl'
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: {
+          state: 'done',
+          updatedAt: 1,
+          providerSession: { key: 'session_id', id: 'ad1e3053', transcriptPath }
+        } as never
+      })
+    ).toEqual({ agent: 'claude', source: 'transcript', sessionId: 'ad1e3053', transcriptPath })
+  })
+
   it('names Codex from its own rollout when the desktop left the pane unowned', () => {
     const transcriptPath =
       '/Users/alwinpaul/.codex/sessions/2026/09/11/' +

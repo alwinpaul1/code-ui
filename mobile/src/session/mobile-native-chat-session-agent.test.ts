@@ -43,3 +43,100 @@ describe('naming the agent that wrote a captured transcript', () => {
     expect(nativeChatAgentFromTranscriptPath('/Users/me/.codex/sessions/2026')).toBeNull()
   })
 })
+
+// Claude Code writes under $CLAUDE_CONFIG_DIR/projects/ when that is set, and
+// this machine runs profiles such as ~/.claude-work. The 1037 pane's transcript
+// below is the path Orca 1.4.211 saved for it on 2026-09-25 (Claude Code
+// 2.1.282, agent-hooks/last-status.json), and the file is on disk. That pane
+// had a session and a transcript and still got no chat once its status lost
+// the agent name, because only `.claude/projects/` was recognised.
+const SESSION = 'ad1e3053-f9ac-40be-80be-8f33a800e9b1'
+const NEXOS = '-Users-alwinpaul-Desktop-NexDash-NexOS'
+const PROFILE_TRANSCRIPT = `/Users/alwinpaul/.claude-work/projects/${NEXOS}/${SESSION}.jsonl`
+
+describe('naming Claude from a transcript under a config dir other than ~/.claude', () => {
+  it('offers chat on a Claude pane whose transcript sits in a ~/.claude-work profile', () => {
+    expect(nativeChatAgentFromTranscriptPath(PROFILE_TRANSCRIPT)).toBe('claude')
+  })
+
+  it('offers chat whatever the config dir is called', () => {
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/profiles/work/projects/${NEXOS}/${SESSION}.jsonl`)
+    ).toBe('claude')
+  })
+
+  it('reads a Windows profile reported with backslashes', () => {
+    // Not captured: there is no Windows host here. Claude Code turns every
+    // character of the working directory that is not a letter or digit into
+    // `-`, so C:\Users\alwinpaul\repo becomes C--Users-alwinpaul-repo.
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        `C:\\Users\\alwinpaul\\.claude-work\\projects\\C--Users-alwinpaul-repo\\${SESSION}.jsonl`
+      )
+    ).toBe('claude')
+  })
+
+  it('still names Codex from its rollout, and Claude only from its own layout', () => {
+    expect(nativeChatAgentFromTranscriptPath(CODEX_TRANSCRIPT)).toBe('codex')
+    expect(nativeChatAgentFromTranscriptPath(CLAUDE_TRANSCRIPT)).toBe('claude')
+  })
+
+  it("does not claim OpenClaude's own transcripts, which keep Claude's layout", () => {
+    // Orca installs OpenClaude's hooks under ~/.openclaude (OPENCLAUDE_HOOK_SETTINGS).
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/.openclaude/projects/${NEXOS}/${SESSION}.jsonl`)
+    ).toBeNull()
+  })
+
+  it('says nothing when a path sits in a Codex home or fits both layouts', () => {
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/.codex/projects/${NEXOS}/${SESSION}.jsonl`)
+    ).toBeNull()
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        `/Users/alwinpaul/.codex/sessions/2026/09/25/projects/${NEXOS}/${SESSION}.jsonl`
+      )
+    ).toBeNull()
+  })
+
+  it("does not take a folder of the user's own called projects for a Claude home", () => {
+    // Claude's project directory is always the dashed working directory.
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/Desktop/projects/nexos/${SESSION}.jsonl`)
+    ).toBeNull()
+    // And its transcripts are named for the session.
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/.claude-work/projects/${NEXOS}/notes.jsonl`)
+    ).toBeNull()
+  })
+
+  it('does not take a subagent transcript for the pane session', () => {
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-Project-Code-UI/' +
+          'e3d959fd-581d-48cb-95dd-cf4135f9577a/subagents/agent-ac783102d52898c35.jsonl'
+      )
+    ).toBeNull()
+  })
+
+  it("says nothing about the JSON Lines files other agents on this machine write", () => {
+    // Real paths, 2026-09-25: Droid, Antigravity and Grok.
+    for (const path of [
+      '/Users/alwinpaul/.factory/sessions/8f47c57b-f669-4c80-9609-7ebe34d8fa10.jsonl',
+      '/Users/alwinpaul/.gemini/antigravity-cli/brain/380bda45-f8e9-48eb-9b4d-208b89c26044/' +
+        '.system_generated/logs/transcript.jsonl',
+      '/Users/alwinpaul/.grok/sessions/%2FUsers%2Falwinpaul%2FDesktop%2FProject%2FCode%20UI/' +
+        'prompt_history.jsonl'
+    ]) {
+      expect(nativeChatAgentFromTranscriptPath(path)).toBeNull()
+    }
+  })
+
+  it('refuses a profile directory or a truncated path', () => {
+    expect(nativeChatAgentFromTranscriptPath('/Users/alwinpaul/.claude-work/projects')).toBeNull()
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/.claude-work/projects/${NEXOS}`)
+    ).toBeNull()
+    expect(nativeChatAgentFromTranscriptPath(`projects/${NEXOS}/${SESSION}.jsonl`)).toBeNull()
+  })
+})

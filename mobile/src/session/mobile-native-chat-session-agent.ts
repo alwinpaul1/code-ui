@@ -26,14 +26,46 @@
  *    Codex 0.153
  *      /Users/me/.codex/sessions/2026/09/11/rollout-2026-09-11T02-42-13-<id>.jsonl
  *
+ *  Claude Code writes under `$CLAUDE_CONFIG_DIR/projects/` when that is set, so
+ *  a profile such as `~/.claude-work` holds the same layout under another name.
+ *  On 2026-09-25 (Claude Code 2.1.282, Orca 1.4.211) five of the seven Claude
+ *  transcript paths Orca had saved on this machine were under `~/.claude-work`,
+ *  and none of those panes could get a chat once their status lost its agent
+ *  name. The directory can be called anything, so outside `.claude` the path
+ *  has to be Claude's own: the project directory is the working directory with
+ *  every character that is not a letter or digit turned into `-` (it starts with
+ *  `-` for a POSIX path, `C--` for a Windows one), and the file is named for
+ *  the session UUID. All 667 transcripts in both config dirs here have that
+ *  shape; none of the 140 JSON Lines files Codex, Grok, Droid and Gemini wrote
+ *  here does.
+ *
  *  Anything else returns null. A path we do not recognise is not a reason to
  *  pick the likelier agent: a wrong identity opens the wrong transcript reader
  *  against a real session file.
  */
 
+const CLAUDE_DEFAULT_HOME_TRANSCRIPT = /(?:^|\/)\.claude\/projects\/[^/]+\/[^/]+\.jsonl$/
+/** `<config dir>/projects/<dashed working directory>/<session uuid>.jsonl`;
+ *  the first group is the config dir's name. */
+const CLAUDE_CONFIG_DIR_TRANSCRIPT =
+  /(?:^|\/)([^/]+)\/projects\/(?:-|[A-Za-z]--)[A-Za-z0-9-]*\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/
+const CODEX_ROLLOUT = /(?:^|\/)\.codex\/sessions\/(?:[^/]+\/)+[^/]+\.jsonl$/
+/** Homes that hold Claude's layout for someone else. OpenClaude writes
+ *  Claude-format transcripts under its own `~/.openclaude` (Orca's
+ *  OPENCLAUDE_HOOK_SETTINGS), and a Codex home belongs to Codex. */
+const NOT_CLAUDE_CONFIG_DIRS: ReadonlySet<string> = new Set(['.openclaude', '.codex'])
+
 /** Windows hosts report the same layouts with backslashes. */
 function toPosix(path: string): string {
   return path.replace(/\\/g, '/')
+}
+
+function isClaudeTranscript(path: string): boolean {
+  if (CLAUDE_DEFAULT_HOME_TRANSCRIPT.test(path)) {
+    return true
+  }
+  const configDir = CLAUDE_CONFIG_DIR_TRANSCRIPT.exec(path)?.[1]
+  return configDir !== undefined && !NOT_CLAUDE_CONFIG_DIRS.has(configDir.toLowerCase())
 }
 
 export function nativeChatAgentFromTranscriptPath(
@@ -48,11 +80,14 @@ export function nativeChatAgentFromTranscriptPath(
   if (!path.endsWith('.jsonl')) {
     return null
   }
-  if (/(?:^|\/)\.claude\/projects\/[^/]+\/[^/]+\.jsonl$/.test(path)) {
+  const claude = isClaudeTranscript(path)
+  const codex = CODEX_ROLLOUT.test(path)
+  // A path both layouts fit says nothing about who wrote it.
+  if (claude && codex) {
+    return null
+  }
+  if (claude) {
     return 'claude'
   }
-  if (/(?:^|\/)\.codex\/sessions\/(?:[^/]+\/)+[^/]+\.jsonl$/.test(path)) {
-    return 'codex'
-  }
-  return null
+  return codex ? 'codex' : null
 }
