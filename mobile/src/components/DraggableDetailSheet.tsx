@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { BackHandler, Modal, Platform, Pressable, useWindowDimensions, View } from 'react-native'
+import { Modal, Pressable, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -13,6 +13,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { X } from 'lucide-react-native'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
@@ -158,18 +159,6 @@ function MountedDraggableDetailSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible])
 
-  useEffect(() => {
-    if (!visible || Platform.OS === 'web') {
-      return
-    }
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss()
-      return true
-    })
-    return () => sub.remove()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible])
-
   const dismiss = useCallback(() => {
     translateY.value = 0
     progress.value = withTiming(0, { duration: HIDE_DURATION_MS }, (finished) => {
@@ -179,6 +168,19 @@ function MountedDraggableDetailSheet({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose])
+
+  // The seam every session sheet takes since upstream #22308: the hardware key natively, and a
+  // claim on the shell's key inside the page. This sheet is the fork's own, so upstream's sweep
+  // never reached it, and its old listener returned early on web — one press inside the page left
+  // the session route with the sheet still open.
+  useBackClaim(
+    visible
+      ? () => {
+          dismiss()
+          return true
+        }
+      : null
+  )
 
   function settle(nextTranslateY: number, velocityY: number) {
     'worklet'

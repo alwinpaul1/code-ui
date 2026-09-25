@@ -72,7 +72,10 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     // Native only (upstream #21977, C7.7): inside the shell's page react-native-web answers
     // `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be
     // used." and an inert subscription. The page has no hardware back to intercept; the shell
-    // owns the phone's.
+    // owns the phone's. Nor does this claim the shell's key through `useBackClaim` (upstream
+    // #22308): that claim would be held for as long as the session is open, and a live claim takes
+    // the key off the navigator (on iOS it removes the stack's swipe-back), so on the page Back
+    // leaves the session from the terminal view as well.
     if (Platform.OS === 'web') {
       return
     }
