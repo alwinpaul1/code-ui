@@ -52,6 +52,10 @@ const DEFAULT_DISMISS_THRESHOLD = 80
  * it ended closest to, with `dismissThreshold` biasing the boundary between
  * "default" and "closed" so a small overshoot past the default position does
  * not read as a dismiss.
+ *
+ * A worklet: the sheet's drag release (`settle`) calls it on the UI thread,
+ * and a plain function called there crashed the app on every release
+ * (2026-09-26, worklet-remote-call-census.test.ts).
  */
 export function resolveDraggableSheetSnap(params: {
   translateY: number
@@ -60,6 +64,7 @@ export function resolveDraggableSheetSnap(params: {
   defaultHeight: number
   dismissThreshold?: number
 }): DraggableSheetSnap {
+  'worklet'
   const {
     translateY,
     velocityY,
