@@ -1,3 +1,4 @@
+import { effortDisplayLabel } from './mobile-claude-session-catalog'
 /**
  * The header's model pill, stated the way the binary states it.
  *
@@ -51,5 +52,6 @@ export function sessionModelPillLabel(live: LiveModelPair | null): string | null
   const label = text(live?.label)
   const name = text(withoutAsides(label ?? model)) ?? text(withoutAsides(model)) ?? model
   const effort = text(live?.effort)
-  return effort === null ? name : `${name} ${effort}`
+  // Named as the Claude app names it: "Opus 5.5 Extra", not "xhigh".
+  return effort === null ? name : `${name} ${effortDisplayLabel(effort)}`
 }

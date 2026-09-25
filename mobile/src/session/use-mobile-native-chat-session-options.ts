@@ -42,6 +42,7 @@ import {
 } from '../../../src/shared/native-chat-session-option-state'
 import { activeModels } from './mobile-chat-model-row-naming'
 import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
+import { mobileEffortNamedCatalog } from './mobile-claude-session-catalog'
 
 export type MobileNativeChatSessionOptionsController = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -173,13 +174,19 @@ export function useMobileNativeChatSessionOptions(args: {
       // command for it (Orca #20612).
       return mobileOmpSessionCatalog(base, discoveredModels, args.modelSwitchCommand)
     }
-    return base && discoveredModels && discoveredModels.length > 0
-      ? {
-          ...base,
-          models: [...discoveredModels],
-          ...(discoveredModelApply ? { modelApply: discoveredModelApply } : {})
-        }
-      : base
+    const merged =
+      base && discoveredModels && discoveredModels.length > 0
+        ? {
+            ...base,
+            models: [...discoveredModels],
+            ...(discoveredModelApply ? { modelApply: discoveredModelApply } : {})
+          }
+        : base
+    // The Claude app's effort names, and its Ultracode on Claude alone
+    // (mobile-claude-session-catalog.ts).
+    return merged && (agent === 'claude' || agent === 'codex')
+      ? mobileEffortNamedCatalog(merged, { ultracode: agent === 'claude' })
+      : merged
   }, [agent, args.modelSwitchCommand, discoveredModelApply, discoveredModels])
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)

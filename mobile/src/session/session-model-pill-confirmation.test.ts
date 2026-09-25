@@ -28,18 +28,18 @@ describe('the model pill states the agent’s own word', () => {
     // the model, and it pushed the effort off a phone-width pill.
     expect(
       sessionModelPillLabel({ model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' })
-    ).toBe('Opus 5 xhigh')
+    ).toBe('Opus 5 Extra')
     expect(sessionModelPillLabel({ model: 'opus', label: 'Opus 4.8', effort: 'max' })).toBe(
-      'Opus 4.8 max'
+      'Opus 4.8 Max'
     )
     expect(
       sessionModelPillLabel({ model: 'opus', label: '(1M context)', effort: 'high' })
-    ).toBe('opus high')
+    ).toBe('opus High')
     // The device showed "Opus 5 (1M conte…" after the label fix: the parser
     // had put the painted name in `model` with no label at all.
     expect(
       sessionModelPillLabel({ model: 'Opus 5 (1M context)', label: null, effort: 'xhigh' })
-    ).toBe('Opus 5 xhigh')
+    ).toBe('Opus 5 Extra')
   })
 
   it('shows the label alone when the agent stated no effort', () => {
@@ -49,7 +49,7 @@ describe('the model pill states the agent’s own word', () => {
   // The id is the catalog family; the label is what the agent actually said.
   // When the agent gave no name, the family is still its own word.
   it('falls back to the family when the agent gave no name', () => {
-    expect(sessionModelPillLabel({ model: 'opus', label: null, effort: 'high' })).toBe('opus high')
+    expect(sessionModelPillLabel({ model: 'opus', label: null, effort: 'high' })).toBe('opus High')
   })
 
   it('shows nothing when the agent has not spoken', () => {
