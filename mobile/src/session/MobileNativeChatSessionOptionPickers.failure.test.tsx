@@ -14,7 +14,7 @@
 // thing standing in for the app is `screen`, the chat's own banner-or-toast
 // reporter (nativeChatSendError.show).
 
-import { createElement, type ReactElement, type ReactNode } from 'react'
+import { createElement, useState, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -61,12 +61,24 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 // The drawer's native window cannot mount here; a host element in its place
-// keeps what the drawer holds findable, and what it does not.
+// keeps what the drawer holds findable, and what it does not. Its `onClose` is
+// what Back, a backdrop tap and a swipe call once the hide animation ends.
+const drawerHandle = vi.hoisted(() => ({ onClose: null as (() => void) | null }))
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
-    BottomDrawer: ({ visible, children }: { visible: boolean; children?: ReactNode }) =>
-      visible ? React.createElement('BottomDrawer', { visible }, children) : null
+    BottomDrawer: ({
+      visible,
+      onClose,
+      children
+    }: {
+      visible: boolean
+      onClose: () => void
+      children?: ReactNode
+    }) => {
+      drawerHandle.onClose = onClose
+      return visible ? React.createElement('BottomDrawer', { visible }, children) : null
+    }
   }
 })
 vi.mock('../transport/client-context-connection-metrics', () => ({
@@ -143,6 +155,10 @@ let reportedModel: string | null = 'sonnet'
 // Whether the desktop terminal takes input from this phone (the input lease).
 let inputReady = true
 const agentRef = { current: agent as string | null }
+// The tab the chat shows, and that tab's own banner-or-toast reporter. In the
+// app the reporter is scoped: nativeChatSendError.show changes with the tab.
+let tabId = 'tab-1'
+let chatReport: (message: string) => void = screen
 // The controller the chat last handed the picker, for a pick made without the
 // drawer (Codex's typed `/model <slug>`, use-codex-chat-command-intercept.ts).
 let lastController: MobileNativeChatSessionOptionsController | null = null
@@ -162,11 +178,11 @@ function Chat(): ReactElement | null {
     restoreRejectedDraft: noop,
     acceptSend: noop,
     holdUnconfirmedSend: noop,
-    onSendError: screen
+    onSendError: chatReport
   })
   const { nativeChatSessionOptions } = useMobileNativeChatSessionOptionController({
     activeChatStructured: false,
-    activeSessionTabId: 'tab-1',
+    activeSessionTabId: tabId,
     agent,
     dispatchCommand: send.dispatchCommand,
     hostId: 'host-a',
@@ -182,7 +198,7 @@ function Chat(): ReactElement | null {
     handleRef,
     deviceTokenRef,
     refreshHud,
-    onFailure: screen
+    onFailure: chatReport
   })
   lastController = nativeChatSessionOptions?.controller ?? null
   return nativeChatSessionOptions
@@ -299,6 +315,9 @@ beforeEach(async () => {
   reportedModel = 'sonnet'
   inputReady = true
   rpc = async () => refusedRpc()
+  tabId = 'tab-1'
+  chatReport = screen
+  drawerHandle.onClose = null
 })
 
 afterEach(() => {
@@ -406,6 +425,98 @@ describe('a Claude pick that fails says so inside the open drawer', () => {
     expect(screen).toHaveBeenCalledWith(NOT_SENT)
   })
 
+  // Back, a backdrop tap and a swipe close the drawer only once its hide
+  // animation ends, so a failure can land in a drawer that is already leaving.
+  it('keeps a failure that lands while the drawer is being dismissed', async () => {
+    let refuse: ((response: RpcResponse) => void) | null = null
+    rpc = (method) =>
+      method === 'terminal.send'
+        ? new Promise<RpcResponse>((resolve) => {
+            refuse = resolve
+          })
+        : Promise.resolve(refusedRpc())
+    await mountChat('claude')
+    await openDrawer()
+    await press(row('Opus'))
+
+    // The user has swiped the drawer away; it is animating out when the pick fails.
+    await act(async () => {
+      refuse!(sendReply(false))
+    })
+    await settle()
+    await act(async () => {
+      drawerHandle.onClose!()
+    })
+    await settle()
+
+    expect(drawer()).toBeNull()
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(NOT_SENT)
+  })
+
+  it("says a pick's failure on its own tab's banner after the chat moved to another tab", async () => {
+    const otherTab = vi.fn<(message: string) => void>()
+    let refuse: ((response: RpcResponse) => void) | null = null
+    rpc = (method) =>
+      method === 'terminal.send'
+        ? new Promise<RpcResponse>((resolve) => {
+            refuse = resolve
+          })
+        : Promise.resolve(refusedRpc())
+    await mountChat('claude')
+    await openDrawer()
+    await press(row('Opus'))
+    await press(pressable('Close picker'))
+
+    // The composer, and the picker in it, stay mounted across a tab switch.
+    tabId = 'tab-2'
+    chatReport = otherTab
+    await act(async () => {
+      renderer!.update(createElement(Chat))
+    })
+    await settle()
+    await act(async () => {
+      refuse!(sendReply(false))
+    })
+    await settle()
+
+    // Tab 1's own reporter, which sends it to the toast once tab 1 is not shown.
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(NOT_SENT)
+    expect(otherTab).not.toHaveBeenCalled()
+  })
+
+  it("keeps a pick's failure out of another tab's open drawer", async () => {
+    const otherTab = vi.fn<(message: string) => void>()
+    let refuse: ((response: RpcResponse) => void) | null = null
+    rpc = (method) =>
+      method === 'terminal.send'
+        ? new Promise<RpcResponse>((resolve) => {
+            refuse = resolve
+          })
+        : Promise.resolve(refusedRpc())
+    await mountChat('claude')
+    await openDrawer()
+    await press(row('Opus'))
+    await press(pressable('Close picker'))
+    tabId = 'tab-2'
+    chatReport = otherTab
+    await act(async () => {
+      renderer!.update(createElement(Chat))
+    })
+    await settle()
+    await openDrawer()
+
+    await act(async () => {
+      refuse!(sendReply(false))
+    })
+    await settle()
+
+    expect(said(NOT_SENT)).toEqual([])
+    expect(screen).toHaveBeenCalledWith(NOT_SENT)
+    expect(otherTab).not.toHaveBeenCalled()
+  })
+
   it("hands an unconfirmed effort pick to the chat's banner once it closes the drawer", async () => {
     await mountChat('claude')
     await openDrawer()
@@ -492,6 +603,27 @@ describe('a Codex pick that fails says so inside the open drawer', () => {
     expect(drawer()).not.toBeNull()
     expectSaidInDrawer(CODEX_UNREACHABLE)
     expect(screen).not.toHaveBeenCalled()
+  })
+
+  // The user is told the link failed. If something else threw (a parser
+  // fault), the log line is the only place that says what it was.
+  it('logs what threw out of a Codex pick', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await seedCodexModels(['gpt-6-astra', 'gpt-5.6-sol'])
+    reportedModel = 'gpt-6-astra'
+    rpc = async (method) => {
+      if (method === 'terminal.read') {
+        throw new Error('Connection closed')
+      }
+      return refusedRpc()
+    }
+    await mountChat('codex')
+    await openDrawer()
+
+    await press(row('gpt-5.6-sol'))
+
+    expect(warn).toHaveBeenCalledWith('[codex-picker] pick threw', 'Connection closed')
+    warn.mockRestore()
   })
 
   it("says a model pick whose keys' ack was lost mid-drive is unconfirmed", async () => {
@@ -692,5 +824,50 @@ describe('the drawer, whatever lane it drives', () => {
     expect(drawer()).not.toBeNull()
     expectSaidInDrawer(BUSY)
     expect(screen).not.toHaveBeenCalled()
+  })
+
+  // The agent-picker row flips the tab to its terminal view when it lands, and
+  // an ack-lost one says so on the way: the word and the unmount of the chat,
+  // picker and all, reach React in the same render.
+  it('hands a failure said in the render that unmounts the picker to the chat', async () => {
+    let hide: () => void = noop
+    function Host(): ReactElement | null {
+      const [shown, setShown] = useState(true)
+      hide = () => setShown(false)
+      return shown
+        ? createElement(MobileNativeChatSessionOptionPickers, {
+            controller: {
+              snapshot: [
+                {
+                  ...MODEL,
+                  kind: { type: 'select', choices: [] },
+                  valueSource: 'unknown',
+                  action: { type: 'agent-picker' }
+                }
+              ],
+              pendingId: null,
+              setOption: async () => false,
+              invokeAction: async (_id, report) => {
+                report?.(UNCONFIRMED)
+                hide()
+                return true
+              },
+              recordCommand: noop
+            },
+            isWorking: false,
+            reportFailure: screen
+          })
+        : null
+    }
+    await act(async () => {
+      renderer = create(createElement(Host))
+    })
+    await openDrawer()
+
+    await press(row('Choose in agent picker…'))
+
+    expect(renderer!.toJSON()).toBeNull()
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(UNCONFIRMED)
   })
 })

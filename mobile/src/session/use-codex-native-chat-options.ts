@@ -190,7 +190,12 @@ export function useCodexNativeChatOptions(args: {
       }
       const result = await withCodexTerminalLock(handle, () =>
         applyCodexPickerSelection(io, target)
-      ).catch(() => null)
+      ).catch((error: unknown) => {
+        // What threw goes to the log too: the user is told the link failed, and
+        // if it was something else (a parser fault) this line is where to look.
+        console.warn('[codex-picker] pick threw', error instanceof Error ? error.message : error)
+        return null
+      })
       void refreshHud()
       if (result === null) {
         say(keysSent ? CODEX_PICK_UNCONFIRMED : CODEX_UNREACHABLE)
