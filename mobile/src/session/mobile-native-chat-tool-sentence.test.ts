@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { CREATED_A_FILE_RUN, EDITED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
 
 function call(name: string): NativeChatBlock {
   return { type: 'tool-call', id: `c-${name}-${Math.random()}`, name, input: {} }
@@ -82,6 +83,14 @@ describe('toolRunSentence', () => {
 
   it('still says "a command" when the one command has no description', () => {
     expect(toolRunSentence([call('Bash'), result()])).toBe('Ran a command')
+  })
+
+  // The 2026-09-26 screenshot: each run held one described Bash call beside a
+  // Write or an Edit, and the Claude app named neither command by its
+  // description (fixtures/claude-edit-runs-2.1.282.ts).
+  it('says "ran a command" beside an edit, as the Claude app does, even for a described command', () => {
+    expect(toolRunSentence(CREATED_A_FILE_RUN)).toBe('Created a file, ran a command')
+    expect(toolRunSentence(EDITED_A_FILE_RUN)).toBe('Edited a file, ran a command')
   })
 
   it('drops the description once a second command joins the run', () => {

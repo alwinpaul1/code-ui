@@ -10,7 +10,7 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 /**
  * One plain sentence for a run of tool calls, the way the Claude app puts it:
  * "Ran 3 commands, read a file", "Ran 12 commands (2 failed), read 6 files",
- * "Ran Fix count wording and append cell diff" for one described command,
+ * "Ran Fix count wording and append cell diff" for a run of one described command,
  * "Ran skill", "Messaged @agent <summary>", "created a file" for a Write the
  * result is certain is new. Requested on 2026-09-12 in place of "20× Bash
  * cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
@@ -82,9 +82,9 @@ function readFileName(block: NativeChatBlock): string | null {
   return name && name.length > 0 ? name : null
 }
 
-/** A single Bash-shaped call reads by its own `description` (real Claude Code
- *  `Bash` calls carry one alongside `command`), the way the Claude app's row
- *  says "Ran Count K*_F changes in section3 accountings" instead of "Ran a
+/** A run of one Bash-shaped call reads by its own `description` (real Claude
+ *  Code `Bash` calls carry one alongside `command`), the way the Claude app's
+ *  row says "Ran Count K*_F changes in section3 accountings" instead of "Ran a
  *  command". */
 function commandDescription(block: NativeChatBlock): string | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'command') {
@@ -204,7 +204,11 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
       continue
     }
     const noun = NOUN[entry.kind]
-    const amount = entry.total === 1 ? (entry.label ?? noun.one) : `${entry.total} ${noun.many}`
+    // A command reads by its own description only when it is the whole run:
+    // beside other work the Claude app says "ran a command" ("Created a file,
+    // ran a command", 2026-09-26), described or not.
+    const label = entry.kind === 'command' && groups.length > 1 ? null : entry.label
+    const amount = entry.total === 1 ? (label ?? noun.one) : `${entry.total} ${noun.many}`
     parts.push(`${noun.verb} ${amount}${failed}`)
   }
   if (parts.length === 0) {
