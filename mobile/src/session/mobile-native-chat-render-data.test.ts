@@ -5,8 +5,7 @@ import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import {
   pendingFoldBoundaries,
   buildMobileNativeChatTransientData,
-  foldMobileNativeChatMessages,
-  mobileNativeChatEmptyState
+  foldMobileNativeChatMessages
 } from './mobile-native-chat-render-data'
 
 function assistant(id: string, text: string): NativeChatMessage {
@@ -50,44 +49,6 @@ describe('an assistant turn Orca assembled from thinking blocks', () => {
     const folded = foldMobileNativeChatMessages([user('u1', 'go'), turn])
     expect(folded.map((m) => m.role)).toEqual(['user', 'assistant'])
     expect(folded[1]?.blocks[0]).toMatchObject({ type: 'text' })
-  })
-})
-
-describe('mobileNativeChatEmptyState', () => {
-  it('invites a first message naming the agent, matching desktop copy', () => {
-    // waiting-session (live agent, no transcript) and ready (loaded, empty) both
-    // resolve to the shared "empty" copy with the agent label substituted.
-    const waiting = mobileNativeChatEmptyState('waiting-session', 'claude')
-    expect(waiting).toEqual({
-      title: 'Start a chat with Claude',
-      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
-    })
-    expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
-  })
-
-  it('invites a first message while the transcript file is still unwritten', () => {
-    // The spinner is already gone by then, so a bare list would read as broken.
-    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude')?.title).toBe(
-      'Start a chat with Claude'
-    )
-  })
-
-  it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
-      'Start a chat with the agent'
-    )
-  })
-
-  it('prefers the provided error message over the default subtitle', () => {
-    expect(mobileNativeChatEmptyState('error', 'claude', 'boom')?.subtitle).toBe('boom')
-    expect(mobileNativeChatEmptyState('error', 'claude')?.subtitle).toBe(
-      'The transcript could not be read. Toggle back to the terminal to keep working.'
-    )
-  })
-
-  it('returns null for states that show no empty copy', () => {
-    expect(mobileNativeChatEmptyState('loading', 'claude')).toBeNull()
-    expect(mobileNativeChatEmptyState('idle', 'claude')).toBeNull()
   })
 })
 

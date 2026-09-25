@@ -1,0 +1,110 @@
+import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import {
+  formatNativeChatEmptyStateCopy,
+  type NativeChatEmptyStateCopy
+} from '../../../src/shared/native-chat-empty-state'
+import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+
+export type MobileNativeChatEmptyStateCopy = NativeChatEmptyStateCopy & {
+  /** A muted line under the invitation saying why there is nothing to read,
+   *  when the reason is not "the conversation is empty". */
+  detail?: string
+}
+
+/** What the chat knows about the session behind an empty list. */
+export type MobileNativeChatEmptyStateEvidence = {
+  /** The pane's status: the same object the chat took its session from. */
+  agentStatus?: AgentStatusEntry | null
+  /** Rows the last read returned, before noise and folding. */
+  transcriptMessageCount?: number
+}
+
+/** How much of a session id the line names: enough to tell two sessions apart
+ *  at a glance and to find the id in the desktop's own records. */
+const SESSION_ID_SHOWN_CHARS = 8
+
+/** The session has already taken a turn, so an empty chat is not its history.
+ *  A `done` that only marks a session boundary (Claude's SessionStart, before
+ *  the transcript file exists) is a session that has not started yet. A resume
+ *  reports the same boundary, so a resumed session that reads empty before its
+ *  first new turn gets no line either; the next turn's status brings it. */
+function sessionHasTakenTurns(status: AgentStatusEntry): boolean {
+  return (
+    status.state !== 'done' ||
+    status.sessionBoundary !== true ||
+    status.prompt.trim().length > 0 ||
+    (status.lastAssistantMessage?.trim().length ?? 0) > 0
+  )
+}
+
+function emptyConversationDetail(
+  status: MobileNativeChatStatus,
+  evidence: MobileNativeChatEmptyStateEvidence
+): string | undefined {
+  const agentStatus = evidence.agentStatus
+  if (!agentStatus) {
+    // No status for this pane yet: a tab the phone just launched. Nothing is
+    // wrong with it, and nothing is known to say.
+    return undefined
+  }
+  const session = agentStatus.providerSession
+  const shortId = session?.id.slice(0, SESSION_ID_SHOWN_CHARS)
+  if (status === 'waiting-session') {
+    return 'The desktop reports this pane but not which session runs in it, so there is no transcript to read.'
+  }
+  if (!shortId || !sessionHasTakenTurns(agentStatus)) {
+    return undefined
+  }
+  if (status === 'awaiting-transcript') {
+    return session?.transcriptPath
+      ? `The desktop has no transcript for session ${shortId}.`
+      : `The desktop has no transcript for session ${shortId}, and no transcript file was named for it.`
+  }
+  // `ready`: the read settled. With rows that all folded away it did send
+  // something, so only a read that returned nothing is called out.
+  return evidence.transcriptMessageCount === 0
+    ? `The desktop read session ${shortId} and sent no messages.`
+    : undefined
+}
+
+/** The centered empty-state copy for a chat with no messages, mirroring the
+ *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
+ *  stay in lockstep. Returns null when the list should stay bare (idle, or the
+ *  loading spinner owns the view). */
+export function mobileNativeChatEmptyState(
+  status: MobileNativeChatStatus,
+  agent: string | null,
+  error?: string,
+  evidence: MobileNativeChatEmptyStateEvidence = {}
+): MobileNativeChatEmptyStateCopy | null {
+  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
+  switch (status) {
+    // A live agent with no transcript yet — an unwritten transcript file, or a
+    // loaded-but-empty one — is "start a chat"; invite the first message instead
+    // of implying the agent is still starting up. But on 2026-09-25 (one pane of
+    // a four-pane split, phone 0.9.54) the same invitation stood over a
+    // 13,000-line conversation, with nothing on screen saying whether the pane
+    // named no session, the desktop found no file, or the read came back empty.
+    // Once the pane has a status of its own, a muted line says which; a session
+    // that has only just started is an empty conversation and gets none.
+    case 'waiting-session':
+    case 'awaiting-transcript':
+    case 'ready': {
+      const copy = formatNativeChatEmptyStateCopy('empty', agentLabel)
+      const detail = emptyConversationDetail(status, evidence)
+      return detail ? { ...copy, detail } : copy
+    }
+    case 'error': {
+      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
+      return error ? { ...copy, subtitle: error } : copy
+    }
+    case 'idle':
+    case 'loading':
+      return null
+    default: {
+      const unhandled: never = status
+      return unhandled
+    }
+  }
+}

@@ -7,10 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import { useChatViewStyles } from './mobile-native-chat-view-styles'
-import {
-  buildMobileNativeChatTransientData,
-  mobileNativeChatEmptyState
-} from './mobile-native-chat-render-data'
+import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import { mobileNativeChatEmptyState } from './mobile-native-chat-empty-state'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useMobileChatFocusView } from './use-mobile-chat-focus-view'
@@ -296,7 +294,12 @@ export function MobileNativeChatView({
     ]
   )
 
-  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
+  // The session named is the one chat asked for: `resolveMobileNativeChat`
+  // takes it from this same status, in the same render.
+  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, {
+    agentStatus,
+    transcriptMessageCount: messages.length
+  })
   const showLoading = status === 'loading' && messages.length === 0
 
   const lockReason = useMobileNativeChatInputLock(inputLockReason)

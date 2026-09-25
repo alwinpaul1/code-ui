@@ -3,13 +3,14 @@ import { ArrowDown } from 'lucide-react-native'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { Txt } from '../ui/Txt'
 import type { AgentType } from '../../../src/shared/agent-status-types'
+import type { MobileNativeChatEmptyStateCopy } from './mobile-native-chat-empty-state'
 
 export function MobileNativeChatListEmpty({
   emptyState,
   agent,
   styles
 }: {
-  emptyState: { title: string; subtitle: string } | null
+  emptyState: MobileNativeChatEmptyStateCopy | null
   agent: AgentType | null | undefined
   styles: { center: object }
 }): React.JSX.Element | null {
@@ -25,6 +26,11 @@ export function MobileNativeChatListEmpty({
       <Txt variant="body" tone="muted" align="center">
         {emptyState.subtitle}
       </Txt>
+      {emptyState.detail ? (
+        <Txt variant="caption" tone="muted" align="center">
+          {emptyState.detail}
+        </Txt>
+      ) : null}
     </View>
   )
 }

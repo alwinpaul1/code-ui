@@ -1,8 +1,3 @@
-import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
-import {
-  formatNativeChatEmptyStateCopy,
-  type NativeChatEmptyStateCopy
-} from '../../../src/shared/native-chat-empty-state'
 import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
 import { isPeerBoilerplateRow, surfacePeerMessages } from './mobile-native-chat-peer-messages'
@@ -22,34 +17,6 @@ import {
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-
-/** The centered empty-state copy for a chat with no messages, mirroring the
- *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
- *  stay in lockstep. Returns null when the list should stay bare (idle, or the
- *  loading spinner owns the view). */
-export function mobileNativeChatEmptyState(
-  status: MobileNativeChatStatus,
-  agent: string | null,
-  error?: string
-): NativeChatEmptyStateCopy | null {
-  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
-  switch (status) {
-    // A live agent with no transcript yet — an unwritten transcript file, or a
-    // loaded-but-empty one — is "start a chat"; invite the first message instead
-    // of implying the agent is still starting up.
-    case 'waiting-session':
-    case 'awaiting-transcript':
-    case 'ready':
-      return formatNativeChatEmptyStateCopy('empty', agentLabel)
-    case 'error': {
-      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
-      return error ? { ...copy, subtitle: error } : copy
-    }
-    default:
-      return null
-  }
-}
 
 /** An optimistic user echo: the text and/or the local preview URIs of any images
  *  ridden along on the send, shown until the transcript catches up. */

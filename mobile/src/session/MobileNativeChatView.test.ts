@@ -120,6 +120,9 @@ type Overrides = {
   permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
   spinner?: { verb: string; elapsed: string | null; thinking: string | null } | null
+  status?: Parameters<typeof MobileNativeChatView>[0]['status']
+  agent?: string | null
+  agentStatus?: Parameters<typeof MobileNativeChatView>[0]['agentStatus']
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -240,6 +243,34 @@ describe('MobileNativeChatView', () => {
     await update({ folded: [assistantTurn('a1', 'Reply')] })
     expect(renderer!.root.findByType('FlashList').props.renderScrollComponent).toBe(scrollComponent)
     act(() => scrollRenderer.unmount())
+  })
+
+  it('says which session came back empty, from the status and the read it drew', async () => {
+    // The 1037 pane of the 2026-09-25 split tab: the empty state is the only
+    // thing on screen, so it has to carry the session the chat subscribed to
+    // and whether the read returned anything.
+    const agentStatus = {
+      state: 'done' as const,
+      prompt: '',
+      updatedAt: 0,
+      stateStartedAt: 0,
+      paneKey: '12eaca17-5ae4-4948-a085-d33f13a25f41:052ceda2-70ad-4c78-ba88-fc99dc338911',
+      stateHistory: [],
+      agentType: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'ad1e3053-f9ac-40be-80be-8f33a800e9b1' }
+    }
+    const detail = (): string | undefined =>
+      (
+        renderer!.root.findByType('FlashList').props.ListEmptyComponent as {
+          props: { emptyState: { detail?: string } | null }
+        }
+      ).props.emptyState?.detail
+    await render({ status: 'awaiting-transcript', agent: 'claude', agentStatus })
+    expect(detail()).toBe(
+      'The desktop has no transcript for session ad1e3053, and no transcript file was named for it.'
+    )
+    await update({ status: 'ready', agent: 'claude', agentStatus, messages: [] })
+    expect(detail()).toBe('The desktop read session ad1e3053 and sent no messages.')
   })
 
   it('renders the route-reported failure verbatim', async () => {
