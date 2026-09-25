@@ -8,15 +8,16 @@ import { useNativeChatTasks } from './native-chat-tasks-context'
 /**
  * The line above the composer, as the Claude app draws it (2026-09-24):
  *
- *   ✳ Cooking… · 5 running tasks
- *   ✳ 1m 16s · 5 running tasks · thinking some more…
+ *   ✳ Working… · 5 running tasks
+ *   ✳ Working… · 5 running tasks · thinking some more…
  *   ✳ 5 running tasks                      (turn over, tasks still running)
  *
- * The verb, the time and the thinking status are the agent's own, read off
- * its spinner line; with no spinner on screen (Codex, or a Claude screen not
- * yet read) the verb is "Working". The count is the background-task reader's
- * and opens the sheet. Nothing is drawn when the agent is idle with nothing
- * running.
+ * The Claude app shows the spinner's verb and then its elapsed time; the user
+ * asked for words and no time (2026-09-25), so a working agent reads
+ * "Working…" whatever its spinner says. The thinking status is still the
+ * agent's own, read off its spinner line. The count is the background-task
+ * reader's and opens the sheet. Nothing is drawn when the agent is idle with
+ * nothing running.
  */
 export function MobileNativeChatStatusLine({
   working,
@@ -34,11 +35,9 @@ export function MobileNativeChatStatusLine({
   }
   const text = { fontFamily: fonts.regular, fontSize: type.label.size, lineHeight: type.label.lineHeight }
   const dot = <Text style={[text, { color: colors.textMuted }]}>{' · '}</Text>
-  const lead = working
-    ? spinner?.elapsed
-      ? <Text style={[text, { color: colors.textMuted }]}>{spinner.elapsed}</Text>
-      : <Text style={[text, { fontFamily: fonts.medium, color: colors.accentText }]}>{`${spinner?.verb ?? 'Working'}…`}</Text>
-    : null
+  const lead = working ? (
+    <Text style={[text, { fontFamily: fonts.medium, color: colors.accentText }]}>Working…</Text>
+  ) : null
   const count = formatRunningTaskCount(runningCount)
   return (
     <View

@@ -190,25 +190,26 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     return instance!
   }
 
-  it('says the agent\'s own verb and the running-task count on one line', async () => {
+  it('says Working and the running-task count on one line, whatever the spinner\'s verb', async () => {
     const view = await show({
       messages: RUNNING_SHELL,
       folded: [],
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: null, thinking: null }
     })
-    expect(statusLine(view)).toEqual(['Cooking…', ' · ', '1 running task'])
+    expect(statusLine(view)).toEqual(['Working…', ' · ', '1 running task'])
     expect(view.root.findAll((node) => node.type === 'WorkingIndicator')).toHaveLength(0)
   })
 
-  it('shows the time and the thinking status once the agent\'s own line does', async () => {
+  // The user asked for words, not the spinner's time (2026-09-25).
+  it('keeps saying Working once the agent\'s line shows a time, with its thinking status', async () => {
     const view = await show({
       messages: RUNNING_SHELL,
       folded: [],
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: '1m 16s', thinking: 'thinking some more' }
     })
-    expect(statusLine(view)).toEqual(['1m 16s', ' · ', '1 running task', ' · thinking some more…'])
+    expect(statusLine(view)).toEqual(['Working…', ' · ', '1 running task', ' · thinking some more…'])
   })
 
   it('says Working when no spinner has been read', async () => {

@@ -82,13 +82,31 @@ describe('the status line above the composer', () => {
     expect(draw({ runningCount: 0, working: false }).texts).toEqual([])
   })
 
-  it('says the verb alone while the agent works with nothing in the background', () => {
-    expect(draw({ runningCount: 0, working: true, spinner: { verb: 'Computing', elapsed: null, thinking: null } }).texts).toEqual([
-      'Computing…'
+  // 2026-09-25, the user: the line said "42s" once Claude's spinner showed a
+  // time, where they wanted words. It says "Working…", capital W, whatever the
+  // spinner's verb or time, in the accent in both themes.
+  it('says Working, never a time, while the agent works', () => {
+    for (const spinner of [
+      { verb: 'Computing', elapsed: null, thinking: null },
+      { verb: 'Computing', elapsed: '42s', thinking: null },
+      { verb: 'Computing', elapsed: '1m 16s', thinking: 'thinking some more' },
+      null
+    ]) {
+      const texts = draw({ runningCount: 0, working: true, spinner }).texts
+      expect(texts[0]).toBe('Working…')
+      expect(texts.join(' ')).not.toMatch(/\d+s\b|\dm\b/)
+    }
+  })
+
+  it('says Working beside the running count', () => {
+    expect(draw({ runningCount: 2, working: true, spinner: { verb: 'Cooking', elapsed: '5s', thinking: null } }).texts).toEqual([
+      'Working…',
+      ' · ',
+      '2 running tasks'
     ])
   })
 
-  it('draws the verb in the accent and the count in the link colour of whichever theme is on', () => {
+  it('draws Working in the accent and the count in the link colour of whichever theme is on', () => {
     const spinner = { verb: 'Cooking', elapsed: null, thinking: null }
     const light = draw({ runningCount: 5, working: true, spinner, scheme: 'light' }).colors
     expect(light).toEqual(expect.arrayContaining([lightColors.accentText, lightColors.info]))
