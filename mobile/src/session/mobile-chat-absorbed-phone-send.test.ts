@@ -778,6 +778,28 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       expect(drawn().filter((entry) => entry === 'hook')).toHaveLength(1)
     })
 
+    // Sixth round of the same review.
+    it('keeps two identical queued messages in the box, not one as a bubble, after a relay drop made the first look taken', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: beforeSend, queued: claudeBox(['yes']) })
+      await show('17:04:20.000', { messages: beforeSend, queued: [] })
+      await show('17:04:30.000', { messages: beforeSend, queued: claudeBox(['yes']) })
+      await ack('17:05:00.300', await tap('17:05:00.000', 'yes'), 'yes')
+      await show('17:05:01.000', { messages: afterTake, queued: claudeBox(['yes', 'yes']) })
+      expect(drawn().filter((entry) => entry === 'phone')).toEqual([])
+      // Claude dequeues the first as the turn ends; the second is taken in the next turn.
+      await show('17:08:21.900', { messages: turnEnded, queued: claudeBox(['yes', 'yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox(['yes']) })
+      const firstRow = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050'), call('0741e6f4', '17:08:23.000')]
+      await show('17:08:25.000', { messages: firstRow, queued: claudeBox(['yes']) })
+      const absorbed = [...firstRow, result('0741e6f5', '17:08:40.000'), text('0741e6f6', 'Done.', '17:09:00.000')]
+      await show('17:08:41.000', { messages: absorbed.slice(0, -1), queued: claudeBox([]) })
+      await show('17:09:01.000', { messages: absorbed, queued: [], working: false })
+      await show('17:09:02.000', { messages: absorbed, queued: [], working: false })
+      expect(drafts!.pending.map((item) => item.sentAt)).toEqual([at('17:05:00.000')])
+    })
+
     describe('on Codex', () => {
       const codexTurn = [
         text('msg_0ddffecfe356', 'Running the deploy check.', '17:03:30.106'),
