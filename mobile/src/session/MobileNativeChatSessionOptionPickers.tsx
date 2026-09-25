@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -21,16 +21,22 @@ import {
   DescriptorRows,
   Pill,
   SessionOptionCaption,
+  SessionOptionFailure,
   SessionOptionSummaryRow
 } from './MobileNativeChatSessionOptionRows'
 import { sortNativeChatSessionOptions } from '../../../src/shared/native-chat-session-option-snapshot'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
+import type { PickFailureReport } from './session-option-pick-failure'
 
 /** Descriptor id of the per-model effort option in every agent catalog. */
 const EFFORT_OPTION_ID = 'effort'
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
+  /** The chat's banner, or its toast. A pick's failure goes here only when the
+   *  drawer is not open to show it: closed while the pick was on its way, or
+   *  closed by a pick that went through with something to say. */
+  reportFailure: PickFailureReport
   /** Pickers lock while the agent works — a mid-turn `/model` interleaves with
    *  the agent's own output (desktop parity). */
   isWorking: boolean
@@ -80,6 +86,7 @@ function withRunningModelSelected(
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
+  reportFailure,
   sendInFlight = false,
   openRequest = 0,
   modelsPending = false,
@@ -87,6 +94,19 @@ export function MobileNativeChatSessionOptionPickers({
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
+  // Why the drawer says a failed pick itself: it draws in its own native window
+  // (a Modal), and the chat's banner and toast draw in the screen under it. A
+  // failed pick keeps the drawer open, so a reason said only there was never
+  // seen, and the row looked dead rather than refused (2026-09-25). The next
+  // pick clears it, and so does closing the drawer.
+  const [failure, setFailure] = useState<string | null>(null)
+  const mountedRef = useRef(false)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
   const [lastRequest, setLastRequest] = useState(controller.optionPickerRequest)
   if (controller.optionPickerRequest && lastRequest !== controller.optionPickerRequest) {
     setLastRequest(controller.optionPickerRequest)
@@ -101,6 +121,15 @@ export function MobileNativeChatSessionOptionPickers({
       setOpenDescriptorId(modelId)
     }
   }, [modelId, openRequest])
+  const drawerOpen =
+    model !== undefined && snapshot.some((descriptor) => descriptor.id === openDescriptorId)
+  // Said while the drawer was not open to show it: the chat's own banner takes it.
+  useEffect(() => {
+    if (failure !== null && !drawerOpen) {
+      reportFailure(failure)
+      setFailure(null)
+    }
+  }, [drawerOpen, failure, reportFailure])
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model) {
     return null
@@ -120,7 +149,21 @@ export function MobileNativeChatSessionOptionPickers({
   const pillLabel = live ?? (optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel)
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 
-  const closePicker = (): void => setOpenDescriptorId(null)
+  // A view the user moved to drops the failure they read in the last one.
+  const showView = (id: string | null): void => {
+    setFailure(null)
+    setOpenDescriptorId(id)
+  }
+  const closePicker = (): void => showView(null)
+  // Where each pick says why it did not go through. After an unmount there is
+  // no drawer left to say it in.
+  const say = (message: string): void => {
+    if (mountedRef.current) {
+      setFailure(message)
+    } else {
+      reportFailure(message)
+    }
+  }
   const openPicker = (): void => {
     Keyboard.dismiss()
     setOpenDescriptorId(model.id)
@@ -129,16 +172,15 @@ export function MobileNativeChatSessionOptionPickers({
   // Why: picking a model is only half the choice — its effort level is the next
   // question, so the drawer steps straight into that model's effort rows instead
   // of closing and making the user reopen the pill. A model with no effort option
-  // (Haiku) has no such descriptor, and the drawer closes as before.
+  // (Haiku) has no such descriptor, and the drawer closes as before. Neither drops
+  // what the pick said (an ack that was lost): it stays in the drawer, or goes to
+  // the banner once the drawer has closed.
   const afterApply = (descriptor: SessionOptionDescriptor): void => {
-    if (descriptor.id === model.id) {
-      setOpenDescriptorId(EFFORT_OPTION_ID)
-      return
-    }
-    closePicker()
+    setOpenDescriptorId(descriptor.id === model.id ? EFFORT_OPTION_ID : null)
   }
 
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
+    setFailure(null)
     // Re-picking the tracked value is a no-op — never re-dispatch it.
     if (
       descriptor.valueSource !== 'unknown' &&
@@ -148,16 +190,17 @@ export function MobileNativeChatSessionOptionPickers({
       afterApply(descriptor)
       return
     }
-    void controller.setOption(descriptor.id, value).then((applied) => {
+    void controller.setOption(descriptor.id, value, say).then((applied) => {
       if (applied) {
         afterApply(descriptor)
       }
     })
   }
   const invokeAction = (descriptor: SessionOptionDescriptor): void => {
-    void controller.invokeAction(descriptor.id).then((invoked) => {
+    setFailure(null)
+    void controller.invokeAction(descriptor.id, say).then((invoked) => {
       if (invoked) {
-        closePicker()
+        setOpenDescriptorId(null)
       }
     })
   }
@@ -180,7 +223,7 @@ export function MobileNativeChatSessionOptionPickers({
                 variant="soft"
                 size={36}
                 iconSize={18}
-                onPress={modelView ? closePicker : () => setOpenDescriptorId(model.id)}
+                onPress={modelView ? closePicker : () => showView(model.id)}
               />
               <Txt variant="title" weight="semibold" align="center" style={{ flex: 1 }}>
                 {modelView ? 'Select model' : `Select ${activeDescriptor.label.toLowerCase()}`}
@@ -193,6 +236,7 @@ export function MobileNativeChatSessionOptionPickers({
                 ) : null}
               </View>
             </View>
+            {failure ? <SessionOptionFailure>{failure}</SessionOptionFailure> : null}
             {activeDescriptor.valueSource === 'dispatched' ? (
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
@@ -243,7 +287,7 @@ export function MobileNativeChatSessionOptionPickers({
                     value={mobileSessionOptionSummaryValue(descriptor)}
                     disabled={disabled}
                     divided={index < options.length - 1}
-                    onPress={() => setOpenDescriptorId(descriptor.id)}
+                    onPress={() => showView(descriptor.id)}
                   />
                 ))}
               </Surface>

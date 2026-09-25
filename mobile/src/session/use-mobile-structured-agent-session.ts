@@ -78,7 +78,8 @@ export function useMobileStructuredAgentSession(args: {
     async <TValue>(
       method: string,
       fingerprintMethod: string,
-      fields: Record<string, unknown>
+      fields: Record<string, unknown>,
+      options?: { onError?: (message: string) => void }
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
@@ -116,7 +117,8 @@ export function useMobileStructuredAgentSession(args: {
         return result
       }
       operationIdsRef.current.delete(key)
-      onSendError(result.message)
+      const report = options?.onError ?? onSendError
+      report(result.message)
       return { status: 'rejected' }
     },
     [client, enabled, onSendError, sessionId, sessionKey]

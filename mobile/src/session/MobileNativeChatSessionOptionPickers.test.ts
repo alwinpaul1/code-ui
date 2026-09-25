@@ -91,7 +91,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     }
     act(() => {
       renderer = create(
-        createElement(MobileNativeChatSessionOptionPickers, { controller, isWorking, ...extra })
+        createElement(MobileNativeChatSessionOptionPickers, {
+          controller,
+          isWorking,
+          reportFailure: vi.fn(),
+          ...extra
+        })
       )
     })
   }
@@ -237,7 +242,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => pill('Model').props.onPress())
     expect(renderer!.root.findByType('BottomDrawer').props.visible).toBe(true)
     await act(async () => rowByText('Opus 4.8').props.onPress())
-    expect(setOption).toHaveBeenCalledWith('model', 'opus')
+    expect(setOption).toHaveBeenCalledWith('model', 'opus', expect.any(Function))
   })
 
   it('opens an option picker from the model sheet summary', async () => {
@@ -245,7 +250,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => pill('Model').props.onPress())
     await act(async () => rowByText('Effort').props.onPress())
     await act(async () => rowByText('Low').props.onPress())
-    expect(setOption).toHaveBeenCalledWith('effort', 'low')
+    expect(setOption).toHaveBeenCalledWith('effort', 'low', expect.any(Function))
   })
 
   it('shows absolute boolean values in option summaries', async () => {
@@ -287,7 +292,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     await act(async () => pill('Model').props.onPress())
     expect(rowByText('Choose in agent picker…').props.accessibilityRole).toBe('button')
     await act(async () => rowByText('Choose in agent picker…').props.onPress())
-    expect(invokeAction).toHaveBeenCalledWith('model')
+    expect(invokeAction).toHaveBeenCalledWith('model', expect.any(Function))
   })
 
   it('shows a reader instead of the placeholder list while models are pending', async () => {

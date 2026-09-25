@@ -229,4 +229,84 @@ describe('a session-option pick or slash command that did not go out says so', (
     expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
     expect(onSendError).not.toHaveBeenCalled()
   })
+
+  /**
+   * A pick from the open option drawer brings its own reporter, because the
+   * chat's banner (`onSendError`) draws under the drawer's native window
+   * (MobileNativeChatSessionOptionPickers.failure.test.tsx). Every refusal the
+   * dispatch can give goes to that reporter alone: the send gate's, the write
+   * lock's, and the heal, clear and key failures on either agent's path.
+   */
+  describe('a pick from the open drawer is told its own refusal', () => {
+    let say = vi.fn()
+
+    beforeEach(() => {
+      say = vi.fn()
+    })
+
+    async function pickFromDrawer(command: string): Promise<string | undefined> {
+      let outcome: string | undefined
+      await act(async () => {
+        outcome = await api!.dispatchCommand(command, { onError: say })
+      })
+      return outcome
+    }
+
+    function expectToldOnly(message: string): void {
+      expect(say).toHaveBeenCalledTimes(1)
+      expect(say).toHaveBeenCalledWith(message)
+      expect(onSendError).not.toHaveBeenCalled()
+    }
+
+    it.each(['claude', 'codex'])('hears the send gate turn a %s pick away', async (agent) => {
+      mount(agent, false)
+
+      expect(await pickFromDrawer('/model opus')).toBe('rejected')
+      expect(sendRequest).not.toHaveBeenCalled()
+      expectToldOnly('Command not sent: the desktop terminal is not taking input from this phone yet')
+    })
+
+    it.each(['claude', 'codex'])(
+      'hears a %s pick turned away while another input holds the terminal',
+      async (agent) => {
+        mount(agent)
+        expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+
+        expect(await pickFromDrawer('/model opus')).toBe('rejected')
+        expectToldOnly('Another input is still being sent. Try again.')
+      }
+    )
+
+    it.each(['claude', 'codex'])(
+      'hears that a %s pick was not sent when the stale paste before it could not be cleared',
+      async (agent) => {
+        markMobileNativeChatInputStale('term')
+        sendRequest.mockResolvedValue(reply(false))
+        mount(agent)
+
+        expect(await pickFromDrawer('/model opus')).toBe('rejected')
+        expectToldOnly('Message not sent')
+      }
+    )
+
+    it.each(['claude', 'codex'])('hears that a %s pick whose keys were refused was not sent', async (agent) => {
+      sendRequest.mockResolvedValue(reply(false))
+      mount(agent)
+
+      expect(await pickFromDrawer('/model opus')).toBe('rejected')
+      expectToldOnly('Message not sent')
+    })
+
+    it.each(['claude', 'codex'])('hears that a %s pick whose ack was lost is unconfirmed', async (agent) => {
+      mount(agent)
+      // Claude's line clear lands first; Codex types its first key straight away.
+      if (agent === 'claude') {
+        sendRequest.mockResolvedValueOnce(reply(true))
+      }
+      sendRequest.mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
+
+      expect(await pickFromDrawer('/model opus')).toBe('unknown')
+      expectToldOnly('Command unconfirmed — check chat before retrying')
+    })
+  })
 })

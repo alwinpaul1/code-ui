@@ -7,7 +7,7 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
-import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
+import type { PickDispatch, PickDispatchOptions } from './session-option-pick-failure'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
@@ -41,11 +41,9 @@ export type MobileNativeChatMessageSend = {
   /** Answer to an agent question — never touches the composer draft. */
   answerQuestion: (text: string) => Promise<boolean>
   /** Session-option command dispatch (e.g. `/model sonnet`) — never touches the
-   *  composer draft; callers need the outcome to track dispatched state. */
-  dispatchCommand: (
-    text: string,
-    options?: { delivery?: CatalogCommandDelivery }
-  ) => Promise<MobileNativeChatSendOutcome>
+   *  composer draft; callers need the outcome to track dispatched state. A
+   *  refusal is said through `options.onError` when the pick brought one. */
+  dispatchCommand: PickDispatch
 }
 
 /** The native-chat send seam: one write path shared by composer sends, image
@@ -111,7 +109,8 @@ export function useMobileNativeChatMessageSend(args: {
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
-      sharedDeadline?: number
+      sharedDeadline?: number,
+      report: (message: string) => void = onSendError
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -123,7 +122,7 @@ export function useMobileNativeChatMessageSend(args: {
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       if (!handle || !origin) {
-        onSendError(handle ? 'Message not sent (no chat on this tab)' : 'Message not sent (no terminal on this tab)')
+        report(handle ? 'Message not sent (no chat on this tab)' : 'Message not sent (no terminal on this tab)')
         return 'rejected'
       }
       // One budget for the whole action, the wait for the link included: a hung
@@ -137,7 +136,7 @@ export function useMobileNativeChatMessageSend(args: {
       // screen the phone has not seen since the link dropped.
       const client = syncComposer
         ? await sendGate.wait(deadline, () => handleRef.current !== handle)
-        : sendGate.now(recordControlSend ? 'Answer' : 'Command')
+        : sendGate.now(recordControlSend ? 'Answer' : 'Command', report)
       if (!client) {
         return 'rejected'
       }
@@ -155,7 +154,7 @@ export function useMobileNativeChatMessageSend(args: {
         deadline
       }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
-        onSendError('Message not sent')
+        report('Message not sent')
         return 'rejected'
       }
       // Why: empty the composer at send time, not on the ack — over relay the
@@ -196,7 +195,7 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText)
           }
-          onSendError('Message not sent')
+          report('Message not sent')
           return 'rejected'
         }
       }
@@ -236,11 +235,11 @@ export function useMobileNativeChatMessageSend(args: {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
           holdUnconfirmedSend(origin, text, () =>
-            onSendError('Delivery unconfirmed — check chat before retrying')
+            report('Delivery unconfirmed — check chat before retrying')
           )
         } else {
           // A command has no echo to wait for, so this is the only word it gets.
-          onSendError(COMMAND_UNCONFIRMED)
+          report(COMMAND_UNCONFIRMED)
         }
         return 'unknown'
       }
@@ -248,7 +247,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
         }
-        onSendError('Message not sent')
+        report('Message not sent')
         return 'rejected'
       }
       if (classification === 'chat') {
@@ -330,37 +329,38 @@ export function useMobileNativeChatMessageSend(args: {
   // spaces a send's body and its Enter ~500ms apart — so without this lock an
   // apply lands between them and is submitted as part of the user's prompt.
   // Every exit that is not the composer send's own says why: the picker stays
-  // open on a false result with nothing else to tell the user (2026-09-25).
+  // open on a false result with nothing else to tell the user (2026-09-25). A
+  // pick from the open drawer brings its own reporter, because the chat's
+  // banner draws under the drawer; anything else says it on that banner. The
+  // send gate's refusal goes the same way.
   const dispatchCommand = useCallback(
-    async (
-      text: string,
-      _options?: { delivery?: CatalogCommandDelivery }
-    ): Promise<MobileNativeChatSendOutcome> => {
+    async (text: string, options?: PickDispatchOptions): Promise<MobileNativeChatSendOutcome> => {
+      const report = options?.onError ?? onSendError
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
-        onSendError('Another input is still being sent. Try again.')
+        report('Another input is still being sent. Try again.')
         return 'rejected'
       }
       try {
         if (agentRef.current === 'codex') {
           if (!terminal) {
-            onSendError('Command not sent (no terminal on this tab)')
+            report('Command not sent (no terminal on this tab)')
             return 'rejected'
           }
           // A command does not wait for the link: what it types was chosen
           // against a screen the phone has not seen since it dropped.
-          const client = sendGate.now('Command')
+          const client = sendGate.now('Command', report)
           return client
             ? await typeCodexChatCommand({
                 client,
                 terminal,
                 command: text,
                 deviceToken: deviceTokenRef.current,
-                onSendError
+                onSendError: report
               })
             : 'rejected'
         }
-        return await sendMessage(text, undefined, false, false)
+        return await sendMessage(text, undefined, false, false, undefined, report)
       } finally {
         if (terminal) {
           releaseMobileNativeChatTerminalWrite(terminal)

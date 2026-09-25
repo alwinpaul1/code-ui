@@ -49,8 +49,10 @@ export type MobileNativeChatSendGate = {
   /** Waits for the link and the lane, on the send's own budget. */
   readonly wait: (deadline: number, abandoned?: () => boolean) => Promise<RpcClient | null>
   /** Does not wait: for a write chosen against a screen the phone has not
-   *  seen since the link dropped (a card answer, a command). */
-  readonly now: (action?: string) => RpcClient | null
+   *  seen since the link dropped (a card answer, a command). `onUnready`
+   *  replaces the gate's own for this one call: a pick from the option drawer
+   *  says its refusal in the drawer, over the banner the gate's own draws on. */
+  readonly now: (action?: string, onUnready?: (message: string) => void) => RpcClient | null
   /** Whether a send could write right now; reports nothing. */
   readonly isReady: () => boolean
 }
@@ -69,18 +71,23 @@ export function useMobileNativeChatSendGate(
   latest.current = args
   return useMemo(() => {
     const read = (): MobileNativeChatSendConditions => latest.current
-    const settle = (readiness: MobileNativeChatSendReadiness, action?: string): RpcClient | null => {
+    const settle = (
+      readiness: MobileNativeChatSendReadiness,
+      action?: string,
+      onUnready: (message: string) => void = latest.current.onUnready
+    ): RpcClient | null => {
       if (readiness.ready) {
         return readiness.client
       }
-      const { lane, onUnready } = latest.current
-      onUnready(mobileNativeChatSendUnreadyMessage(action ?? latest.current.action, readiness, lane))
+      onUnready(
+        mobileNativeChatSendUnreadyMessage(action ?? latest.current.action, readiness, latest.current.lane)
+      )
       return null
     }
     return {
       wait: async (deadline, abandoned) =>
         settle(await waitForMobileNativeChatSendable({ read, deadline, abandoned })),
-      now: (action) => settle(mobileNativeChatSendReadinessNow(read()), action),
+      now: (action, onUnready) => settle(mobileNativeChatSendReadinessNow(read()), action, onUnready),
       isReady: () => readyClient(read()) !== null
     }
   }, [])

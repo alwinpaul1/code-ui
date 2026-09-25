@@ -6,16 +6,13 @@ import {
   readSessionOptionRecord,
   writeSessionOptionRecord
 } from '../storage/session-option-records'
-import type {
-  CatalogCommandDelivery,
-  CatalogModel
-} from '../../../src/shared/agent-session-option-catalog'
+import type { CatalogModel } from '../../../src/shared/agent-session-option-catalog'
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { dispatchPick, type PickDispatch, type PickFailureReport } from './session-option-pick-failure'
 import {
   clearPendingModelPicksForTests,
   forgetModelReportScope,
@@ -50,8 +47,9 @@ export type MobileNativeChatSessionOptionsController = {
   snapshot: SessionOptionDescriptor[]
   /** Descriptor id with a dispatch in flight; the UI disables rows meanwhile. */
   pendingId: string | null
-  setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
-  invokeAction: (id: string) => Promise<boolean>
+  /** `report` is where the pick's own failure is said (see PickFailureReport). */
+  setOption: (id: string, value: SessionOptionValue, report?: PickFailureReport) => Promise<boolean>
+  invokeAction: (id: string, report?: PickFailureReport) => Promise<boolean>
   /** Track a slash command the user typed themselves (e.g. `/model sonnet`). */
   recordCommand: (command: string) => void
 }
@@ -132,10 +130,7 @@ export function useMobileNativeChatSessionOptions(args: {
   /** The tab's terminal. A scope outlives its terminal, so "this agent has
    *  stated its model" is remembered per terminal, not per scope. */
   terminalHandle?: string | null
-  dispatchCommand: (
-    command: string,
-    options?: { delivery?: CatalogCommandDelivery }
-  ) => Promise<MobileNativeChatSendOutcome>
+  dispatchCommand: PickDispatch
   /** A model change that must happen in the agent's own TUI picker was
    *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
@@ -147,7 +142,11 @@ export function useMobileNativeChatSessionOptions(args: {
   discoveredModelApply?: CatalogOptionApply | null
   /** Apply a value some other way than typing a command (Codex drives its own
    *  picker). Resolves the outcome, or null to fall through to the command path. */
-  applyOverride?: (id: string, value: SessionOptionValue) => Promise<boolean | null>
+  applyOverride?: (
+    id: string,
+    value: SessionOptionValue,
+    report?: PickFailureReport
+  ) => Promise<boolean | null>
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
   const reportedModelLabel = args.reportedModelLabel ?? null
@@ -392,7 +391,7 @@ export function useMobileNativeChatSessionOptions(args: {
   )
 
   const setOption = useCallback(
-    (id: string, value: SessionOptionValue): Promise<boolean> => {
+    (id: string, value: SessionOptionValue, report?: PickFailureReport): Promise<boolean> => {
       if (!catalog || !scopeKey || !agent || !identity) {
         return Promise.resolve(false)
       }
@@ -406,7 +405,7 @@ export function useMobileNativeChatSessionOptions(args: {
                 .find((model) => model.id === previousModelId)
                 ?.options.find((option) => option.id === id)?.apply
         if (applyOverride) {
-          const handled = await applyOverride(id, value)
+          const handled = await applyOverride(id, value, report)
           if (handled !== null) {
             if (handled) {
               if (id === 'model' && typeof value === 'string' && previousModelId !== value) {
@@ -450,7 +449,7 @@ export function useMobileNativeChatSessionOptions(args: {
         // report effect is not on this queue.
         const trackedBeforeDispatch =
           id === 'model' ? undefined : getTrackedSessionOption(record, previousModelId, id)
-        const outcome = await dispatchCommand(command)
+        const outcome = await dispatchPick(dispatchCommand, command, { onError: report })
         if (outcome === 'rejected') {
           return false
         }
@@ -489,7 +488,7 @@ export function useMobileNativeChatSessionOptions(args: {
   )
 
   const invokeAction = useCallback(
-    (id: string): Promise<boolean> => {
+    (id: string, report?: PickFailureReport): Promise<boolean> => {
       if (!catalog || !scopeKey || !agent || !identity) {
         return Promise.resolve(false)
       }
@@ -504,9 +503,10 @@ export function useMobileNativeChatSessionOptions(args: {
                 ?.options.find((option) => option.id === id)?.apply
         const midSession = apply?.midSession
         if (midSession?.kind === 'agent-picker') {
-          const outcome = midSession.delivery
-            ? await dispatchCommand(midSession.command, { delivery: midSession.delivery })
-            : await dispatchCommand(midSession.command)
+          const outcome = await dispatchPick(dispatchCommand, midSession.command, {
+            delivery: midSession.delivery,
+            onError: report
+          })
           if (outcome === 'rejected') {
             return false
           }
@@ -517,7 +517,8 @@ export function useMobileNativeChatSessionOptions(args: {
         }
         if (isFlipOnlyMidSession(midSession) && !getTrackedSessionOption(record, modelId, id)) {
           // Why: an unknown baseline remains unknown after one inversion.
-          return (await dispatchCommand(midSession.command)) !== 'rejected'
+          const outcome = await dispatchPick(dispatchCommand, midSession.command, { onError: report })
+          return outcome !== 'rejected'
         }
         return false
       })

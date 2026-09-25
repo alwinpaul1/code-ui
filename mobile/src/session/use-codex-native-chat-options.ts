@@ -23,6 +23,7 @@ import {
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import { applyCodexPickerSelection, createCodexPickerIo } from './codex-picker-apply'
 import { withCodexTerminalLock } from './codex-terminal-lock'
+import type { PickFailureReport } from './session-option-pick-failure'
 
 export type CodexNativeChatOptions = {
   discoveredModels: CatalogModel[] | null
@@ -30,8 +31,14 @@ export type CodexNativeChatOptions = {
    *  sheet shows a reader instead of a list that will be replaced. */
   modelsPending: boolean
   discoveredModelApply: CatalogOptionApply | null
-  applyOverride: ((id: string, value: SessionOptionValue) => Promise<boolean | null>) | undefined
+  applyOverride: CodexApplyOverride | undefined
 }
+
+type CodexApplyOverride = (
+  id: string,
+  value: SessionOptionValue,
+  report?: PickFailureReport
+) => Promise<boolean | null>
 
 export function useCodexNativeChatOptions(args: {
   agent: string | null
@@ -124,10 +131,16 @@ export function useCodexNativeChatOptions(args: {
   }, [discoveredModels, refreshHud])
 
   const applyOverride = useCallback(
-    async (id: string, value: SessionOptionValue): Promise<boolean | null> => {
+    async (
+      id: string,
+      value: SessionOptionValue,
+      report?: PickFailureReport
+    ): Promise<boolean | null> => {
+      // The open drawer's own reporter when the pick came from it; see PickFailureReport.
+      const say = report ?? onFailure
       const handle = handleRef.current
       if (!client || !handle || typeof value !== 'string') {
-        onFailure("Can't reach the Codex terminal right now")
+        say("Can't reach the Codex terminal right now")
         return false
       }
       const io = createCodexPickerIo({
@@ -141,7 +154,7 @@ export function useCodexNativeChatOptions(args: {
       } else if (id === 'effort') {
         const model = currentModelId()
         if (!model) {
-          onFailure('Pick a model first')
+          say('Pick a model first')
           return false
         }
         const level = discovered
@@ -158,7 +171,7 @@ export function useCodexNativeChatOptions(args: {
       if (result.ok) {
         return true
       }
-      onFailure(
+      say(
         result.reason === 'busy'
           ? 'Respond to the active Codex approval first'
           : result.reason === 'model-unavailable'

@@ -31,6 +31,7 @@ import {
   type StructuredRewindSupport
 } from './mobile-structured-agent-rewind'
 import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'
+import type { PickFailureReport } from './session-option-pick-failure'
 
 type StructuredOptionsController = {
   optionPickerRequest: { id: string; sequence: number } | null
@@ -40,7 +41,12 @@ type StructuredOptionsController = {
   optionSnapshot: SessionOptionDescriptor[]
   optionSurface: SessionOptionsSurface
   pendingOptionId: string | null
-  setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
+  /** `report` is where a host refusal of the pick is said (PickFailureReport). */
+  setStructuredOption: (
+    id: string,
+    value: SessionOptionValue,
+    report?: PickFailureReport
+  ) => Promise<boolean>
   invokeStructuredOption: (id: string) => Promise<boolean>
 }
 
@@ -126,7 +132,7 @@ export function useMobileStructuredAgentOptions(args: {
   )
 
   const setStructuredOption = useCallback(
-    async (id: string, value: SessionOptionValue): Promise<boolean> => {
+    async (id: string, value: SessionOptionValue, report?: PickFailureReport): Promise<boolean> => {
       const currentState = optionStateRef.current
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
       if (
@@ -147,7 +153,8 @@ export function useMobileStructuredAgentOptions(args: {
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
-          { key: id, value: encoded }
+          { key: id, value: encoded },
+          { onError: report }
         )
         if (
           activeOptionRecordRef.current !== targetRecord ||

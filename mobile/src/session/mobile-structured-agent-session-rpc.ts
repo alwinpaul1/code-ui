@@ -34,7 +34,10 @@ export type StructuredAgentSessionMutationResult<TValue> =
 export type StructuredAgentSessionMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
-  fields: Record<string, unknown>
+  fields: Record<string, unknown>,
+  /** Where a host refusal is said; the chat's banner when absent. A pick from the
+   *  open option drawer brings its own, because that banner draws under it. */
+  options?: { onError?: (message: string) => void }
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 class AgentSessionRpcResponseError extends Error {

@@ -1,13 +1,10 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { RpcClient } from '../transport/rpc-client'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionValue
-} from '../../../src/shared/native-chat-session-options'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { ModelReportSource } from './mobile-native-chat-model-report-authority'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { PickDispatch } from './session-option-pick-failure'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import {
   useMobileNativeChatSessionOptions,
@@ -22,7 +19,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
   activeSessionTabId: string | null
   agent: string | null
-  dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
+  dispatchCommand: PickDispatch
   hostId: string
   isTabChatView: (tabId: string, agent?: string | null) => boolean
   isWorking: boolean
@@ -46,7 +43,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     optionPickerRequest?: { id: string; sequence: number } | null
     snapshot: SessionOptionDescriptor[]
     pendingId: string | null
-    setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
+    setOption: MobileNativeChatSessionOptionsController['setOption']
     invokeAction: (id: string) => Promise<boolean>
   }
   toggleTabChatView: (tabId: string, agent?: string | null) => void
@@ -56,6 +53,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
   refreshHud: () => Promise<unknown>
+  /** The chat's banner, or its toast: where a pick's failure is said when no
+   *  open drawer can show it (a typed `/model`, or a drawer already closed). */
   onFailure: (message: string) => void
 }): {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
@@ -185,12 +184,13 @@ export function useMobileNativeChatSessionOptionController(args: {
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking }
+          ? { controller: structuredController, isWorking, reportFailure: onFailure }
           : null
         : sessionOptions.snapshot.length > 0
           ? {
               controller: sessionOptions,
               isWorking,
+              reportFailure: onFailure,
               openRequest,
               modelsPending: codex.modelsPending,
               liveModel: {
@@ -204,6 +204,7 @@ export function useMobileNativeChatSessionOptionController(args: {
       activeChatStructured,
       codex.modelsPending,
       isWorking,
+      onFailure,
       openRequest,
       reportedEffort,
       reportedModel,
