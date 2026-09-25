@@ -124,10 +124,11 @@ export function useMobileNativeChatSessionOptionController(args: {
     enabled: !activeChatStructured && agent === 'claude' && activeSessionTabId !== null,
     lastConnectedAt
   })
+  const scopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
   const sessionOptions = useMobileNativeChatSessionOptions({
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
-    scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
+    scopeKey,
     reportedModel,
     reportedEffort,
     reportedModelLabel,
@@ -184,13 +185,14 @@ export function useMobileNativeChatSessionOptionController(args: {
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking, reportFailure: onFailure }
+          ? { controller: structuredController, isWorking, reportFailure: onFailure, scopeKey }
           : null
         : sessionOptions.snapshot.length > 0
           ? {
               controller: sessionOptions,
               isWorking,
               reportFailure: onFailure,
+              scopeKey,
               openRequest,
               modelsPending: codex.modelsPending,
               liveModel: {
@@ -209,6 +211,7 @@ export function useMobileNativeChatSessionOptionController(args: {
       reportedEffort,
       reportedModel,
       reportedModelLabel,
+      scopeKey,
       sessionOptions,
       structuredController
     ]

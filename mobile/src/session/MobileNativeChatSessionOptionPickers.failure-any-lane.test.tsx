@@ -45,6 +45,7 @@ const NOT_SENT = 'Message not sent'
 const UNCONFIRMED = 'Command unconfirmed — check chat before retrying'
 
 const noop = (): void => undefined
+const TAB = 'host-a\0wt-1\0tab-1'
 // The chat's own banner-or-toast reporter, which draws under the drawer.
 const screen = vi.fn<(message: string) => void>()
 
@@ -179,7 +180,8 @@ describe('the drawer, whatever lane it drives', () => {
         createElement(MobileNativeChatSessionOptionPickers, {
           controller,
           isWorking: false,
-          reportFailure: screen
+          reportFailure: screen,
+          scopeKey: TAB
         })
       )
     })
@@ -254,7 +256,8 @@ describe('the drawer, whatever lane it drives', () => {
               recordCommand: noop
             },
             isWorking: false,
-            reportFailure: screen
+            reportFailure: screen,
+            scopeKey: TAB
           })
         : null
     }
@@ -331,7 +334,8 @@ describe('the drawer, whatever lane it drives', () => {
               recordCommand: noop
             },
             isWorking: false,
-            reportFailure: screen
+            reportFailure: screen,
+            scopeKey: TAB
           })
         : null
     }

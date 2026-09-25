@@ -20,13 +20,15 @@ export function setSessionOptionPickFailureClockForTests(next: (() => number) | 
   clock = next ?? (() => performance.now())
 }
 
-/** A pick's failure, and the chat reporter of the tab the pick was made on. */
-type PickFailure = { message: string; report: PickFailureReport }
+/** A pick's failure, the tab the pick was made on, and that tab's reporter. */
+type PickFailure = { message: string; scope: string | null; report: PickFailureReport }
 
 export function useSessionOptionPickFailure(args: {
   drawerOpen: boolean
-  /** The current tab's banner-or-toast reporter. It is new for each tab, and
-   *  that is how a pick made on another tab is told apart. */
+  /** The tab the chat shows (mobileNativeChatScopeKey). A failure is drawn only
+   *  on the tab its pick was made on, however the reporter below was built. */
+  scopeKey: string | null
+  /** The current tab's banner-or-toast reporter. */
   reportFailure: PickFailureReport
 }): {
   /** The message to draw in the drawer, or null. */
@@ -36,7 +38,7 @@ export function useSessionOptionPickFailure(args: {
   /** Drop the failure: a new pick, or another view of the drawer. */
   clear: () => void
 } {
-  const { drawerOpen, reportFailure } = args
+  const { drawerOpen, scopeKey, reportFailure } = args
   const [failure, setFailureState] = useState<PickFailure | null>(null)
   // The same value, for the unmount below, which runs after the last render.
   const latestRef = useRef<PickFailure | null>(null)
@@ -68,7 +70,7 @@ export function useSessionOptionPickFailure(args: {
     }
   }, [])
 
-  const ownTab = failure !== null && failure.report === reportFailure
+  const ownTab = failure !== null && failure.scope === scopeKey
   const shown = drawerOpen && ownTab ? failure.message : null
   useLayoutEffect(() => {
     if (shown !== null && failure !== null && drawnRef.current?.failure !== failure) {
@@ -82,21 +84,22 @@ export function useSessionOptionPickFailure(args: {
   // own tab's reporter, which paints that tab's banner, or the toast once the
   // tab is gone.
   useEffect(() => {
-    if (failure !== null && (!drawerOpen || failure.report !== reportFailure)) {
+    if (failure !== null && (!drawerOpen || failure.scope !== scopeKey)) {
       setFailure(null)
       if (!read(failure)) {
         failure.report(failure.message)
       }
     }
-  }, [drawerOpen, failure, reportFailure, setFailure])
+  }, [drawerOpen, failure, scopeKey, setFailure])
 
   return {
     shown,
     reporterForPick: () => {
       const report = reportFailure
+      const scope = scopeKey
       return (message) => {
         if (mountedRef.current) {
-          setFailure({ message, report })
+          setFailure({ message, scope, report })
         } else {
           report(message)
         }

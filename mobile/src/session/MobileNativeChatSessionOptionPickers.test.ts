@@ -95,6 +95,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
           controller,
           isWorking,
           reportFailure: vi.fn(),
+          scopeKey: 'host\0wt\0tab',
           ...extra
         })
       )

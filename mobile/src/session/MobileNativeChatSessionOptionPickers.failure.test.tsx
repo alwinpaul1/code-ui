@@ -561,6 +561,26 @@ describe('a Claude pick that fails says so inside the open drawer', () => {
     expect(otherTab).not.toHaveBeenCalled()
   })
 
+  // Which tab a failure belongs to is the tab's scope, not which reporter
+  // function the picker holds: a wrapper anywhere between the banner and the
+  // picker hands it a new function on every render, for the same tab.
+  it('keeps a failure in the drawer when the same tab hands the picker a new reporter', async () => {
+    await mountChat('claude')
+    await openDrawer()
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    await press(row('Opus'))
+    expectSaidInDrawer(BUSY)
+
+    chatReport = (message) => screen(message)
+    await act(async () => {
+      renderer!.update(createElement(Chat))
+    })
+    await settle()
+
+    expectSaidInDrawer(BUSY)
+    expect(screen).not.toHaveBeenCalled()
+  })
+
   it("keeps a pick's failure out of another tab's open drawer", async () => {
     const otherTab = vi.fn<(message: string) => void>()
     let refuse: ((response: RpcResponse) => void) | null = null

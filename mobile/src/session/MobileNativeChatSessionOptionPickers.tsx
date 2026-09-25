@@ -35,9 +35,11 @@ const EFFORT_OPTION_ID = 'effort'
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
   /** The chat's banner, or its toast, for the tab shown. A pick's failure goes
-   *  here only when the drawer is not showing it (use-session-option-pick-failure.ts).
-   *  Keep it the same function for one tab: a new one reads as a new tab. */
+   *  here only when the drawer is not showing it (use-session-option-pick-failure.ts). */
   reportFailure: PickFailureReport
+  /** The tab the chat shows (mobileNativeChatScopeKey): a failure is drawn only
+   *  on the tab its pick was made on. */
+  scopeKey: string | null
   /** Pickers lock while the agent works — a mid-turn `/model` interleaves with
    *  the agent's own output (desktop parity). */
   isWorking: boolean
@@ -88,6 +90,7 @@ export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
   reportFailure,
+  scopeKey,
   sendInFlight = false,
   openRequest = 0,
   modelsPending = false,
@@ -115,7 +118,7 @@ export function MobileNativeChatSessionOptionPickers({
   // seen, and the row looked dead rather than refused (2026-09-25).
   const drawerOpen =
     model !== undefined && snapshot.some((descriptor) => descriptor.id === openDescriptorId)
-  const failure = useSessionOptionPickFailure({ drawerOpen, reportFailure })
+  const failure = useSessionOptionPickFailure({ drawerOpen, scopeKey, reportFailure })
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model) {
     return null
