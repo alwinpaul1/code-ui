@@ -21,7 +21,11 @@ import {
   type DiscoveredCodexModel
 } from './codex-model-discovery'
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
-import { applyCodexPickerSelection, createCodexPickerIo } from './codex-picker-apply'
+import {
+  applyCodexPickerSelection,
+  createCodexPickerIo,
+  type CodexPickerIo
+} from './codex-picker-apply'
 import { withCodexTerminalLock } from './codex-terminal-lock'
 import type { PickFailureReport } from './session-option-pick-failure'
 
@@ -33,6 +37,11 @@ export type CodexNativeChatOptions = {
   discoveredModelApply: CatalogOptionApply | null
   applyOverride: CodexApplyOverride | undefined
 }
+
+const CODEX_UNREACHABLE = "Can't reach the Codex terminal right now"
+/** A key may have reached Codex before the link failed, so its picker may be
+ *  open on the desktop, part way through the pick. */
+const CODEX_PICK_UNCONFIRMED = 'Pick unconfirmed — check the Codex terminal before retrying'
 
 type CodexApplyOverride = (
   id: string,
@@ -140,14 +149,29 @@ export function useCodexNativeChatOptions(args: {
       const say = report ?? onFailure
       const handle = handleRef.current
       if (!client || !handle || typeof value !== 'string') {
-        say("Can't reach the Codex terminal right now")
+        say(CODEX_UNREACHABLE)
         return false
       }
-      const io = createCodexPickerIo({
+      // A rejected RPC throws out of the driver, and it used to go on past the
+      // picker, which then said nothing at all (2026-09-25). What it means turns
+      // on whether a key had gone out: before one, nothing on the desktop moved.
+      let keysSent = false
+      const driver = createCodexPickerIo({
         client,
         terminal: handle,
         deviceToken: deviceTokenRef.current
       })
+      const io: CodexPickerIo = {
+        ...driver,
+        sendKey: (text) => {
+          keysSent = true
+          return driver.sendKey(text)
+        },
+        typeCommand: (command) => {
+          keysSent = true
+          return driver.typeCommand(command)
+        }
+      }
       let target
       if (id === 'model') {
         target = { model: value, effort: null }
@@ -166,8 +190,12 @@ export function useCodexNativeChatOptions(args: {
       }
       const result = await withCodexTerminalLock(handle, () =>
         applyCodexPickerSelection(io, target)
-      )
+      ).catch(() => null)
       void refreshHud()
+      if (result === null) {
+        say(keysSent ? CODEX_PICK_UNCONFIRMED : CODEX_UNREACHABLE)
+        return false
+      }
       if (result.ok) {
         return true
       }

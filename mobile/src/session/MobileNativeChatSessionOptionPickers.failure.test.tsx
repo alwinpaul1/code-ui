@@ -78,6 +78,11 @@ const NOT_SENT = 'Message not sent'
 const UNCONFIRMED = 'Command unconfirmed — check chat before retrying'
 const GATE_REFUSED = 'Command not sent: the desktop terminal is not taking input from this phone yet'
 const CODEX_APPROVAL_FIRST = 'Respond to the active Codex approval first'
+const CODEX_UNREACHABLE = "Can't reach the Codex terminal right now"
+const CODEX_PICK_UNCONFIRMED = 'Pick unconfirmed — check the Codex terminal before retrying'
+
+// Codex idle at its prompt, as codex-picker-screen.test.ts reads it.
+const CODEX_IDLE_SCREEN = ['• ok', '› Ask Codex to do anything', '  gpt-6-astra xhigh · ~/Project']
 
 // A Codex approval as Codex draws it: the screenshot codex-terminal-permission.test.ts
 // was written from. A model pick must not type into it.
@@ -138,6 +143,9 @@ let reportedModel: string | null = 'sonnet'
 // Whether the desktop terminal takes input from this phone (the input lease).
 let inputReady = true
 const agentRef = { current: agent as string | null }
+// The controller the chat last handed the picker, for a pick made without the
+// drawer (Codex's typed `/model <slug>`, use-codex-chat-command-intercept.ts).
+let lastController: MobileNativeChatSessionOptionsController | null = null
 
 function Chat(): ReactElement | null {
   agentRef.current = agent
@@ -176,6 +184,7 @@ function Chat(): ReactElement | null {
     refreshHud,
     onFailure: screen
   })
+  lastController = nativeChatSessionOptions?.controller ?? null
   return nativeChatSessionOptions
     ? createElement(MobileNativeChatSessionOptionPickers, nativeChatSessionOptions)
     : null
@@ -459,6 +468,100 @@ describe('a Codex pick that fails says so inside the open drawer', () => {
     expect(drawer()).not.toBeNull()
     expectSaidInDrawer(CODEX_APPROVAL_FIRST)
     expect(screen).not.toHaveBeenCalled()
+  })
+
+  // The driver reads Codex's screen and types into it over plain RPCs, and a
+  // rejected one threw straight out of the pick: no message anywhere, and an
+  // unhandled rejection behind a row that did nothing.
+  it('says a model pick whose screen read was rejected could not reach Codex', async () => {
+    await seedCodexModels(['gpt-6-astra', 'gpt-5.6-sol'])
+    reportedModel = 'gpt-6-astra'
+    rpc = async (method) => {
+      if (method === 'terminal.read') {
+        throw new Error('Connection closed')
+      }
+      return refusedRpc()
+    }
+    await mountChat('codex')
+    await openDrawer()
+
+    await press(row('gpt-5.6-sol'))
+
+    // Nothing was typed, so nothing on the desktop changed.
+    expect(sendRequest.mock.calls.map(([method]) => method)).not.toContain('terminal.send')
+    expect(drawer()).not.toBeNull()
+    expectSaidInDrawer(CODEX_UNREACHABLE)
+    expect(screen).not.toHaveBeenCalled()
+  })
+
+  it("says a model pick whose keys' ack was lost mid-drive is unconfirmed", async () => {
+    await seedCodexModels(['gpt-6-astra', 'gpt-5.6-sol'])
+    reportedModel = 'gpt-6-astra'
+    rpc = async (method) => {
+      if (method === 'terminal.read') {
+        return reply({ terminal: { tail: CODEX_IDLE_SCREEN } })
+      }
+      if (method === 'terminal.send') {
+        throw markRpcDeliveryUnknown(new Error('Connection closed'))
+      }
+      return refusedRpc()
+    }
+    await mountChat('codex')
+    await openDrawer()
+
+    await press(row('gpt-5.6-sol'))
+
+    // `/model` may have reached Codex, so its picker may be open on the desktop.
+    expect(sendRequest.mock.calls.map(([method]) => method)).toContain('terminal.send')
+    expect(drawer()).not.toBeNull()
+    expectSaidInDrawer(CODEX_PICK_UNCONFIRMED)
+    expect(screen).not.toHaveBeenCalled()
+  })
+
+  it("says a typed /model whose screen read was rejected on the chat's banner", async () => {
+    await seedCodexModels(['gpt-6-astra', 'gpt-5.6-sol'])
+    reportedModel = 'gpt-6-astra'
+    rpc = async (method) => {
+      if (method === 'terminal.read') {
+        throw new Error('Connection closed')
+      }
+      return refusedRpc()
+    }
+    await mountChat('codex')
+
+    // No drawer, no reporter: the composer's typed command lands here.
+    let applied: boolean | undefined
+    await act(async () => {
+      applied = await lastController!.setOption('model', 'gpt-5.6-sol')
+    })
+
+    expect(applied).toBe(false)
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(CODEX_UNREACHABLE)
+  })
+
+  it("says a rejected read on the chat's banner when the drawer closed first", async () => {
+    await seedCodexModels(['gpt-6-astra', 'gpt-5.6-sol'])
+    reportedModel = 'gpt-6-astra'
+    let reject: ((error: Error) => void) | null = null
+    rpc = (method) =>
+      method === 'terminal.read'
+        ? new Promise<RpcResponse>((_resolve, rejectRead) => {
+            reject = rejectRead
+          })
+        : Promise.resolve(refusedRpc())
+    await mountChat('codex')
+    await openDrawer()
+    await press(row('gpt-5.6-sol'))
+    await press(pressable('Close picker'))
+
+    await act(async () => {
+      reject!(new Error('Connection closed'))
+    })
+    await settle()
+
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(CODEX_UNREACHABLE)
   })
 
   it('says the failure of the only row in a one-model drawer', async () => {
