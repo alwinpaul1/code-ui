@@ -228,10 +228,13 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
 
   const evaluateEdge = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      // Every sample says the list still moves; the gap after the last one
-      // says it stopped (use-mobile-chat-following.ts, the quiet window).
-      scrollSample()
-      applyMetrics(event.nativeEvent)
+      // A sample of the list moving says it still moves; the gap after the
+      // last one says it stopped (use-mobile-chat-following.ts, the quiet
+      // window). A sample that only held the reader's place while the content
+      // grew is not movement, and needs the height to tell.
+      const metrics = event.nativeEvent
+      scrollSample({ offset: metrics.contentOffset.y, height: metrics.contentSize.height })
+      applyMetrics(metrics)
     },
     [applyMetrics, scrollSample]
   )

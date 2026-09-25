@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createChatFollowGate } from './mobile-chat-follow-gate'
+import { isReaderScrollMotion, type ChatScrollGeometry } from './mobile-chat-scroll-motion'
 
 /** A finger held this long is a long-press — Android's text-selection
  *  timeout is 400 ms — and from then on the reader owns the list, as with a
@@ -7,9 +8,9 @@ import { createChatFollowGate } from './mobile-chat-follow-gate'
  *  (screen recording, 2026-09-12 22:49). A shorter touch is a tap. */
 const LONG_PRESS_MS = 400
 
-/** How long the list must go without a scroll sample, with the finger up,
- *  before it counts as at rest without an end event. Longer than a frame of
- *  a slow fling (samples arrive every 16 ms while anything moves), shorter
+/** How long the list must go without a sample of it moving, with the finger
+ *  up, before it counts as at rest without an end event. Longer than a frame
+ *  of a slow fling (samples arrive every 16 ms while anything moves), shorter
  *  than a reader's next hold. */
 const QUIET_MS = 250
 
@@ -35,8 +36,8 @@ export function useMobileChatFollowing() {
   // re-anchor or a nested scroll view interrupts sends no momentum-end, and
   // the flag then sat false until the reader's next clean scroll: a hold on
   // a list that had been still for half a second selected nothing (phone
-  // recording, 2026-09-21). The finger lifting and the samples stopping are
-  // the evidence that the list is at rest, so those restore it too. A finger
+  // recording, 2026-09-21). The finger lifting and the list no longer moving
+  // are the evidence that it is at rest, so those restore it too. A finger
   // still down after beginning a drag, or put down to stop a fling, keeps
   // selection off until it lifts: the 2026-09-12 rule.
   const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -59,24 +60,40 @@ export function useMobileChatFollowing() {
       }
     }, QUIET_MS)
   }, [cancelQuiet])
+  // A drag or a fling. A drag begins under a finger, and the window waits for
+  // it to lift. A fling begins with the finger already up, and is only
+  // presumed to move: the window opens at once and each sample of it moving
+  // starts the window over. Waiting instead for the momentum end left text
+  // unselectable for a whole turn, because Android sends that end only after
+  // three quiet checks with no scroll at all, and a streaming reply scrolls
+  // the list every time it grows (`NATIVE_CHAT_STREAM_THROTTLE_MS`, 50 ms)
+  // while it holds the reader's place (2026-09-25).
   const beginScroll = useCallback(() => {
     scrollingRef.current = true
-    cancelQuiet()
     setTextSelectable(false)
     setFollowing(false)
-  }, [cancelQuiet, setFollowing])
+    armQuiet()
+  }, [armQuiet, setFollowing])
   const endScroll = useCallback(() => {
     scrollingRef.current = false
     cancelQuiet()
     setTextSelectable(true)
   }, [cancelQuiet])
-  /** A scroll sample while a scroll is in flight: the list is still moving,
-   *  so the quiet window starts over. */
-  const scrollSample = useCallback(() => {
-    if (scrollingRef.current) {
-      armQuiet()
-    }
-  }, [armQuiet])
+  const lastSample = useRef<ChatScrollGeometry | null>(null)
+  /** A scroll sample while a scroll is in flight. If the list moved under the
+   *  reader, the quiet window starts over. If it only held their place while
+   *  the content grew (`isReaderScrollMotion`), it proves nothing about the
+   *  reader's scroll, and the window runs on. */
+  const scrollSample = useCallback(
+    (geometry: ChatScrollGeometry) => {
+      const moved = isReaderScrollMotion(lastSample.current, geometry)
+      lastSample.current = geometry
+      if (scrollingRef.current && moved) {
+        armQuiet()
+      }
+    },
+    [armQuiet]
+  )
   // Armed on touch-down, disarmed on release: control passes at the long-press
   // mark while the finger is STILL DOWN, not when it lifts.
   //

@@ -54,9 +54,9 @@ describe('chat text selection around a scroll', () => {
     // A fling: samples keep the window closed while the list still moves.
     act(() => {
       vi.advanceTimersByTime(200)
-      latest!.scrollSample()
+      latest!.scrollSample({ offset: 600, height: 5000 })
       vi.advanceTimersByTime(200)
-      latest!.scrollSample()
+      latest!.scrollSample({ offset: 900, height: 5000 })
     })
     expect(latest!.textSelectable).toBe(false)
     // …and no momentum-end ever arrives.
