@@ -110,9 +110,12 @@ export function useMobileNativeChatPendingPersistence(
         if (held.length > 0) {
           handedOn.set(sessionKey, held)
           void readNativeChatPendingEchoes(sessionKey).then((fresh) => {
-            const list = rememberHeldWitnesses({}, sessionKey, held, fresh ?? [])[sessionKey] ?? []
-            if (list.length > 0) {
-              void writeNativeChatPendingEchoes(sessionKey, [...(fresh ?? []), ...list])
+            // Against what is there now: a chat that came straight back may
+            // already have stored the handed-on copy (review, 2026-09-25).
+            const onDisk = fresh ?? []
+            const list = rememberHeldWitnesses({ [sessionKey]: onDisk }, sessionKey, held, onDisk)[sessionKey] ?? []
+            if (list.length > onDisk.length) {
+              void writeNativeChatPendingEchoes(sessionKey, list)
             }
           })
         }

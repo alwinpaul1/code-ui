@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { isTakenSend } from './mobile-native-chat-pending-echo'
+import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+
+const ownKey = (text: string) => normalizeReconcileText(text)
 
 /**
  * How long a send made mid-turn stays in the queue box, unlisted by the
@@ -116,7 +119,25 @@ export function useQueuedOwnSends<T extends OwnSend>(
   /** Sends the reads say were absorbed without the box ever listing them. */
   const [expired, setExpired] = useState(NO_IDS)
   const result = useMemo(() => {
-    const projected = projectMobileChatQueue(pending, queue ?? [])
+    // A send the agent took is not the box's row while a copy of its text
+    // still waits: the row is that copy's. Handed to the taken one, the copy
+    // stayed unlisted and the taken one looked let go again at the end of the
+    // turn, onto the copy's dequeued row (review, 2026-09-25).
+    const waiting = new Set(pending.filter((item) => !isTakenSend(item)).map((item) => ownKey(item.text)))
+    const shadowed = new Set(
+      pending.filter((item) => isTakenSend(item) && waiting.has(ownKey(item.text))).map((item) => item.id)
+    )
+    const boxed = projectMobileChatQueue(
+      shadowed.size === 0 ? pending : pending.filter((item) => !shadowed.has(item.id)),
+      queue ?? []
+    )
+    const projected =
+      shadowed.size === 0
+        ? boxed
+        : {
+            ...boxed,
+            pending: pending.filter((item) => shadowed.has(item.id) || boxed.pending.includes(item))
+          }
     const outside = new Set(projected.pending.map((item) => item.id))
     for (const item of pending) {
       if (!outside.has(item.id)) {

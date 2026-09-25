@@ -184,3 +184,20 @@ describe('a row stamped as a taken send left the queue box', () => {
     }
   })
 })
+
+// Review, 2026-09-25: a message Claude took mid-turn, and the same text sent
+// just before the turn ended, which the box let go as the turn ended and
+// Claude wrote as a queued row. Both are taken; the row is the second's.
+describe('two taken copies of one text and one dequeued row', () => {
+  const history = [row('m1', 'assistant', 'Pushed. Waiting for the deploy…')]
+  const firstTaken = Date.parse('2026-09-25T17:04:47.000Z')
+  const secondTaken = Date.parse('2026-09-25T17:08:22.300Z')
+  it('gives the row to the one the box let go as it was written, and keeps the other', () => {
+    const first = takeMobileNativeChatPending(send({}, 'pending-1', 'yes', history), KEY, ['pending-1'], firstTaken)
+    const both = takeMobileNativeChatPending(send(first, 'pending-2', 'yes', history), KEY, ['pending-2'], secondTaken)
+    const landed = [...history, { ...row('u1', 'user', 'yes'), timestamp: secondTaken - 250 }]
+    const next = retireLandedMobileNativeChatPending(landed, both[KEY]!, NONE)
+    expect(next.map((item) => [item.id, item.expectedOccurrence])).toEqual([['pending-1', 2]])
+    expect(retireLandedMobileNativeChatPending(landed, next, NONE)).toBe(next)
+  })
+})

@@ -351,18 +351,36 @@ export function retireLandedMobileNativeChatPending(
   // kept, so the next pass cannot read the same row for a second copy: the first
   // version sealed a taken send for good instead, and a second copy of its text
   // then drew twice (review, 2026-09-25).
-  for (const index of taken) {
+  // A taken send whose own dequeued row landed goes first: of two taken copies
+  // of one text, the one the box let go as the turn ended owns that row, not
+  // one taken mid-turn minutes before (review, 2026-09-25). The copies either
+  // side of a claim left it out of their ordinals, so each needs one more.
+  const claim = (index: number): void => {
     const item = current[index]!
     const key = normalizeReconcileText(item.text)
-    if (key === '' || (landedCounts.get(key) ?? 0) < ordinalOf(item)) {
-      continue
-    }
     landedPendingIds.add(item.id)
     exactLandedIds.add(item.id)
-    for (const later of current.slice(index + 1)) {
-      if (!landedPendingIds.has(later.id) && normalizeReconcileText(later.text) === key) {
-        bump(later)
+    for (const [other, copy] of current.entries()) {
+      const leftItOut = other > index || (other < index && isTakenSend(copy))
+      if (leftItOut && !landedPendingIds.has(copy.id) && normalizeReconcileText(copy.text) === key) {
+        bump(copy)
       }
+    }
+  }
+  const claims = (index: number): boolean => {
+    const item = current[index]!
+    const key = normalizeReconcileText(item.text)
+    return key !== '' && !landedPendingIds.has(item.id) && (landedCounts.get(key) ?? 0) >= ordinalOf(item)
+  }
+  for (const index of taken) {
+    const item = current[index]!
+    if (claims(index) && dequeuedRowLanded(messages, normalizeReconcileText(item.text), item)) {
+      claim(index)
+    }
+  }
+  for (const index of taken) {
+    if (claims(index)) {
+      claim(index)
     }
   }
   const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)

@@ -731,6 +731,53 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       expect(drawn()).toContain('hook')
     })
 
+    // Fifth round of the same review.
+    it('keeps a message Claude took mid-turn when the same text, sent just before the turn ended, is dequeued as a row', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: beforeSend, queued: claudeBox(['yes']) })
+      await show('17:04:47.000', { messages: afterTake, queued: claudeBox([]) })
+      await show('17:06:30.000', { messages: turnGoesOn, queued: [] })
+      // The same text again, 9 s before the turn ends: the box lists it.
+      await ack('17:08:12.300', await tap('17:08:12.000', 'yes'), 'yes')
+      await show('17:08:13.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      await show('17:08:21.900', { messages: turnEnded, queued: claudeBox(['yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      const dequeued = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050'), call('0741e6f4', '17:08:23.000')]
+      await show('17:08:25.000', { messages: dequeued, queued: [] })
+      const secondTurn = [...dequeued, result('0741e6f5', '17:08:30.000'), text('0741e6f6', 'Done.', '17:08:40.000')]
+      await show('17:08:41.000', { messages: secondTurn, queued: [], working: false })
+      await show('17:08:42.000', { messages: secondTurn, queued: [], working: false })
+      expect(drafts!.pending.map((item) => item.sentAt)).toEqual([at('17:04:15.000')])
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'row')).toEqual(['phone', 'row'])
+    })
+
+    it('stores a desk message seen during a slow store read once, when the chat came straight back while the read was out', async () => {
+      // Read at the end of the wait this time: a write that lands meanwhile is
+      // seen, as the second chat's write is by the first one's write-through.
+      const read = AsyncStorage.getItem.bind(AsyncStorage)
+      const slow = vi.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key: string) => {
+        if (key.startsWith('orca:chatPendingEchoes:')) {
+          await new Promise((resolve) => setTimeout(resolve, 3000))
+        }
+        return read(key)
+      })
+      const deskCopy = hookCopy('17:05:00.000', 'typed at the desk')
+      await show('17:05:00.500', { messages: afterTake, queued: [], prompts: deskCopy })
+      await show('17:05:02.000', { messages: afterTake, queued: [], prompts: deskCopy })
+      act(() => renderer?.unmount())
+      renderer = null
+      await show('17:05:02.500', { messages: afterTake, queued: [], prompts: [] })
+      for (const clock of ['17:05:03.500', '17:05:04.500', '17:05:05.600', '17:05:06.500', '17:05:08.000', '17:05:10.000']) {
+        await show(clock, { messages: afterTake, queued: [], prompts: [] })
+      }
+      slow.mockRestore()
+      expect(drawn().filter((entry) => entry === 'hook')).toHaveLength(1)
+      await remount('17:06:00.000', { messages: afterTake, queued: [], prompts: [] })
+      await show('17:06:01.000', { messages: afterTake, queued: [], prompts: [] })
+      expect(drawn().filter((entry) => entry === 'hook')).toHaveLength(1)
+    })
+
     describe('on Codex', () => {
       const codexTurn = [
         text('msg_0ddffecfe356', 'Running the deploy check.', '17:03:30.106'),
