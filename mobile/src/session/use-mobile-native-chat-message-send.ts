@@ -23,6 +23,9 @@ import {
   mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
 
+/** A command whose ack was lost may have run; a retry could run it twice. */
+const COMMAND_UNCONFIRMED = 'Command unconfirmed — check chat before retrying'
+
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
   send: (text: string, images?: string[]) => Promise<boolean>
@@ -228,6 +231,9 @@ export function useMobileNativeChatMessageSend(args: {
           holdUnconfirmedSend(origin, text, () =>
             onSendError('Delivery unconfirmed — check chat before retrying')
           )
+        } else {
+          // A command has no echo to wait for, so this is the only word it gets.
+          onSendError(COMMAND_UNCONFIRMED)
         }
         return 'unknown'
       }
@@ -317,6 +323,8 @@ export function useMobileNativeChatMessageSend(args: {
   // A session-option apply writes to the same input line as a send, and the host
   // spaces a send's body and its Enter ~500ms apart — so without this lock an
   // apply lands between them and is submitted as part of the user's prompt.
+  // Every exit that is not the composer send's own says why: the picker stays
+  // open on a false result with nothing else to tell the user (2026-09-25).
   const dispatchCommand = useCallback(
     async (
       text: string,
@@ -324,11 +332,13 @@ export function useMobileNativeChatMessageSend(args: {
     ): Promise<MobileNativeChatSendOutcome> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
+        onSendError('Message not sent')
         return 'rejected'
       }
       try {
         if (agentRef.current === 'codex') {
           if (!client || !terminal || !enabled) {
+            onSendError('Message not sent (disconnected)')
             return 'rejected'
           }
           const deadline = openMobileNativeChatSendBudget()
@@ -343,15 +353,20 @@ export function useMobileNativeChatMessageSend(args: {
               deadline
             }))
           ) {
+            onSendError('Message not sent')
             return 'rejected'
           }
-          return typeMobileNativeChatCommandWithOutcome({
+          const typed = await typeMobileNativeChatCommandWithOutcome({
             client,
             terminal,
             command: text,
             ...(mobileClient ? { mobileClient } : {}),
             deadline
           })
+          if (typed !== 'accepted') {
+            onSendError(typed === 'unknown' ? COMMAND_UNCONFIRMED : 'Message not sent')
+          }
+          return typed
         }
         return await sendMessage(text, undefined, false, false)
       } finally {
@@ -360,7 +375,7 @@ export function useMobileNativeChatMessageSend(args: {
         }
       }
     },
-    [client, deviceTokenRef, enabled, handleRef, sendMessage]
+    [client, deviceTokenRef, enabled, handleRef, onSendError, sendMessage]
   )
 
   return { send, sendWithOutcome, answerQuestion, dispatchCommand }
