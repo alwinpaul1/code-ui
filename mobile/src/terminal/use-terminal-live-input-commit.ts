@@ -222,6 +222,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     activeHandle,
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
+    flushPendingLiveInputText,
     heldLiveInputTextRef,
     liveInputComposingRef,
     liveInputRef,

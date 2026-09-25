@@ -99,16 +99,22 @@ const HOST_COMPONENT_NAMES = new Set([
 // wheel rows each terminal has had since it last printed.
 // 2026-09-24: reportDictationFailure (Orca #22256), and useSoftKeyboard with its two
 // effects in place of the Keyboard.addListener pair (Orca #22252).
-const HEAD_MAIN_HOOK_SHA256 = 'c10e21f1f200f07412f65934054ad0980f7ceea653421ac5f418af3ddf03c5b6'
+// 301 since 2026-09-25 (Orca #22300): the terminal fields' submit seam — submitLiveInput and
+// a useTerminalTextFieldSubmitBinding per field in the send actions, the same +3 upstream
+// measured once its submitBufferedDraft stopped being a useCallback. The hook binding, callback
+// identity and body, and host-JSX pins moved with them, and only those.
+const HEAD_MAIN_HOOK_SHA256 = '69e0512d60379fedf9f2a7401c702b0ddca8723f6027b4c7619876ed32b93996'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
-const HEAD_HOOK_BINDING_SHA256 = '56aaed5528daf2d10cb7f6584a285dc1be1b2c679559ad3a14cc1bef6181e152'
+// 2026-09-25: bindLiveInputField and bindCommandField bind (Orca #22300).
+const HEAD_HOOK_BINDING_SHA256 = 'a6142861ee40358c9b9e394934aad6d00efcb911c977507abaee6f3b253bca8a'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
+// 84 since 2026-09-25: submitLiveInput (Orca #22300).
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'fde290c3ce9a5da035c980daff2f82e2f4d51f85267a9d33a749c58fd81e3000'
+  '7ee5572db983d42e91c565cfcb5650faeef08d166f0b1dacabf408f9fbbc58fe'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -185,7 +191,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // output window (holding the rest on the phone, a reversal let through at
 // once), and the subscribe's data branch notes the output. Same callbacks.
 // 2026-09-24 (Orca #22256): both dictation failure paths call reportDictationFailure.
-const HEAD_CALLBACK_BODY_SHA256 = '30c85c78c0b224074c0e834ce61bd0745a58ee53e700e3d73db977ecfa0f853b'
+// 2026-09-25 (Orca #22300): the live field's submit body moved out of the dock's JSX into
+// submitLiveInput, and the per-render submitBufferedDraft calls handleSend.
+const HEAD_CALLBACK_BODY_SHA256 = 'e5ace7997cbd032c0a02428e5995be9a38511f9bb57073f5dfe1b2c6d72ecc96'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -352,7 +360,9 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // Same host record COUNT (99); that one View's captured style moved.
 // 2026-09-19: the .md tab's Preview ScrollView spreads the reading-position
 // props; FileReader and MarkdownReader take readingPositionKey.
-const HEAD_HOST_JSX_SHA256 = '0e144db3ff60e989d05f114b28b7f7845add250668ae3d3d895258369d667f53'
+// 2026-09-25 (Orca #22300): both of the dock's fields take their ref from the submit binding,
+// and the live one's onSubmitEditing is submitLiveInput. Same host record COUNT (99).
+const HEAD_HOST_JSX_SHA256 = '53613ac8c06b2104e830be99b2de1804f8e145cfd51fc6fbc6cf1e96e7a95790'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -817,12 +827,15 @@ describe('mobile session route extraction parity', () => {
     // points now call (Orca #22256).
     // 298 since 2026-09-24 (later): useSoftKeyboard replaces the route's own Keyboard.addListener
     // pair, and its visibility and height now each own a separate effect (Orca #22252).
-    expect(main.hooks).toHaveLength(298)
+    // 301 since 2026-09-25: the terminal fields' submit seam — submitLiveInput (useCallback) and
+    // one useTerminalTextFieldSubmitBinding per field in the send actions (Orca #22300).
+    expect(main.hooks).toHaveLength(301)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
     // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
-    expect(main.callbacks).toHaveLength(83)
+    // 84 since 2026-09-25: submitLiveInput, the live field's one send seam (Orca #22300).
+    expect(main.callbacks).toHaveLength(84)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.

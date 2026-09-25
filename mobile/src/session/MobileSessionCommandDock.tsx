@@ -21,14 +21,11 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     autocompleteEnabled,
     liveInputCapture,
     dictationMode,
-    liveInputRef,
-    commandInputRef,
+    bindCommandField,
     handleLiveInputChange,
     handleLiveInputKeyPress,
-    handleLiveInputSubmit,
-    getLiveInteractionGeneration,
-    getSendCompletionGeneration,
-    dismissKeyboardAfterAgentSend,
+    bindLiveInputField,
+    submitLiveInput,
     activeSessionTab,
     canSend,
     canCompose,
@@ -104,7 +101,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               here instantly while each keystroke streams to the PTY; the terminal
               echo arrives one relay round trip later. Enter clears the field. */}
           <TextInput
-            ref={liveInputRef}
+            ref={bindLiveInputField}
             style={{
               flex: 1,
               height: 38,
@@ -124,20 +121,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             onBlur={() => setLiveFocused(false)}
             onChange={handleLiveInputChange}
             onKeyPress={handleLiveInputKeyPress}
-            onSubmitEditing={() => {
-              const submit = handleLiveInputSubmit()
-              const sendOrigin = {
-                tab: activeSessionTab,
-                generation: getSendCompletionGeneration(),
-                interaction: getLiveInteractionGeneration()
-              }
-              void submit.then((accepted) =>
-                dismissKeyboardAfterAgentSend(
-                  sendOrigin,
-                  accepted && sendOrigin.interaction === getLiveInteractionGeneration()
-                )
-              )
-            }}
+            onSubmitEditing={submitLiveInput}
             placeholder={getMobileTerminalLiveInputPlaceholder({ dictation, isAttaching })}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}
@@ -181,7 +165,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           }}
         >
           <TextInput
-            ref={commandInputRef}
+            ref={bindCommandField}
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={
               Platform.OS === 'android'

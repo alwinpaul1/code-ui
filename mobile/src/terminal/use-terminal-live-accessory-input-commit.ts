@@ -3,7 +3,8 @@ import type { TextInput } from 'react-native'
 import {
   getTerminalLiveAccessoryBytesDecision,
   getTerminalLiveAccessoryLocalEditText,
-  isTerminalLiveCursorRepositionBytes
+  isTerminalLiveCursorRepositionBytes,
+  terminalLiveAccessoryInputEndsLine
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import { writeTerminalLiveInputText } from './terminal-live-input-text-write'
@@ -27,6 +28,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
+  readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly sendControlBytesAfterPendingText: (
     handle: string,
     bytes: string,
@@ -47,6 +49,7 @@ export function useTerminalLiveAccessoryInputCommit({
   activeHandle,
   applyLiveInputMirror,
   clearPendingLiveInputCommit,
+  flushPendingLiveInputText,
   sendControlBytesAfterPendingText,
   heldLiveInputTextRef,
   liveInputComposingRef,
@@ -79,8 +82,15 @@ export function useTerminalLiveAccessoryInputCommit({
       switch (decision.kind) {
         case 'send-now': {
           // Why: raw accessory bytes must wait behind any in-flight mirror send
-          // so composed Hangul reaches the PTY before follow-up controls.
-          if (!(await waitForPendingLiveInputFlush())) {
+          // so composed Hangul reaches the PTY before follow-up controls. A control
+          // that ends the line ends the field's editing session with the same flush
+          // an explicit submit takes — without it the echoed text stayed in the
+          // field and the next keystrokes appended to it. The send stays the
+          // caller's, so exactly one return goes out.
+          const ready = terminalLiveAccessoryInputEndsLine(input.bytes)
+            ? await flushPendingLiveInputText(activeHandle)
+            : await waitForPendingLiveInputFlush()
+          if (!ready) {
             return { kind: 'suppress-raw' }
           }
           // Why: a cursor move or line-mutating control leaves the field's
@@ -124,6 +134,7 @@ export function useTerminalLiveAccessoryInputCommit({
       activeHandle,
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
+      flushPendingLiveInputText,
       sendControlBytesAfterPendingText,
       heldLiveInputTextRef,
       liveInputComposingRef,

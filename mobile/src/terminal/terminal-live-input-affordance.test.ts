@@ -35,7 +35,7 @@ describe('terminal live input affordance', () => {
     const block = liveInputBarBlock()
 
     // The field itself is the bar: typed text is visible locally while it streams.
-    expect(block).toContain('ref={liveInputRef}')
+    expect(block).toContain('ref={bindLiveInputField}')
     expect(block).toContain('value={liveInputCapture}')
     expect(block).not.toContain('opacity: 0, width: 1, height: 1')
     expect(block).toContain('fontFamily: fonts.mono')
