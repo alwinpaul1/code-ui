@@ -148,6 +148,56 @@ describe('MobileNativeChatMessage', () => {
     expect(selectable).not.toContain('run the full gate')
   })
 
+  // 2026-09-25, phone recording: a hold on the agent's reply mid-turn
+  // selected nothing. One suspect was a touchable above the prose taking the
+  // hold first, as the sent prompt's bubble does on purpose. Nothing between
+  // the reply's markdown and the row may claim a press, a long press or the
+  // responder, in a settled reply, an interim note, or a reply in a turn that
+  // is still working with a live tool row beside it.
+  it('puts nothing that takes a touch above the agent reply’s prose, working or settled', () => {
+    const TOUCH_PROPS = [
+      'onPress',
+      'onLongPress',
+      'onPressIn',
+      'onStartShouldSetResponder',
+      'onStartShouldSetResponderCapture',
+      'onMoveShouldSetResponder',
+      'onMoveShouldSetResponderCapture',
+      'onResponderGrant',
+      'onTouchStart'
+    ]
+    const reply = toolMessage([
+      { type: 'text', text: 'One thing is out of the phone’s reach: Orca' },
+      { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' } },
+      { type: 'text', text: '- `orca search` and the orca-cli skill are for agents' }
+    ])
+    const cases: Array<[string, Omit<Parameters<typeof MobileNativeChatMessage>[0], 'message'>]> = [
+      ['settled', {}],
+      ['interim', { interim: true }],
+      ['working', { structuredActivityUi: true, activeTurnIsWorking: true }]
+    ]
+    for (const [label, props] of cases) {
+      const tree = render(reply, props)
+      const prose = tree.root.findAllByType('MobileMarkdown' as never)
+      expect({ label, prose: prose.length }).toEqual({ label, prose: 2 })
+      for (const node of prose) {
+        const claims: string[] = []
+        for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
+          if (ancestor.type === ('Pressable' as never)) {
+            claims.push('Pressable')
+          }
+          claims.push(...TOUCH_PROPS.filter((prop) => typeof ancestor!.props[prop] === 'function'))
+        }
+        expect({ label, claims }).toEqual({ label, claims: [] })
+      }
+      act(() => tree.unmount())
+    }
+    // The one place a hold is meant to be taken: the sent prompt's bubble.
+    const prompt = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
+    const bubble = prompt.root.findByProps({ accessibilityLabel: 'Sent prompt' })
+    expect(bubble.type).toBe('Pressable')
+  })
+
   it('discloses no copy button on a tap any more, and none on a queued echo', () => {
     const sent = render(userMessage([{ type: 'text', text: 'record' }]))
     act(() => {
