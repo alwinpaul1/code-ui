@@ -276,7 +276,7 @@ describe('mobile + Codex tab creation routing', () => {
     const client = clientAnswering({
       'agentSession.createSupport': { ok: true, result: { supported: false } },
       'settings.get': { ok: true, result: {} },
-      'status.get': { ok: true, result: { platform: 'darwin' } },
+      'status.get': { ok: true, result: { hostPlatform: 'darwin' } },
       'session.tabs.createTerminal': terminalCreateResponse()
     })
     const scope = createScope(client)
@@ -366,7 +366,7 @@ describe('mobile + Codex tab creation routing', () => {
         'agentSession.createSupport': { ok: true, result: { supported: true } },
         'agentSession.create': { ok: false, error: { code, message: 'no structured lane' } },
         'settings.get': { ok: true, result: {} },
-        'status.get': { ok: true, result: { platform: 'darwin' } },
+        'status.get': { ok: true, result: { hostPlatform: 'darwin' } },
         'session.tabs.createTerminal': terminalCreateResponse()
       })
       const scope = createScope(client)

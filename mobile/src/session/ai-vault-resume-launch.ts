@@ -18,6 +18,7 @@ import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { withoutStaleWindowsHudFlag } from './agent-hud-desktop-launch-args'
 import { reviewTerminalCreateRun, reviewTerminalSendRun } from './mobile-review-terminal-operations'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
@@ -87,7 +88,11 @@ export function buildMobileAiVaultResumeLaunch(args: {
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
-      agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
+      agentArgs: withoutStaleWindowsHudFlag(
+        args.session.agent,
+        resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
+        args.hostPlatform
+      ),
       agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }

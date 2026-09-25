@@ -21333,7 +21333,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "platform": "darwin"
+              "hostPlatform": "darwin"
             }
           }
         },

@@ -1013,17 +1013,23 @@ describe('the Windows command line has a ceiling, and the flags must stay under 
 // an argument passed to a native program; the path was only ever run under
 // PowerShell 7. No flag goes to a Windows host until an encoding survives 5.1.
 describe('a Windows host launches its agents exactly as it always did', () => {
-  it('gets no beacon flag for Claude or Codex', () => {
-    for (const agent of ['claude', 'codex'] as const) {
-      expect(buildAgentHudLaunchArgs({ agent, hostDefaultArgs: '--verbose', hostPlatform: 'win32' })).toBeNull()
+  // The second review of 59c9643a: a failed `status.get` gave a null platform,
+  // read as POSIX, and the POSIX flag carries the same double-quoted JSON. So a
+  // host whose platform could not be read, which may be Windows, gets none too.
+  it('gets no beacon flag for Claude or Codex, nor does a host whose platform is unknown', () => {
+    for (const hostPlatform of ['win32', null] as const) {
+      for (const agent of ['claude', 'codex'] as const) {
+        expect(buildAgentHudLaunchArgs({ agent, hostDefaultArgs: '--verbose', hostPlatform })).toBeNull()
+      }
     }
   })
 
-  it('still gets the flag on macOS and Linux, and on a host that reports no platform', () => {
-    for (const hostPlatform of ['darwin', 'linux', null] as const) {
+  it('still gets the flag on macOS and Linux', () => {
+    for (const hostPlatform of ['darwin', 'linux'] as const) {
       expect(buildAgentHudLaunchArgs({ agent: 'claude', hostDefaultArgs: '', hostPlatform })).toBe(
         agentHudLaunchFlag('claude', hostPlatform)
       )
     }
   })
+
 })

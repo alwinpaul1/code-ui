@@ -10,6 +10,7 @@ import {
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { agentHudLaunchFlag } from './agent-hud-launch-args'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -210,6 +211,20 @@ describe('buildMobileAiVaultResumeLaunch', () => {
     })
     // Only bare real-home Codex resumes request env deletion.
     expect(launch.envToDelete).toBeUndefined()
+  })
+
+  // The second review of 59c9643a, 2026-09-25: a resume on a Windows host
+  // took the host's saved args, which can still hold the beacon flag an
+  // earlier build saved there, and Claude would not start with it.
+  it('resumes on a Windows host without a beacon flag an earlier build saved there', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'claude', sessionId: 'abc', cwd: 'C:\\Users\\ada\\repo' }),
+      hostPlatform: 'win32',
+      settings: { agentDefaultArgs: { claude: `--model opus ${agentHudLaunchFlag('claude', 'win32')}` } }
+    })
+    expect(launch.launchConfig?.agentArgs).toBe('--model opus')
+    expect(launch.command).not.toContain('--settings')
+    expect(launch.command).toContain('opus')
   })
 
   it('deletes inherited Codex homes when resuming a real-home session like desktop', () => {

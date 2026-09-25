@@ -281,8 +281,10 @@ agent's output over the link.
 
 ### Where the flags come from
 
-Both paths read `hostPlatform` from `status.get` first, because Codex's notify
-command differs on Windows (Claude's `--settings` does not).
+Both paths read `hostPlatform` from `status.get` first. A Windows host gets no
+flag (below), and neither does a host whose platform could not be read: Orca
+has reported it since its 2026-08-13 builds, so a missing one is a failed
+`status.get`, and that host may be the same Windows machine.
 
 - Tabs the phone opens: `agent-hud-launch-config.ts` puts the host's own
   `agentDefaultArgs`/`agentDefaultEnv` in front and appends ours, passed as the
@@ -293,6 +295,16 @@ command differs on Windows (Claude's `--settings` does not).
   0.2.77's visible `tui.status_line` flags wherever a host still carries them.
   The switch is Settings → Chat UI → "Desktop agents report model and context",
   default on; turning it off removes the flags again.
+- **A key is never deleted.** Orca reads a missing `agentDefaultArgs` key as
+  "launch with the defaults", which are the skip-permissions flags, and an
+  empty one as "no flags", which is how its ask-permissions mode is saved. So
+  the flag is appended to what Orca would launch with (its defaults, when
+  nothing is saved), and taking it out leaves `''` rather than removing the
+  key. Until 2026-09-25 the strip deleted an emptied key, which would have
+  turned permission prompts off for every Windows user in ask mode.
+- A tab the phone opens, and an AI-vault resume, on a Windows host start
+  without any flag an earlier build saved there, so neither fails in the
+  moment before the connect sync takes it out.
 
 ### A user's own status line is kept
 

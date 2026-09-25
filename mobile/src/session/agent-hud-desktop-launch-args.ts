@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { resolveTuiAgentLaunchArgs } from '../../../src/shared/tui-agent-launch-defaults'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentHudLaunchFlag, hostTakesAgentHudFlag } from './agent-hud-launch-args'
@@ -60,6 +61,24 @@ export function withoutAgentHudDesktopFlag(agent: HudAgent, current: string | un
   return stripped(agent, current)
 }
 
+/**
+ * The args a launch on a Windows host starts with: its saved ones, less any
+ * beacon flag an earlier build saved there. The connect sync takes that flag
+ * out, but a tab opened or a session resumed before its write lands would
+ * start with it, and Claude refuses to (see `hostTakesAgentHudFlag`).
+ */
+export function withoutStaleWindowsHudFlag(
+  agent: TuiAgent,
+  args: string,
+  hostPlatform: NodeJS.Platform | null
+): string {
+  if (hostPlatform !== 'win32' || (agent !== 'claude' && agent !== 'codex')) {
+    return args
+  }
+  const cleaned = stripped(agent, args)
+  return cleaned === args.trim() ? args : cleaned
+}
+
 type HostSettingsLike = { agentDefaultArgs?: Partial<Record<TuiAgent, string>> }
 
 function resultOf(response: unknown): Record<string, unknown> | null {
@@ -87,9 +106,16 @@ export async function syncAgentHudDesktopLaunchArgs(
   if (!settings) {
     return null
   }
+  // A host that will not say what it is gets nothing written either way: a
+  // failed `status.get` once read as "not Windows" and put a flag straight back
+  // onto a Windows host. Orca has reported `hostPlatform` since its 2026-08-13
+  // builds, so an unknown platform is a failed read, not an old host.
+  const hostPlatform = readMobileRuntimeHostPlatform(resultOf(statusResponse))
+  if (hostPlatform === null) {
+    return null
+  }
   // A Windows host takes no flag, and one this app already saved there is
   // taken back out even while the switch is on: it stops Claude from starting.
-  const hostPlatform = readMobileRuntimeHostPlatform(resultOf(statusResponse))
   const writeFlag = enabled && hostTakesAgentHudFlag(hostPlatform)
   const current = ((settings as HostSettingsLike).agentDefaultArgs ?? {}) as Partial<
     Record<TuiAgent, string>
@@ -97,16 +123,17 @@ export async function syncAgentHudDesktopLaunchArgs(
   const next: Partial<Record<TuiAgent, string>> = { ...current }
   let changed = false
   for (const agent of HUD_AGENTS) {
+    // What Orca would launch with. A missing key means its defaults, which are
+    // the skip-permissions flags; an empty one means none, which is how its
+    // ask-permissions mode is saved. So a key is never deleted, and an agent
+    // with no saved args keeps its defaults in front of the flag.
+    const launched = resolveTuiAgentLaunchArgs(agent, current)
     const value = writeFlag
-      ? withAgentHudDesktopFlag(agent, current[agent], hostPlatform)
-      : withoutAgentHudDesktopFlag(agent, current[agent])
-    if (value !== (current[agent] ?? '')) {
+      ? withAgentHudDesktopFlag(agent, launched, hostPlatform)
+      : withoutAgentHudDesktopFlag(agent, launched)
+    if (value !== launched) {
       changed = true
-      if (value) {
-        next[agent] = value
-      } else {
-        delete next[agent]
-      }
+      next[agent] = value
     }
   }
   if (!changed) {

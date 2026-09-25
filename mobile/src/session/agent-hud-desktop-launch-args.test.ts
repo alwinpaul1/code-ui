@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { getTuiAgentDefaultArgs, resolveTuiAgentLaunchArgs } from '../../../src/shared/tui-agent-launch-defaults'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentHudLaunchFlag } from './agent-hud-launch-args'
 import {
@@ -12,14 +13,18 @@ import {
 const oldClaudeFlag = `--settings '{"statusLine":{"type":"command","command":"i=$(cat); printf x"}}'`
 const oldCodexFlag = `-c 'tui.status_line=["model-with-reasoning","context-remaining"]'`
 
-/** A host that answers `settings.get` and `status.get` and records the write. */
-function fakeHost(stored: Record<string, string>, hostPlatform: string | null = 'darwin') {
+/** A host that answers `settings.get` and `status.get` and records the write.
+ *  `'rejects'` drives a `status.get` that fails outright. */
+function fakeHost(stored: Record<string, string>, hostPlatform: string | null | 'rejects' = 'darwin') {
   let current = { ...stored }
   const sendRequest = vi.fn(async (method: string, params?: unknown) => {
     if (method === 'settings.get') {
       return { ok: true, result: { agentDefaultArgs: { ...current } } }
     }
     if (method === 'status.get') {
+      if (hostPlatform === 'rejects') {
+        throw new Error('request timed out')
+      }
       return { ok: true, result: hostPlatform ? { hostPlatform } : {} }
     }
     current = { ...(params as { agentDefaultArgs: Record<string, string> }).agentDefaultArgs }
@@ -80,7 +85,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
     const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
     expect(written).toEqual({
       claude: `--verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
-      codex: agentHudLaunchFlag('codex', 'darwin')
+      codex: `${getTuiAgentDefaultArgs('codex')} ${agentHudLaunchFlag('codex', 'darwin')}`
     })
     expect(host.sendRequest.mock.calls.map(([m]) => m)).toContain('settings.update')
 
@@ -111,8 +116,54 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
     )
     const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
     expect(written?.claude).toBe('--verbose')
-    expect(written && 'codex' in written).toBe(false)
-    expect(host.stored()).toEqual({ claude: '--verbose' })
+    expect(host.stored()).toEqual({ claude: '--verbose', codex: '' })
+  })
+
+  // The second review of 59c9643a, 2026-09-25: Orca reads a MISSING key as
+  // "launch with the defaults", which are the skip-permissions flags
+  // (`--dangerously-skip-permissions`, `--dangerously-bypass-approvals-and-sandbox`),
+  // and an EMPTY one as "no flags", which is how its ask-permissions mode is
+  // saved. Deleting a key our strip had emptied turned permission prompts off
+  // for every Windows user in ask mode, on their next connect, by itself.
+  it('keeps an agent asking for permission when the flag comes out, instead of handing it the skip-permissions default', async () => {
+    for (const [hostPlatform, enabled] of [
+      ['win32', true],
+      ['darwin', false]
+    ] as const) {
+      const flagOnly = {
+        claude: agentHudLaunchFlag('claude', hostPlatform),
+        codex: agentHudLaunchFlag('codex', hostPlatform)
+      }
+      const host = fakeHost(flagOnly, hostPlatform)
+      await syncAgentHudDesktopLaunchArgs(host.client, enabled)
+      expect(host.stored()).toEqual({ claude: '', codex: '' })
+      expect(resolveTuiAgentLaunchArgs('claude', host.stored())).toBe('')
+      expect(resolveTuiAgentLaunchArgs('codex', host.stored())).toBe('')
+    }
+  })
+
+  it('keeps what Orca would launch an agent with when it has no saved args, flag in and flag out', async () => {
+    const host = fakeHost({}, 'darwin')
+    await syncAgentHudDesktopLaunchArgs(host.client, true)
+    expect(host.stored().claude).toBe(`${getTuiAgentDefaultArgs('claude')} ${agentHudLaunchFlag('claude', 'darwin')}`)
+    await syncAgentHudDesktopLaunchArgs(host.client, false)
+    expect(resolveTuiAgentLaunchArgs('claude', host.stored())).toBe(getTuiAgentDefaultArgs('claude'))
+    expect(resolveTuiAgentLaunchArgs('codex', host.stored())).toBe(getTuiAgentDefaultArgs('codex'))
+  })
+
+  // Same review: a failed `status.get` read as "not Windows", so the sync put
+  // the POSIX flag, with the same double-quoted JSON PowerShell 5.1 breaks,
+  // straight back onto the Windows host it had just cleaned.
+  it('touches nothing when the host will not say what platform it is', async () => {
+    const saved = { claude: `--verbose ${agentHudLaunchFlag('claude', 'win32')}` }
+    for (const hostPlatform of ['rejects', null] as const) {
+      for (const enabled of [true, false]) {
+        const host = fakeHost(saved, hostPlatform)
+        expect(await syncAgentHudDesktopLaunchArgs(host.client, enabled)).toBeNull()
+        expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
+        expect(host.stored()).toEqual(saved)
+      }
+    }
   })
 
   it('gives the profile back exactly as it was when the switch is turned off', async () => {
@@ -120,8 +171,9 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
       claude: `--verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
       codex: agentHudLaunchFlag('codex', 'darwin')
     })
-    expect(await syncAgentHudDesktopLaunchArgs(host.client, false)).toEqual({ claude: '--verbose' })
-    // codex had nothing but our flag, so its key goes rather than sitting empty.
-    expect(host.stored()).toEqual({ claude: '--verbose' })
+    expect(await syncAgentHudDesktopLaunchArgs(host.client, false)).toEqual({ claude: '--verbose', codex: '' })
+    // codex had nothing but our flag, so it goes back to launching with none,
+    // not to Orca's defaults, which a missing key would mean.
+    expect(host.stored()).toEqual({ claude: '--verbose', codex: '' })
   })
 })

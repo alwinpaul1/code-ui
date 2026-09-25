@@ -6,6 +6,7 @@ import {
 } from '../../../src/shared/tui-agent-launch-defaults'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import type { RpcClient } from '../transport/rpc-client'
+import { withoutStaleWindowsHudFlag } from './agent-hud-desktop-launch-args'
 import { buildAgentHudLaunchArgs } from './agent-hud-launch-args'
 
 type HostLaunchSettings = {
@@ -36,14 +37,14 @@ export async function resolveAgentHudLaunchConfig(
     client.sendRequest('status.get').catch(() => null)
   ])
   const hostSettings = (resultOf(settings) ?? {}) as HostLaunchSettings
-  const agentArgs = buildAgentHudLaunchArgs({
-    agent,
-    hostDefaultArgs: resolveTuiAgentLaunchArgs(agent, hostSettings.agentDefaultArgs),
-    // A Windows host takes no flag (`hostTakesAgentHudFlag`), so it launches
-    // exactly as the desktop would.
-    hostPlatform: readMobileRuntimeHostPlatform(resultOf(status))
-  })
-  if (agentArgs === null) {
+  const hostDefaultArgs = resolveTuiAgentLaunchArgs(agent, hostSettings.agentDefaultArgs)
+  const hostPlatform = readMobileRuntimeHostPlatform(resultOf(status))
+  // A Windows host takes no flag (`hostTakesAgentHudFlag`), so it launches as
+  // the desktop would, less any flag an earlier build saved in its profile.
+  const agentArgs =
+    buildAgentHudLaunchArgs({ agent, hostDefaultArgs, hostPlatform }) ??
+    withoutStaleWindowsHudFlag(agent, hostDefaultArgs, hostPlatform)
+  if (agentArgs === hostDefaultArgs) {
     return null
   }
   return { agentArgs, agentEnv: resolveTuiAgentLaunchEnv(agent, hostSettings.agentDefaultEnv) }

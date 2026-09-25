@@ -798,9 +798,11 @@ export function agentHudLaunchFlag(
  * strips the double quotes inside a native program's argument). The writers
  * above stay, tested under PowerShell 7, until a launch encoding is proven on
  * a real Windows machine. A missing HUD beats an agent that will not start.
+ * None for a host whose platform is unknown either: that is a failed
+ * `status.get`, and it may be the same Windows host.
  */
 export function hostTakesAgentHudFlag(hostPlatform: NodeJS.Platform | null): boolean {
-  return hostPlatform !== 'win32'
+  return hostPlatform !== null && hostPlatform !== 'win32'
 }
 
 /**
@@ -808,9 +810,6 @@ export function hostTakesAgentHudFlag(hostPlatform: NodeJS.Platform | null): boo
  * ours appended. Null for an agent with no beacon channel, or on a host that
  * takes no flag (`hostTakesAgentHudFlag`), so the host launches exactly as it
  * always did.
- *
- * A null platform is treated as POSIX: an older host that does not report one
- * is a host the phone has only ever seen on macOS and Linux.
  */
 export function buildAgentHudLaunchArgs(args: {
   agent: TuiAgent
