@@ -67,19 +67,17 @@ failing-first test and has been checked on the phone in light and dark.
   budget after it and a user row stamped between them shows the session took a
   newer prompt (`promptTakenBetween`). A row Claude wrote as it dequeued a
   send the box let go goes to that send, not to a later copy of its text.
-  Four review rounds on 2026-09-25 drove the same-text cases through the real
+  Six review rounds on 2026-09-25 drove the same-text cases through the real
   overlay; these stay open, all rare: a message typed at the desk or in the
   Claude app that the phone first sees after the turn draws under the reply
   that ended it (`agent-status-prompts.ts`), since the tab status carries no
   time for a prompt taken mid-turn; the desk repeating a phone send's exact
   text in the same turn, or in a later one whose user row is above the loaded
   page, is taken for the send's own copy and not drawn, and so is one typed in
-  a second turn that ended within 30 s of the send; when Claude takes one of
-  two identical queued messages mid-turn and dequeues the other at the end,
-  the row goes to the first; a send whose take the phone saw late, with an
-  idle resend of its text landing in that window, gives the resend's row to
-  the first (both as before these fixes); and a desk message seen only while a
-  store read that never returns was out is lost.
+  a second turn that ended within 30 s of the send; a send whose take the
+  phone saw late, with an idle resend of its text landing in that window,
+  gives the resend's row to the first (as before these fixes); and a desk
+  message seen only while a store read that never returns was out is lost.
 - **Background work (6).** Not drawn because the phone cannot know it:
   a finished shell's output (the Claude app's chevron on a Shell card opens
   it; the output file sits outside the worktree `files.read` is jailed to),
