@@ -14,20 +14,27 @@
  * exact `printf`: 1-4 % of beacons land inside an escape at 5-20 ms of reader
  * lag.
  *
- * These four bytes cannot do that, whichever way a splice lands. Verified
- * against both parsers' own tables, not from memory:
+ * These four bytes draw no text, whichever way a splice lands. Verified
+ * against both parsers' own source, not from memory:
  *
  *  - xterm.js 6.1 (the desktop renderer, 6.1.0-beta.303, and Orca's headless
  *    model, 6.1.0-beta.302; `EscapeSequenceParser.ts`): C0 other than CAN,
  *    SUB and ESC is EXECUTE in ground, ESC, ESC-intermediate and every CSI
  *    state, where the parser stays in its state; IGNORE in OSC, SOS/PM and
  *    APC. InputHandler registers execute handlers only for BEL, BS, HT, LF,
- *    VT, FF, CR, SO and SI, so these four reach the no-op fallback.
+ *    VT, FF, CR, SO and SI, so these four reach the no-op fallback. One
+ *    exception, and no byte avoids it: its CSI fast path leaves its loop at
+ *    ANY C0 byte right after `ESC[` and resumes in CSI_PARAM instead of
+ *    CSI_ENTRY, so a `?` after it goes to CSI_IGNORE and a private-mode CSI
+ *    (`ESC[?2026l`) is dropped. Nothing is drawn; a dropped ESU holds the
+ *    desktop renderer until the next frame's ESU or 1 s. The OSC dropped it
+ *    too, and drew the rest. Pinned in `agent-hud-beacon-splice.test.ts`.
  *  - Ghostty (libghostty-vt b0947378, the phone's engine; `parse_table.zig`,
- *    `stream.zig`): the same actions per state, and `execute` ignores SOH and
- *    STX explicitly and ETX and ACK in its default branch. Only 0x00-0x0F are
- *    executed there: the ground fast path PRINTS 0x10-0x1F (except ESC) as
- *    one-cell glyphs, which rules out DLE through US.
+ *    `stream.zig`): the same in ground, ESC, CSI and OSC, and `execute`
+ *    ignores SOH and STX explicitly and ETX and ACK in its default branch.
+ *    Only 0x00-0x0F are executed there: the ground fast path PRINTS
+ *    0x10-0x1F (except ESC) as one-cell glyphs, which rules out DLE through
+ *    US.
  *
  * The rest of C0 is out for a stated reason: NUL (dropped by some paths),
  * ENQ (Ghostty answers it), BEL, BS, HT, LF, VT, FF, CR (they act), SO and SI
@@ -35,12 +42,15 @@
  * sequence), ESC (it starts one), EOT (macOS drops it on output under
  * ONOEOT), and 0x10-0x1F (Ghostty draws them).
  *
- * One place still takes the bytes as data: a DCS passthrough, where both
- * parsers hand C0 to the DCS handler. Claude Code and Codex paint no DCS in
- * their frames, and the phone strips these bytes before its own engine sees
- * them. A beacon that lands between the bytes of one UTF-8 character still
- * breaks that glyph, as any second writer would: that is the host's decoder,
- * not an escape, and no byte choice avoids it.
+ * Two places still take the bytes as data: a DCS passthrough, where both
+ * parsers hand C0 to the DCS handler, and Ghostty's SOS/PM/APC string, which
+ * keeps C0 as payload. Claude Code and Codex paint no DCS in their frames,
+ * and the phone strips these bytes before its own engine sees them. Two
+ * splices still show, as they would for any second writer and for the OSC: one
+ * between the bytes of a UTF-8 character (the host's decoder makes it U+FFFD),
+ * and one between a base character and its combining mark or variation
+ * selector (xterm.js's execute path resets its grapheme join, so the mark
+ * takes a cell of its own).
  *
  * The frame: ACK, the body in base 3 (SOH = 0, STX = 1, ETX = 2), ACK. The
  * body is `<crc> <payload>` in UTF-8, where `<crc>` is the POSIX `cksum` of

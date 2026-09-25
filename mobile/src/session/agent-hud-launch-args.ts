@@ -66,8 +66,8 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
  *    put this write inside one of the agent's writes. An OSC here began with
  *    ESC, which aborts whatever sequence it lands in: `ESC[?` + beacon +
  *    `2026h` drew `2026h` in the desktop Claude Code composer (2026-09-25).
- *    The channel's bytes are no-ops to xterm.js and Ghostty in every state a
- *    splice can reach, so a split frame still parses as one. `cksum` checks
+ *    The channel's bytes draw nothing in xterm.js or Ghostty wherever a
+ *    splice puts them (the limits are in `agent-hud-channel.ts`). `cksum` checks
  *    the payload, `od` turns it into hex, one `sed` turns each nibble into
  *    three base-3 letters, and `tr` maps the letters and the `w` delimiters
  *    to ACK, SOH, STX and ETX. No control byte ever sits in a shell variable

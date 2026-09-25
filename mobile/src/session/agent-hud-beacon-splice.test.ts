@@ -60,7 +60,11 @@ const FRAME =
   '\u001b[?2026h\u001b[3;1H\u001b[2K\u001b[38;2;215;119;87m✻\u001b[39m Schlepping… (20m 29s)' +
   '\u001b[1;3H\u001b[?2026l'
 
-async function render(data: string): Promise<{ rows: string[]; x: number; y: number }> {
+type Rendered = { rows: string[]; x: number; y: number; modes: string }
+
+/** What the desktop would show, and the modes it is left in: a dropped
+ *  `ESC[?2026l` draws nothing but holds the renderer (see below). */
+async function render(data: string): Promise<Rendered> {
   const terminal = new Terminal({ cols: 40, rows: 5, allowProposedApi: true })
   try {
     await new Promise<void>((resolve) => terminal.write(data, resolve))
@@ -69,10 +73,27 @@ async function render(data: string): Promise<{ rows: string[]; x: number; y: num
     for (let y = 0; y < 5; y += 1) {
       rows.push(buffer.getLine(y)?.translateToString(true) ?? '')
     }
-    return { rows, x: buffer.cursorX, y: buffer.cursorY }
+    return { rows, x: buffer.cursorX, y: buffer.cursorY, modes: JSON.stringify(terminal.modes) }
   } finally {
     terminal.dispose()
   }
+}
+
+/** Offsets just after the `ESC[` of a private-mode CSI (`ESC[?…`). There,
+ *  xterm.js 6.1's CSI fast path (`EscapeSequenceParser.ts`, the loop after
+ *  "CSI fast-path") meets ANY C0 byte, leaves the loop and resumes in
+ *  CSI_PARAM instead of CSI_ENTRY, and CSI_PARAM sends the `?` to
+ *  CSI_IGNORE: the sequence is dropped. Nothing is drawn, but a dropped ESU
+ *  leaves synchronized output on until the next frame's ESU, or the 1 s
+ *  timeout. No byte avoids it; the OSC dropped it too and drew the rest. */
+function privateCsiEntries(frame: string): Set<number> {
+  const offsets = new Set<number>()
+  for (let at = 2; at < frame.length; at += 1) {
+    if (frame.slice(at - 2, at) === '\u001b[' && '<=>?'.includes(frame[at]!)) {
+      offsets.add(at)
+    }
+  }
+  return offsets
 }
 
 beforeEach(() => {
@@ -94,12 +115,32 @@ describe('a beacon the kernel splices into a Claude frame draws nothing on the d
     const beacon = realBeacon()
     const clean = await render(BEFORE + FRAME)
     expect(clean.rows[0]).toBe('❯ ')
+    const quirk = privateCsiEntries(FRAME)
+    // The BSU at the start and the ESU at the end.
+    expect([...quirk]).toEqual([2, FRAME.lastIndexOf('\u001b[?2026l') + 2])
     for (let at = 1; at < FRAME.length; at += 1) {
       const spliced = await render(BEFORE + FRAME.slice(0, at) + beacon + FRAME.slice(at))
-      expect(spliced, `beacon at frame offset ${at} (${JSON.stringify(FRAME.slice(0, at))})`).toEqual(
-        clean
-      )
+      const label = `beacon at frame offset ${at} (${JSON.stringify(FRAME.slice(0, at))})`
+      if (quirk.has(at)) {
+        expect({ ...spliced, modes: '' }, label).toEqual({ ...clean, modes: '' })
+      } else {
+        expect(spliced, label).toEqual(clean)
+      }
     }
+  })
+
+  it('leaves synchronized output on when it lands right after the ESU\'s ESC[, drawing nothing', async () => {
+    // Pinned so a change in xterm.js's fast path, or in the writer, is seen.
+    const beacon = realBeacon()
+    const at = FRAME.lastIndexOf('\u001b[?2026l') + 2
+    const spliced = await render(BEFORE + FRAME.slice(0, at) + beacon + FRAME.slice(at))
+    const clean = await render(BEFORE + FRAME)
+    expect(spliced.rows).toEqual(clean.rows)
+    expect(JSON.parse(spliced.modes).synchronizedOutputMode).toBe(true)
+    expect(JSON.parse(clean.modes).synchronizedOutputMode).toBe(false)
+    // The next frame's ESU ends it, as it does on the desktop.
+    const next = await render(BEFORE + FRAME.slice(0, at) + beacon + FRAME.slice(at) + FRAME)
+    expect(JSON.parse(next.modes).synchronizedOutputMode).toBe(false)
   })
 
   it('draws the frame exactly as without it when the frame lands inside the beacon, at any offset', async () => {

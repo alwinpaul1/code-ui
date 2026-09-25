@@ -15,7 +15,7 @@ Verified live 2026-09-09 on macOS against Claude Code 2.1.266 and codex-cli
 unproven" below.
 
 The HUD reads the agents' own live state, and the state travels on four C0
-control bytes that terminals neither draw nor act on, in any parser state. The
+control bytes that terminals do not draw, wherever a splice puts them. The
 user's terminal is unchanged, their disk is untouched, and no terminal is
 opened on the host. (Until 2026-09-25 it travelled on an OSC escape; "Why not
 an OSC" below says why that could draw text.)
@@ -103,8 +103,17 @@ memory:
   and every CSI state, and the parser stays in the state it was in. It is
   IGNORE in OSC, SOS/PM and APC. Execute handlers exist only for BEL, BS, HT,
   LF, VT, FF, CR, SO and SI, so SOH, STX, ETX and ACK reach the no-op fallback.
+  **One exception, which no byte avoids:** the CSI fast path leaves its loop at
+  any C0 byte right after `ESC[` and resumes in CSI_PARAM instead of
+  CSI_ENTRY, so a following `?` goes to CSI_IGNORE and the private-mode CSI is
+  dropped. Nothing is drawn, but a dropped `ESC[?2026l` leaves synchronized
+  output on, which holds the desktop renderer until the next frame's ESU or
+  1 s. It happens only when the splice lands at exactly that byte, and only
+  when xterm.js has two more bytes of the same write in hand. The OSC dropped
+  the sequence there too, and drew the rest of it.
 - **Ghostty** (libghostty-vt `b0947378`, the phone's engine; `parse_table.zig`,
-  `stream.zig`, `Terminal.zig`): the same actions per state. `execute` ignores
+  `stream.zig`, `Terminal.zig`): the same actions in ground, ESC, CSI and OSC;
+  its SOS/PM/APC string keeps C0 as payload. `execute` ignores
   SOH and STX explicitly, and ETX and ACK in its default branch. It executes
   only 0x00-0x0F: its ground fast path **prints** 0x10-0x1F (except ESC) as
   one-cell glyphs, which rules out DLE through US.
@@ -148,15 +157,19 @@ after ESC thousands of times, and xterm.js renders the capture identically
 with and without them. `agent-hud-beacon-splice.test.ts` does the same at every
 offset, in both directions, with the bytes the real status-line script writes.
 
-**Still possible, and no byte choice fixes it:** a splice that lands between
-the bytes of one UTF-8 character. The host decodes the pty bytes before any
-terminal sees them, so that character becomes U+FFFD on the desktop and on
-the phone. Any second writer does this. In a stress run (a beacon every
+**Still possible, and no byte choice fixes it**, for the channel, the OSC
+and any other second writer. A splice that lands between the bytes of one
+UTF-8 character: the host decodes the pty bytes before any terminal sees them,
+so that character becomes U+FFFD on the desktop and on the phone. A splice
+between a base character and its combining mark or variation selector
+(`e`+U+0301, `❤`+U+FE0F): xterm.js's execute path resets its grapheme join, so
+the mark takes a cell of its own and the rest of that row moves one cell. In a stress run (a beacon every
 ~25 ms, 20 ms of reader lag, 8 s) the host's decode showed 0-3 broken
 characters with the OSC writer and 4-8 with the channel, whose frames are
 larger. At the real cadence (one status-line beacon every 5 s) it has not been
 observed. Inside a DCS passthrough both parsers hand C0 to the DCS handler as
-data; neither agent paints a DCS in its frames.
+data, and Ghostty keeps it as payload inside SOS/PM/APC; neither agent paints
+those in its frames, and the phone strips the bytes before Ghostty sees them.
 
 `sid` names the session the beacon speaks for: Claude Code's `session_id`
 (the same field its hooks report, and the same id `--resume`/`-c` keep —
