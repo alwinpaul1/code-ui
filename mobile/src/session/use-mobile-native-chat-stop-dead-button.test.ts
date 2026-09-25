@@ -199,6 +199,38 @@ describe('a Stop tap that did nothing says so', () => {
     expect(onSendError).toHaveBeenCalledWith('Stop not sent')
   })
 
+  // Second review (2026-09-25): Claude's verdict came from its 80 ms timer;
+  // Grok sends one Ctrl+C and has no timer, so the same tap said nothing.
+  it("says Grok's Stop was not sent when the tap lands on a callback from before the lease dropped", async () => {
+    const { sendRequest } = heldSends()
+    await mount({ sendRequest } as unknown as RpcClient, 'grok')
+    const earlierStop = stop
+
+    await rerender({ enabled: false, streamIdentity: ROUTE })
+    act(() => earlierStop?.())
+    await settleAll()
+
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+  })
+
+  // Second review (2026-09-25): a tap turned away before it wrote anything is
+  // still the newest Stop, and it has already said why.
+  it('says it once when a second Stop is turned away while the first is still on the wire', async () => {
+    const { sendRequest, settle } = heldSends()
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    act(() => stop?.())
+    await rerender({ enabled: false, streamIdentity: ROUTE })
+    act(() => stop?.())
+    await settleAll(() => settle[0]!(reply(false)))
+
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledTimes(1)
+    expect(onSendError).toHaveBeenCalledWith('Stop not sent (terminal not ready)')
+  })
+
   it('stays quiet when the lease drops after an Escape landed', async () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)

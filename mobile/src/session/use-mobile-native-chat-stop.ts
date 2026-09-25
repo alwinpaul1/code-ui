@@ -38,8 +38,8 @@ export function useMobileNativeChatStop(args: {
   const agentRef = useRef(agent)
   agentRef.current = agent
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Counts Stop taps, and nothing else: only a newer tap may take a verdict
-   *  away, because it reports for itself. */
+  /** Counts Stop taps, turned-away ones included, and nothing else: only a
+   *  newer tap may take a verdict away, because it reports for itself. */
   const latestStopRef = useRef(0)
   /** Settles the paced second Escape when it is cancelled rather than sent, so a
    *  first-Escape failure still reports instead of waiting on a write that will
@@ -64,14 +64,14 @@ export function useMobileNativeChatStop(args: {
   // turns it into a toast there.
   useEffect(() => cancelSecondEscape, [cancelSecondEscape, client, enabled, streamIdentity])
   return useCallback(() => {
+    latestStopRef.current += 1
+    const tap = latestStopRef.current
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
       onSendError('Stop not sent (terminal not ready)')
       return
     }
     cancelPending()
-    latestStopRef.current += 1
-    const tap = latestStopRef.current
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
     const deadline = openMobileNativeChatSendBudget()
@@ -109,8 +109,10 @@ export function useMobileNativeChatStop(args: {
         handleRef.current !== handle
       ) {
         // Nothing written is a verdict too: a tap on a callback from before the
-        // route moved on has no reply coming to report it otherwise.
+        // route moved on has no reply coming to report it otherwise. Settle it
+        // here, since Grok's lone Ctrl+C has no pacing timer to do it later.
         sawRejected = true
+        reportIfSettled()
         return
       }
       pending += 1
