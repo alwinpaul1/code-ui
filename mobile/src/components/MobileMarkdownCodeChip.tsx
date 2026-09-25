@@ -1,5 +1,6 @@
 import { Text, View } from 'react-native'
 import { useChatTextSelectable } from './chat-text-selectable-context'
+import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
 import type { MarkdownStyles } from './mobile-markdown-styles'
 import type { markdownChipScale } from './mobile-markdown-prose-scale'
 
@@ -25,7 +26,7 @@ export function MobileMarkdownCodeChip({
   styles: MarkdownStyles
   /** Pill sizes at the reader's zoom; null when they have not zoomed. */
   chipScale: ReturnType<typeof markdownChipScale> | undefined
-  /** Opens the file a path pill names; a tap, never a hold. */
+  /** Opens the file a path pill names; a tap, never a hold (markdown-link-hold.ts). */
   onPress?: () => void
 }) {
   const selectable = useChatTextSelectable()
@@ -51,6 +52,7 @@ export function MobileMarkdownCodeChip({
           onPress ? styles.inlineCodeLink : null
         ]}
         onPress={onPress}
+        {...(onPress ? HOLD_DOES_NOT_OPEN : null)}
       >
         {piece}
       </Text>

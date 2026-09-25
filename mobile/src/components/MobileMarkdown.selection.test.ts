@@ -339,3 +339,57 @@ describe('holding a code pill', () => {
     expect(pill!.props.selectable).toBe(false)
   })
 })
+
+// A hold to copy a link, a named file or a file pill also opened it when the
+// finger lifted (second review, 2026-09-25). Android starts its selection on
+// the hold, and React Native still fires the Text's onPress on the release
+// unless the Text has an onLongPress to cancel the press (Pressability; the
+// rule is pinned in chat-text-selectable-host.test.ts). Text takes no
+// delayLongPress, so the press counts as long at 500 ms, and a hold released
+// between Android's 400 ms and that still opens: only the phone shows it.
+describe('holding a link to copy it', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  it('does not open a link, a named file or a file pill on the release of a hold, and still opens each on a tap', () => {
+    const opened: string[] = []
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: [
+            'See https://example.com/docs and [the guide](https://example.com/guide).',
+            '',
+            'The rule is in mobile/src/session/use-mobile-chat-following.ts, and',
+            '`docs/hud.md` draws it.'
+          ].join('\n'),
+          onOpenFile: (path: string) => opened.push(path)
+        })
+      )
+    })
+    const pressable = renderer!.root
+      .findAllByType('Text' as never)
+      .filter((node) => typeof node.props.onPress === 'function')
+    const labels = pressable.map((node) => node.children.join(''))
+    expect(labels).toEqual([
+      'https://example.com/docs',
+      'the guide',
+      'mobile/src/session/use-mobile-chat-following.ts',
+      'docs/hud.md'
+    ])
+    for (const node of pressable) {
+      expect({ label: node.children.join(''), cancelsPressOnHold: typeof node.props.onLongPress }).toEqual({
+        label: node.children.join(''),
+        cancelsPressOnHold: 'function'
+      })
+      act(() => node.props.onLongPress())
+    }
+    // The hold itself opened nothing; a tap still does.
+    expect(opened).toEqual([])
+    act(() => pressable[2]!.props.onPress())
+    act(() => pressable[3]!.props.onPress())
+    expect(opened).toEqual(['mobile/src/session/use-mobile-chat-following.ts', 'docs/hud.md'])
+  })
+})

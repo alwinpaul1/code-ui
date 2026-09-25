@@ -34,6 +34,7 @@ import {
 } from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
+import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
 import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 
@@ -141,6 +142,7 @@ function renderTextRun(
           key={`${keyPrefix}:${segmentIndex}`}
           style={styles.link}
           onPress={() => onOpenFile(segment.path)}
+          {...HOLD_DOES_NOT_OPEN}
         >
           {segment.value}
         </Text>
@@ -192,20 +194,20 @@ function renderInline(
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {image[1] || 'image'}
         </Text>
       )
     } else if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {link[1]}
         </Text>
       )
     } else if (/^https?:\/\//i.test(token)) {
       const { url, trailing } = trimAutolinkTrailingPunctuation(token)
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {url}
         </Text>
       )
@@ -248,6 +250,7 @@ function renderInline(
             key={key}
             style={[styles.inlineCode, openFile ? styles.inlineCodeLink : null]}
             onPress={openFile}
+            {...(openFile ? HOLD_DOES_NOT_OPEN : null)}
           >
             {code}
           </Text>

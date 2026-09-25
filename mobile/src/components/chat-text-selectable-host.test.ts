@@ -34,6 +34,28 @@ function code(relative: string): string {
     .replace(/^\s*\/\/.*$/gm, '')
 }
 
+// A link in selectable text opens on a tap and must not on a hold
+// (markdown-link-hold.ts). That rests on Pressability: after a long press the
+// release still fires onPress unless onLongPress is set, and Text hands its
+// onLongPress to Pressability but no delayLongPress, so the default 500 ms
+// is what makes a press long. If any of this changes, the guard does too.
+describe('a hold on a link in chat text does not open it', () => {
+  it('lets a long press cancel the release’s press only when onLongPress is set', () => {
+    expect(code('Libraries/Pressability/Pressability.js')).toMatch(
+      /const isPressCanceledByLongPress =\s*onLongPress != null && prevState === 'RESPONDER_ACTIVE_LONG_PRESS_IN';\s*if \(!isPressCanceledByLongPress\) \{/
+    )
+    expect(code('Libraries/Pressability/Pressability.js')).toMatch(/const DEFAULT_LONG_PRESS_DELAY_MS = 500;/)
+  })
+
+  it('hands a Text’s onLongPress to its press handling, with no delayLongPress', () => {
+    const text = code('Libraries/Text/Text.js')
+    const pressProps = /textPressabilityProps = \{([^}]*)\}/.exec(text)?.[1] ?? ''
+    expect(pressProps).toMatch(/\bonLongPress,/)
+    expect(pressProps).toMatch(/\bonPress,/)
+    expect(pressProps).not.toMatch(/delayLongPress/)
+  })
+})
+
 describe('flipping selection for a scroll keeps each chat Text the same native view', () => {
   it('draws a selectable Text as NativeSelectableText and any other as NativeText', () => {
     expect(code('Libraries/Text/Text.js')).toMatch(
