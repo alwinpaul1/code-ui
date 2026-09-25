@@ -5,6 +5,10 @@ import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 import { deskEchoId } from './use-desktop-prompt-echoes'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
+import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
+import { phoneClockAllowanceMs } from './mid-turn-written-before'
 
 /**
  * Which copy of a message is drawn when the phone holds one and the hook has
@@ -107,8 +111,12 @@ const sourceOf = (prompt: DesktopPrompt) =>
  *  with none, stands for an untimed one (2026-09-13). */
 export function pairPendingWithHookPrompts(
   pending: readonly PendingCopy[],
-  prompts: readonly DesktopPrompt[]
+  prompts: readonly DesktopPrompt[],
+  /** The transcript rows the phone holds, which say when the session took a
+   *  newer prompt (promptTakenBetween). */
+  messages: readonly NativeChatMessage[] = []
 ): HookPairing {
+  const margin = phoneClockAllowanceMs(messages)
   const keys = prompts.map((prompt) => key(prompt.text))
   const remembered = new Set(pending.map((item) => item.id))
   const taken = new Set<number>()
@@ -130,7 +138,10 @@ export function pairPendingWithHookPrompts(
   }
   for (const item of pending.filter(holdsItsOwnPlace)) {
     for (const source of ['status', 'beacon'] as const) {
-      const ofSource = (prompt: DesktopPrompt) => sourceOf(prompt) === source && notSomeoneElses(prompt)
+      const ofSource = (prompt: DesktopPrompt) =>
+        sourceOf(prompt) === source &&
+        notSomeoneElses(prompt) &&
+        !promptTakenBetween(messages, item, prompt.at, margin)
       const copy = nearestCopy(item.sentAt, open(item.text, ofSource), prompts)
       if (copy !== undefined) {
         claim(copy, true)
@@ -149,6 +160,44 @@ export function pairPendingWithHookPrompts(
     }
   }
   return { steppedAside, standIns }
+}
+
+/**
+ * Whether the session took a newer prompt between a send and a hook copy's
+ * time: a user row stamped after the send by more than `marginMs` and no
+ * later than `at`, of another text, and not one the harness injects (Orca's
+ * hook keeps the tab status's prompt through those). The copy is then a
+ * message typed since with the send's text, not the send.
+ *
+ * Why: the send claims the copy of its text nearest it, and after a remount the
+ * only copy on the tab status is the one first seen then, timed by when the
+ * pane's state began. That is the send's own copy when Claude took the send
+ * mid-turn, and hiding it keeps the send drawn once (2026-09-25). But when the
+ * desk typed the same text in a later turn, hiding it lost that message
+ * (review, 2026-09-25). Rows the phone does not hold say nothing, so a window
+ * that has not loaded them answers no, and says yes once they load.
+ */
+export function promptTakenBetween(
+  messages: readonly NativeChatMessage[],
+  send: { text: string; sentAt?: number },
+  at: number | undefined,
+  marginMs: number
+): boolean {
+  const sentAt = send.sentAt
+  if (at === undefined || typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+    return false
+  }
+  const own = key(send.text)
+  return messages.some((message) => {
+    if (message.role !== 'user' || message.timestamp === null) {
+      return false
+    }
+    if (message.timestamp <= sentAt + marginMs || message.timestamp > at) {
+      return false
+    }
+    const text = normalizedUserText(message)
+    return Boolean(text) && !isKnownHarnessInjectedUserTurnText(text!) && key(text!) !== own
+  })
 }
 
 /** The hook prompts no pending copy stands for.

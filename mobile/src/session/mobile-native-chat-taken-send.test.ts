@@ -141,3 +141,35 @@ describe('a send the agent took out of its queue box', () => {
     expect(isTakenSend({ takenAt: TAKEN_AT })).toBe(true)
   })
 })
+
+// Review, 2026-09-25: a send dequeued at the end of the turn after all, its
+// text sent again before its row reached the phone, and the second then taken
+// mid-turn. The row is stamped before the second left the phone.
+describe('a row stamped before a later copy of its text left the phone', () => {
+  const history = [row('m1', 'assistant', 'Pushed. Waiting for the deploy…')]
+  const firstSent = Date.parse('2026-09-25T17:04:15.000Z')
+  const secondSent = Date.parse('2026-09-25T17:08:23.000Z')
+  const stamped = (id: string, text: string, at: number | null): NativeChatMessage => ({
+    ...row(id, 'user', text),
+    timestamp: at
+  })
+  const copies = (): MobileNativeChatPendingMessage[] => {
+    const first = send({}, 'pending-1', 'yes', history)
+    const withTime = { [KEY]: [{ ...first[KEY]![0]!, sentAt: firstSent }] }
+    const taken = takeMobileNativeChatPending(withTime, KEY, ['pending-1'], TAKEN_AT)
+    const both = send(taken, 'pending-2', 'yes', history)
+    return both[KEY]!.map((item) => (item.id === 'pending-2' ? { ...item, sentAt: secondSent } : item))
+  }
+
+  it('goes to the taken send before it, not to the later copy', () => {
+    const landed = [...history, stamped('u1', 'yes', secondSent - 950)]
+    expect(ids(retireLandedMobileNativeChatPending(landed, copies(), NONE))).toEqual(['pending-2'])
+  })
+
+  it('still goes to the later copy when it was stamped after that copy left, or carries no time', () => {
+    const own = [...history, stamped('u1', 'yes', secondSent + 200)]
+    expect(ids(retireLandedMobileNativeChatPending(own, copies(), NONE))).toEqual(['pending-1'])
+    const untimed = [...history, stamped('u1', 'yes', null)]
+    expect(ids(retireLandedMobileNativeChatPending(untimed, copies(), NONE))).toEqual(['pending-1'])
+  })
+})

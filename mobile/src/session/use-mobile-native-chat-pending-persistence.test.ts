@@ -26,11 +26,16 @@ describe('useMobileNativeChatPendingPersistence', () => {
   let pending: Pending = {}
   let setPending: Dispatch<SetStateAction<Pending>> = () => {}
 
-  function Harness({ sessionKey, initial = {} }: { sessionKey: string | null; initial?: Pending }): null {
-    const [state, setState] = useState<Pending>(initial)
+  let remember: (id: string, text: string, anchorId: string | null) => void = () => {}
+  const MESSAGES = { current: [] as never[] }
+  function Harness({ sessionKey }: { sessionKey: string | null }): null {
+    const [state, setState] = useState<Pending>({})
     pending = state
     setPending = setState
-    useMobileNativeChatPendingPersistence(sessionKey, state, setState)
+    remember = useMobileNativeChatPendingPersistence(sessionKey, state, setState, {
+      messagesRef: MESSAGES,
+      draftKey: 'draft'
+    }).rememberEcho
     return null
   }
   async function mount(sessionKey: string | null): Promise<void> {
@@ -99,43 +104,60 @@ describe('useMobileNativeChatPendingPersistence', () => {
   // The route came back after a turn Claude took the phone's message in: the
   // hook's copy of it is remembered as a witness a moment before the stored
   // echoes are read back (reported 2026-09-25, Claude Code 2.1.282).
-  describe('a witness remembered before the stored echoes came back', () => {
+  // Reported 2026-09-25 (Claude Code 2.1.282): after a remount the hook's copy
+  // of a stored send was remembered, in the moment before the store was read
+  // back, as someone else's message, and drew under the reply that ended the
+  // turn. No witness is remembered until the read is back.
+  describe('a witness seen before the stored echoes are read back', () => {
     const sentAt = Date.parse('2026-09-25T17:04:15.000Z')
     const send = { ...echo('pending-1', 'check the menu'), sentAt }
-    const witness = (text: string, witnessedAt: number): MobileNativeChatPendingMessage => ({
-      ...echo('desk-status:s1:1:0', text),
-      witnessedAt
-    })
-    /** The live list already holds the witness when the stored read starts. */
-    async function mountWithLive(live: MobileNativeChatPendingMessage[]): Promise<void> {
-      await act(async () => {
-        renderer = create(createElement(Harness, { sessionKey: 's1', initial: { s1: live } }))
-      })
-      await flush()
+    /** Holds the store's read until `release` is called. */
+    function holdTheRead(): { release: () => void } {
+      let release = () => {}
+      const read = AsyncStorage.getItem.bind(AsyncStorage)
+      const spy = vi.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
+        (key) =>
+          new Promise((resolve) => {
+            release = () => {
+              spy.mockRestore()
+              void read(key).then(resolve)
+            }
+          })
+      )
+      return { release: () => release() }
     }
 
-    it('drops the copy of a stored send, so the send is drawn once', async () => {
+    it('is not remembered then, and is once the read is back', async () => {
       await writeNativeChatPendingEchoes('s1', [send])
-      await mountWithLive([witness('check the menu', sentAt + 300_000)])
+      const read = holdTheRead()
+      await mount('s1')
+      act(() => remember('desk-status:s1:1:0', 'check the menu', 'm9'))
+      await flush()
+      expect(pending.s1).toBeUndefined()
+      read.release()
+      await flush()
       expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1'])
+      act(() => remember('desk-status:s1:2:0', 'typed at the desk', 'm9'))
+      await flush()
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:2:0'])
     })
 
-    it('keeps a witness of another message, and one remembered before the send left the phone', async () => {
-      await writeNativeChatPendingEchoes('s1', [send])
-      await mountWithLive([witness('something else', sentAt + 300_000)])
-      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
-      act(() => renderer?.unmount())
-      renderer = null
-      await AsyncStorage.clear()
-      await writeNativeChatPendingEchoes('s1', [send])
-      await mountWithLive([witness('check the menu', sentAt - 1)])
-      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+    it('is remembered once a session with nothing stored has been read', async () => {
+      await mount('s1')
+      await flush()
+      act(() => remember('desk-status:s1:1:0', 'typed at the desk', 'm9'))
+      await flush()
+      expect(pending.s1?.map((item) => item.id)).toEqual(['desk-status:s1:1:0'])
     })
 
-    it('keeps the witness beside a stored send from a build that kept no send time', async () => {
-      await writeNativeChatPendingEchoes('s1', [echo('pending-1', 'check the menu')])
-      await mountWithLive([witness('check the menu', sentAt)])
-      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+    it('is remembered when the store could not be read at all', async () => {
+      const spy = vi.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('store unreadable'))
+      await mount('s1')
+      await flush()
+      spy.mockRestore()
+      act(() => remember('desk-status:s1:1:0', 'typed at the desk', 'm9'))
+      await flush()
+      expect(pending.s1?.map((item) => item.id)).toEqual(['desk-status:s1:1:0'])
     })
   })
 

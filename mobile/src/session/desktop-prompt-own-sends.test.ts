@@ -4,6 +4,7 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import {
   inSendOrder,
   pairPendingWithHookPrompts,
+  promptTakenBetween,
   promptsNoCopyStandsFor
 } from './desktop-prompt-own-sends'
 import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
@@ -227,5 +228,69 @@ describe('bubbles that follow the same row', () => {
     expect(order([], ['desk-2', 'desk-1'])).toEqual(['desk-2', 'desk-1'])
     expect(order([own('p-2', 40), own('p-1', 20)], [])).toEqual(['p-2', 'p-1'])
     expect(order([], [])).toEqual([])
+  })
+})
+
+// Review, 2026-09-25. A phone send claims the hook copy of its text nearest
+// its send, and after a remount the only copy on the tab status is the one
+// first seen then. When a user row was stamped between the send and that
+// copy's time, the session took a newer prompt, so the copy is a message typed
+// since with the same text, not the send: it must still be drawn.
+describe('a phone send and a hook copy of its text timed after a newer prompt', () => {
+  const sentAt = Date.parse('2026-09-25T17:04:15.000Z')
+  const send: Copy = { id: 'pending-1', text: 'check the menu', sentAt }
+  const later = { nonce: 'status:s:1:0', text: 'check the menu', at: sentAt + 530_000 }
+  const row = (id: string, text: string, at: number) => ({
+    id,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text }],
+    timestamp: at,
+    source: 'transcript' as const
+  })
+
+  it('leaves the copy to be drawn when a user row lies between the send and the copy', () => {
+    const pairing = pairPendingWithHookPrompts([send], [later], [row('u1', 'now run the tests', sentAt + 400_000)])
+    expect([...pairing.standIns]).toEqual([])
+  })
+
+  it('still claims it when no such row is held: the copy is the send, seen late', () => {
+    expect([...pairPendingWithHookPrompts([send], [later], []).standIns]).toEqual(['status:s:1:0'])
+    const before = row('u0', 'earlier prompt', sentAt - 60_000)
+    const after = row('u2', 'after the copy', later.at + 60_000)
+    expect([...pairPendingWithHookPrompts([send], [later], [before, after]).standIns]).toEqual(['status:s:1:0'])
+  })
+
+  it('still claims it across a row the harness injected, or a row of the send text', () => {
+    const notice = row('u1', '<task-notification><task-id>t1</task-id></task-notification>', sentAt + 400_000)
+    const own = row('u3', 'check the menu', sentAt + 2_000)
+    expect([...pairPendingWithHookPrompts([send], [later], [notice, own]).standIns]).toEqual(['status:s:1:0'])
+  })
+})
+
+describe('promptTakenBetween', () => {
+  const sentAt = Date.parse('2026-09-25T17:04:15.000Z')
+  const send = { text: 'check the menu', sentAt }
+  const at = sentAt + 530_000
+  const row = (text: string, timestamp: number | null) => ({
+    id: `u-${String(timestamp)}`,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text }],
+    timestamp,
+    source: 'transcript' as const
+  })
+
+  it('says yes only for a row after the send by more than the margin, and no later than the copy', () => {
+    expect(promptTakenBetween([row('now run the tests', sentAt + 400_000)], send, at, 1000)).toBe(true)
+    expect(promptTakenBetween([row('close to the send', sentAt + 900)], send, at, 1000)).toBe(false)
+    expect(promptTakenBetween([row('after the copy', at + 1)], send, at, 1000)).toBe(false)
+    expect(promptTakenBetween([row('untimed', null)], send, at, 1000)).toBe(false)
+    expect(promptTakenBetween([], send, at, 1000)).toBe(false)
+  })
+
+  it('says no when there is nothing to order by: no send time, or a copy with no time', () => {
+    const later = [row('now run the tests', sentAt + 400_000)]
+    expect(promptTakenBetween(later, { text: 'check the menu' }, at, 1000)).toBe(false)
+    expect(promptTakenBetween(later, { text: 'check the menu', sentAt: Number.NaN }, at, 1000)).toBe(false)
+    expect(promptTakenBetween(later, send, undefined, 1000)).toBe(false)
   })
 })

@@ -546,6 +546,53 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
     })
 
+    // Second round of the same review.
+    it('draws a send Claude dequeued at the end of the turn once, and a resend of its text Claude then took mid-turn once too', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      await ack('17:08:23.300', await tap('17:08:23.000', 'yes'), 'yes')
+      await show('17:08:24.000', { messages: turnEnded, queued: claudeBox(['yes']) })
+      // The first one's queued row, stamped before the resend left the phone.
+      const firstRow = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050'), call('0741e6f4', '17:08:23.500')]
+      await show('17:08:25.000', { messages: firstRow, queued: claudeBox(['yes']) })
+      // Claude takes the resend at the next tool result: no row, the box empties.
+      const absorbed = [...firstRow, result('0741e6f5', '17:08:40.000'), text('0741e6f6', 'Done with both.', '17:09:00.000')]
+      await show('17:08:41.000', { messages: absorbed.slice(0, -1), queued: claudeBox([]) })
+      await show('17:09:01.000', { messages: absorbed, queued: [], working: false })
+      await show('17:09:02.000', { messages: absorbed, queued: [], working: false })
+      // The first as its row, the resend as its bubble where it was sent: after
+      // the rows the phone held then, which did not yet include that row.
+      expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'phone', 'row', '0741e6f4', '0741e6f6'])
+    })
+
+    it('draws a message typed at the desk in a later turn once the rows that show that turn load, after the chat came back', async () => {
+      await sendAndLetClaudeTakeIt({ prompts: hookCopy('17:04:15.110') })
+      act(() => renderer?.unmount())
+      renderer = null
+      const secondTurn = [
+        ...turnEnded,
+        user('d0000011', 'now run the tests', '17:11:00.000'),
+        call('d0000012', '17:11:05.000'),
+        result('d0000013', '17:12:30.000'),
+        text('d0000014', 'All tests pass.', '17:13:10.000')
+      ]
+      const firstSight = [
+        ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+          prompt: TEXT,
+          updatedAt: at('17:13:10.100'),
+          stateStartedAt: at('17:13:10.050')
+        }).prompts
+      ]
+      // Back while the read is still in flight, over the rows kept from before.
+      await show('17:14:00.000', { messages: turnEnded, loading: true, queued: [], working: false, prompts: firstSight })
+      await show('17:14:01.000', { messages: turnEnded, loading: true, queued: [], working: false, prompts: firstSight })
+      await show('17:14:05.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
+      await show('17:14:06.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
+    })
+
     describe('on Codex', () => {
       const codexTurn = [
         text('msg_0ddffecfe356', 'Running the deploy check.', '17:03:30.106'),

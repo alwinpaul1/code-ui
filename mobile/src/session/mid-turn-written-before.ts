@@ -30,6 +30,13 @@ export function noteLiveRowsArrived(rows: readonly NativeChatMessage[], arrivedA
  * 2026-09-24); this widens the margin to what the clocks actually allow.
  */
 export function phoneClockAllowanceMs(rawMessages: readonly NativeChatMessage[]): number {
+  const lead = phoneClockLeadMs(rawMessages)
+  return lead === null ? PHONE_CLOCK_MARGIN_MS : Math.max(PHONE_CLOCK_MARGIN_MS, lead)
+}
+
+/** The bound above, before any floor: the smallest gap between a live row's
+ *  stamp and its arrival, or null when no live row has been timed. */
+export function phoneClockLeadMs(rawMessages: readonly NativeChatMessage[]): number | null {
   let smallest = Number.POSITIVE_INFINITY
   for (const message of rawMessages) {
     const arrivedAt = arrivals.get(message)
@@ -37,7 +44,7 @@ export function phoneClockAllowanceMs(rawMessages: readonly NativeChatMessage[])
       smallest = Math.min(smallest, arrivedAt - message.timestamp)
     }
   }
-  return Number.isFinite(smallest) ? Math.max(PHONE_CLOCK_MARGIN_MS, smallest) : PHONE_CLOCK_MARGIN_MS
+  return Number.isFinite(smallest) ? smallest : null
 }
 
 /**

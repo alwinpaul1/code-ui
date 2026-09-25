@@ -56,11 +56,20 @@ failing-first test and has been checked on the phone in light and dark.
   when it submits it at the end of the turn, a steer when it is injected
   (Codex CLI 0.153.4 rollouts: `response_item` message role `user` and
   `event_msg` item_completed `UserMessage`), so a Codex send always leaves on
-  its row. Still open: a message typed at the desk or in the Claude app that
-  the phone first sees after the turn is timed by the pane's state, which
-  began when the turn ended, and draws under the reply that ended it
-  (`agent-status-prompts.ts`); the tab status carries no time for a prompt
-  taken mid-turn.
+  its row. After a remount the hook's copy of such a send is first seen timed
+  by the pane's state, which began when the turn ended, so no witness is
+  remembered until the stored echoes are read back, and the send claims that
+  copy unless a user row stamped between them shows the session took a newer
+  prompt (`promptTakenBetween`). Two review rounds on 2026-09-25 drove the
+  same-text cases through the real overlay; these stay open, all rare: a
+  message typed at the desk or in the Claude app that the phone first sees
+  after the turn draws under the reply that ended it
+  (`agent-status-prompts.ts`), since the tab status carries no time for a
+  prompt taken mid-turn; the desk repeating a phone send's exact text in the
+  same turn, or in a later one whose user row is above the loaded page, is
+  taken for the send's own copy and not drawn; and when Claude takes one of
+  two identical queued messages mid-turn and dequeues the other at the end,
+  the row goes to the first (as before these fixes).
 - **Background work (6).** Not drawn because the phone cannot know it:
   a finished shell's output (the Claude app's chevron on a Shell card opens
   it; the output file sits outside the worktree `files.read` is jailed to),

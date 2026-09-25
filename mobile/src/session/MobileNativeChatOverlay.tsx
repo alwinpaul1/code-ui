@@ -197,8 +197,8 @@ export function MobileNativeChatOverlay({
   // no send time steps aside for the hook's. One copy each way: a pending
   // "yes" must not hide a later "yes" typed at the desk (desktop-prompt-own-sends.ts).
   const hookPairing = useMemo(
-    () => pairPendingWithHookPrompts(controller.chatPending, desktopPrompts),
-    [controller.chatPending, desktopPrompts]
+    () => pairPendingWithHookPrompts(controller.chatPending, desktopPrompts, session.messages),
+    [controller.chatPending, desktopPrompts, session.messages]
   )
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
