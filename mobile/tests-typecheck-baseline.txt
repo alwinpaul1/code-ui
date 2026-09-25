@@ -119,7 +119,6 @@ src/session/mobile-terminal-permission-options-merge.test.ts
 src/session/mobile-terminal-records.test.ts
 src/session/native-queue-editor.test.ts
 src/session/pending-terminal-handle-recovery-poll.test.ts
-src/session/transcript-tail/transcript-tail-ledger.test.ts
 src/session/use-codex-chat-command-intercept.test.ts
 src/session/use-debounced-persist.test.ts
 src/session/use-host-image-previews.test.ts
@@ -132,7 +131,6 @@ src/session/use-mobile-native-chat-drafts.test.ts
 src/session/use-mobile-native-chat-file-search.test.ts
 src/session/use-mobile-native-chat-hunk-revert.test.tsx
 src/session/use-mobile-native-chat-image-attachments.remount.test.ts
-src/session/use-mobile-native-chat-image-attachments.test.ts
 src/session/use-mobile-native-chat-input-lease.test.ts
 src/session/use-mobile-native-chat-rewind.test.tsx
 src/session/use-mobile-native-chat-stop.test.ts
@@ -158,8 +156,6 @@ src/terminal/terminal-webview-engine-error.test.ts
 src/terminal/terminal-webview-query-reply-routing.test.ts
 src/terminal/terminal-webview-wheel-scroll.test.ts
 src/terminal/use-buffered-terminal-drafts.test.tsx
-src/test-support/rpc-recording/adapter-seam.test.ts
-src/test-support/rpc-recording/recording-runner.test.ts
 src/transport/client-context.test.ts
 src/transport/connection-revival-triggers.test.ts
 src/transport/direct-probe-network-gate.test.ts
