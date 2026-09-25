@@ -476,6 +476,7 @@ import {
   SendParams,
   SetOptionParams,
   SubscribeParams,
+  ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -583,6 +584,9 @@ export const RPC_PARAMS_BY_METHOD = {
   // CODE UI HAND-KEPT (Orca #21924, 2739246058): the method is registered so a catalog-driven
   // caller never mis-shapes it, though nothing on the phone calls it. See LOCAL-FILES.md.
   'agentSession.subscribeTurnCompletions': null,
+  // CODE UI HAND-KEPT (Orca #22377, 563dd5487f): nothing on the phone calls it yet. See
+  // LOCAL-FILES.md.
+  'agentSession.threadGoal': ThreadGoalParams,
   'agentSession.unsubscribe': UnsubscribeParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,

@@ -69,6 +69,13 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
   and #22029 left that form alone. It is not taken: nothing in `mobile/` or
   `src/shared/` calls `countToolCalls`, and both forms return the same count. Recorded here 2026-09-24; before
   that the exception was only in UPSTREAM.txt.
+- `structured-agent-session-tool-call-block.ts` — new at 8757e40063 (#22349, v1.4.210..v1.4.211
+  shared halves) and copied from it minus one line: upstream's block builder also copies
+  `callId` onto the tool-call block. This fork's journal item and block have no `callId`
+  (it arrived with #19869, which is not ported), so the line cannot compile here and is
+  left out, marked `CODE UI LOCAL HUNK` in the source. Unlike the entries above it fixes
+  nothing; the fork's projection never carried `callId` either, so what the phone draws is
+  unchanged. Porting #19869 makes the hunk redundant.
 
 ## Vendored files carrying a hand-applied upstream hunk
 
@@ -150,6 +157,8 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES` entry)
   from 0bf815a48 (#21106), with its comment and the sibling
   `AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY` from abc8386e1 (#21137), and
+  `AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY` (constant plus `RUNTIME_CAPABILITIES`
+  entry) from ebed0964a2 (#22216, v1.4.210..v1.4.211 shared halves), and
   `AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY` (constant, its doc comment, and its
   `RUNTIME_CAPABILITIES` entry) from 2739246058 (#21924, v1.4.209..v1.4.210 shared
   halves) — its entry only; the wire types it gates
@@ -177,7 +186,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `mobileWeb.bundle.range` row from 996f9cc306 (#22381) is hand-kept for the same reason;
   it reuses the chunk's params schema, so the import did not change. It also carries the
   `agentSession.subscribeTurnCompletions: null` row from 2739246058 (#21924,
-  v1.4.209..v1.4.210 shared halves), hand-kept for the same reason.
+  v1.4.209..v1.4.210 shared halves), hand-kept for the same reason, and the
+  `agentSession.threadGoal` row with its `ThreadGoalParams` import from 563dd5487f
+  (#22377, v1.4.210..v1.4.211 shared halves); nothing on the phone calls it yet.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,
   `agent-session-journal-schemas.ts` — the working-state half of 2f828e446
   (#19822): `hasUnansweredStructuredAgentSessionDispatch`, the optional
@@ -232,6 +243,35 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `matchedAskRule`, and the `AgentJournalApprovalMatchedAskRule` type) the
   same way, and #21090's (e42f7c00b) typed plan `subject` on an approval.
 
+- `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts` and its test,
+  `native-chat-types.ts`, `agent-session-wire.ts`, `structured-agent-session-projection.ts`
+  and `structured-agent-session-reducer.ts` also carry the v1.4.210..v1.4.211 shared
+  halves, applied by hand because every one of them sits on the hunks above:
+  - Orca #22299 (9ece273056): `AgentJournalProducerKind` and `AgentJournalProducerLinkage`
+    on every render item, and the zod `AgentJournalProducerLinkageFields` spread into
+    `AgentJournalRenderItemSchema`. The projection takes only the two "Deliberately NOT
+    scoped by producer" notes: the root-row scoping in `latestStructuredAgentSession*`
+    lives in functions this fork's projection does not have.
+  - Orca #22377 (563dd5487f): the thread goal. `AGENT_JOURNAL_MESSAGE_SEND_MODES`,
+    `sentAs` on a journal message and on `NativeChatMessage`, the goal status and state
+    types, `threadGoal` on a status item, their zod shapes, the projection copying a
+    known `sentAs` onto its message, and in the wire file
+    `AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH`, `AgentSessionThreadGoalChange`,
+    `AgentSessionThreadGoalResult` and `threadGoal` on the options result. The reducer
+    takes its `liveItemsWithinWindow`: while older rows remain on the host, a live
+    revision of a row older than the loaded window is left out, so it cannot become the
+    load-older anchor and make the next page skip every row in between.
+  - Orca #22349 (8757e40063): the projection's tool-call and diff arms build their
+    block through `structured-agent-session-tool-call-block.ts` (see the local hunk
+    above), and the wire file's `toolName` doc comment. The status summary's
+    `statusStructuredAgentSessionToolCall` is not taken, because
+    `projectStructuredAgentSessionStatusSummary` is not here.
+  The schemas test takes both commits' new cases by hand; it sits 176 lines short of
+  upstream's v1.4.210 copy, so the range patch does not apply.
+- `constants.test.ts` — #22216's (ebed0964a2) `muse: '--yolo'` expectation, by hand. The
+  file cannot be taken whole: upstream's copy also has #14929's `minimaxEndpoint` case,
+  which needs a `default-global-settings.ts` field this fork's copy does not have.
+
 - `structured-agent-session-projection.ts` also carries the per-item render
   cache from Orca #19229 (e80fae0c4): the `projectedItems` WeakMap, and
   `projectStructuredItemsToNativeChat` delegating to the single-item
@@ -264,5 +304,7 @@ their c1e15c400 pin and the field is back; the entry is gone.
   Orca #19695 (2626e2eca) landed on 2026-09-19 and brought both, so the file
   and its test are now vendored whole at fab78c766, and
   `structured-agent-session-projection.ts` re-exports
-  `activeStructuredAgentSessionTurnId` / `activeStructuredAgentSessionToolCall`
-  from it, exactly as upstream's projection does. The entry is gone.
+  `activeStructuredAgentSessionTurnId` from it, as upstream's projection does.
+  (It also re-exported `activeStructuredAgentSessionToolCall` until the
+  v1.4.210..v1.4.211 shared halves, when #22349 dropped that reader from the
+  live-turn module.) The entry is gone.

@@ -1,16 +1,22 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+import {
+  AGENT_JOURNAL_MESSAGE_SEND_MODES,
+  type AgentJournalMessageSendMode,
+  type AgentJournalRenderItem,
+  type AgentJournalSubmission
 } from './agent-session-journal-types'
 import { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22349, 8757e40063): the tool-call and diff arms
+// read the shared tool-call block below, and `activeStructuredAgentSessionToolCall` is no longer
+// re-exported (live-turn dropped it). See src/shared/LOCAL-FILES.md.
+import {
+  isStructuredAgentSessionToolAction,
+  structuredAgentSessionToolCallBlock
+} from './structured-agent-session-tool-call-block'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 
 // Re-exported so the live-turn readers' existing consumers keep one import site.
-export {
-  activeStructuredAgentSessionToolCall,
-  activeStructuredAgentSessionTurnId
-} from './structured-agent-session-live-turn'
+export { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -44,25 +50,22 @@ function itemBlocks(item: AgentJournalRenderItem): {
   if (body.kind === 'message') {
     return { role: body.role, blocks: body.blocks }
   }
-  if (body.kind === 'tool-call') {
+  if (isStructuredAgentSessionToolAction(body)) {
+    // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d): the execution and
+    // MCP-identity metadata, carried only when the host actually recorded it, so an
+    // older host projects exactly what it did. Since #22349 the block is built in
+    // structured-agent-session-tool-call-block.ts.
+    const call = structuredAgentSessionToolCallBlock(body)
+    if (body.kind === 'diff') {
+      return {
+        role: 'assistant',
+        blocks: [call, { type: 'tool-result', output: boundedText(body.patch) }]
+      }
+    }
     return {
       role: 'assistant',
       blocks: [
-        // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d): the
-        // execution and MCP-identity metadata, carried only when the host
-        // actually recorded it, so an older host projects exactly what it did.
-        {
-          type: 'tool-call',
-          name: body.name,
-          input: body.input,
-          state: body.state,
-          ...(body.mcpIdentity !== undefined ? { mcpIdentity: body.mcpIdentity } : {}),
-          ...(body.exitCode !== undefined ? { exitCode: body.exitCode } : {}),
-          ...(body.durationMs !== undefined ? { durationMs: body.durationMs } : {}),
-          ...(body.webSearchResults !== undefined
-            ? { webSearchResults: body.webSearchResults }
-            : {})
-        },
+        call,
         ...(body.output
           ? [
               {
@@ -72,15 +75,6 @@ function itemBlocks(item: AgentJournalRenderItem): {
               }
             ]
           : [])
-      ]
-    }
-  }
-  if (body.kind === 'diff') {
-    return {
-      role: 'assistant',
-      blocks: [
-        { type: 'tool-call', name: 'Diff', input: { path: body.path } },
-        { type: 'tool-result', output: boundedText(body.patch) }
       ]
     }
   }
@@ -131,8 +125,18 @@ function itemBlocks(item: AgentJournalRenderItem): {
 // render cache. The file cannot be re-vendored whole at that commit because it
 // also carries the forward-ported `presentation`/`tone` hints from #19228 and
 // the #18765 / #19226 hunks above. See src/shared/LOCAL-FILES.md.
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22377, 563dd5487f): `sentAs` on a projected
+// message, and (Orca #22299, 9ece273056) the two "not scoped by producer" notes.
+function isAgentJournalMessageSendMode(value: string): value is AgentJournalMessageSendMode {
+  return AGENT_JOURNAL_MESSAGE_SEND_MODES.some((mode) => mode === value)
+}
+
 const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
 
+/** Deliberately NOT scoped by producer: the transcript shows every agent's
+ *  output. The line this module draws is that the transcript renders every item,
+ *  while every "what is this agent doing right now" scan renders only the
+ *  session's own agent's. */
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
@@ -155,20 +159,25 @@ export function projectStructuredItemToNativeChat(
   }
   // Reducer updates replace journal items, so unchanged rows keep their render caches.
   const projected = itemBlocks(item)
+  const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
   const message: NativeChatMessage | null = projected
     ? {
         id: item.itemId,
         role: projected.role,
         blocks: projected.blocks,
         timestamp: item.observedAt,
-        source: 'transcript'
+        source: 'transcript',
+        // A send mode this build cannot name renders as an ordinary message.
+        ...(sentAs !== undefined && isAgentJournalMessageSendMode(sentAs) ? { sentAs } : {})
       }
     : null
   projectedItems.set(item, message)
   return message
 }
 
-
+/** Deliberately NOT scoped by producer: this is an existence test ("is this
+ *  session listable at all"), not an attribution one. A session whose only
+ *  content came from a subagent still has content. */
 export function hasPersistedStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): boolean {

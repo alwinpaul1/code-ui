@@ -6,6 +6,9 @@
 // here must be plain JSON: these values cross the IPC boundary, so no class
 // instances, Maps, or Dates.
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22377, 563dd5487f): the import and the
+// `sentAs` field on NativeChatMessage. See src/shared/LOCAL-FILES.md.
+import type { AgentJournalMessageSendMode } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -121,6 +124,8 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** How a user message was delivered when it was not an ordinary prompt. */
+  sentAs?: AgentJournalMessageSendMode
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

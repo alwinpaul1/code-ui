@@ -15,7 +15,8 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResetReason,
   AgentJournalResolution,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalThreadGoal
 } from './agent-session-journal-types'
 import type {
   AgentSessionHandoffStage,
@@ -202,7 +203,8 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
-  /** The tool the running turn is inside. Absent unless `status` is 'working'. */
+  /** The tool the running turn is inside, else the last one it used. Absent unless `status`
+   *  is 'working'. */
   toolName?: string
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
@@ -365,10 +367,29 @@ export type AgentSessionCommandsResult = {
   commands?: AgentSessionSlashCommand[]
 }
 
+/** Longest objective a client may send; matches the provider's own limit. */
+export const AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH = 4000
+
+/** A client's change to the thread goal. `set` replaces the objective and makes
+ *  it active, which the provider pursues without a separate turn. */
+export type AgentSessionThreadGoalChange =
+  | { kind: 'set'; objective: string }
+  | { kind: 'status'; status: 'active' | 'paused' }
+  | { kind: 'clear' }
+
+export type AgentSessionThreadGoalResult = {
+  change: AgentSessionThreadGoalChange['kind']
+}
+
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** Present only where this session can change its goal, so a host without
+   *  `agentSession.threadGoal` never offers the controls. `current` is the
+   *  latest goal the whole journal records, for a client whose loaded page
+   *  starts after it. */
+  threadGoal?: { current: AgentJournalThreadGoal | null }
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport

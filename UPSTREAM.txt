@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
 src/shared/structured-agent-session-mutation.ts: 8999a0028
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
@@ -22,7 +22,7 @@ src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk 
 src/shared/native-chat-session-option-snapshot.test.ts: c287a5d9b
 src/shared/native-chat-session-option-state.ts: ae9c06c94 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/native-chat-session-option-state.test.ts: ae9c06c94
-src/shared/agent-session-option-catalog.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; adds Antigravity to the catalog map)
+src/shared/agent-session-option-catalog.ts: 52a1e2875b (v1.4.210..v1.4.211 shared halves; #22383 adds Muse to the catalog map)
 src/shared/agent-session-option-catalog-antigravity.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; new, pulled in because agent-session-option-catalog.ts imports it)
 src/shared/agent-session-option-catalog-omp.ts: ae9c06c94
 src/shared/agent-session-option-catalog-omp.test.ts: ae9c06c94
@@ -56,7 +56,7 @@ src/shared/structured-agent-session-send-disposition.test.ts: f55b7ba68
 src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502
-src/shared/structured-agent-session-composer.ts: ecd7b19ad
+src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode)
 src/shared/native-chat-diff.ts: 0d4d059ae
 src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
@@ -66,14 +66,14 @@ src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a6
 src/shared/native-chat-tool-identity.test.ts: d0506bf5de0da490025d94c6507378be75194a60
 src/shared/native-chat-agent-profiles.ts: ecd7b19ad
 src/shared/native-chat-agent-profiles.test.ts: ecd7b19ad
-src/shared/native-chat-tool-activity.ts: 68ea3b92e
+src/shared/native-chat-tool-activity.ts: 641a7f36d9 (v1.4.210..v1.4.211 shared halves; #22432's one live tool-run header per call)
 src/shared/native-chat-tool-run-outcome.ts: 68ea3b92e
 src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02
 src/shared/native-chat-turn-status.test.ts: 533b0bd02
-src/shared/structured-agent-session-live-turn.ts: 2739246058 (v1.4.209..v1.4.210 shared halves; #21924's newestStructuredAgentSessionTurnBySequence refactor)
-src/shared/structured-agent-session-live-turn.test.ts: fab78c766
+src/shared/structured-agent-session-live-turn.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299's root-row filter and #22349's tool line between calls)
+src/shared/structured-agent-session-live-turn.test.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299, #22349)
 src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
 src/shared/native-chat-tool-preview-prefix.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; adds unwrapLoginShellCommand)
@@ -100,7 +100,7 @@ src/shared/project-host-setup-projection.ts: c35a47958
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
-src/shared/agent-launch-intent.ts: 60c43695e5 (v1.4.209..v1.4.210 shared halves; #22037's agentArgs/cwd/launchSource plus #22108's paneKey)
+src/shared/agent-launch-intent.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291's reserved pane, over #22037/#22108)
 src/shared/github/owner-slug.ts: 85d1ffc07
 src/shared/github/owner-slug.test.ts: 85d1ffc07
 src/shared/pr-comment-audience.ts: dcc1f9012
@@ -111,11 +111,11 @@ src/shared/ai-vault-search-contract.ts: 1f7655f3e (plus a01027697's isolated AiV
 src/shared/ai-vault-search-contract.test.ts: 1f7655f3e
 src/shared/ai-vault-search-limit.ts: 1f7655f3e
 src/shared/crash-reporting.ts: 90d363afc9 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base — adds the 'code-editor' ReactErrorBoundarySurface member)
-src/shared/daemon-adoption-telemetry.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
-src/shared/daemon-adoption-telemetry.test.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves)
+src/shared/daemon-adoption-telemetry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171's daemon code identity)
+src/shared/daemon-adoption-telemetry.test.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
 src/shared/developer-permissions-types.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
-src/shared/telemetry-daemon-event-schemas.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
-src/shared/telemetry-event-registry.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
+src/shared/telemetry-daemon-event-schemas.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
+src/shared/telemetry-event-registry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -126,9 +126,9 @@ The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018)
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
 src/shared/rpc-contract/accounts-params.ts: c84007c54
 src/shared/rpc-contract/agent-hooks-params.ts: c84007c54
-src/shared/rpc-contract/agent-launch-params.ts: d60043787b (v1.4.209..v1.4.210 shared halves; #22037's agentArgs/cwd/launchSource)
+src/shared/rpc-contract/agent-launch-params.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291's reserved pane)
 src/shared/rpc-contract/agent-launch-params.test.ts: d60043787b (v1.4.209..v1.4.210 shared halves; new)
-src/shared/rpc-contract/agent-session-params.ts: c84007c54
+src/shared/rpc-contract/agent-session-params.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291; also brings #20620's terminalKittyKeyboardProtocol field, which the c84007c54 copy lacked)
 src/shared/rpc-contract/ai-vault-params.ts: c84007c54
 src/shared/rpc-contract/artifacts-params.ts: c84007c54
 src/shared/rpc-contract/automation-params.ts: c84007c54
@@ -187,7 +187,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md)
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
@@ -195,7 +195,7 @@ src/shared/rpc-contract/session-tabs-schemas-params.ts: c84007c54
 src/shared/rpc-contract/skills-params.ts: c84007c54
 src/shared/rpc-contract/speech-params.ts: c84007c54
 src/shared/rpc-contract/ssh-params.ts: c84007c54
-src/shared/rpc-contract/structured-agent-session-params.ts: f55b7ba68
+src/shared/rpc-contract/structured-agent-session-params.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's ThreadGoalParams; also brings #21096's restart schemas, which the f55b7ba68 copy lacked)
 src/shared/rpc-contract/task-resume-state-params.ts: c84007c54
 src/shared/rpc-contract/terminal-orphan-params.ts: c84007c54
 src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54
@@ -240,12 +240,12 @@ src/shared/agent-detection.ts: b6b974cb8
 src/shared/shell-process-detection.ts: b6b974cb8
 src/shared/ws-outbound-backpressure-queue.ts: a445abadd
 src/shared/agent-session-resume.test.ts: ff934256a
-src/shared/agent-session-resume.ts: c62eca398 (v1.4.206)
-src/shared/agent-process-recognition.ts: c62eca398 (v1.4.206)
-src/shared/agent-process-recognition.test.ts: c62eca398 (v1.4.206)
+src/shared/agent-session-resume.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse resume)
+src/shared/agent-process-recognition.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-process-recognition.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/tui-agent-startup.ts: cd59678394 (v1.4.209..v1.4.210 shared halves; buildAgentDraftLaunchPlan's sessionOptionsOverrideAgentArgs passthrough)
-src/shared/tui-agent-startup-session-options.test.ts: eb92222e7f (v1.4.209..v1.4.210 shared halves; was still at vendor base, now carries #21705's Antigravity case and #22082's override case)
-src/shared/tui-agent-startup.test.ts: ac4d6b407 (v1.4.209 shared halves)
+src/shared/tui-agent-startup-session-options.test.ts: 52a1e2875b (v1.4.210..v1.4.211 shared halves; #22383's Muse case)
+src/shared/tui-agent-startup.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/pi-agent-kind.ts: c62eca398 (v1.4.206)
 src/shared/omp-draft-launch-shell.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-draft-launch-windows.test.ts: c62eca398 (v1.4.206)
@@ -255,30 +255,30 @@ src/shared/omp-fresh-launch-shell.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-fresh-launch.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-fresh-launch.ts: c62eca398 (v1.4.206)
 src/shared/agent-hook-listener-transport.test.ts: c62eca398
-src/shared/agent-hook-listener/provider-dispatch.ts: c62eca398
-src/shared/agent-hook-listener/provider-event-routing.ts: c62eca398
+src/shared/agent-hook-listener/provider-dispatch.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216 routes Muse events)
+src/shared/agent-hook-listener/provider-event-routing.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/agent-hook-listener/providers/opencode-family-events.ts: c62eca398
-src/shared/agent-hook-listener/source-routing.ts: c62eca398
-src/shared/agent-hook-relay.ts: c62eca398
-src/shared/agent-kind.ts: c62eca398
+src/shared/agent-hook-listener/source-routing.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-hook-relay.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-kind.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216's Muse entry, then #22601's revert of #18790)
 src/shared/agent-name-token-match.ts: c62eca398
-src/shared/agent-type-label.ts: c62eca398
-src/shared/ai-vault-resume-command.ts: c62eca398
-src/shared/ai-vault-types.ts: f07bf8544 (v1.4.209 shared halves)
-src/shared/commit-message-agent-spec.test.ts: 253f0e394 (v1.4.209 shared halves)
+src/shared/agent-type-label.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/ai-vault-resume-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/ai-vault-types.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/commit-message-agent-spec.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/commit-message-agent-specs-primary.ts: 4085e1cf6 (v1.4.209 shared halves)
 src/shared/opencode-database-name.ts: c62eca398
 src/shared/opencode-launch-command.test.ts: c62eca398
 src/shared/opencode-launch-command.ts: c62eca398
 src/shared/pane-agent-identity-inventory.test.ts: c62eca398
-src/shared/skills-cli-agent-keys.ts: c62eca398
-src/shared/source-control-ai-action-recipes.test.ts: c62eca398
-src/shared/telemetry-property-schemas.ts: c62eca398
+src/shared/skills-cli-agent-keys.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
+src/shared/source-control-ai-action-recipes.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/telemetry-property-schemas.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
 src/shared/terminal-title-agent-type.ts: c62eca398
-src/shared/tui-agent-config.ts: 4a5afd70a3 (the v1.4.210 tag; v1.4.209..v1.4.210 shared halves; #21705's Antigravity preflightTrust, taken at the release tag rather than at eb92222e7f because the unassigned #18790/its same-range revert also touch this file — see docs/upstream-port-inventory.md)
-src/shared/tui-agent-display-names.ts: c62eca398
-src/shared/tui-agent-selection.ts: c62eca398
-src/shared/tui-agent.ts: c62eca398
+src/shared/tui-agent-config.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216's Muse config, #22546, #22593's comment fix and #22601's revert of #18790)
+src/shared/tui-agent-display-names.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
+src/shared/tui-agent-selection.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
+src/shared/tui-agent.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216 adds muse to TuiAgent, then #22601's revert of #18790)
 src/shared/constants.ts: c62eca398
 src/shared/pairing-local-ui-fields.ts: c62eca398
 src/shared/pairing-local-ui-fields.test.ts: c62eca398
@@ -296,7 +296,7 @@ src/shared/agent-hook-listener-opencode-reattribution.test.ts: 646fa3645
 src/shared/agent-hook-listener-opencode-session-correlation.test.ts: 646fa3645
 src/shared/agent-hook-listener-opencode-session-registry.test.ts: 646fa3645
 src/shared/agent-hook-listener.ts: 646fa3645
-src/shared/agent-hook-listener/listener-state.ts: 646fa3645
+src/shared/agent-hook-listener/listener-state.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse session-log state)
 src/shared/agent-hook-listener/opencode-session-correlation.ts: 646fa3645
 src/shared/agent-hook-listener/opencode-session-registry.ts: 646fa3645
 src/shared/agent-prompt-injection.test.ts: ea5152f1c
@@ -309,7 +309,47 @@ src/shared/antigravity-source-control.test.ts: 253f0e394
 src/shared/capability-probe-cache.ts: 4085e1cf6
 src/shared/codex-usage-types.ts: 347d399bb (297cfe0cf3, the v1.4.209..v1.4.210 range's own #22073, is the identical change under a second commit hash; already here, no diff)
 src/shared/commit-message-agent-spec.ts: 253f0e394
-src/shared/commit-message-agent-specs-secondary.ts: 253f0e394
+src/shared/commit-message-agent-specs-secondary.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse spec)
 src/shared/commit-message-model-parsers.ts: 253f0e394
-src/shared/tui-agent-permissions.ts: ac4d6b407
+src/shared/tui-agent-permissions.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse --yolo)
 src/shared/tui-agent-prompt-transport.test.ts: 663d67087
+
+v1.4.210..v1.4.211 shared halves (#22295, #22299, #22340, #22105, #22171, #22216, #22383, #22349, #22291, #22377,
+#22432, #22546, #22444, #22593, #22601). First pins of files that were still at vendor base,
+and files new here or pulled in only because a file above imports them:
+src/shared/agent-headless-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener-claude-compatible-vendors.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener-relay-dependency.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener-test-harness.ts: 9ab0a18e82 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; last changed before the range, taken because the Muse tests need its seedLegacyAgentStatusForTests)
+src/shared/agent-hook-types.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/ai-vault-resume-command.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/commit-message-plan.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings the cases added between the base and the range)
+src/shared/skill-install-providers.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/tui-agent-config.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/tui-agent-permissions.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/browser-page-zoom.ts: dfff3915c4 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/claude-background-task-inventory.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/claude-background-task-status.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/claude-roster-state.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20530's comment)
+src/shared/draft-paste-ready-scanner.test.ts: fe51c804b8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-interrupt-intent.ts: a7a3c021d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20149's change)
+src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment)
+src/shared/agent-hook-listener/providers/muse-events.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because provider-dispatch.ts imports it)
+src/shared/agent-hook-listener/providers/muse-events.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new)
+src/shared/muse-session-log.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because listener-state.ts and muse-events.ts import it)
+src/shared/muse-session-log.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new)
+src/shared/codex-rollout-jsonl-cursor.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new here, pulled in because muse-session-log.ts imports it)
+src/shared/muse-headless-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because agent-headless-command.ts imports it)
+src/shared/agent-icons/muse.png: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new; mobile/src/components/mobile-agent-icon-assets.ts requires it)
+src/shared/agent-session-option-catalog-muse.ts: 52a1e2875b (v1.4.210..v1.4.211 shared halves; new, pulled in because agent-session-option-catalog.ts imports it)
+src/shared/agent-lead-status-fold.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-roster-state.ts imports it)
+src/shared/agent-lead-status-fold.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
+src/shared/agent-status-child-work-liveness.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-roster-state.ts and claude-background-task-inventory.ts import it)
+src/shared/agent-status-child-work-liveness.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
+src/shared/agent-status-child-work.ts: 0325f1a22e (v1.4.210..v1.4.211 shared halves; new here, pulled in because agent-status-child-work-liveness.ts imports it; unchanged in the range)
+src/shared/agent-status-subject.ts: 3cd60e76e9 (v1.4.210..v1.4.211 shared halves; new here, pulled in because agent-status-child-work.ts imports it; unchanged in the range)
+src/shared/claude-background-task-kind.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-background-task-inventory.ts imports it)
+src/shared/claude-background-task-kind.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
+src/shared/agent-session-journal-producer.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts imports it)
+src/shared/agent-session-journal-producer.test.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new)
+src/shared/structured-agent-session-tool-call-block.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts and the projection import it; minus the `callId` line, a local hunk, see LOCAL-FILES.md)

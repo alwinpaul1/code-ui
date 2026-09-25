@@ -37,6 +37,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   'command-code': 'commandcode.ai',
   continue: 'continue.dev',
   cursor: 'cursor.com',
+  muse: 'dev.meta.ai',
   droid: 'factory.ai',
   kimi: 'moonshot.cn',
   'mistral-vibe': 'mistral.ai',
