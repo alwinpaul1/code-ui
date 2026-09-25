@@ -83,7 +83,9 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
 
 /** Stops one background task. The tasks sheet voids the result and the row keeps
  *  its Stop until the host reports the task ended, so an unknown outcome is said
- *  here or nowhere (2026-09-25). A refusal already is, by the shared mutation. */
+ *  here or nowhere (2026-09-25). A host refusal already is, by the shared
+ *  mutation. Its not-ready exit (no client, session or fence) says nothing, but
+ *  the sheet is drawn from that same loaded session. */
 export async function requestMobileStructuredBackgroundTaskStop(args: {
   mutate: StructuredAgentSessionMutate
   taskId: string

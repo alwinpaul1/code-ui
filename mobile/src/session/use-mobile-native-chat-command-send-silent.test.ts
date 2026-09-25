@@ -20,17 +20,21 @@ function reply(accepted: boolean) {
 }
 
 /**
- * A model pick goes out through `dispatchCommand`, and the picker stays open
- * on a false result with nothing else to say why, so a refusal that is not
- * reported leaves a row that looks tappable and does nothing. Found by the
- * sweep after the Stop fix (2026-09-25): the write-lock exit (every agent) and
- * each of Codex's exits (not ready, a refused clear, refused or ack-lost keys)
- * returned without a word, while Claude's picks, which go through the
- * composer's own send, already said "Message not sent". The same send said
- * nothing for a slash command whose ack was lost either: a chat message waits
- * for its transcript echo before it says so, and a command has no echo.
+ * A session-option pick goes out through `dispatchCommand`. On Claude that is
+ * the model and effort rows. On Codex it is only what Codex's own picker
+ * driver (use-codex-native-chat-options.ts) does not handle, such as the typed
+ * `/model` that opens Codex's model picker; Codex's model and effort picks
+ * never come here. The picker stays open on a false result with nothing
+ * else to say why, so a refusal that is not reported leaves a row that looks
+ * tappable and does nothing. Found by the sweep after the Stop fix
+ * (2026-09-25): the write-lock exit (every agent) and each of Codex's exits
+ * (not ready, a refused clear, refused or ack-lost keys) returned without a
+ * word, while Claude's, which go through the composer's own send, already
+ * said "Message not sent". The same send said nothing for a slash command
+ * whose ack was lost either: a chat message waits for its transcript echo
+ * before it says so, and a command has no echo.
  */
-describe('a model pick or slash command that did not go out says so', () => {
+describe('a session-option pick or slash command that did not go out says so', () => {
   let renderer: ReactTestRenderer | null = null
   let api: Send | null = null
   let onSendError = vi.fn()
@@ -88,55 +92,55 @@ describe('a model pick or slash command that did not go out says so', () => {
   }
 
   it.each(['claude', 'codex'])(
-    'says a %s model pick was not sent while another input holds the terminal',
+    'says a %s session command was not sent while another input holds the terminal',
     async (agent) => {
       mount(agent)
       // An image paste or a paced answer is mid-way through its writes.
       expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
 
-      expect(await pick('/model sonnet')).toBe('rejected')
+      expect(await pick('/model')).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
       expect(onSendError).toHaveBeenCalledTimes(1)
-      expect(onSendError).toHaveBeenCalledWith('Message not sent')
+      expect(onSendError).toHaveBeenCalledWith('Another input is still being sent. Try again.')
     }
   )
 
-  it('says a Codex model pick was not sent while the chat is disconnected', async () => {
+  it('says a Codex picker command was not sent while the chat is disconnected', async () => {
     mount('codex', false)
 
-    expect(await pick('/model gpt-5')).toBe('rejected')
+    expect(await pick('/model')).toBe('rejected')
     expect(sendRequest).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
   })
 
-  it('says a Codex model pick was not sent when the host refuses its keys', async () => {
+  it('says a Codex picker command was not sent when the host refuses its keys', async () => {
     sendRequest.mockResolvedValue(reply(false))
     mount('codex')
 
-    expect(await pick('/model gpt-5')).toBe('rejected')
+    expect(await pick('/model')).toBe('rejected')
     // The first key, the line clear, was refused; nothing after it went out.
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
   })
 
-  it('says a Codex model pick is unconfirmed when the ack of its keys is lost', async () => {
+  it('says a Codex picker command is unconfirmed when the ack of its keys is lost', async () => {
     sendRequest.mockRejectedValue(markRpcDeliveryUnknown(new Error('Connection closed')))
     mount('codex')
 
-    expect(await pick('/model gpt-5')).toBe('unknown')
+    expect(await pick('/model')).toBe('unknown')
     expect(onSendError).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Command unconfirmed — check chat before retrying')
   })
 
-  it('says a Codex model pick was not sent when the clear before it is refused', async () => {
+  it('says a Codex picker command was not sent when the clear before it is refused', async () => {
     // An earlier image paste failed, so the line must be cleared first.
     markMobileNativeChatInputStale('term')
     sendRequest.mockResolvedValue(reply(false))
     mount('codex')
 
-    expect(await pick('/model gpt-5')).toBe('rejected')
+    expect(await pick('/model')).toBe('rejected')
     expect(onSendError).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Message not sent')
   })
@@ -172,14 +176,14 @@ describe('a model pick or slash command that did not go out says so', () => {
     expect(onSendError).toHaveBeenCalledWith('Command unconfirmed — check chat before retrying')
   })
 
-  it('holds the terminal for a Codex model pick until its last key is written', async () => {
+  it('holds the terminal for a Codex picker command until its last key is written', async () => {
     const settle: Array<(value: unknown) => void> = []
     sendRequest.mockImplementation(() => new Promise((resolve) => settle.push(resolve)))
     mount('codex')
 
     let picked: Promise<string> | undefined
     act(() => {
-      picked = api!.dispatchCommand('/model gpt-5')
+      picked = api!.dispatchCommand('/model')
     })
     await vi.waitFor(() => expect(settle).toHaveLength(1))
     // A composer send now would splice its bytes into the command being typed.
@@ -188,7 +192,7 @@ describe('a model pick or slash command that did not go out says so', () => {
     void picked!.then(() => {
       done = true
     })
-    // Let each key land in turn: the line clear, the command's twelve, Enter.
+    // Let each key land in turn: the line clear, the command's six, Enter.
     await act(async () => {
       while (!done) {
         await vi.waitFor(() => expect(settle.length > 0 || done).toBe(true))
@@ -196,14 +200,14 @@ describe('a model pick or slash command that did not go out says so', () => {
       }
     })
     await expect(picked).resolves.toBe('accepted')
-    expect(sendRequest).toHaveBeenCalledTimes(14)
+    expect(sendRequest).toHaveBeenCalledTimes(8)
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
   })
 
-  it('stays quiet when a Codex model pick lands', async () => {
+  it('stays quiet when a Codex picker command lands', async () => {
     mount('codex')
 
-    expect(await pick('/model gpt-5')).toBe('accepted')
+    expect(await pick('/model')).toBe('accepted')
     expect(onSendError).not.toHaveBeenCalled()
   })
 

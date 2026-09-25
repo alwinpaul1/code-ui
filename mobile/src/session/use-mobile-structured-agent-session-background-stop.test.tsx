@@ -43,7 +43,7 @@ function snapshotEvent(): AgentSessionSubscribeEvent {
  * The background-tasks sheet voids what its Stop returns, and the task row
  * keeps its Stop button until the host says the task ended. So a Stop whose
  * outcome is unknown, and that says nothing, is a dead button on a task that
- * may still be running. A refusal already said why (through the shared
+ * may still be running. A host refusal already said why (through the shared
  * mutation); an unknown outcome said nothing. Found by the sweep after the
  * chat Stop fix (2026-09-25).
  */

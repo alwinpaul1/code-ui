@@ -332,7 +332,7 @@ export function useMobileNativeChatMessageSend(args: {
     ): Promise<MobileNativeChatSendOutcome> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
-        onSendError('Message not sent')
+        onSendError('Another input is still being sent. Try again.')
         return 'rejected'
       }
       try {

@@ -34,16 +34,18 @@ describe('a queue tap that did nothing says so', () => {
   })
 
   function Harness({
+    agent,
     enabled,
     handle,
     beforeOpen
   }: {
+    agent: string
     enabled: boolean
     handle: string | null
     beforeOpen: () => Promise<void>
   }): null {
     queue = useMobileNativeChatQueueEditor({
-      agent: 'claude',
+      agent,
       tabId: 'tab',
       handleRef: { current: handle },
       deviceTokenRef: { current: 'phone' },
@@ -59,13 +61,14 @@ describe('a queue tap that did nothing says so', () => {
   }
 
   async function mount(props: {
+    agent?: string
     enabled: boolean
     handle: string | null
     beforeOpen?: () => Promise<void>
   }): Promise<void> {
     await act(async () => {
       renderer = create(
-        createElement(Harness, { beforeOpen: async () => undefined, ...props })
+        createElement(Harness, { agent: 'claude', beforeOpen: async () => undefined, ...props })
       )
     })
   }
@@ -129,30 +132,37 @@ describe('a queue tap that did nothing says so', () => {
     })
   })
 
-  it('says the queue editor did not open when the pencil is tapped while disconnected', async () => {
-    await mount({ enabled: false, handle: 'terminal' })
+  // Send now is Claude's alone (canSendQueueNow); the pencil is both agents'.
+  it.each(['claude', 'codex'])(
+    'says the %s queue editor did not open when the pencil is tapped while disconnected',
+    async (agent) => {
+      await mount({ agent, enabled: false, handle: 'terminal' })
 
-    await act(async () => {
-      await queue?.open(1, 'second queued')
-    })
+      await act(async () => {
+        await queue?.open(1, 'second queued')
+      })
 
-    expect(queue?.editor).toBeNull()
-    expect(sendRequest).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError).toHaveBeenCalledWith('Could not open the queue editor (disconnected).')
-  })
+      expect(queue?.editor).toBeNull()
+      expect(sendRequest).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError).toHaveBeenCalledWith('Could not open the queue editor (disconnected).')
+    }
+  )
 
-  it('says the queue editor did not open when the chat has no terminal yet', async () => {
-    await mount({ enabled: true, handle: null })
+  it.each(['claude', 'codex'])(
+    'says the %s queue editor did not open when the chat has no terminal yet',
+    async (agent) => {
+      await mount({ agent, enabled: true, handle: null })
 
-    await act(async () => {
-      await queue?.open(1, 'second queued')
-    })
+      await act(async () => {
+        await queue?.open(1, 'second queued')
+      })
 
-    expect(queue?.editor).toBeNull()
-    expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError).toHaveBeenCalledWith('Could not open the queue editor (terminal not ready).')
-  })
+      expect(queue?.editor).toBeNull()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError).toHaveBeenCalledWith('Could not open the queue editor (terminal not ready).')
+    }
+  )
 
   it('leaves a second pencil tap to the recall the first one started', async () => {
     let finishOpening!: () => void
