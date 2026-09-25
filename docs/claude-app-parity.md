@@ -21,7 +21,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 11 | A queued message stays queued while Claude Code 2.1.281 draws the queue above its spinner | Drew it as already sent | done (acac520b) |
 | 12 | A reply written just before a phone send stays above the message | Drew it below | done (3ed09620) |
 | 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
-| 14 | Where a mid-turn message sits among the rows around it: its own sends where it sent them, a message sent elsewhere where the agent took it (below) | A phone text send gave way to the hook's copy and drew under rows written after it | phone sends fixed, not yet checked on the phone; a Claude app send reaches the phone as the hook's text only (below); a Claude app or desktop send keeps rows written just after it below it (f2b2a5ca) |
+| 14 | Where a mid-turn message sits among the rows around it: its own sends where it sent them, a message sent elsewhere where the agent took it (below) | A phone text send gave way to the hook's copy and drew under rows written after it | phone sends fixed, not yet checked on the phone; a Claude app send reaches the phone as the hook's text only (below); a Claude app or desktop send keeps rows written just after it below it (f2b2a5ca). A phone send Claude took mid-turn drew as the last row, under the reply that ended the turn, when the chat's read settled late or the chat came back after the turn, and a later send of its text drew twice (fixed 2026-09-25, not yet checked on the phone; records below) |
 
 ## Evidence notes
 
@@ -36,6 +36,31 @@ failing-first test and has been checked on the phone in light and dark.
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops
   both attachment kinds.
+- **What a queued message leaves in the transcript (14).** Two shapes, and
+  the phone reads only one. A message still queued when a turn ends is
+  dequeued as a `user` row with `promptSource: "queued"`. A message Claude
+  takes mid-turn is written as a `queue-operation` enqueue, a remove with
+  reason `absorbed_mid_turn`, and a `queued_command` attachment after the next
+  tool result, and no `user` row carries it. Counted on this machine on
+  2026-09-25 across every build that writes them, Claude Code 2.1.205 to
+  2.1.282: 1,998 human prompts written only as the attachment, 378 as a
+  queued row, 3,106 `absorbed_mid_turn` removes. On 2.1.280 to 2.1.282 alone:
+  65, 16 and 438. The phone's code said from 2026-09-14 that a queued prompt
+  lands as a queued row "on 2.1.272"; the session it cited (63b835a8) holds
+  190 attachments beside its 20 queued rows, so that was never the whole
+  record. The report of 2026-09-25 (session da53d612, 2.1.282, lines
+  3321-3326) was the first shape: a phone send taken 31 s after it was queued.
+  The phone now keeps such a send where it was sent and stops waiting for a
+  row for it once the queue box lets it go (`isTakenSend`), still retiring it
+  if a queued row does land. Codex writes every input as a row: a follow-up
+  when it submits it at the end of the turn, a steer when it is injected
+  (Codex CLI 0.153.4 rollouts: `response_item` message role `user` and
+  `event_msg` item_completed `UserMessage`), so a Codex send always leaves on
+  its row. Still open: a message typed at the desk or in the Claude app that
+  the phone first sees after the turn is timed by the pane's state, which
+  began when the turn ended, and draws under the reply that ended it
+  (`agent-status-prompts.ts`); the tab status carries no time for a prompt
+  taken mid-turn.
 - **Background work (6).** Not drawn because the phone cannot know it:
   a finished shell's output (the Claude app's chevron on a Shell card opens
   it; the output file sits outside the worktree `files.read` is jailed to),

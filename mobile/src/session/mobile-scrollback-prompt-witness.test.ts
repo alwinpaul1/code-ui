@@ -14,38 +14,66 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  * has no code for that type at all, so the phone never receives it" — verified
  * against Claude Code on 2026-09-13.
  *
- * That is no longer true. On 2.1.272 a queued prompt lands as an ordinary `user`
- * row carrying `promptSource: "queued"`, which the phone already reads. The
- * witness was then inventing a SECOND copy of a message the phone already had,
- * built by guessing which two-space rows belonged to the prompt — and the
- * agent's own prose sits on rows of exactly that shape. Hence a bubble ending in
- * the agent's "session:ok" (2026-09-15, reported as a leak), prompts glued to
- * replies, paragraphs lost, and image markers stripped.
+ * On 2026-09-14 that was taken to be no longer true, from the `user` rows
+ * carrying `promptSource: "queued"` in the session below (Claude Code 2.1.272).
+ * It was half the record, and still is on 2.1.282. A prompt still queued when a
+ * turn ENDS is dequeued as such a row. A prompt Claude takes MID-turn is written
+ * only as the queued_command, after a queue-operation remove with reason
+ * `absorbed_mid_turn`: the same session holds 190 of those beside 20 queued rows,
+ * and this machine 1,998 beside 378 across Claude Code 2.1.205 to 2.1.282 (65
+ * beside 16 on 2.1.280 to 2.1.282; counted 2026-09-25). Both halves are pinned
+ * below.
+ *
+ * The witness stays gone for what it did. It built a prompt by guessing which
+ * two-space rows belonged to it, and the agent's own prose sits on rows of
+ * exactly that shape. Hence a bubble ending in the agent's "session:ok"
+ * (2026-09-15, reported as a leak), prompts glued to replies, paragraphs lost,
+ * and image markers stripped. A mid-turn message reaches the chat by other
+ * copies: the phone's own send (isTakenSend in mobile-native-chat-pending-echo.ts),
+ * Orca's hook copy, and the queue box.
  */
 const LIVE_TRANSCRIPT =
   '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-NexDash-NexOS/63b835a8-569c-4711-938d-7871059b4698.jsonl'
 
-describe('the evidence that a queued prompt reaches the phone on its own', () => {
-  it('records every queued prompt as a plain user row', () => {
-    let raw: string
-    try {
-      raw = readFileSync(LIVE_TRANSCRIPT, 'utf8')
-    } catch {
-      // The capture belongs to one machine; the shape it proved is pinned by the
-      // behaviour tests below, which need no file.
+/** The live transcript's records, or null on a machine that does not hold it.
+ *  Read once: the file is large. */
+let liveRecordsRead: Record<string, unknown>[] | null | undefined
+function liveRecords(): Record<string, unknown>[] | null {
+  if (liveRecordsRead === undefined) {
+    liveRecordsRead = readLiveRecords()
+  }
+  return liveRecordsRead
+}
+function readLiveRecords(): Record<string, unknown>[] | null {
+  let raw: string
+  try {
+    raw = readFileSync(LIVE_TRANSCRIPT, 'utf8')
+  } catch {
+    // The capture belongs to one machine; the shape it proved is pinned by the
+    // behaviour tests below, which need no file.
+    return null
+  }
+  return raw
+    .split('\n')
+    .filter((line) => line.trim())
+    .map((line) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>
+      } catch {
+        return null
+      }
+    })
+    .filter((row): row is Record<string, unknown> => row !== null)
+}
+
+describe('what a queued prompt leaves in the transcript', () => {
+  it('writes a prompt still queued when the turn ends as a plain user row', () => {
+    const records = liveRecords()
+    if (!records) {
       return
     }
-    const queued = raw
-      .split('\n')
-      .filter((line) => line.trim())
-      .map((line) => {
-        try {
-          return JSON.parse(line) as Record<string, unknown>
-        } catch {
-          return null
-        }
-      })
-      .filter((row): row is Record<string, unknown> => row?.type === 'user')
+    const queued = records
+      .filter((row) => row.type === 'user')
       .filter((row) => row.promptSource === 'queued')
     expect(queued.length).toBeGreaterThan(0)
     for (const row of queued) {
@@ -68,6 +96,25 @@ describe('the evidence that a queued prompt reaches the phone on its own', () =>
       expect(text.length).toBeGreaterThan(0)
       expect(row.uuid).toBeTruthy()
     }
+  })
+
+  // The half the withdrawal missed: Orca's reader decodes `user` and
+  // `assistant` records only, so these never reach the phone as rows.
+  it('writes a prompt taken mid-turn only as a queued_command attachment, far more often', () => {
+    const records = liveRecords()
+    if (!records) {
+      return
+    }
+    const absorbed = records.filter(
+      (row) => row.type === 'queue-operation' && row.operation === 'remove' && row.reason === 'absorbed_mid_turn'
+    )
+    const attachments = records.filter((row) => {
+      const attachment = row.attachment as { type?: unknown; origin?: { kind?: unknown } } | undefined
+      return row.type === 'attachment' && attachment?.type === 'queued_command' && attachment.origin?.kind === 'human'
+    })
+    const queuedRows = records.filter((row) => row.type === 'user' && row.promptSource === 'queued')
+    expect(absorbed.length).toBeGreaterThan(0)
+    expect(attachments.length).toBeGreaterThan(queuedRows.length)
   })
 })
 

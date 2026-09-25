@@ -47,13 +47,22 @@ export function useAbsorbedQueueEchoes(
    * stripped the markers that say an image was sent. Each was fixed in turn;
    * the guessing was the defect.
    *
-   * It existed because a prompt queued mid-turn was said to land only as an
+   * It existed because a prompt queued mid-turn lands only as an
    * `attachment`/`queued_command` record the phone cannot read (verified
-   * 2026-09-13). That is no longer true: on Claude Code 2.1.272 it lands as an
-   * ordinary `user` row with `promptSource: "queued"`, which the phone already
-   * reads — 18 of them in the session this was reported from, every one a real
-   * row. So the witness was inventing a second copy of a message the phone
-   * already had. See mobile-scrollback-prompt-witness.test.ts for the evidence.
+   * 2026-09-13). It was then taken to be no longer true, from the `user` rows
+   * with `promptSource: "queued"` in the session this was reported from
+   * (Claude Code 2.1.272). That was half the record. Those rows are prompts
+   * still queued when a turn ENDS, which Claude dequeues as a new turn. A
+   * prompt Claude takes MID-turn is still written only as a queued_command,
+   * after a queue-operation remove with reason `absorbed_mid_turn`. That same
+   * session holds 190 of those beside its 20 queued rows, and this machine
+   * holds 1,998 beside 378 across Claude Code 2.1.205 to 2.1.282, or 65 beside
+   * 16 on 2.1.280 to 2.1.282 (counted 2026-09-25). The witness stays withdrawn
+   * for what it did, guessing a prompt's rows out of prose-shaped screen lines,
+   * not for what it was thought to duplicate. A mid-turn message reaches the
+   * chat by other copies: the phone's own send (isTakenSend), Orca's hook copy
+   * (use-desktop-prompt-echoes.ts), and the queue box below. See
+   * mobile-scrollback-prompt-witness.test.ts for the evidence.
    *
    * The QUEUE BOX below is a different witness and is kept: short entries the
    * agent lists for itself, not prose guessed out of its output.
