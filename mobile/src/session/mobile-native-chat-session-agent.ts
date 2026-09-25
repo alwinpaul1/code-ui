@@ -39,6 +39,17 @@
  *  shape; none of the 140 JSON Lines files Codex, Grok, Droid and Gemini wrote
  *  here does.
  *
+ *  Codex does the same with `$CODEX_HOME/sessions/`, and Orca sets CODEX_HOME
+ *  in every terminal it opens once it manages the Codex home (Orca main
+ *  2026-09-23, ipc/pty/host-env/assembly.ts): `<userData>/codex-runtime-home/home`,
+ *  or `<userData>/codex-accounts/<id>/home` for a managed account. A `codex`
+ *  typed into such a terminal writes its rollout there, and this machine's
+ *  runtime home holds one from 2026-09-05. Outside `.codex` the path has to be
+ *  Codex's own: `sessions/YYYY/MM/DD/rollout-<start time>-<thread uuid>.jsonl`,
+ *  the dated layout Orca's own `claimsCodexRolloutLayout` keys on. All 13
+ *  rollouts on this machine have it (2026-09-25); none of the 668 Claude
+ *  transcripts or the 1504 other JSON Lines files under the agents' homes do.
+ *
  *  Anything else returns null. A path we do not recognise is not a reason to
  *  pick the likelier agent: a wrong identity opens the wrong transcript reader
  *  against a real session file.
@@ -49,7 +60,10 @@ const CLAUDE_DEFAULT_HOME_TRANSCRIPT = /(?:^|\/)\.claude\/projects\/[^/]+\/[^/]+
  *  the first group is the config dir's name. */
 const CLAUDE_CONFIG_DIR_TRANSCRIPT =
   /(?:^|\/)([^/]+)\/projects\/(?:-|[A-Za-z]--)[A-Za-z0-9-]*\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/
-const CODEX_ROLLOUT = /(?:^|\/)\.codex\/sessions\/(?:[^/]+\/)+[^/]+\.jsonl$/
+const CODEX_DEFAULT_HOME_ROLLOUT = /(?:^|\/)\.codex\/sessions\/(?:[^/]+\/)+[^/]+\.jsonl$/
+/** `<CODEX_HOME>/sessions/YYYY/MM/DD/rollout-<start time>-<thread uuid>.jsonl`. */
+const CODEX_HOME_ROLLOUT =
+  /(?:^|\/)[^/]+\/sessions\/\d{4}\/\d{2}\/\d{2}\/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$/
 /** Homes that hold Claude's layout for someone else. OpenClaude writes
  *  Claude-format transcripts under its own `~/.openclaude` (Orca's
  *  OPENCLAUDE_HOOK_SETTINGS), and a Codex home belongs to Codex. */
@@ -81,7 +95,7 @@ export function nativeChatAgentFromTranscriptPath(
     return null
   }
   const claude = isClaudeTranscript(path)
-  const codex = CODEX_ROLLOUT.test(path)
+  const codex = CODEX_DEFAULT_HOME_ROLLOUT.test(path) || CODEX_HOME_ROLLOUT.test(path)
   // A path both layouts fit says nothing about who wrote it.
   if (claude && codex) {
     return null

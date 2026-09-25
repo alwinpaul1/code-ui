@@ -260,6 +260,26 @@ describe('resolveMobileNativeChat', () => {
     ).toEqual({ agent: 'codex', source: 'transcript', sessionId: 'sess-2', transcriptPath })
   })
 
+  // Orca sets CODEX_HOME to its own managed home in every terminal it opens
+  // once it manages the Codex home, so a `codex` typed there writes its
+  // rollout under Orca's user data, not ~/.codex. This one is on disk here.
+  it("offers chat for a hand-started Codex whose rollout is in Orca's own Codex home", () => {
+    const transcriptPath =
+      '/Users/alwinpaul/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/09/05/' +
+      'rollout-2026-09-05T10-52-04-01a070c4-8dde-7ad2-9ee4-0410a6b8e0c0.jsonl'
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        agentStatus: {
+          state: 'idle',
+          updatedAt: 1,
+          agentType: 'unknown',
+          providerSession: { key: 'session_id', id: 'sess-5', transcriptPath }
+        } as never
+      })
+    ).toEqual({ agent: 'codex', source: 'transcript', sessionId: 'sess-5', transcriptPath })
+  })
+
   it('still refuses a terminal whose captured transcript names no agent it can read', () => {
     expect(
       resolveMobileNativeChat({

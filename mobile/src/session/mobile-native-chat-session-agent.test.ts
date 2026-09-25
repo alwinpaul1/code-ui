@@ -140,3 +140,67 @@ describe('naming Claude from a transcript under a config dir other than ~/.claud
     expect(nativeChatAgentFromTranscriptPath(`projects/${NEXOS}/${SESSION}.jsonl`)).toBeNull()
   })
 })
+
+// Codex writes under $CODEX_HOME/sessions/, and Orca sets CODEX_HOME in the
+// environment of every terminal it opens once it manages the Codex home
+// (ipc/pty/host-env/assembly.ts, read off Orca main 2026-09-23): the shared
+// `<userData>/codex-runtime-home/home`, or `<userData>/codex-accounts/<id>/home`
+// for a managed account. A `codex` typed into such a terminal writes its
+// rollout there, as Orca's own resolver says (native-chat/session-file-resolver.ts:
+// "rollout files land under `<managed home>/sessions`, NOT `~/.codex/sessions`").
+// The path below is the one rollout Orca's runtime home holds on this
+// machine, on disk 2026-09-25.
+const ORCA_USER_DATA = '/Users/alwinpaul/Library/Application Support/orca'
+const ROLLOUT_NAME = 'rollout-2026-09-05T10-52-04-01a070c4-8dde-7ad2-9ee4-0410a6b8e0c0.jsonl'
+const RUNTIME_HOME_ROLLOUT = `${ORCA_USER_DATA}/codex-runtime-home/home/sessions/2026/09/05/${ROLLOUT_NAME}`
+
+describe('naming Codex from a rollout under a Codex home other than ~/.codex', () => {
+  it("offers chat on a Codex pane whose rollout sits in Orca's own Codex home", () => {
+    expect(nativeChatAgentFromTranscriptPath(RUNTIME_HOME_ROLLOUT)).toBe('codex')
+  })
+
+  it('offers chat on a Codex pane running under a managed Codex account', () => {
+    // Not captured: there is no managed account on this machine. The home is
+    // Orca's `join(userData, 'codex-accounts')/<account id>/home`.
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        `${ORCA_USER_DATA}/codex-accounts/3f2b9c1e-7a4d-4e8f-9b6a-1c2d3e4f5a6b/home/sessions/2026/09/05/${ROLLOUT_NAME}`
+      )
+    ).toBe('codex')
+  })
+
+  it('offers chat whatever CODEX_HOME is called', () => {
+    expect(
+      nativeChatAgentFromTranscriptPath(`/Users/alwinpaul/work/codex-home/sessions/2026/09/05/${ROLLOUT_NAME}`)
+    ).toBe('codex')
+  })
+
+  it('reads a managed Codex home reported with backslashes', () => {
+    // Not captured: there is no Windows host here.
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        `C:\\Users\\alwinpaul\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\sessions\\2026\\09\\05\\${ROLLOUT_NAME}`
+      )
+    ).toBe('codex')
+  })
+
+  it("does not take a dated folder of the user's own called sessions for a Codex home", () => {
+    expect(nativeChatAgentFromTranscriptPath('/Users/alwinpaul/notes/sessions/2026/09/05/standup.jsonl')).toBeNull()
+    // A rollout is named for its start time and its thread id.
+    expect(
+      nativeChatAgentFromTranscriptPath('/Users/alwinpaul/notes/sessions/2026/09/05/rollout-draft.jsonl')
+    ).toBeNull()
+    // Muse shards by date too, but names the file session.jsonl
+    // (Orca's shared/muse-session-log.ts).
+    expect(
+      nativeChatAgentFromTranscriptPath(
+        '/Users/alwinpaul/.local/share/muse/sessions/2026/09/05/01a070c4-8dde-7ad2-9ee4-0410a6b8e0c0/session.jsonl'
+      )
+    ).toBeNull()
+  })
+
+  it('refuses a Codex home directory, or a rollout with no home above its sessions folder', () => {
+    expect(nativeChatAgentFromTranscriptPath(`${ORCA_USER_DATA}/codex-runtime-home/home/sessions`)).toBeNull()
+    expect(nativeChatAgentFromTranscriptPath(`sessions/2026/09/05/${ROLLOUT_NAME}`)).toBeNull()
+  })
+})
