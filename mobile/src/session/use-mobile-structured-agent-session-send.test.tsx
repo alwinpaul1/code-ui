@@ -449,3 +449,67 @@ describe('mobile structured send retries', () => {
     expect(calls()).toHaveLength(0)
   })
 })
+
+// What the send bridge waits on while the relay re-dials. The controller has
+// one structured lane, bound to the active tab, so the session a waiting send
+// was tapped in has to be named, or a tab switch carries the text into the
+// next tab's session (review of the 2026-09-25 relay wait).
+describe('the send conditions a structured session hands the send bridge', () => {
+  let renderer: ReactTestRenderer | null = null
+  let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
+  let listener: ((value: unknown) => void) | null = null
+  const client = {
+    sendRequest: vi.fn(async (method: string) =>
+      method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+    ),
+    subscribe: vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
+      listener = onData
+      return vi.fn()
+    })
+  } as unknown as RpcClient
+
+  function Harness({ sessionId, connected }: { sessionId: string; connected: boolean }): null {
+    hook = useMobileStructuredAgentSession({
+      client,
+      sessionId,
+      sourceIdentity: 'host-a\0workspace-a',
+      enabled: true,
+      connected,
+      agent: 'codex',
+      onSendError: vi.fn()
+    } as never)
+    return null
+  }
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    hook = null
+    listener = null
+  })
+
+  it('names the session a waiting send belongs to, and reads ready only once it loaded on a live link', async () => {
+    act(() => {
+      renderer = create(createElement(Harness, { sessionId: 'session-1', connected: true }))
+    })
+    // No fence to send against until the first page lands.
+    expect(hook!.sendConditions.sendable).toBe(false)
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotEvent()))
+    expect(hook!.sendConditions).toEqual({ client, target: expect.any(String), sendable: true })
+    const tapped = hook!.sendConditions.target
+
+    // The link drops: not sendable, but still the same session.
+    act(() => {
+      renderer!.update(createElement(Harness, { sessionId: 'session-1', connected: false }))
+    })
+    expect(hook!.sendConditions.sendable).toBe(false)
+    expect(hook!.sendConditions.target).toBe(tapped)
+
+    // Another tab's session is another target.
+    act(() => {
+      renderer!.update(createElement(Harness, { sessionId: 'session-2', connected: true }))
+    })
+    expect(hook!.sendConditions.target).not.toBe(tapped)
+  })
+})

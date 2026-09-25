@@ -115,22 +115,24 @@ describe('useMobileNativeChatMessageSend', () => {
     api = null
   })
 
-  it('wakes a cooled-down relay before writing when the tab is not connected', async () => {
-    // Why: the relay supervisor books a 60 s cooldown after the desktop's peer
-    // drops, and a write that arrives inside it waits out its 15 s budget and
-    // fails as "Message not sent". The tap on Send is the user asking for the
-    // connection now — nudge first, then let the write ride the reconnect.
+  it('wakes a cooled-down relay and writes only once it is back when the tab is not connected', async () => {
+    // Why: after the desktop's relay peer drops, the supervisor backs off
+    // before it re-dials. The tap on Send is the user asking for the
+    // connection now — nudge first, then write once the link is back. (The
+    // relay-reconnect suite drives the same send through the real transport.)
     clientState = 'disconnected'
     notifyForeground.mockClear()
     mount(() => null)
-    await act(async () => {
-      await api!.send('hello')
-    })
+    const sending = api!.send('hello')
     expect(notifyForeground).toHaveBeenCalledWith('user-send')
+    expect(clearInputWrite).not.toHaveBeenCalled()
+    clientState = 'connected'
+    await act(async () => {
+      await sending
+    })
     expect(notifyForeground.mock.invocationCallOrder[0]).toBeLessThan(
       clearInputWrite.mock.invocationCallOrder[0]!
     )
-    clientState = 'connected'
   })
 
   it('does not nudge a connection that is already up', async () => {

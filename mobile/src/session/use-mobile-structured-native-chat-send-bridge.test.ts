@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 
@@ -25,6 +26,8 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const onSendError = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
+  // A loaded session on a live link; the relay-reconnect suite covers the rest.
+  const connectedClient = { getState: () => 'connected', notifyForeground: vi.fn() } as unknown as RpcClient
 
   function Harness({ agent }: { agent: AgentSessionHandleProvider }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
@@ -35,7 +38,8 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       holdUnconfirmedSend,
       onSendError,
       restoreRejectedDraft,
-      sendStructured
+      sendStructured,
+      sendConditions: { client: connectedClient, sendable: true }
     }).sendWithOutcome
     return null
   }

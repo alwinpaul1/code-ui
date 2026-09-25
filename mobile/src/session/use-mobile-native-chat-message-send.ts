@@ -22,6 +22,7 @@ import {
   clearMobileNativeChatInputResidue,
   mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
+import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 
 /** A command whose ack was lost may have run; a retry could run it twice. */
 const COMMAND_UNCONFIRMED = 'Command unconfirmed — check chat before retrying'
@@ -98,6 +99,12 @@ export function useMobileNativeChatMessageSend(args: {
     beforeSend,
     onCommandDispatched
   } = args
+  const sendGate = useMobileNativeChatSendGate({
+    client,
+    sendable: enabled,
+    action: 'Message',
+    onUnready: onSendError
+  })
 
   const sendMessage = useCallback(
     async (
@@ -116,19 +123,24 @@ export function useMobileNativeChatMessageSend(args: {
       const origin = captureSendOrigin(text)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
-      // Why: the lease collapses one render after `connState`, so a question-card
-      // answer (which reaches this send directly) would otherwise burn the whole
-      // 15s heal+send budget waiting on a socket that is already gone.
-      if (!client || !handle || !origin || !enabled) {
-        onSendError('Message not sent (disconnected)')
+      if (!handle || !origin) {
+        onSendError(handle ? 'Message not sent (no chat on this tab)' : 'Message not sent (no terminal on this tab)')
         return 'rejected'
       }
-      // Why: after the desktop's relay peer drops, the supervisor books a 60 s
-      // cooldown and a write inside it would wait out its whole budget and fail.
-      // The tap on Send is the user asking for the link now; the write below
-      // then rides the reconnect (budgetSpansConnect) instead of the cooldown.
-      if (client.getState() !== 'connected') {
-        client.notifyForeground('user-send')
+      // One budget for the whole action, the wait for the link included: a hung
+      // heal must eat into the text send's time, not hand it a fresh timeout and
+      // pin the composer for twice as long. An image send already opened one
+      // covering its paste — keep spending that.
+      const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
+      // Nothing has been written yet, so a composer send tapped while the relay
+      // re-dials waits for it and then goes (mobile-native-chat-send-readiness.ts).
+      // A card answer or a command does not: what it types was chosen against a
+      // screen the phone has not seen since the link dropped.
+      const client = syncComposer
+        ? await sendGate.wait(deadline, () => handleRef.current !== handle)
+        : sendGate.now(recordControlSend ? 'Answer' : 'Command')
+      if (!client) {
+        return 'rejected'
       }
       if (syncComposer && beforeSend) {
         await beforeSend()
@@ -137,10 +149,6 @@ export function useMobileNativeChatMessageSend(args: {
       // send (#10228); submitting on top of it would glue the image onto this
       // message. Healed before the draft clear so a failed heal — which sends
       // nothing — leaves the composer exactly as the user left it.
-      // One budget for the whole action: a hung heal must eat into the text send's
-      // time, not hand it a fresh timeout and pin the composer for twice as long.
-      // An image send already opened one covering its paste — keep spending that.
-      const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
       const healArgs = {
         client,
         terminal: handle,
@@ -271,16 +279,15 @@ export function useMobileNativeChatMessageSend(args: {
       beforeSend,
       captureSendOrigin,
       clearDraftForSend,
-      client,
       commandSendRef,
       deviceTokenRef,
-      enabled,
       handleRef,
       holdUnconfirmedSend,
       onCommandDispatched,
       onSendError,
       readSeededLaunchDraftSeed,
-      restoreRejectedDraft
+      restoreRejectedDraft,
+      sendGate
     ]
   )
 

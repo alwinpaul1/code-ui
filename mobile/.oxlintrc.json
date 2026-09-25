@@ -446,7 +446,12 @@
             // 2026-09-24: +15 for the cases that pin Working and Stop to the
             // lead's own turn while a background agent runs (parity item 7);
             // the rule is claude-lead-turn-ended.ts, tested beside it.
-            "max": 820,
+            // 2026-09-25: +16 for the relay re-dial wait. The fast refusal is
+            // now pinned on a question-card answer, and a new case holds a
+            // composer send for the link and checks the reason it gives. The
+            // stub's live state now follows the rendered one, and the
+            // structured mock gains sendConditions.
+            "max": 836,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -473,7 +478,12 @@
             // (split out the same way use-native-chat-attachment-scope-writers
             // already is), so this file only gains the wiring: one import, the
             // type's field, the hook call, and the field in the return.
-            "max": 325,
+            // 2026-09-25: +2 for waiting out a relay re-dial before a send
+            // writes. The wait and its message live in
+            // mobile-native-chat-send-readiness.ts; this file gains the gate's
+            // hook call and a separate refusal for a tab with no terminal,
+            // which the old "(disconnected)" line had covered wrongly.
+            "max": 327,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -498,7 +508,12 @@
             // Done): a `failed` RPC-response builder and three cases covering
             // the upload-and-swap, the no-scope no-op, and the reject-leaves-
             // the-chip-untouched path.
-            "max": 866,
+            // 2026-09-25: +18 because the two lease-closed cases no longer fail
+            // at once. One waits out the send's budget on fake timers and pins
+            // the reason it now gives; the other holds its heal until the lease
+            // comes back and then sends. The relay re-dial cases have their own
+            // suite (use-mobile-native-chat-image-attachments-relay-reconnect).
+            "max": 884,
             "skipBlankLines": true,
             "skipComments": true
           }

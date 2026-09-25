@@ -297,9 +297,10 @@ export function useMobileStructuredAgentSession(args: {
     turnThinking,
     turnActivity,
     sendWithOutcome,
-    cancel: () => {
-      void requestCancel()
-    },
+    // What the send bridge waits on across a relay re-dial: a loaded session
+    // (a fence to send against) on a live link, and still this session.
+    sendConditions: { client, target: sessionKey, sendable: client !== null && sessionId !== null && enabled && connected && state.fence !== null },
+    cancel: () => void requestCancel(),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current.items)),
     permission: projectStructuredPermission(approvalPrompt),

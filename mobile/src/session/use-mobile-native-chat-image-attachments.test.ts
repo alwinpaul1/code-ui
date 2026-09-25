@@ -129,7 +129,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
     // Record each terminal write so the paste-before-settle order is asserted,
     // not just implied by the call counts.
-    const trackedClient: Pick<RpcClient, 'sendRequest'> = {
+    const trackedClient: Pick<RpcClient, 'sendRequest' | 'getState' | 'notifyForeground'> = {
+      ...client,
       sendRequest: (method, params) => {
         if (method === 'terminal.send') {
           order.push((params as { text?: string }).text?.startsWith('\x15') ? 'clear' : 'paste')
@@ -270,7 +271,8 @@ describe('useMobileNativeChatImageAttachments', () => {
         sendResult(true), // Ctrl+U clear
         sendResult(true) // image paste
       ])
-      const slowClient: Pick<RpcClient, 'sendRequest'> = {
+      const slowClient: Pick<RpcClient, 'sendRequest' | 'getState' | 'notifyForeground'> = {
+        ...client,
         sendRequest: async (method, params) => {
           if (method === 'terminal.send') {
             // A slow relay: each write burns 5s of the action's budget.
@@ -401,13 +403,24 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.attachImage('library')
     })
+    // The send waits out its budget for the lease (it may be re-acquiring after
+    // a reconnect), then says which half was missing: the link is up here.
+    vi.useFakeTimers()
     let accepted = true
-    await act(async () => {
-      accepted = await hook!.sendNativeChat('hi')
-    })
+    try {
+      const sending = hook!.sendNativeChat('hi')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000)
+      })
+      accepted = await sending
+    } finally {
+      vi.useRealTimers()
+    }
     expect(accepted).toBe(false)
     expect(baseSend).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
+    expect(onSendError).toHaveBeenCalledWith(
+      'Message not sent: the desktop terminal did not take input from this phone within 11 s'
+    )
     expect(hook!.attachments).toHaveLength(1)
   })
 
@@ -821,20 +834,29 @@ describe('useMobileNativeChatImageAttachments', () => {
       hook!.removeAttachment('img-1')
     })
 
-    // Lease lost: the heal is a terminal.send too, so it must not be attempted.
-    update({ ...args, enabled: false })
-    let accepted = true
-    await act(async () => {
-      accepted = await hook!.sendNativeChat('hi again')
-    })
-    expect(accepted).toBe(false)
-    expect(onSendError).toHaveBeenLastCalledWith('Message not sent (disconnected)')
-    expect(client.calls.filter((c) => c.method === 'terminal.send')).toHaveLength(2)
+    // Lease lost: the heal is a terminal.send too, so it must not be attempted
+    // while the lease is closed. The send waits for the lease instead, and the
+    // heal goes once it is back.
+    vi.useFakeTimers()
+    let accepted: boolean | null = null
+    try {
+      update({ ...args, enabled: false })
+      void hook!.sendNativeChat('hi again').then((result) => {
+        accepted = result
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(accepted).toBeNull()
+      expect(client.calls.filter((c) => c.method === 'terminal.send')).toHaveLength(2)
 
-    update({ ...args, enabled: true })
-    await act(async () => {
-      accepted = await hook!.sendNativeChat('hi again')
-    })
+      update({ ...args, enabled: true })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
     expect(accepted).toBe(true)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)

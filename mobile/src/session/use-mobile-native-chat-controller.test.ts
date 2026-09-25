@@ -97,6 +97,8 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     turnId: null,
     turnActivity: null,
     sendWithOutcome: structuredSendWithOutcome,
+    // A loaded session on a live link, so a structured send goes at once.
+    sendConditions: { client: { getState: () => 'connected', notifyForeground: () => {} }, sendable: true },
     cancel: structuredCancel,
     cancelPrompt: structuredCancelPrompt,
     permission: structuredPermission,
@@ -191,8 +193,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   const onSendError = vi.fn()
   const onSendResolved = vi.fn()
   // Only the stale-input heal reaches the transport directly (the message send
-  // itself is mocked above).
-  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
+  // itself is mocked above). Its live state is the one the Harness renders, as
+  // a real client's and its screen's agree.
+  let liveState: ConnectionState = 'connected'
+  const clientStub = { sendRequest: vi.fn(), getState: () => liveState, getLastConnectedAt: () => 1, notifyForeground: vi.fn() }
 
   function Harness({
     connState = 'connected',
@@ -205,6 +209,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     activeHandle?: string | null
     inputLeaseReady?: boolean
   }): null {
+    liveState = connState
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
@@ -241,6 +246,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     act(() => renderer?.unmount())
     renderer = null
     controller = null
+    vi.useRealTimers()
   })
 
   it('leaves structured prompt cancellation unavailable on the legacy bridge lane', () => {
@@ -476,21 +482,36 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledWith(ORIGIN, 'look', expect.any(Function))
   })
 
-  it('fails a send fast while the socket is down, before spending the heal budget', async () => {
+  it('fails a question-card answer fast while the socket is down, before spending the heal budget', async () => {
     // The lease collapses a render after connState, so a question-card answer could
-    // otherwise sit in `sending` for the whole 15s heal+send budget.
+    // otherwise sit in `sending` for the whole 15s heal+send budget. It is not held
+    // for the link either: its text was chosen against a screen gone stale.
     markMobileNativeChatInputStale('term-1')
     await act(async () => {
       renderer?.update(createElement(Harness, { connState: 'connecting' }))
     })
     let accepted = true
     await act(async () => {
-      accepted = await controller!.handleNativeChatSend('answer')
+      accepted = await controller!.handleNativeChatQuestionAnswer('answer')
     })
     expect(accepted).toBe(false)
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
     expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
+    expect(onSendError).toHaveBeenCalledWith('Answer not sent: not connected to your desktop')
+  })
+
+  it('holds a composer send while the socket is down, healing nothing meanwhile, and says why when it stays down', async () => {
+    markMobileNativeChatInputStale('term-1')
+    await act(async () => renderer?.update(createElement(Harness, { connState: 'connecting' })))
+    vi.useFakeTimers() // back to real in afterEach
+    const sending = controller!.handleNativeChatSend('hello')
+    await act(() => vi.advanceTimersByTimeAsync(11_000).then(() => undefined))
+    expect(await sending).toBe(false)
+    expect(clientStub.sendRequest.mock.calls.filter(([method]) => method === 'terminal.send')).toEqual([])
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith('Message not sent: the connection to your desktop dropped and did not come back within 11 s')
+    // The tap asked the link to come back now instead of after its backoff.
+    expect(clientStub.notifyForeground).toHaveBeenCalledWith('user-send')
   })
 
   it('reports a rejected send and posts no echo', async () => {

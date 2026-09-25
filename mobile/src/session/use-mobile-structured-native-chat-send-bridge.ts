@@ -1,7 +1,14 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import {
+  openMobileNativeChatSendBudget,
+  type MobileNativeChatSendOutcome
+} from './mobile-native-chat-send'
+import {
+  useMobileNativeChatSendGate,
+  type MobileNativeChatSendConditions
+} from './mobile-native-chat-send-readiness'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 
 type StructuredNativeChatAttachment = {
@@ -19,6 +26,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     deadline?: number,
     attachments?: readonly StructuredNativeChatAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
+  /** The session's own gate (useMobileStructuredAgentSession): its client, and
+   *  whether it is loaded with the link up. */
+  sendConditions: MobileNativeChatSendConditions
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
@@ -46,20 +56,45 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     holdUnconfirmedSend,
     onSendError,
     restoreRejectedDraft,
-    sendStructured
+    sendConditions
   } = args
+  // The session's key rides along as the send's target: the controller's one
+  // structured lane follows the active tab, so a wait that outlives a tab
+  // switch would otherwise send this text into the next tab's session.
+  const sendGate = useMobileNativeChatSendGate({
+    ...sendConditions,
+    action: 'Message',
+    lane: 'session',
+    onUnready: onSendError
+  })
+  // The send a wait resumes into is the latest render's: the one at the tap
+  // closed over a session that could not send yet.
+  const latestSendStructured = useRef(args.sendStructured)
+  latestSendStructured.current = args.sendStructured
   const sendWithOutcome = useCallback(
     async (
       text: string,
       images?: string[],
-      deadline?: number,
+      sharedDeadline?: number,
       attachments?: readonly StructuredNativeChatAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
-        onSendError('Message not sent (disconnected)')
+        onSendError('Message not sent (no chat on this tab)')
         return 'rejected'
       }
+      // Nothing has been written yet, so a send tapped while the relay re-dials
+      // waits for it and then goes (mobile-native-chat-send-readiness.ts). One
+      // that waited hands the rest of its budget on, so the whole send stays
+      // inside one; one that did not keeps the budget it was given.
+      let deadline = sharedDeadline
+      if (!sendGate.isReady()) {
+        deadline ??= openMobileNativeChatSendBudget()
+        if (!(await sendGate.wait(deadline))) {
+          return 'rejected'
+        }
+      }
+      const sendStructured = latestSendStructured.current
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
       clearDraftForSend(origin, text)
       const outcome =
@@ -100,7 +135,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       holdUnconfirmedSend,
       onSendError,
       restoreRejectedDraft,
-      sendStructured
+      sendGate
     ]
   )
   const send = useCallback(

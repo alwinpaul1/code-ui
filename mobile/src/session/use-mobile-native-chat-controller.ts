@@ -357,7 +357,7 @@ export function useMobileNativeChatController(
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
-    sendStructured: structuredNativeChat.sendWithOutcome,
+    sendStructured: structuredNativeChat.sendWithOutcome, sendConditions: structuredNativeChat.sendConditions,
     captureSendOrigin,
     clearDraftForSend,
     acceptSend,

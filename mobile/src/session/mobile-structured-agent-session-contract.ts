@@ -7,6 +7,7 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { NativeChatTurnActivity } from './mobile-native-chat-turn-activity'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendConditions } from './mobile-native-chat-send-readiness'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
@@ -36,6 +37,9 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
     deadline?: number,
     attachments?: readonly StructuredMobileAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
+  /** Whether `sendWithOutcome` can write right now: a loaded session on a live
+   *  link. The send bridge waits on it across a relay re-dial. */
+  sendConditions: MobileNativeChatSendConditions
   cancel: () => void
   permission: MobileChatPermission | null
   question: MobileChatQuestion | null

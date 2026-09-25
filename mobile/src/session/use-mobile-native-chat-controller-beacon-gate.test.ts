@@ -22,6 +22,7 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     turnId: null,
     turnActivity: null,
     sendWithOutcome: vi.fn(),
+    sendConditions: { client: null, sendable: false },
     cancel: vi.fn(),
     permission: null,
     question: null,

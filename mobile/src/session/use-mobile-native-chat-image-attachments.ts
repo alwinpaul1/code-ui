@@ -36,6 +36,7 @@ import {
   isPendingNativeChatFile,
   withMobileNativeChatFileNotes
 } from './mobile-native-chat-file-attachment'
+import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -143,6 +144,15 @@ export function useMobileNativeChatImageAttachments({
   })
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
+  // Nothing has been written when a send below looks, so one tapped while the
+  // relay re-dials waits for it on its own budget and then goes; a wait that
+  // ends unready refuses as the gate always did, the box, chips and bubble
+  // untouched (mobile-native-chat-send-readiness.ts). The tab's scope is the
+  // target: a wait that outlives a tab switch gives up instead of sending.
+  const sendGate = useMobileNativeChatSendGate({
+    client, sendable: enabled && connState === 'connected', target: scopeKey, action: 'Message',
+    lane: structuredNativeChat ? 'session' : 'terminal', onUnready: (message) => { onError?.(); onSendError(message) }
+  })
 
   const { attachImage, attachImageFile, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
     client,
@@ -218,9 +228,7 @@ export function useMobileNativeChatImageAttachments({
           )
         }
         if (structuredNativeChat && pendingImages.length > 0 && scope) {
-          if (!client || !enabled || connState !== 'connected') {
-            onError?.()
-            onSendError('Message not sent (disconnected)')
+          if (!(await sendGate.wait(deadline))) {
             return false
           }
           // Empty the composer and add the optimistic bubble now, in the same
@@ -248,14 +256,13 @@ export function useMobileNativeChatImageAttachments({
             // Why: the heal is itself a terminal.send, so without the input lease it
             // can only be rejected — which used to latch the marker and fail every
             // later send with a bare "Message not sent" (#10681). Gate it like the
-            // image path; the heal retries once the lease is back.
-            if (!client || !enabled || connState !== 'connected') {
-              onError?.()
-              onSendError('Message not sent (disconnected)')
+            // image path: it waits for the lease, or leaves the marker for later.
+            const healClient = await sendGate.wait(deadline, () => activeHandleRef.current !== staleTerminal)
+            if (!healClient) {
               return false
             }
             const healed = await healMobileNativeChatStaleInput({
-              client,
+              client: healClient,
               terminal: staleTerminal,
               deviceToken: deviceTokenRef.current,
               deadline
@@ -276,10 +283,13 @@ export function useMobileNativeChatImageAttachments({
           return accepted
         }
         const handle = activeHandleRef.current
-        if (!client || !handle || !enabled || connState !== 'connected') {
+        if (!handle) {
           onError?.()
-          // Mirror the text path's failure surface (the base send is never reached).
-          onSendError('Message not sent (disconnected)')
+          onSendError('Message not sent (no terminal on this tab)')
+          return false
+        }
+        const pasteClient = await sendGate.wait(deadline, () => activeHandleRef.current !== handle)
+        if (!pasteClient) {
           return false
         }
         // Set once the box has been emptied for this send; a no-op before that.
@@ -313,7 +323,7 @@ export function useMobileNativeChatImageAttachments({
           // glued to this photo's caption — size the clear for whatever is there.
           const residue = mobileNativeChatInputResidue(handle)
           const pasted = await pasteMobileNativeChatImagePaths({
-            client,
+            client: pasteClient,
             terminal: handle,
             agent,
             deviceToken: deviceTokenRef.current,
@@ -384,15 +394,13 @@ export function useMobileNativeChatImageAttachments({
       baseSend,
       beforeImagePaste,
       beginImageSend,
-      client,
-      connState,
       agent,
       deviceTokenRef,
-      enabled,
       onError,
       onSendError,
       readSeededLaunchDraft,
       scopeKey,
+      sendGate,
       sleep
     ]
   )
