@@ -10,7 +10,7 @@ failing-first test and has been checked on the phone in light and dark.
 |---|---|---|---|
 | 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100); telling thinking from notes needs the desktop to mark it (below) |
 | 2 | Tool-run labels: a single command by its description ("Ran Count K*_F changes in section3 accountings"), "Ran skill", a SendMessage as "Messaged @agent <summary>", a new file as "created a file" | "Ran a command" for every single command; no skill or message wording | done (7816f8c5) |
-| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0") | No chip | done (7816f8c5) |
+| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, has no chip, and only Orca could carry its count |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards. The sheet caps each input and the output at the inline row's `MAX_TOOL_DETAIL_LENGTH`, so a huge output cannot stall text layout; the Tools toggle no longer expands a row that opens the sheet, which the user chose to keep (2026-09-24; the Claude app has no such toggle). Drag feel needs a phone check |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
 | 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a breathing label; parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
@@ -32,6 +32,32 @@ failing-first test and has been checked on the phone in light and dark.
   (transcript-record-blocks.ts, claudeMessageRole), so the phone cannot tell
   thinking from a note written between tools, and draws both under the note
   line. Only an Orca change could mark them apart.
+- **Line counts (3).** Session 76ba8f2f (Claude Code 2.1.282), lines
+  4408-4447. The Claude app counts from the full tool input it gets over its
+  bridge. The phone gets Orca's mobile payload diet
+  (`native-chat-rpc-block-sanitize.ts`, the same 4000-character cap on
+  origin/main and the installed 1.4.211), which keeps 4000 characters of a
+  tool call's input and ends what it cut with `… (truncated)`. An edit's
+  count survives that: Orca attaches the result's `structuredPatch` as
+  `editPatch`, and that is not cut, so the Edit's +14 −2 was already right. A
+  created file's count does not. A create's `structuredPatch` is empty (3658 of
+  3658 creates in this machine's transcripts), its result text names no count,
+  and its content is cut (1421 of those 3658; the Write here kept 3896 of 6111
+  characters and read "+61 −0"). No RPC the phone may call returns the uncut
+  input: `nativeChat.readSession` applies the same diet, `agentSession.history`
+  is the structured lane's, and `files.read` gives the file as it is now, not
+  as it was written. So the chip is left off whenever a count cannot be the
+  edit's own: an input the diet cut or a key it dropped, a resolved hunk
+  Orca kept only 400 rows of, a patch at Orca's 40-hunk cap, a file the
+  journal bounded, or a file-editing call that landed with nothing left to
+  count (`mobile-native-chat-edit-wire-cut.ts`). The diff card shows "Diff
+  truncated" in place of its count for the same files. Codex: a whole
+  `apply_patch` envelope still counts, and one cut before `*** End Patch`
+  voids its run's chip. Codex 0.153.4 applies every patch from inside an
+  `exec` script, as a JavaScript string with escaped newlines, which nothing
+  on the phone splits into files, so those runs draw no chip. A command that
+  edits a file some other way (`sed -i`, `cat > file`) is never counted: what
+  it changed is not on the wire.
 - **Hand-backs (5).** Since Claude Code 2.1.272 every subagent report is a
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops

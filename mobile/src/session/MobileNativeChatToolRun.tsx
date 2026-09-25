@@ -8,10 +8,7 @@ import {
 } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
-import {
-  editFilesFromToolPair,
-  isEditToolName
-} from '../../../src/shared/native-chat-edit-normalize'
+import { isEditToolName } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
@@ -27,7 +24,7 @@ import {
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
-import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
+import { editFilesForToolCall, toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { toolPairOpensDetailSheet } from './mobile-native-chat-tool-detail'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
@@ -94,26 +91,10 @@ function ResultBody({
 
 /** The files one edit call changed, or null when the model refuses to claim an
  *  edit — a failed call, one still running, or a turn that stopped before its
- *  call was answered. Those keep the generic tool view and its error body. */
+ *  call was answered. Those keep the generic tool view and its error body. A
+ *  file the wire cut arrives `truncated`, the same answer the run's chip gets. */
 function editFilesForPair(pair: ToolPair) {
-  const { call, result } = pair
-  if (!call) {
-    return null
-  }
-  const files = editFilesFromToolPair({
-    name: call.name,
-    input: call.input,
-    ...(call.state ? { state: call.state } : {}),
-    ...(result
-      ? {
-          result: {
-            output: result.output,
-            isError: result.isError,
-            editPatch: result.editPatch
-          }
-        }
-      : {})
-  })
+  const files = pair.call ? editFilesForToolCall(pair.call, pair.result ?? null) : null
   return files && files.length > 0 ? files : null
 }
 

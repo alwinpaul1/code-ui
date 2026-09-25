@@ -286,12 +286,18 @@ function DiffCard({
         >
           {baseName(file.path)}
         </Text>
-        <Text testID="diff-card-added" style={styles.added}>
-          {`+${file.added}`}
-        </Text>
-        <Text testID="diff-card-removed" style={styles.removed}>
-          {`−${file.removed}`}
-        </Text>
+        {file.truncated ? null : (
+          // A cut file's rows are what survived the cut, so their count is
+          // not the edit's; "Diff truncated" beside the name says so instead.
+          <>
+            <Text testID="diff-card-added" style={styles.added}>
+              {`+${file.added}`}
+            </Text>
+            <Text testID="diff-card-removed" style={styles.removed}>
+              {`−${file.removed}`}
+            </Text>
+          </>
+        )}
         {clipped ? (
           // Beside the counts, not under the rows: a card clipped down to no
           // rows at all would otherwise say nothing about what it dropped.

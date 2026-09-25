@@ -4,7 +4,9 @@
 // chain the inline diff card (MobileNativeChatDiffCard) already trusts —
 // editPatch hunks first, then a whole-file write, then an Edit's own
 // old/new strings — never a guess, so a run with no resolvable edit draws
-// nothing rather than a false "+0 −0".
+// nothing rather than a false "+0 −0", and a run whose edit the wire cut
+// (mobile-native-chat-edit-wire-cut.ts) draws nothing rather than the count
+// of what survived the cut.
 
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
@@ -17,12 +19,14 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
+import { isLandedFileEdit, markWireCutEditFiles } from './mobile-native-chat-edit-wire-cut'
 
 /** The files one call is known to have changed, across every shape the
  *  vendored decoder understands — null when the tool isn't edit-shaped, or
- *  when the call is still running, failed, or has no answer yet. The one
- *  place both `toolRunDiffStat` and the sentence's "created a file" wording
- *  ask this question, so they read the same evidence the same way. */
+ *  when the call is still running, failed, or has no answer yet. A file whose
+ *  count the wire cut comes back `truncated`. The one place the chip, the
+ *  diff card and the sentence's "created a file" wording ask this question,
+ *  so they read the same evidence the same way. */
 export function editFilesForToolCall(
   call: NativeChatToolCallBlock,
   result: NativeChatToolResultBlock | null
@@ -30,7 +34,7 @@ export function editFilesForToolCall(
   if (!isEditToolName(call.name)) {
     return null
   }
-  return editFilesFromToolPair({
+  const files = editFilesFromToolPair({
     name: call.name,
     input: call.input,
     ...(call.state ? { state: call.state } : {}),
@@ -38,20 +42,7 @@ export function editFilesForToolCall(
       ? { result: { output: result.output, isError: result.isError, editPatch: result.editPatch } }
       : {})
   })
-}
-
-function knownEditFiles(blocks: readonly NativeChatBlock[]): NativeChatEditFile[] {
-  const files: NativeChatEditFile[] = []
-  for (const pair of pairToolBlocks(blocks)) {
-    if (!pair.call) {
-      continue
-    }
-    const found = editFilesForToolCall(pair.call, pair.result ?? null)
-    if (found) {
-      files.push(...found)
-    }
-  }
-  return files
+  return files ? markWireCutEditFiles(call, result, files) : null
 }
 
 export type NativeChatToolRunDiffStat = { added: number; removed: number }
@@ -59,20 +50,35 @@ export type NativeChatToolRunDiffStat = { added: number; removed: number }
 /** The run's total added/removed line count, summed over every file an
  *  edit-shaped call in the run (not only the rows a collapsed view still
  *  shows) is known to have changed. Null when the run touched no file, or
- *  touched one and nothing about the change could be resolved — there is
- *  nothing honest to draw either way. */
+ *  when any edit in it landed without a whole count — a cut file, or a
+ *  file-editing call with nothing left to count. A sum that leaves one out
+ *  is not the run's total, so there is nothing honest to draw. */
 export function toolRunDiffStat(
   blocks: readonly NativeChatBlock[]
 ): NativeChatToolRunDiffStat | null {
-  const files = knownEditFiles(blocks)
-  if (files.length === 0) {
-    return null
-  }
   let added = 0
   let removed = 0
-  for (const file of files) {
-    added += file.added
-    removed += file.removed
+  let counted = false
+  for (const pair of pairToolBlocks(blocks)) {
+    if (!pair.call) {
+      continue
+    }
+    const result = pair.result ?? null
+    const files = editFilesForToolCall(pair.call, result)
+    if (!files || files.length === 0) {
+      if (isLandedFileEdit(pair.call, result)) {
+        return null
+      }
+      continue
+    }
+    for (const file of files) {
+      if (file.truncated) {
+        return null
+      }
+      added += file.added
+      removed += file.removed
+    }
+    counted = true
   }
-  return { added, removed }
+  return counted ? { added, removed } : null
 }
