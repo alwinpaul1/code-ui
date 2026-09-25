@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type { ForceReconnect } from '../transport/rpc-client-context-contract'
@@ -64,11 +63,9 @@ function render(forceReconnectHost: ForceReconnect, scheme: ThemeScheme): ReactT
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   act(() => {
     rendered.tree = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: scheme },
-        createElement(HostScreenHeader, { controller: controllerWith(forceReconnectHost) })
-      )
+      <ThemeProvider initialPreference={scheme}>
+        <HostScreenHeader controller={controllerWith(forceReconnectHost)} />
+      </ThemeProvider>
     )
   })
   if (rendered.tree === null) {

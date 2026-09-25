@@ -105,7 +105,7 @@ async function renderScreen(
 ): Promise<ReactTestRenderer> {
   const rendered: { tree: ReactTestRenderer | null } = { tree: null }
   await act(async () => {
-    rendered.tree = create(createElement(ThemeProvider, { initialPreference: scheme }, screen()))
+    rendered.tree = create(<ThemeProvider initialPreference={scheme}>{screen()}</ThemeProvider>)
   })
   if (rendered.tree === null) {
     throw new Error('the screen did not mount')
@@ -116,8 +116,8 @@ async function renderScreen(
 function pressableLabelled(tree: ReactTestRenderer, label: string): ReactTestInstance {
   const found = tree.root.findAll(
     (node) =>
-      node.type === 'Pressable' &&
-      node.findAll((child) => child.type === 'Text' && child.props.children === label).length > 0
+      String(node.type) === 'Pressable' &&
+      node.findAll((child) => String(child.type) === 'Text' && child.props.children === label).length > 0
   )
   const node = found[0]
   if (node === undefined) {
@@ -202,10 +202,10 @@ describe('the Troubleshoot screen in both themes', () => {
 
       const block = tree.root.find((node) => node.props.testID === 'mobile-web-shell-update-failures')
       const line = block.find(
-        (node) => node.type === 'Text' && node.props.testID === 'mobile-web-shell-update-failure'
+        (node) => String(node.type) === 'Text' && node.props.testID === 'mobile-web-shell-update-failure'
       )
       const panels = block
-        .findAll((node) => node.type === 'View')
+        .findAll((node) => String(node.type) === 'View')
         .flatMap((node) => stylesOf(node.props.style))
         .map((style) => style.backgroundColor)
         .filter((colour) => colour !== undefined)
@@ -216,7 +216,7 @@ describe('the Troubleshoot screen in both themes', () => {
 
   it.each(['light', 'dark'] as const)('puts the %s page behind it all', async (scheme) => {
     const tree = await renderScreen(scheme)
-    const page = tree.root.findAll((node) => node.type === 'View')[0]
+    const page = tree.root.findAll((node) => String(node.type) === 'View')[0]
 
     expect(stylesOf(page?.props.style).map((style) => style.backgroundColor)).toContain(
       colorsForScheme(scheme).bg

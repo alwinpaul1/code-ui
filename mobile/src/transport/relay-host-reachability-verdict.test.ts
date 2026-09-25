@@ -40,7 +40,7 @@ function controllerReportingTo(report: (reachability: RelayHostReachability) => 
     {
       now: () => 0,
       randomBytes: () => new Uint8Array([0, 0]),
-      setTimer: () => 0,
+      setTimer: () => 0 as unknown as ReturnType<typeof setTimeout>,
       clearTimer: () => {}
     },
     () => {}

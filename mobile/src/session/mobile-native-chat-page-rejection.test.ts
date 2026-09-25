@@ -45,7 +45,7 @@ async function unhandledRejectionsWhile(run: () => Promise<void>): Promise<unkno
   } finally {
     process.removeAllListeners('unhandledRejection')
     for (const listener of previous) {
-      process.on('unhandledRejection', listener)
+      process.on('unhandledRejection', listener as NodeJS.UnhandledRejectionListener)
     }
   }
   return captured

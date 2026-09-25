@@ -44,11 +44,11 @@ function render(verdict: BlockedVerdict): string {
 function renderThemed(preference: ThemePreference, verdict: BlockedVerdict): string {
   act(() => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: preference },
-        createElement(ProtocolBlockScreen, { verdict })
-      )
+      createElement(ThemeProvider, {
+        initialPreference: preference,
+        // oxlint-disable-next-line react/no-children-prop -- a .ts file has no JSX, and ThemeProvider types children as required, so createElement only type-checks with them in props.
+        children: createElement(ProtocolBlockScreen, { verdict })
+      })
     )
   })
   return JSON.stringify(renderer?.toJSON())

@@ -29,7 +29,7 @@ describe('the / menu’s skills list on a host that refuses skills.discover', ()
 
   async function openMenuTwiceAcrossTheStaleWindow(reply: RpcResponse): Promise<number> {
     vi.useFakeTimers()
-    const sendRequest = vi.fn(async () => reply)
+    const sendRequest = vi.fn(async (_method: string, _params?: unknown) => reply)
     const loads: (() => void)[] = []
     act(() => {
       renderer = create(createElement(Harness, { client: { sendRequest }, onLoad: (load) => loads.push(load) }))

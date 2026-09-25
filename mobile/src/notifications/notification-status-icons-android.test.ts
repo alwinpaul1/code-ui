@@ -33,9 +33,10 @@ describe('the icons drawn where a notification used to have an emoji', () => {
   })
 
   it('converts every hand-drawn SVG, so a prebuild cannot fail on one', () => {
-    const files = statusResourceFiles(MOBILE_ROOT)
+    // The plugin is JS: its map is keyed per icon at run time, which inference cannot see.
+    const files = new Map(Object.entries(statusResourceFiles(MOBILE_ROOT)))
     for (const icon of Object.values(NOTIFICATION_STATUS_ICONS)) {
-      const xml = files[`drawable/${icon}.xml`]
+      const xml = files.get(`drawable/${icon}.xml`)
       expect(xml).toContain('android:viewportWidth="24"')
       expect(xml).toMatch(/android:pathData="M/)
       expect(xml).not.toContain('"none"')

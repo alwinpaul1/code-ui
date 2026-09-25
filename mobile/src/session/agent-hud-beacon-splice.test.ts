@@ -47,7 +47,8 @@ function realBeacon(): string {
   execFileSync('sh', ['-c', CLAUDE_HUD_STATUSLINE_SCRIPT], {
     input: workingStatusJson(),
     encoding: 'utf8',
-    env: { PATH: process.env.PATH ?? '', HOME: tmpdir(), CUIHUD_TTY: tty }
+    // Only these variables, on purpose. The cast is for Expo's ProcessEnv, which demands NODE_ENV.
+    env: { PATH: process.env.PATH ?? '', HOME: tmpdir(), CUIHUD_TTY: tty } as unknown as NodeJS.ProcessEnv
   })
   return readFileSync(tty, 'latin1')
 }

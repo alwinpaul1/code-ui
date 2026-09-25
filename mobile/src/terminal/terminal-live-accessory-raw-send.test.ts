@@ -12,7 +12,7 @@ function captureClient(
   })
 ) {
   const sendRequest = vi.fn(() => result)
-  return { client: { sendRequest } as unknown as Pick<RpcClient, 'sendRequest'>, sendRequest }
+  return { client: { sendRequest } as unknown as RpcClient, sendRequest }
 }
 
 const BASE_ARGS = {

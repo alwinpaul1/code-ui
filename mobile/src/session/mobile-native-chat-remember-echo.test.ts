@@ -6,6 +6,7 @@ import {
   rememberEchoInPending,
   sweepWitnessedEchoes
 } from './mobile-native-chat-remember-echo'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -76,7 +77,11 @@ describe('a phone send acknowledged after a witness of it was stored', () => {
   }
   const witness = (id: string, text: string, storedAt?: number) =>
     rememberEchoInPending({}, 'k', id, text, 'a1', [], 'd', storedAt).k![0]!
-  const accept = (stored: ReturnType<typeof witness>[], send = origin, text = 'Working W capital') =>
+  const accept = (
+    stored: ReturnType<typeof witness>[],
+    send: MobileNativeChatSendOrigin = origin,
+    text = 'Working W capital'
+  ) =>
     acceptOwnSendInPending({ k: stored }, 'k', 'pending-1', send, text).k!
 
   it('stamps when each witness was stored', () => {

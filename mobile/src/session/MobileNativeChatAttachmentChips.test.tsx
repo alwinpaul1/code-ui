@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
@@ -34,23 +33,24 @@ vi.mock('./image-preview-store', () => ({ openImagePreview: vi.fn() }))
 function render(props: Parameters<typeof MobileNativeChatAttachmentChips>[0]): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: 'light' }, createElement(
-      MobileNativeChatAttachmentChips,
-      props
-    )))
+    renderer = create(
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatAttachmentChips {...props} />
+      </ThemeProvider>
+    )
   })
   return renderer!
 }
 
 function pencilButtons(renderer: ReactTestRenderer) {
   return renderer.root.findAll(
-    (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Edit image'
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Edit image'
   )
 }
 
 function thumbnail(renderer: ReactTestRenderer) {
   return renderer.root.find(
-    (node) => node.type === 'Pressable' && node.props.accessibilityRole === 'imagebutton'
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'imagebutton'
   )
 }
 
@@ -79,7 +79,7 @@ describe('marking up a photo in the attachment strip', () => {
     expect(openImagePreview).not.toHaveBeenCalled()
     // The X stays, and still removes.
     expect(
-      renderer.root.findAll((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Remove image')
+      renderer.root.findAll((node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Remove image')
     ).toHaveLength(1)
   })
 
@@ -108,7 +108,7 @@ describe('marking up a photo in the attachment strip', () => {
     })
     expect(pencilButtons(renderer)).toHaveLength(0)
     expect(
-      renderer.root.findAll((node) => node.type === 'Pressable' && node.props.accessibilityRole === 'imagebutton')
+      renderer.root.findAll((node) => String(node.type) === 'Pressable' && node.props.accessibilityRole === 'imagebutton')
     ).toHaveLength(0)
   })
 })

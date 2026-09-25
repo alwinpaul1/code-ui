@@ -75,7 +75,9 @@ describe('the chat overlay over a terminal tab', () => {
 
     show(AGENT_EXITED)
     expect(shown(root)).toBe('terminal')
-    act(() => vi.advanceTimersByTime(CHAT_FRAME_HOLD_MS))
+    act(() => {
+      vi.advanceTimersByTime(CHAT_FRAME_HOLD_MS)
+    })
     expect(shown(root)).toBe('terminal')
   })
 
@@ -107,7 +109,9 @@ describe('the chat overlay over a terminal tab', () => {
 
   it('lets a blip that outlasts the hold go to the terminal, and never replays that chat after', () => {
     show(RECONNECT_BLIP)
-    act(() => vi.advanceTimersByTime(CHAT_FRAME_HOLD_MS))
+    act(() => {
+      vi.advanceTimersByTime(CHAT_FRAME_HOLD_MS)
+    })
     expect(shown(root)).toBe('terminal')
 
     show(TERMINAL_CHOSEN)

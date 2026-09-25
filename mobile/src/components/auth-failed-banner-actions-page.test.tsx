@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -30,16 +29,14 @@ function render(
   let renderer!: ReactTestRenderer
   act(() => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: scheme },
-        createElement(AuthFailedBanner, {
-          canRetry: true,
-          onRetry: () => (presses.retry += 1),
-          onRepair: () => (presses.repair += 1),
-          onRemove: () => (presses.remove += 1)
-        })
-      )
+      <ThemeProvider initialPreference={scheme}>
+        <AuthFailedBanner
+          canRetry
+          onRetry={() => (presses.retry += 1)}
+          onRepair={() => (presses.repair += 1)}
+          onRemove={() => (presses.remove += 1)}
+        />
+      </ThemeProvider>
     )
   })
   return renderer

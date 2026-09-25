@@ -51,7 +51,7 @@ const SEND_MESSAGE_PAIR: NativeChatToolPair = {
 // `findAllByType('Text')` keeps this to the host node the mock actually
 // renders.
 function findTextNode(renderer: ReactTestRenderer, testID: string) {
-  return renderer.root.findAllByType('Text').find((node) => node.props.testID === testID)!
+  return renderer.root.findAllByType('Text' as never).find((node) => node.props.testID === testID)!
 }
 
 function findText(renderer: ReactTestRenderer, testID: string): string {
@@ -68,7 +68,7 @@ function textColor(renderer: ReactTestRenderer, testID: string): string | undefi
 function renderTree(children: React.ReactNode, scheme: 'light' | 'dark' = 'light'): ReactTestRenderer {
   let renderer: ReactTestRenderer
   act(() => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, children))
+    renderer = create(<ThemeProvider initialPreference={scheme}>{children}</ThemeProvider>)
   })
   return renderer!
 }
@@ -112,7 +112,7 @@ describe('tool detail body: Inputs and Output', () => {
     renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }))
     const names = renderer.root
       .findAllByProps({ testID: 'tool-detail-input-row' })
-      .map((row) => row.findAllByType('Text')[0]!.props.children)
+      .map((row) => row.findAllByType('Text' as never)[0]!.props.children)
     expect(names).toEqual(['content', 'message', 'recipient', 'summary', 'to', 'type'])
   })
 
@@ -170,7 +170,7 @@ describe('tool detail body: Inputs and Output', () => {
     renderer = renderTree(createElement(ToolDetailBody, { pair: huge }))
     const value = renderer.root
       .findByProps({ testID: 'tool-detail-input-row' })
-      .findAllByType('Text')[1]!.props.children as string
+      .findAllByType('Text' as never)[1]!.props.children as string
     expect(value).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(value.endsWith('…')).toBe(true)
   })

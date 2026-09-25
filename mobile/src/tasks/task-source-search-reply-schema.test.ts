@@ -163,7 +163,7 @@ describe('the Linear issue list takes both shapes the picker has always accepted
 
   // Adopting the item half's `linearIssueRowSchema` adds five requirements to this path. Each one
   // is non-optional on the host's own `LinearIssue`, and each is rendered by the picker row.
-  it.each(['identifier', 'title', 'url', 'updatedAt', 'labels'])(
+  it.each(['identifier', 'title', 'url', 'updatedAt', 'labels'] as const)(
     'drops an issue with no %s, which the host type declares non-optional',
     (member) => {
       const { [member]: _dropped, ...without } = linearRow

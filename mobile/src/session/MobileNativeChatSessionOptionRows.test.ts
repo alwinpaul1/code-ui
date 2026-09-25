@@ -46,7 +46,7 @@ function renderRows(descriptor: SessionOptionDescriptor): ReactTestRenderer {
 }
 
 const textOf = (renderer: ReactTestRenderer): string[] =>
-  renderer.root.findAllByType('Text').flatMap((node) => {
+  renderer.root.findAllByType('Text' as never).flatMap((node) => {
     const children = node.props.children
     return typeof children === 'string' ? [children] : []
   })
@@ -54,7 +54,7 @@ const textOf = (renderer: ReactTestRenderer): string[] =>
 describe('DescriptorRows boolean', () => {
   it('renders one switch and no unknown-value caption', () => {
     const renderer = renderRows({ ...FAST, valueSource: 'unknown' })
-    expect(renderer.root.findAllByType('Switch')).toHaveLength(1)
+    expect(renderer.root.findAllByType('Switch' as never)).toHaveLength(1)
     expect(textOf(renderer)).not.toContain('Current value unknown')
   })
 
@@ -80,7 +80,7 @@ describe('DescriptorRows boolean', () => {
     expect(textOf(renderer)).toContain(shown)
     expect(textOf(renderer)).not.toContain(hidden)
     // The marker qualifies the value; it must not become part of the control's name.
-    expect(renderer.root.findByType('Switch').props.accessibilityLabel).toBe('Fast mode')
+    expect(renderer.root.findByType('Switch' as never).props.accessibilityLabel).toBe('Fast mode')
   })
 
   it('drops the marker once something has picked the value', () => {
@@ -95,6 +95,6 @@ describe('DescriptorRows boolean', () => {
       kind: { type: 'boolean', currentValue: true },
       valueSource: 'unknown'
     })
-    expect(renderer.root.findByType('Switch').props.value).toBe(true)
+    expect(renderer.root.findByType('Switch' as never).props.value).toBe(true)
   })
 })

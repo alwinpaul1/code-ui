@@ -15,7 +15,8 @@ const SHELLS: readonly string[] = ['sh', 'bash', ...(existsSync('/bin/dash') ? [
 function write(shell: string, payload: string): string {
   const tty = join(mkdtempSync(join(tmpdir(), 'cuihud-writer-')), 'pty')
   execFileSync(shell, ['-c', `o="$1"; ${AGENT_HUD_TTY_WRITE.join('; ')}`, 'sh', payload], {
-    env: { PATH: process.env.PATH ?? '', CUIHUD_TTY: tty }
+    // Only these variables, on purpose. The cast is for Expo's ProcessEnv, which demands NODE_ENV.
+    env: { PATH: process.env.PATH ?? '', CUIHUD_TTY: tty } as unknown as NodeJS.ProcessEnv
   })
   return readFileSync(tty, 'latin1')
 }

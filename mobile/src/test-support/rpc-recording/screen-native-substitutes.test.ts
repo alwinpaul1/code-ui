@@ -57,9 +57,12 @@ describe('the inert screen substitutes', () => {
     act(() => {
       rendered = create(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the substitute is an inert element component by construction.
-        createElement(member('react-native', 'Pressable') as ElementType, {}, () => {
-          invoked++
-          return null
+        createElement(member('react-native', 'Pressable') as ElementType<{ children: () => null }>, {
+          // oxlint-disable-next-line react/no-children-prop -- a render callback as children is what this case feeds the substitute, and createElement types a positional child as a ReactNode, which a callback is not. React stores both forms as props.children.
+          children: () => {
+            invoked++
+            return null
+          }
         })
       )
     })

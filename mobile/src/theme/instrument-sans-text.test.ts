@@ -17,29 +17,27 @@ vi.mock('react-native', () => {
   return { StyleSheet: { flatten } }
 })
 
-import { StyleSheet } from 'react-native'
+import { StyleSheet, type StyleProp, type TextStyle } from 'react-native'
 import { fontFamily } from './tokens'
 import { instrumentSansTextStyle } from './instrument-sans-text'
+
+/** The face a styled Text draws in. The helper is generic over its input, so
+ *  the flattened union has no common `fontFamily` for inference to see. */
+function faceOf(style: unknown): string | undefined {
+  return StyleSheet.flatten(style as StyleProp<TextStyle>)?.fontFamily
+}
 
 describe('legacy text that names no face', () => {
   it('draws Instrument Sans regular when a screen sets no family and no weight', () => {
     const styled = instrumentSansTextStyle(undefined)
-    expect(StyleSheet.flatten(styled).fontFamily).toBe(fontFamily.regular)
+    expect(faceOf(styled)).toBe(fontFamily.regular)
   })
 
   it('picks the Instrument Sans face that matches a numeric weight', () => {
-    expect(StyleSheet.flatten(instrumentSansTextStyle({ fontWeight: '500' })).fontFamily).toBe(
-      fontFamily.medium
-    )
-    expect(StyleSheet.flatten(instrumentSansTextStyle({ fontWeight: '600', fontSize: 15 })).fontFamily).toBe(
-      fontFamily.semibold
-    )
-    expect(StyleSheet.flatten(instrumentSansTextStyle({ fontWeight: '700' })).fontFamily).toBe(
-      fontFamily.bold
-    )
-    expect(StyleSheet.flatten(instrumentSansTextStyle({ fontWeight: 'bold' })).fontFamily).toBe(
-      fontFamily.bold
-    )
+    expect(faceOf(instrumentSansTextStyle({ fontWeight: '500' }))).toBe(fontFamily.medium)
+    expect(faceOf(instrumentSansTextStyle({ fontWeight: '600', fontSize: 15 }))).toBe(fontFamily.semibold)
+    expect(faceOf(instrumentSansTextStyle({ fontWeight: '700' }))).toBe(fontFamily.bold)
+    expect(faceOf(instrumentSansTextStyle({ fontWeight: 'bold' }))).toBe(fontFamily.bold)
   })
 
   it('leaves a code face alone', () => {
@@ -54,7 +52,7 @@ describe('legacy text that names no face', () => {
 
   it('reads the weight from the last style in a list', () => {
     const styled = instrumentSansTextStyle([{ color: '#111' }, { fontWeight: '600' }])
-    expect(StyleSheet.flatten(styled).fontFamily).toBe(fontFamily.semibold)
+    expect(faceOf(styled)).toBe(fontFamily.semibold)
   })
 
   it('keeps the React Native Text and TextInput hooks in the patch', () => {

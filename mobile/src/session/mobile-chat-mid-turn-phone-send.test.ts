@@ -169,7 +169,8 @@ describe('a message the phone queues while the agent works', () => {
       onClearSendError: vi.fn(),
       sendSurfaceId: tab,
       getSendCompletionGeneration: () => 0,
-      keyboardInset: 0
+      keyboardInset: 0,
+      onOpenFile: vi.fn()
     })
   }
 
@@ -219,7 +220,7 @@ describe('a message the phone queues while the agent works', () => {
   }
 
   function view() {
-    return renderer!.root.findAll((node) => node.type === 'ChatView')[0]!
+    return renderer!.root.findAll((node) => String(node.type) === 'ChatView')[0]!
   }
   /** Each user bubble the chat draws: the phone's own as `phone`, the hook's
    *  copy as `hook`, the queue box's as `queue`, a remembered witness as `kept`. */

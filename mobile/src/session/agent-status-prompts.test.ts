@@ -135,7 +135,6 @@ describe('a prompt posted on this pane by another session', () => {
 
   it('still takes a prompt from a row with no provider session (older hosts)', () => {
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, PARENT, {
-      state: 'working',
       updatedAt: 1,
       prompt: parentText
     })
@@ -150,7 +149,6 @@ describe('a prompt posted on this pane by another session', () => {
 describe('the time of a prompt first seen mid-session', () => {
   it('is when the pane’s current state began, not the status clock', () => {
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-9', {
-      state: 'working',
       prompt: '<pasted_content id="329c"> Find me a jacket',
       updatedAt: 1789897000000,
       stateStartedAt: 1789895949068
@@ -160,13 +158,11 @@ describe('the time of a prompt first seen mid-session', () => {
 
   it('is the status clock for a prompt that arrives while the phone is watching', () => {
     let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-9', {
-      state: 'working',
       prompt: 'first',
       updatedAt: 1000,
       stateStartedAt: 900
     })
     state = observeAgentStatusPrompt(state, 'sess-9', {
-      state: 'working',
       prompt: 'second, mid-turn',
       updatedAt: 5000,
       stateStartedAt: 900

@@ -16,7 +16,7 @@ function makeDetector(onPause = vi.fn()) {
   const detector = new AppPauseDetector({
     now: Date.now,
     setTimer: (handler, ms) => setTimeout(handler, ms),
-    clearTimer: (handle) => clearTimeout(handle),
+    clearTimer: (handle) => clearTimeout(handle ?? undefined),
     onPause
   })
   return { detector, onPause }

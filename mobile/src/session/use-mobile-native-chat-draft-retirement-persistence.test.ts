@@ -48,13 +48,17 @@ describe('saved chat message retirement', () => {
     vi.useFakeTimers()
     try {
       await mount('unique-pending')
-      act(() => state!.acceptSend(state!.captureSendOrigin('first')!, 'first'))
+      act(() => {
+        state!.acceptSend(state!.captureSendOrigin('first')!, 'first')
+      })
       await act(async () => {
         await vi.advanceTimersByTimeAsync(300)
       })
       act(() => renderer!.unmount())
       await mount('unique-pending')
-      act(() => state!.acceptSend(state!.captureSendOrigin('second')!, 'second'))
+      act(() => {
+        state!.acceptSend(state!.captureSendOrigin('second')!, 'second')
+      })
       expect(state!.pending.map((item) => item.text)).toEqual(['first', 'second'])
       expect(new Set(state!.pending.map((item) => item.id)).size).toBe(2)
     } finally {
@@ -67,7 +71,9 @@ describe('saved chat message retirement', () => {
     try {
       await mount('persist-retired')
       const origin = state!.captureSendOrigin('already delivered')!
-      act(() => state!.acceptSend(origin, 'already delivered'))
+      act(() => {
+        state!.acceptSend(origin, 'already delivered')
+      })
       await act(async () => {
         await vi.advanceTimersByTimeAsync(300)
       })

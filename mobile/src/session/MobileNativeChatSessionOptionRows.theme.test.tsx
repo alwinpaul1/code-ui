@@ -38,7 +38,7 @@ const FAST: SessionOptionDescriptor = {
 
 function textColors(renderer: ReactTestRenderer): string[] {
   const colors: string[] = []
-  for (const node of renderer.root.findAllByType('Text')) {
+  for (const node of renderer.root.findAllByType('Text' as never)) {
     const style = node.props.style
     for (const entry of Array.isArray(style) ? style.flat() : [style]) {
       if (entry && typeof entry === 'object' && typeof entry.color === 'string') {
@@ -63,19 +63,12 @@ describe('the Fast mode switch row', () => {
   ] as const)('paints its track and marker from the %s theme', (scheme, palette) => {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(DescriptorRows, {
-            descriptor: FAST,
-            disabled: false,
-            onSetOption: vi.fn(),
-            onInvokeAction: vi.fn()
-          })
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <DescriptorRows descriptor={FAST} disabled={false} onSetOption={vi.fn()} onInvokeAction={vi.fn()} />
+        </ThemeProvider>
       )
     })
-    const toggle = renderer!.root.findByType('Switch')
+    const toggle = renderer!.root.findByType('Switch' as never)
     expect(toggle.props.value).toBe(true)
     expect(toggle.props.trackColor).toEqual({ false: palette.borderStrong, true: palette.accent })
     expect(toggle.props.thumbColor).toBe(palette.bgPanel)
@@ -95,7 +88,7 @@ describe('the Fast mode switch row', () => {
         })
       )
     })
-    act(() => renderer!.root.findByType('Switch').props.onValueChange(false))
+    act(() => renderer!.root.findByType('Switch' as never).props.onValueChange(false))
     expect(onSetOption).toHaveBeenCalledWith(false)
   })
 })

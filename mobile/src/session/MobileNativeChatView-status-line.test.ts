@@ -127,6 +127,7 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     onSend: vi.fn().mockResolvedValue(true),
     sendSurfaceId: 'tab-a',
     getSendCompletionGeneration: () => 0,
+    getComposerEditGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),
@@ -172,7 +173,7 @@ function statusLine(instance: ReturnType<typeof create>): string[] | null {
     return null
   }
   return line
-    .findAllByType('Text')
+    .findAllByType('Text' as never)
     .map((node) => node.props.children)
     .filter((child): child is string => typeof child === 'string')
 }
@@ -198,7 +199,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
       spinner: { verb: 'Cooking', elapsed: null, thinking: null }
     })
     expect(statusLine(view)).toEqual(['Working…', ' · ', '1 running task'])
-    expect(view.root.findAll((node) => node.type === 'WorkingIndicator')).toHaveLength(0)
+    expect(view.root.findAll((node) => String(node.type) === 'WorkingIndicator')).toHaveLength(0)
   })
 
   // The user asked for words, not the spinner's time (2026-09-25).
@@ -230,11 +231,11 @@ describe('the status line above the composer, as the Claude app draws it', () =>
 
   it('opens the background tasks sheet from the count', async () => {
     const view = await show({ messages: RUNNING_SHELL, folded: [], agentWorking: false })
-    const sheet = () => view.root.findAll((node) => node.type === 'BackgroundTasksSheet')[0]!
+    const sheet = () => view.root.findAll((node) => String(node.type) === 'BackgroundTasksSheet')[0]!
     expect(sheet().props.visible).toBe(false)
     const count = view.root.findAll(
       (node) =>
-        node.type === 'Pressable' &&
+        String(node.type) === 'Pressable' &&
         node.props.accessibilityLabel === '1 running task. Open background tasks'
     )[0]!
     await act(async () => count.props.onPress())
@@ -243,7 +244,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
 
   it('no longer draws the count a second time under the last message', async () => {
     const view = await show({ messages: RUNNING_SHELL, folded: [], agentWorking: false })
-    const header = view.root.findByType('FlashList').props.ListHeaderComponent
+    const header = view.root.findByType('FlashList' as never).props.ListHeaderComponent
     let rendered!: ReturnType<typeof create>
     act(() => {
       rendered = create(header)

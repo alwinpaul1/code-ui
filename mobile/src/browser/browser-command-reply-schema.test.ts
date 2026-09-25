@@ -19,14 +19,14 @@ function refuses(schema: z.ZodType<unknown, unknown>, value: unknown): boolean {
 
 describe('a navigation reports the URL it settled on', () => {
   it('reads the settled URL the address bar takes', () => {
-    expect(reads(browserNavigationSettledSchema, { url: 'https://example.test/' }).url).toBe(
+    expect(reads(browserNavigationSettledSchema, { url: 'https://example.test/' })!.url).toBe(
       'https://example.test/'
     )
   })
 
   it('leaves the address bar alone for a reply that names no URL', () => {
-    expect(reads(browserNavigationSettledSchema, {}).url).toBe(undefined)
-    expect(reads(browserNavigationSettledSchema, { url: 7 }).url).toBe(undefined)
+    expect(reads(browserNavigationSettledSchema, {})!.url).toBe(undefined)
+    expect(reads(browserNavigationSettledSchema, { url: 7 })!.url).toBe(undefined)
   })
 
   it('leaves the address bar alone for a null or absent result, as the pane always did', () => {

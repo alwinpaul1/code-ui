@@ -47,6 +47,7 @@ describe('the chat lane asks about the host it is actually connected to', () => 
       transcriptPath: null,
       sessionId: 'session-1',
       sourceIdentity,
+      callerIdentity: 'mobile-device-a',
       enabled: true,
       connState: 'connected',
       onSendError: vi.fn()

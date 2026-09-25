@@ -47,20 +47,18 @@ describe('the status line above the composer', () => {
     act(() => {
       renderer?.unmount()
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: args.scheme ?? 'light' },
-          createElement(
+        <ThemeProvider initialPreference={args.scheme ?? 'light'}>
+          {createElement(
             NativeChatTasksContext.Provider,
             { value: { runningCount: args.runningCount, openSheet: () => {} } },
             createElement(MobileNativeChatStatusLine, { working: args.working, spinner: args.spinner ?? null })
-          )
-        )
+          )}
+        </ThemeProvider>
       )
     })
     const texts: string[] = []
     const colors: string[] = []
-    for (const node of renderer!.root.findAllByType('Text')) {
+    for (const node of renderer!.root.findAllByType('Text' as never)) {
       if (typeof node.props.children === 'string') {
         texts.push(node.props.children)
       }

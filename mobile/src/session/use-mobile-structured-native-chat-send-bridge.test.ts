@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 
@@ -18,7 +17,7 @@ const ORIGIN: MobileNativeChatSendOrigin = {
 
 describe('useMobileStructuredNativeChatSendBridge', () => {
   let renderer: ReactTestRenderer | null = null
-  let sendWithOutcome: (text: string) => Promise<MobileNativeChatSendOutcome>
+  let sendWithOutcome: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
   const acceptSend = vi.fn()
   const captureSendOrigin = vi.fn(() => ORIGIN)
   const clearDraftForSend = vi.fn()

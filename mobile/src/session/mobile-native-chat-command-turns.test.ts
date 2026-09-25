@@ -27,14 +27,14 @@ const rows: NativeChatMessage[] = [
   {
     id: 'a-bash',
     role: 'assistant',
-    blocks: [{ type: 'tool-call', id: 'call-1', name: 'Bash', input: { command: 'ls' } }],
+    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }],
     timestamp: T('21:26:55.000'),
     source: 'transcript'
   },
   {
     id: 'u-bash',
     role: 'tool',
-    blocks: [{ type: 'tool-result', toolCallId: 'call-1', output: 'ok' }],
+    blocks: [{ type: 'tool-result', output: 'ok' }],
     timestamp: T('21:26:57.000'),
     source: 'transcript'
   },
@@ -43,14 +43,14 @@ const rows: NativeChatMessage[] = [
   {
     id: 'a-bash-2',
     role: 'assistant',
-    blocks: [{ type: 'tool-call', id: 'call-2', name: 'Bash', input: { command: 'squeue' } }],
+    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'squeue' } }],
     timestamp: T('21:41:13.000'),
     source: 'transcript'
   },
   {
     id: 'u-bash-2',
     role: 'tool',
-    blocks: [{ type: 'tool-result', toolCallId: 'call-2', output: 'waiting' }],
+    blocks: [{ type: 'tool-result', output: 'waiting' }],
     timestamp: T('21:41:16.000'),
     source: 'transcript'
   },
@@ -106,7 +106,7 @@ describe('a slash-command turn in the transcript', () => {
       {
         id: 'a1',
         role: 'assistant',
-        blocks: [{ type: 'tool-call', id: 'c1', name: 'Bash', input: { command: 'ls' } }],
+        blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }],
         timestamp: 3,
         source: 'transcript'
       },
@@ -226,7 +226,7 @@ describe('a command the CLI answered itself', () => {
       {
         id: 'a1',
         role: 'assistant',
-        blocks: [{ type: 'tool-call', id: 'c1', name: 'Bash', input: { command: 'squeue' } }],
+        blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'squeue' } }],
         timestamp: T('21:41:13.000'),
         source: 'transcript'
       }

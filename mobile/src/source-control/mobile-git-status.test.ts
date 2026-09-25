@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { GitStatusResult } from '../../../src/shared/git-status-types'
 import {
   buildMobileSourceControlSections,
@@ -11,9 +11,9 @@ import {
   isMobileGitStageableEntry,
   isMobileGitTransientRefreshError,
   isMobileGitUnavailable,
-  type MobileGitStatusEntry,
-  type MobileGitStatusResult
+  type MobileGitStatusEntry
 } from './mobile-git-status'
+import { gitStatusHostPayloadSchema } from './git-status-reply-schema'
 
 const entries: MobileGitStatusEntry[] = [
   { path: 'b.ts', status: 'modified', area: 'staged' },
@@ -22,8 +22,18 @@ const entries: MobileGitStatusEntry[] = [
 ]
 
 describe('mobile source control status helpers', () => {
-  it('keeps the mobile RPC status type in lockstep with the shared git contract', () => {
-    expectTypeOf<MobileGitStatusResult>().toEqualTypeOf<GitStatusResult>()
+  it('reads the barest status reply the shared git contract allows', () => {
+    // Since the #20950 port MobileGitStatusResult is the reply schema's output, cut to what
+    // mobile reads, so it no longer equals the host type and an equality pin cannot compile. What
+    // still has to hold in lockstep: a reply with only the members the host contract requires is
+    // one mobile reads, row and all.
+    const barest: GitStatusResult = {
+      entries: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown'
+    }
+    const parsed = gitStatusHostPayloadSchema.safeParse(barest)
+    expect(parsed.success).toBe(true)
+    expect(parsed.data).toEqual(barest)
   })
 
   it('builds sections in the mobile source control order', () => {

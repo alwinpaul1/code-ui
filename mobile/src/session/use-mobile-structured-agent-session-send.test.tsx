@@ -31,7 +31,7 @@ function sendResult(dispatchState: AgentJournalDispatchState) {
   })
 }
 
-function snapshotEvent(): AgentSessionSubscribeEvent {
+function snapshotEvent(): Extract<AgentSessionSubscribeEvent, { type: 'snapshot' }> {
   return {
     type: 'snapshot',
     sessionId: 'session-1',

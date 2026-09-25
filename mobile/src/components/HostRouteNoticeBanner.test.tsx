@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 
 vi.mock('react-native', () => ({
@@ -28,15 +27,9 @@ describe('the host route notice banner announces itself', () => {
     let renderer!: ReactTestRenderer
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: 'dark' },
-          createElement(HostRouteNoticeBanner, {
-            message: 'Nothing happened',
-            tone,
-            onDismiss: () => {}
-          })
-        )
+        <ThemeProvider initialPreference="dark">
+          <HostRouteNoticeBanner message="Nothing happened" tone={tone} onDismiss={() => {}} />
+        </ThemeProvider>
       )
     })
     return renderer

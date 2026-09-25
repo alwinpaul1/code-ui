@@ -44,12 +44,12 @@ describe('code spans inside a table cell', () => {
     })
     const out: { text: string; cellWidth: number }[] = []
     const cells = renderer!.root.findAll(
-      (node: ReactTestInstance) => node.type === 'Text' && Array.isArray(node.props.style) && node.props.style.some((s: unknown) => typeof s === 'object' && s !== null && 'width' in s)
+      (node: ReactTestInstance) => String(node.type) === 'Text' && Array.isArray(node.props.style) && node.props.style.some((s: unknown) => typeof s === 'object' && s !== null && 'width' in s)
     )
     for (const cell of cells) {
       const width = (cell.props.style as { width?: number }[]).find((s) => typeof s?.width === 'number')?.width ?? 0
-      for (const chip of cell.findAll((node: ReactTestInstance) => node.type === 'View' && node.props.style?.borderRadius === 7)) {
-        const text = chip.findAll((node: ReactTestInstance) => node.type === 'Text').map((node) => String(node.props.children)).join('')
+      for (const chip of cell.findAll((node: ReactTestInstance) => String(node.type) === 'View' && node.props.style?.borderRadius === 7)) {
+        const text = chip.findAll((node: ReactTestInstance) => String(node.type) === 'Text').map((node) => String(node.props.children)).join('')
         out.push({ text, cellWidth: width })
       }
     }

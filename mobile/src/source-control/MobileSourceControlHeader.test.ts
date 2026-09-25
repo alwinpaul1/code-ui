@@ -41,8 +41,6 @@ describe('the source-control header control', () => {
         createElement(MobileSourceControlHeader, {
           embedded,
           worktreeLabel: 'wt',
-          ioBusy: false,
-          onRefresh: () => {},
           ...handlers
         })
       )

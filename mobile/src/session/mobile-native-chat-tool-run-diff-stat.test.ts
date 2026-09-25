@@ -8,14 +8,12 @@ describe('toolRunDiffStat', () => {
   it('sums editPatch hunks for a landed Edit, the strongest evidence available', () => {
     const call: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-edit-1',
       name: 'Edit',
       input: { file_path: '/repo/a.ts', old_string: 'a', new_string: 'b' },
       state: 'completed'
     }
     const result: NativeChatBlock = {
       type: 'tool-result',
-      toolCallId: 'x',
       output: 'ok',
       editPatch: {
         filePath: '/repo/a.ts',
@@ -28,13 +26,11 @@ describe('toolRunDiffStat', () => {
   it("counts a created file's whole content as added lines, none removed", () => {
     const call: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-write-1',
       name: 'Write',
       input: { file_path: '/repo/NEW.md', content: 'one\ntwo\nthree\n' }
     }
     const result: NativeChatBlock = {
       type: 'tool-result',
-      toolCallId: 'x',
       output: 'File created successfully at: /repo/NEW.md'
     }
     expect(toolRunDiffStat([call, result])).toEqual({ added: 3, removed: 0 })
@@ -43,37 +39,33 @@ describe('toolRunDiffStat', () => {
   it("falls back to an Edit's own old/new strings when there is no editPatch", () => {
     const call: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-edit-2',
       name: 'Edit',
       input: { file_path: '/repo/b.ts', old_string: 'x\ny\n', new_string: 'x\nz\n' }
     }
-    const result: NativeChatBlock = { type: 'tool-result', toolCallId: 'x', output: 'ok' }
+    const result: NativeChatBlock = { type: 'tool-result', output: 'ok' }
     expect(toolRunDiffStat([call, result])).toEqual({ added: 1, removed: 1 })
   })
 
   it('sums every edit-shaped call across the whole run, not just one', () => {
     const write: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-write-2',
       name: 'Write',
       input: { file_path: '/repo/NEW.md', content: 'a\nb\n' }
     }
     const writeResult: NativeChatBlock = {
       type: 'tool-result',
-      toolCallId: 'x',
       output: 'File created successfully at: /repo/NEW.md'
     }
     const edit: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-edit-3',
       name: 'Edit',
       input: { file_path: '/repo/c.ts', old_string: 'p', new_string: 'q\nr' }
     }
-    const editResult: NativeChatBlock = { type: 'tool-result', toolCallId: 'y', output: 'ok' }
+    const editResult: NativeChatBlock = { type: 'tool-result', output: 'ok' }
     expect(
       toolRunDiffStat([
-        { type: 'tool-call', id: 'c-bash', name: 'Bash', input: { command: 'ls' } },
-        { type: 'tool-result', toolCallId: 'z', output: '' },
+        { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool-result', output: '' },
         write,
         writeResult,
         edit,
@@ -85,8 +77,8 @@ describe('toolRunDiffStat', () => {
   it('draws nothing for a run that touched no file', () => {
     expect(
       toolRunDiffStat([
-        { type: 'tool-call', id: 'c-bash', name: 'Bash', input: { command: 'ls' } },
-        { type: 'tool-result', toolCallId: 'x', output: '' }
+        { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool-result', output: '' }
       ])
     ).toBeNull()
   })
@@ -94,7 +86,6 @@ describe('toolRunDiffStat', () => {
   it('draws nothing for an edit call that is still running, since nothing landed yet', () => {
     const call: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-edit-4',
       name: 'Edit',
       input: { file_path: '/repo/d.ts', old_string: 'a', new_string: 'b' },
       state: 'running'
@@ -105,13 +96,11 @@ describe('toolRunDiffStat', () => {
   it('draws nothing for an edit call that failed', () => {
     const call: NativeChatBlock = {
       type: 'tool-call',
-      id: 'c-edit-5',
       name: 'Edit',
       input: { file_path: '/repo/e.ts', old_string: 'a', new_string: 'b' }
     }
     const result: NativeChatBlock = {
       type: 'tool-result',
-      toolCallId: 'x',
       output: 'no such string',
       isError: true
     }

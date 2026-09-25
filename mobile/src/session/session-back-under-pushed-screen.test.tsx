@@ -1,6 +1,6 @@
 import { createElement, Fragment } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 // React Native's BackHandler, as it dispatches: the newest listener is asked first, and the first
 // one that returns true ends the press (`BackHandler.android.js`). The order is the whole subject
@@ -97,9 +97,9 @@ function Session({ state }: { state: SessionState }): null {
   return null
 }
 
-const preview: { back: MobileFilePreviewBack | null; leave: ReturnType<typeof vi.fn> } = {
+const preview: { back: MobileFilePreviewBack | null; leave: Mock<() => void> } = {
   back: null,
-  leave: vi.fn()
+  leave: vi.fn<() => void>()
 }
 
 function FilePreview({ hasUnsavedDraft }: { hasUnsavedDraft: boolean }): null {

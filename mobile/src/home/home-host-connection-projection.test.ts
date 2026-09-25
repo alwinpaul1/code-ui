@@ -15,6 +15,7 @@ function entry(
     pendingPath: null,
     pairingRejected: false,
     relayHostReachability: 'connecting',
+    livenessProbing: false,
     ...overrides
   }
 }
@@ -34,7 +35,8 @@ describe('projectHomeHostConnections', () => {
       },
       pendingPath: null,
       pairingRejected: false,
-      relayHostReachability: 'connecting'
+      relayHostReachability: 'connecting',
+      livenessProbing: false
     }
 
     const projection = projectHomeHostConnections([counted, entry('host-1', { path: 'relay' })])

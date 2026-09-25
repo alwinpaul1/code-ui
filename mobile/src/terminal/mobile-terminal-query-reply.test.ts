@@ -10,7 +10,7 @@ function createClient() {
       result: { send: { accepted: true, bytesWritten: 6 } },
       _meta: { runtimeId: 'runtime-1' }
     })
-  } as unknown as Pick<RpcClient, 'sendRequest'>
+  } as unknown as RpcClient
 }
 
 describe('sendMobileTerminalQueryReply', () => {

@@ -37,7 +37,7 @@ const baseArgs = {
   note: undefined,
   worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
   // Existing cases keep pinning the legacy create; the launch cases opt in explicitly.
-  agentLaunchSupported: false
+  agentLaunchSupported: false as const
 }
 
 describe('createWorkspaceFromComposerSource', () => {

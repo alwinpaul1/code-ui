@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -26,7 +25,9 @@ function render(props: {
   let renderer!: ReactTestRenderer
   act(() => {
     renderer = create(
-      createElement(ThemeProvider, { initialPreference: 'dark' }, createElement(AuthFailedBanner, props))
+      <ThemeProvider initialPreference="dark">
+        <AuthFailedBanner {...props} />
+      </ThemeProvider>
     )
   })
   return renderer

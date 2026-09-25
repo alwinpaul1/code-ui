@@ -113,6 +113,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
             compareRef: 'HEAD',
             changedFiles: 0,
             commitsAhead: 3,
+            errorMessage: undefined,
             headOid: 'abc',
             mergeBase: 'def'
           }

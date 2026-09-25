@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
@@ -76,7 +76,7 @@ function turn(): NativeChatMessage {
 
 function texts(renderer: ReactTestRenderer): string[] {
   const out: string[] = []
-  for (const node of renderer.root.findAllByType('Text')) {
+  for (const node of renderer.root.findAllByType('Text' as never)) {
     for (const child of [node.props.children].flat()) {
       if (typeof child === 'string') {
         out.push(child)
@@ -91,7 +91,7 @@ function colorsOf(renderer: ReactTestRenderer): string[] {
   for (const node of renderer.root.findAll((n) => typeof n.props.color === 'string')) {
     out.push(node.props.color)
   }
-  for (const node of renderer.root.findAllByType('Text')) {
+  for (const node of renderer.root.findAllByType('Text' as never)) {
     for (const entry of [node.props.style].flat(3)) {
       if (entry && typeof entry.color === 'string') {
         out.push(entry.color)
@@ -116,20 +116,16 @@ describe('the conversation row for five agents launched at once', () => {
   }) {
     await act(async () => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: args.scheme ?? 'light' },
-          createElement(
-            MobileNativeChatTasksProvider,
-            {
-              messages: parallelAgentMessages(),
-              agent: 'claude',
-              agentWorking: args.agentWorking,
-              agentStatus: args.status
-            },
-            createElement(MobileNativeChatMessage, { message: turn() })
-          )
-        )
+        <ThemeProvider initialPreference={args.scheme ?? 'light'}>
+          <MobileNativeChatTasksProvider
+            messages={parallelAgentMessages()}
+            agent="claude"
+            agentWorking={args.agentWorking}
+            agentStatus={args.status}
+          >
+            <MobileNativeChatMessage message={turn()} />
+          </MobileNativeChatTasksProvider>
+        </ThemeProvider>
       )
     })
     return renderer!
@@ -138,7 +134,7 @@ describe('the conversation row for five agents launched at once', () => {
   async function press(tree: ReactTestRenderer, label: RegExp | string) {
     const target = tree.root.findAll(
       (node) =>
-        node.type === 'Pressable' &&
+        String(node.type) === 'Pressable' &&
         typeof node.props.accessibilityLabel === 'string' &&
         (typeof label === 'string' ? node.props.accessibilityLabel === label : label.test(node.props.accessibilityLabel))
     )[0]

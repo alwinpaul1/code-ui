@@ -54,7 +54,7 @@ function createScope(client: RpcClient) {
   return {
     worktreeId: 'workspace-1',
     client,
-    hostCapabilities: [],
+    hostCapabilities: [] as string[],
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },

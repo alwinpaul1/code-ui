@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
@@ -38,14 +37,18 @@ vi.mock('./ZoomableImage', () => ({ ZoomableImage: 'ZoomableImage' }))
 function render(): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: 'dark' }, createElement(ImagePreviewModal)))
+    renderer = create(
+      <ThemeProvider initialPreference="dark">
+        <ImagePreviewModal />
+      </ThemeProvider>
+    )
   })
   return renderer!
 }
 
 function findByLabel(renderer: ReactTestRenderer, label: string) {
   return renderer.root.findAll(
-    (node) => node.type === 'Pressable' && node.props.accessibilityLabel === label
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === label
   )
 }
 
@@ -79,7 +82,9 @@ describe('the fullscreen preview\'s edit pencil', () => {
     // The viewer's own store is now closed — a second render sees nothing.
     act(() => {
       renderer!.update(
-        createElement(ThemeProvider, { initialPreference: 'dark' }, createElement(ImagePreviewModal))
+        <ThemeProvider initialPreference="dark">
+          <ImagePreviewModal />
+        </ThemeProvider>
       )
     })
     expect(renderer!.toJSON()).toBeNull()

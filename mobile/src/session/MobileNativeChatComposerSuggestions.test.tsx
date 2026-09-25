@@ -34,7 +34,7 @@ vi.mock('react-native', () => ({
 function readTexts(renderer: ReactTestRenderer): { texts: string[]; colors: string[] } {
   const texts: string[] = []
   const colors: string[] = []
-  for (const node of renderer.root.findAllByType('Text')) {
+  for (const node of renderer.root.findAllByType('Text' as never)) {
     if (typeof node.props.children === 'string') {
       texts.push(node.props.children)
     }
@@ -76,14 +76,9 @@ describe('a `/` row with the argument hint the provider reported (Orca #19928)',
     ] as const) {
       act(() => {
         renderer = create(
-          createElement(
-            ThemeProvider,
-            { initialPreference: scheme },
-            createElement(MobileNativeChatComposerSuggestions, {
-              suggestions: [GOAL, CLEAR],
-              onPick: () => {}
-            })
-          )
+          <ThemeProvider initialPreference={scheme}>
+            <MobileNativeChatComposerSuggestions suggestions={[GOAL, CLEAR]} onPick={() => {}} />
+          </ThemeProvider>
         )
       })
       const { texts, colors } = readTexts(renderer!)

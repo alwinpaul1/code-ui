@@ -4,8 +4,7 @@
 // matchedAskRule; the projection has to hand every one of them to the card.
 
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import { projectStructuredPermission } from './mobile-structured-agent-prompts'
+import { projectStructuredPermission, type StructuredApprovalItem } from './mobile-structured-agent-prompts'
 
 function approval(body: Record<string, unknown>) {
   return {
@@ -21,7 +20,7 @@ function approval(body: Record<string, unknown>) {
       resolution: { state: 'pending' },
       ...body
     }
-  } as unknown as AgentJournalRenderItem
+  } as unknown as StructuredApprovalItem
 }
 
 describe('the approval card reads the harness presentation off the journal', () => {

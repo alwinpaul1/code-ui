@@ -210,8 +210,9 @@ describe('a send still in the agent queue box', () => {
 describe('bubbles that follow the same row', () => {
   const own = (id: string, sentAt?: number) => ({ id, ...(sentAt === undefined ? {} : { sentAt }) })
   const times: Record<string, number | undefined> = { 'desk-1': 10, 'desk-2': 30, 'desk-x': undefined }
-  const order = (mine: { id: string; sentAt?: number }[], theirs: string[]) =>
-    inSendOrder(mine, theirs.map((id) => ({ id })), (copy) => times[copy.id]).map((copy) => copy.id)
+  type Copy = { id: string; sentAt?: number }
+  const order = (mine: Copy[], theirs: string[]) =>
+    inSendOrder<Copy>(mine, theirs.map((id) => ({ id })), (copy) => times[copy.id]).map((copy) => copy.id)
 
   it('draw in the order they were sent, each list keeping its own order', () => {
     expect(order([own('p-1', 20), own('p-2', 40)], ['desk-1', 'desk-2'])).toEqual(['desk-1', 'p-1', 'desk-2', 'p-2'])
