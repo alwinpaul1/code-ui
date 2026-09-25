@@ -1,6 +1,8 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { phoneClockAllowanceMs } from './mid-turn-written-before'
+import { lastRowBefore } from './use-desktop-prompt-echoes'
 
 /**
  * Give the sends that never saw a transcript the boundary they lack, on the
@@ -37,8 +39,20 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  * bubble is DRAWN, but that is what it did: with no row to sit after, the view
  * dropped it at the tail and kept it there, so a photo sent while the transcript
  * was still loading re-read below every reply that answered it, and a second one
- * stacked under the first (2026-09-15). The placement anchor is this read's own
- * tail, which is where the send happened; no reconciler reads it.
+ * stacked under the first (2026-09-15). The placement anchor is where the send
+ * happened; no reconciler reads it.
+ *
+ * Where the send happened is the last row written before it, by its own send
+ * time, not this read's tail. The two agree when the read settles a moment
+ * after the send, which is the case all of the above was written for. They do
+ * not when it settles later: a message sent from a chat whose read was still
+ * in flight, mid-turn, was drawn under the reply that ended the turn, as the
+ * last row of the chat, and since Claude writes no row for a message it takes
+ * mid-turn, it stayed there (reported 2026-09-25, Claude Code 2.1.282). The
+ * rows carry the desktop's clock and the send the phone's, so the same margin
+ * the phone's mid-turn sends are placed by applies
+ * (mid-turn-written-before.ts). A send with no time, or a read whose rows
+ * carry none, keeps the tail as before.
  */
 export function rebaseMobileNativeChatPendingBaselines(
   messages: readonly NativeChatMessage[],
@@ -47,7 +61,15 @@ export function rebaseMobileNativeChatPendingBaselines(
   if (current.every((item) => item.baselineResolved)) {
     return current
   }
-  const baselineTailMessageId = messages.at(-1)?.id ?? null
+  const tail = messages.at(-1)?.id ?? null
+  const allowance = phoneClockAllowanceMs(messages)
+  const sentAfter = (item: MobileNativeChatPendingMessage): string | null => {
+    if (typeof item.sentAt !== 'number' || !Number.isFinite(item.sentAt)) {
+      return tail
+    }
+    const written = lastRowBefore(messages, item.sentAt - allowance)
+    return written === undefined ? tail : written
+  }
   return current.map((item) => {
     if (item.baselineResolved) {
       return item
@@ -59,16 +81,17 @@ export function rebaseMobileNativeChatPendingBaselines(
     }
     const reconcilesAgainstItsOwnTail =
       Boolean(item.images?.length) || normalizeReconcileText(item.text) === ''
+    // Every row this read holds written after the send gives null, as an
+    // empty read does: the send came before all of them, so it leads.
+    const sentAfterId = sentAfter(item)
     if (!reconcilesAgainstItsOwnTail) {
-      return { ...resolved, baselineTailMessageId }
+      return { ...resolved, baselineTailMessageId: sentAfterId }
     }
     // The boundary stays withheld, for the reasons above — but the bubble still
     // has to be drawn somewhere, and an echo with no row to sit after is drawn
     // at the tail and kept there. This anchor says where; no reconciler reads
     // it. A read that is itself empty gives none, which is the truth: the
     // conversation really was empty when this was sent, so it leads.
-    return baselineTailMessageId === null
-      ? resolved
-      : { ...resolved, placementAnchorId: baselineTailMessageId }
+    return sentAfterId === null ? resolved : { ...resolved, placementAnchorId: sentAfterId }
   })
 }

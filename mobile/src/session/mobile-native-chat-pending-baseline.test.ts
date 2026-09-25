@@ -162,3 +162,58 @@ describe('rebaseMobileNativeChatPendingBaselines', () => {
     expect(rebased[0]?.baselineResolved).toBe(true)
   })
 })
+
+// A read that settles long after the send: the chat was opened mid-turn over a
+// re-dialling relay, a message went out, and the rows came back after the turn
+// had ended (reported 2026-09-25, Claude Code 2.1.282, session da53d612). Its
+// tail is the reply that ended the turn, which the message came before.
+describe('a send whose read settled after the replies to it', () => {
+  const sentAt = 50_000
+  const settledLate = [
+    assistantTurn('m1', 'Pushed. Waiting for the deploy…', 10_000),
+    assistantTurn('m2', 'The menu opens from the right edge.', 120_000),
+    assistantTurn('m3', 'Fixed: the menu opens from the left now.', 250_000)
+  ]
+  const sent = (text: string, images?: string[]): MobileNativeChatPendingMessage => ({
+    ...unresolved('p1', text),
+    sentAt,
+    ...(images ? { images } : {})
+  })
+
+  it('anchors a text send at the last row written before it, not under the reply that ended the turn', () => {
+    const rebased = rebaseMobileNativeChatPendingBaselines(settledLate, [sent('check the menu')])
+    expect(rebased[0]?.baselineTailMessageId).toBe('m1')
+    expect(rebased[0]?.baselineResolved).toBe(true)
+  })
+
+  it('draws a photo sent then where it was sent, and still withholds its counted boundary', () => {
+    const rebased = rebaseMobileNativeChatPendingBaselines(settledLate, [sent('', ['file:///a.png'])])
+    expect(rebased[0]?.placementAnchorId).toBe('m1')
+    expect(rebased[0]?.baselineTailMessageId).toBeNull()
+  })
+
+  it('leads when every row the read holds was written after the send', () => {
+    const rebased = rebaseMobileNativeChatPendingBaselines(settledLate.slice(1), [sent('check the menu')])
+    expect(rebased[0]?.baselineTailMessageId).toBeNull()
+    expect(rebased[0]?.baselineResolved).toBe(true)
+  })
+
+  it('takes the one row a one-row read holds when it came before the send', () => {
+    const rebased = rebaseMobileNativeChatPendingBaselines(settledLate.slice(0, 1), [sent('check the menu')])
+    expect(rebased[0]?.baselineTailMessageId).toBe('m1')
+  })
+
+  it('keeps the old tail rule for a send with no time, or a read whose rows carry none', () => {
+    expect(
+      rebaseMobileNativeChatPendingBaselines(settledLate, [unresolved('p1', 'check the menu')])[0]
+        ?.baselineTailMessageId
+    ).toBe('m3')
+    const untimed = settledLate.map((message) => ({ ...message, timestamp: null }))
+    expect(
+      rebaseMobileNativeChatPendingBaselines(untimed, [sent('check the menu')])[0]?.baselineTailMessageId
+    ).toBe('m3')
+    // The pending store does not check the field it reads back.
+    const garbled = { ...sent('check the menu'), sentAt: Number.NaN }
+    expect(rebaseMobileNativeChatPendingBaselines(settledLate, [garbled])[0]?.baselineTailMessageId).toBe('m3')
+  })
+})
