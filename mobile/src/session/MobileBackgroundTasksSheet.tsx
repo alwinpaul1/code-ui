@@ -19,6 +19,8 @@ import { projectStructuredBackgroundTasks } from './mobile-structured-background
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
 import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import { SheetFailureLine } from './SheetFailureLine'
+import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -38,6 +40,8 @@ export function MobileBackgroundTasksSheet({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
+  reportStopFailure,
+  scopeKey = null,
   onClose
 }: {
   visible: boolean
@@ -48,9 +52,31 @@ export function MobileBackgroundTasksSheet({
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string) => void
+  /** `report` is where this Stop's failure is said: the sheet, while open. */
+  onStopTask?: (taskId: string, report?: SheetFailureReport) => void
+  /** The chat's banner, or its toast, and the tab it belongs to: where a failed
+   *  Stop goes once the sheet is not showing it. Without it the sheet hands
+   *  the Stop no reporter, and the lane says a failure on the banner. */
+  reportStopFailure?: SheetFailureReport
+  scopeKey?: string | null
   onClose: () => void
 }) {
+  // Why the sheet says a failed Stop itself: it draws in its own native window,
+  // over the chat's banner, and the row keeps its Stop until the host says the
+  // task ended. A reason said only on the banner left a Stop that seemed to do
+  // nothing (2026-09-25), the defect the session-option drawer had too.
+  const failure = useSheetFailure({
+    open: visible,
+    scopeKey,
+    reportFailure: reportStopFailure ?? ignoreFailure
+  })
+  const stop =
+    onStopTask && reportStopFailure
+      ? (taskId: string) => {
+          failure.clear()
+          onStopTask(taskId, failure.reporter())
+        }
+      : onStopTask
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss expandable>
@@ -61,11 +87,15 @@ export function MobileBackgroundTasksSheet({
         agentStatus={agentStatus ?? null}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
-        onStopTask={onStopTask}
+        onStopTask={stop}
+        stopFailure={failure.shown}
       />
     </BottomDrawer>
   )
 }
+
+// Never called: the sheet makes a reporter only when it was handed one.
+const ignoreFailure: SheetFailureReport = () => undefined
 
 /** The sheet's contents, exported so render tests can mount them without the
  *  drawer's gesture/animation stack. */
@@ -76,6 +106,7 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
+  stopFailure = null,
   onClose
 }: {
   messages: readonly NativeChatMessage[]
@@ -84,6 +115,8 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
+  /** Why the last Stop did not go through, drawn under the title. */
+  stopFailure?: string | null
   onClose?: () => void
 }) {
   const { space } = useTheme()
@@ -130,6 +163,7 @@ export function MobileBackgroundTasksSheetBody({
   return (
     <View style={{ paddingBottom: space.md, gap: space.sm }}>
       <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
+      {stopFailure ? <SheetFailureLine>{stopFailure}</SheetFailureLine> : null}
       <BackgroundTasksSection
         title="Running"
         open={runningOpen}

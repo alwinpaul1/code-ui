@@ -23,6 +23,8 @@ export function MobileNativeChatTasksProvider({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
+  reportStopFailure,
+  scopeKey,
   children
 }: {
   /** The UNFILTERED transcript: the notifications that retire a task are
@@ -33,7 +35,11 @@ export function MobileNativeChatTasksProvider({
   agentStatus?: AgentStatusEntry | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string) => void
+  onStopTask?: (taskId: string, report?: (message: string) => void) => void
+  /** The chat's banner, or its toast, and the tab it belongs to: where a failed
+   *  Stop goes when the sheet is not showing it. */
+  reportStopFailure?: (message: string) => void
+  scopeKey?: string | null
   children: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -87,6 +93,8 @@ export function MobileNativeChatTasksProvider({
           backgroundTaskReport={backgroundTaskReport}
           hostBackgroundTasks={hostBackgroundTasks}
           onStopTask={onStopTask}
+          reportStopFailure={reportStopFailure}
+          scopeKey={scopeKey}
           onClose={() => setSheetOpen(false)}
         />
       </NativeChatAgentRunsContext.Provider>

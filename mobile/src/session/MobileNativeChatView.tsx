@@ -65,6 +65,7 @@ export function MobileNativeChatView({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopBackgroundTask,
+  reportBackgroundTaskFailure,
   spinner = null,
   onStop,
   streaming,
@@ -310,6 +311,7 @@ export function MobileNativeChatView({
       backgroundTaskReport={backgroundTaskReport} hostBackgroundTasks={hostBackgroundTasks}
       agentWorking={agentWorking === true}
       onStopTask={onStopBackgroundTask}
+      reportStopFailure={reportBackgroundTaskFailure} scopeKey={sendSurfaceId}
     >
     <View style={styles.root} onLayout={onRootLayout}>
       {showLoading ? (

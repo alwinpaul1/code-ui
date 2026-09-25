@@ -83,9 +83,11 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
 
 /** Stops one background task. The tasks sheet voids the result and the row keeps
  *  its Stop until the host reports the task ended, so an unknown outcome is said
- *  here or nowhere (2026-09-25). A host refusal already is, by the shared
- *  mutation. Its not-ready exit (no client, session or fence) says nothing, but
- *  the sheet is drawn from that same loaded session. */
+ *  here or nowhere (2026-09-25). A host refusal is said by the shared mutation,
+ *  through the same `onSendError`: the sheet's own reporter when it brought one,
+ *  because the chat's banner draws under the sheet. The mutation's not-ready
+ *  exit (no client, session or fence) says nothing, but the sheet is drawn from
+ *  that same loaded session. */
 export async function requestMobileStructuredBackgroundTaskStop(args: {
   mutate: StructuredAgentSessionMutate
   taskId: string
@@ -93,11 +95,12 @@ export async function requestMobileStructuredBackgroundTaskStop(args: {
 }): Promise<boolean> {
   // The host reads `turnId: 'background-tasks'` as the scope marker, not as
   // a real turn — a background task outlives the turn that launched it.
-  const result = await args.mutate('agentSession.cancel', 'agentSession.cancel', {
-    turnId: 'background-tasks',
-    scope: 'background-tasks',
-    taskId: args.taskId
-  })
+  const result = await args.mutate(
+    'agentSession.cancel',
+    'agentSession.cancel',
+    { turnId: 'background-tasks', scope: 'background-tasks', taskId: args.taskId },
+    { onError: args.onSendError }
+  )
   if (result.status === 'unknown') {
     args.onSendError('Stop unconfirmed — check chat before retrying')
   }

@@ -354,6 +354,7 @@ export function MobileSessionActiveContent({
         inputLockReason={nativeChatOverlayInputLockReason}
         sendErrorMessage={nativeChatSendError.message}
         onClearSendError={nativeChatSendError.clear}
+        onSendFailure={nativeChatSendError.show}
         sendSurfaceId={controller.nativeChatScopeKey ?? ''}
         getSendCompletionGeneration={controller.getSendCompletionGeneration}
         keyboardInset={keyboardLift}

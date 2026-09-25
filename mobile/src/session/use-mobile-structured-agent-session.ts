@@ -253,8 +253,8 @@ export function useMobileStructuredAgentSession(args: {
   })
 
   const stopBackgroundTask = useCallback(
-    (taskId: string): Promise<boolean> =>
-      requestMobileStructuredBackgroundTaskStop({ mutate, taskId, onSendError }),
+    (taskId: string, report?: (message: string) => void): Promise<boolean> =>
+      requestMobileStructuredBackgroundTaskStop({ mutate, taskId, onSendError: report ?? onSendError }),
     [mutate, onSendError]
   )
 

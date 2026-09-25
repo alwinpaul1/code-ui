@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
 import type { PickFailureReport } from './session-option-pick-failure'
-import * as pickFailure from './use-session-option-pick-failure'
+import * as sheetFailure from './use-sheet-failure'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 
 vi.mock('react-native', () => ({
@@ -50,20 +50,20 @@ const TAB = 'host-a\0wt-1\0tab-1'
 const screen = vi.fn<(message: string) => void>()
 
 let renderer: ReactTestRenderer | null = null
-// The drawer's own clock (use-session-option-pick-failure.ts), moved only by lookFor.
+// The drawer's own clock (use-sheet-failure.ts), moved only by lookFor.
 let pickClock = 0
 
 beforeEach(() => {
   screen.mockReset()
   pickClock = 0
-  pickFailure.setSessionOptionPickFailureClockForTests?.(() => pickClock)
+  sheetFailure.setSheetFailureClockForTests?.(() => pickClock)
 })
 
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
   vi.useRealTimers()
-  pickFailure.setSessionOptionPickFailureClockForTests?.(null)
+  sheetFailure.setSheetFailureClockForTests?.(null)
 })
 
 /** Let `ms` pass: on the drawer's own clock, and on the wall clock with it.

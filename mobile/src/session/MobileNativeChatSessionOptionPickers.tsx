@@ -21,13 +21,13 @@ import {
   DescriptorRows,
   Pill,
   SessionOptionCaption,
-  SessionOptionFailure,
   SessionOptionSummaryRow
 } from './MobileNativeChatSessionOptionRows'
+import { SheetFailureLine } from './SheetFailureLine'
 import { sortNativeChatSessionOptions } from '../../../src/shared/native-chat-session-option-snapshot'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import type { PickFailureReport } from './session-option-pick-failure'
-import { useSessionOptionPickFailure } from './use-session-option-pick-failure'
+import { useSheetFailure } from './use-sheet-failure'
 
 /** Descriptor id of the per-model effort option in every agent catalog. */
 const EFFORT_OPTION_ID = 'effort'
@@ -35,7 +35,7 @@ const EFFORT_OPTION_ID = 'effort'
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
   /** The chat's banner, or its toast, for the tab shown. A pick's failure goes
-   *  here only when the drawer is not showing it (use-session-option-pick-failure.ts). */
+   *  here only when the drawer is not showing it (use-sheet-failure.ts). */
   reportFailure: PickFailureReport
   /** The tab the chat shows (mobileNativeChatScopeKey): a failure is drawn only
    *  on the tab its pick was made on. */
@@ -118,7 +118,7 @@ export function MobileNativeChatSessionOptionPickers({
   // seen, and the row looked dead rather than refused (2026-09-25).
   const drawerOpen =
     model !== undefined && snapshot.some((descriptor) => descriptor.id === openDescriptorId)
-  const failure = useSessionOptionPickFailure({ drawerOpen, scopeKey, reportFailure })
+  const failure = useSheetFailure({ open: drawerOpen, scopeKey, reportFailure })
   const options = sortNativeChatSessionOptions(snapshot)
   if (!model) {
     return null
@@ -139,7 +139,7 @@ export function MobileNativeChatSessionOptionPickers({
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 
   // Another view of the drawer drops the failure the user read in this one.
-  // Closing leaves it to use-session-option-pick-failure.ts, which drops it if
+  // Closing leaves it to use-sheet-failure.ts, which drops it if
   // it has been read and hands it to the chat's banner if not.
   const showView = (id: string): void => {
     failure.clear()
@@ -172,7 +172,7 @@ export function MobileNativeChatSessionOptionPickers({
       afterApply(descriptor)
       return
     }
-    void controller.setOption(descriptor.id, value, failure.reporterForPick()).then((applied) => {
+    void controller.setOption(descriptor.id, value, failure.reporter()).then((applied) => {
       if (applied) {
         afterApply(descriptor)
       }
@@ -180,7 +180,7 @@ export function MobileNativeChatSessionOptionPickers({
   }
   const invokeAction = (descriptor: SessionOptionDescriptor): void => {
     failure.clear()
-    void controller.invokeAction(descriptor.id, failure.reporterForPick()).then((invoked) => {
+    void controller.invokeAction(descriptor.id, failure.reporter()).then((invoked) => {
       if (invoked) {
         setOpenDescriptorId(null)
       }
@@ -218,7 +218,11 @@ export function MobileNativeChatSessionOptionPickers({
                 ) : null}
               </View>
             </View>
-            {failure.shown ? <SessionOptionFailure>{failure.shown}</SessionOptionFailure> : null}
+            {failure.shown ? (
+              <SheetFailureLine style={{ paddingHorizontal: space.md, paddingBottom: space.xs }}>
+                {failure.shown}
+              </SheetFailureLine>
+            ) : null}
             {activeDescriptor.valueSource === 'dispatched' ? (
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}

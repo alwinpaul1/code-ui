@@ -420,7 +420,11 @@ const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b20
 // Claude's own turn has ended. Same record count; only that record moved.
 // 2026-09-25: MobileSessionSurface's <MobileFileTapMatchPicker picker=...> is
 // the one new record (74).
-const HEAD_LEAF_JSX_SHA256 = '7bdcc51255e964754a7b069eff41ff04c6a0164780a20c818f29667bb14831dc'
+// 2026-09-25: the chat overlay is handed `onSendFailure` (nativeChatSendError.show)
+// beside `onClearSendError`, so the Background tasks sheet can say a failed Stop
+// itself and hand on what it cannot show. Same record count; only the overlay's
+// record moved.
+const HEAD_LEAF_JSX_SHA256 = 'f6b385e4b3da1f7cda06e5e91356cf58732beddc8b2a960157c4eaaba78a8def'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`

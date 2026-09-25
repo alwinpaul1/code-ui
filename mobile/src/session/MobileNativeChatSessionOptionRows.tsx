@@ -26,26 +26,6 @@ export function SessionOptionCaption({ children }: { children: string }): React.
   )
 }
 
-/** Why the last pick did not go through, said inside the drawer. The chat's
- *  send-failure banner draws under the drawer's window, so this is the only
- *  place the user can read it while the drawer is open. Announced like that
- *  banner, and in the same danger tone. */
-export function SessionOptionFailure({ children }: { children: string }): React.JSX.Element {
-  const { space } = useTheme()
-  return (
-    <Txt
-      variant="caption"
-      weight="semibold"
-      tone="danger"
-      accessibilityRole="alert"
-      accessibilityLiveRegion="assertive"
-      style={{ paddingHorizontal: space.md, paddingBottom: space.xs }}
-    >
-      {children}
-    </Txt>
-  )
-}
-
 export function Pill({
   label,
   accessibleName,

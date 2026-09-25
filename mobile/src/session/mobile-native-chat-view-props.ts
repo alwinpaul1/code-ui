@@ -65,8 +65,12 @@ export type MobileNativeChatViewProps = {
    *  host has reported one it is the whole answer and the two props above go
    *  unread; `undefined` leaves the tab to the transcript reader. */
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  /** Stops one named background task; omitted when the host accepts no stop. */
-  onStopBackgroundTask?: (taskId: string) => void
+  /** Stops one named background task; omitted when the host accepts no stop.
+   *  `report` is the tasks sheet's own place to say a Stop failed. */
+  onStopBackgroundTask?: (taskId: string, report?: (message: string) => void) => void
+  /** The chat's banner, or its toast: where a failed Stop is said once the
+   *  tasks sheet is not showing it (use-sheet-failure.ts). */
+  reportBackgroundTaskFailure?: (message: string) => void
   /** Claude Code's spinner line as its screen paints it, for the status line. */
   spinner?: ClaudeSpinner | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */

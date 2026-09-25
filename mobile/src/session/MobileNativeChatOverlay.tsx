@@ -77,6 +77,9 @@ type Props = {
   sendErrorMessage: string | null
   /** Drops that failure once a later send succeeds. */
   onClearSendError: () => void
+  /** The chat's banner-or-toast reporter itself, for a sheet that says its own
+   *  failures while open and hands on what it cannot show (use-sheet-failure.ts). */
+  onSendFailure?: (message: string) => void
   /** Stable host/worktree/tab identity for accepted-send completion fencing. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation for accepted-send fencing. */
@@ -112,6 +115,7 @@ export function MobileNativeChatOverlay({
   inputLockReason,
   sendErrorMessage,
   onClearSendError,
+  onSendFailure,
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset,
@@ -284,7 +288,8 @@ export function MobileNativeChatOverlay({
     return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
   }, [absorbedEchoes, desktopEchoes, desktopPrompts, hookPairing, placedOwn])
   const stopBackgroundTask = useCallback(
-    (taskId: string) => void controller.handleNativeChatStopBackgroundTask(taskId),
+    (taskId: string, report?: (message: string) => void) =>
+      void controller.handleNativeChatStopBackgroundTask(taskId, report),
     [controller]
   )
   const streaming = useMobileNativeChatStreamingBubble(
@@ -348,6 +353,7 @@ export function MobileNativeChatOverlay({
             ? stopBackgroundTask
             : undefined
         }
+        reportBackgroundTaskFailure={onSendFailure}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

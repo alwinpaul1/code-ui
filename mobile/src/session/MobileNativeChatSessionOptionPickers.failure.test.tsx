@@ -36,7 +36,7 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
-import * as pickFailure from './use-session-option-pick-failure'
+import * as sheetFailure from './use-sheet-failure'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import {
@@ -208,7 +208,7 @@ function Chat(): ReactElement | null {
 }
 
 let renderer: ReactTestRenderer | null = null
-// The drawer's own clock (use-session-option-pick-failure.ts), moved only by lookFor.
+// The drawer's own clock (use-sheet-failure.ts), moved only by lookFor.
 let pickClock = 0
 
 async function settle(): Promise<void> {
@@ -306,7 +306,7 @@ function expectSaidInDrawer(message: string): void {
 
 beforeEach(async () => {
   pickClock = 0
-  pickFailure.setSessionOptionPickFailureClockForTests?.(() => pickClock)
+  sheetFailure.setSheetFailureClockForTests?.(() => pickClock)
   resetMobileNativeChatSessionOptionRecordsForTests()
   resetMobileNativeChatTerminalWritesForTests()
   resetMobileNativeChatStaleInputForTests()
@@ -329,7 +329,7 @@ afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
   vi.useRealTimers()
-  pickFailure.setSessionOptionPickFailureClockForTests?.(null)
+  sheetFailure.setSheetFailureClockForTests?.(null)
 })
 
 /** Move the wall clock by `ms`, and nothing else: timers stay real, so the

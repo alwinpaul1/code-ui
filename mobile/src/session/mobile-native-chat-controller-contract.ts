@@ -96,7 +96,10 @@ export type MobileNativeChatController = {
    *  leaves the tab to the transcript reader; see mobile-structured-background-tasks.ts. */
   nativeChatBackgroundTasks: AgentSessionBackgroundTaskState | null | undefined
   /** Stops one named background task, where the roster says the host accepts it. */
-  handleNativeChatStopBackgroundTask: (taskId: string) => Promise<boolean>
+  handleNativeChatStopBackgroundTask: (
+    taskId: string,
+    report?: (message: string) => void
+  ) => Promise<boolean>
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean
