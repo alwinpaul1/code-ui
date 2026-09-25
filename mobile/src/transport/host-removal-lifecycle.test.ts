@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
+const forgetUpdateFailuresMock = vi.hoisted(() => vi.fn(async () => undefined))
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(async () => null),
   setItem: vi.fn(async () => undefined),
@@ -16,6 +17,10 @@ vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
 }))
 
+vi.mock('../mobile-web-shell/forget-host-update-failures', () => ({
+  forgetHostUpdateFailures: (hostId: string) => forgetUpdateFailuresMock(hostId)
+}))
+
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
 import {
   getHostNotificationSession,
@@ -26,6 +31,7 @@ describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
     asyncStorage.removeItem.mockClear()
+    forgetUpdateFailuresMock.mockClear()
     resetHostNotificationSessionsForTests()
   })
 
@@ -87,5 +93,25 @@ describe('host removal lifecycle', () => {
     await Promise.resolve()
 
     expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
+  })
+
+  it("forgets the host's recorded update failures once it is gone", async () => {
+    removeHostMock.mockResolvedValue(undefined)
+    await removeHostAndCloseClient('host-1', vi.fn())
+    expect(forgetUpdateFailuresMock).toHaveBeenCalledWith('host-1')
+  })
+
+  it('keeps them while the host is still paired', async () => {
+    removeHostMock.mockRejectedValue(new Error('storage unavailable'))
+    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
+    expect(forgetUpdateFailuresMock).not.toHaveBeenCalled()
+  })
+
+  it('still closes the client when forgetting them fails', async () => {
+    removeHostMock.mockResolvedValue(undefined)
+    forgetUpdateFailuresMock.mockRejectedValueOnce(new Error('disk'))
+    const closeHostClient = vi.fn()
+    await removeHostAndCloseClient('host-1', closeHostClient)
+    expect(closeHostClient).toHaveBeenCalledWith('host-1')
   })
 })

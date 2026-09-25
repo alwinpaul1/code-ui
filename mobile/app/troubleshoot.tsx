@@ -28,6 +28,7 @@ import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common
 import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
 import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
+import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
 import { mobileWebShellFlagCanBeOn } from '../src/storage/preferences'
 
 // Same guard as mobile-terminal-diagnostics.ts: `__DEV__` is undefined outside the React Native runtime. The import
@@ -233,9 +234,12 @@ export default function TroubleshootScreen() {
 
         {mobileWebShellFlagCanBeOn() ? (
           <>
-            {/* The bundle probe stays development-only: it fetches. */}
+            {/* The shell rows wherever the flag can be on, which in an OTA build is the only way
+                back to the native screens and the only place its update failures show. The
+                bundle probe stays development-only: it fetches. */}
             {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
             <MobileWebShellDevRow />
+            <MobileWebShellUpdateFailureRow />
           </>
         ) : null}
 

@@ -1,3 +1,4 @@
+import { forgetHostUpdateFailures } from '../mobile-web-shell/forget-host-update-failures'
 import {
   clearWatermark,
   forgetHostNotificationSession
@@ -23,4 +24,7 @@ export async function removeHostAndCloseClient(
   // send notifications it has never sent.
   void clearDeliveredPushes(hostId)
   forgetPushRegistrationOutcome(hostId)
+  // Why after the commit and not awaited: evidence about a host that is gone, never a reason to
+  // hold the removal or fail it.
+  void forgetHostUpdateFailures(hostId).catch(() => undefined)
 }
