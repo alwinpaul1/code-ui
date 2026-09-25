@@ -29,7 +29,7 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
   `useTheme()` provider with a Light / Dark / System setting under
   Settings → Appearance. Screens never use literal colours.
 - **Screens.** Home, workspace list, session header and tab strip, terminal
-  dock, Chat UI (transcript, tool runs, thinking disclosure, composer, ask,
+  dock, Chat UI (transcript, tool runs, thinking line, composer, ask,
   permission and question cards, model picker), pairing, settings, about and
   every shared sheet and modal were rewritten on the new tokens.
 - **Chat UI additions.** The terminal accessory keys (Esc, Tab, Shift+Tab,
@@ -48,7 +48,7 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
 | [#15219](https://github.com/stablyai/orca/issues/15219) closing a tab jumps to the leftmost tab | The phone keeps its own visit history and returns to the previously viewed tab, else the newest remaining one. |
 | [#15494](https://github.com/stablyai/orca/issues/15494) pinned workspaces duplicated | The list follows the desktop `showPinnedWorktreesInGroups` setting; off by default. |
 | [#17567](https://github.com/stablyai/orca/issues/17567) terminal theme reassigned every snapshot | The WebView skips identical theme payloads. |
-| [#17579](https://github.com/stablyai/orca/issues/17579) reasoning floods the transcript | Reasoning turns fold into a Thinking disclosure with a one-line preview. |
+| [#17579](https://github.com/stablyai/orca/issues/17579) reasoning floods the transcript | A thought is drawn as its text beside a thin line, the way the Claude app draws it, and one past 600 characters folds behind Show more. |
 | [#17729](https://github.com/stablyai/orca/issues/17729) every commit shows "just now" | Commit timestamps are treated as epoch milliseconds, as the desktop sends them. |
 | [#18568](https://github.com/stablyai/orca/issues/18568) no visible model | The session header shows the active model as a chip. |
 | [#12707](https://github.com/stablyai/orca/issues/12707) / [#18101](https://github.com/stablyai/orca/issues/18101) no in-app update for the sideloaded APK | Daily check against GitHub Releases, a morphing update card with release notes, in-app download and hand-off to the package installer. |

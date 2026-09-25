@@ -22,16 +22,6 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '100%',
       gap: space.sm
     },
-    // A note the agent wrote and then worked past, set apart from the closing
-    // answer. Thin and faint, the weight of the Claude app's thinking line: the
-    // desktop hands Claude's thinking over as ordinary text, so it lands here
-    // too, and 3 px in the strong colour read heavy beside the app (2026-09-24).
-    interimNote: {
-      borderLeftWidth: 2,
-      borderLeftColor: colors.border,
-      paddingLeft: space.md,
-      gap: space.sm
-    },
     userBubble: {
       maxWidth: '86%',
       flexShrink: 1,
@@ -75,21 +65,20 @@ export function makeChatMessageStyles(theme: Theme) {
       backgroundColor: colors.successSoft,
       borderRadius: radius.md
     },
-    // Reasoning ("Thinking") disclosure, #17579.
+    // A thought, the one message drawn beside a line (an open tool run and a
+    // quote have their own). Thin and faint, the weight of the Claude app's
+    // thinking line: 3 px in the strong colour read heavy beside it (2026-09-24).
     reasoning: {
       borderLeftWidth: 2,
       borderLeftColor: colors.border,
       paddingLeft: space.md
     },
-    reasoningHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.xs + 2,
-      paddingVertical: 2
-    },
     reasoningBody: {
-      marginTop: space.xs,
       opacity: 0.85
+    },
+    reasoningToggle: {
+      alignSelf: 'flex-start',
+      paddingVertical: space.xs
     },
     toolRun: {
       marginTop: space.xs

@@ -97,7 +97,6 @@ src/session/mobile-native-chat-diff-card-revert.test.tsx
 src/session/mobile-native-chat-diff-card.test.tsx
 src/session/mobile-native-chat-eligibility.test.ts
 src/session/mobile-native-chat-image-strip-pipeline.test.ts
-src/session/mobile-native-chat-interim.test.ts
 src/session/mobile-native-chat-notice.test.tsx
 src/session/mobile-native-chat-open-file.test.ts
 src/session/mobile-native-chat-render-data.test.ts

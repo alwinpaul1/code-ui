@@ -1,20 +1,12 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import {
-  ArrowUp,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Sparkles,
-  Undo2
-} from 'lucide-react-native'
+import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MobileMarkdown } from '../components/MobileMarkdown'
 import { triggerSuccess } from '../platform/haptics'
 import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
 import { renderProseGroup } from './mobile-native-chat-prose-group-view'
@@ -27,6 +19,7 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
+import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
@@ -36,9 +29,6 @@ import {
   MobileNativeChatNoticeRow
 } from './MobileNativeChatNoticeRow'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
-
-/** Collapsed reasoning shows this many characters of its first line. */
-const REASONING_PREVIEW_CHARS = 96
 
 /** A finger held this long is a copy, not a tap: Android's own long-press
  *  timeout, the one the chat's scroll gate already keys on. */
@@ -115,67 +105,8 @@ function AgentControls({
   )
 }
 
-/** Reasoning turns fold into a "Thinking" disclosure so a long think-aloud does
- *  not swamp the transcript (#17579). Collapsed shows one preview line. */
-function ReasoningDisclosure({
-  message,
-  fontScale,
-  onOpenFile,
-  styles
-}: {
-  message: NativeChatMessage
-  fontScale: number
-  onOpenFile?: (relativePath: string) => void
-  styles: ChatMessageStyles
-}) {
-  const { colors } = useTheme()
-  const [open, setOpen] = useState(false)
-  const text = nativeChatMessageText(message.blocks)
-  const preview =
-    text
-      .split('\n')
-      .find((line) => line.trim().length > 0)
-      ?.trim() ?? ''
-  const truncated =
-    preview.length > REASONING_PREVIEW_CHARS
-      ? `${preview.slice(0, REASONING_PREVIEW_CHARS).trimEnd()}…`
-      : preview
-  return (
-    <View style={styles.reasoning}>
-      <Pressable
-        style={styles.reasoningHeader}
-        onPress={() => setOpen((v) => !v)}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={open ? 'Hide thinking' : 'Show thinking'}
-      >
-        <Sparkles size={13} color={colors.textMuted} strokeWidth={2} />
-        <Txt variant="caption" weight="semibold" tone="muted">
-          Thinking
-        </Txt>
-        {open ? (
-          <ChevronDown size={13} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <ChevronRight size={13} color={colors.textMuted} strokeWidth={2} />
-        )}
-      </Pressable>
-      {open ? (
-        <View style={styles.reasoningBody}>
-          <MobileMarkdown content={text} textScale={fontScale * 0.93} onOpenFile={onOpenFile} />
-        </View>
-      ) : truncated ? (
-        <Txt variant="caption" tone="muted" numberOfLines={1} style={{ marginTop: 2 }}>
-          {truncated}
-        </Txt>
-      ) : null}
-    </View>
-  )
-}
-
 function MobileNativeChatMessageImpl({
   message,
-  interim = false,
   toolsExpanded = false,
   promptsAsMarkdown = false,
   fontScale = 1,
@@ -196,9 +127,6 @@ function MobileNativeChatMessageImpl({
   taskListPredecessors
 }: {
   message: NativeChatMessage
-  /** An assistant note the agent kept working past, drawn as a quote block
-   *  with a bar on the left, the way the Claude app draws it (2026-09-12). */
-  interim?: boolean
   toolsExpanded?: boolean
   /** A transcript whose user rows the lead agent wrote (a subagent's task),
    *  drawn as Markdown; the user's own prompts stay the plain text they typed. */
@@ -257,16 +185,7 @@ function MobileNativeChatMessageImpl({
   )
 
   if (isReasoning) {
-    return (
-      <View style={styles.row}>
-        <ReasoningDisclosure
-          message={message}
-          fontScale={fontScale}
-          onOpenFile={onOpenFile}
-          styles={styles}
-        />
-      </View>
-    )
+    return <MobileNativeChatReasoningNote message={message} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
   }
 
   // The harness's words around a peer message, as the Claude app draws them.
@@ -380,10 +299,9 @@ function MobileNativeChatMessageImpl({
         >
           {segments.map((segment, segmentIndex) =>
             segment.kind === 'prose' ? (
-              <View
-                key={`p${segmentIndex}`}
-                style={interim && isAgent ? styles.interimNote : null}
-              >
+              // No line beside the agent's own words, interim or final: the
+              // Claude app draws one only beside a thought (2026-09-25).
+              <View key={`p${segmentIndex}`}>
                 {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
                   // Air between a picture and the caption under it.
                   <View

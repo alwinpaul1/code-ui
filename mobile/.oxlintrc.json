@@ -316,7 +316,9 @@
             // 2026-09-20, later: +1 for the dock's pointerEvents.
             // 2026-09-24: +2 for onEditAttachment, threaded from the overlay
             // to the composer for the markup editor's pencil.
-            "max": 421,
+            // 2026-09-26: tightened to 412 when the interim-note wiring left;
+            // the side line follows a message's role now, not its turn.
+            "max": 412,
             "skipBlankLines": true,
             "skipComments": true
           }

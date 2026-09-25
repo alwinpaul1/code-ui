@@ -604,9 +604,9 @@ describe('agent-read thumbnails across a mid-turn split', () => {
 
 describe('foldMobileNativeChatMessages with a reasoning row', () => {
   // On the structured lane a Claude or Codex turn journals its reasoning as its
-  // own `reasoning` message (Orca #19977). The phone draws that as a collapsed
-  // "Thinking" disclosure, so it must never swallow the turn's work or fold into
-  // the reply before it.
+  // own `reasoning` message (Orca #19977). The phone draws that as its own row,
+  // the thought beside a thin line, so it must never swallow the turn's work or
+  // fold into the reply before it.
   function reasoning(id: string, text: string): NativeChatMessage {
     return {
       id,

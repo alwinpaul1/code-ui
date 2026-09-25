@@ -8,7 +8,7 @@ failing-first test and has been checked on the phone in light and dark.
 
 | # | What the Claude app shows | Code UI today | Status |
 |---|---|---|---|
-| 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100); telling thinking from notes needs the desktop to mark it (below) |
+| 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100). The line now goes only beside a `reasoning` message, drawn as its text, and no assistant prose has one (2026-09-26). A terminal Claude tab gets no line at all until Orca marks thinking (below); the structured lane, Codex and Grok already do |
 | 2 | Tool-run labels: a single command by its description ("Ran Count K*_F changes in section3 accountings"), "Ran skill", a SendMessage as "Messaged @agent <summary>", a new file as "created a file"; a described command beside other work as "ran a command" ("Created a file, ran a command", 2026-09-26) | "Ran a command" for every single command; no skill or message wording; then a described command named by its description beside an edit too | done (7816f8c5); the mixed run's wording fixed after the 2026-09-26 screenshot |
 | 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, has no chip, and only Orca could carry its count |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards. The sheet caps each input and the output at the inline row's `MAX_TOOL_DETAIL_LENGTH`, so a huge output cannot stall text layout; the Tools toggle no longer expands a row that opens the sheet, which the user chose to keep (2026-09-24; the Claude app has no such toggle). Drag feel needs a phone check |
@@ -51,11 +51,30 @@ Nothing here is built.
 
 - **Thinking (1).** The Claude app draws only `thinking` blocks with the side
   line; the paragraphs read as rephrasings of the visible reply because they
-  are Claude's reasoning summary. Orca's reader turns a Claude `thinking`
-  block into a text block under the plain `assistant` role
-  (transcript-record-blocks.ts, claudeMessageRole), so the phone cannot tell
-  thinking from a note written between tools, and draws both under the note
-  line. Only an Orca change could mark them apart.
+  are Claude's reasoning summary. Its notes between tools, and its answers,
+  have no line (2026-09-25, the same session side by side; the phone had drawn
+  one beside every note but the newest). So the phone draws the line beside a
+  `reasoning` message and nothing else, and folds a thought past 600
+  characters behind Show more (#17579). On a terminal Claude tab thinking still
+  reaches the phone as ordinary prose, so it gets no line. That is a refusal,
+  not a miss: the phone does not guess thinking from the words. The cause is
+  in Orca (origin/main 8d6fec597b, 2026-09-23): `claudeMessageRole()` in
+  `src/main/native-chat/transcript-line-decoders-claude.ts` returns
+  `assistant` for a message made only of `thinking` blocks, though its own
+  comment says such a message should surface as `reasoning`, and
+  `transcript-record-blocks.ts` turns each `thinking` block into a plain text
+  block. The structured lane, Codex and Grok send `reasoning` today, and a
+  terminal tab will too as soon as Orca returns the role its comment
+  promises (`mobile-native-chat-side-rail.test.tsx`). Codex's decoder does,
+  but all 12 Codex rollouts on this machine carry their 1,213 reasoning items
+  encrypted, with no summary text, so a Codex tab shows no thought here today
+  either. Claude Code 2.1.282 still writes
+  `thinking` blocks: 1,245 in this machine's transcripts, of which 201 carry
+  text (the rest only a signature), the longest 414 characters. A block with
+  no text draws nothing, so when the role arrives most of them add no row. A
+  thought past 600 characters folds at the last word before the cut, never
+  back at an earlier paragraph, so a streamed one keeps what it showed. No
+  2.1.283 transcript existed on this machine to check (2026-09-26).
 - **Line counts (3).** Session 76ba8f2f (Claude Code 2.1.282), lines
   4408-4447. The Claude app counts from the full tool input it gets over its
   bridge. The phone gets Orca's mobile payload diet

@@ -29,7 +29,6 @@ import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
-import { interimAssistantMessageIds } from './mobile-native-chat-interim'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
@@ -158,11 +157,6 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
-  // Over the transcript, not `data`: a message the phone sent mid-turn sits
-  // in `data` as an echo the agent absorbed without a user record, and it
-  // must not end the turn — the Claude app keeps the note before it in a
-  // quote block (2026-09-13).
-  const interimIds = useMemo(() => interimAssistantMessageIds(folded), [folded])
   // Labels say "today" or a weekday relative to now; five minutes keeps a
   // divider honest across midnight without churning the rows.
   const dividerNow = useNow(5 * 60_000)
@@ -249,7 +243,6 @@ export function MobileNativeChatView({
         ) : null}
         <MobileNativeChatMessage
         message={item}
-        interim={interimIds.has(item.id)}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
         messageIndex={index}
@@ -275,7 +268,6 @@ export function MobileNativeChatView({
       </>
     ),
     [
-      interimIds,
       dividerLabels,
       toolsExpanded,
       fontScale,
