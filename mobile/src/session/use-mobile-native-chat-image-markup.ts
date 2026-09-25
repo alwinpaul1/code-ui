@@ -30,7 +30,20 @@ export function useMobileNativeChatImageMarkup({
   return useCallback(
     async (id: string, base64: string): Promise<void> => {
       const scope = scopeKey
-      if (!scope || !client) {
+      // No scope has no chip to put it in: Done calls back into the render the
+      // editor opened from, whose scope held the tapped chip.
+      if (!scope) {
+        return
+      }
+      // Never throws, and never returns without a word: the editor has closed
+      // by Done and voids this promise, so a failure said nowhere else let the
+      // unmarked photo go out as if marked up (2026-09-25 sweep). Chips sit in
+      // a module-level store and outlive the host's client, so a Done with no
+      // client is one of those failures.
+      const notSaved = (): void =>
+        showToast('Markup not saved — the photo is still attached without it', 1500)
+      if (!client) {
+        notSaved()
         return
       }
       let uploaded: Awaited<ReturnType<typeof uploadMarkedUpNativeChatImage>>
@@ -40,10 +53,7 @@ export function useMobileNativeChatImageMarkup({
           getConnectionId: getActiveWorktreeConnectionId
         })
       } catch {
-        // Never throws: the editor has closed by Done and voids this promise,
-        // so a rejection reached no one, and the unmarked photo then went out
-        // as if it had been marked up (2026-09-25 sweep).
-        showToast('Markup not saved — the photo is still attached without it', 1500)
+        notSaved()
         return
       }
       replaceAttachmentImage(scope, id, uploaded)
