@@ -4,7 +4,7 @@ import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
-import { useQueuedOwnSends } from './use-queued-own-sends'
+import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
@@ -158,7 +158,12 @@ export function MobileNativeChatOverlay({
   const projectedQueue = useQueuedOwnSends(
     controller.chatPending,
     queuedMessages,
-    controller.nativeChatAgentWorking === true
+    controller.nativeChatAgentWorking === true,
+    {
+      scopeKey: controller.nativeChatStreamScopeKey,
+      readsQueueBox: !controller.nativeChatStructured && agentHasQueueReader(controller.nativeChatAgent),
+      readBeat: controller.nativeChatSpinner
+    }
   )
   // Confirmed queued photos cannot exist in history yet. Searching older pages
   // for them repeatedly changes the list window during a live reply.

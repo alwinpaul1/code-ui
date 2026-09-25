@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { useDebouncedPersist } from './use-debounced-persist'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { rememberEchoInPending, sweepWitnessedEchoes } from './mobile-native-chat-remember-echo'
+import {
+  rememberEchoInPending,
+  sweepWitnessedEchoes,
+  withoutWitnessesOfSends
+} from './mobile-native-chat-remember-echo'
 import {
   readNativeChatPendingEchoes,
   writeNativeChatPendingEchoes
@@ -63,10 +67,12 @@ export function useMobileNativeChatPendingPersistence(
         }
         const live = previous[sessionKey] ?? []
         const liveIds = new Set(live.map((item) => item.id))
+        // A send acknowledged while another tab was on screen dropped its
+        // witness in memory, not on disk (withoutWitnessesOfSends).
         return {
           ...previous,
           [sessionKey]: [
-            ...sweepWitnessedEchoes(stored)
+            ...withoutWitnessesOfSends(sweepWitnessedEchoes(stored), live)
               .filter((item) => !liveIds.has(item.id))
               .map((item) => ({ ...item, restored: true })),
             ...live

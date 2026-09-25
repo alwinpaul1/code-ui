@@ -91,7 +91,15 @@ type Tick = {
   prompts?: DesktopPrompt[]
   /** The rows the agent's screen reader took out of its queue box. */
   queued?: string[]
-  agent?: 'claude' | 'codex'
+  agent?: 'claude' | 'codex' | 'grok'
+  /** The structured (agent-session) lane, which reads no queue box. */
+  structured?: boolean
+  /** Which tab is on screen; `other` is a second working session. */
+  tab?: 'this' | 'other'
+  /** Claude's spinner as the last screen read parsed it. Its elapsed time
+   *  moves every second while the agent works, so each read that completes
+   *  hands the chat a new one. */
+  spinner?: { verb: string; elapsed: string }
 }
 
 type Drafts = ReturnType<typeof useMobileNativeChatDrafts>
@@ -115,11 +123,13 @@ describe('a message the phone queues while the agent works', () => {
 
   /** The real draft store and its witness memory, feeding the real overlay. */
   function Route({ tick }: { tick: Tick }) {
+    const tab = tick.tab === 'other' ? 'tab-2' : 'tab'
+    const session = tick.tab === 'other' ? 'another-session' : SESSION
     drafts = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
-      tabId: 'tab',
-      sessionId: SESSION,
+      tabId: tab,
+      sessionId: session,
       messages: tick.messages,
       transcriptLoading: false,
       transcriptSettled: true
@@ -131,9 +141,11 @@ describe('a message the phone queues while the agent works', () => {
       terminalPeekActive: false,
       nativeChatSession: { messages: tick.messages, status: 'ready' },
       nativeChatAgent: tick.agent ?? 'claude',
+      nativeChatStructured: tick.structured ?? false,
       nativeChatAgentWorking: tick.working ?? true,
       nativeChatStreamLive: tick.working ?? true,
-      nativeChatStreamScopeKey: `tab:${SESSION}`,
+      nativeChatStreamScopeKey: `${tab}:${session}`,
+      nativeChatSpinner: tick.spinner ?? null,
       chatPending: drafts.pending,
       rememberEcho: drafts.rememberEcho,
       nativeChatDesktopPrompts: tick.prompts,
@@ -155,7 +167,7 @@ describe('a message the phone queues while the agent works', () => {
       inputLockReason: null,
       sendErrorMessage: null,
       onClearSendError: vi.fn(),
-      sendSurfaceId: 'tab',
+      sendSurfaceId: tab,
       getSendCompletionGeneration: () => 0,
       keyboardInset: 0
     })
@@ -182,10 +194,13 @@ describe('a message the phone queues while the agent works', () => {
         renderer = create(createElement(Route, { tick }))
       }
     })
-    // Let the witness memory's effects settle into the store and back.
-    await act(async () => {
-      await Promise.resolve()
-    })
+    // Let the witness memory's effects, and a tab's stored echoes read back
+    // from storage, settle into the store and back.
+    for (let turn = 0; turn < 5; turn += 1) {
+      await act(async () => {
+        await Promise.resolve()
+      })
+    }
   }
 
   /** The tap: the send's origin is taken as it leaves the phone. */
@@ -317,15 +332,98 @@ describe('a message the phone queues while the agent works', () => {
       expect(queueBox()).toEqual([])
     })
 
-    it('lets a send out of the queue box when Claude took it before any poll saw the box', async () => {
+    // Second review, 2026-09-25: five shapes the first pass got wrong.
+    it('keeps a send Claude already took out of the queue box after a trip to another working tab', async () => {
       await show('08:24:18.500', { messages: held })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      await show('08:24:20.400', { messages: held, queued: [TEXT] })
+      await show('08:24:49.800', { messages: afterTake, queued: [] })
+      expect(bubbles()).toEqual(['phone'])
+      await show('08:24:55.000', { messages: [], tab: 'other' })
+      await show('08:25:05.000', { messages: afterTake })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('keeps a send that left the queue box unseen out of it after a trip to another working tab', async () => {
+      await show('08:24:18.500', { messages: held })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      await clockTo('08:24:34.400')
+      expect(bubbles()).toEqual(['phone'])
+      await show('08:24:40.000', { messages: [], tab: 'other' })
+      await show('08:24:45.000', { messages: afterTake })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('draws a send the box listed and released before its ack as a bubble at the ack', async () => {
+      await show('08:24:18.500', { messages: held })
+      const origin = await tap('08:24:19.000')
+      await show('08:24:19.600', { messages: held, queued: queuedMessagesFromScreen(claudeScreen([TEXT])) })
+      await show('08:24:20.600', { messages: waited, queued: [] })
+      await ack('08:24:21.000', origin)
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it.each([
+      ['an agent whose queue box the phone does not read', { agent: 'grok' as const }],
+      ['the structured lane, which reads no queue box', { structured: true }]
+    ])('draws a mid-turn send as a bubble at once for %s', async (_label, lane) => {
+      await show('08:24:18.500', { messages: held, ...lane })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('keeps a send queued while the screen reads time out, until a read lists it', async () => {
+      const spinner = (elapsed: string) => ({ verb: 'Incubating', elapsed })
+      await show('08:24:18.500', { messages: held, spinner: spinner('31m 26s') })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      expect(queueBox()).toEqual([TEXT])
+      // Two reads time out at 2.5 s each over the relay; nothing new arrives.
+      await show('08:24:24.400', { messages: held, spinner: spinner('31m 26s') })
+      expect(bubbles()).toEqual([])
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:24.600', { messages: held, spinner: spinner('31m 32s'), queued: [TEXT] })
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:49.800', { messages: afterTake, spinner: spinner('31m 57s'), queued: [] })
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('shows the message once when its ack landed while another tab was on screen', async () => {
+      await show('08:24:18.500', { messages: held })
+      const origin = await tap('08:24:19.000')
+      await show('08:24:19.320', { messages: held, prompts: hookCopy('08:24:19.090') })
+      expect(bubbles()).toEqual(['hook'])
+      // The user leaves before the ack; the witness went to disk on the way out.
+      await show('08:24:19.700', { messages: [], tab: 'other' })
+      await ack('08:24:19.900', origin)
+      await show('08:24:30.000', { messages: waited, prompts: hookCopy('08:24:19.090'), queued: [TEXT] })
+      await show('08:24:52.500', { messages: afterTake, prompts: hookCopy('08:24:19.090'), queued: [] })
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('lets a send out of the queue box when Claude took it before any poll saw the box', async () => {
+      const spinner = (seconds: number) => ({ verb: 'Incubating', elapsed: `31m ${seconds}s` })
+      await show('08:24:18.500', { messages: held, spinner: spinner(26) })
       const origin = await tap('08:24:19.000')
       await ack('08:24:19.300', origin)
       expect(queueBox()).toEqual([TEXT])
-      // Every poll after it finds the box empty: Claude took it at once.
-      await act(async () => {
-        vi.advanceTimersByTime(10_000)
-      })
+      // Every read after it finds the box empty: Claude took it at once.
+      for (let second = 20; second <= 25; second += 1) {
+        await show(`08:24:${second}.100`, { messages: held, spinner: spinner(second + 7) })
+      }
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('lets it out by the cap when no screen read completes at all', async () => {
+      await show('08:24:18.500', { messages: held })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      await show('08:24:29.000', { messages: held })
+      expect(queueBox()).toEqual([TEXT])
+      await clockTo('08:24:34.400')
       expect(queueBox()).toEqual([])
       expect(bubbles()).toEqual(['phone'])
     })

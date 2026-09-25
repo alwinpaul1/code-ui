@@ -96,21 +96,41 @@ export function acceptOwnSendInPending(
   images?: string[]
 ): PendingByKey {
   const current = previous[key] ?? []
-  const sentAt = origin.sentAt
-  const kept =
-    typeof sentAt === 'number'
-      ? current.filter(
-          (item) =>
-            !(
-              isWitnessed(item.id) &&
-              typeof item.witnessedAt === 'number' &&
-              item.witnessedAt >= sentAt &&
-              preferredWitnessReading(text, item.text) !== null
-            )
-        )
-      : current
-  const base = kept.length === current.length ? previous : { ...previous, [key]: kept }
+  const kept = withoutWitnessesOfSends(current, [{ text, sentAt: origin.sentAt }])
+  const base = kept === current ? previous : { ...previous, [key]: kept }
   return appendMobileNativeChatPending(base, key, id, origin, text, images)
+}
+
+/**
+ * `list` without the witnesses (`desk-`/`absorbed-`) of any of `sends`: a
+ * reading of the same message stored at or after the send left the phone.
+ * The same list back when nothing goes.
+ *
+ * Also run when a tab's stored echoes are read back and merged with the live
+ * ones: a send acknowledged while another tab was on screen dropped its
+ * witness in memory only, since only the tab on screen is written, and the
+ * copy on disk came back beside it (second review, 2026-09-25).
+ */
+export function withoutWitnessesOfSends(
+  list: MobileNativeChatPendingMessage[],
+  sends: readonly { text: string; sentAt?: number }[]
+): MobileNativeChatPendingMessage[] {
+  const timed = sends.filter((send) => typeof send.sentAt === 'number' && Number.isFinite(send.sentAt))
+  if (timed.length === 0) {
+    return list
+  }
+  const kept = list.filter(
+    (item) =>
+      !(
+        isWitnessed(item.id) &&
+        typeof item.witnessedAt === 'number' &&
+        timed.some(
+          (send) =>
+            item.witnessedAt! >= send.sentAt! && preferredWitnessReading(send.text, item.text) !== null
+        )
+      )
+  )
+  return kept.length === list.length ? list : kept
 }
 
 function isWitnessed(id: string): boolean {

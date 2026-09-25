@@ -2,21 +2,51 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 
 /**
- * How long a send made mid-turn waits in the queue box for the agent's own
- * box to list it before it is taken to have been absorbed unseen.
+ * How long a send made mid-turn stays in the queue box, unlisted by the
+ * agent's own box, before the screen reads may say it was absorbed unseen.
  *
  * The screen is read once a second, each read given 2.5 s
  * (use-mobile-terminal-hud-observation.ts), and the agent paints its queue at
  * the Enter, before the write is even acknowledged, so a message still queued
- * is listed by the first read that completes after the send lands. Past this
- * the only reason the box never showed it is that the agent took it between
- * two reads.
+ * is listed by the first read that completes after the send lands.
  */
 export const QUEUE_SIGHTING_GRACE_MS = 5000
+/** Completed screen reads after the send, none listing it, that it takes to
+ *  call it absorbed. Two, because the first may have been asked for before the
+ *  Enter reached the agent. */
+export const QUEUE_SIGHTING_READS = 2
+/** The longest a send waits for any of that, reads or no reads. A link whose
+ *  reads all time out says nothing either way, and the send must not be
+ *  stranded in the box. */
+export const QUEUE_SIGHTING_CAP_MS = 15_000
+/** Box rows remembered with when they were first read, so a send whose ack
+ *  came after the box listed it and let it go is known as listed. */
+const SEEN_ROWS_CAP = 32
 
 type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number }
 
+/** The agents whose queue box the phone parses off the screen, as
+ *  use-mobile-terminal-hud-observation.ts reads them. Keep the two in step. */
+export function agentHasQueueReader(agent: string | null | undefined): boolean {
+  return agent === 'claude' || agent === 'openclaude' || agent === 'codex'
+}
+
 const NO_IDS: ReadonlySet<string> = new Set()
+
+export type QueuedOwnSendsScope = {
+  /** The session on screen. A send is queued only if this chat saw the agent
+   *  working in THIS session before it was sent, so coming back to a tab
+   *  never puts a send the agent already took back in the box. */
+  scopeKey: string
+  /** Whether the phone reads this agent's queue box at all: Claude and Codex
+   *  on the terminal lane. Without it nothing would ever list the send, and
+   *  every mid-turn send would sit in the box for the whole wait. */
+  readsQueueBox: boolean
+  /** Something that changes with each completed screen read while the agent
+   *  works: Claude's spinner, whose elapsed time moves every second. Absent
+   *  (Codex, or no spinner on screen), only the cap ends the wait. */
+  readBeat: unknown
+}
 
 /**
  * The phone's own sends split between the queue box and the chat, as
@@ -31,16 +61,18 @@ const NO_IDS: ReadonlySet<string> = new Set()
  * is where it belongs.
  *
  * It stays there, unlisted, only until the agent's box lists it (after which
- * the box decides, exactly as before), the agent stops working, or
- * QUEUE_SIGHTING_GRACE_MS passes with no read listing it: a send the agent
- * absorbed before any read saw the box must not be stranded there. A send
+ * the box decides, exactly as before), the agent stops working, or the reads
+ * say it is gone: QUEUE_SIGHTING_GRACE_MS passed and QUEUE_SIGHTING_READS
+ * reads completed without listing it, or QUEUE_SIGHTING_CAP_MS passed. A send
+ * the agent absorbed before any read saw the box is not stranded there. A send
  * made while the agent was idle starts a turn rather than queueing, so it is a
  * bubble at once; so is one with no send time (restored from an older build).
  */
 export function useQueuedOwnSends<T extends OwnSend>(
   pending: readonly T[],
   queue: readonly string[] | undefined,
-  agentWorking: boolean
+  agentWorking: boolean,
+  { scopeKey, readsQueueBox, readBeat }: QueuedOwnSendsScope
 ): {
   /** Own sends drawn as bubbles in the chat. */
   pending: T[]
@@ -49,16 +81,33 @@ export function useQueuedOwnSends<T extends OwnSend>(
   unlisted: T[]
 } {
   /** When the phone saw the current working stretch begin, by its clock; null
-   *  while idle, and until the first commit that saw it working. A send made
-   *  before it was made while the agent was idle, or before this chat was
-   *  watching, and is not taken to be queued. */
+   *  while idle. It starts again on every change of session. A send older
+   *  than it was made while the agent was idle, or before this chat was
+   *  watching this session, so coming back to a tab never puts a send the
+   *  agent already took back in the box (second review, 2026-09-25). */
   const workingSince = useRef<number | null>(null)
   useEffect(() => {
     workingSince.current = agentWorking ? Date.now() : null
-  }, [agentWorking])
+  }, [agentWorking, scopeKey])
+  /** Each box row read, with when it was first read. */
+  const seenRows = useRef(new Map<string, number>())
+  useEffect(() => {
+    const now = Date.now()
+    for (const row of queue ?? []) {
+      if (!seenRows.current.has(row)) {
+        seenRows.current.set(row, now)
+      }
+    }
+    for (const row of seenRows.current.keys()) {
+      if (seenRows.current.size <= SEEN_ROWS_CAP) {
+        break
+      }
+      seenRows.current.delete(row)
+    }
+  }, [queue])
   /** Sends the agent's box has listed at least once: the box decides them. */
   const listed = useRef(new Set<string>())
-  /** Sends whose grace ran out with no box listing them. */
+  /** Sends the reads say were absorbed without the box ever listing them. */
   const [expired, setExpired] = useState(NO_IDS)
   const result = useMemo(() => {
     const projected = projectMobileChatQueue(pending, queue ?? [])
@@ -68,7 +117,7 @@ export function useQueuedOwnSends<T extends OwnSend>(
         listed.current.add(item.id)
       }
     }
-    const since = agentWorking ? workingSince.current : null
+    const since = agentWorking && readsQueueBox ? workingSince.current : null
     const unlisted = projected.pending.filter(
       (item) =>
         since !== null &&
@@ -76,7 +125,8 @@ export function useQueuedOwnSends<T extends OwnSend>(
         Number.isFinite(item.sentAt) &&
         item.sentAt >= since &&
         !listed.current.has(item.id) &&
-        !expired.has(item.id)
+        !expired.has(item.id) &&
+        !listedBeforeItExisted(item, seenRows.current, listed.current)
     )
     if (unlisted.length === 0) {
       return { ...projected, unlisted }
@@ -96,12 +146,9 @@ export function useQueuedOwnSends<T extends OwnSend>(
       ],
       unlisted
     }
-  }, [agentWorking, expired, pending, queue])
-  // Each unlisted send's grace runs from when the phone first held it, which
-  // for a text send is its ack. A timer ends it, so it leaves the queue box
-  // without waiting for some other change to re-render the chat.
-  const firstSeen = useRef(new Map<string, number>())
+  }, [agentWorking, expired, pending, queue, readsQueueBox])
   // Bounded by the sends still pending: a retired send is forgotten.
+  const firstSeen = useRef(new Map<string, { at: number; beats: number }>())
   useEffect(() => {
     const live = new Set(pending.map((item) => item.id))
     for (const id of listed.current) {
@@ -119,6 +166,20 @@ export function useQueuedOwnSends<T extends OwnSend>(
       return kept.length === previous.size ? previous : new Set(kept)
     })
   }, [pending])
+  // Completed reads, counted by what they parsed rather than by object, so
+  // two reads of the same second count once.
+  const beats = useRef({ count: 0, last: '' })
+  const beat = readBeat == null ? '' : JSON.stringify(readBeat)
+  const [beatCount, setBeatCount] = useState(0)
+  useEffect(() => {
+    if (beat !== '' && beat !== beats.current.last) {
+      beats.current = { count: beats.current.count + 1, last: beat }
+      setBeatCount(beats.current.count)
+    }
+  }, [beat])
+  // Each unlisted send's wait runs from when the phone first held it, which
+  // for a text send is its ack. Timers end it, so it leaves the queue box
+  // without waiting for some other change to re-render the chat.
   useEffect(() => {
     if (result.unlisted.length === 0) {
       return
@@ -126,22 +187,63 @@ export function useQueuedOwnSends<T extends OwnSend>(
     const now = Date.now()
     for (const item of result.unlisted) {
       if (!firstSeen.current.has(item.id)) {
-        firstSeen.current.set(item.id, now)
+        firstSeen.current.set(item.id, { at: now, beats: beats.current.count })
       }
     }
-    const deadlineOf = (item: T) => (firstSeen.current.get(item.id) ?? now) + QUEUE_SIGHTING_GRACE_MS
-    const next = Math.min(...result.unlisted.map(deadlineOf))
-    const timer = setTimeout(() => {
-      // The earliest is due by construction; the clock is read again only for
-      // any others that fell due in the same moment.
-      const at = Math.max(Date.now(), next)
-      const due = result.unlisted.filter((item) => deadlineOf(item) <= at).map((item) => item.id)
-      setExpired((previous) => new Set([...previous, ...due]))
-    }, Math.max(0, next - now))
-    return () => clearTimeout(timer)
-  }, [result.unlisted])
+    const due = (at: number) =>
+      result.unlisted
+        .filter((item) => {
+          const seen = firstSeen.current.get(item.id)
+          if (!seen) {
+            return false
+          }
+          const waited = at - seen.at
+          return (
+            waited >= QUEUE_SIGHTING_CAP_MS ||
+            (waited >= QUEUE_SIGHTING_GRACE_MS && beats.current.count - seen.beats >= QUEUE_SIGHTING_READS)
+          )
+        })
+        .map((item) => item.id)
+    const expire = (ids: string[]) => {
+      if (ids.length > 0) {
+        setExpired((previous) => new Set([...previous, ...ids]))
+      }
+    }
+    expire(due(now))
+    const timers = result.unlisted.flatMap((item) => {
+      const seen = firstSeen.current.get(item.id)!
+      return [QUEUE_SIGHTING_GRACE_MS, QUEUE_SIGHTING_CAP_MS].map((after) =>
+        setTimeout(() => expire(due(Math.max(Date.now(), seen.at + after))), Math.max(0, seen.at + after - now))
+      )
+    })
+    return () => {
+      for (const timer of timers) {
+        clearTimeout(timer)
+      }
+    }
+  }, [beatCount, result.unlisted])
   return useMemo(
     () => ({ pending: result.pending, queue: result.queue, unlisted: result.unlisted }),
     [result]
   )
+}
+
+/** Whether the box listed a row that is this send after it left the phone,
+ *  before the phone held it: an ack that came after the agent had queued and
+ *  taken the message. Such a send is a bubble at once. */
+function listedBeforeItExisted(
+  item: OwnSend,
+  seenRows: ReadonlyMap<string, number>,
+  listed: Set<string>
+): boolean {
+  if (typeof item.sentAt !== 'number') {
+    return false
+  }
+  for (const [row, seenAt] of seenRows) {
+    if (seenAt >= item.sentAt && projectMobileChatQueue([item], [row]).pending.length === 0) {
+      listed.add(item.id)
+      return true
+    }
+  }
+  return false
 }
