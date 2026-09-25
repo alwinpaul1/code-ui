@@ -41,6 +41,14 @@ export function useMobileChatFollowing() {
   // still down after beginning a drag, or put down to stop a fling, keeps
   // selection off until it lifts: the 2026-09-12 rule.
   const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A finger dragging the list, from the drag's begin to its end. `holding`
+  // cannot say so on Android: when the scroll view takes a gesture, JS gets a
+  // touchcancel before the drag begins and no touchend when the finger lifts,
+  // so `holding` reads false for every drag. Without this the window closed
+  // under a finger that had caught a fling and held still, and after a drag
+  // paused a quarter of a second, and the next sample near the live edge
+  // handed the list back to tail-follow mid-drag (second review, 2026-09-25).
+  const draggingRef = useRef(false)
   const cancelQuiet = useCallback(() => {
     if (quietTimer.current !== null) {
       clearTimeout(quietTimer.current)
@@ -49,31 +57,45 @@ export function useMobileChatFollowing() {
   }, [])
   const armQuiet = useCallback(() => {
     cancelQuiet()
-    if (!scrollingRef.current || holdingRef.current) {
+    if (!scrollingRef.current || holdingRef.current || draggingRef.current) {
       return
     }
     quietTimer.current = setTimeout(() => {
       quietTimer.current = null
-      if (scrollingRef.current && !holdingRef.current) {
+      if (scrollingRef.current && !holdingRef.current && !draggingRef.current) {
         scrollingRef.current = false
         setTextSelectable(true)
       }
     }, QUIET_MS)
   }, [cancelQuiet])
-  // A drag or a fling. A drag begins under a finger, and the window waits for
-  // it to lift. A fling begins with the finger already up, and is only
-  // presumed to move: the window opens at once and each sample of it moving
-  // starts the window over. Waiting instead for the momentum end left text
-  // unselectable for a whole turn, because Android sends that end only after
-  // three quiet checks with no scroll at all, and a streaming reply scrolls
-  // the list every time it grows (`NATIVE_CHAT_STREAM_THROTTLE_MS`, 50 ms)
-  // while it holds the reader's place (2026-09-25).
-  const beginScroll = useCallback(() => {
+  const startScroll = useCallback(() => {
     scrollingRef.current = true
     setTextSelectable(false)
     setFollowing(false)
+  }, [setFollowing])
+  /** A drag: a finger on the list, so the window waits for it to lift. */
+  const beginScroll = useCallback(() => {
+    draggingRef.current = true
+    cancelQuiet()
+    startScroll()
+  }, [cancelQuiet, startScroll])
+  /** The dragging finger lifted; if nothing moves now, the list is at rest. */
+  const endDrag = useCallback(() => {
+    draggingRef.current = false
     armQuiet()
-  }, [armQuiet, setFollowing])
+  }, [armQuiet])
+  // A fling begins with the finger already up and is only presumed to move:
+  // the window opens at once and each sample of it moving starts it over.
+  // Waiting instead for the momentum end left text unselectable for a whole
+  // turn, because Android sends that end only after three quiet checks with
+  // no scroll at all, and a streaming reply scrolls the list every time it
+  // grows (`NATIVE_CHAT_STREAM_THROTTLE_MS`, 50 ms) while it holds the
+  // reader's place (2026-09-25).
+  const beginFling = useCallback(() => {
+    draggingRef.current = false
+    startScroll()
+    armQuiet()
+  }, [armQuiet, startScroll])
   const endScroll = useCallback(() => {
     scrollingRef.current = false
     cancelQuiet()
@@ -114,6 +136,9 @@ export function useMobileChatFollowing() {
   }, [])
   const touchStart = useCallback(() => {
     holdingRef.current = true
+    // A new gesture: any drag before it is over, even one whose end the
+    // scroll view never sent (a cancelled gesture sends none).
+    draggingRef.current = false
     touchStartedAt.current = Date.now()
     cancelQuiet()
     disarmLongPress()
@@ -127,6 +152,9 @@ export function useMobileChatFollowing() {
   }, [cancelQuiet, disarmLongPress, setFollowing])
   const touchEnd = useCallback(() => {
     holdingRef.current = false
+    // Android sends this (as a touchcancel) BEFORE a drag begins, never
+    // after; a touchend that follows a drag's begin is a finger JS saw lift.
+    draggingRef.current = false
     disarmLongPress()
     // Kept for the case the timer could not run (a backgrounded app, a test
     // with no timers): the elapsed time still says this was a long-press.
@@ -155,6 +183,8 @@ export function useMobileChatFollowing() {
     showJumpToLatest,
     setFollowing,
     beginScroll,
+    endDrag,
+    beginFling,
     endScroll
   }
 }

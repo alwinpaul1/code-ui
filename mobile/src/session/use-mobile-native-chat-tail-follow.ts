@@ -117,6 +117,8 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     showJumpToLatest,
     setFollowing,
     beginScroll,
+    endDrag,
+    beginFling,
     endScroll,
     scrollSample
   } = useMobileChatFollowing()
@@ -290,13 +292,14 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const onScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       cancelSettle()
+      endDrag()
       const metrics = event.nativeEvent
       settleFrameRef.current = requestAnimationFrame(() => {
         settleFrameRef.current = null
         settle(metrics)
       })
     },
-    [cancelSettle, settle]
+    [cancelSettle, endDrag, settle]
   )
 
   // A requested jump also emits momentum events. Enabling history anchoring
@@ -304,9 +307,9 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const onMomentumScrollBegin = useCallback(() => {
     cancelSettle()
     if (!jumpingRef.current) {
-      beginScroll()
+      beginFling()
     }
-  }, [beginScroll, cancelSettle])
+  }, [beginFling, cancelSettle])
 
   const onMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
