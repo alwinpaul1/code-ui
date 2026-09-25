@@ -8,6 +8,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -295,6 +296,96 @@ describe('a message the phone queues while the agent works', () => {
       await ack('08:24:19.900', origin, 'yes')
       await show('08:24:52.500', { messages: afterTake, prompts: both })
       expect(bubbles()).toEqual(['hook', 'phone'])
+    })
+  })
+
+  describe('in the queue box from the send until Claude takes it', () => {
+    it('lists a send made while Claude works in the queue box at once, not as a bubble first', async () => {
+      await show('08:24:18.500', { messages: held })
+      const origin = await tap('08:24:19.000')
+      await ack('08:24:19.300', origin)
+      expect(bubbles()).toEqual([])
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:19.400', { messages: held, prompts: hookCopy('08:24:19.090') })
+      expect(bubbles()).toEqual([])
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:20.400', { messages: held, prompts: hookCopy('08:24:19.090'), queued: queuedMessagesFromScreen(claudeScreen([TEXT])) })
+      expect(bubbles()).toEqual([])
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:49.800', { messages: waited, prompts: hookCopy('08:24:19.090'), queued: [] })
+      expect(bubbles()).toEqual(['phone'])
+      expect(queueBox()).toEqual([])
+    })
+
+    it('lets a send out of the queue box when Claude took it before any poll saw the box', async () => {
+      await show('08:24:18.500', { messages: held })
+      const origin = await tap('08:24:19.000')
+      await ack('08:24:19.300', origin)
+      expect(queueBox()).toEqual([TEXT])
+      // Every poll after it finds the box empty: Claude took it at once.
+      await act(async () => {
+        vi.advanceTimersByTime(10_000)
+      })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('draws a send made while the agent is idle as a bubble at once', async () => {
+      await show('08:24:18.500', { messages: held, working: false })
+      const origin = await tap('08:24:19.000')
+      await show('08:24:19.200', { messages: held, working: true })
+      await ack('08:24:19.300', origin)
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('lists two identical sends as two queued rows while the box has painted only one', async () => {
+      await show('08:24:18.500', { messages: held })
+      await ack('08:24:19.300', await tap('08:24:19.000', 'yes'), 'yes')
+      await ack('08:24:20.300', await tap('08:24:20.000', 'yes'), 'yes')
+      expect(queueBox()).toEqual(['yes', 'yes'])
+      await show('08:24:20.500', { messages: held, queued: ['yes'] })
+      expect(queueBox()).toEqual(['yes', 'yes'])
+      expect(bubbles()).toEqual([])
+      await show('08:24:21.500', { messages: held, queued: ['yes', 'yes'] })
+      await show('08:24:49.800', { messages: afterTake, queued: [] })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone', 'phone'])
+    })
+
+    // The box cuts a long entry short with `…` on a narrow terminal, and a
+    // stub under 24 characters is too short to be sure it is this send
+    // (queueRowIsPendingSend), so it stands as a row of its own. When it left,
+    // the queue-box witness held it, and only the phone's own sends clear it.
+    it('does not draw a send twice when the box listed it too short to match and it left unseen', async () => {
+      const text = 'Check the build failure on CI'
+      await show('08:24:18.500', { messages: held })
+      await ack('08:24:19.300', await tap('08:24:19.000', text), text)
+      await show('08:24:20.400', { messages: held, queued: ['Check the build…'] })
+      await show('08:24:21.400', { messages: waited, queued: [] })
+      // Still the phone's own queued send, never a second copy beside it.
+      expect(bubbles()).toEqual([])
+      await show('08:24:52.500', { messages: afterTake, queued: [] })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
+    })
+
+    it('does the same for a Codex send, whose queue box reads differently', async () => {
+      const codexScreen = (rows: string[]) => [
+        '• Queued follow-up inputs',
+        ...rows.map((text) => `  ↳ ${text}`),
+        '    alt + ↑ edit last queued message',
+        '› '
+      ]
+      await show('08:24:18.500', { messages: held, agent: 'codex' })
+      await ack('08:24:19.300', await tap('08:24:19.000'))
+      expect(queueBox()).toEqual([TEXT])
+      expect(bubbles()).toEqual([])
+      await show('08:24:20.400', { messages: held, agent: 'codex', queued: codexQueuedMessagesFromScreen(codexScreen([TEXT])) })
+      expect(queueBox()).toEqual([TEXT])
+      await show('08:24:49.800', { messages: afterTake, agent: 'codex', queued: codexQueuedMessagesFromScreen(codexScreen([])) })
+      expect(queueBox()).toEqual([])
+      expect(bubbles()).toEqual(['phone'])
     })
   })
 })

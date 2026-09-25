@@ -360,8 +360,12 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
  *  ("…confirm with jev and / then fixx / and again…", device 2026-09-20).
  *  `caption` keeps the drawn row, because that is what a recall has to match
  *  against. A row with no own send behind it — typed on the desk — stays a
- *  string, the screen's own reading. */
-export type MobileChatQueueEntry = string | { text: string; images: string[]; caption: string }
+ *  string, the screen's own reading. `unlisted` marks a send queued mid-turn
+ *  that the agent's box has not listed yet (use-queued-own-sends.ts): there is
+ *  no drawn row to recall, so it cannot be edited. */
+export type MobileChatQueueEntry =
+  | string
+  | { text: string; images: string[]; caption: string; unlisted?: true }
 
 /** Show each confirmed queued send once, as typed, retaining local photos. */
 export function projectMobileChatQueue<T extends { text: string; images?: string[] }>(

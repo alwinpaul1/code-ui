@@ -4,7 +4,7 @@ import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
-import { projectMobileChatQueue } from './mobile-terminal-queued-messages'
+import { useQueuedOwnSends } from './use-queued-own-sends'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
@@ -153,9 +153,12 @@ export function MobileNativeChatOverlay({
     }
   }, [])
 
-  const projectedQueue = useMemo(
-    () => projectMobileChatQueue(controller.chatPending, queuedMessages ?? []),
-    [controller.chatPending, queuedMessages]
+  // A send made mid-turn is queued from the moment it exists, not from the
+  // first screen read that finds it in the agent's box (2026-09-25).
+  const projectedQueue = useQueuedOwnSends(
+    controller.chatPending,
+    queuedMessages,
+    controller.nativeChatAgentWorking === true
   )
   // Confirmed queued photos cannot exist in history yet. Searching older pages
   // for them repeatedly changes the list window during a live reply.
@@ -199,9 +202,15 @@ export function MobileNativeChatOverlay({
   )
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
+  // The phone's own sends waiting in the queue box before the agent's box has
+  // listed them are drawn too: a box row that left may be one of them.
   const ownPrompts = useMemo(
-    () => [...projectedQueue.pending.map((p) => p.text), ...desktopPrompts.map((p) => p.text)],
-    [desktopPrompts, projectedQueue.pending]
+    () => [
+      ...projectedQueue.pending.map((p) => p.text),
+      ...projectedQueue.unlisted.map((p) => p.text),
+      ...desktopPrompts.map((p) => p.text)
+    ],
+    [desktopPrompts, projectedQueue.pending, projectedQueue.unlisted]
   )
   // Every mid-turn message is drawn where it was SENT, as the Claude app draws
   // it, with the calls that ran while it waited below it (2026-09-23).

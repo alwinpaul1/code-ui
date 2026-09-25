@@ -92,6 +92,28 @@ it('gives Claude a pencil on every queued message, addressed by position', async
   await act(async () => renderer!.unmount())
 })
 
+// 2026-09-25: a send made mid-turn is listed from the moment it exists, before
+// the agent's own box has painted it (use-queued-own-sends.ts). There is no
+// row on the agent's screen to recall yet, so its pencil waits for the box.
+it.each([
+  ['claude', 1],
+  ['codex', 0]
+] as const)('gives a %s send the box has not listed yet no pencil', async (agent, pencils) => {
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const messages = [
+    'listed by the box',
+    { text: 'Working W capital', images: [], caption: 'Working W capital', unlisted: true as const }
+  ]
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(MobileNativeChatQueue, { messages, agent, onEdit }))
+  })
+  expect(renderer!.root.findByProps({ accessibilityLabel: '2 queued messages' })).toBeTruthy()
+  expect(renderer!.root.findAllByType('Pencil')).toHaveLength(pencils)
+  expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Edit queued message 2' })).toHaveLength(0)
+  await act(async () => renderer!.unmount())
+})
+
 it('keeps Codex to the one queued message its native recall can reach', async () => {
   const onEdit = vi.fn().mockResolvedValue(undefined)
   const projected = projectMobileChatQueue([], ['first', 'second', 'third'])

@@ -42,8 +42,11 @@ export function MobileNativeChatQueue({
   // Claude builds without the selector report that through the editor's own
   // error, which names the flag that turns it on — silence would just repeat
   // the original complaint that queued messages cannot be edited.
+  // A send the agent's box has not listed yet has no row on its screen to
+  // recall, so it gets its pencil once the box lists it.
   const editable = (index: number) =>
     Boolean(onEdit) &&
+    !isUnlisted(messages?.[index]) &&
     (agent === 'claude' || (agent === 'codex' && index === (messages?.length ?? 0) - 1))
   if (!messages?.length) {
     return null
@@ -203,6 +206,10 @@ export function MobileNativeChatQueue({
       </ScrollView>
     </View>
   )
+}
+
+function isUnlisted(entry: MobileChatQueueEntry | undefined): boolean {
+  return typeof entry === 'object' && entry.unlisted === true
 }
 
 function QueuedImages({ images, index }: { images: string[]; index: number }) {
