@@ -56,7 +56,7 @@ export type StickyLiveHud = {
  * and session across screen reads that come back empty.
  *
  * Only the screen: the `[Model effort]` badge on a user's own status line, or
- * Codex's footer. The agent's OSC beacon is the other live source, and it is
+ * Codex's footer. The agent's HUD beacon is the other live source, and it is
  * NOT held here — the beacon store already keeps the last beacon per handle,
  * and it is that store, not this hold, that decides when a beacon has died
  * with its process (`agent-hud-beacon-liveness.ts`). Holding beacon figures

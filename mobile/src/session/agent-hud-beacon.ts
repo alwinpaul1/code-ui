@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { resetAgentHudChannels, takeAgentHudChannelFor } from './agent-hud-channel'
 import { restamp, unchangedBeacon } from './agent-hud-beacon-identity'
 import { resetBeaconWatches } from './agent-hud-beacon-liveness'
 import {
@@ -9,14 +10,18 @@ import {
 /**
  * The phone half of the invisible HUD channel.
  *
- * Each agent writes `ESC ] 7777 ; CUIHUD1 key=value … BEL` straight to its own
- * PTY (see `agent-hud-launch-args.ts`). Terminals draw nothing for an unknown
- * OSC, so the user's screen is unchanged — but the phone already receives that
- * PTY byte stream, so it can sniff the sequence out, keep the payload, and
- * strip the bytes before anything reaches the WebView.
+ * Each agent writes a `CUIHUD1 key=value …` payload straight to its own PTY
+ * (see `agent-hud-launch-args.ts`), framed in four C0 bytes no terminal draws
+ * or acts on (`agent-hud-channel.ts`). The phone already receives that PTY
+ * byte stream, so it takes those bytes out wherever they landed, keeps the
+ * payload, and hands the rest on unchanged.
  *
- * OSC 7777 is in the private range. Anything else that looks like an OSC
- * (`ESC ] 0 ; title BEL`, for one) is passed through untouched.
+ * The older frame, `ESC ] 7777 ; … BEL`, is still read: a tab launched with
+ * the old flags keeps writing it until its agent restarts. That one could be
+ * spliced into the agent's own escapes and draw text on the desktop, which is
+ * why the writers moved off it. OSC 7777 is in the private range; anything
+ * else that looks like an OSC (`ESC ] 0 ; title BEL`, for one) is passed
+ * through untouched.
  */
 
 const OSC_PREFIX = '\u001b]7777;'
@@ -315,7 +320,11 @@ export async function hydrateAgentHudBeacons(): Promise<void> {
  * exists.
  */
 export function consumeAgentHudBeacons(handle: string, chunk: string): string {
-  let text = (carries.get(handle) ?? '') + chunk
+  // The channel first: its bytes can sit inside anything, an old OSC beacon
+  // included, and once they are out every other byte is where it was.
+  const taken = takeAgentHudChannelFor(handle, chunk)
+  taken.payloads.forEach((payload) => publish(handle, payload))
+  let text = (carries.get(handle) ?? '') + taken.text
   carries.delete(handle)
   let out = ''
   for (;;) {
@@ -369,6 +378,7 @@ export function getAgentHudBeaconArrivedAt(handle: string | null): number | null
 export function resetAgentHudBeacons(): void {
   beacons.clear()
   carries.clear()
+  resetAgentHudChannels()
   arrivals.clear()
   resetBeaconWatches()
 }

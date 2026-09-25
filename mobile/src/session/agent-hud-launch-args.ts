@@ -5,7 +5,7 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 /**
  * The HUD's data source: the agents' own live state, carried to the phone on
- * an INVISIBLE escape sequence written straight to the PTY. Nothing is drawn
+ * INVISIBLE control bytes written straight to the PTY. Nothing is drawn
  * in the user's terminal, nothing is written to their disk, and no terminal is
  * opened on the host.
  *
@@ -22,20 +22,25 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
  *  - Claude Code STRIPS OSC escapes from a status-line command's stdout, so
  *    the payload cannot ride on stdout. Instead each script finds the agent's
  *    own PTY by walking its parent processes (`ps -o tty= -p <pid>`, which
- *    gives `ttys003` on macOS and `pts/3` on Linux) and writes ONE
- *    `ESC ] 7777 ; <payload> BEL` to `/dev/<tty>`. Terminals draw nothing for
- *    an unknown OSC; the phone already receives the raw PTY byte stream and
- *    sniffs the sequence out of it (`agent-hud-beacon.ts`).
+ *    gives `ttys003` on macOS and `pts/3` on Linux) and writes one frame of
+ *    the C0 channel (`agent-hud-channel.ts`) to `/dev/<tty>`: four control
+ *    bytes xterm.js and Ghostty ignore in every state, so nothing is drawn
+ *    even when the kernel splices the frame into the middle of the agent's
+ *    own escapes, which an `ESC ] 7777 ; … BEL` did not survive (2026-09-25).
+ *    The phone already receives the raw PTY byte stream and takes the frame
+ *    out of it (`agent-hud-beacon.ts`).
  *  - Windows has no PTY device path to walk to, so both halves take a
  *    different route there. Claude Code runs its status-line command through
  *    Git Bash, so the same sh script detects MSYS from `uname -s` and writes
  *    to `/dev/tty` (MSYS's name for the attached console, which is Claude's
- *    own under ConPTY), then `/dev/conout`. Codex spawns notify with NO shell
+ *    own under ConPTY), then `/dev/conout`, still as the OSC: ConPTY's
+ *    handling of the C0 channel is unknown. Codex spawns notify with NO shell
  *    and Git for Windows puts no `sh.exe` on PATH, so a win32 host gets a
  *    PowerShell notify command instead (`CODEX_HUD_NOTIFY_POWERSHELL`).
  *    **The whole Windows path is untested on a real Windows machine.**
  *
- * The POSIX scripts use `sed`, `printf`, `tail`, `tr` and `ps` only: no node,
+ * The POSIX scripts use `sed`, `printf`, `tail`, `tr`, `ps`, `od` and `cksum`
+ * only (`od` and `cksum` are POSIX, for the channel's frame): no node,
  * no jq, no python for the payload itself. (Claude's DELEGATION step below
  * does reach for node/python3/jq, but only to read the user's own settings
  * file, and Claude Code is itself a Node program.)
@@ -54,23 +59,40 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
  *    which is the stream Orca forwards. `/dev/conout` is the second try.
  *    UNTESTED on a real Windows host; see docs/mobile-agent-hud.md.
  *
- * One `printf`, so the whole sequence is a single write() the phone sees whole
- * far more often than not. The sniffer stitches a split one anyway.
+ * What is written differs by branch:
+ *
+ *  - Unix: the C0 channel of `agent-hud-channel.ts` (`v`), never an escape.
+ *    The agent paints the same tty from its own process, and the kernel can
+ *    put this write inside one of the agent's writes. An OSC here began with
+ *    ESC, which aborts whatever sequence it lands in: `ESC[?` + beacon +
+ *    `2026h` drew `2026h` in the desktop Claude Code composer (2026-09-25).
+ *    The channel's bytes are no-ops to xterm.js and Ghostty in every state a
+ *    splice can reach, so a split frame still parses as one. `cksum` checks
+ *    the payload, `od` turns it into hex, one `sed` turns each nibble into
+ *    three base-3 letters, and `tr` maps the letters and the `w` delimiters
+ *    to ACK, SOH, STX and ETX. No control byte ever sits in a shell variable
+ *    (bash uses \001 internally), and the `tr -d` drops any newline a `sed`
+ *    might add, which would move the cursor. With no `od` or no `cksum` the
+ *    frame is empty or fails its checksum, and the phone ignores it.
+ *  - Windows (MSYS): the OSC, as before (`w`). ConPTY rebuilds the output
+ *    stream, and whether it passes these C0 bytes through is unknown; the
+ *    Windows path has never run on a Windows machine.
  *
  * `CUIHUD_TTY` overrides the device; `CUIHUD_WIN_TTY` and `CUIHUD_WIN_CONOUT`
  * override the two Windows ones. Tests point them at temp files.
  * Quoted case patterns: an unquoted `?` would glob-match any single char.
  */
-const TTY_WRITE = [
+export const AGENT_HUD_TTY_WRITE = [
   // `2>/dev/null` FIRST: a failing `>>` is reported by the shell on fd 2, and
   // that must already be /dev/null or a Windows host with no console would
   // print an error into the terminal this exists to leave alone.
   'w(){ printf "\\033]7777;%s\\007" "$o" 2>/dev/null >> "$1"; }',
+  'v(){ ck=$(printf %s "$o" | cksum 2>/dev/null | sed "s/ .*//"); { printf w; printf "%s %s" "$ck" "$o" | od -An -v -tx1 2>/dev/null | tr -d " \\n" | sed "s/0/xxx/g;s/1/xxy/g;s/2/xxz/g;s/3/xyx/g;s/4/xyy/g;s/5/xyz/g;s/6/xzx/g;s/7/xzy/g;s/8/xzz/g;s/9/yxx/g;s/a/yxy/g;s/b/yxz/g;s/c/yyx/g;s/d/yyy/g;s/e/yyz/g;s/f/yzx/g"; printf w; } | tr -d "\\n" | tr wxyz "\\006\\001\\002\\003" 2>/dev/null >> "$1"; }',
   'tt=$CUIHUD_TTY',
   'wn=0',
   'case $(uname -s 2>/dev/null || true) in MSYS*|MINGW*|CYGWIN*) wn=1;; esac',
   'if [ -z "$tt" ] && [ "$wn" = 0 ]; then pw=$PPID; nw=0; while [ -n "$pw" ] && [ "$pw" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p "$pw" 2>/dev/null | tr -d " " || true); case "$dv" in ""|"?"|"??") pw=$(ps -o ppid= -p "$pw" 2>/dev/null | tr -d " " || true);; *) tt="/dev/$dv"; break;; esac; nw=$((nw+1)); done; fi',
-  'if [ -n "$tt" ]; then w "$tt"; elif [ "$wn" = 1 ]; then w "${CUIHUD_WIN_TTY:-/dev/tty}" || w "${CUIHUD_WIN_CONOUT:-/dev/conout}"; fi'
+  'if [ -n "$tt" ] && [ "$wn" = 0 ]; then v "$tt"; elif [ -n "$tt" ]; then w "$tt"; elif [ "$wn" = 1 ]; then w "${CUIHUD_WIN_TTY:-/dev/tty}" || w "${CUIHUD_WIN_CONOUT:-/dev/conout}"; fi'
 ]
 
 /** Percent-encodes what would otherwise break the `key=value` grammar:
@@ -100,7 +122,10 @@ const ENCODE_FN = 'q(){ printf %s "$1" | LC_ALL=C sed -e "s/%/%25/g" -e "s/ /%20
  *
  * Why 5 s: the phone writes a beacon off after six missed beats (30 s;
  * `agent-hud-beacon-liveness.ts`). The command itself costs ~10 ms of CPU a
- * run with no user status line (measured 2026-09-18, 38 MB transcript); a
+ * run with no user status line (measured 2026-09-18, 38 MB transcript), and
+ * the C0 channel's writer adds about 7 ms of wall time to it (`cksum`, `od`,
+ * `sed` and two `tr`: 72 ms median against 65 ms for the OSC `printf`, the
+ * whole script over the 2.1.266 fixture, 2026-09-25); a
  * user who keeps their own bar pays that bar's cost on the same beat, as
  * they would with the same setting in their own settings.json. The beacon
  * carries the value (`hb=`), so the phone knows what beat to expect and sizes
@@ -234,7 +259,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // nothing is running, the phone kept the previous list and its count until
   // the turn ended (2026-09-13).
   '[ -n "$tp" ] && [ -r "$tp" ] && o="$o live=${lv%,}"',
-  ...TTY_WRITE,
+  ...AGENT_HUD_TTY_WRITE,
   // Delegation: a user who already runs their own status line must keep seeing
   // exactly their bar. settings.json is multi-line JSON. Each reader is tried
   // in turn and the first non-empty answer wins: node, python3, jq, and last a
@@ -296,7 +321,7 @@ export const CODEX_HUD_NOTIFY_SCRIPT = [
   '[ -n "$ef" ] && o="$o effort=$(q "$ef")"',
   '[ -n "$tk" ] && o="$o used=$tk"',
   '[ -n "$cw" ] && o="$o win=$cw"',
-  ...TTY_WRITE,
+  ...AGENT_HUD_TTY_WRITE,
   // Delegation: our `-c notify=[…]` overrides whatever the user configured, so
   // run theirs too. Best effort, and deliberately narrow: only a SINGLE-LINE
   // `notify = ["a","b"]` array is supported, and an argument containing a comma
@@ -555,7 +580,7 @@ export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   // own characters, so a stray quote or space can never break the grammar.
   'si=$(printf %s "$i" | sed -nE "s/.*\\"session_id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9._-]+)\\".*/\\\\1/p" | head -n 1)',
   'o="CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}"',
-  ...TTY_WRITE
+  ...AGENT_HUD_TTY_WRITE
 ].join('; ')
 
 /**
@@ -612,7 +637,7 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
   'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct${at:+ at=$at}"',
   '[ -z "$pr" ] && exit 0',
-  ...TTY_WRITE,
+  ...AGENT_HUD_TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,
   // and a non-zero exit as a hook error (issue #13912, 2026). This script
   // prints nothing and always succeeds, whatever the tty write did.

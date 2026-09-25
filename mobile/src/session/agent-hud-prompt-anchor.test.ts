@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
+import { decodeAgentHudChannelText } from './agent-hud-channel'
 
 // Real row shapes, taken from a live Claude Code 2.1.270 transcript on
 // 2026-09-15 (~/.claude/projects/.../15f3d17a…jsonl). The last six user or
@@ -36,7 +37,8 @@ function anchorFor(lines: string[]): string | null {
     encoding: 'utf8',
     env: { PATH: process.env.PATH ?? '', HOME: dir, CUIHUD_TTY: tty }
   })
-  const beacon = execFileSync('cat', [tty], { encoding: 'utf8' })
+  // The payload the phone decodes, not the raw channel bytes the hook wrote.
+  const beacon = decodeAgentHudChannelText(execFileSync('cat', [tty], { encoding: 'latin1' })).join('\n')
   const match = /\bat=([0-9a-fA-F-]+)/.exec(beacon)
   return match?.[1] ?? null
 }

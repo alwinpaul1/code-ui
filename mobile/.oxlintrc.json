@@ -337,7 +337,9 @@
             // heartbeat: `refreshInterval` on the settings and `hb=` on the
             // status-line beacon, so silence means something, with a slower
             // beat for Windows where each run is a PowerShell process.
-            "max": 315,
+            // 2026-09-25: 316. The POSIX writer is the C0 channel's `v`
+            // (agent-hud-channel.ts), beside the OSC `w` the Windows branch keeps.
+            "max": 316,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -356,7 +358,10 @@
             // the handle's record when the session changes) and the arrival
             // clock the liveness rule reads. +3 the same day for the beat a
             // beacon declares (`hb=`), parsed and kept across a merge.
-            "max": 325,
+            // 2026-09-25: 329. The C0 channel is read first on every chunk (an
+            // import, the take, the publish, the reset); its state lives in
+            // agent-hud-channel.ts.
+            "max": 329,
             "skipBlankLines": true,
             "skipComments": true
           }

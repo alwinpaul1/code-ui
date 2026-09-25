@@ -2,7 +2,7 @@
 
 Verified against Orca 1.4.197, Claude Code 2.1.266 and codex-cli 0.153.4 on
 macOS; the heartbeat (`refreshInterval`) and the session id against Claude
-Code 2.1.276. The Windows path is written but unrun; see below.
+Code 2.1.276; the C0 channel against Claude Code 2.1.281 (2026-09-25). The Windows path is written but unrun; see below.
 
 **The rule this is built to:** a Code UI user sets up nothing on their desktop.
 No status line, no plugin, no config, no Orca change — and no code written to
@@ -14,9 +14,11 @@ Verified live 2026-09-09 on macOS against Claude Code 2.1.266 and codex-cli
 0.153.4. **Not yet confirmed end-to-end on a phone** — see "What is still
 unproven" below.
 
-The HUD reads the agents' own live state, and the state travels on an escape
-sequence terminals draw nothing for. The user's terminal is unchanged, their
-disk is untouched, and no terminal is opened on the host.
+The HUD reads the agents' own live state, and the state travels on four C0
+control bytes that terminals neither draw nor act on, in any parser state. The
+user's terminal is unchanged, their disk is untouched, and no terminal is
+opened on the host. (Until 2026-09-25 it travelled on an OSC escape; "Why not
+an OSC" below says why that could draw text.)
 
 ### The channel
 
@@ -63,19 +65,98 @@ exact bytes.
 
 ### The payload
 
-One `printf`, one write, well under 1 KB:
-
 ```
-ESC ] 7777 ; CUIHUD1 agent=claude hk=1 hb=5 sid=<session id> model=<id> name=<display name>
-             effort=<level> used=<tokens> win=<window> pct=<int>
-             h5=<int>:<epoch> d7=<int>:<epoch> BEL
+CUIHUD1 agent=claude hk=1 hb=5 sid=<session id> model=<id> name=<display name>
+        effort=<level> used=<tokens> win=<window> pct=<int>
+        h5=<int>:<epoch> d7=<int>:<epoch>
 ```
 
 Space-separated `key=value`; values percent-encode `%`, space and `;`. A key
 whose figure the agent did not state is simply absent — nothing is guessed at,
 and a beacon with tokens but no window leaves the phone's context ring alone
-rather than inventing a denominator. OSC 7777 is private, so terminals draw
-nothing for it.
+rather than inventing a denominator.
+
+### The frame: the C0 channel
+
+The payload travels as `ACK <body> ACK`. The body is `<crc> <payload>` in
+UTF-8, where `<crc>` is the POSIX `cksum` of the payload bytes in decimal.
+Every body byte is written as two hex nibbles, and each nibble as three base-3
+digits: SOH = 0, STX = 1, ETX = 2. A 200-byte payload is about 1.3 KB of
+control bytes.
+
+The writer is plain `sh`: `cksum`, `od -An -v -tx1`, one `sed` that turns each
+hex digit into three letters, and `tr` that maps the letters and the `w`
+delimiters onto the four bytes. No control byte is ever held in a shell
+variable (bash uses `\001` internally), and a `tr -d "\n"` drops any newline
+a `sed` adds, which would move the cursor. With no `od` or no `cksum` the frame
+comes out empty or fails its checksum, and the phone ignores it. The code is
+`agent-hud-channel.ts` (the phone's decoder and a reference encoder) and
+`AGENT_HUD_TTY_WRITE` in `agent-hud-launch-args.ts` (the writer). A test holds
+the writer's bytes to the encoder's under `sh`, bash and dash.
+
+Why these four bytes, checked against both parsers' source rather than from
+memory:
+
+- **xterm.js 6.1** (the desktop renderer, 6.1.0-beta.303, and Orca's headless
+  model, 6.1.0-beta.302; `EscapeSequenceParser.ts`, `InputHandler.ts`): every
+  C0 byte except CAN, SUB and ESC is EXECUTE in ground, ESC, ESC-intermediate
+  and every CSI state, and the parser stays in the state it was in. It is
+  IGNORE in OSC, SOS/PM and APC. Execute handlers exist only for BEL, BS, HT,
+  LF, VT, FF, CR, SO and SI, so SOH, STX, ETX and ACK reach the no-op fallback.
+- **Ghostty** (libghostty-vt `b0947378`, the phone's engine; `parse_table.zig`,
+  `stream.zig`, `Terminal.zig`): the same actions per state. `execute` ignores
+  SOH and STX explicitly, and ETX and ACK in its default branch. It executes
+  only 0x00-0x0F: its ground fast path **prints** 0x10-0x1F (except ESC) as
+  one-cell glyphs, which rules out DLE through US.
+- **The rest of C0 is out** for a stated reason: NUL, ENQ (Ghostty answers
+  it), BEL, BS, HT, LF, VT, FF and CR (they act), SO and SI (charset shift),
+  DC1 and DC3 (flow control), CAN and SUB (they abort a sequence), ESC (it
+  starts one), and EOT (macOS drops it on output under `ONOEOT`).
+
+The phone takes every one of the four bytes out of the stream wherever it
+lands, feeds them to a per-terminal decoder, and passes every other byte on
+untouched and in order. Every ACK opens the next frame, so a frame whose
+opening ACK was lost fails its checksum, and the stream is back in step at the
+next one. A frame is dropped for a digit count that is not whole bytes, a
+nibble past 15, a missing or wrong checksum, an empty payload, or more than
+16 KiB. A program that happens to print these bytes (readline leaks SOH and
+STX around prompts) cannot inject a beacon, and stripping them changes nothing
+on screen, because no terminal on the path acts on them.
+
+### Why not an OSC
+
+On 2026-09-25 (phone on 0.9.54, Claude Code 2.1.281 on the desktop) the
+desktop Claude Code composer showed `❯ 2026h` mid-turn. Nobody typed it and it
+was never submitted. The beacon is written to the agent's tty by a **second
+process** (the status-line command, the hooks, Codex's notify) while the agent
+paints the same tty. When Orca reads the pty slowly, the kernel splits the
+agent's write and the beacon lands in the gap. Claude Code 2.1.281 writes each
+frame as one string: `ESC[?2026h`, the patches, a cursor move to the input
+caret, `ESC[?2026l`.
+
+An OSC begins with ESC, and ESC aborts whatever sequence it lands in. `ESC[?`
++ beacon + `2026h` made xterm.js print `2026h` at the caret, and Claude's diff
+renderer never repaints an unchanged input row. The reverse splice, a frame
+landing inside the beacon, ended the OSC early and printed the rest of its
+payload (`used=… win=…`) as text. On a private pty with Claude-shaped frames
+and the host's exact `printf`, 1-4 % of beacons landed inside an escape at
+5-20 ms of reader lag, `ESC[?` → `2026h` among them. The phone never showed
+it: it rejoined the two halves when it took the OSC out.
+
+With the channel, the same pty run lands channel bytes inside CSI and just
+after ESC thousands of times, and xterm.js renders the capture identically
+with and without them. `agent-hud-beacon-splice.test.ts` does the same at every
+offset, in both directions, with the bytes the real status-line script writes.
+
+**Still possible, and no byte choice fixes it:** a splice that lands between
+the bytes of one UTF-8 character. The host decodes the pty bytes before any
+terminal sees them, so that character becomes U+FFFD on the desktop and on
+the phone. Any second writer does this. In a stress run (a beacon every
+~25 ms, 20 ms of reader lag, 8 s) the host's decode showed 0-3 broken
+characters with the OSC writer and 4-8 with the channel, whose frames are
+larger. At the real cadence (one status-line beacon every 5 s) it has not been
+observed. Inside a DCS passthrough both parsers hand C0 to the DCS handler as
+data; neither agent paints a DCS in its frames.
 
 `sid` names the session the beacon speaks for: Claude Code's `session_id`
 (the same field its hooks report, and the same id `--resume`/`-c` keep —
@@ -147,7 +228,8 @@ take from a beacon (`hud-beacon-fields.ts`, `agent-hud-beacon-liveness.ts`,
   message, `/compact`, a mode change — and NOT while a tool executes, so that
   rule blanked a live session's pill and ring 30 s into any long tool call or
   subagent run. The heartbeat costs ~10 ms of CPU per beat with no user status
-  line (38 MB transcript, 2026-09-18); a user's own bar runs on the same beat,
+  line (38 MB transcript, 2026-09-18), plus about 7 ms of wall time for the C0
+  channel's writer (2026-09-25); a user's own bar runs on the same beat,
   which is their bar repainting, not a row of ours.
 
 This matters because `claude -c`/`--resume` keep the session id: the session
@@ -156,10 +238,13 @@ continues. The screen rule and the silence rule are what separate them.
 
 ### The phone side
 
-`agent-hud-beacon.ts` scans every `Output` chunk for the sequence, stitches one
-split across chunks (holding at most 2 KB per handle), publishes the parsed
-beacon to a module store keyed by terminal handle, and returns the chunk with
-our bytes removed — so xterm never sees it either. Another program's OSC (a
+`agent-hud-beacon.ts` takes the channel's bytes out of every `Output` chunk
+(`agent-hud-channel.ts`; a frame may span any number of chunks), publishes each
+decoded beacon to a module store keyed by terminal handle, and returns the
+chunk with only those bytes removed, so the engine never sees them either. It
+still reads the old `ESC ] 7777 ; … BEL` frame, stitching one split across
+chunks (holding at most 2 KB per handle), because a tab launched with the old
+flags keeps writing it until its agent restarts. Another program's OSC (a
 window title, an OSC 8 hyperlink) passes through untouched.
 
 `hud-beacon-fields.ts` merges it into the HUD above the host's `agentStatus`
@@ -217,6 +302,11 @@ machine.** There is no PowerShell on the Mac it was written on
 (`which pwsh powershell` finds neither), so the PowerShell script is asserted
 by shape only. Treat the whole Windows path as unproven.
 
+- **Every Windows writer keeps the OSC frame.** ConPTY rebuilds the output
+  stream rather than passing bytes through, and whether it forwards SOH, STX,
+  ETX and ACK is unknown; none of this has run. So the PowerShell scripts and
+  the MSYS branch of the sh script still write `ESC ] 7777 ; … BEL`, and still
+  carry the splice risk above. The phone reads both frames.
 - **Claude Code** runs status-line commands through Git Bash, so it is the same
   sh script with one branch: `uname -s` matching `MSYS*`/`MINGW*`/`CYGWIN*`
   skips the parent walk and writes to `/dev/tty`, which MSYS maps to the
@@ -250,9 +340,18 @@ by shape only. Treat the whole Windows path as unproven.
   with its own stdin and stdout redirected to files, Claude's script wrote
   `ESC ] 7777 ; CUIHUD1 agent=claude … BEL` to the pty and printed zero bytes
   to stdout, and the same run handed back this machine's real claude-hud bar
-  when its settings were readable. What remains unobserved is whether OSC 7777
-  survives Orca's PTY streaming all the way to the phone. That is the one thing
-  left to verify, and it needs a device.
+  when its settings were readable. The C0 channel was checked the same way on
+  2026-09-25: Claude Code 2.1.281, launched with the new flags in a private
+  tmux server (`env -i`, no `ORCA_*` variables, a fresh session, no prompt),
+  had its pty bytes captured with `pipe-pane`. The phone's decoder read 13 of
+  13 status-line beacons out of them, in 4096-byte and 7-byte chunks. The pane
+  showed nothing extra (`capture-pane -e` holds no control byte but LF and
+  ESC), and the screen matched a run without the flags except for one live
+  usage figure, the user's own bar included. The Stop and prompt hooks and
+  Codex's notify were not run live, since each needs a model turn; they share
+  the one writer and run for real under sh, bash and dash in the tests. What
+  remains unobserved is whether these bytes survive Orca's PTY streaming all
+  the way to the phone. That needs a device.
 - The beacon is only as fresh as the agent's own cadence: Claude Code repaints
   its status line continuously, Codex fires notify once per turn.
 - No single quote may ever appear in either script: the whole thing rides

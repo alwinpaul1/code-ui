@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
 import { unescapeJsonStringBody } from './agent-hud-beacon'
+import { decodeAgentHudChannelText } from './agent-hud-channel'
 
 function runHook(payload: Record<string, unknown>, transcript?: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-prompt-'))
@@ -21,7 +22,8 @@ function runHook(payload: Record<string, unknown>, transcript?: string): string 
     env: { ...process.env, CUIHUD_TTY: tty }
   })
   try {
-    return readFileSync(tty, 'utf8')
+    // The payload the phone decodes, not the raw channel bytes the hook wrote.
+    return decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n')
   } catch {
     return ''
   }

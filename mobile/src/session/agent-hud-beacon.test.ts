@@ -7,6 +7,7 @@ import {
   parseAgentHudBeaconPayload,
   resetAgentHudBeacons
 } from './agent-hud-beacon'
+import { encodeAgentHudChannelFrame } from './agent-hud-channel'
 
 const ESC = '\u001b'
 const BEL = '\u0007'
@@ -91,6 +92,37 @@ describe('the HUD beacon never reaches the terminal the user is looking at', () 
     consumeAgentHudBeacons('t1', CLAUDE_BEACON.slice(40))
     expect(getAgentHudBeacon('t1')?.agent).toBe('claude')
     expect(getAgentHudBeacon('t2')?.agent).toBe('codex')
+  })
+})
+
+describe('a tab launched before the C0 channel keeps its HUD', () => {
+  it('reads the old OSC frame and the new channel frame from the same stream', () => {
+    // Tabs keep the flags they were launched with until the agent restarts, so
+    // an old writer and a new one can share a terminal's history.
+    const channel = encodeAgentHudChannelFrame(
+      'CUIHUD1 agent=claude hk=1 hb=5 model=claude-opus-5 used=1 win=1000000'
+    )
+    expect(consumeAgentHudBeacons('t-mixed', `a${CLAUDE_BEACON}b`)).toBe('ab')
+    expect(getAgentHudBeacon('t-mixed')?.modelId).toBe('claude-fable-5-1')
+    expect(consumeAgentHudBeacons('t-mixed', `c${channel}d`)).toBe('cd')
+    expect(getAgentHudBeacon('t-mixed')).toMatchObject({ modelId: 'claude-opus-5', usedTokens: 1 })
+  })
+
+  it('takes channel bytes out even from inside an old OSC frame', () => {
+    const channel = encodeAgentHudChannelFrame('CUIHUD1 agent=claude model=claude-opus-5')
+    const middle = CLAUDE_BEACON.indexOf(' model=')
+    const rest = consumeAgentHudBeacons(
+      't-nested',
+      CLAUDE_BEACON.slice(0, middle) + channel + CLAUDE_BEACON.slice(middle)
+    )
+    expect(rest).toBe('')
+    // The OSC one closed last, so it is what the store holds, and its fields
+    // are clean: left in, the channel bytes would have been glued onto
+    // `agent=claude` and the payload refused.
+    expect(getAgentHudBeacon('t-nested')).toMatchObject({
+      agent: 'claude',
+      modelId: 'claude-fable-5-1'
+    })
   })
 })
 

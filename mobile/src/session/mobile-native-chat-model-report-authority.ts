@@ -6,7 +6,7 @@ import { matchNativeChatCatalogModelId } from '../../../src/shared/native-chat-s
  *
  * Two sources reach this decision and they are not equally good evidence:
  *
- * - `'live'` — the agent's own OSC beacon, or the badge on a user's own status
+ * - `'live'` — the agent's own HUD beacon, or the badge on a user's own status
  *   line. This is what the agent IS, on the repaint it said it. It is re-read
  *   continuously, so the same value arriving twice is two statements, not one
  *   echoed twice.

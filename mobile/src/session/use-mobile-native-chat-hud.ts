@@ -46,7 +46,7 @@ export type NativeChatLiveHud = {
  *  - the agent's screen: the permission and collaboration modes, and the
  *    `[Model effort]` badge of a user's own status line (or Codex's footer).
  *    The screen is the present: a badge that names a model owns the pair.
- *  - the agent's own state, on the invisible OSC 7777 beacon it writes to its
+ *  - the agent's own state, on the invisible HUD beacon it writes to its
  *    PTY when the phone launched it (`agent-hud-beacon.ts`): the context, and
  *    the model and effort where the screen names none. Believed only for the
  *    session the tab is showing, and only while its process still speaks —

@@ -19,7 +19,7 @@ export type ReportedModelPair = {
  * The two travel together or not at all. They come from two sources that must
  * never be mixed: what the agent has said about itself this session (the badge
  * on a user's own status line, held across empty reads by `useStickyLiveHud`,
- * or the OSC beacon — believed only for the session on screen and only while
+ * or the HUD beacon — believed only for the session on screen and only while
  * its process still paints, see `use-mobile-native-chat-hud.ts`), and the
  * host's `agentStatus` record, which is what the session was LAUNCHED as and
  * does not follow a `/model` typed into the agent.

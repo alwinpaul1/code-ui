@@ -6,6 +6,7 @@ import {
   buildClaudeHudSettingsJson,
   CLAUDE_HUD_STOP_HOOK_SCRIPT
 } from './agent-hud-launch-args'
+import { decodeAgentHudChannelText } from './agent-hud-channel'
 
 /** Captured from a live Claude Code 2.1.267 Stop hook on 2026-09-10, with one
  *  background shell still running. Not invented: an invented payload would
@@ -21,7 +22,8 @@ function runStopHook(payload: string, tty: string): string {
     env: { ...process.env, CUIHUD_TTY: tty },
     timeout: 20_000
   })
-  return readFileSync(tty, 'utf8')
+  // The payload the phone decodes, not the raw channel bytes the hook wrote.
+  return decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n')
 }
 
 describe('what the agent itself says is still running', () => {

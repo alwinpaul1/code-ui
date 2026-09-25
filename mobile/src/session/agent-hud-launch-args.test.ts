@@ -21,6 +21,7 @@ import {
   encodePowerShellCommand,
   CLAUDE_HUD_STOP_HOOK_POWERSHELL
 } from './agent-hud-launch-args'
+import { decodeAgentHudChannelText, encodeAgentHudChannelFrame } from './agent-hud-channel'
 
 // Captured 2026-09-09 from Claude Code 2.1.266 on macOS: the JSON it pipes to a
 // status-line command, paths redacted. This is the real contract, not a guess.
@@ -54,7 +55,9 @@ const transcriptWithNotifications = readFileSync(
  *  included wherever it exists — a Linux host runs this script under it. */
 const SHELLS: readonly string[] = ['sh', 'bash', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])]
 
-type Run = { stdout: string; beacon: string | null }
+/** `raw` is exactly what the script wrote to the tty; `beacon` is the payload
+ *  the phone decodes out of it (null when nothing was written). */
+type Run = { stdout: string; raw: string | null; beacon: string | null }
 
 function runScript(
   script: string,
@@ -84,13 +87,14 @@ function runScript(
       ...options.env
     }
   })
-  let beacon: string | null = null
+  let raw: string | null = null
   try {
-    beacon = readFileSync(tty, 'utf8')
+    raw = readFileSync(tty, 'latin1')
   } catch {
-    beacon = null
+    raw = null
   }
-  return { stdout, beacon }
+  const beacon = raw === null ? null : decodeAgentHudChannelText(raw).join('\n')
+  return { stdout, raw, beacon }
 }
 
 function withUsage(
@@ -114,9 +118,15 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
     // Empty stdout is the whole point: Claude Code draws no status row for it.
     expect(run.stdout).toBe('')
-    expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200${BEL}`
+    // Byte for byte what the phone's own encoder makes of the same payload,
+    // and nothing else: no ESC, no BEL, nothing a terminal draws.
+    expect(run.raw).toBe(
+      encodeAgentHudChannelFrame(
+        'CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium win=1000000 h5=37:1788967200 d7=36:1788973200'
+      )
     )
+    // oxlint-disable-next-line no-control-regex -- the channel IS these bytes
+    expect(run.raw).toMatch(/^[\u0001-\u0003\u0006]+$/)
   })
 
   it('adds the token total and the percentage once Claude Code has replied once', () => {
@@ -125,7 +135,7 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
     })
     // The percentage is truncated to an integer, not passed through as 64.95.
     expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200${BEL}`
+      'CUIHUD1 agent=claude hk=1 hb=5 sid=00000000-0000-4000-8000-000000000000 model=claude-fable-5-1 name=Fable%205.1 effort=medium used=649540 win=1000000 pct=64 h5=37:1788967200 d7=36:1788973200'
     )
     expect(run.stdout).toBe('')
   })
@@ -135,6 +145,9 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
       const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson, shell })
       expect(run.beacon).toContain('model=claude-fable-5-1')
       expect(run.beacon).toContain('effort=medium')
+      // bash keeps \001 as an internal quoting byte; the writer never holds a
+      // control byte in a variable, and every shell writes the same frame.
+      expect(run.raw, shell).toBe(encodeAgentHudChannelFrame(run.beacon ?? ''))
     }
   })
 
@@ -357,8 +370,10 @@ describe("the phone reads Codex's own rollout without drawing a row", () => {
     })
     expect(run.stdout).toBe('')
     // 22147 is the LAST token_count in the fixture, not the first (21364).
-    expect(run.beacon).toBe(
-      `${ESC}]7777;CUIHUD1 agent=codex sid=${threadId} model=gpt-6-astra effort=high used=22147 win=258400${BEL}`
+    expect(run.raw).toBe(
+      encodeAgentHudChannelFrame(
+        `CUIHUD1 agent=codex sid=${threadId} model=gpt-6-astra effort=high used=22147 win=258400`
+      )
     )
   })
 
@@ -378,7 +393,7 @@ describe("the phone reads Codex's own rollout without drawing a row", () => {
       args: ['cuihud', JSON.stringify({ 'thread-id': 'no-such-thread' })],
       env: { CODEX_HOME: codexHome() }
     })
-    expect(run.beacon).toBe(`${ESC}]7777;CUIHUD1 agent=codex sid=no-such-thread${BEL}`)
+    expect(run.beacon).toBe('CUIHUD1 agent=codex sid=no-such-thread')
   })
 
   it("still runs the user's own notify command", () => {
@@ -842,8 +857,10 @@ describe('the Claude status line for Windows under a real PowerShell', () => {
     const shell = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, { input: statusJson })
     const ps = runClaudePowerShell({ json: statusJson })
     // Save for the beat it declares: Windows is launched with a slower one.
+    // The payload, that is: Windows keeps the OSC frame (ConPTY's handling of
+    // the C0 channel is unknown), so only what is inside the frame can match.
     expect(ps.beacon).toBe(
-      shell.beacon?.replace(` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS} `, ` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32} `)
+      `${ESC}]7777;${shell.beacon?.replace(` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS} `, ` hb=${CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32} `)}${BEL}`
     )
     expect(ps.stdout).toBe('')
   })

@@ -127,13 +127,26 @@ footer item, not one extra line. A status line the user never asked for was
 tried on 2026-09-09 and withdrawn the same day, and that verdict stands: a
 visible row is a change to their screen, which is a change to their machine.
 
-The HUD reads the agents' own state instead, on an **invisible OSC beacon**
+The HUD reads the agents' own state instead, on an **invisible beacon**
 they write to their own PTY. Launch flags (Claude Code `--settings`, Codex
-`-c notify`) make each agent run a small `sh` command that emits
-`ESC ] 7777 ; … BEL` to `/dev/<its tty>`; terminals draw nothing for an unknown
-OSC, the phone already receives those bytes, and it strips them before xterm
-ever sees them. Claude's command also runs the user's own status line and
-prints its output verbatim, so a user with one keeps exactly their bar, and a
+`-c notify`) make each agent run a small `sh` command that writes one frame of
+four C0 bytes (ACK, and SOH/STX/ETX as base-3 digits, checksummed with
+`cksum`) to `/dev/<its tty>`. The phone already receives those bytes and takes
+them out wherever they land before its engine sees them. **Why not an OSC:** the
+beacon comes from a second process writing the same tty the agent paints, so
+the kernel can splice it into the middle of the agent's own write, and an OSC's
+ESC aborts whatever sequence it lands in. That drew `❯ 2026h` in the desktop
+Claude Code composer on 2026-09-25 (the tail of a cut `ESC[?2026h`), and a
+frame landing inside the beacon drew the rest of its payload. SOH, STX, ETX
+and ACK are no-ops to xterm.js and Ghostty in every state a splice can reach,
+checked against both parsers' source; the reasons every other C0 byte is out,
+and the one splice no byte choice fixes (inside a UTF-8 character), are in
+`docs/mobile-agent-hud.md`. The phone still reads the old `ESC ] 7777 ; … BEL`
+frame from tabs launched before the change, and the Windows writers still
+write it, because ConPTY's handling of these bytes is unknown.
+
+Claude's command also runs the user's own status line and prints its output
+verbatim, so a user with one keeps exactly their bar, and a
 user without one still gets no row. The flag also sets
 `statusLine.refreshInterval` (5 s; 15 s on Windows), so Claude re-runs the
 command on a timer while its status line is mounted (not under a dialog or a
