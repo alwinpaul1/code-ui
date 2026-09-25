@@ -17,8 +17,8 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
+import { acceptOwnSendInPending } from './mobile-native-chat-remember-echo'
 import {
-  appendMobileNativeChatPending,
   dropMobileNativeChatPending,
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
@@ -229,11 +229,11 @@ export function useMobileNativeChatDrafts(args: {
       const key = origin.pendingKey
       if (key) {
         setPendingBySession((previous) =>
-          appendMobileNativeChatPending(previous, key, id, origin, text, images)
+          acceptOwnSendInPending(previous, key, id, origin, text, images)
         )
       } else {
         setPendingWaitingForSession((previous) =>
-          appendMobileNativeChatPending(previous, origin.draftKey, id, origin, text, images)
+          acceptOwnSendInPending(previous, origin.draftKey, id, origin, text, images)
         )
       }
       return id

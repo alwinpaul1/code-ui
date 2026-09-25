@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { echoMemoryId, rememberEchoInPending, sweepWitnessedEchoes } from './mobile-native-chat-remember-echo'
+import {
+  acceptOwnSendInPending,
+  echoMemoryId,
+  rememberEchoInPending,
+  sweepWitnessedEchoes
+} from './mobile-native-chat-remember-echo'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -51,5 +56,59 @@ describe('remembered readings of one message', () => {
       { id: echoMemoryId(clean), text: clean, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
     ]
     expect(sweepWitnessedEchoes(stored).map((i) => i.text)).toEqual(['a phone send', clean])
+  })
+})
+
+// 2026-09-25 (Claude Code 2.1.281): the hook's copy of a phone send reached the
+// phone before the send's own ack, was remembered as `desk-…`, and drew beside
+// the send once Claude took it. The send is accepted over its own witness.
+describe('a phone send acknowledged after a witness of it was stored', () => {
+  const tapAt = Date.parse('2026-09-25T08:24:19.000Z')
+  const origin = {
+    draftKey: 'd',
+    draftEditGeneration: 0,
+    pendingKey: 'k',
+    normalizedText: 'working w capital',
+    baselineOccurrences: 0,
+    baselineTailMessageId: 'a1',
+    baselineResolved: true,
+    sentAt: tapAt
+  }
+  const witness = (id: string, text: string, storedAt?: number) =>
+    rememberEchoInPending({}, 'k', id, text, 'a1', [], 'd', storedAt).k![0]!
+  const accept = (stored: ReturnType<typeof witness>[], send = origin, text = 'Working W capital') =>
+    acceptOwnSendInPending({ k: stored }, 'k', 'pending-1', send, text).k!
+
+  it('stamps when each witness was stored', () => {
+    expect(witness('desk-status:x:1', 'Working W capital', tapAt + 320).witnessedAt).toBe(tapAt + 320)
+  })
+
+  it('drops the hook copy and the queue-box stub stored in the gap, and counts neither as an earlier landing', () => {
+    const accepted = accept([
+      witness('desk-status:x:1', 'Working W capital', tapAt + 320),
+      witness(echoMemoryId('Working W…'), 'Working W…', tapAt + 900)
+    ])
+    expect(accepted.map((item) => item.id)).toEqual(['pending-1'])
+    expect(accepted[0]!.expectedOccurrence).toBe(1)
+  })
+
+  it('keeps a message typed at the desk before the tap, and one stored by a build that kept no time', () => {
+    const earlier = witness('desk-status:x:0', 'Working W capital', tapAt - 1)
+    const unstamped = { ...witness(echoMemoryId('Working W capital'), 'Working W capital', tapAt + 5), witnessedAt: undefined }
+    expect(accept([earlier]).map((item) => item.id)).toEqual(['desk-status:x:0', 'pending-1'])
+    expect(accept([unstamped]).map((item) => item.id)).toEqual([unstamped.id, 'pending-1'])
+  })
+
+  it('keeps a different message stored in the gap, and drops nothing for a send with no time', () => {
+    const other = witness('desk-status:x:1', 'look at the logs', tapAt + 320)
+    expect(accept([other]).map((item) => item.id)).toEqual(['desk-status:x:1', 'pending-1'])
+    const same = witness('desk-status:x:2', 'Working W capital', tapAt + 320)
+    expect(accept([same], { ...origin, sentAt: undefined }).map((item) => item.id)).toEqual(['desk-status:x:2', 'pending-1'])
+  })
+
+  it('accepts into an empty store, and never drops a phone send of the same text', () => {
+    expect(accept([]).map((item) => item.id)).toEqual(['pending-1'])
+    const earlierSend = { id: 'pending-0', text: 'Working W capital', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true, sentAt: tapAt + 1 }
+    expect(accept([earlierSend]).map((item) => item.id)).toEqual(['pending-0', 'pending-1'])
   })
 })

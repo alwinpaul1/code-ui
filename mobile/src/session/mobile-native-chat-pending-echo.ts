@@ -24,6 +24,11 @@ export type MobileNativeChatPendingMessage = {
   /** When the phone sent it, by the phone's clock. Absent on sends restored
    *  from an older build. */
   sentAt?: number
+  /** A witnessed message only (`desk-`/`absorbed-`): when the phone stored
+   *  it, by the phone's clock, so a send whose ack came after it can tell its
+   *  own witness from an older message (acceptOwnSendInPending). Absent on
+   *  witnesses stored by an older build. */
+  witnessedAt?: number
   /** Whether the transcript this baseline was captured from was already this
    *  session's own history. A send issued mid-hydration is captured unresolved
    *  and rebased onto the first authoritative read instead of reconciling
