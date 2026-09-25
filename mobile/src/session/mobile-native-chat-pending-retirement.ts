@@ -240,20 +240,25 @@ function gluedLanded(text: string, landedCounts: ReadonlyMap<string, number>): b
   return false
 }
 
-/** Whether a user row of `key` was stamped as a send taken at `takenAt` left
- *  the queue box: the row Claude writes when it dequeues a prompt. */
+/** Whether a user row of `key` was stamped as this taken send left the queue
+ *  box: the row Claude writes when it dequeues a prompt. Never one stamped
+ *  before the send left the phone, which is an older row of the same text
+ *  (review, 2026-09-25: "yes" sent idle, then again mid-turn seconds later). */
 function dequeuedRowLanded(
   messages: readonly NativeChatMessage[],
   key: string,
-  takenAt: number | undefined
+  taken: Pick<MobileNativeChatPendingMessage, 'takenAt' | 'sentAt'>
 ): boolean {
+  const takenAt = taken.takenAt
   if (typeof takenAt !== 'number' || !Number.isFinite(takenAt)) {
     return false
   }
+  const sentAt = typeof taken.sentAt === 'number' && Number.isFinite(taken.sentAt) ? taken.sentAt : -Infinity
+  const from = Math.max(sentAt, takenAt - DEQUEUED_ROW_LEADS_MS)
   return messages.some(
     (message) =>
       message.timestamp !== null &&
-      message.timestamp >= takenAt - DEQUEUED_ROW_LEADS_MS &&
+      message.timestamp >= from &&
       message.timestamp <= takenAt + DEQUEUED_ROW_TRAILS_MS &&
       normalizedUserText(message) === key
   )
@@ -318,7 +323,7 @@ export function retireLandedMobileNativeChatPending(
     // phone clock running ahead lost the first message the other way.
     const deferred = taken.some((earlier) => {
       const other = current[earlier]!
-      return normalizeReconcileText(other.text) === key && dequeuedRowLanded(messages, key, other.takenAt)
+      return normalizeReconcileText(other.text) === key && dequeuedRowLanded(messages, key, other)
     })
     const byCount = captioned && (landedCounts.get(key) ?? 0) >= item.expectedOccurrence && !deferred
     const landed = !captioned

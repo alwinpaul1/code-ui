@@ -3,7 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-pending-persistence'
+import {
+  resetHandedOnWitnessesForTests,
+  useMobileNativeChatPendingPersistence
+} from './use-mobile-native-chat-pending-persistence'
 import {
   PENDING_ECHO_MAX_AGE_MS,
   readNativeChatPendingEchoes,
@@ -54,6 +57,7 @@ describe('useMobileNativeChatPendingPersistence', () => {
   beforeEach(async () => {
     vi.useFakeTimers()
     await AsyncStorage.clear()
+    resetHandedOnWitnessesForTests()
   })
   afterEach(() => {
     act(() => renderer?.unmount())

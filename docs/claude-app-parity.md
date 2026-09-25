@@ -43,37 +43,43 @@ failing-first test and has been checked on the phone in light and dark.
   reason `absorbed_mid_turn`, and a `queued_command` attachment after the next
   tool result, and no `user` row carries it. Counted on this machine on
   2026-09-25 across every build that writes them, Claude Code 2.1.205 to
-  2.1.282: 1,998 human prompts written only as the attachment, 378 as a
-  queued row, 3,106 `absorbed_mid_turn` removes. On 2.1.280 to 2.1.282 alone:
-  65, 16 and 438. The phone's code said from 2026-09-14 that a queued prompt
-  lands as a queued row "on 2.1.272"; the session it cited (63b835a8) holds
-  190 attachments beside its 20 queued rows, so that was never the whole
-  record. The report of 2026-09-25 (session da53d612, 2.1.282, lines
-  3321-3326) was the first shape: a phone send taken 31 s after it was queued.
-  The phone now keeps such a send where it was sent and stops waiting for a
-  row for it once the queue box lets it go (`isTakenSend`), still retiring it
-  if a queued row does land. Codex writes every input as a row: a follow-up
-  when it submits it at the end of the turn, a steer when it is injected
-  (Codex CLI 0.153.4 rollouts: `response_item` message role `user` and
-  `event_msg` item_completed `UserMessage`), so a Codex send always leaves on
-  its row. After a remount the hook's copy of such a send is first seen timed
-  by the pane's state, which began when the turn ended, so a witness seen
-  before the stored echoes are read back is held until they are, and dropped
-  then if it copies a stored send (`rememberHeldWitnesses`). The send claims
-  that copy unless the copy is timed more than twice a send's 15 s budget
-  after it and a user row stamped between them shows the session took a newer
-  prompt (`promptTakenBetween`). A row Claude wrote as it dequeued a send the
-  box let go goes to that send, not to a later copy of its text. Three review
-  rounds on 2026-09-25 drove the same-text cases through the real overlay;
-  these stay open, all rare: a
-  message typed at the desk or in the Claude app that the phone first sees
-  after the turn draws under the reply that ended it
-  (`agent-status-prompts.ts`), since the tab status carries no time for a
-  prompt taken mid-turn; the desk repeating a phone send's exact text in the
-  same turn, or in a later one whose user row is above the loaded page, is
-  taken for the send's own copy and not drawn; and when Claude takes one of
+  2.1.282: 1,998 human prompts written only as the attachment, 378 as a queued
+  row, 3,106 `absorbed_mid_turn` removes. On 2.1.280 to 2.1.282 alone: 65, 16
+  and 438. Claude Code 2.1.283 (installed 2026-09-25 23:55) keeps both shapes
+  by its binary's strings: the same `absorbed_mid_turn` absorption,
+  `queued_command` writer and `"queued"` promptSource default; no 2.1.283
+  transcript existed yet to read. The phone's code said from 2026-09-14 that a
+  queued prompt lands as a queued row "on 2.1.272"; the session it cited
+  (63b835a8) holds 190 attachments beside its 20 queued rows, so that was
+  never the whole record. The report of 2026-09-25 (session da53d612, 2.1.282,
+  lines 3321-3326) was the first shape: a phone send taken 31 s after it was
+  queued. The phone now keeps such a send where it was sent and stops waiting
+  for a row for it once the queue box lets it go (`isTakenSend`), still
+  retiring it if a queued row does land. Codex writes every input as a row: a
+  follow-up when it submits it at the end of the turn, a steer when it is
+  injected (Codex CLI 0.153.4 rollouts: `response_item` message role `user`
+  and `event_msg` item_completed `UserMessage`), so a Codex send always leaves
+  on its row. After a remount the hook's copy of such a send is first seen
+  timed by the pane's state, which began when the turn ended, so a witness
+  seen before the stored echoes are read back is held until they are, and
+  dropped then if it copies a stored send (`rememberHeldWitnesses`). The send
+  claims that copy unless the copy is timed more than twice a send's 15 s
+  budget after it and a user row stamped between them shows the session took a
+  newer prompt (`promptTakenBetween`). A row Claude wrote as it dequeued a
+  send the box let go goes to that send, not to a later copy of its text.
+  Four review rounds on 2026-09-25 drove the same-text cases through the real
+  overlay; these stay open, all rare: a message typed at the desk or in the
+  Claude app that the phone first sees after the turn draws under the reply
+  that ended it (`agent-status-prompts.ts`), since the tab status carries no
+  time for a prompt taken mid-turn; the desk repeating a phone send's exact
+  text in the same turn, or in a later one whose user row is above the loaded
+  page, is taken for the send's own copy and not drawn, and so is one typed in
+  a second turn that ended within 30 s of the send; when Claude takes one of
   two identical queued messages mid-turn and dequeues the other at the end,
-  the row goes to the first (as before these fixes).
+  the row goes to the first; a send whose take the phone saw late, with an
+  idle resend of its text landing in that window, gives the resend's row to
+  the first (both as before these fixes); and a desk message seen only while a
+  store read that never returns was out is lost.
 - **Background work (6).** Not drawn because the phone cannot know it:
   a finished shell's output (the Claude app's chevron on a Shell card opens
   it; the output file sits outside the worktree `files.read` is jailed to),

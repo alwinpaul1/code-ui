@@ -116,8 +116,20 @@ describe('a send the agent took out of its queue box', () => {
     expect(takeMobileNativeChatPending(state, 'another', ['pending-1'], TAKEN_AT)).toBe(state)
     expect(takeMobileNativeChatPending({}, KEY, ['pending-1'], TAKEN_AT)).toEqual({})
     const taken = takeMobileNativeChatPending(state, KEY, ['pending-1'], TAKEN_AT)
-    expect(takeMobileNativeChatPending(taken, KEY, ['pending-1'], TAKEN_AT + 1)).toBe(taken)
+    expect(takeMobileNativeChatPending(taken, KEY, ['pending-1'], TAKEN_AT)).toBe(taken)
     expect(retireLandedMobileNativeChatPending(history, taken[KEY]!, NONE)).toBe(taken[KEY])
+  })
+
+  // Review, 2026-09-25: a relay drop let a send look taken while it was still
+  // queued; the box let it go for real at the end of the turn.
+  it('moves only the time of a send the box let go again, and leaves its ordinal and the others alone', () => {
+    const queued = send(send({}, 'pending-1', 'yes', history), 'pending-2', 'yes', history)
+    const taken = takeMobileNativeChatPending(queued, KEY, ['pending-1'], TAKEN_AT)
+    const again = takeMobileNativeChatPending(taken, KEY, ['pending-1'], TAKEN_AT + 240_000)
+    expect(again[KEY]!.map((item) => [item.id, item.expectedOccurrence, item.takenAt])).toEqual([
+      ['pending-1', 1, TAKEN_AT + 240_000],
+      ['pending-2', 1, undefined]
+    ])
   })
 
   it('takes only the phone own text sends, never a witnessed message or a caption-less photo', () => {

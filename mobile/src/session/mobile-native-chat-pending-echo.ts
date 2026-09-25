@@ -53,7 +53,8 @@ export type MobileNativeChatPendingMessage = {
  * Orca's reader drops; a prompt still queued when the turn ends it writes as a
  * `user` row with `promptSource: "queued"`. On this machine, from 2.1.205 to
  * 2.1.282, 1,998 human prompts were written the first way and 378 the second
- * (65 and 16 on 2.1.280 to 2.1.282). The phone cannot tell which it will be
+ * (65 and 16 on 2.1.280 to 2.1.282); 2.1.283's binary writes both the same
+ * way (its strings, 2026-09-25). The phone cannot tell which it will be
  * from the box letting go, and the box also looks empty when a relay drop
  * hands the chat no queue, so a taken send still leaves on its own row if one
  * lands (retireLandedMobileNativeChatPending). What changes is that it no
@@ -179,7 +180,8 @@ export function removeWaitingSessionPending(
 
 /**
  * Mark the phone's own sends the agent has taken out of its queue box
- * (`isTakenSend`). The same object back when nothing changes.
+ * (`isTakenSend`), or move the time of one taken already that the box let go
+ * again. The same object back when nothing changes.
  *
  * A later send of the same text counted each of these as still outstanding
  * when it was sent, so its ordinal is one too high by each: brought back down
@@ -202,7 +204,17 @@ export function takeMobileNativeChatPending(
   for (let index = 0; index < next.length; index += 1) {
     const item = next[index]!
     const text = normalizeReconcileText(item.text)
-    if (!wanted.has(item.id) || !item.id.startsWith('pending-') || isTakenSend(item) || text === '') {
+    if (!wanted.has(item.id) || !item.id.startsWith('pending-') || text === '') {
+      continue
+    }
+    // Let go again after being back in the box: only the latest release says
+    // when Claude dequeued it (retireLandedMobileNativeChatPending), and its
+    // ordinal was already brought down the first time.
+    if (isTakenSend(item)) {
+      if (item.takenAt !== now) {
+        next[index] = { ...item, takenAt: now }
+        changed = true
+      }
       continue
     }
     next[index] = { ...item, takenAt: now }

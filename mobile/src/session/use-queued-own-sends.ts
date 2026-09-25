@@ -153,25 +153,43 @@ export function useQueuedOwnSends<T extends OwnSend>(
       unlisted
     }
   }, [agentWorking, expired, pending, queue, readsQueueBox])
-  // Out of the box after being in it: the agent has it. Only the phone's own
-  // sends are marked (takeMobileNativeChatPending), once each.
+  // Out of the box after being in it: the agent has it. Each release is told
+  // once, and a taken send that is back in the box and out again is told again:
+  // a relay drop hands the chat no queue, so a send still queued looks let go,
+  // and only its last release says when Claude dequeued it (review,
+  // 2026-09-25). Only the phone's own sends are marked
+  // (takeMobileNativeChatPending).
+  const inBox = useRef(new Set<string>())
+  const told = useRef(new Set<string>())
   useEffect(() => {
-    const taken = result.pending
-      .filter(
-        (item) => !isTakenSend(item) && (listed.current.has(item.id) || expired.has(item.id))
-      )
-      .map((item) => item.id)
-    if (taken.length > 0) {
-      onTaken?.(taken)
+    const outside = new Set(result.pending.map((item) => item.id))
+    const released: string[] = []
+    for (const item of pending) {
+      if (!outside.has(item.id)) {
+        inBox.current.add(item.id)
+        told.current.delete(item.id)
+        continue
+      }
+      const wasInBox = inBox.current.delete(item.id)
+      const wentThrough = wasInBox || listed.current.has(item.id) || expired.has(item.id)
+      if (wentThrough && !told.current.has(item.id) && (wasInBox || !isTakenSend(item))) {
+        told.current.add(item.id)
+        released.push(item.id)
+      }
     }
-  }, [expired, onTaken, result.pending])
+    if (released.length > 0) {
+      onTaken?.(released)
+    }
+  }, [expired, onTaken, pending, result.pending])
   // Bounded by the sends still pending: a retired send is forgotten.
   const firstSeen = useRef(new Map<string, { at: number; beats: number }>())
   useEffect(() => {
     const live = new Set(pending.map((item) => item.id))
-    for (const id of listed.current) {
-      if (!live.has(id)) {
-        listed.current.delete(id)
+    for (const ids of [listed.current, inBox.current, told.current]) {
+      for (const id of ids) {
+        if (!live.has(id)) {
+          ids.delete(id)
+        }
       }
     }
     for (const id of firstSeen.current.keys()) {

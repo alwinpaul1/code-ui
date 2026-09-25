@@ -19,6 +19,18 @@ import {
 
 const PENDING_WRITE_DEBOUNCE_MS = 250
 
+/** Witnesses a chat held for a session and went away before that session's
+ *  stored echoes came back: the next chat of the session takes them at its own
+ *  read-back. The write to the store after a second read (below) is for a
+ *  relaunch; this is for a chat that came straight back, whose read was issued
+ *  before that write and would miss it (review, 2026-09-25). */
+const handedOn = new Map<string, HeldWitness[]>()
+
+/** Test-only: the map outlives a single test's hooks. */
+export function resetHandedOnWitnessesForTests(): void {
+  handedOn.clear()
+}
+
 type PendingBySession = Record<string, MobileNativeChatPendingMessage[]>
 
 /**
@@ -88,13 +100,15 @@ export function useMobileNativeChatPendingPersistence(
     }
     let cancelled = false
     void readNativeChatPendingEchoes(sessionKey).then((stored) => {
-      const held = heldRef.current.get(sessionKey) ?? []
+      const held = [...(handedOn.get(sessionKey) ?? []), ...(heldRef.current.get(sessionKey) ?? [])]
+      handedOn.delete(sessionKey)
       heldRef.current.delete(sessionKey)
       if (cancelled) {
         // Gone before the read came back: keep what the chat saw rather than
         // lose it (review, 2026-09-25). Read again, behind any write the
         // unmount flushed, so that write is not undone.
         if (held.length > 0) {
+          handedOn.set(sessionKey, held)
           void readNativeChatPendingEchoes(sessionKey).then((fresh) => {
             const list = rememberHeldWitnesses({}, sessionKey, held, fresh ?? [])[sessionKey] ?? []
             if (list.length > 0) {

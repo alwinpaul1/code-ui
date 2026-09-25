@@ -44,7 +44,11 @@ vi.mock('./MobileNativeChatView', async () => {
 // dequeued as an ordinary `user` row with `promptSource: "queued"`. On this
 // machine, across Claude Code 2.1.205 to 2.1.282, 1,998 human prompts were
 // written only as a queued_command and 378 as a queued user row; on 2.1.280
-// to 2.1.282 alone, 65 and 16.
+// to 2.1.282 alone, 65 and 16. Claude Code 2.1.283 (installed 2026-09-25
+// 23:55) writes both the same way by its binary's strings: the same
+// `messageQueue.consume(…, {reason: "absorbed_mid_turn"})` absorption, the same
+// queued_command writer, and the same `inputSource ?? "queued"` promptSource
+// for a dequeued prompt. No 2.1.283 transcript existed yet to read.
 //
 // Texts are neutral stand-ins; ids, times and record kinds are the real ones.
 const SESSION = 'da53d612-5f7e-4aff-b8e8-1818049ba8f1'
@@ -657,6 +661,73 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       // Back after the status moved on: the stored echoes are all it has.
       await show('17:06:00.000', { messages: afterTake, queued: [], prompts: [] })
       await show('17:06:01.000', { messages: afterTake, queued: [], prompts: [] })
+      expect(drawn()).toContain('hook')
+    })
+
+    // Fourth round of the same review.
+    it('draws a dequeued send and a resend of its text once each after a relay drop had emptied the box earlier in the turn', async () => {
+      await show('17:04:10.000', { messages: beforeSend })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await show('17:04:16.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      // The relay drops: the controller hands the chat no queue, then the box is back.
+      await show('17:04:20.000', { messages: turnGoesOn, queued: [] })
+      await show('17:04:30.000', { messages: turnGoesOn, queued: claudeBox(['yes']) })
+      await show('17:08:21.900', { messages: turnEnded, queued: claudeBox(['yes']) })
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      await ack('17:08:23.300', await tap('17:08:23.000', 'yes'), 'yes')
+      await show('17:08:24.000', { messages: turnEnded, queued: claudeBox(['yes']) })
+      const firstRow = [...turnEnded, user('0741e6f2', 'yes', '17:08:22.050'), call('0741e6f4', '17:08:23.500')]
+      await show('17:08:25.000', { messages: firstRow, queued: claudeBox(['yes']) })
+      const absorbed = [...firstRow, result('0741e6f5', '17:08:40.000'), text('0741e6f6', 'Done with both.', '17:09:00.000')]
+      await show('17:08:41.000', { messages: absorbed.slice(0, -1), queued: claudeBox([]) })
+      await show('17:09:01.000', { messages: absorbed, queued: [], working: false })
+      await show('17:09:02.000', { messages: absorbed, queued: [], working: false })
+      expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'phone', 'row', '0741e6f4', '0741e6f6'])
+      expect(drafts!.pending.map((item) => item.sentAt)).toEqual([at('17:08:23.000')])
+    })
+
+    it('keeps a message Claude took mid-turn when the same text had landed as a row a few seconds before it was sent', async () => {
+      await show('17:04:15.000', { messages: beforeSend, working: false })
+      await ack('17:04:20.300', await tap('17:04:20.000', 'yes'), 'yes')
+      const idleRow = [...beforeSend, user('e0000001', 'yes', '17:04:20.200')]
+      await show('17:04:21.000', { messages: idleRow, working: true })
+      await ack('17:04:23.300', await tap('17:04:23.000', 'yes'), 'yes')
+      await show('17:04:24.000', { messages: idleRow, queued: claudeBox(['yes']) })
+      // Taken 8 s after the first one's row was stamped, inside a 10 s window.
+      const taken = [...idleRow, call('e0000002', '17:04:27.000')]
+      await show('17:04:28.000', { messages: taken, queued: claudeBox([]) })
+      const ended = [...taken, result('e0000003', '17:04:50.000'), text('e0000004', 'Both done.', '17:05:00.000')]
+      await show('17:05:01.000', { messages: ended, queued: [], working: false })
+      await ack('17:09:00.300', await tap('17:09:00.000', 'yes'), 'yes')
+      const again = [...ended, user('e0000005', 'yes', '17:09:00.200')]
+      await show('17:09:01.000', { messages: again, queued: [] })
+      await show('17:09:02.000', { messages: again, queued: [] })
+      expect(drafts!.pending.map((item) => item.sentAt)).toEqual([at('17:04:23.000')])
+    })
+
+    it('keeps a desk message seen while a slow store read was out when the chat comes straight back and sends again', async () => {
+      const read = AsyncStorage.getItem.bind(AsyncStorage)
+      const slow = vi.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key: string) => {
+        const value = await read(key)
+        if (key.startsWith('orca:chatPendingEchoes:')) {
+          await new Promise((resolve) => setTimeout(resolve, 3000))
+        }
+        return value
+      })
+      const deskCopy = hookCopy('17:05:00.000', 'typed at the desk')
+      await show('17:05:00.500', { messages: afterTake, queued: [], prompts: deskCopy })
+      await show('17:05:02.000', { messages: afterTake, queued: [], prompts: deskCopy })
+      act(() => renderer?.unmount())
+      renderer = null
+      // Straight back, with the first read still out; the status has moved on.
+      await show('17:05:02.500', { messages: afterTake, queued: [], prompts: [] })
+      await clockTo('17:05:12.000')
+      await show('17:05:12.000', { messages: afterTake, queued: [], prompts: [] })
+      expect(drawn()).toContain('hook')
+      slow.mockRestore()
+      await ack('17:05:20.300', await tap('17:05:20.000', 'another thing'), 'another thing')
+      await show('17:05:21.000', { messages: afterTake, queued: [], working: false, prompts: [] })
+      await remount('17:06:00.000', { messages: afterTake, queued: [], prompts: [] })
       expect(drawn()).toContain('hook')
     })
 
