@@ -1,4 +1,5 @@
-import { BackHandler, Platform } from 'react-native'
+import { Platform } from 'react-native'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { hardwareBackAction } from './mobile-session-hardware-back'
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
@@ -68,32 +69,38 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
 
   // Hardware back / back gesture: from the terminal view of a tab that has a
   // chat view, show the chat (what the header toggle does); otherwise leave.
-  useEffect(() => {
-    // Native only (upstream #21977, C7.7): inside the shell's page react-native-web answers
-    // `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be
-    // used." and an inert subscription. The page has no hardware back to intercept; the shell
-    // owns the phone's. Nor does this claim the shell's key through `useBackClaim` (upstream
-    // #22308): that claim would be held for as long as the session is open, and a live claim takes
-    // the key off the navigator (on iOS it removes the stack's swipe-back), so on the page Back
-    // leaves the session from the terminal view as well.
-    if (Platform.OS === 'web') {
-      return
-    }
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      const action = hardwareBackAction({
-        activeTabId: activeSessionTabId,
-        chatEligible: activeChatEligible,
-        chatVisible: showNativeChat
-      })
-      if (action.kind === 'show-chat') {
-        void switchTabView(action.tabId)
-      } else {
-        requestLeaveSession()
-      }
-      return true
-    })
-    return () => subscription.remove()
-  }, [activeChatEligible, activeSessionTabId, requestLeaveSession, showNativeChat, switchTabView])
+  //
+  // Registered once for the session's life: `useBackClaim` holds this render's handler in a ref,
+  // so a new tab snapshot changes what the press does, not where it sits. React Native asks the
+  // newest listener first, and the session stays mounted under a screen pushed over it. When this
+  // was an effect keyed on the tabs, every snapshot re-registered it above the claims of those
+  // screens (the file preview's unsaved-draft prompt, the diff review's PR drawer, which claim
+  // once through the same seam since #22308), and it answered their Back: the preview popped with
+  // its edit and no prompt (2026-09-25 review, `session-back-under-pushed-screen.test.tsx`).
+  //
+  // Native only (upstream #21977, C7.7): inside the shell's page react-native-web answers
+  // `BackHandler.addEventListener` with "BackHandler is not supported on web and should not be
+  // used." and an inert subscription, and the web `useBackClaim` would claim the shell's key
+  // instead (upstream #22308). That claim would be held for as long as the session is open, and a
+  // live claim takes the key off the navigator (on iOS it removes the stack's swipe-back), so on
+  // the page nothing is claimed and Back leaves the session from the terminal view as well.
+  useBackClaim(
+    Platform.OS === 'web'
+      ? null
+      : () => {
+          const action = hardwareBackAction({
+            activeTabId: activeSessionTabId,
+            chatEligible: activeChatEligible,
+            chatVisible: showNativeChat
+          })
+          if (action.kind === 'show-chat') {
+            void switchTabView(action.tabId)
+          } else {
+            requestLeaveSession()
+          }
+          return true
+        }
+  )
 
   // Transitions the switch above did not drive (default chat on open, the
   // slash-command terminal peek, the "Back to chat" chip): apply the same
