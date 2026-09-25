@@ -19,6 +19,9 @@ export function useShellPageBack(args: {
   sendBack: () => boolean
   /** This screen's own navigator options, from the caller that holds the navigation object. */
   setOptions: (options: { gestureEnabled: boolean }) => void
+  /** Whether this screen is the one on top, read at the press. A route the page hands to the shell
+   *  is pushed over this screen and the claim outlives the push. */
+  isFocused: () => boolean
 }): void {
   const { claimed } = args
   // Held rather than depended on: both are rebuilt by the caller's render, and an effect keyed on
@@ -38,8 +41,15 @@ export function useShellPageBack(args: {
     }
     // The handler's own answer is the frame's: `false` lets the press fall through to the
     // navigator, which is what a page that cannot be reached has to leave behind.
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () =>
-      latest.current.sendBack()
+    //
+    // Not while a native screen covers this one (a fork check; upstream v1.4.211 posts
+    // regardless). A page that grew its own stack keeps its claim when it hands a route to the
+    // shell, such as Re-pair's `/pair-scan` (#22363), and that screen claims no Back, so this
+    // listener is still the first asked. Posting there popped the hidden page's stack under the
+    // scanner and left the scanner on screen (2026-09-25 review).
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => latest.current.isFocused() && latest.current.sendBack()
     )
     return () => subscription.remove()
   }, [claimed])

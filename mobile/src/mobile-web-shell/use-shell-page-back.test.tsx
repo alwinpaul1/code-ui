@@ -25,20 +25,22 @@ vi.mock('react-native', () => ({
 
 import { useShellPageBack } from './use-shell-page-back'
 
-function Screen(props: {
+type ScreenProps = {
   claimed: boolean
   sendBack: () => boolean
   setOptions: (options: { gestureEnabled: boolean }) => void
-}): null {
-  useShellPageBack(props)
+  /** Defaults to on top, which is every case but the covered-shell ones. */
+  isFocused?: () => boolean
+}
+
+const onTop = (): boolean => true
+
+function Screen({ isFocused = onTop, ...props }: ScreenProps): null {
+  useShellPageBack({ ...props, isFocused })
   return null
 }
 
-function render(props: {
-  claimed: boolean
-  sendBack: () => boolean
-  setOptions: (options: { gestureEnabled: boolean }) => void
-}): ReactTestRenderer {
+function render(props: ScreenProps): ReactTestRenderer {
   let tree!: ReactTestRenderer
   act(() => {
     tree = create(createElement(Screen, props))
@@ -127,5 +129,35 @@ describe('the shell taking the device Back key for a page that claimed it', () =
     const setOptions = vi.fn()
     render({ claimed: true, sendBack: () => true, setOptions })
     expect(setOptions).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A page that grew its own stack holds the key, and then hands a route to the shell: Re-pair on
+ * the auth-failed banner (#22363) pushes the native `/pair-scan` over this screen. That screen
+ * claims no Back of its own, and the navigator's listener is the oldest one, so this listener is
+ * still the first asked. It posted the press to the hidden page, which popped its own stack under
+ * the scanner, and Back on the scanner did nothing the user could see (2026-09-25 review).
+ */
+describe('the shell covered by a native screen it handed a route to', () => {
+  it('leaves the press to the navigator, which pops the screen on top', () => {
+    const sendBack = vi.fn(() => true)
+    render({ claimed: true, sendBack, setOptions: vi.fn(), isFocused: () => false })
+
+    expect(native.addEventListener.mock.calls[0]?.[1]?.()).toBe(false)
+    expect(sendBack).not.toHaveBeenCalled()
+  })
+
+  it('posts to the page again once the shell is back on top', () => {
+    const sendBack = vi.fn(() => true)
+    let focused = false
+    render({ claimed: true, sendBack, setOptions: vi.fn(), isFocused: () => focused })
+    const press = native.addEventListener.mock.calls[0]?.[1]
+    expect(press?.()).toBe(false)
+
+    focused = true
+
+    expect(press?.()).toBe(true)
+    expect(sendBack).toHaveBeenCalledTimes(1)
   })
 })

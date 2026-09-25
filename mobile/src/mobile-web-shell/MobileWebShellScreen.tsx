@@ -317,7 +317,8 @@ export function MobileWebShellScreen({
   useShellPageBack({
     claimed: backClaimed,
     sendBack: bridge.sendBack,
-    setOptions: navigation.setOptions
+    setOptions: navigation.setOptions,
+    isFocused: navigation.isFocused
   })
 
   // A profile read that rejected never becomes a host, so the session would otherwise sit in

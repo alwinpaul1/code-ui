@@ -98,8 +98,9 @@ vi.mock('expo-router', () => ({
   }),
   // Read by the pop latch, which clears on the route this shell is mounted at changing.
   usePathname: () => dependencies.pathname,
-  // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
-  useNavigation: () => ({ setOptions: dependencies.setScreenOptions })
+  // The screen's own place on the stack, which is where the iOS swipe-back is taken away; always on
+  // top here, and the covered case is `use-shell-page-back.test.tsx`'s.
+  useNavigation: () => ({ setOptions: dependencies.setScreenOptions, isFocused: () => true })
 }))
 // A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
 // and a mount/unmount log is the only thing that can tell a remount from a prop update.
