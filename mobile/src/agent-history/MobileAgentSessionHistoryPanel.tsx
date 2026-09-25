@@ -8,8 +8,8 @@ import {
   resumeRepoListRead,
   resumeWorktreeListRead
 } from './mobile-agent-history-operations'
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { useCallback, useMemo, useRef, useState, type ReactElement } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
@@ -31,13 +31,15 @@ import {
   RESUME_RPC_TIMEOUT_MS
 } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { useAgentHistoryWorktrees } from './use-agent-history-worktrees'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import { AgentHistoryFilterBar } from './AgentHistoryFilterBar'
+import { AgentSessionSearchPanel, type SearchFallbackSlot } from './AgentSessionSearchPanel'
 import {
   resolveMobileAiVaultSessionResumeTarget,
   type MobileAiVaultResumeFolderWorkspace,
@@ -53,12 +55,6 @@ export type MobileAgentSessionHistoryPanelProps = {
   worktreeId: string
   name?: string
 }
-
-const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
-]
 
 export function MobileAgentSessionHistoryPanel({
   hostId,
@@ -222,6 +218,24 @@ export function MobileAgentSessionHistoryPanel({
     ]
   )
 
+  // A query goes to the host's search index; the loaded list only answers under a notice saying
+  // why the index could not (off, still building, refused), filtered as it always was.
+  const searchQuery = query.trim()
+  const historyList = (header: ReactElement | null, listRefreshing: boolean, refresh: () => void) => (
+    <MobileAgentSessionHistoryList
+      header={header ?? undefined}
+      sections={sections}
+      sessionsById={sessionsById}
+      refreshing={listRefreshing}
+      showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
+      resumeActionStateBySessionId={resumeActionStateBySessionId}
+      onResume={onResumeSession}
+      onRefresh={refresh}
+    />
+  )
+  const renderSearchFallback: SearchFallbackSlot = ({ header, refreshing: pulling, onRefresh: pull }) =>
+    sections.length === 0 ? null : historyList(header, pulling, pull)
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.header} edges={['top']}>
@@ -277,33 +291,12 @@ export function MobileAgentSessionHistoryPanel({
         </View>
       ) : (
         <>
-          <View style={styles.scopeTabs}>
-            {SCOPE_TABS.map((tab) => {
-              const active = scope === tab.scope
-              return (
-                <Pressable
-                  key={tab.scope}
-                  style={[styles.scopeTab, active && styles.scopeTabActive]}
-                  onPress={() => onSelectScope(tab.scope)}
-                >
-                  <Text style={[styles.scopeTabText, active && styles.scopeTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search sessions, repo:, path:"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
+          <AgentHistoryFilterBar
+            scope={scope}
+            onSelectScope={onSelectScope}
+            query={query}
+            onChangeQuery={setQuery}
+          />
           {issues.length > 0 ? (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
@@ -316,23 +309,28 @@ export function MobileAgentSessionHistoryPanel({
               <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
             </View>
           ) : null}
-          {sections.length === 0 ? (
+          {searchQuery ? (
+            <AgentSessionSearchPanel
+              hostId={hostId}
+              client={client}
+              connected={connState === 'connected'}
+              query={searchQuery}
+              scope={scope}
+              scopePaths={scopeFilterPaths}
+              sessions={sessions}
+              now={now}
+              onResumeSession={onResumeSession}
+              onResumeMessage={setResumeMessage}
+              onRefreshHistory={onRefresh}
+              renderFallback={renderSearchFallback}
+            />
+          ) : sections.length === 0 ? (
             <View style={styles.state}>
               <Text style={styles.stateTitle}>No agent sessions</Text>
-              <Text style={styles.stateText}>
-                {query ? 'No sessions match your search.' : 'No past agent sessions in this scope.'}
-              </Text>
+              <Text style={styles.stateText}>No past agent sessions in this scope.</Text>
             </View>
           ) : (
-            <MobileAgentSessionHistoryList
-              sections={sections}
-              sessionsById={sessionsById}
-              refreshing={refreshing}
-              showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
-              resumeActionStateBySessionId={resumeActionStateBySessionId}
-              onResume={onResumeSession}
-              onRefresh={() => void onRefresh()}
-            />
+            historyList(null, refreshing, () => void onRefresh())
           )}
         </>
       )}

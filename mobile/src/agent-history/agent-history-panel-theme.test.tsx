@@ -52,6 +52,9 @@ vi.mock('../transport/client-context', () => ({
   useForceReconnect: () => null,
   useHostClient: () => ({ client: host.client, state: 'connected', clientId: null })
 }))
+// The search panel names the host from the store; the page's own store answers from `init.host`,
+// where the native one reaches a keychain this test does not have.
+vi.mock('../transport/host-store', async () => await import('../transport/host-store.web'))
 
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
 

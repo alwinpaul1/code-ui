@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
@@ -23,9 +23,12 @@ type Props = {
   resumeActionStateBySessionId?: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onRefresh: () => void
+  /** Drawn above the first group; the session search puts its notice here over the loaded list. */
+  header?: ReactElement
 }
 
 export function MobileAgentSessionHistoryList({
+  header,
   sections,
   sessionsById,
   refreshing,
@@ -70,6 +73,7 @@ export function MobileAgentSessionHistoryList({
       keyExtractor={(card) => card.id}
       stickySectionHeadersEnabled={false}
       contentContainerStyle={styles.list}
+      ListHeaderComponent={header}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

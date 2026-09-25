@@ -126,11 +126,13 @@ export function SectionListDouble(props: {
   renderSectionHeader?: (info: { section: never }) => ReactElement | null
   renderItem: (info: { item: never }) => ReactElement | null
   refreshControl?: ReactElement
+  ListHeaderComponent?: ListSlot
 }): ReactElement {
   return createElement(
     'SectionList',
     { refreshControl: props.refreshControl },
     props.refreshControl,
+    slot(props.ListHeaderComponent),
     props.sections.map((section) =>
       createElement(
         'Section',

@@ -52,6 +52,9 @@ vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: 
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', async () => await import('../navigation/route-handoff.web'))
 vi.mock('../transport/client-context', async () => await import('../transport/client-context.web'))
+// The search panel names the host from the store; the page's own store answers from `init.host`,
+// where the native one reaches a keychain this test does not have.
+vi.mock('../transport/host-store', async () => await import('../transport/host-store.web'))
 vi.mock('../transport/host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
   useForceReconnect: () =>
