@@ -246,6 +246,7 @@ function ToolLine({
               rowLimit={diffLineLimit}
               onRevertHunk={onRevertHunk}
               revertScope={`${revertScope ?? ''}:${index}`}
+              onOpenFile={onOpenFile}
             />
           ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}

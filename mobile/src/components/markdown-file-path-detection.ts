@@ -9,7 +9,7 @@ export type FilePathSegment =
   | { type: 'text'; value: string }
   | { type: 'file'; value: string; path: string }
 
-// Common source/code/config extensions we treat as openable file paths. Kept
+// Common source/code/config/document extensions we treat as openable file paths. Kept
 // explicit (rather than "any extension") so prose like "etc." or "e.g." and
 // domain-ish tokens like "example.com" don't get matched.
 const FILE_EXTENSIONS = [
@@ -79,7 +79,18 @@ const FILE_EXTENSIONS = [
   'gradle',
   'dockerfile',
   'gitignore',
-  'npmrc'
+  'npmrc',
+  // What an agent makes for a person rather than a compiler: the viewer draws
+  // a PDF and a picture, and a data file or log reads as text (2026-09-25).
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'csv',
+  'tsv',
+  'log'
 ] as const
 
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)

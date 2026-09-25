@@ -166,7 +166,8 @@ function DiffCard({
   rowLimit = MAX_DIFF_CARD_ROWS,
   verb,
   onRevertHunk,
-  revertScope = ''
+  revertScope = '',
+  onOpenFile
 }: Props): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useDiffCardStyles()
@@ -253,6 +254,8 @@ function DiffCard({
     ? rows.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
     : 0
   const gutterWidth = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
+  // A deleted file has nothing left to open.
+  const openable = onOpenFile !== undefined && file.changeKind !== 'deleted'
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -268,7 +271,14 @@ function DiffCard({
             <Text style={styles.arrow}>→</Text>
           </>
         ) : null}
-        <Text testID="diff-card-path" style={styles.path} numberOfLines={1}>
+        <Text
+          testID="diff-card-path"
+          style={[styles.path, openable && styles.pathLink]}
+          numberOfLines={1}
+          onPress={openable ? () => onOpenFile(file.path) : undefined}
+          suppressHighlighting={!openable}
+          {...(openable ? { accessibilityRole: 'link' as const, accessibilityHint: 'Opens the file' } : {})}
+        >
           {baseName(file.path)}
         </Text>
         <Text testID="diff-card-added" style={styles.added}>
@@ -335,6 +345,9 @@ type Props = {
   /** Which card this is, beyond its content: the message it came from and its
    *  place in it. A later message re-applying the same edit is another card. */
   revertScope?: string
+  /** Opens the file from its name, the same open a path on the tool line
+   *  does. Absent on a proposal, where the file does not exist yet. */
+  onOpenFile?: (path: string) => void
 }
 
 export const MobileNativeChatDiffCard = memo(DiffCard)

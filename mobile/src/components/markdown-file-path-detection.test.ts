@@ -155,6 +155,21 @@ describe('detectFilePathSegments', () => {
     ])
   })
 
+  // 2026-09-25, the user: "if a file like md or pdf or text is created when
+  // the user clicks this files on chatui open that corresponding file". A PDF
+  // usually comes from a command, not a Write, so the reply naming it is the
+  // only place it shows, and the viewer can draw a PDF and a picture.
+  it('links a PDF, a picture or a data file the agent names in its reply', () => {
+    for (const path of ['docs/report.pdf', 'out/chart.png', 'shots/home.JPG', 'data/rows.csv', 'logs/run.log']) {
+      expect(detectFilePathSegments(`Saved it to ${path} for you.`)).toEqual([
+        { type: 'text', value: 'Saved it to ' },
+        { type: 'file', value: path, path },
+        { type: 'text', value: ' for you.' }
+      ])
+      expect(isFilePathCodeSpan(path.split('/').pop()!)).toBe(true)
+    }
+  })
+
   it('does not match unknown extensions', () => {
     expect(detectFilePathSegments('path/to/thing.whatever')).toEqual([
       { type: 'text', value: 'path/to/thing.whatever' }

@@ -46,6 +46,11 @@ export function makeDiffCardStyles(theme: Theme) {
       fontFamily: fonts.mono,
       fontSize: MONO_SIZE
     },
+    // The same link the tool line draws a path with (`toolPreviewLink`).
+    pathLink: {
+      color: colors.accentText,
+      textDecorationLine: 'underline'
+    },
     added: {
       color: colors.diffAddText,
       fontFamily: fonts.mono,
