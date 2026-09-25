@@ -103,12 +103,16 @@ const HOST_COMPONENT_NAMES = new Set([
 // a useTerminalTextFieldSubmitBinding per field in the send actions, the same +3 upstream
 // measured once its submitBufferedDraft stopped being a useCallback. The hook binding, callback
 // identity and body, and host-JSX pins moved with them, and only those.
-const HEAD_MAIN_HOOK_SHA256 = '69e0512d60379fedf9f2a7401c702b0ddca8723f6027b4c7619876ed32b93996'
+// 302 since 2026-09-25 (Orca #22362): the Markdown actions' useBackClaim, the page's claim on
+// Back while a draft is dirty. Upstream's count held because its claim replaced a native
+// BackHandler effect; this fork never had that effect, so here it is +1.
+const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e129dc711bcc117d00'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
 // 2026-09-25: bindLiveInputField and bindCommandField bind (Orca #22300).
-const HEAD_HOOK_BINDING_SHA256 = 'a6142861ee40358c9b9e394934aad6d00efcb911c977507abaee6f3b253bca8a'
+// 2026-09-25: hasDirtyDraft binds for the Markdown actions' page Back claim (Orca #22362).
+const HEAD_HOOK_BINDING_SHA256 = '57078a3ef7cf4e18632858ecdd26bb35a3f84950009c790d59a1390966912fdb'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -333,8 +337,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 673 since 2026-09-24 (Orca #22252): the Keyboard pair's six literals ('ios'
 // twice and its four event names) leave with it; useSoftKeyboard owns the
 // listeners now.
+// 674 since 2026-09-25 (Orca #22362): the Markdown actions' 'web' check, which holds the page's
+// Back claim to the page.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1b02f04c0952cdab94d0ab0902e69ff68f05b176abf8611ccac310b38d65c6a0'
+  '909abd2d2bb5ad6672de6879fdf6958ad52921f919276eba41339c4124ab7b11'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -833,7 +839,8 @@ describe('mobile session route extraction parity', () => {
     // pair, and its visibility and height now each own a separate effect (Orca #22252).
     // 301 since 2026-09-25: the terminal fields' submit seam — submitLiveInput (useCallback) and
     // one useTerminalTextFieldSubmitBinding per field in the send actions (Orca #22300).
-    expect(main.hooks).toHaveLength(301)
+    // 302 since 2026-09-25: the Markdown actions' page Back claim (Orca #22362).
+    expect(main.hooks).toHaveLength(302)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -938,7 +945,8 @@ describe('mobile session route extraction parity', () => {
     // direction through.
     // 673 since 2026-09-24: the Keyboard pair's event names ('ios' twice,
     // keyboardWill/DidShow, keyboardWill/DidHide) leave with it (Orca #22252).
-    expect(strings).toHaveLength(673)
+    // 674 since 2026-09-25: the Markdown actions' 'web' check (Orca #22362).
+    expect(strings).toHaveLength(674)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

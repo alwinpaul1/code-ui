@@ -1,12 +1,39 @@
 import { useCallback } from 'react'
-import { Keyboard } from 'react-native'
+import { Keyboard, Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
 
-export function useMobileSessionMarkdownActions(scope: MobileSessionDiffCommentsModel) {
+/**
+ * What these actions read, which is fourteen of the session model's fields.
+ *
+ * Declared rather than taking the whole model, so the hook can be rendered on its own: its page
+ * Back claim is tested directly, and a probe that had to build the whole session to reach it would
+ * be testing the session. `MobileSessionDiffCommentsModel` satisfies this by construction, so the
+ * one caller is unchanged.
+ */
+export type MobileSessionMarkdownActionsScope = Pick<
+  MobileSessionDiffCommentsModel,
+  | 'hostId'
+  | 'worktreeId'
+  | 'router'
+  | 'client'
+  | 'sessionTabs'
+  | 'setMarkdownDocs'
+  | 'markdownDocs'
+  | 'setDiscardMarkdownTarget'
+  | 'discardMarkdownTarget'
+  | 'setLeaveDrafts'
+  | 'markdownSaveSeqRef'
+  | 'markdownSaveInFlightRef'
+  | 'showToast'
+  | 'readMarkdownTab'
+>
+
+export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActionsScope) {
   const {
     hostId,
     worktreeId,
@@ -92,6 +119,21 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     Keyboard.dismiss()
     setLeaveDrafts(dirtyDrafts)
   }, [getDirtyMarkdownDrafts, leaveSession])
+
+  // The page only (upstream #22362). There an unclaimed Back is the shell's own pop, which is
+  // already "leave" and drops an unsaved draft without asking, so the page claims the key while a
+  // draft is dirty. Natively the key is `use-mobile-session-view-switch.ts`'s: its leave branch is
+  // this `requestLeaveSession`, which already asks, and a second native claim registered after it
+  // would answer first and swallow its terminal-to-chat Back. Upstream claims natively too.
+  const hasDirtyDraft = getDirtyMarkdownDrafts().length > 0
+  useBackClaim(
+    Platform.OS === 'web' && hasDirtyDraft
+      ? () => {
+          requestLeaveSession()
+          return true
+        }
+      : null
+  )
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
