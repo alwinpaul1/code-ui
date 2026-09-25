@@ -135,6 +135,21 @@ describe('a file the agent created opens from its card in the chat', () => {
     expect(name.props.accessibilityRole).toBeUndefined()
   })
 
+  // The second review of cd562b81: an edit that names no file gets the
+  // vendored normalizer's stand-in path, 'file', and a link to a file named
+  // "file" can only fail.
+  it('offers nothing to open when the edit never said which file it changed', () => {
+    const name = cardName(
+      [
+        { type: 'tool-call', name: 'Edit', input: { old_string: 'a = 1', new_string: 'a = 2' }, state: 'completed' },
+        { type: 'tool-result', output: 'The file has been updated.' }
+      ],
+      vi.fn()
+    )
+    expect(name.props.children).toBe('file')
+    expect(name.props.onPress).toBeUndefined()
+  })
+
   it('draws the name as a link in the theme in use, light and dark', () => {
     const light = cardName(claudeWrite('/w/a.md', 'x'), vi.fn(), 'light')
     const lightColor = [light.props.style].flat(3).reduce((color, entry) => entry?.color ?? color, undefined)

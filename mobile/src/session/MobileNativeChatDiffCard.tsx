@@ -36,6 +36,10 @@ const VERB_LABEL: Record<NativeChatEditFile['changeKind'], string> = {
   edited: 'Edited file'
 }
 
+/** The path `native-chat-edit-normalize.ts` and `native-chat-edit-patch-files.ts`
+ *  (vendored) give an edit that never named its file. */
+const UNNAMED_EDIT_PATH = 'file'
+
 function baseName(path: string): string {
   return path.split(/[\\/]/).at(-1) || path
 }
@@ -254,8 +258,9 @@ function DiffCard({
     ? rows.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
     : 0
   const gutterWidth = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
-  // A deleted file has nothing left to open.
-  const openable = onOpenFile !== undefined && file.changeKind !== 'deleted'
+  // A deleted file has nothing left to open, and an unnamed one nothing to find.
+  const openable =
+    onOpenFile !== undefined && file.changeKind !== 'deleted' && file.path !== UNNAMED_EDIT_PATH
   return (
     <View style={styles.card}>
       <View style={styles.header}>

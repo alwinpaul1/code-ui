@@ -166,8 +166,22 @@ describe('detectFilePathSegments', () => {
         { type: 'file', value: path, path },
         { type: 'text', value: ' for you.' }
       ])
-      expect(isFilePathCodeSpan(path.split('/').pop()!)).toBe(true)
+      expect(isFilePathCodeSpan(path.split('/').pop()!)).toBe(!path.endsWith('.log'))
     }
+  })
+
+  // The second review of cd562b81: an image or PDF address without its
+  // scheme ends in exactly the extensions that commit added, and read as a
+  // file the host would then fail to find.
+  it('leaves a web address without https:// as text, not a file that cannot open', () => {
+    for (const address of ['i.imgur.com/abc123.png', 'example.com/report.pdf', 'www.example.com/a.jpg', 'docs.github.io/guide.md']) {
+      expect(detectFilePathSegments(`See ${address} here`)).toEqual([{ type: 'text', value: `See ${address} here` }])
+      expect(isFilePathCodeSpan(address)).toBe(false)
+    }
+    expect(detectFilePathSegments('in src.old/app.ts')).toEqual([
+      { type: 'text', value: 'in ' },
+      { type: 'file', value: 'src.old/app.ts', path: 'src.old/app.ts' }
+    ])
   })
 
   it('does not match unknown extensions', () => {
@@ -244,6 +258,18 @@ describe('isFilePathCodeSpan', () => {
 
   it('rejects multi-word code spans', () => {
     expect(isFilePathCodeSpan('npm run build')).toBe(false)
+  })
+
+  // The second review of cd562b81: with `log` known, `console.log` in an
+  // agent's reply became a link that failed with "Couldn't open console.log".
+  // `process.env` had done the same since `env` joined the list.
+  it('leaves a method call or property read as code, but links the same name in a folder', () => {
+    for (const code of ['console.log', 'Math.log', 'np.log', 'logger.log', 'process.env', 'import.meta.env']) {
+      expect(isFilePathCodeSpan(code)).toBe(false)
+    }
+    expect(isFilePathCodeSpan('logs/run.log')).toBe(true)
+    expect(isFilePathCodeSpan('config/app.env')).toBe(true)
+    expect(isFilePathCodeSpan('package.json')).toBe(true)
   })
 
   it('rejects non-file code spans', () => {

@@ -95,6 +95,16 @@ const FILE_EXTENSIONS = [
 
 const EXTENSION_SET = new Set<string>(FILE_EXTENSIONS)
 
+// `name.log` and `name.env` are also how code calls a method or reads a
+// property (`console.log`, `process.env`), so without a folder in front they
+// stay code rather than links that cannot open (2026-09-25).
+const MEMBER_NAME_EXTENSIONS = new Set(['log', 'env'])
+
+// A web address written without its scheme (`i.imgur.com/abc.png`): its first
+// segment is a host name, not a folder, and the host has no such file.
+const HOST_NAME_SEGMENT =
+  /^(?:[a-z0-9-]+\.)+(?:com|org|net|io|dev|app|co|ai|me|gov|edu|info|xyz|uk|de|fr|jp|in|us|ca|au|tv|gg|ly|to)$/i
+
 // Accept the host's native separator because transcript paths originate on the
 // connected runtime, which may be Windows even when the phone is not. Leading
 // alternatives cover Windows drives, UNC, and POSIX absolute roots; the optional
@@ -143,6 +153,9 @@ function isOpenablePath(pathText: string): boolean {
   }
   // Must contain a separator (a bare "file.ts" is too ambiguous in prose).
   if (!/[\\/]/.test(candidate)) {
+    return false
+  }
+  if (HOST_NAME_SEGMENT.test(candidate.split(/[\\/]/)[0] ?? '')) {
     return false
   }
   const lastSeparator = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'))
@@ -245,7 +258,7 @@ export function isFilePathCodeSpan(code: string): boolean {
   }
   const name = path.slice(0, dot)
   const ext = path.slice(dot + 1).toLowerCase()
-  if (/[^\w.@+-]/.test(name)) {
+  if (/[^\w.@+-]/.test(name) || MEMBER_NAME_EXTENSIONS.has(ext)) {
     return false
   }
   return EXTENSION_SET.has(ext)
