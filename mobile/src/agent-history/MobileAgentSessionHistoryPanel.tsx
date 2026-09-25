@@ -8,16 +8,15 @@ import {
   resumeRepoListRead,
   resumeWorktreeListRead
 } from './mobile-agent-history-operations'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { useHostClient } from '../transport/client-context'
 import type { RpcClient } from '../transport/rpc-client'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
-import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -35,6 +34,7 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
+import { useAgentHistoryWorktrees } from './use-agent-history-worktrees'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
@@ -45,7 +45,7 @@ import {
   type MobileAiVaultResumeRepo
 } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
-import { styles } from './agent-history-styles'
+import { agentHistoryStyles } from './agent-history-styles'
 import { useNow } from '../hooks/use-now'
 
 export type MobileAgentSessionHistoryPanelProps = {
@@ -68,9 +68,9 @@ export function MobileAgentSessionHistoryPanel({
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useRouteHandoff()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(agentHistoryStyles)
   const { client, state: connState } = useHostClient(hostId)
-  const [worktrees, setWorktrees] = useState<Worktree[]>([])
-  const [worktreesLoaded, setWorktreesLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
@@ -81,41 +81,7 @@ export function MobileAgentSessionHistoryPanel({
   )
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
-  // Why: the worktree list seeds the host-local scopePaths derivation and the
-  // active-worktree path for the "current worktree" badge.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
-        if (cancelled) {
-          return
-        }
-        const catalog = worktreeCatalogRead.interpret(worktreeReply)
-        if (catalog.accepted) {
-          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
-          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
-          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
-        }
-      } catch {
-        // Why: worktree list is best-effort context; the session scan still runs
-        // (without it, scoped tabs can't narrow and fall back to the full list).
-      } finally {
-        // Why: mark loaded even on failure so a scoped tab proceeds with an
-        // unscoped fetch instead of holding a spinner forever.
-        if (!cancelled) {
-          setWorktreesLoaded(true)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, connState])
+  const { worktrees, worktreesLoaded } = useAgentHistoryWorktrees(client, connState)
 
   const {
     scope,

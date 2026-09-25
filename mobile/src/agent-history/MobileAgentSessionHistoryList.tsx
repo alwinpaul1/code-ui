@@ -2,13 +2,13 @@ import { useCallback, useMemo, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type { MobileAgentHistoryCard } from './agent-history-session-card'
-import { styles } from './agent-history-styles'
+import { agentHistoryStyles } from './agent-history-styles'
 
 // Lazy-render at most this many preview turns when a card is tapped — the
 // scanner already bounds preview text, but rendering them only on tap keeps the
@@ -34,6 +34,8 @@ export function MobileAgentSessionHistoryList({
   onResume,
   onRefresh
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(agentHistoryStyles)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const toggleExpanded = useCallback((id: string) => {
@@ -105,6 +107,8 @@ function AgentHistoryCardRow({
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onPress: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(agentHistoryStyles)
   const previewTurns = useMemo(
     () => (expanded && session ? recentSessionConversationTurns(session, PREVIEW_TURN_LIMIT) : []),
     [expanded, session]
@@ -156,9 +160,9 @@ function AgentHistoryCardRow({
             accessibilityLabel="Resume agent session"
           >
             {resumeActionState?.loading ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.text} />
             ) : (
-              <Play size={17} color={colors.textPrimary} strokeWidth={2.4} />
+              <Play size={17} color={colors.text} strokeWidth={2.4} />
             )}
           </Pressable>
         ) : null}
