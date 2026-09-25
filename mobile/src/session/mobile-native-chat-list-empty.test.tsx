@@ -1,16 +1,16 @@
-import { createElement } from 'react'
+import type { ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
-  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+  const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
     React.createElement('Text', props, children)
   return {
     ActivityIndicator: 'ActivityIndicator',
     Pressable: 'Pressable',
     Text,
-    View: ({ children, ...props }: { children?: unknown }) =>
+    View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light'
@@ -39,15 +39,9 @@ function render(
 ): ReactTestRenderer {
   act(() => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: scheme },
-        createElement(MobileNativeChatListEmpty, {
-          emptyState,
-          agent: 'claude',
-          styles: { center: {} }
-        })
-      )
+      <ThemeProvider initialPreference={scheme}>
+        <MobileNativeChatListEmpty emptyState={emptyState} agent="claude" styles={{ center: {} }} />
+      </ThemeProvider>
     )
   })
   return renderer!

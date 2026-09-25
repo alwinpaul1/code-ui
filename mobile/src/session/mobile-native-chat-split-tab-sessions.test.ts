@@ -5,6 +5,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { resolveMobileNativeChat } from './mobile-native-chat-eligibility'
+import type { MobileSessionTab } from './mobile-session-route-types'
 import { reconcileSessionTabsWithTerminalList } from './mobile-session-tab-terminal-reconcile'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -133,7 +134,9 @@ function chatForPill(
   terminals: readonly TerminalRecord[],
   pillId: string
 ): ReturnType<typeof resolveMobileNativeChat> {
-  const strip = reconcileSessionTabsWithTerminalList(tabs, terminals)
+  // Narrowed as the route narrows it (use-mobile-session-tab-application.ts): the
+  // reconciled strip is the snapshot's own tabs, whose isActive is always set.
+  const strip = reconcileSessionTabsWithTerminalList(tabs, terminals) as MobileSessionTab[]
   const { activeTab } = resolveActiveSessionTab(strip, {
     pendingActiveSessionTabId: null,
     selectedSessionTabId: pillId

@@ -5,7 +5,7 @@
 // Claude Code 2.1.281 answers a Write with "File created successfully at:
 // <absolute path>"; Codex adds one with an `*** Add File:` patch.
 
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
@@ -18,7 +18,7 @@ import { ToolRun } from './MobileNativeChatToolRun'
 vi.mock('../components/DraggableDetailSheet', async () => {
   const React = await import('react')
   return {
-    DraggableDetailSheet: ({ visible, header, children }: { visible: boolean; header?: unknown; children?: unknown }) =>
+    DraggableDetailSheet: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children?: ReactNode }) =>
       visible ? React.createElement('DraggableDetailSheet', null, header, children) : null
   }
 })
@@ -89,10 +89,12 @@ describe('a file the agent created opens from its card in the chat', () => {
   function cardName(blocks: NativeChatBlock[], onOpenFile?: (path: string) => void, scheme: 'light' | 'dark' = 'light') {
     act(() => {
       renderer = create(
-        createElement(ThemeProvider, { initialPreference: scheme }, createElement(Harness, { blocks, onOpenFile }))
+        <ThemeProvider initialPreference={scheme}>
+          <Harness blocks={blocks} onOpenFile={onOpenFile} />
+        </ThemeProvider>
       )
     })
-    const names = renderer!.root.findAll((node) => node.type === 'Text' && node.props.testID === 'diff-card-path')
+    const names = renderer!.root.findAll((node) => String(node.type) === 'Text' && node.props.testID === 'diff-card-path')
     expect(names).toHaveLength(1)
     return names[0]!
   }
@@ -164,11 +166,9 @@ describe('a file the agent created opens from its card in the chat', () => {
   it('leaves the name plain where nothing can open it, as on a permission card proposing the file', () => {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: 'light' },
-          createElement(MobileNativeChatDiffCard, {
-            file: {
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatDiffCard
+            file={{
               path: '/w/new.md',
               oldPath: null,
               changeKind: 'added',
@@ -177,13 +177,13 @@ describe('a file the agent created opens from its card in the chat', () => {
               lines: [{ kind: 'add', text: '# New', oldLineNumber: null, newLineNumber: 1 }],
               lineNumbersKnown: false,
               truncated: false
-            },
-            verb: 'Create file'
-          })
-        )
+            }}
+            verb="Create file"
+          />
+        </ThemeProvider>
       )
     })
-    const name = renderer!.root.find((node) => node.type === 'Text' && node.props.testID === 'diff-card-path')
+    const name = renderer!.root.find((node) => String(node.type) === 'Text' && node.props.testID === 'diff-card-path')
     expect(name.props.onPress).toBeUndefined()
   })
 })
