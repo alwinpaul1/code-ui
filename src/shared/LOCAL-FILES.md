@@ -173,7 +173,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   which the phone never calls.
   It also carries the two `mobileWeb.bundle.*` rows and their import from 9641a1b54
   (#21348, OTA phase A 3/5); this fork cannot run the generator, so the rows are
-  hand-kept until the catalog is re-vendored at or past 9641a1b54. It also carries the
+  hand-kept until the catalog is re-vendored at or past 9641a1b54. The
+  `mobileWeb.bundle.range` row from 996f9cc306 (#22381) is hand-kept for the same reason;
+  it reuses the chunk's params schema, so the import did not change. It also carries the
   `agentSession.subscribeTurnCompletions: null` row from 2739246058 (#21924,
   v1.4.209..v1.4.210 shared halves), hand-kept for the same reason.
 - `structured-agent-session-projection.ts`, `agent-session-journal-types.ts`,

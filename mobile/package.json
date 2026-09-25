@@ -68,6 +68,7 @@
     "expo-splash-screen": "^57.0.8",
     "expo-status-bar": "^57.0.1",
     "expo-task-manager": "57.0.16",
+    "fflate": "0.8.2",
     "lowlight": "^3.3.0",
     "lucide-react-native": "^1.14.0",
     "marked": "18.0.12",

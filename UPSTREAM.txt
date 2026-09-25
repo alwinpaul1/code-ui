@@ -187,7 +187,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md)
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
@@ -213,9 +213,10 @@ src/shared/rpc-contract/worktree-visibility-defaults-params.ts: c84007c54
 
 The desktop-served mobile web bundle contract (OTA phase A, Orca #21325 + #21348; the manifest's
 `routes` from phase C, #21502; the `native.` grant names from #21623), vendored whole.
-src/shared/mobile-web-bundle/bundle-rpc-contract.ts: 9641a1b54
-src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: ac4dc6599
-src/shared/mobile-web-bundle/manifest-contract.ts: e47ef8cc2 (a manifest route may declare optionalGrants, OTA phase D C8.1, #22141)
+src/shared/mobile-web-bundle/bundle-rpc-contract.ts: 996f9cc306 (mobileWeb.bundle.range and rangeBytes on the manifest reply, #22381)
+src/shared/mobile-web-bundle/bundle-rpc-contract.test.ts: 996f9cc306
+src/shared/mobile-web-bundle/bundle-range-rpc-contract.test.ts: 996f9cc306
+src/shared/mobile-web-bundle/manifest-contract.ts: 996f9cc306 (exports SHA256_PATTERN for the range reply, #22381; a manifest route may declare optionalGrants since e47ef8cc2, OTA phase D C8.1, #22141)
 src/shared/mobile-web-bundle/manifest-contract.test.ts: e47ef8cc2
 src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts: 9641a1b54
 src/shared/zod-salvage.ts: 9641a1b54 (re-vendored for `hostUnionArms`, which bundle-rpc-contract.ts imports; purely additive over the base — `openEnum` from #20950 and `hostUnionArms` from #21269/#21298 — and identical to origin/main. Group D had pinned it at 4a86b2dc5 for the same two exports; #21298's `NoInfer` form of `hostUnionArms` and the `const` generic on `openEnum` are the later commit's, kept on the 2026-09-19 merge)

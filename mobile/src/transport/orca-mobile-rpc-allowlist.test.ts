@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_MANIFEST_METHOD
+  MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
+  MOBILE_WEB_BUNDLE_RANGE_METHOD
 } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   HOST_MOBILE_CAPABILITY_KEYS,
@@ -145,11 +146,12 @@ const EXCEPTIONS: readonly AllowlistException[] = [
 /**
  * A method the tree sends by a CONSTANT imported from `src/shared`, never by a string literal
  * under `app/` or `src/`, so the literal scan below cannot see it (2026-09-19, Orca #21374: the
- * desktop-served mobile web bundle names its two methods through `bundle-rpc-contract.ts`).
+ * desktop-served mobile web bundle names its methods through `bundle-rpc-contract.ts`).
  * Each entry is checked three ways so it cannot rot: the spelled method must equal the imported
  * constant, the named sender must bind that identifier to a `method:` field, and the fixture must
  * still refuse the method — a re-captured fixture that allows it deletes the entry, and a literal
- * that appears in the tree hands the method to the scan above and deletes it too.
+ * that appears in the tree hands the method to the scan above and deletes it too. A send made
+ * with a shared constant that is missing here fails `sharedConstantSends`' check below.
  */
 type ConstantNamedSend = {
   readonly method: string
@@ -174,6 +176,13 @@ const CONSTANT_NAMED_SENDS: readonly ConstantNamedSend[] = [
     identifier: 'MOBILE_WEB_BUNDLE_CHUNK_METHOD',
     sender: 'src/transport/mobile-web-bundle-operations.ts',
     why: 'Paged only after a manifest read succeeded, so it inherits the manifest read\'s gate above.'
+  },
+  {
+    method: 'mobileWeb.bundle.range',
+    constant: MOBILE_WEB_BUNDLE_RANGE_METHOD,
+    identifier: 'MOBILE_WEB_BUNDLE_RANGE_METHOD',
+    sender: 'src/transport/mobile-web-bundle-operations.ts',
+    why: 'Paged instead of chunks only when the manifest reply names `rangeBytes` (mobile-web-bundle-window-reader.ts, Orca #22381), so it inherits the manifest read\'s gate above.'
   }
 ]
 
@@ -255,6 +264,38 @@ function isNonSendPosition(node: ts.StringLiteralLike): boolean {
   return false
 }
 
+/** Whether a method expression is what a send is made with: `client.sendRequest(m, …)`,
+ *  `client.subscribe(m, …)`, `sendSingleFlightRequest(client, hostId, m)`, or `{ method: m }` (an
+ *  operation definition or a dispatcher's step). */
+function isSendPosition(node: ts.Expression): boolean {
+  const parent: ts.Node | undefined = node.parent
+  if (!parent) {
+    return false
+  }
+  if (
+    ts.isCallExpression(parent) &&
+    parent.arguments[0] === node &&
+    ts.isPropertyAccessExpression(parent.expression) &&
+    (parent.expression.name.text === 'sendRequest' || parent.expression.name.text === 'subscribe')
+  ) {
+    return true
+  }
+  if (
+    ts.isCallExpression(parent) &&
+    parent.arguments[2] === node &&
+    ts.isIdentifier(parent.expression) &&
+    parent.expression.text === 'sendSingleFlightRequest'
+  ) {
+    return true
+  }
+  return (
+    ts.isPropertyAssignment(parent) &&
+    parent.initializer === node &&
+    ts.isIdentifier(parent.name) &&
+    parent.name.text === 'method'
+  )
+}
+
 /** Every catalogued method a file names, which of those it names in a SEND
  *  position, and which it names ONLY in positions that cannot send. */
 export function catalogedMethodLiterals(
@@ -278,36 +319,7 @@ export function catalogedMethodLiterals(
       if (!isNonSendPosition(node)) {
         inSendablePosition.add(node.text)
       }
-      const parent: ts.Node | undefined = node.parent
-      // `client.sendRequest('m', …)`, `client.subscribe('m', …)`
-      if (
-        parent &&
-        ts.isCallExpression(parent) &&
-        parent.arguments[0] === node &&
-        ts.isPropertyAccessExpression(parent.expression) &&
-        (parent.expression.name.text === 'sendRequest' ||
-          parent.expression.name.text === 'subscribe')
-      ) {
-        sent.add(node.text)
-      }
-      // `sendSingleFlightRequest(client, hostId, 'm')`
-      if (
-        parent &&
-        ts.isCallExpression(parent) &&
-        parent.arguments[2] === node &&
-        ts.isIdentifier(parent.expression) &&
-        parent.expression.text === 'sendSingleFlightRequest'
-      ) {
-        sent.add(node.text)
-      }
-      // `{ method: 'm' }` — an operation definition or a dispatcher's step.
-      if (
-        parent &&
-        ts.isPropertyAssignment(parent) &&
-        parent.initializer === node &&
-        ts.isIdentifier(parent.name) &&
-        parent.name.text === 'method'
-      ) {
+      if (isSendPosition(node)) {
         sent.add(node.text)
       }
     }
@@ -342,6 +354,39 @@ export function catalogedMethodLiterals(
     onlyInNonSendPositions,
     readsMobileScopeRefusal: importsRefusalReader && callsRefusalReader
   }
+}
+
+/** The identifiers a file imports from `src/shared` and sends with: the sends the literal scan
+ *  cannot see, which CONSTANT_NAMED_SENDS has to list by hand. */
+export function sharedConstantSends(path: string, source: string): Set<string> {
+  const sourceFile = parse(path, source)
+  const imported = new Set<string>()
+  for (const statement of sourceFile.statements) {
+    const bindings = ts.isImportDeclaration(statement) ? statement.importClause?.namedBindings : undefined
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      /(^|\/)src\/shared\//.test(statement.moduleSpecifier.text) &&
+      !statement.importClause?.isTypeOnly &&
+      bindings &&
+      ts.isNamedImports(bindings)
+    ) {
+      for (const element of bindings.elements) {
+        if (!element.isTypeOnly) {
+          imported.add(element.name.text)
+        }
+      }
+    }
+  }
+  const sent = new Set<string>()
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && imported.has(node.text) && isSendPosition(node)) {
+      sent.add(node.text)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return sent
 }
 
 const catalog = readCatalogMethods()
@@ -588,6 +633,34 @@ describe('every RPC method the phone can send', () => {
         `${entry.sender} no longer binds ${entry.identifier} to a method field`
       ).toBe(true)
     }
+  })
+
+  it('lists every send made with a method constant from src/shared, which the literal scan cannot see', () => {
+    // 2026-09-25, Orca #22381: mobileWeb.bundle.range arrived as a third bundle constant, and every
+    // check here stayed green without an entry for it, because each one starts from the list.
+    const found = scanned.flatMap((file) =>
+      [...sharedConstantSends(join(mobileRoot, file), readFileSync(join(mobileRoot, file), 'utf8'))].map(
+        (identifier) => `${file}: ${identifier}`
+      )
+    )
+    const listed = CONSTANT_NAMED_SENDS.map((entry) => `${entry.sender}: ${entry.identifier}`)
+    expect(
+      found.sort(),
+      'A sender sends with a method constant from src/shared that CONSTANT_NAMED_SENDS does not list, so nothing checks the host lets it through. Add an entry saying what keeps a refusing host from being asked.'
+    ).toEqual([...listed].sort())
+  })
+
+  it('finds a send made with a shared constant in each shape a send takes, and not an unsent import', () => {
+    const source = [
+      "import { A, B, C, D, type T } from '../../../src/shared/x'",
+      "import { E } from './local'",
+      'client.sendRequest(A, {})',
+      'sendSingleFlightRequest(client, hostId, B)',
+      'defineRpcOperation({ method: C })',
+      'const unsent = D',
+      'defineRpcOperation({ method: E })'
+    ].join('\n')
+    expect([...sharedConstantSends('probe.ts', source)].sort()).toEqual(['A', 'B', 'C'])
   })
 
   it('requires a fails-open sender to read the gate’s refusal, so it stops asking', () => {
