@@ -227,11 +227,30 @@ export function hasConnectedTerminalAbsentFromSessionTabs(
   const tabHandles = new Set(
     getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
   )
+  // Why: a PTY whose leaf is on the strip was not dropped, even while that tab
+  // waits for its handle (`pending-handle`). That wait belongs to the
+  // pending-handle recovery, which has a retry budget; counting it here forced
+  // a session.tabs poll every 2 s with none, for as long as the desktop left
+  // the leaf pending.
+  const leaves = sessionTabLeafAddresses(tabs)
   return currentTerminals.some(
     (terminal) =>
       terminal.connected === true &&
       terminal.orphaned !== true &&
-      !tabHandles.has(terminal.handle)
+      !tabHandles.has(terminal.handle) &&
+      !(terminal.tabId && terminal.leafId && leaves.has(`${terminal.tabId}::${terminal.leafId}`))
+  )
+}
+
+/** The host's address, `parentTabId::leafId`, of every terminal tab that
+ *  carries both halves, whether or not it has a handle yet. */
+export function sessionTabLeafAddresses(tabs: readonly MobileSessionTabLike[]): Set<string> {
+  return new Set(
+    tabs.flatMap((tab) =>
+      tab.type === 'terminal' && tab.parentTabId && tab.leafId
+        ? [`${tab.parentTabId}::${tab.leafId}`]
+        : []
+    )
   )
 }
 

@@ -1,5 +1,6 @@
 import {
   getTerminalRecordsFromSessionTabs,
+  sessionTabLeafAddresses,
   type MobileSessionTabLike,
   type MobileTerminalSessionTab,
   type TerminalRecord
@@ -59,6 +60,16 @@ export function appendUnlistedConnectedTerminalTabs(
         : []
     )
   )
+  // Why: one tab per leaf, and a leaf the snapshot already has is never built
+  // again. The host can publish a leaf as `pending-handle` (`terminal: null`)
+  // while `terminal.list` already lists its PTY (Orca 1.4.211, 2026-09-25), and
+  // matching on the handle alone built a second tab for that leaf under the same
+  // id: a duplicate React key, and a pill with no agent status beside the host's.
+  // The host's tab is the leaf; until it names a handle, the pending-handle
+  // recovery asks for one. Filling the handle in from the list was tried and
+  // withdrawn: the route strips the leaf address from its records on every
+  // snapshot, so the borrowed handle came and went on each beat.
+  const leavesOnStrip = new Set([...tabs.map((tab) => tab.id), ...sessionTabLeafAddresses(tabs)])
   const extras: MobileTerminalSessionTab[] = []
   for (const terminal of terminals) {
     const parentTabId = terminal.tabId
@@ -71,13 +82,18 @@ export function appendUnlistedConnectedTerminalTabs(
     ) {
       continue
     }
+    // The host's own address for a leaf. A tab id that churns between the
+    // snapshot and the sweep loses the per-tab chat/terminal override and the
+    // buffered draft, both of which are keyed by it.
+    const id = terminal.leafId ? `${parentTabId}::${terminal.leafId}` : terminal.handle
+    if (leavesOnStrip.has(id)) {
+      continue
+    }
     listedHandles.add(terminal.handle)
+    leavesOnStrip.add(id)
     extras.push({
       type: 'terminal',
-      // The host's own address for a leaf. A tab id that churns between the
-      // snapshot and the sweep loses the per-tab chat/terminal override and the
-      // buffered draft, both of which are keyed by it.
-      id: terminal.leafId ? `${parentTabId}::${terminal.leafId}` : terminal.handle,
+      id,
       title: terminal.title || 'Terminal',
       parentTabId,
       leafId: terminal.leafId,
