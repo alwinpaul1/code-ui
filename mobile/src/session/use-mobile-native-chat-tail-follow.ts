@@ -110,6 +110,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     followingRef,
     scrollingRef,
     holdingRef,
+    draggingRef,
     touchStart,
     touchEnd,
     followGate,
@@ -311,24 +312,39 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     }
   }, [beginFling, cancelSettle])
 
+  // Not while a finger drags. An animated scroll runs on a ValueAnimator, and
+  // a finger that grabs it is taken by the scroll view, which cancels the
+  // animator, whose listener sends this end. Settling on it finished the
+  // scroll under the dragging finger: the text went selectable, and near the
+  // live edge the stream pinned the list to the newest message while the
+  // reader dragged away (third review, 2026-09-25). That drag's own end
+  // settles the list.
   const onMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       cancelSettle()
       jumpingRef.current = false
+      if (draggingRef.current) {
+        return
+      }
       settle(event.nativeEvent)
     },
-    [cancelSettle, settle]
+    [cancelSettle, draggingRef, settle]
   )
 
+  // The jump control sits outside the list, so its tap reaches none of the
+  // list's touch handlers; the jump itself says no finger drags the list. A
+  // drag whose end never came would otherwise keep the jump's momentum end
+  // from settling it (see onMomentumScrollEnd).
   const jumpToTail = useCallback(
     (animated: boolean) => {
       cancelSettle()
+      endDrag()
       jumpingRef.current = true
       setAtTail(true)
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
-    [cancelSettle, setAtTail, setFollowing]
+    [cancelSettle, endDrag, setAtTail, setFollowing]
   )
 
   const onScrollToMessage = useCallback(

@@ -429,6 +429,81 @@ describe('holding the agent’s reply to copy it while the reply streams in', ()
     })
   }
 
+  // Third review, and older than this fix: an animated scroll runs on a
+  // ValueAnimator. A finger that grabs it is taken by the scroll view, which
+  // then cancels the animator, and the animator's listener sends a momentum
+  // END (ReactScrollViewHelper.dispatchMomentumEndOnAnimationEnd). Settling
+  // on that end finished the scroll under the dragging finger: the text went
+  // selectable, and near the live edge every stream tick pinned the list to
+  // the newest message while the reader dragged away from it.
+  it('keeps a drag that grabs the jump to the newest message, with nothing pinned under the finger', () => {
+    mount(1200)
+    runFor(300, [], false)
+    act(() => latest!.jumpToTail(true))
+    act(() => latest!.onMomentumScrollBegin())
+    runFor(
+      6 * FRAME_MS,
+      Array.from({ length: 6 }, (_, index) => ({
+        at: now + (index + 1) * FRAME_MS,
+        run: () => {
+          world.y = Math.max(30, world.y - 200)
+          act(() => latest!.evaluateEdge(sample(world.y, world.height)))
+        }
+      }))
+    )
+    expect(world.y).toBe(30)
+    // The reader grabs it 30 dp from the live edge.
+    act(() => latest!.touchStart())
+    intercept()
+    act(() => latest!.onMomentumScrollEnd(sample(world.y, world.height)))
+    const pinsBefore = pins.length
+    const seen: boolean[] = []
+    runFor(
+      20 * FRAME_MS,
+      Array.from({ length: 20 }, (_, index) => ({
+        at: now + (index + 1) * FRAME_MS,
+        run: () => {
+          world.y += 15
+          act(() => latest!.evaluateEdge(sample(world.y, world.height)))
+          seen.push(latest!.textSelectable)
+        }
+      }))
+    )
+    expect(pins.length - pinsBefore).toBe(0)
+    expect(world.y).toBeGreaterThan(300)
+    expect(seen.filter(Boolean)).toEqual([])
+    expect(latest!.showJumpToLatest).toBe(true)
+    // Let go: the list comes to rest and selection comes back.
+    release()
+    runFor(300)
+    expect(latest!.textSelectable).toBe(true)
+  })
+
+  // The jump control sits outside the list, so its tap reaches no touch
+  // handler of the list's; the jump is the reader saying no finger drags it.
+  it('comes back when the reader jumps to the newest message after a drag whose end never came', () => {
+    mount(600)
+    drag(120)
+    runFor(2_000)
+    act(() => latest!.jumpToTail(true))
+    act(() => latest!.onMomentumScrollBegin())
+    runFor(
+      15 * FRAME_MS,
+      Array.from({ length: 15 }, (_, index) => ({
+        at: now + (index + 1) * FRAME_MS,
+        run: () => {
+          world.y = Math.max(0, world.y - world.y / (15 - index))
+          act(() => latest!.evaluateEdge(sample(world.y, world.height)))
+        }
+      }))
+    )
+    act(() => latest!.onMomentumScrollEnd(sample(world.y, world.height)))
+    runFor(300)
+    expect(latest!.textSelectable).toBe(true)
+    expect(latest!.showJumpToLatest).toBe(false)
+    expect(world.y).toBe(0)
+  })
+
   it('costs at most the next touch when a drag’s end never comes and nothing reports why', () => {
     mount(600)
     drag(120)

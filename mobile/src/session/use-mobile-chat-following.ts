@@ -188,6 +188,7 @@ export function useMobileChatFollowing() {
     followingRef,
     scrollingRef,
     holdingRef,
+    draggingRef,
     touchStart,
     touchEnd,
     scrollSample,
