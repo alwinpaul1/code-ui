@@ -148,7 +148,7 @@ describe('saying the index is still building', () => {
 })
 
 describe('what a search in flight draws, by what the index is known to be', () => {
-  it.each([
+  const inFlight: [string, SearchPanelView['kind'], boolean, SearchIndexState][] = [
     ['a ready index', 'loading', false, READY],
     ['a building index', 'loading', false, BUILDING],
     ['an index not yet read', 'loading', true, { kind: 'checking' }],
@@ -156,7 +156,8 @@ describe('what a search in flight draws, by what the index is known to be', () =
     ['an unreadable index', 'loading', true, { kind: 'unreadable', message: 'status unavailable' }],
     ['an index that is off', 'notice', true, { kind: 'off' }],
     ['a host with no index at all', 'notice', true, { kind: 'unsupported' }]
-  ] as const)(
+  ]
+  it.each(inFlight)(
     'draws %s as %s, with the loaded matches under it: %s',
     (_label, kind, fallback, index) => {
       expect(viewFor({ kind: 'searching' }, index)).toMatchObject({ kind, fallback })
