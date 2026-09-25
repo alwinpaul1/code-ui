@@ -23,9 +23,8 @@ import {
   mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
+import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
 
-/** A command whose ack was lost may have run; a retry could run it twice. */
-const COMMAND_UNCONFIRMED = 'Command unconfirmed — check chat before retrying'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -344,36 +343,22 @@ export function useMobileNativeChatMessageSend(args: {
       }
       try {
         if (agentRef.current === 'codex') {
-          if (!client || !terminal || !enabled) {
-            onSendError('Message not sent (disconnected)')
+          if (!terminal) {
+            onSendError('Command not sent (no terminal on this tab)')
             return 'rejected'
           }
-          const deadline = openMobileNativeChatSendBudget()
-          const mobileClient = deviceTokenRef.current
-            ? { id: deviceTokenRef.current, type: 'mobile' as const }
-            : undefined
-          if (
-            !(await healMobileNativeChatStaleInput({
-              client,
-              terminal,
-              deviceToken: deviceTokenRef.current,
-              deadline
-            }))
-          ) {
-            onSendError('Message not sent')
-            return 'rejected'
-          }
-          const typed = await typeMobileNativeChatCommandWithOutcome({
-            client,
-            terminal,
-            command: text,
-            ...(mobileClient ? { mobileClient } : {}),
-            deadline
-          })
-          if (typed !== 'accepted') {
-            onSendError(typed === 'unknown' ? COMMAND_UNCONFIRMED : 'Message not sent')
-          }
-          return typed
+          // A command does not wait for the link: what it types was chosen
+          // against a screen the phone has not seen since it dropped.
+          const client = sendGate.now('Command')
+          return client
+            ? await typeCodexChatCommand({
+                client,
+                terminal,
+                command: text,
+                deviceToken: deviceTokenRef.current,
+                onSendError
+              })
+            : 'rejected'
         }
         return await sendMessage(text, undefined, false, false)
       } finally {
@@ -382,7 +367,7 @@ export function useMobileNativeChatMessageSend(args: {
         }
       }
     },
-    [client, deviceTokenRef, enabled, handleRef, onSendError, sendMessage]
+    [deviceTokenRef, handleRef, onSendError, sendGate, sendMessage]
   )
 
   return { send, sendWithOutcome, answerQuestion, dispatchCommand }

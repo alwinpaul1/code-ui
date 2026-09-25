@@ -105,13 +105,17 @@ describe('a session-option pick or slash command that did not go out says so', (
     }
   )
 
-  it('says a Codex picker command was not sent while the chat is disconnected', async () => {
+  // The link is up and the input lease is not: the reason names that, rather
+  // than the bare "(disconnected)" every refusal once said (2026-09-25).
+  it('says a Codex picker command was not sent while the terminal is not taking input', async () => {
     mount('codex', false)
 
     expect(await pick('/model')).toBe('rejected')
     expect(sendRequest).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Message not sent (disconnected)')
+    expect(onSendError).toHaveBeenCalledWith(
+      'Command not sent: the desktop terminal is not taking input from this phone yet'
+    )
   })
 
   it('says a Codex picker command was not sent when the host refuses its keys', async () => {
