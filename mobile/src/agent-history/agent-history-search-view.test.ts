@@ -147,6 +147,29 @@ describe('saying the index is still building', () => {
   })
 })
 
+describe('what a search in flight draws, by what the index is known to be', () => {
+  it.each([
+    ['a ready index', 'loading', false, READY],
+    ['a building index', 'loading', false, BUILDING],
+    ['an index not yet read', 'loading', true, { kind: 'checking' }],
+    ['a paused index', 'loading', true, { kind: 'paused', notes: [] }],
+    ['an unreadable index', 'loading', true, { kind: 'unreadable', message: 'status unavailable' }],
+    ['an index that is off', 'notice', true, { kind: 'off' }],
+    ['a host with no index at all', 'notice', true, { kind: 'unsupported' }]
+  ] as const)(
+    'draws %s as %s, with the loaded matches under it: %s',
+    (_label, kind, fallback, index) => {
+      expect(viewFor({ kind: 'searching' }, index)).toMatchObject({ kind, fallback })
+    }
+  )
+
+  it('says a newer Orca is needed at once, rather than spinning, when the host has no status method', () => {
+    expect(lines(viewFor({ kind: 'searching' }, { kind: 'unsupported' }))).toEqual([
+      'Session search needs a newer Orca on Studio.'
+    ])
+  })
+})
+
 describe('counting results', () => {
   it('says no results and why when the page is empty', () => {
     const view = viewFor(results({ hits: [] }))

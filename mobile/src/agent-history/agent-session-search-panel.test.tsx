@@ -437,6 +437,61 @@ describe('a search that fails says why', () => {
   })
 })
 
+/** A host on an Orca from before session search: neither search method exists. */
+function hostWithoutSearch(): Responder {
+  return historyReplies([historySession()], (method) =>
+    refused('method_not_found', `Unknown method: ${method}`)
+  )
+}
+
+function spinners(rendered: ReactTestRenderer): number {
+  return rendered.root.findAll((node) => String(node.type) === 'ActivityIndicator').length
+}
+
+describe('the loaded sessions while the index cannot answer', () => {
+  it('keeps the loaded matches on screen, with no spinner, while typing on an Orca without search', async () => {
+    const { rendered } = await mountPanel(hostWithoutSearch())
+    await search(rendered, 'vault')
+    expect(hasText(rendered, 'Implement vault filters')).toBe(true)
+    await typeQuery(rendered, 'vaul')
+    expect(screenTexts(rendered)).toEqual(
+      expect.arrayContaining(['Session search needs a newer Orca on Studio.', 'Implement vault filters'])
+    )
+    expect(spinners(rendered)).toBe(0)
+  })
+
+  it('draws the loaded matches before a host with search off has answered the status read', async () => {
+    let answerStatus: (reply: HostReply) => void = () => {}
+    const { rendered } = await mountPanel(
+      historyReplies([historySession()], (method) => {
+        switch (method) {
+          case 'aiVault.searchStatus':
+            return new Promise((resolve) => {
+              answerStatus = resolve
+            })
+          case 'aiVault.searchSessions':
+            return ok({ kind: 'unavailable', reason: 'disabled' })
+          default:
+            return refused('method_not_found', `${method} is not answered by this suite`)
+        }
+      })
+    )
+    await typeQuery(rendered, 'vault')
+    await flush()
+    expect(screenTexts(rendered)).toEqual(
+      expect.arrayContaining(['Loaded sessions that match', 'Implement vault filters'])
+    )
+    await act(async () => answerStatus(ok(searchStatus({ enabled: false }))))
+    await flush()
+    expect(screenTexts(rendered)).toEqual(
+      expect.arrayContaining([
+        'Session search is off on Studio. Turn it on in Orca on that computer: Settings → Agent Session Search.',
+        'Implement vault filters'
+      ])
+    )
+  })
+})
+
 describe('resuming from a hit', () => {
   it("resumes a hit already in the list through the list's own resume", async () => {
     const { host, rendered } = await mountPanel(searchHost(() => ok(searchResults([searchHit()]))))
@@ -469,7 +524,8 @@ describe('resuming from a hit', () => {
     expect(host.sent('repo.list')).toHaveLength(1)
   })
 
-  it('says so when the host no longer lists the session behind a hit', async () => {
+  it('says so when the host no longer lists the Claude session behind a hit', async () => {
+    // For Claude the folder scan reaches past the host's 500-session cap, so a miss is real.
     const { host, rendered } = await mountPanel(
       searchHost(() => ok(searchResults([searchHit({ sessionId: 'session-gone' })])))
     )
@@ -482,6 +538,26 @@ describe('resuming from a hit', () => {
         "The host's session history no longer lists this session, so it cannot be resumed from here."
       )
     ).toBe(true)
+    expect(host.sent('repo.list')).toEqual([])
+  })
+
+  it('names the history limit, not the host, when a Codex hit is older than the host lists', async () => {
+    // Orca's scan keeps the 500 newest sessions and widens past them for a folder only for Claude
+    // (discoverInScopeClaudeFiles, origin/main 8d6fec597b), so an older Codex session the index
+    // still holds is in no list the phone can ask for.
+    const { host, rendered } = await mountPanel(
+      searchHost(() => ok(searchResults([searchHit({ agent: 'codex', sessionId: 'session-old' })])))
+    )
+    await search(rendered, 'scope')
+    await press(rendered.root.find((node) => node.props.accessibilityLabel === 'Resume agent session'))
+    await flush()
+    expect(
+      hasText(
+        rendered,
+        'Studio lists only its 500 most recent sessions, and this one is older, so it cannot be resumed from here. Resume it in Orca on that computer.'
+      )
+    ).toBe(true)
+    expect(screenTexts(rendered).join('\n')).not.toMatch(/no longer lists/)
     expect(host.sent('repo.list')).toEqual([])
   })
 })

@@ -9,7 +9,8 @@ import type { AgentSessionSearchHit } from './agent-history-search-reply-schema'
 import { searchHitKey } from './agent-history-search-state'
 
 // The screen's own scan size (use-mobile-agent-history-state.ts), so the lookup below costs what
-// a tab switch costs.
+// a tab switch costs. It is also Orca's own cap: the scan keeps the 500 newest sessions, and for a
+// folder it reaches past them only for Claude (discoverInScopeClaudeFiles, origin/main 8d6fec597b).
 const HIT_LOOKUP_SESSION_LIMIT = 500
 
 /**
@@ -34,12 +35,14 @@ export function findSearchHitSession(
  * A hit over the relay carries no file path and no resume command (the host redacts both for a
  * paired client), so it cannot be resumed from itself. The row is usually already loaded; when it
  * is not (a hit older than the 500 the screen holds), one scan narrowed to the hit's own folder
- * finds it, the same `aiVault.listSessions` the screen runs on every open.
+ * finds it, the same `aiVault.listSessions` the screen runs on every open. That scan reaches past
+ * the host's 500 newest only for Claude, so an older hit from any other agent is named as such.
  */
 export async function resolveSearchHitSession(
   client: RpcClient,
   hit: AgentSessionSearchHit,
-  loaded: readonly AiVaultSession[]
+  loaded: readonly AiVaultSession[],
+  host: string
 ): Promise<AiVaultSession> {
   const onScreen = findSearchHitSession(loaded, hit)
   if (onScreen) {
@@ -63,7 +66,9 @@ export async function resolveSearchHitSession(
   const found = findSearchHitSession(result.sessions as AiVaultSession[], hit)
   if (!found) {
     throw new Error(
-      "The host's session history no longer lists this session, so it cannot be resumed from here."
+      hit.agent === 'claude'
+        ? "The host's session history no longer lists this session, so it cannot be resumed from here."
+        : `${host} lists only its ${String(HIT_LOOKUP_SESSION_LIMIT)} most recent sessions, and this one is older, so it cannot be resumed from here. Resume it in Orca on that computer.`
     )
   }
   return found
@@ -71,6 +76,8 @@ export async function resolveSearchHitSession(
 
 type HitResumeParams = {
   client: RpcClient | null
+  /** The paired host's display name, for the one message that has to name it. */
+  host: string
   connected: boolean
   sessions: readonly AiVaultSession[]
   onResumeSession: (session: AiVaultSession) => Promise<void>
@@ -83,6 +90,7 @@ type HitResumeParams = {
  */
 export function useSearchHitResume({
   client,
+  host,
   connected,
   sessions,
   onResumeSession,
@@ -115,7 +123,7 @@ export function useSearchHitResume({
       inFlightRef.current = true
       setResolvingKey(searchHitKey(hit))
       try {
-        const session = await resolveSearchHitSession(client, hit, sessions)
+        const session = await resolveSearchHitSession(client, hit, sessions, host)
         await onResumeSession(session)
       } catch (error) {
         triggerError()
@@ -129,7 +137,7 @@ export function useSearchHitResume({
         }
       }
     },
-    [client, connected, sessions, onResumeSession, onResumeMessage]
+    [client, host, connected, sessions, onResumeSession, onResumeMessage]
   )
 
   return { resumeHit, resolvingKey }

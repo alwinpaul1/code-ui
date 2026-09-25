@@ -88,6 +88,7 @@ function AgentSessionSearchResults(props: AgentSessionSearchPanelProps & { host:
   })
   const { resumeHit, resolvingKey } = useSearchHitResume({
     client,
+    host,
     connected,
     sessions,
     onResumeSession: props.onResumeSession,
@@ -182,21 +183,29 @@ function SearchNoticeBody({
   const styles = useThemedStyles(agentSessionSearchStyles)
   const listStyles = useThemedStyles(agentHistoryStyles)
   const { colors } = useTheme()
-  const notice = view.kind === 'results' ? null : view.notice
-  const box = notice ? <SearchNoticeBox notice={notice} onRetry={onRetry} /> : null
-  const fallback =
-    view.kind === 'notice' && view.fallback
-      ? renderFallback({
-          header: (
-            <View>
-              {box}
-              <Text style={styles.fallbackCaption}>{SEARCH_FALLBACK_CAPTION}</Text>
-            </View>
-          ),
-          refreshing: pull.refreshing,
-          onRefresh: pull.onRefresh
-        })
-      : null
+  if (view.kind === 'results') {
+    return null
+  }
+  const box = view.notice ? <SearchNoticeBox notice={view.notice} onRetry={onRetry} /> : null
+  const spinner =
+    view.kind === 'loading' ? (
+      <View style={styles.loading}>
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      </View>
+    ) : null
+  const fallback = view.fallback
+    ? renderFallback({
+        header: (
+          <View>
+            {spinner}
+            {box}
+            <Text style={styles.fallbackCaption}>{SEARCH_FALLBACK_CAPTION}</Text>
+          </View>
+        ),
+        refreshing: pull.refreshing,
+        onRefresh: pull.onRefresh
+      })
+    : null
   if (fallback) {
     return fallback
   }
@@ -206,11 +215,7 @@ function SearchNoticeBody({
       keyboardShouldPersistTaps="handled"
       refreshControl={pull.control}
     >
-      {view.kind === 'loading' ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : null}
+      {spinner}
       {box}
     </ScrollView>
   )

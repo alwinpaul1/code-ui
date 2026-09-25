@@ -24,7 +24,7 @@ export type SearchNotice = {
 }
 
 export type SearchPanelView =
-  | { kind: 'loading'; notice: SearchNotice | null }
+  | { kind: 'loading'; notice: SearchNotice | null; fallback: boolean }
   | { kind: 'results'; results: SessionSearchResults; notice: SearchNotice | null; count: string }
   | { kind: 'notice'; notice: SearchNotice; fallback: boolean }
 
@@ -57,11 +57,7 @@ export function searchPanelView(
     case 'waiting':
       return notice('info', [`Waiting for ${host}…`], false)
     case 'searching':
-      // The status read usually answers first; an index already known to be off says so at once
-      // instead of spinning until the search comes back refused.
-      return index.kind === 'off'
-        ? offView(host)
-        : { kind: 'loading', notice: buildingNotice(host, index, false) }
+      return searchingView(host, index)
     case 'results':
       return resultsView(host, index, search)
     case 'unavailable':
@@ -73,7 +69,7 @@ export function searchPanelView(
         true
       )
     case 'unsupported':
-      return notice('warning', [`Session search needs a newer Orca on ${host}.`], false)
+      return unsupportedView(host)
     case 'failed':
       return notice('danger', [`Could not search ${host}: ${search.message}`], true)
     default: {
@@ -81,6 +77,38 @@ export function searchPanelView(
       return unhandled
     }
   }
+}
+
+/**
+ * A search in flight. Only an index known to answer (ready or building) gets the bare spinner the
+ * desktop draws. Anything else keeps the loaded matches on screen, so the box never blanks on a
+ * keystroke the index cannot answer. An index known to be off, or a host with no status method,
+ * says so at once instead of spinning until the search is refused. The status method and the
+ * search method joined the mobile allowlist in the same Orca commit (1f7655f3e3, #20277), so a host
+ * without one has neither.
+ */
+function searchingView(host: string, index: SearchIndexState): SearchPanelView {
+  switch (index.kind) {
+    case 'off':
+      return offView(host)
+    case 'unsupported':
+      return unsupportedView(host)
+    case 'ready':
+    case 'building':
+      return { kind: 'loading', notice: buildingNotice(host, index, false), fallback: false }
+    case 'checking':
+    case 'paused':
+    case 'unreadable':
+      return { kind: 'loading', notice: null, fallback: true }
+    default: {
+      const unhandled: never = index
+      return unhandled
+    }
+  }
+}
+
+function unsupportedView(host: string): SearchPanelView {
+  return notice('warning', [`Session search needs a newer Orca on ${host}.`], false)
 }
 
 function resultsView(
