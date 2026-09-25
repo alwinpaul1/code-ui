@@ -26,6 +26,10 @@ export async function dispatchMobileStructuredCommand(input: {
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (input.pending.current) {
+    // Every send is turned away while a command runs (its RPC may take 195 s),
+    // a plain message included. The composer gets the text back, and before
+    // this nothing said why, so Send looked broken for that long (2026-09-25).
+    input.onError('Not sent — a chat-session command is still running.')
     return 'rejected'
   }
   if (!isStructuredAgentSessionComposerCommand(input.text, input.controller.agent)) {
