@@ -6,6 +6,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
   retainStructuredSessionOperationId,
+  type StructuredAgentSessionMutate,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
 
@@ -78,4 +79,25 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
     onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
   }
   return false
+}
+
+/** Stops one background task. The tasks sheet voids the result and the row keeps
+ *  its Stop until the host reports the task ended, so an unknown outcome is said
+ *  here or nowhere (2026-09-25). A refusal already is, by the shared mutation. */
+export async function requestMobileStructuredBackgroundTaskStop(args: {
+  mutate: StructuredAgentSessionMutate
+  taskId: string
+  onSendError: (message: string) => void
+}): Promise<boolean> {
+  // The host reads `turnId: 'background-tasks'` as the scope marker, not as
+  // a real turn — a background task outlives the turn that launched it.
+  const result = await args.mutate('agentSession.cancel', 'agentSession.cancel', {
+    turnId: 'background-tasks',
+    scope: 'background-tasks',
+    taskId: args.taskId
+  })
+  if (result.status === 'unknown') {
+    args.onSendError('Stop unconfirmed — check chat before retrying')
+  }
+  return result.status === 'accepted'
 }

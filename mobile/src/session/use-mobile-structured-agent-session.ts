@@ -36,7 +36,8 @@ import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-age
 import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 import {
   pendingStructuredPromptIdentity,
-  requestMobileStructuredAgentSessionCancel
+  requestMobileStructuredAgentSessionCancel,
+  requestMobileStructuredBackgroundTaskStop
 } from './mobile-structured-agent-session-cancel'
 
 export function useMobileStructuredAgentSession(args: {
@@ -248,17 +249,9 @@ export function useMobileStructuredAgentSession(args: {
   })
 
   const stopBackgroundTask = useCallback(
-    async (taskId: string): Promise<boolean> => {
-      // The host reads `turnId: 'background-tasks'` as the scope marker, not as
-      // a real turn — a background task outlives the turn that launched it.
-      const result = await mutate('agentSession.cancel', 'agentSession.cancel', {
-        turnId: 'background-tasks',
-        scope: 'background-tasks',
-        taskId
-      })
-      return result.status === 'accepted'
-    },
-    [mutate]
+    (taskId: string): Promise<boolean> =>
+      requestMobileStructuredBackgroundTaskStop({ mutate, taskId, onSendError }),
+    [mutate, onSendError]
   )
 
   const messages = useMemo(
