@@ -10,7 +10,10 @@ import {
   readNativeChatPendingEchoes,
   writeNativeChatPendingEchoes
 } from '../storage/native-chat-pending-echoes'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import {
+  takeMobileNativeChatPending,
+  type MobileNativeChatPendingMessage
+} from './mobile-native-chat-pending-echo'
 
 const PENDING_WRITE_DEBOUNCE_MS = 250
 
@@ -29,7 +32,11 @@ export function useMobileNativeChatPendingPersistence(
   setPendingBySession: Dispatch<SetStateAction<PendingBySession>>,
   /** What a witnessed message is remembered against; see `rememberEchoInPending`. */
   memory?: { messagesRef: { current: readonly NativeChatMessage[] }; draftKey: string | null }
-): { rememberEcho: (id: string, text: string, anchorId: string | null) => void } {
+): {
+  rememberEcho: (id: string, text: string, anchorId: string | null) => void
+  /** Mark own sends the agent took out of its queue box (isTakenSend). */
+  takeSends: (ids: readonly string[]) => void
+} {
   const sessionKeyRef = useRef(sessionKey)
   sessionKeyRef.current = sessionKey
   const memoryRef = useRef(memory)
@@ -45,6 +52,15 @@ export function useMobileNativeChatPendingPersistence(
       setPendingBySession((previous) =>
         rememberEchoInPending(previous, key, id, text, anchorId, messages, draftKey)
       )
+    },
+    [setPendingBySession]
+  )
+  const takeSends = useCallback(
+    (ids: readonly string[]) => {
+      const key = sessionKeyRef.current
+      if (key) {
+        setPendingBySession((previous) => takeMobileNativeChatPending(previous, key, ids))
+      }
     },
     [setPendingBySession]
   )
@@ -99,5 +115,5 @@ export function useMobileNativeChatPendingPersistence(
     current?.length === 0 ? 0 : PENDING_WRITE_DEBOUNCE_MS,
     writeNativeChatPendingEchoes
   )
-  return { rememberEcho }
+  return { rememberEcho, takeSends }
 }

@@ -39,6 +39,32 @@ export type MobileNativeChatPendingMessage = {
   /** Held from the first screen reading, anchored to whatever the tail was
    *  then: drawn, but never written to disk (2026-09-13). */
   provisional?: boolean
+  /** The phone's own send only: when, by the phone's clock, the agent took it
+   *  out of its queue box. Claude Code writes no row for a prompt it takes
+   *  mid-turn (see `isTakenSend`), so from then on the send waits for none. */
+  takenAt?: number
+  /** A taken send whose text a later copy's own row has since landed for: a
+   *  row of that text is that copy's, never this one's, so it stays. */
+  takenSealed?: true
+}
+
+/**
+ * Whether the agent has taken this send out of its queue box.
+ *
+ * Claude Code writes a prompt it takes mid-turn only as a `queued_command`
+ * attachment (queue-operation remove, reason `absorbed_mid_turn`), which
+ * Orca's reader drops; a prompt still queued when the turn ends it writes as a
+ * `user` row with `promptSource: "queued"`. On this machine, from 2.1.205 to
+ * 2.1.282, 1,998 human prompts were written the first way and 378 the second
+ * (65 and 16 on 2.1.280 to 2.1.282). The phone cannot tell which it will be
+ * from the box letting go, so a taken send still leaves on its own row if one
+ * lands; what changes is that it no longer counts as a send still waiting,
+ * which put a later send of the same text one ordinal past its own row, so the
+ * later one drew twice and this one was retired by that row (2026-09-25).
+ * The pending store does not check the field it reads back.
+ */
+export function isTakenSend(item: Pick<MobileNativeChatPendingMessage, 'takenAt'>): boolean {
+  return typeof item.takenAt === 'number' && Number.isFinite(item.takenAt)
 }
 
 export type MobileNativeChatSendOrigin = {
@@ -91,9 +117,11 @@ export function appendMobileNativeChatPending(
   images?: string[]
 ): PendingByKey {
   const current = previous[key] ?? []
-  // Count outstanding repeats with the same normalized key.
+  // Count outstanding repeats with the same normalized key. A send the agent
+  // took is not outstanding: no row is owed for it (isTakenSend).
   const earlierOutstanding = current.filter(
     (pending) =>
+      !isTakenSend(pending) &&
       normalizeReconcileText(pending.text) === origin.normalizedText &&
       pending.expectedOccurrence > origin.baselineOccurrences
   ).length
@@ -148,6 +176,50 @@ export function removeWaitingSessionPending(
   const next = { ...previous }
   delete next[draftKey]
   return next
+}
+
+/**
+ * Mark the phone's own sends the agent has taken out of its queue box
+ * (`isTakenSend`). The same object back when nothing changes.
+ *
+ * A later send of the same text counted each of these as still outstanding
+ * when it was sent, so its ordinal is one too high by each: brought back down
+ * here, or its own row could never retire it. Witnessed messages and a
+ * caption-less photo are left alone: neither is counted this way.
+ */
+export function takeMobileNativeChatPending(
+  previous: PendingByKey,
+  key: string,
+  ids: readonly string[],
+  now = Date.now()
+): PendingByKey {
+  const current = previous[key]
+  if (!current?.length || ids.length === 0) {
+    return previous
+  }
+  const wanted = new Set(ids)
+  const next = [...current]
+  let changed = false
+  for (let index = 0; index < next.length; index += 1) {
+    const item = next[index]!
+    const text = normalizeReconcileText(item.text)
+    if (!wanted.has(item.id) || !item.id.startsWith('pending-') || isTakenSend(item) || text === '') {
+      continue
+    }
+    next[index] = { ...item, takenAt: now }
+    changed = true
+    for (let later = index + 1; later < next.length; later += 1) {
+      const other = next[later]!
+      if (
+        !isTakenSend(other) &&
+        normalizeReconcileText(other.text) === text &&
+        other.expectedOccurrence > item.expectedOccurrence
+      ) {
+        next[later] = { ...other, expectedOccurrence: other.expectedOccurrence - 1 }
+      }
+    }
+  }
+  return changed ? { ...previous, [key]: next } : previous
 }
 
 /** Drop one echo by id from every key; returns the same object when nothing changed

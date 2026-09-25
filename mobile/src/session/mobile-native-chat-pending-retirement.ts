@@ -4,7 +4,7 @@ import {
   normalizeReconcileText,
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
 const SPACE = ' '
 const NO_PENDING_IDS: ReadonlySet<string> = new Set()
@@ -249,6 +249,9 @@ export function retireLandedMobileNativeChatPending(
   // row. An image landing can share its row with the send glued after it, so treating it
   // as a barrier would strand that send in a run of one and keep its echo forever.
   const exactLandedIds = new Set<string>()
+  // Texts a copy still waiting for its row retired on in this pass.
+  const claimed = new Set<string>()
+  const taken: MobileNativeChatPendingMessage[] = []
   for (const item of current) {
     if (landedImagePendingIds.has(item.id)) {
       landedPendingIds.add(item.id)
@@ -257,6 +260,10 @@ export function retireLandedMobileNativeChatPending(
     // An unresolved baseline has nothing to count against yet — `messages` is not
     // known to be the transcript this send was issued into.
     if (!item.baselineResolved) {
+      continue
+    }
+    if (isTakenSend(item)) {
+      taken.push(item)
       continue
     }
     // Image echoes are held back so their local preview can reach the
@@ -281,10 +288,37 @@ export function retireLandedMobileNativeChatPending(
     if (landed) {
       landedPendingIds.add(item.id)
       exactLandedIds.add(item.id)
+      claimed.add(normalizeReconcileText(item.text))
     }
   }
-  const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)
-  return landedPendingIds.size === 0 && glued.size === 0
-    ? current
-    : current.filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
+  // A send the agent took is owed no row (isTakenSend). It still leaves on one,
+  // since Claude may have dequeued it as a queued user row after all, but only
+  // until a copy still waiting claims a row of its text: from then on such a
+  // row is that copy's, and this one is sealed and stays. Without the seal the
+  // pass after that copy retired read the same row again and took this one too.
+  const sealed = new Set<string>()
+  for (const item of taken) {
+    const text = normalizeReconcileText(item.text)
+    if (item.takenSealed === true || claimed.has(text)) {
+      sealed.add(item.id)
+    } else if ((landedCounts.get(text) ?? 0) >= item.expectedOccurrence) {
+      landedPendingIds.add(item.id)
+      exactLandedIds.add(item.id)
+    }
+  }
+  const glued = selectGluedPendingIds(
+    messages,
+    current,
+    sealed.size === 0 ? exactLandedIds : new Set([...exactLandedIds, ...sealed]),
+    landedImagePendingIds
+  )
+  const newlySealed = taken.some((item) => sealed.has(item.id) && item.takenSealed !== true)
+  if (landedPendingIds.size === 0 && glued.size === 0 && !newlySealed) {
+    return current
+  }
+  return current
+    .filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
+    .map((item) =>
+      sealed.has(item.id) && item.takenSealed !== true ? { ...item, takenSealed: true as const } : item
+    )
 }

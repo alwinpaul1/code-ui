@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+import { isTakenSend } from './mobile-native-chat-pending-echo'
 
 /**
  * How long a send made mid-turn stays in the queue box, unlisted by the
@@ -23,7 +24,7 @@ export const QUEUE_SIGHTING_CAP_MS = 15_000
  *  came after the box listed it and let it go is known as listed. */
 const SEEN_ROWS_CAP = 32
 
-type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number }
+type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number; takenAt?: number }
 
 /** The agents whose queue box the phone parses off the screen, as
  *  use-mobile-terminal-hud-observation.ts reads them. Keep the two in step. */
@@ -46,6 +47,11 @@ export type QueuedOwnSendsScope = {
    *  works: Claude's spinner, whose elapsed time moves every second. Absent
    *  (Codex, or no spinner on screen), only the cap ends the wait. */
   readBeat: unknown
+  /** Told the ids of own sends the agent has taken out of its queue box: the
+   *  box listed one and let it go, or the reads say it went unseen. Claude
+   *  Code writes no row for a prompt it takes mid-turn (isTakenSend), so the
+   *  store stops counting them as sends still waiting for one. */
+  onTaken?: (ids: readonly string[]) => void
 }
 
 /**
@@ -72,7 +78,7 @@ export function useQueuedOwnSends<T extends OwnSend>(
   pending: readonly T[],
   queue: readonly string[] | undefined,
   agentWorking: boolean,
-  { scopeKey, readsQueueBox, readBeat }: QueuedOwnSendsScope
+  { scopeKey, readsQueueBox, readBeat, onTaken }: QueuedOwnSendsScope
 ): {
   /** Own sends drawn as bubbles in the chat. */
   pending: T[]
@@ -147,6 +153,18 @@ export function useQueuedOwnSends<T extends OwnSend>(
       unlisted
     }
   }, [agentWorking, expired, pending, queue, readsQueueBox])
+  // Out of the box after being in it: the agent has it. Only the phone's own
+  // sends are marked (takeMobileNativeChatPending), once each.
+  useEffect(() => {
+    const taken = result.pending
+      .filter(
+        (item) => !isTakenSend(item) && (listed.current.has(item.id) || expired.has(item.id))
+      )
+      .map((item) => item.id)
+    if (taken.length > 0) {
+      onTaken?.(taken)
+    }
+  }, [expired, onTaken, result.pending])
   // Bounded by the sends still pending: a retired send is forgotten.
   const firstSeen = useRef(new Map<string, { at: number; beats: number }>())
   useEffect(() => {

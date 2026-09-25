@@ -166,7 +166,9 @@ export function MobileNativeChatOverlay({
     {
       scopeKey: controller.nativeChatStreamScopeKey,
       readsQueueBox: !controller.nativeChatStructured && agentHasQueueReader(controller.nativeChatAgent),
-      readBeat: controller.nativeChatSpinner
+      readBeat: controller.nativeChatSpinner,
+      // Taken mid-turn, a send is owed no row (isTakenSend, 2026-09-25).
+      onTaken: controller.takeOwnSends
     }
   )
   // Confirmed queued photos cannot exist in history yet. Searching older pages

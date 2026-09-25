@@ -133,7 +133,7 @@ export function useMobileNativeChatController(
     getComposerEditGeneration: getChatComposerEditGeneration,
     pending: chatPending,
     imagePreviewsByMessageId: chatImagePreviewsByMessageIdLocal,
-    captureSendOrigin, rememberEcho,
+    captureSendOrigin, rememberEcho, takeSends,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
@@ -522,7 +522,7 @@ export function useMobileNativeChatController(
     chatComposerText,
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
-    chatPending, rememberEcho,
+    chatPending, rememberEcho, takeOwnSends: takeSends,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,

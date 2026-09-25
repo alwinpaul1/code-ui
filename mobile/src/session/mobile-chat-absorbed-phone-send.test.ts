@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import { isTakenSend, type MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
@@ -193,6 +193,7 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       nativeChatSpinner: null,
       chatPending: drafts.pending,
       rememberEcho: drafts.rememberEcho,
+      takeOwnSends: drafts.takeSends,
       nativeChatDesktopPrompts: tick.prompts,
       nativeChatQueuedMessages: tick.queued,
       chatImagePreviewsByMessageId: {},
@@ -322,6 +323,67 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103'])
   })
 
+  it('stops waiting for a row only once the box lets the message go, never while it waits there or for a send made idle', async () => {
+    await show('17:04:10.000', { messages: beforeSend })
+    await ack('17:04:15.300', await tap('17:04:15.000'))
+    await show('17:04:16.000', { messages: beforeSend, queued: claudeBox([TEXT]) })
+    await show('17:04:30.000', { messages: beforeSend, queued: claudeBox([TEXT]) })
+    expect(drafts!.pending.map(isTakenSend)).toEqual([false])
+    await show('17:04:47.000', { messages: afterTake, queued: claudeBox([]) })
+    expect(drafts!.pending.map(isTakenSend)).toEqual([true])
+    await show('17:08:22.500', { messages: turnEnded, queued: [], working: false })
+    await ack('17:09:00.300', await tap('17:09:00.000', 'something new'), 'something new')
+    await show('17:09:00.500', { messages: turnEnded, queued: [] })
+    expect(drafts!.pending.map(isTakenSend)).toEqual([true, false])
+  })
+
+  it('shows a second send of the same text once, and keeps the first where Claude took it', async () => {
+    await sendAndLetClaudeTakeIt()
+    // Sent again while Claude is idle: this one starts a turn and lands as a row.
+    const again = await tap('17:09:00.000')
+    await ack('17:09:00.300', again)
+    const landed = [...turnEnded, user('b1c2d3e4', TEXT, '17:09:00.180')]
+    await show('17:09:01.000', { messages: landed, queued: [] })
+    await show('17:09:02.000', { messages: landed, queued: [] })
+    expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103', 'row'])
+  })
+
+  it('keeps two identical messages Claude took as two, and draws a third send of it once', async () => {
+    await show('17:04:10.000', { messages: beforeSend })
+    await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+    await ack('17:04:20.300', await tap('17:04:20.000', 'yes'), 'yes')
+    await show('17:04:21.000', { messages: beforeSend, queued: claudeBox(['yes', 'yes']) })
+    await show('17:04:47.000', { messages: afterTake, queued: claudeBox([]) })
+    await show('17:08:22.500', { messages: turnEnded, queued: [], working: false })
+    await ack('17:09:00.300', await tap('17:09:00.000', 'yes'), 'yes')
+    const landed = [...turnEnded, user('b1c2d3e4', 'yes', '17:09:00.180')]
+    await show('17:09:01.000', { messages: landed, queued: [] })
+    expect(drawn()).toEqual(['fa161a56', 'phone', 'phone', '19e57746', '398d2cdc', 'cf22b103', 'row'])
+  })
+
+  // The 378 prompts that were still queued when a turn ended: Claude dequeues
+  // them as a `user` row with `promptSource: "queued"`. The box can empty a
+  // read before that row reaches the phone, or after.
+  it.each([
+    ['the box empties before the row arrives', true],
+    ['the row arrives first', false]
+  ])('still draws a message Claude wrote as a queued user row once, when %s', async (_label, boxFirst) => {
+    await show('17:04:10.000', { messages: beforeSend })
+    await ack('17:04:15.300', await tap('17:04:15.000'))
+    await show('17:04:16.000', { messages: turnGoesOn, queued: claudeBox([TEXT]) })
+    await show('17:08:21.900', { messages: turnEnded, queued: claudeBox([TEXT]) })
+    const dequeued = [...turnEnded, user('0741e6f2', TEXT, '17:08:22.050')]
+    if (boxFirst) {
+      await show('17:08:22.300', { messages: turnEnded, queued: claudeBox([]) })
+      await show('17:08:30.000', { messages: turnEnded, queued: [] })
+    }
+    await show('17:08:31.000', { messages: dequeued, queued: [] })
+    await show('17:08:32.000', { messages: dequeued, queued: [] })
+    // No bubble breaks the tool fold any more, so the calls fold back again.
+    expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'row'])
+    expect(drafts!.pending).toEqual([])
+  })
+
   it('draws it once, where it was sent, when the chat comes back after the turn and first sees the hook copy then', async () => {
     const atEnter = hookCopy('17:04:15.110')
     await sendAndLetClaudeTakeIt({ prompts: atEnter })
@@ -364,5 +426,58 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     await show('17:08:23.000', { messages: landed, agent: 'codex', queued: [] })
     expect(drawn()).toEqual(['msg_0ddffecfe356', 'msg_0ddffecfe358', 'row'])
     expect(drafts!.pending).toEqual([])
+  })
+
+  it('keeps it where it was sent after the chat comes back, and still shows a later send of the same text once', async () => {
+    await sendAndLetClaudeTakeIt()
+    await remount('17:10:00.000', { messages: turnEnded, queued: [], working: false })
+    await ack('17:10:30.300', await tap('17:10:30.000'))
+    const landed = [...turnEnded, user('b1c2d3e4', TEXT, '17:10:30.180')]
+    await show('17:10:31.000', { messages: landed, queued: [], working: false })
+    expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103', 'row'])
+  })
+
+  // Codex writes every input as a transcript record, a queued follow-up at the
+  // end of the turn and a steer when it is injected (Codex CLI 0.153.4 rollouts
+  // on this machine: `response_item` message role "user" and `event_msg`
+  // item_completed UserMessage, which Orca's reader turns into a user row).
+  // So its box letting a message go is followed by the row, never by nothing.
+  describe('on Codex, whose inputs always land as rows', () => {
+    const codexTurn = [
+      text('msg_0ddffecfe356', 'Running the deploy check.', '17:03:30.106'),
+      call('ctc_0ddffecfe357', '17:03:33.195')
+    ]
+    const codexEnded = [
+      ...codexTurn,
+      result('ctco_01a07666289b', '17:04:46.455'),
+      text('msg_0ddffecfe358', 'Deploy is green.', '17:08:21.651')
+    ]
+
+    it('draws a follow-up once, as its row, after the queue box lets it go', async () => {
+      await show('17:04:10.000', { messages: codexTurn, agent: 'codex' })
+      await ack('17:04:15.300', await tap('17:04:15.000'))
+      await show('17:04:16.000', { messages: codexTurn, agent: 'codex', queued: codexBox([TEXT]) })
+      await show('17:08:22.000', { messages: codexEnded, agent: 'codex', queued: codexBox([]) })
+      const landed = [...codexEnded, user('01a07666-28b6-77a3', TEXT, '17:08:22.100')]
+      await show('17:08:23.000', { messages: landed, agent: 'codex', queued: [] })
+      await show('17:08:24.000', { messages: landed, agent: 'codex', queued: [] })
+      expect(drawn()).toEqual(['msg_0ddffecfe356', 'msg_0ddffecfe358', 'row'])
+      expect(drafts!.pending).toEqual([])
+    })
+
+    it('draws two follow-ups of the same text once each as their rows land', async () => {
+      await show('17:04:10.000', { messages: codexTurn, agent: 'codex' })
+      await ack('17:04:15.300', await tap('17:04:15.000', 'yes'), 'yes')
+      await ack('17:04:20.300', await tap('17:04:20.000', 'yes'), 'yes')
+      await show('17:04:21.000', { messages: codexTurn, agent: 'codex', queued: codexBox(['yes', 'yes']) })
+      await show('17:08:22.000', { messages: codexEnded, agent: 'codex', queued: codexBox([]) })
+      const first = [...codexEnded, user('01a07666-28b6-0001', 'yes', '17:08:22.100')]
+      await show('17:08:23.000', { messages: first, agent: 'codex', queued: [] })
+      const both = [...first, text('msg_0ddffecfe359', 'Done.', '17:08:40.000'), user('01a07666-28b6-0002', 'yes', '17:08:41.000')]
+      await show('17:08:42.000', { messages: both, agent: 'codex', queued: [] })
+      await show('17:08:43.000', { messages: both, agent: 'codex', queued: [] })
+      expect(drawn()).toEqual(['msg_0ddffecfe356', 'msg_0ddffecfe358', 'row', 'msg_0ddffecfe359', 'row'])
+      expect(drafts!.pending).toEqual([])
+    })
   })
 })
