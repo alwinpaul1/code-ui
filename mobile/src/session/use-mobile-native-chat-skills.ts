@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { resolveNativeChatTranscriptAgent } from '../../../src/shared/native-chat-agent-support'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../src/shared/skills'
 import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
@@ -147,8 +147,15 @@ export function useMobileNativeChatSkills(args: {
     })
   }, [client, worktreeId])
 
-  useEffect(() => {
+  // A layout effect, so it lands before any passive one: the composer asks for
+  // the skills from its own effect, and a child's passive effects run before
+  // this hook's. Written there, the ask in a switching commit read the tab the
+  // user had left (re-review, 2026-09-25).
+  useLayoutEffect(() => {
     shownRef.current = { key: browseKey, configDir: claudeConfigDir }
+  }, [browseKey, claudeConfigDir])
+
+  useEffect(() => {
     // Until a scan has answered, the list on screen is a listing, and a
     // listing belongs to one config dir: show this dir's, not the last one's.
     if (loadedAtRef.current === null) {

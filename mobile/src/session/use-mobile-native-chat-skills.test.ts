@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useEffect, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -644,6 +644,49 @@ describe('the / menu lists the skills of the Claude profile its session runs und
         (call) => call[0] === 'files.browseServerDir' && (call[1] as { path: string }).path === `${HOME}/.claude-work/plugins/cache`
       )
       expect(secondListed).toHaveLength(1)
+      expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['find-skills', 'claude-security'])
+    })
+
+    // Re-review, 2026-09-25: the composer asks for the skills from its own
+    // effect when its `/` trigger changes, and a child's effects run before
+    // the menu's. In the commit that switches tabs, that ask read the tab the
+    // user had just left, and the right list came two seconds late.
+    it("reads the new tab's profile when the composer asks in the commit that switches to it", async () => {
+      resetConfirmedSkillFilesForTest()
+      vi.useFakeTimers()
+      const client = browsingClient()
+      // Asks on a change of chat, not on mount: the first read is the test's own.
+      function Composer({ load, chat }: { load: () => void; chat: SkillsMenuChat }): null {
+        const first = useRef(true)
+        useEffect(() => {
+          if (first.current) {
+            first.current = false
+            return
+          }
+          load()
+        }, [chat.transcriptPath])
+        return null
+      }
+      let latest: Latest | null = null
+      function Chat({ chat }: { chat: SkillsMenuChat }) {
+        latest = useMobileNativeChatSkills({ client: client as never, worktreeId: 'w-ask::/tmp/none', chatIdentity: chat })
+        return createElement(Composer, { load: latest.loadNativeChatSkills, chat })
+      }
+      const settle = async () => {
+        await act(async () => {
+          for (let i = 0; i < 80; i += 1) {
+            await Promise.resolve()
+          }
+        })
+      }
+      act(() => {
+        renderer = create(createElement(Chat, { chat: claude(HOME_TRANSCRIPT) }))
+      })
+      latest!.loadNativeChatSkills()
+      await settle()
+      expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['notebooklm', 'use-railway'])
+      act(() => renderer!.update(createElement(Chat, { chat: claude(WORK_TRANSCRIPT) })))
+      await settle()
       expect(latest!.nativeChatSkills.map((skill) => skill.name)).toEqual(['find-skills', 'claude-security'])
     })
   })
