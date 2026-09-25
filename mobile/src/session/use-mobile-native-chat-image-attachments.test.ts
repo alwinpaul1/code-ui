@@ -985,7 +985,10 @@ describe('useMobileNativeChatImageAttachments', () => {
       expect(client.calls).toEqual([])
     })
 
-    it('rejects and leaves the chip untouched when the re-upload fails', async () => {
+    // The editor has closed by Done and voids this promise, so a rejection
+    // reached no one: the chip kept the unmarked photo, which then went out
+    // as if marked up, and nothing said so (2026-09-25 sweep).
+    it('says the markup was not saved, and leaves the chip untouched, when the re-upload fails', async () => {
       pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
       const client = makeClient([
         methodNotFound('start'),
@@ -993,16 +996,15 @@ describe('useMobileNativeChatImageAttachments', () => {
         methodNotFound('start-2'),
         failed('save-2', 'disk full')
       ])
-      mount(baseArgs({ client: client as unknown as RpcClient }))
+      const showToast = vi.fn()
+      mount(baseArgs({ client: client as unknown as RpcClient, showToast }))
       await act(async () => {
         await hook!.attachImage('library')
       })
 
-      await expect(
-        act(async () => {
-          await hook!.replaceAttachment('img-1', 'ZZZZ')
-        })
-      ).rejects.toThrow('disk full')
+      await act(() => hook!.replaceAttachment('img-1', 'ZZZZ'))
+      const saidSo = 'Markup not saved — the photo is still attached without it'
+      expect(showToast).toHaveBeenCalledExactlyOnceWith(saidSo, 1500)
       expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])
     })
   })

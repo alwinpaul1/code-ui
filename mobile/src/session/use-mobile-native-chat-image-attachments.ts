@@ -138,7 +138,8 @@ export function useMobileNativeChatImageAttachments({
     client,
     getActiveWorktreeConnectionId,
     scopeKey,
-    replaceAttachmentImage
+    replaceAttachmentImage,
+    showToast
   })
   const attachments =
     (scopeKey ? attachmentsByScope[scopeKey] : undefined) ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS

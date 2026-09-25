@@ -11,6 +11,8 @@ type Args = {
     id: string,
     next: { path: string; previewUri: string; contentFingerprint?: string }
   ) => void
+  /** The attach failures' own channel, not the send banner: this is attach-side. */
+  readonly showToast: (message: string, durationMs?: number) => void
 }
 
 /** The markup editor's Done: re-uploads the flattened PNG the same way the
@@ -22,7 +24,8 @@ export function useMobileNativeChatImageMarkup({
   client,
   getActiveWorktreeConnectionId,
   scopeKey,
-  replaceAttachmentImage
+  replaceAttachmentImage,
+  showToast
 }: Args): (id: string, base64: string) => Promise<void> {
   return useCallback(
     async (id: string, base64: string): Promise<void> => {
@@ -30,12 +33,21 @@ export function useMobileNativeChatImageMarkup({
       if (!scope || !client) {
         return
       }
-      const uploaded = await uploadMarkedUpNativeChatImage(base64, {
-        client,
-        getConnectionId: getActiveWorktreeConnectionId
-      })
+      let uploaded: Awaited<ReturnType<typeof uploadMarkedUpNativeChatImage>>
+      try {
+        uploaded = await uploadMarkedUpNativeChatImage(base64, {
+          client,
+          getConnectionId: getActiveWorktreeConnectionId
+        })
+      } catch {
+        // Never throws: the editor has closed by Done and voids this promise,
+        // so a rejection reached no one, and the unmarked photo then went out
+        // as if it had been marked up (2026-09-25 sweep).
+        showToast('Markup not saved — the photo is still attached without it', 1500)
+        return
+      }
       replaceAttachmentImage(scope, id, uploaded)
     },
-    [client, getActiveWorktreeConnectionId, scopeKey, replaceAttachmentImage]
+    [client, getActiveWorktreeConnectionId, scopeKey, replaceAttachmentImage, showToast]
   )
 }
