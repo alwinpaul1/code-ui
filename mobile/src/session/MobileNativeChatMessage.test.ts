@@ -334,6 +334,29 @@ describe('MobileNativeChatMessage', () => {
     expect(onOpenFile).not.toHaveBeenCalled()
   })
 
+  // 2026-09-25, device: a subagent's transcript showed the lead's task with
+  // raw `**` and backticks. Those rows are written by the lead agent in
+  // Markdown, so the transcript draws them as Markdown; the user's own
+  // bubbles, in their own chat, stay the plain text they typed.
+  it('draws a prompt the lead wrote as Markdown in a transcript, and the user\'s own as typed', () => {
+    const task = '1. **Duplicate after dequeue.** Code is under `mobile/`.'
+    const asMarkdown = render(userMessage([{ type: 'text', text: task }]), { promptsAsMarkdown: true })
+    const rendered = asMarkdown.root.findAllByType('MobileMarkdown' as never)
+    expect(rendered.map((node) => node.props.content)).toEqual([task])
+    expect(textIn(asMarkdown.root)).not.toContain(task)
+    act(() => renderer?.unmount())
+    const typed = render(userMessage([{ type: 'text', text: task }]))
+    expect(typed.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
+    expect(textIn(typed.root)).toContain(task)
+  })
+
+  it('draws Markdown in a bubble in the bubble\'s own text colour, in light and dark', () => {
+    // MobileMarkdown writes in the theme's text colour; inside a bubble that
+    // is only right while the two are the same colour, so pin it.
+    expect(lightColors.text).toBe(lightColors.userBubbleText)
+    expect(darkColors.text).toBe(darkColors.userBubbleText)
+  })
+
   it('labels a tool row with the target path instead of raw input JSON', () => {
     const tree = render(
       toolMessage([{ type: 'tool-call', name: 'Read', input: { file_path: 'src/index.ts' } }]),

@@ -56,3 +56,14 @@ describe('the subagent transcript viewer is reachable from the session screen', 
     expect(providers[0]).toEqual(expect.arrayContaining(['agent', 'agentStatus', 'messages']))
   })
 })
+
+// 2026-09-25: the lead's task showed raw `**` and backticks in the viewer.
+describe('the subagent transcript viewer draws the lead\'s prompts as Markdown', () => {
+  it('passes promptsAsMarkdown on every message it draws', () => {
+    const drawn = jsxElements(parse('MobileSubagentTranscriptModal.tsx'), 'MobileNativeChatMessage')
+    expect(drawn.length).toBeGreaterThan(0)
+    for (const attributes of drawn) {
+      expect(attributes).toContain('promptsAsMarkdown')
+    }
+  })
+})

@@ -14,6 +14,8 @@ export function renderProseGroup(
   group: ProseGroup,
   options: {
     isUser: boolean
+    /** A user row the lead agent wrote, drawn as Markdown in its bubble. */
+    promptsAsMarkdown?: boolean
     fontScale: number
     onOpenFile?: (relativePath: string) => void
     styles: ChatMessageStyles
@@ -31,6 +33,7 @@ export function renderProseGroup(
         <Prose
           block={group.block}
           invert={options.isUser}
+          markdownPrompt={options.promptsAsMarkdown}
           fontScale={options.fontScale}
           onOpenFile={options.onOpenFile}
           styles={options.styles}

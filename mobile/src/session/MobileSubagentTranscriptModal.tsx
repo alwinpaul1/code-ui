@@ -103,7 +103,8 @@ export function MobileSubagentTranscriptScreen({
     error: session.error
   })
   const renderItem = useCallback(
-    ({ item }: { item: NativeChatMessage }) => <MobileNativeChatMessage message={item} />,
+    // The user rows here are the lead's task and messages, written in Markdown.
+    ({ item }: { item: NativeChatMessage }) => <MobileNativeChatMessage message={item} promptsAsMarkdown />,
     []
   )
 

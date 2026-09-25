@@ -177,6 +177,7 @@ function MobileNativeChatMessageImpl({
   message,
   interim = false,
   toolsExpanded = false,
+  promptsAsMarkdown = false,
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
@@ -199,6 +200,9 @@ function MobileNativeChatMessageImpl({
    *  with a bar on the left, the way the Claude app draws it (2026-09-12). */
   interim?: boolean
   toolsExpanded?: boolean
+  /** A transcript whose user rows the lead agent wrote (a subagent's task),
+   *  drawn as Markdown; the user's own prompts stay the plain text they typed. */
+  promptsAsMarkdown?: boolean
   /** Present while this optimistic echo is still queued behind a running turn. */
   onCancelQueued?: () => void
   /** Rewind the conversation to before this sent prompt. The lane passes it
@@ -386,7 +390,7 @@ function MobileNativeChatMessageImpl({
                     key={index}
                     style={imageLeadsText(groups, index) ? styles.imageLead : null}
                   >
-                    {renderProseGroup(group, { isUser, fontScale, onOpenFile, styles })}
+                    {renderProseGroup(group, { isUser, promptsAsMarkdown, fontScale, onOpenFile, styles })}
                   </View>
                 ))}
               </View>

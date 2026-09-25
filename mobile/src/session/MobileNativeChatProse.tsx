@@ -12,18 +12,21 @@ import { TEXT_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-
 export function Prose({
   block,
   invert,
+  markdownPrompt,
   fontScale,
   onOpenFile,
   styles
 }: {
   block: NativeChatBlock
   invert?: boolean
+  /** A prompt the lead agent wrote, not the user: Markdown, in the bubble. */
+  markdownPrompt?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
 }) {
   if (isTextBlock(block)) {
-    if (invert) {
+    if (invert && !markdownPrompt) {
       // Not selectable, on purpose: a hold on a sent prompt copies the whole
       // prompt (MobileNativeChatMessage's Bubble, 2026-09-21), and a selectable
       // Text would take that hold for Android's own selection first. The
