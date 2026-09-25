@@ -323,7 +323,15 @@ beforeEach(async () => {
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  vi.useRealTimers()
 })
+
+/** Let the user look at the drawer for `ms`. Only the clock moves: timers stay
+ *  real, so the chat's sends and the settles above run as before. */
+function lookFor(ms: number): void {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(Date.now() + ms)
+}
 
 describe('a Claude pick that fails says so inside the open drawer', () => {
   it('says a model pick turned away by a busy terminal inside the drawer, not under it', async () => {
@@ -390,6 +398,7 @@ describe('a Claude pick that fails says so inside the open drawer', () => {
     expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
     await press(row('Opus'))
     expectSaidInDrawer(BUSY)
+    lookFor(2_000)
 
     await press(pressable('Close picker'))
     expect(drawer()).toBeNull()
@@ -398,6 +407,40 @@ describe('a Claude pick that fails says so inside the open drawer', () => {
     expect(said(BUSY)).toEqual([])
     // The user read it in the drawer; closing it is not a second failure.
     expect(screen).not.toHaveBeenCalled()
+  })
+
+  // Back, a backdrop tap and a swipe are how an Android drawer is usually
+  // closed, and they call onClose only after the hide animation.
+  it('does not repeat a failure the user has read when Back or a swipe closes the drawer', async () => {
+    await mountChat('claude')
+    await openDrawer()
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    await press(row('Opus'))
+    expectSaidInDrawer(BUSY)
+    lookFor(2_000)
+
+    await act(async () => {
+      drawerHandle.onClose!()
+    })
+    await settle()
+
+    expect(drawer()).toBeNull()
+    expect(screen).not.toHaveBeenCalled()
+  })
+
+  it("repeats on the chat's banner a failure the drawer closed on before it could be read", async () => {
+    await mountChat('claude')
+    await openDrawer()
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    await press(row('Opus'))
+    expectSaidInDrawer(BUSY)
+
+    // Closed the moment it appeared.
+    await press(pressable('Close picker'))
+
+    expect(drawer()).toBeNull()
+    expect(screen).toHaveBeenCalledTimes(1)
+    expect(screen).toHaveBeenCalledWith(BUSY)
   })
 
   it("says a pick that fails after the drawer closed on the chat's banner", async () => {
@@ -829,6 +872,44 @@ describe('the drawer, whatever lane it drives', () => {
   // The agent-picker row flips the tab to its terminal view when it lands, and
   // an ack-lost one says so on the way: the word and the unmount of the chat,
   // picker and all, reach React in the same render.
+  it('does not repeat a failure the user has read when the picker unmounts', async () => {
+    let hide: () => void = noop
+    function Host(): ReactElement | null {
+      const [shown, setShown] = useState(true)
+      hide = () => setShown(false)
+      return shown
+        ? createElement(MobileNativeChatSessionOptionPickers, {
+            controller: {
+              snapshot: [MODEL],
+              pendingId: null,
+              setOption: async (_id, _value, report) => {
+                report?.(BUSY)
+                return false
+              },
+              invokeAction: async () => false,
+              recordCommand: noop
+            },
+            isWorking: false,
+            reportFailure: screen
+          })
+        : null
+    }
+    await act(async () => {
+      renderer = create(createElement(Host))
+    })
+    await openDrawer()
+    await press(row('Opus 4.8'))
+    expectSaidInDrawer(BUSY)
+    lookFor(2_000)
+
+    await act(async () => {
+      hide()
+    })
+
+    expect(renderer!.toJSON()).toBeNull()
+    expect(screen).not.toHaveBeenCalled()
+  })
+
   it('hands a failure said in the render that unmounts the picker to the chat', async () => {
     let hide: () => void = noop
     function Host(): ReactElement | null {

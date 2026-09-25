@@ -135,16 +135,14 @@ export function MobileNativeChatSessionOptionPickers({
   const pillLabel = live ?? (optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel)
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
 
-  // The user moves on from a failure they have in front of them: another view
-  // of the drawer, or its X. Back, a backdrop tap and a swipe close it only once
-  // the hide animation ends, so `dismissed` keeps what may have landed since,
-  // and the chat's banner takes it.
-  const showView = (id: string | null): void => {
+  // Another view of the drawer drops the failure the user read in this one.
+  // Closing leaves it to use-session-option-pick-failure.ts, which drops it if
+  // it has been read and hands it to the chat's banner if not.
+  const showView = (id: string): void => {
     failure.clear()
     setOpenDescriptorId(id)
   }
-  const closePicker = (): void => showView(null)
-  const dismissed = (): void => setOpenDescriptorId(null)
+  const closePicker = (): void => setOpenDescriptorId(null)
   const openPicker = (): void => {
     Keyboard.dismiss()
     setOpenDescriptorId(model.id)
@@ -194,7 +192,7 @@ export function MobileNativeChatSessionOptionPickers({
         disabled={disabled}
         onPress={openPicker}
       />
-      <BottomDrawer visible={activeDescriptor !== undefined} onClose={dismissed}>
+      <BottomDrawer visible={activeDescriptor !== undefined} onClose={closePicker}>
         {activeDescriptor ? (
           <View style={{ paddingBottom: space.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: space.lg }}>

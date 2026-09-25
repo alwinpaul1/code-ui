@@ -4,8 +4,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PickFailureReport } from './session-option-pick-failure'
 
-/** A pick's failure, and the chat reporter of the tab the pick was made on. */
-type PickFailure = { message: string; report: PickFailureReport }
+/** How long a failure has to have been in the open drawer before the user is
+ *  taken to have read it. One the drawer stops showing sooner goes to the
+ *  chat's banner. Back, a backdrop tap and a swipe close the drawer only after
+ *  its 150 to 300 ms hide animation (mounted-bottom-drawer.tsx), so a failure
+ *  can land in a drawer that is already on its way out; a second covers that
+ *  window and a slow JS thread on top of it. */
+const READ_MS = 1_000
+
+/** A pick's failure, the chat reporter of the tab the pick was made on, and
+ *  when the drawer took it. */
+type PickFailure = { message: string; report: PickFailureReport; at: number }
+
+function unread(failure: PickFailure): boolean {
+  return Date.now() - failure.at < READ_MS
+}
 
 export function useSessionOptionPickFailure(args: {
   drawerOpen: boolean
@@ -17,7 +30,7 @@ export function useSessionOptionPickFailure(args: {
   shown: string | null
   /** A reporter for one pick, bound to the tab it is made on. */
   reporterForPick: () => PickFailureReport
-  /** Drop the failure: the user had it in front of them and moved on. */
+  /** Drop the failure: a new pick, or another view of the drawer. */
   clear: () => void
 } {
   const { drawerOpen, reportFailure } = args
@@ -35,23 +48,28 @@ export function useSessionOptionPickFailure(args: {
     return () => {
       mountedRef.current = false
       // Said in the same render that unmounted the drawer (an agent-picker pick
-      // that flips the tab to its terminal): nothing is left to show it.
+      // that flips the tab to its terminal), or just before: nothing is left to
+      // show it.
       const pending = latestRef.current
       latestRef.current = null
-      pending?.report(pending.message)
+      if (pending && unread(pending)) {
+        pending.report(pending.message)
+      }
     }
   }, [])
 
-  // A failure the drawer is not showing goes to its own tab's reporter: the
-  // drawer closed first (Back, a backdrop tap and a swipe close it only after
-  // the hide animation, and a failure can land in that window), the pick that
-  // said it closed the drawer, or the chat has moved to another tab since. That
-  // reporter paints its own tab's banner, or the toast once the tab is gone.
+  // The drawer stops showing a failure when it closes (the X, Back, a backdrop
+  // tap, a swipe, or the pick that said it), or when the chat moves to another
+  // tab. One the user has read goes no further. One they have not goes to its
+  // own tab's reporter, which paints that tab's banner, or the toast once the
+  // tab is gone.
   const ownTab = failure !== null && failure.report === reportFailure
   useEffect(() => {
     if (failure !== null && (!drawerOpen || failure.report !== reportFailure)) {
       setFailure(null)
-      failure.report(failure.message)
+      if (unread(failure)) {
+        failure.report(failure.message)
+      }
     }
   }, [drawerOpen, failure, reportFailure, setFailure])
 
@@ -61,7 +79,7 @@ export function useSessionOptionPickFailure(args: {
       const report = reportFailure
       return (message) => {
         if (mountedRef.current) {
-          setFailure({ message, report })
+          setFailure({ message, report, at: Date.now() })
         } else {
           report(message)
         }
