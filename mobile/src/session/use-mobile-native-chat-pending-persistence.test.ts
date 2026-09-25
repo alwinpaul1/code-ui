@@ -26,8 +26,8 @@ describe('useMobileNativeChatPendingPersistence', () => {
   let pending: Pending = {}
   let setPending: Dispatch<SetStateAction<Pending>> = () => {}
 
-  function Harness({ sessionKey }: { sessionKey: string | null }): null {
-    const [state, setState] = useState<Pending>({})
+  function Harness({ sessionKey, initial = {} }: { sessionKey: string | null; initial?: Pending }): null {
+    const [state, setState] = useState<Pending>(initial)
     pending = state
     setPending = setState
     useMobileNativeChatPendingPersistence(sessionKey, state, setState)
@@ -94,6 +94,49 @@ describe('useMobileNativeChatPendingPersistence', () => {
     act(() => setPending({ s1: [] }))
     await flush()
     expect(await AsyncStorage.getAllKeys()).toEqual([])
+  })
+
+  // The route came back after a turn Claude took the phone's message in: the
+  // hook's copy of it is remembered as a witness a moment before the stored
+  // echoes are read back (reported 2026-09-25, Claude Code 2.1.282).
+  describe('a witness remembered before the stored echoes came back', () => {
+    const sentAt = Date.parse('2026-09-25T17:04:15.000Z')
+    const send = { ...echo('pending-1', 'check the menu'), sentAt }
+    const witness = (text: string, witnessedAt: number): MobileNativeChatPendingMessage => ({
+      ...echo('desk-status:s1:1:0', text),
+      witnessedAt
+    })
+    /** The live list already holds the witness when the stored read starts. */
+    async function mountWithLive(live: MobileNativeChatPendingMessage[]): Promise<void> {
+      await act(async () => {
+        renderer = create(createElement(Harness, { sessionKey: 's1', initial: { s1: live } }))
+      })
+      await flush()
+    }
+
+    it('drops the copy of a stored send, so the send is drawn once', async () => {
+      await writeNativeChatPendingEchoes('s1', [send])
+      await mountWithLive([witness('check the menu', sentAt + 300_000)])
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1'])
+    })
+
+    it('keeps a witness of another message, and one remembered before the send left the phone', async () => {
+      await writeNativeChatPendingEchoes('s1', [send])
+      await mountWithLive([witness('something else', sentAt + 300_000)])
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+      act(() => renderer?.unmount())
+      renderer = null
+      await AsyncStorage.clear()
+      await writeNativeChatPendingEchoes('s1', [send])
+      await mountWithLive([witness('check the menu', sentAt - 1)])
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+    })
+
+    it('keeps the witness beside a stored send from a build that kept no send time', async () => {
+      await writeNativeChatPendingEchoes('s1', [echo('pending-1', 'check the menu')])
+      await mountWithLive([witness('check the menu', sentAt)])
+      expect(pending.s1?.map((item) => item.id)).toEqual(['pending-1', 'desk-status:s1:1:0'])
+    })
   })
 
   it('keeps an optimistic bubble that was made just before the screen closed', async () => {

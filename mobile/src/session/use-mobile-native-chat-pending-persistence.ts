@@ -69,14 +69,19 @@ export function useMobileNativeChatPendingPersistence(
         const liveIds = new Set(live.map((item) => item.id))
         // A send acknowledged while another tab was on screen dropped its
         // witness in memory, not on disk (withoutWitnessesOfSends).
+        const restored = withoutWitnessesOfSends(sweepWitnessedEchoes(stored), live)
+          .filter((item) => !liveIds.has(item.id))
+          .map((item) => ({ ...item, restored: true }))
+        // And the other way round: a witness remembered in the moment before
+        // this read came back is a copy of a stored send, not someone else's
+        // message. After a remount the hook's copy of a send Claude took
+        // mid-turn is first seen then, timed by the pane's state, which began
+        // when the turn ended; remembered as another message, it drew under
+        // the reply that ended the turn, beside the send's own bubble
+        // (reported 2026-09-25, Claude Code 2.1.282).
         return {
           ...previous,
-          [sessionKey]: [
-            ...withoutWitnessesOfSends(sweepWitnessedEchoes(stored), live)
-              .filter((item) => !liveIds.has(item.id))
-              .map((item) => ({ ...item, restored: true })),
-            ...live
-          ]
+          [sessionKey]: [...restored, ...withoutWitnessesOfSends(live, restored)]
         }
       })
     })

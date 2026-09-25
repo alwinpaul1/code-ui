@@ -8,6 +8,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
+import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
@@ -125,6 +126,14 @@ const codexBox = (queued: readonly string[]) =>
     '› '
   ])
 
+/** Orca's hook copy of a submission, read off the tab status. */
+function hookCopy(clock: string, body = TEXT): DesktopPrompt[] {
+  let state = EMPTY_AGENT_STATUS_PROMPTS
+  state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at(clock) })
+  state = observeAgentStatusPrompt(state, SESSION, { prompt: body, updatedAt: at(clock) })
+  return [...state.prompts]
+}
+
 type Tick = {
   messages: NativeChatMessage[]
   working?: boolean
@@ -237,6 +246,14 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     }
   }
 
+  /** The chat route goes away and comes back: a tab switch, or the app
+   *  brought back after Android let it go. The stored echoes are all it keeps. */
+  async function remount(clock: string, tick: Tick): Promise<void> {
+    act(() => renderer?.unmount())
+    renderer = null
+    await show(clock, tick)
+  }
+
   async function tap(clock: string, body = TEXT): Promise<MobileNativeChatSendOrigin> {
     await clockTo(clock)
     return drafts!.captureSendOrigin(body)!
@@ -302,6 +319,25 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     // The read settles only after the turn ended.
     await show('17:08:40.000', { messages: turnEnded, queued: [], working: false })
     await show('17:08:41.000', { messages: turnEnded, queued: [], working: false })
+    expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103'])
+  })
+
+  it('draws it once, where it was sent, when the chat comes back after the turn and first sees the hook copy then', async () => {
+    const atEnter = hookCopy('17:04:15.110')
+    await sendAndLetClaudeTakeIt({ prompts: atEnter })
+    // Back after the turn: the tab status is read afresh, and a prompt first
+    // seen then is timed by the pane's current state, which began at the end.
+    // The stored echoes come back a moment after the first render, and the
+    // hook's copy was remembered in that moment as someone else's message.
+    const firstSight = [
+      ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+        prompt: TEXT,
+        updatedAt: at('17:08:21.900'),
+        stateStartedAt: at('17:08:21.800')
+      }).prompts
+    ]
+    await remount('17:10:00.000', { messages: turnEnded, queued: [], working: false, prompts: firstSight })
+    await show('17:10:01.000', { messages: turnEnded, queued: [], working: false, prompts: firstSight })
     expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103'])
   })
 
