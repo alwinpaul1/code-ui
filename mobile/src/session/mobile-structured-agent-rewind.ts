@@ -41,7 +41,8 @@ const REWIND_TIMEOUT_MS = 60_000
 const REFUSAL_PREFIX = 'agent_session_rewind:'
 
 const NOT_SENT = 'Rewind not sent'
-const DISCONNECTED = 'Rewind not sent (disconnected)'
+const NOT_CONNECTED = 'Rewind not sent: not connected to your desktop'
+const NOT_LOADED = 'Rewind not sent: the session on your desktop has not loaded yet'
 const BUSY = 'The agent is still working. Wait for it to finish, then try again.'
 const INVALID_TARGET = 'This message cannot be rewound to.'
 const UNCONFIRMED = 'Rewind unconfirmed. Check the chat before trying again.'
@@ -102,7 +103,12 @@ export async function dispatchStructuredRewind(args: {
 }): Promise<StructuredRewindOutcome> {
   const { client, sessionId, enabled, sessionKey, itemId, state, operationIds } = args
   if (!client || !sessionId || !enabled || state.fence === null || state.epoch === null) {
-    return { status: 'rejected', message: DISCONNECTED }
+    // A lost link, or else a session still loading. The logical client
+    // outlives a drop, so its state says which, not its presence.
+    return {
+      status: 'rejected',
+      message: client?.getState() === 'connected' ? NOT_LOADED : NOT_CONNECTED
+    }
   }
   if (sessionBusy(state.items)) {
     return { status: 'rejected', message: BUSY }

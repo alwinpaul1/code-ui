@@ -105,6 +105,15 @@ export function mobileNativeChatSendReadinessNow(
   return client ? { ready: true, client } : mobileNativeChatSendUnready(conditions)
 }
 
+/** The refusal of a write whose own render gate said no and that must not
+ *  wait (a card answer, a cancel), in the same words a waiting send uses. */
+export function mobileNativeChatSendRefusal(
+  action: string,
+  conditions: MobileNativeChatSendConditions
+): string {
+  return mobileNativeChatSendUnreadyMessage(action, mobileNativeChatSendUnready(conditions))
+}
+
 function mobileNativeChatSendUnready(
   conditions: MobileNativeChatSendConditions,
   waitedMs = 0,

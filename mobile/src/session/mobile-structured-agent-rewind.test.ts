@@ -105,8 +105,8 @@ function setup(reply: unknown = hostAccepts()) {
   const sendRequest = vi.fn(async (_method: string, _params: unknown, _options: unknown) => reply)
   const operationIds = new Map<string, string>()
   const args: Parameters<typeof dispatchStructuredRewind>[0] = {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the path under test reaches only sendRequest.
-    client: { sendRequest } as unknown as RpcClient,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the path under test reaches only sendRequest, and getState when it refuses.
+    client: { sendRequest, getState: () => 'connected' } as unknown as RpcClient,
     sessionId: 'session-1',
     enabled: true,
     sessionKey: 'key-1',
@@ -252,17 +252,25 @@ describe('rewinding the conversation to an earlier message', () => {
     })
   })
 
+  // Each local refusal names what is missing. Only the first is a lost link;
+  // the rest used to read "(disconnected)" too (2026-09-25 sweep).
+  const NOT_CONNECTED = 'Rewind not sent: not connected to your desktop'
+  const NOT_LOADED = 'Rewind not sent: the session on your desktop has not loaded yet'
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a refusal reads only the state.
+  const dropped = { getState: () => 'disconnected' } as unknown as RpcClient
   it.each([
-    ['no client', { client: null }],
-    ['no session', { sessionId: null }],
-    ['a disabled lane', { enabled: false }],
-    ['no fence yet', { state: { fence: null, epoch: 'epoch-1', items: conversation() } }],
-    ['no epoch yet', { state: { fence: 3, epoch: null, items: conversation() } }]
-  ])('refuses locally with %s, without a round trip', async (_label, override) => {
+    ['no client', { client: null }, NOT_CONNECTED],
+    // The logical client outlives a drop; an offline start never loads the session.
+    ['a dropped link before the session loaded', { client: dropped, state: { fence: null, epoch: null, items: conversation() } }, NOT_CONNECTED],
+    ['no session', { sessionId: null }, NOT_LOADED],
+    ['a disabled lane', { enabled: false }, NOT_LOADED],
+    ['no fence yet', { state: { fence: null, epoch: 'epoch-1', items: conversation() } }, NOT_LOADED],
+    ['no epoch yet', { state: { fence: 3, epoch: null, items: conversation() } }, NOT_LOADED]
+  ])('refuses locally with %s, without a round trip, and says why', async (_label, override, message) => {
     const { args, sendRequest } = setup()
     await expect(dispatchStructuredRewind({ ...args, ...override })).resolves.toEqual({
       status: 'rejected',
-      message: 'Rewind not sent (disconnected)'
+      message
     })
     expect(sendRequest).not.toHaveBeenCalled()
   })

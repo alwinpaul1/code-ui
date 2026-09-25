@@ -149,7 +149,9 @@ export function useMobileStructuredAgentSession(args: {
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
       if (!client || !sessionId || !enabled || currentFence === null) {
-        onSendError('Message not sent (disconnected)')
+        // A lost link (the logical client outlives a drop, so its state says
+        // which, not its presence), or else a session still loading.
+        onSendError(client?.getState() === 'connected' ? 'Message not sent: the session on your desktop has not loaded yet' : 'Message not sent: not connected to your desktop')
         return 'rejected'
       }
       const timeoutMs = timeoutForDeadline(deadline)

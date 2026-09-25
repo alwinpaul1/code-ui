@@ -15,6 +15,7 @@ import {
   sendMobileNativeChatMessageWithOutcome
 } from './mobile-native-chat-send'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { mobileNativeChatSendRefusal } from './mobile-native-chat-send-readiness'
 import {
   acquireMobileNativeChatTerminalWrite,
   clearMobileNativeChatTerminalHalfStep,
@@ -103,8 +104,15 @@ export function useMobileNativeChatAnswerSend(args: {
   const answerAsk = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
       const handle = handleRef.current
+      // Refused at once, never held for a relay re-dial: the keys are chosen
+      // against a selector the phone has not seen since the link dropped, and
+      // this hook already drops its chains when the lease does.
       if (!client || !handle || !enabled) {
-        onSendError('Answer not sent (disconnected)')
+        onSendError(
+          handle
+            ? mobileNativeChatSendRefusal('Answer', { client, sendable: enabled })
+            : 'Answer not sent (no terminal on this tab)'
+        )
         return false
       }
       if (!hasAskAnswer(prompt, selections)) {

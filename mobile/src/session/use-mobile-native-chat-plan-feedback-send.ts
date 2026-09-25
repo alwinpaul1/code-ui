@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { sendClaudePlanFeedback } from './claude-plan-feedback-send'
+import { mobileNativeChatSendRefusal } from './mobile-native-chat-send-readiness'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
@@ -28,8 +29,14 @@ export function useMobileNativeChatPlanFeedbackSend(args: {
   return useCallback(
     async (send: string, comment: string): Promise<boolean> => {
       const terminal = args.handleRef.current
+      // Refused at once, never held for a relay re-dial: the feedback is typed
+      // into a review row the phone has not seen since the link dropped.
       if (!args.client || !terminal || !args.enabled) {
-        args.onSendError('Response not sent (disconnected)')
+        args.onSendError(
+          terminal
+            ? mobileNativeChatSendRefusal('Response', { client: args.client, sendable: args.enabled })
+            : 'Response not sent (no terminal on this tab)'
+        )
         return false
       }
       if (!acquireMobileNativeChatTerminalWrite(terminal)) {

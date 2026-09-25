@@ -77,14 +77,20 @@ export class FakeRelayLink {
   }
 }
 
-/** Terminal writes are accepted and a terminal subscription is acknowledged,
- *  which is what grants the phone its input lease. */
+/** What the desktop terminal shows when the phone reads its screen. */
+export const fakeDesktop: { screen: string[] } = { screen: [] }
+
+/** Terminal writes are accepted, a terminal subscription is acknowledged
+ *  (which is what grants the phone its input lease), and a screen read returns
+ *  fakeDesktop.screen. */
 export function answerLikeDesktop(frame: RelayFrame): unknown {
   switch (frame.method) {
     case 'terminal.subscribe':
       return { type: 'subscribed' }
     case 'terminal.send':
       return { send: { accepted: true } }
+    case 'terminal.read':
+      return { terminal: { lines: fakeDesktop.screen } }
     default:
       return {}
   }
@@ -93,4 +99,5 @@ export function answerLikeDesktop(frame: RelayFrame): unknown {
 export function resetFakeRelayLinks(): void {
   fakeRelayLinks.length = 0
   fakeRelayCell.onOpen = null
+  fakeDesktop.screen = []
 }

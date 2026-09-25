@@ -10,6 +10,7 @@ import {
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
+import { mobileNativeChatSendRefusal } from './mobile-native-chat-send-readiness'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
@@ -148,8 +149,17 @@ export function useMobileNativeChatPermissionSend(args: {
   return useCallback(
     async (text: string): Promise<boolean> => {
       const terminal = args.handleRef.current
-      if (!args.client || !terminal || !args.enabled) {
-        args.onSendError('Response not sent (disconnected)')
+      const client = args.client
+      // Refused at once, never held for a relay re-dial. The HUD drops its
+      // screen reading when the link goes, so after a drop no card here has
+      // one, and the plan review's own read cannot tell that its review left.
+      // A held digit could land on whatever prompt came up meanwhile.
+      if (!client || !terminal || !args.enabled) {
+        args.onSendError(
+          terminal
+            ? mobileNativeChatSendRefusal('Response', { client, sendable: args.enabled })
+            : 'Response not sent (no terminal on this tab)'
+        )
         return false
       }
       // A choice keystroke must not interleave into a mid-flight composed write
@@ -164,7 +174,7 @@ export function useMobileNativeChatPermissionSend(args: {
       let outcome: MobileNativeChatPermissionResponseOutcome
       try {
         outcome = await sendMobileNativeChatPermissionResponse({
-          client: args.client,
+          client,
           terminal,
           deviceToken: args.deviceTokenRef.current,
           text,

@@ -1,6 +1,7 @@
 import { useCallback, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { sendMobileNativeChatMessageWithOutcome } from './mobile-native-chat-send'
+import { mobileNativeChatSendRefusal } from './mobile-native-chat-send-readiness'
 
 /** Sends the Escape that dismisses an ask/question card. Its own module for the
  *  same reason stop/permission/answer are: the controller owns composition, not
@@ -17,8 +18,14 @@ export function useMobileNativeChatCancelAsk(args: {
   const { client, enabled, handleRef, deviceTokenRef, cancelPending, onSendError } = args
   return useCallback(async (): Promise<boolean> => {
     const handle = handleRef.current
+    // Refused at once, never held for a relay re-dial: if the ask left the
+    // screen meanwhile, a late Escape would interrupt the agent's turn instead.
     if (!client || !handle || !enabled) {
-      onSendError('Cancel not sent (disconnected)')
+      onSendError(
+        handle
+          ? mobileNativeChatSendRefusal('Cancel', { client, sendable: enabled })
+          : 'Cancel not sent (no terminal on this tab)'
+      )
       return false
     }
     cancelPending()

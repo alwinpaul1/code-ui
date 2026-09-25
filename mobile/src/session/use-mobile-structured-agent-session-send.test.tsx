@@ -465,7 +465,8 @@ describe('the send conditions a structured session hands the send bridge', () =>
     subscribe: vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
       listener = onData
       return vi.fn()
-    })
+    }),
+    getState: () => 'connected'
   } as unknown as RpcClient
 
   function Harness({ sessionId, connected }: { sessionId: string; connected: boolean }): null {
@@ -486,6 +487,33 @@ describe('the send conditions a structured session hands the send bridge', () =>
     renderer = null
     hook = null
     listener = null
+  })
+
+  it('says the session has not loaded, not that it is disconnected, when a send beats its first page', async () => {
+    const onSendError = vi.fn()
+    function Early(): null {
+      hook = useMobileStructuredAgentSession({
+        client,
+        sessionId: 'session-1',
+        sourceIdentity: 'host-a\0workspace-a',
+        enabled: true,
+        connected: true,
+        agent: 'codex',
+        onSendError
+      } as never)
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Early))
+    })
+    let outcome = 'accepted'
+    await act(async () => {
+      outcome = await hook!.sendWithOutcome('hello')
+    })
+    expect(outcome).toBe('rejected')
+    expect(onSendError).toHaveBeenCalledWith(
+      'Message not sent: the session on your desktop has not loaded yet'
+    )
   })
 
   it('names the session a waiting send belongs to, and reads ready only once it loaded on a live link', async () => {

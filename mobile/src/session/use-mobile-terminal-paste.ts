@@ -11,6 +11,7 @@ import {
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import { resizeMobileClipboardImage } from './mobile-clipboard-image-resize'
+import { mobileNativeChatSendRefusal } from './mobile-native-chat-send-readiness'
 
 function buildMobileTerminalClipboardTextPayload(
   text: string,
@@ -111,12 +112,24 @@ export function useMobileTerminalPaste({
         return
       }
       const currentClient = clientRef.current
-      if (
-        !currentClient ||
-        connStateRef.current !== 'connected' ||
-        targetHandle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
+      // Moved away from the terminal it was meant for: dropped, as before.
+      if (targetHandle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
+        return
+      }
+      // Not held for a relay re-dial: a paste that is not bracketed runs its
+      // lines in the shell, and the prompt it was meant for may be gone by the
+      // time the link is back. But a paste the drop stopped says so; it used
+      // to do nothing at all. The client itself is read too: connStateRef
+      // trails it by a render, so it can still say connected over a dead relay.
+      const liveState = currentClient?.getState()
+      if (!currentClient || connStateRef.current !== 'connected' || liveState !== 'connected') {
+        onError()
+        showToast(
+          liveState === 'connected'
+            ? 'Paste not sent: not connected to your desktop'
+            : mobileNativeChatSendRefusal('Paste', { client: currentClient, sendable: true }),
+          1500
+        )
         return
       }
       await terminalInputSend.request(currentClient, {

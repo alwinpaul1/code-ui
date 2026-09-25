@@ -139,7 +139,8 @@ describe('useMobileNativeChatPlanFeedbackSend', () => {
     const sendRequest = vi.fn()
     function Harness(): null {
       respond = useMobileNativeChatPlanFeedbackSend({
-        client: { sendRequest } as unknown as RpcClient,
+        // A connected client: the refusal reads its live state to say why.
+        client: { sendRequest, getState: () => 'connected' } as unknown as RpcClient,
         enabled: false,
         handleRef: { current: 'terminal' },
         deviceTokenRef: { current: null },
