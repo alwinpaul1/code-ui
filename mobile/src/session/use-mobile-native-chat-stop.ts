@@ -38,7 +38,9 @@ export function useMobileNativeChatStop(args: {
   const agentRef = useRef(agent)
   agentRef.current = agent
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const generationRef = useRef(0)
+  /** Counts Stop taps, and nothing else: only a newer tap may take a verdict
+   *  away, because it reports for itself. */
+  const latestStopRef = useRef(0)
   /** Settles the paced second Escape when it is cancelled rather than sent, so a
    *  first-Escape failure still reports instead of waiting on a write that will
    *  never happen. */
@@ -54,13 +56,13 @@ export function useMobileNativeChatStop(args: {
     dropSecondEscapeRef.current = null
     drop?.()
   }, [])
-  useEffect(
-    () => () => {
-      generationRef.current += 1
-      cancelSecondEscape()
-    },
-    [cancelSecondEscape, client, enabled, streamIdentity]
-  )
+  // A route change (lease drop, reconnect, tab switch, unmount) cancels the
+  // paced second Escape but leaves the verdict to report. It used to silence it
+  // too, so a Stop the host refused as the lease dropped said nothing, and the
+  // Stop button stayed up looking live (2026-09-25). A failure after the user
+  // left this chat still has to reach them: `use-mobile-native-chat-send-error.ts`
+  // turns it into a toast there.
+  useEffect(() => cancelSecondEscape, [cancelSecondEscape, client, enabled, streamIdentity])
   return useCallback(() => {
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
@@ -68,8 +70,8 @@ export function useMobileNativeChatStop(args: {
       return
     }
     cancelPending()
-    generationRef.current += 1
-    const generation = generationRef.current
+    latestStopRef.current += 1
+    const tap = latestStopRef.current
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
     const deadline = openMobileNativeChatSendBudget()
@@ -86,7 +88,7 @@ export function useMobileNativeChatStop(args: {
     let sawRejected = false
     const reportIfSettled = (): void => {
       if (
-        generationRef.current !== generation ||
+        latestStopRef.current !== tap ||
         pending > 0 ||
         sawAccepted ||
         (!sawUnknown && !sawRejected)
@@ -106,6 +108,9 @@ export function useMobileNativeChatStop(args: {
         activeRoute.streamIdentity !== stopStreamIdentity ||
         handleRef.current !== handle
       ) {
+        // Nothing written is a verdict too: a tap on a callback from before the
+        // route moved on has no reply coming to report it otherwise.
+        sawRejected = true
         return
       }
       pending += 1
