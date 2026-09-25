@@ -1,17 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-/** The two Codex model lists a phone learns per host+worktree: the rows of
- *  Codex's own `/model` picker and the host probe (labels, effort levels).
- *  Both are read live on every open, but that takes seconds over the terminal,
- *  so the last known copy is kept here and shown at once on a cold start. */
+/** The model lists a phone learns per host+worktree: the rows of Codex's own
+ *  `/model` picker, the host probe for Codex (labels, effort levels), and the
+ *  host probe for Claude (claude-model-discovery.ts). Reading any of them live
+ *  takes seconds, so the last known copy is kept here and shown at once on a
+ *  cold start. The prefix predates the Claude list; renaming it would orphan
+ *  every Codex list already stored. */
 const PREFIX = 'orca:codexModels:'
+
+type ModelListKind = 'visible' | 'discovered' | 'claude-discovered'
 
 function storageKey(kind: string, key: string): string {
   return `${PREFIX}${kind}:${encodeURIComponent(key)}`
 }
 
 export async function readCodexModelList<T>(
-  kind: 'visible' | 'discovered',
+  kind: ModelListKind,
   key: string,
   isEntry: (value: unknown) => value is T
 ): Promise<T[] | null> {
@@ -31,7 +35,7 @@ export async function readCodexModelList<T>(
 }
 
 export async function writeCodexModelList(
-  kind: 'visible' | 'discovered',
+  kind: ModelListKind,
   key: string,
   models: readonly unknown[]
 ): Promise<void> {

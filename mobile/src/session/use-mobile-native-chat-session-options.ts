@@ -6,10 +6,9 @@ import {
   readSessionOptionRecord,
   writeSessionOptionRecord
 } from '../storage/session-option-records'
-import {
-  getAgentSessionOptionCatalog,
-  type CatalogCommandDelivery,
-  type CatalogModel
+import type {
+  CatalogCommandDelivery,
+  CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import type {
@@ -41,8 +40,7 @@ import {
   type NativeChatSessionOptionRecord
 } from '../../../src/shared/native-chat-session-option-state'
 import { activeModels } from './mobile-chat-model-row-naming'
-import { mobileOmpSessionCatalog } from './mobile-omp-session-catalog'
-import { mobileEffortNamedCatalog } from './mobile-claude-session-catalog'
+import { mobileNativeChatSessionOptionCatalog } from './mobile-native-chat-session-option-catalog'
 
 export type MobileNativeChatSessionOptionsController = {
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -160,34 +158,22 @@ export function useMobileNativeChatSessionOptions(args: {
   // The catalog id the agent is currently reporting, for `setOption` to stamp on
   // a pick. A ref because the dispatch runs in a callback, not in render.
   const reportedModelRef = useRef<string | null>(null)
-  const catalog = useMemo(() => {
-    // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
-    // effective-model resolution desktop does — `previousModelId` below is tracked-only,
-    // so a CLI-default model would render option rows that do nothing when tapped.
-    const base =
-      agent === 'claude' || agent === 'codex' || agent === 'omp'
-        ? getAgentSessionOptionCatalog(agent)
-        : null
-    if (base && agent === 'omp') {
-      // OMP seeds no models: the list is whatever the host discovered, and a
-      // switch is offered only where the running extension installed the
-      // command for it (Orca #20612).
-      return mobileOmpSessionCatalog(base, discoveredModels, args.modelSwitchCommand)
-    }
-    const merged =
-      base && discoveredModels && discoveredModels.length > 0
-        ? {
-            ...base,
-            models: [...discoveredModels],
-            ...(discoveredModelApply ? { modelApply: discoveredModelApply } : {})
-          }
-        : base
-    // The Claude app's effort names, and its Ultracode on Claude alone
-    // (mobile-claude-session-catalog.ts).
-    return merged && (agent === 'claude' || agent === 'codex')
-      ? mobileEffortNamedCatalog(merged, { ultracode: agent === 'claude' })
-      : merged
-  }, [agent, args.modelSwitchCommand, discoveredModelApply, discoveredModels])
+  // Claude's running row offers only the levels Claude Code allows the model
+  // that runs (claude-running-model-efforts.ts); no other agent reads these.
+  const runningModel = agent === 'claude' ? reportedModel : null
+  const runningModelLabel = agent === 'claude' ? reportedModelLabel : null
+  const catalog = useMemo(
+    () =>
+      mobileNativeChatSessionOptionCatalog({
+        agent,
+        discoveredModels,
+        discoveredModelApply,
+        modelSwitchCommand: args.modelSwitchCommand,
+        runningModel,
+        runningModelLabel
+      }),
+    [agent, args.modelSwitchCommand, discoveredModelApply, discoveredModels, runningModel, runningModelLabel]
+  )
   const identity = agent && scopeKey ? `${scopeKey}\0${agent}` : null
   const [version, setVersion] = useState(0)
   // Bumped when the grace on a dispatched model pick expires, so the seeding
@@ -283,6 +269,7 @@ export function useMobileNativeChatSessionOptions(args: {
       catalog,
       agent,
       reportedModel,
+      reportedLabel: runningModelLabel,
       reportedEffort,
       source: reportedModelSource,
       scopeKey,
@@ -324,6 +311,7 @@ export function useMobileNativeChatSessionOptions(args: {
     reportedEffort,
     reportedModel,
     reportedModelSource,
+    runningModelLabel,
     scopeKey,
     terminalHandle
   ])

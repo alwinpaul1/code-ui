@@ -15,6 +15,8 @@ import {
 } from './use-mobile-native-chat-session-options'
 import { useCodexNativeChatOptions } from './use-codex-native-chat-options'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
+import { useClaudeModelDiscovery } from './use-claude-model-discovery'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 
 export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
@@ -115,6 +117,14 @@ export function useMobileNativeChatSessionOptionController(args: {
     worktreeId,
     enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
   })
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const discoveredClaudeModels = useClaudeModelDiscovery({
+    client,
+    hostId,
+    worktreeId,
+    enabled: !activeChatStructured && agent === 'claude' && activeSessionTabId !== null,
+    lastConnectedAt
+  })
   const sessionOptions = useMobileNativeChatSessionOptions({
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
@@ -126,11 +136,19 @@ export function useMobileNativeChatSessionOptionController(args: {
     terminalHandle,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
-    // Codex discovers through its own hook (`codex debug models`); OMP through
-    // the host's `git.discoverCommitMessageModels` probe (Orca #20612). One
-    // agent is active at a time, so the two never both carry a list.
-    discoveredModels: agent === 'omp' ? discoveredOmpModels : codex.discoveredModels,
-    discoveredModelApply: codex.discoveredModelApply,
+    // Codex discovers through its own hook (`codex debug models`); OMP and
+    // Claude through the host's `git.discoverCommitMessageModels` probe (Orca
+    // #20612; claude-model-discovery.ts). One agent is active at a time, so
+    // only one of them ever carries a list.
+    discoveredModels:
+      agent === 'omp'
+        ? discoveredOmpModels
+        : agent === 'claude'
+          ? discoveredClaudeModels
+          : codex.discoveredModels,
+    // Codex's alone: its hook clears its list in an effect, so for one render
+    // after a tab turns from Codex to Claude it still holds Codex's apply.
+    discoveredModelApply: agent === 'codex' ? codex.discoveredModelApply : null,
     applyOverride: codex.applyOverride
   })
   useLayoutEffect(() => {

@@ -32,9 +32,13 @@ export function effortDisplayLabel(effort: string): string {
  * Claude Code 2.1.281's `/effort ultracode` is "xhigh effort + dynamic
  * workflows for maximum thoroughness", and it refuses it on a model that does
  * not support xhigh ("the model does not support xhigh effort"). So it is
- * offered exactly where Extra is, after Max. Dynamic workflows being off is
- * Claude Code's to say: the phone cannot read that setting, and the refusal is
- * the agent's own words in the chat.
+ * offered exactly where Extra is, after Max. Where Extra is comes from the
+ * host's own list of Claude models (claude-model-discovery.ts), and for the
+ * running model from Claude Code's table (claude-running-model-efforts.ts),
+ * so neither is offered on Opus 4.6 or Sonnet 4.6 unless the host's own
+ * Claude Code lists xhigh for them (a capability override). Dynamic workflows
+ * being off is Claude Code's to say: the phone cannot read that setting, and
+ * the refusal is the agent's own words in the chat.
  */
 function withClaudeEffortNames(option: CatalogOption, ultracode: boolean): CatalogOption {
   if (option.id !== 'effort' || option.kind.type !== 'select') {

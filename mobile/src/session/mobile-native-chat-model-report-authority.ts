@@ -1,5 +1,6 @@
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
 import { matchNativeChatCatalogModelId } from '../../../src/shared/native-chat-session-option-state'
+import { matchClaudeCatalogModelId } from './claude-model-identity'
 
 /**
  * Whether a model report is allowed to overwrite what the record already says.
@@ -198,6 +199,8 @@ export function resolveReportedModelSeed(input: {
   catalog: AgentSessionOptionCatalog
   agent: string
   reportedModel: string
+  /** The agent's own name for the model ("Sonnet 4.6"). Claude only. */
+  reportedLabel?: string | null
   reportedEffort: string | null
   source: ModelReportSource
   scopeKey: string
@@ -210,12 +213,16 @@ export function resolveReportedModelSeed(input: {
   // absent from cached discovery, and those are what its CLI accepts back — so
   // it never goes through the catalog match, whose longest-prefix rule would
   // fold `deepseek/deepseek-v4-pro-new` onto `…-v4-pro` (Orca #20612). Claude
-  // keeps the strict match — its badge label "Opus 5" is not a catalog id.
+  // keeps a strict match — its badge label "Opus 5" is not a catalog id — that
+  // also finds a host-listed row by Claude Code's canonical id
+  // (claude-model-identity.ts).
   const matched =
     agent === 'omp'
       ? reportedModel.trim() || null
-      : (matchNativeChatCatalogModelId(catalog, reportedModel) ??
-        (agent === 'codex' ? reportedModel.trim() : null))
+      : agent === 'claude'
+        ? matchClaudeCatalogModelId(catalog, reportedModel, input.reportedLabel ?? null)
+        : (matchNativeChatCatalogModelId(catalog, reportedModel) ??
+          (agent === 'codex' ? reportedModel.trim() : null))
   if (!matched) {
     return null
   }
