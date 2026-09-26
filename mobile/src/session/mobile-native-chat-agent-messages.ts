@@ -289,22 +289,24 @@ export function agentMessageOf(message: NativeChatMessage): { sender: string; bo
 export function screenRowBodies(
   messages: readonly StatusSubagentMessage[],
   raw: readonly NativeChatMessage[]
-): { senders: string[]; body: string; cut: boolean; seenAt: number }[] {
+): { senders: string[]; body: string; cut: boolean; seenAt?: number }[] {
   if (messages.length === 0) {
     return []
   }
   const names = subagentNames(raw)
   return messages.map((message) => {
     const name = names.get(message.from)
-    return { senders: name ? [message.from, name] : [message.from], body: message.body, cut: message.cut, seenAt: message.seenAt }
+    const senders = name ? [message.from, name] : [message.from]
+    return { senders, body: message.body, cut: message.cut, ...(message.seenAt !== undefined ? { seenAt: message.seenAt } : {}) }
   })
 }
 
 /** What the tab status carried of a subagent message: who sent it, and as
  *  much of its words as fit (parseStatusSubagentPreview). */
 export type StatusSubagentPreview = { from: string; body: string; cut: boolean }
-/** The same, with when the phone first read it (its clock). */
-export type StatusSubagentMessage = StatusSubagentPreview & { seenAt: number }
+/** The same, with when the phone first read it (its clock); none for a copy
+ *  read on a first read of the status, which is never paired. */
+export type StatusSubagentMessage = StatusSubagentPreview & { seenAt?: number }
 
 const STATUS_OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:\s+/
 const STATUS_TAG = /^<agent-message\b([^>]*)>\s*/

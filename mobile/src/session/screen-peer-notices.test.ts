@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
 import { observeScreenPeerNotices, ROW_WORDS_WINDOW_MS, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
 import { paintedIn } from './use-screen-peer-notices'
+import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
+import { screenRowBodies } from './mobile-native-chat-agent-messages'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -533,5 +535,36 @@ describe('one subagent row under tool output of the same turn', () => {
     const repainted = ['⏺ Bash(git status)', '  ⎿  On branch main', '     nothing to commit, working tree clean', '', ROW]
     expect(poll(first, repainted, (_notice, row) => paintedIn(again, row)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
     expect(poll(first, screen.slice(3), (_notice, row) => paintedIn(again, row)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
+  })
+})
+
+// Re-review of a6857609..235dfa20: the tab opens with the status still
+// carrying the probe's message taken minutes ago, its row off the screen. Six
+// seconds later the probe's next message and another agent's are taken at the
+// same tool boundary; the status ends on the other agent's, so the phone
+// never reads the probe's new copy, and the screen paints both rows.
+describe("a subagent's next row, when the status's copy of its last message was read on opening the tab", () => {
+  const PROBE = 'a7a46867b4f497c96'
+  const OTHER = 'a1111111111111111'
+  const rowOf = (name: string) => `› Message from @${name} (ctrl+o to expand)`
+  const wrap = (from: string, words: string) => `<agent-message from="${from}"> ${words} </agent-message>`
+  const folded = [row('a1', 'assistant', 'Working on it.')]
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it("never opens to the old message's words", () => {
+    let status = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { prompt: wrap(PROBE, 'OLD: probe step 1 done'), updatedAt: 700_000 })
+    let notices = observeScreenPeerNotices([], peerNoticesFromScreen(['⏺ Working on it.']), 'a1', 1)
+    vi.setSystemTime(1_006_000)
+    status = observeAgentStatusPrompt(status, 'sess-1', { prompt: wrap(OTHER, 'other agent report'), updatedAt: 1_006_000 })
+    notices = observeScreenPeerNotices(notices, peerNoticesFromScreen(['⏺ Working on it.', '', rowOf(PROBE), '', rowOf(OTHER)]), 'a1', 2)
+    const bodies = screenRowBodies(status.agentMessages ?? [], folded)
+    const drawn = withScreenPeerNotices(folded, notices, { subagentRows: true, bodies }).flatMap((message) => (agentMessageOf(message) ? [agentMessageOf(message)!] : []))
+    expect(drawn.find((entry) => entry.sender === PROBE)?.body).toBe('')
+    expect(drawn.find((entry) => entry.sender === OTHER)?.body).toBe('other agent report')
   })
 })

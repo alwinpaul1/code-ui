@@ -265,7 +265,7 @@ export function withScreenPeerNotices(
 /** Words another source carried for a sender-only row: the tab status's copy
  *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
  *  the name the row shows, with when the phone first read it. */
-export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt: number }
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt?: number }
 
 /** How far apart the phone may first read a row and the status's copy of its
  *  message and still take them for one message. The hook that puts a message
@@ -287,7 +287,7 @@ function bodyOf(
   bodies: readonly ScreenRowBody[] | undefined
 ): ScreenRowBody | undefined {
   const near = (seenAt: number | undefined, body: ScreenRowBody) =>
-    seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
+    seenAt !== undefined && body.seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
   const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender) && near(notice.seenAt, body))
   const body = theirs.length === 1 ? theirs[0]! : undefined
   const rivals = notices.filter(

@@ -59,7 +59,10 @@ export const STATUS_PROMPT_NONCE_PREFIX = 'status:'
 export function observeAgentStatusPrompt(
   state: AgentStatusPromptState,
   sessionKey: string | null,
-  status: AgentStatusPromptSource | undefined
+  status: AgentStatusPromptSource | undefined,
+  /** `firstRead`: the first status the phone has read since it reconnected,
+   *  which, like the first of a session, can carry a copy minutes old. */
+  options: { firstRead?: boolean } = {}
 ): AgentStatusPromptState {
   const firstSight = sessionKey !== state.sessionKey
   if (firstSight) {
@@ -97,8 +100,13 @@ export function observeAgentStatusPrompt(
   if (isKnownHarnessInjectedUserTurnText(text)) {
     const message = parseStatusSubagentPreview(text, text.length >= AGENT_STATUS_MAX_FIELD_LENGTH)
     // When the phone first read it, which is what pairs it with the screen's
-    // row of the same message (screen-peer-notices.ts).
-    const seen = message ? { ...message, seenAt: Date.now() } : null
+    // row of the same message (screen-peer-notices.ts). Not on a first read
+    // (a launch, a return to the tab, a reconnect): that copy can be minutes
+    // old with its row off the screen, and timed by the read it paired with
+    // the sender's next row and gave it the old words (re-review of
+    // 2026-09-27). Kept untimed, it never pairs.
+    const live = !firstSight && options.firstRead !== true
+    const seen = message ? (live ? { ...message, seenAt: Date.now() } : message) : null
     return seen
       ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), seen].slice(-PROMPT_CAP) }
       : { ...state, last: text }
