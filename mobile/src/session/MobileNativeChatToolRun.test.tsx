@@ -27,6 +27,8 @@ vi.mock('react-native', () => ({
     sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
     timing: () => ({ start: vi.fn(), stop: vi.fn() })
   },
+  // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
+  Platform: { OS: 'android', Version: 34 },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -310,44 +312,59 @@ describe('a tool run while the turn is still working', () => {
     return flattenColor(label?.props.style)
   }
 
+  /** The drawn label Text, not the ShimmerText element that hands it the testID. */
+  function activeLabel(tree: ReactTestRenderer) {
+    return tree.root.find(
+      (node) => node.props?.testID === 'tool-run-active-label' && String(node.type) === 'Text'
+    )
+  }
+
+  /** The label's glyphs while it shimmers: one span per character. */
+  function activeGlyphs(tree: ReactTestRenderer): string[] {
+    const label = activeLabel(tree)
+    return label
+      .findAll((node) => String(node.type) === 'Text' && node !== label)
+      .map((node) => String(node.props.children))
+  }
+
+  function opacityOf(style: unknown): unknown {
+    return [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
+  }
+
   it('names the call that is still running instead of counting the settled ones', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
-    expect(texts(tree)).toContain('Running')
+    expect(activeGlyphs(tree).join('')).toBe('Running')
     // The batch sentence is what the live row replaces.
     expect(texts(tree).some((text) => text.startsWith('Ran '))).toBe(false)
   })
 
-  it('breathes the Running label while a call is live', () => {
-    mocks.loop.mockClear()
-    render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
-    expect(mocks.loop).toHaveBeenCalledOnce()
-  })
-
-  // 2026-09-26, the user: the running row's icon stood still while its text
-  // breathed. One breath for both, so they never drift apart.
-  it('breathes the running tool icon with its label, on one shared breath', () => {
+  // 2026-09-26, the user, with a recording of the Claude app: "Running agents
+  // animations must be like this". There the icon stands still and a darker
+  // band sweeps across the label; nothing fades as a whole. Until then the
+  // icon and the label breathed together (d96fef9b).
+  it('sweeps a shimmer across the Running label while a call is live, and breathes nothing', () => {
     mocks.loop.mockClear()
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
-    const opacityOf = (style: unknown) =>
-      [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
-    const icon = tree.root.find((node) => node.props?.testID === 'tool-run-active-icon')
-    // The drawn Text, not the PulsingText element that hands it the testID.
-    const label = tree.root.find(
-      (node) => node.props?.testID === 'tool-run-active-label' && String(node.type) === 'Text'
-    )
-    expect(opacityOf(icon.props.style)).toBeDefined()
-    expect(opacityOf(icon.props.style)).toBe(opacityOf(label.props.style))
-    expect(mocks.loop).toHaveBeenCalledOnce()
+    expect(activeGlyphs(tree)).toEqual(['R', 'u', 'n', 'n', 'i', 'n', 'g'])
+    expect(mocks.loop).not.toHaveBeenCalled()
+  })
+
+  it('keeps the running tool icon still beside the shimmering label', () => {
+    const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    const header = tree.root.find((node) => node.props?.testID === 'tool-run-active-header')
+    expect(header.findAll((node) => String(node.type) === 'SquareTerminal')).toHaveLength(1)
+    expect(header.findAll((node) => opacityOf(node.props?.style) !== undefined)).toEqual([])
   })
 
   // "Remove animations" on, and "Running" kept breathing (0.6.6 audit).
-  // The word is still on the row; it just holds at full opacity.
+  // The word is still on the row, whole, with no sweep.
   it('holds the Running label still under reduced motion', () => {
     mocks.reduced = true
     mocks.loop.mockClear()
     try {
       const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
       expect(mocks.loop).not.toHaveBeenCalled()
+      expect(activeGlyphs(tree)).toEqual([])
       expect(texts(tree)).toContain('Running')
     } finally {
       mocks.reduced = false

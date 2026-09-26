@@ -13,7 +13,7 @@ failing-first test and has been checked on the phone in light and dark.
 | 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, is counted from the file on the desktop when that is provably the file the Write made, and draws no count otherwise (below) |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards. The sheet caps each input and the output at the inline row's `MAX_TOOL_DETAIL_LENGTH`, so a huge output cannot stall text layout; the Tools toggle no longer expands a row that opens the sheet, which the user chose to keep (2026-09-24; the Claude app has no such toggle). Drag feel needs a phone check |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
-| 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a breathing label; parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
+| 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a band that sweeps the label while the icon stands still, measured off a recording of the Claude app (2026-09-26); parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
 | 7 | After an API error ends the turn, no "Working" and no Stop; the same after a normal finish while an agent runs in the background | Still showed "Working ••• " and Stop under the ended turn | fixed (85ee85d0, and the active tab's pill in e9df676a), not yet checked on the phone; an inactive tab's pill still follows the desktop, which the phone holds no transcript for |
 | 8 | A message with images or video leaves the composer text and media together | The text leaves first, the media lingers, then both reappear pinned together after a refresh | merged (3248a41b); phone check pending |
 | 9 | A sent message with an image and a video shows the image thumbnail and a file card ("MP4", the file name) | Showed only the video's path text, `@"/Users/…/….mp4"`, and no image | file card merged (ddfb8945). A message sent from the Claude app gets one "Image on Desktop" chip per photo, the chip a desktop-pasted image already had, Claude Code paints above it (`[Image #N]`, 2.1.281), read while that message is on the terminal screen and kept after; the picture itself arrives inline and Orca's reader drops it (below) |
@@ -292,8 +292,14 @@ Nothing here is built.
   `supportsTaskStop`; the thinking status "almost done thinking", which the
   Claude app showed but Claude Code 2.1.281 does not paint (its words are
   read when they are). Codex's spinner is not read, so a Codex tab says
-  "Working…". The drag-to-full-screen sheet and the breathing label have not
-  run on the device yet.
+  "Working". The drag-to-full-screen sheet has not run on the device yet.
+  The running rows' label shimmer (2026-09-26) replaced a breath that faded
+  icon and label together; its numbers come from the user's screen recording
+  of the Claude app: one sweep every 1.5 s, a band about six characters wide
+  at its foot, a glyph at its centre kept at 26% of its contrast. In that
+  recording the "N running tasks" star never moved, so the phone's star now
+  stands still unless "Working" shows beside it. The shimmer has not run on
+  the device yet either.
 - **Working after the turn ended (7).** Session 967668df. Claude Code
   2.1.281 fires StopFailure, not Stop, when a turn's last record is an API
   error (a safeguards refusal is one, with no status code). Orca then holds a

@@ -14,9 +14,10 @@ const MOTION_SITES = [
   'components/AgentStateDot.tsx',
   'components/mounted-bottom-drawer.tsx',
   'components/RightDrawer.tsx',
-  'session/MobileNativeChatAgentRun.tsx',
+  'components/DraggableDetailSheet.tsx',
   'session/MobileBackgroundTasksPulse.tsx',
-  'session/MobileNativeChatToolPulsingText.tsx',
+  // The running rows' label sweep (agent, command and tool rows alike).
+  'session/MobileNativeChatShimmerText.tsx',
   'session/MobileNativeChatTurnStatus.tsx',
   'ui/StatusPulse.tsx',
   // The two onboarding sites already honoured the setting through a hook of
