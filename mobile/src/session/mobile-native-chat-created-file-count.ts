@@ -195,8 +195,10 @@ function collapsedPath(path: string): string {
 }
 
 /** The home folder a normalised path spells out: `/users/x`, `/home/x`,
- *  `c:/users/x` or `/root`. macOS's /Users/Shared is no one's. */
-const HOME = /^(?:(?:[a-z]:)?\/users\/(?!shared(?:\/|$))[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
+ *  `c:/users/x` or `/root`. macOS's /Users/Shared is no one's, nor are
+ *  Windows' Public, Default, Default User and All Users. */
+const HOME =
+  /^(?:(?:[a-z]:)?\/users\/(?!(?:shared|public|default|default user|all users)(?:\/|$))[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
 const ABSOLUTE = /^(?:[a-z]:)?\//
 
 function fromHome(path: string): boolean {

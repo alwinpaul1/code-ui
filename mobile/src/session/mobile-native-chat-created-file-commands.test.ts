@@ -156,7 +156,7 @@ describe('a create followed by a command that names it', () => {
     expect(ranAfter(command)).toBe(true)
   })
 
-  function ranAfterCreateFromHome(command: string, path = FROM_HOME): boolean | undefined {
+  function ranAfterCreateAt(command: string, path = FROM_HOME): boolean | undefined {
     const write: NativeChatToolCallBlock = {
       ...WRITE,
       input: { ...(WRITE.input as object), file_path: path }
@@ -176,7 +176,7 @@ describe('a create followed by a command that names it', () => {
     ['runs a script of its name under a folder a variable names', 'bash $DIR/'],
     ['is a script of its name under a folder a variable names', '$DIR/']
   ])('draws no count for a create spelled from ~ when the next command %s', (_, lead) => {
-    expect(ranAfterCreateFromHome(`${lead}${FROM_HOME.slice(2)}`)).toBe(true)
+    expect(ranAfterCreateAt(`${lead}${FROM_HOME.slice(2)}`)).toBe(true)
   })
 
   // Review of 5b257b16: a setting whose value ends in the file's path read as
@@ -187,13 +187,11 @@ describe('a create followed by a command that names it', () => {
     ['edits it behind a setting that names it', `F=${FROM_HOME} sed -i '$d' ${FROM_HOME}`],
     ['hands its relative path to another script in a setting', `QUEUE=./${RELATIVE} node trim.js`]
   ])('draws no count for a create spelled from ~ when the next command %s', (_, command) => {
-    expect(ranAfterCreateFromHome(command)).toBe(true)
+    expect(ranAfterCreateAt(command)).toBe(true)
   })
 
   it('draws no count for a short create spelled from ~ when the next command hands its relative path to another script in a setting', () => {
-    expect(ranAfterCreateFromHome('QUEUE=./jobs/queue.sh node trim.js', '~/jobs/queue.sh')).toBe(
-      true
-    )
+    expect(ranAfterCreateAt('QUEUE=./jobs/queue.sh node trim.js', '~/jobs/queue.sh')).toBe(true)
   })
 
   // Review of 5b257b16: `~alice` is another user's home, and `~+` or a zsh
@@ -203,11 +201,26 @@ describe('a create followed by a command that names it', () => {
     ["is a script of its name in another user's home", '~alice/jobs/queue.sh'],
     ['runs a script of its name from the folder the shell is in', 'bash ~+/jobs/queue.sh']
   ])('draws no count for a create spelled from ~ when the next command %s', (_, command) => {
-    expect(ranAfterCreateFromHome(command, '~/jobs/queue.sh')).toBe(true)
+    expect(ranAfterCreateAt(command, '~/jobs/queue.sh')).toBe(true)
   })
 
   it("draws no count for a create in another user's home when the next command runs a script of its name from ~", () => {
-    expect(ranAfterCreateFromHome('bash ~/jobs/queue.sh', '~alice/jobs/queue.sh')).toBe(true)
+    expect(ranAfterCreateAt('bash ~/jobs/queue.sh', '~alice/jobs/queue.sh')).toBe(true)
+  })
+
+  // Review of 5b257b16: Windows keeps folders under C:\Users that are no
+  // one's home, the sibling of macOS's /Users/Shared.
+  it.each(['Public', 'Default', 'Default User', 'All Users'])(
+    'draws no count for a create under C:\\Users\\%s when the next command runs a script of its name from ~',
+    (folder) => {
+      expect(ranAfterCreateAt('bash ~/jobs/queue.sh', `C:\\Users\\${folder}\\jobs\\queue.sh`)).toBe(
+        true
+      )
+    }
+  )
+
+  it("still counts a create in a user's own Windows home when the next command runs it from ~", () => {
+    expect(ranAfterCreateAt('bash ~/jobs/queue.sh', 'C:\\Users\\dev\\jobs\\queue.sh')).toBe(false)
   })
 
   it("draws no count for a create when the next command runs a script of its name from another user's home", () => {
