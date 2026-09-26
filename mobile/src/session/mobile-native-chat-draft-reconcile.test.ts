@@ -24,48 +24,93 @@ function pending(id: string, images: string[], expectedOccurrence = 1): PendingI
 
 // 2026-09-26, Claude Code 2.1.283: a photo sent with no words before the
 // chat's read settled took the first photo row after whatever the phone had
-// on screen, an older message's. Rows the desktop stamped well before the
-// send, and rows already drawing another send's photos, are not candidates.
-describe('a photo sent with no words, kept off older photo rows', () => {
+// on screen, an older message's. Rows stamped well before such a send, and
+// rows already drawing as many of the phone's photos as they have, are not
+// its row; a row with room left is one two sends were glued into.
+describe('the phone’s photos, kept off rows that are not their send’s', () => {
   const sentAt = Date.parse('2026-09-26T09:30:03.500Z')
-  const photoRow = (id: string, clock: string): NativeChatMessage => ({
-    ...userText(id, '[Image #17]'),
+  const stamped = (row: NativeChatMessage, clock: string): NativeChatMessage => ({
+    ...row,
     timestamp: Date.parse(`2026-09-26T${clock}Z`)
   })
-  const photo = { ...pending('pending', ['file:///p17.jpg']), sentAt }
+  const photoRow = (id: string, clock: string) => stamped(userText(id, '[Image #17]'), clock)
+  const unsettled = { ...pending('pending', ['file:///p17.jpg']), sentAt, sentBeforeReadSettled: true }
+  const ids = (landed: { messageId: string }[]) => landed.map((item) => item.messageId)
 
-  it('binds the row written after the send, not an older one before it', () => {
+  it('binds a photo sent before the read settled to the row written after it, not an older one', () => {
     const messages = [photoRow('older', '08:43:47.644'), photoRow('mine', '09:30:03.923')]
-    expect(findLandedImagePreviewEchoes(messages, [photo])).toEqual([
+    expect(findLandedImagePreviewEchoes(messages, [unsettled])).toEqual([
       { pendingId: 'pending', messageId: 'mine', images: ['file:///p17.jpg'] }
     ])
   })
 
-  it('still binds a row the desktop stamped a little before the send, for a phone clock running ahead', () => {
-    const messages = [photoRow('mine', '09:29:10.000')]
-    expect(findLandedImagePreviewEchoes(messages, [photo]).map((landed) => landed.messageId)).toEqual(['mine'])
+  it('still binds one whose row the desktop stamped a little before it, for a phone clock running ahead', () => {
+    expect(ids(findLandedImagePreviewEchoes([photoRow('mine', '09:29:10.000')], [unsettled]))).toEqual(['mine'])
   })
 
-  it('binds nothing when the only photo row is more than a minute older than the send', () => {
-    expect(findLandedImagePreviewEchoes([photoRow('older', '09:29:03.000')], [photo])).toEqual([])
+  it('binds nothing when the only photo row is more than the allowance older than the send', () => {
+    expect(findLandedImagePreviewEchoes([photoRow('older', '09:29:03.000')], [unsettled])).toEqual([])
+    // A phone the rows show to be further ahead widens it.
+    expect(ids(findLandedImagePreviewEchoes([photoRow('older', '09:29:03.000')], [unsettled], {}, 120_000))).toEqual([
+      'older'
+    ])
+  })
+
+  // Review, 2026-09-26: the check also refused the send's own row when the
+  // phone's clock ran more than a minute ahead, and a photo with no words
+  // retires only by binding, so its bubble stood beside a chip for good.
+  it('binds a send made against a settled read however far ahead the phone’s clock runs, with words or without', () => {
+    const settled = { ...pending('pending', ['file:///p17.jpg']), sentAt }
+    expect(ids(findLandedImagePreviewEchoes([photoRow('mine', '09:28:30.000')], [settled]))).toEqual(['mine'])
+    const captioned = { ...settled, text: 'look at this' }
+    const row = stamped(userText('mine', '[Image #17] look at this'), '09:20:00.000')
+    expect(ids(findLandedImagePreviewEchoes([row], [captioned]))).toEqual(['mine'])
   })
 
   it('binds as before a send from an older build, which kept no send time', () => {
     const messages = [photoRow('older', '08:43:47.644')]
-    expect(findLandedImagePreviewEchoes(messages, [pending('pending', ['file:///p17.jpg'])]).map((landed) => landed.messageId)).toEqual(['older'])
-  })
-
-  it('binds a photo sent with words by them, whatever time the desktop stamped its row', () => {
-    const captioned = { ...photo, text: 'look at this' }
-    const row = { ...userText('mine', '[Image #17] look at this'), timestamp: Date.parse('2026-09-26T09:20:00.000Z') }
-    expect(findLandedImagePreviewEchoes([row], [captioned]).map((landed) => landed.messageId)).toEqual(['mine'])
+    expect(ids(findLandedImagePreviewEchoes(messages, [pending('pending', ['file:///p17.jpg'])]))).toEqual(['older'])
   })
 
   it('leaves a row already drawing another send’s photos to that send', () => {
     const messages = [photoRow('first', '09:29:31.000'), photoRow('mine', '09:30:03.923')]
-    expect(
-      findLandedImagePreviewEchoes(messages, [photo], new Set(['first'])).map((landed) => landed.messageId)
-    ).toEqual(['mine'])
+    expect(ids(findLandedImagePreviewEchoes(messages, [unsettled], { first: ['file:///p16.jpg'] }))).toEqual(['mine'])
+  })
+
+  // A send the store still holds while its write catches up is offered again,
+  // and a row with room left would have drawn its photos twice.
+  it('binds a send whose photos a row already draws to that row, adding nothing', () => {
+    const row = stamped(userText('mine', '[Image #1] [Image #2] [Image #3] see these'), '09:30:04.000')
+    const again = { ...pending('pending', ['file:///x1.jpg', 'file:///x2.jpg']), text: 'see these', sentAt }
+    expect(findLandedImagePreviewEchoes([row], [again], { mine: ['file:///x1.jpg', 'file:///x2.jpg'] })).toEqual([
+      { pendingId: 'pending', messageId: 'mine', images: ['file:///x1.jpg', 'file:///x2.jpg'] }
+    ])
+  })
+
+  // The ordinal a photo with no words was sent with counts the photo sends
+  // still waiting then; once the first has retired onto its row, counting that
+  // row again sent the second nowhere.
+  it('binds the second of two photos sent with no words to its own row after the first retired', () => {
+    const messages = [photoRow('one', '09:30:04.000'), photoRow('two', '09:30:09.000')]
+    const second = { ...pending('second', ['file:///two.jpg'], 2), sentAt }
+    expect(ids(findLandedImagePreviewEchoes(messages, [second], { one: ['file:///one.jpg'] }))).toEqual(['two'])
+  })
+
+  // Review, 2026-09-26: two photo sends glued on the agent's input line land
+  // as one row. The first binds it; the second was refused a row that
+  // already drew a photo, and its bubble never left.
+  it('puts a second send’s photo after the first’s on a row both were glued into', () => {
+    const glued = stamped(userText('g1', '[Image #1] look at this [Image #2] and this one'), '09:30:05.000')
+    const second = { ...pending('second', ['file:///b.jpg']), text: 'and this one', sentAt }
+    expect(findLandedImagePreviewEchoes([glued], [second], { g1: ['file:///a.jpg'] })).toEqual([
+      { pendingId: 'second', messageId: 'g1', images: ['file:///a.jpg', 'file:///b.jpg'] }
+    ])
+    // Both in one pass, in send order.
+    const first = { ...pending('first', ['file:///a.jpg']), text: 'look at this', sentAt }
+    expect(findLandedImagePreviewEchoes([glued], [first, second]).map((item) => item.images)).toEqual([
+      ['file:///a.jpg'],
+      ['file:///a.jpg', 'file:///b.jpg']
+    ])
   })
 })
 

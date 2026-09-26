@@ -537,6 +537,79 @@ describe('a message the phone sent with photos, as its row lands', () => {
         { id: 'add90135', images: 'P', text: '' }
       ])
     })
+
+    // Review, 2026-09-26: the checks above, first written, refused the send's
+    // own row when the phone's clock ran more than a minute ahead, and two
+    // photo sends glued into one row kept the second one's bubble for good.
+    it('draws a photo with no words once, as the phone’s picture, when the phone’s clock runs 90 s ahead', async () => {
+      const ahead = (row: NativeChatMessage): NativeChatMessage => ({ ...row, timestamp: row.timestamp! - 90_000 })
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: earlier.map(ahead) })
+      await send('09:30:03.500', '', PHOTO)
+      const landedFrom = frames.length
+      await show('09:30:04.000', { messages: [...earlier, P17, C17].map(ahead), working: true })
+      for (const frame of framesFrom(landedFrom)) {
+        expect(frame).toEqual([
+          { id: '4665aaaa', images: 'D', text: '' },
+          { id: 'add90135', images: 'P', text: '' }
+        ])
+      }
+    })
+
+    // The ordinal a photo with no words is sent with counts the photo sends
+    // still waiting then. With the rows of retired sends left out, the second
+    // of two such sends counted past its own row and never left.
+    it('draws two photos sent with no words on their own rows when the second row lands a read later', async () => {
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: earlier })
+      await send('09:30:01.000', '', ['file:///phone/one.jpg'])
+      await send('09:30:02.000', '', ['file:///phone/two.jpg'])
+      const first = [promptRow('r1r1r1r1', 18, 1, '', '09:30:02.500'), companionRow('r1c1r1c1', PATHS1.slice(0, 1), '09:30:02.500')]
+      const second = [promptRow('r2r2r2r2', 19, 1, '', '09:30:04.500'), companionRow('r2c2r2c2', PATHS1.slice(1, 2), '09:30:04.500')]
+      await show('09:30:03.000', { messages: [...earlier, ...first], working: true })
+      await show('09:30:05.000', { messages: [...earlier, ...first, ...second], working: true })
+      expect(drafts!.pending).toEqual([])
+      const drawn = frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>
+      expect([drawn['r1r1r1r1'], drawn['r2r2r2r2']]).toEqual([['file:///phone/one.jpg'], ['file:///phone/two.jpg']])
+    })
+
+    it('draws two photo sends glued into one row once, with both photos, and no bubble left over', async () => {
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: earlier, working: true })
+      await send('09:30:01.000', 'look at this', ['file:///phone/a.jpg'])
+      await send('09:30:02.000', 'and this one', ['file:///phone/b.jpg'])
+      const glued = promptRow('g1g1g1g1', 1, 1, 'look at this [Image #2] and this one', '09:30:05.000')
+      const gluedCompanion = companionRow('g2g2g2g2', PATHS1.slice(0, 2), '09:30:05.000')
+      await show('09:30:06.000', { messages: [...earlier, glued, gluedCompanion], working: true })
+      await show('09:30:07.000', { messages: [...earlier, glued, gluedCompanion], working: true })
+      expect(drafts!.pending).toEqual([])
+      expect(lastFrame()).toEqual([
+        { id: '4665aaaa', images: 'D', text: '' },
+        { id: 'g1g1g1g1', images: 'PP', text: 'look at this and this one' }
+      ])
+      expect((frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>)['g1g1g1g1']).toEqual([
+        'file:///phone/a.jpg',
+        'file:///phone/b.jpg'
+      ])
+    })
+
+    it('draws a photo with words, sent before the read settled, on its own row and not an older one with the same words', async () => {
+      const olderSame = [
+        agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000'),
+        promptRow('old1old1', 16, 1, 'what about this one', '08:43:47.644'),
+        companionRow('old2old2', PATHS2.slice(0, 1), '08:43:47.644'),
+        agentRow('0b0bbe84', 'That one is fine.', '08:44:10.000')
+      ]
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: [], loading: true })
+      await send('09:30:03.500', 'what about this one', PHOTO)
+      const mine = promptRow('new1new1', 17, 1, 'what about this one', '09:30:03.923')
+      await show('09:30:04.000', { messages: [...olderSame, mine, C17], working: true })
+      expect(lastFrame()).toEqual([
+        { id: 'old1old1', images: 'D', text: 'what about this one' },
+        { id: 'new1new1', images: 'P', text: 'what about this one' }
+      ])
+    })
   })
 
   describe('what is not the phone’s own photo', () => {

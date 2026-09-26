@@ -1,4 +1,4 @@
-import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isImageRefBlock, isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -68,6 +68,8 @@ export type PendingImagePreviewEcho = {
   baselineTailMessageId: string | null
   /** When the phone sent it, by the phone's clock (absent from older builds). */
   sentAt?: number
+  /** Sent before the chat's read settled, so its tail is not to be trusted. */
+  sentBeforeReadSettled?: boolean
 }
 
 /**
@@ -76,8 +78,9 @@ export type PendingImagePreviewEcho = {
  * photos are pasted, so it trails the send; this only allows for a phone
  * clock that runs ahead. A photo row older than that is another message's.
  */
-const SEND_ROW_CLOCK_SLACK_MS = 60_000
-const NO_MESSAGE_IDS: ReadonlySet<string> = new Set()
+export const SEND_ROW_CLOCK_SLACK_MS = 60_000
+const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
+const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 
 export type LandedImagePreviewEcho = {
   pendingId: string
@@ -166,11 +169,14 @@ export function migrateImagePreviewMessageIds(
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
   entries: readonly PendingImagePreviewEcho[],
-  /** Rows already drawing the phone's photos from another send. */
-  boundMessageIds: ReadonlySet<string> = NO_MESSAGE_IDS
+  /** The phone's photos rows already draw, from sends that retired. */
+  bound: Readonly<Record<string, readonly string[]>> = NO_BOUND,
+  /** How far ahead of the desktop's the phone's clock may run. */
+  clockSlackMs = SEND_ROW_CLOCK_SLACK_MS
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
+  const rawById = new Map(messages.map((message) => [message.id, message]))
   // Keep provenance from the raw transcript: normalization removes image markers,
   // so a plain text row must not become a candidate merely because it shares a
   // caption prefix with a glued image send.
@@ -201,16 +207,31 @@ export function findLandedImagePreviewEchoes(
     }
     resolvedTailIndexByRawId.set(message.id, lastSurviving)
   }
-  const claimedMessageIds = new Set<string>()
+  // The phone's photos each row draws, from earlier sends and this pass. A
+  // row with as many as it has photos is another send's; one with room left
+  // is a row two sends were glued into, and the next one's photos go after
+  // the first's (review, 2026-09-26: refusing it left the second send's
+  // bubble standing for good).
+  const drawn = new Map<string, readonly string[]>()
+  const drawnOn = (id: string) => drawn.get(id) ?? bound[id] ?? []
+  const full = (message: NativeChatMessage) =>
+    drawnOn(message.id).length >= photoSlots(message, rawById.get(message.id))
   const landed: LandedImagePreviewEcho[] = []
 
   for (const entry of entries) {
     if (!entry.images?.length) {
       continue
     }
+    // Already drawn on a row: that row is this send's, and nothing is added
+    // twice (a send still held while the store's write catches up).
+    const own = normalized.find((message) => entry.images!.every((uri) => drawnOn(message.id).includes(uri)))
+    if (own) {
+      landed.push({ pendingId: entry.id, messageId: own.id, images: [...drawnOn(own.id)] })
+      continue
+    }
     const targetText = normalizeNativeChatUserText(entry.text)
     const candidates = normalized.filter((message) => {
-      if (message.role !== 'user' || boundMessageIds.has(message.id) || (!targetText && writtenBefore(message, entry))) {
+      if (message.role !== 'user' || writtenBefore(message, entry, clockSlackMs)) {
         return false
       }
       if (targetText) {
@@ -237,51 +258,57 @@ export function findLandedImagePreviewEchoes(
       ? (messageIndexById.get(entry.baselineTailMessageId) ??
         resolvedTailIndexByRawId.get(entry.baselineTailMessageId))
       : -1
+    const afterTail = (message: NativeChatMessage) =>
+      tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
     const occurrenceIndex = Math.max(0, entry.expectedOccurrence - 1)
-    const candidate = targetText
-      ? tailIndex !== undefined && tailIndex >= 0
+    // A photo with no words has only the order of photo rows to go by: the
+    // first after its tail that does not already draw another send's photos.
+    // Counting photo rows by the send's ordinal counted the rows of sends that
+    // had retired meanwhile too, so skipping the drawn ones could not use it.
+    const candidate =
+      !targetText || (tailIndex !== undefined && tailIndex >= 0)
         ? // The saved ordinal counted a larger transcript. A retained baseline
           // is stronger evidence: use the next unclaimed echo after that send.
-          candidates.find(
-            (message) =>
-              !claimedMessageIds.has(message.id) &&
-              (messageIndexById.get(message.id) ?? -1) > tailIndex
-          )
+          candidates.find((message) => afterTail(message) && !full(message))
         : candidates[occurrenceIndex]
-      : candidates.filter(
-          (message) =>
-            tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
-        )[occurrenceIndex]
-    if (
-      !candidate ||
-      claimedMessageIds.has(candidate.id) ||
-      (tailIndex !== undefined && (messageIndexById.get(candidate.id) ?? -1) <= tailIndex)
-    ) {
+    if (!candidate || full(candidate) || !afterTail(candidate)) {
       continue
     }
-    claimedMessageIds.add(candidate.id)
-    landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
+    const images = [...drawnOn(candidate.id), ...entry.images]
+    drawn.set(candidate.id, images)
+    landed.push({ pendingId: entry.id, messageId: candidate.id, images })
   }
   return landed
 }
 
+/** How many photos a row has room for: its image blocks, or the `[Image #N]`
+ *  markers its words carried before its companion landed; at least one. */
+function photoSlots(message: NativeChatMessage, raw: NativeChatMessage | undefined): number {
+  const blocks = message.blocks.filter(isImageRefBlock).length
+  const markers = (raw ?? message).blocks.reduce(
+    (count, block) => count + (isTextBlock(block) ? (block.text.match(IMAGE_PROMPT_MARKERS)?.length ?? 0) : 0),
+    0
+  )
+  return Math.max(1, blocks, markers)
+}
+
 /**
  * A row the desktop stamped well before the phone sent this is another
- * message's. The tail alone could not say so for a send made before the chat's
- * read settled: its tail is whatever the phone had, a kept transcript from an
- * earlier visit or nothing, and a photo sent with no words, which has only
- * the order of photo rows to go by, took the first photo row after it. So an
- * older photo message drew the new photo, and the new one "Image on Desktop"
- * (2026-09-26, Claude Code 2.1.283). Asked only for a send with no words: one
- * with words is matched by them, and a phone clock running far ahead must
- * not cost it its photos.
+ * message's. For a send made before the chat's read settled the tail cannot
+ * say so: it is whatever the phone had, an earlier visit's transcript or
+ * nothing, and a photo sent with no words took the first photo row after it,
+ * an older message's, which then drew the new photo while the new row drew
+ * "Image on Desktop" (2026-09-26, Claude Code 2.1.283). Asked only of such a
+ * send: one made against a settled read has a real tail, and a phone clock
+ * running ahead of the desktop's must not cost it its photos.
  */
-function writtenBefore(message: NativeChatMessage, entry: PendingImagePreviewEcho): boolean {
+function writtenBefore(message: NativeChatMessage, entry: PendingImagePreviewEcho, slackMs: number): boolean {
   return (
+    entry.sentBeforeReadSettled === true &&
     typeof entry.sentAt === 'number' &&
     Number.isFinite(entry.sentAt) &&
     message.timestamp !== null &&
-    message.timestamp < entry.sentAt - SEND_ROW_CLOCK_SLACK_MS
+    message.timestamp < entry.sentAt - slackMs
   )
 }
 

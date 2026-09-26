@@ -36,6 +36,10 @@ export type MobileNativeChatPendingMessage = {
   baselineResolved: boolean
   /** Restored echoes with no retained boundary must not appear as new sends. */
   restored?: boolean
+  /** Sent before the chat's read settled: its tail was whatever the phone had
+   *  on screen, so rows stamped well before it are not its (the photo binder,
+   *  mobile-native-chat-draft-reconcile.ts). Kept through the rebase. */
+  sentBeforeReadSettled?: boolean
   /** Held from the first screen reading, anchored to whatever the tail was
    *  then: drawn, but never written to disk (2026-09-13). */
   provisional?: boolean
@@ -143,6 +147,7 @@ export function appendMobileNativeChatPending(
             : origin.baselineOccurrences + earlierOutstanding + 1,
         baselineTailMessageId: origin.baselineTailMessageId,
         baselineResolved: origin.baselineResolved,
+        ...(origin.baselineResolved ? {} : { sentBeforeReadSettled: true }),
         ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {}),
         ...(images?.length ? { images } : {})
       }
