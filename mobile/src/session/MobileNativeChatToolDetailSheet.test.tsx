@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
@@ -9,7 +9,8 @@ import { ToolDetailBody, ToolDetailHeader } from './MobileNativeChatToolDetailSh
 
 // The header/body are tested apart from `DraggableDetailSheet`, the same way
 // `MobileBackgroundTasksSheetBody` is tested apart from `BottomDrawer` —
-// neither content component touches gesture-handler/reanimated itself.
+// neither content component touches reanimated or the sheet's pans; the
+// body's one gesture is the output text's own (mocked below).
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: {
@@ -21,12 +22,25 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 // Same reason `MobileBackgroundTasksSheet.test.tsx` mocks out `BottomDrawer`:
-// the drawer shell pulls in gesture-handler/reanimated's Flow-typed RN
-// internals, which Node cannot parse, and the content under test never
-// touches it.
+// the drawer shell pulls in reanimated's Flow-typed RN internals, which Node
+// cannot parse, and the content under test never touches it.
 vi.mock('../components/DraggableDetailSheet', () => ({
   DraggableDetailSheet: 'DraggableDetailSheet'
 }))
+// The shared gesture-handler mock hands back one untyped builder for every
+// gesture; this one keeps the kind, so a test can tell a Native gesture from
+// a Pan. Any configuration call still returns the same builder.
+vi.mock('react-native-gesture-handler', async () => {
+  const { createElement: h } = await import('react')
+  const builder = (kind: string): unknown => {
+    const self: unknown = new Proxy({}, { get: (_, key) => (key === 'kind' ? kind : () => self) })
+    return self
+  }
+  return {
+    Gesture: { Native: () => builder('native'), Pan: () => builder('pan'), Tap: () => builder('tap') },
+    GestureDetector: (props: Record<string, unknown>) => h('GestureDetector', props)
+  }
+})
 
 const SEND_MESSAGE_PAIR: NativeChatToolPair = {
   call: {
@@ -63,6 +77,16 @@ function textColor(renderer: ReactTestRenderer, testID: string): string | undefi
   const style = findTextNode(renderer, testID).props.style
   const entries = Array.isArray(style) ? style : [style]
   return entries.find((entry: { color?: string } | null) => entry?.color)?.color
+}
+
+// The first host element above `node`, skipping composites like `Txt`: the
+// view a gesture-handler detector would attach its handler to.
+function nearestHostAncestor(node: ReactTestInstance): ReactTestInstance | null {
+  let current = node.parent
+  while (current && typeof current.type !== 'string') {
+    current = current.parent
+  }
+  return current
 }
 
 function renderTree(children: React.ReactNode, scheme: 'light' | 'dark' = 'light'): ReactTestRenderer {
@@ -193,6 +217,33 @@ describe('tool detail body: Inputs and Output', () => {
     expect(pretty).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(pretty.startsWith('{\n  "rows": [\n')).toBe(true)
   })
+
+  // Reported 2026-09-26 (screen recording): a finger dragged over the Output
+  // block scrolled the sheet a little, then Android selected the word under
+  // the finger and raised Copy / Translate / Select all, on every attempt.
+  // The sheet's pans run under gesture-handler, whose root stops passing the
+  // touch to the Android views once a pan takes it, without a cancel. A
+  // selectable TextView with no gesture of its own keeps the long-press it
+  // armed on touch-down, and it fires mid-scroll. Its own native gesture is
+  // what the pan cancels, which delivers ACTION_CANCEL to the TextView.
+  it.each(['light', 'dark'] as const)(
+    'scrolls instead of selecting a word when a drag starts on the output (%s)',
+    (scheme) => {
+      renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }), scheme)
+      const output = findTextNode(renderer, 'tool-detail-output')
+      // Still selectable by a deliberate, still long-press.
+      expect(output.props.selectable).toBe(true)
+      const selectable = renderer.root
+        .findAllByType('Text' as never)
+        .filter((node) => node.props.selectable === true)
+      expect(selectable.length).toBeGreaterThan(0)
+      for (const node of selectable) {
+        const detector = nearestHostAncestor(node)
+        expect(detector?.type).toBe('GestureDetector')
+        expect((detector?.props.gesture as { kind?: string } | undefined)?.kind).toBe('native')
+      }
+    }
+  )
 
   it('keeps an output of exactly the cap whole, with no ellipsis', () => {
     const exact: NativeChatToolPair = {
