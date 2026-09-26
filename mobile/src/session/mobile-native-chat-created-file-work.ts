@@ -38,7 +38,11 @@
 //   TaskStop's word is taken only from a batch that closed with every call
 //   answered and held no call that could print it (review of 5b257b16: a
 //   `grep` printed the not-running line beside a stop turned down, and a
-//   call never answered drew a later stop that worked into the batch).
+//   call never answered drew a later stop that worked into the batch). Of
+//   several stops of one task there, only as many stand as TaskStop's words
+//   for it, the latest first (review of d3bb3304: a stop turned down and a
+//   second that worked shared the one word, and the first ended the task
+//   before a create between them).
 // The limits, each of which refuses:
 // - a task that ended in a way the transcript does not record (a mid-turn
 //   completion Orca does not surface) is still running here;
@@ -190,8 +194,9 @@ function launchIn(call: Pending, answer: string): string | null | undefined {
 /** Closes a batch. Each call that may have lost its launch to another, and
  *  each call still waiting, runs under every launch of it an answer there
  *  names. Then each stop is taken back if a failure landed in the batch,
- *  unless TaskStop said its task was no longer running, in a batch every
- *  call answered and none could have said it for TaskStop. */
+ *  unless TaskStop said its task was no longer running, once for it and for
+ *  each later stop of that task, in a batch every call answered and none
+ *  could have said it for TaskStop. */
 function settle(batch: Batch, waiting: Pending[], endings: Ending[], spans: Span[]): void {
   for (const call of [...batch.unsure, ...waiting.filter(mayLaunch)]) {
     for (const answer of batch.answers) {
@@ -205,8 +210,12 @@ function settle(batch: Batch, waiting: Pending[], endings: Ending[], spans: Span
     return
   }
   const vouched = waiting.length === 0 && !batch.mayQuote
-  for (const stop of batch.stops) {
-    if (!vouched || !batch.answers.some((answer) => saysStopped(answer, stop.id))) {
+  // Of several stops of one task, only as many stand as TaskStop's word
+  // vouches for, and the latest of them: which one it answered is a guess.
+  for (const [index, stop] of batch.stops.entries()) {
+    const said = batch.answers.filter((answer) => saysStopped(answer, stop.id)).length
+    const later = batch.stops.slice(index + 1).filter((other) => other.id === stop.id).length
+    if (!vouched || later >= said) {
       endings.splice(endings.indexOf(stop), 1)
     }
   }

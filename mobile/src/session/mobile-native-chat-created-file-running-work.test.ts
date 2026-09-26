@@ -437,6 +437,37 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...SHELL, ...turn, ...CREATE])).toBe(true)
   })
 
+  // Review of d3bb3304: two stops of one task shared the one answer saying
+  // it stopped, so the first, turned down, still ended the task before the
+  // create between them.
+  const STOP = { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } } as const
+
+  it('draws no count for a create made between a stop the user turned down and a second stop of the same task that worked', () => {
+    const turn = [
+      message('assistant', [STOP, WRITE, STOP]),
+      answered(USER_TURNED_DOWN),
+      message('user', [WRITE_RESULT]),
+      answered(stoppedOutput(SHELL_ID))
+    ]
+    expect(touched([...SHELL, ...turn])).toBe(true)
+  })
+
+  it('still counts a create made between two stops of the same task, both answered as ended, beside a failed read', () => {
+    const turn = [
+      message('assistant', [
+        STOP,
+        WRITE,
+        STOP,
+        { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/missing.txt' } }
+      ]),
+      answered(stoppedOutput(SHELL_ID)),
+      message('user', [WRITE_RESULT]),
+      alreadyDone(SHELL_ID),
+      answered(MISSING_FILE)
+    ]
+    expect(touched([...SHELL, ...turn])).toBe(false)
+  })
+
   it('still counts a create made after a stop answered after the search beside it failed', () => {
     const turn = [
       message('assistant', [

@@ -136,7 +136,11 @@ Nothing here is built.
   beside a stop turned down. The not-running line is itself no failure when
   a stop called before it names its task, since TaskStop's own answer is
   then that line or its JSON: in review a stop of a task already done,
-  beside an `npm test`, was taken back. So a task that ended where the transcript does not
+  beside an `npm test`, was taken back. Of several stops of one task among
+  those calls, only as many stand as TaskStop's words for it, the latest
+  first: in review a stop turned down and a second that worked shared the
+  one word, and the first ended the task before a create between them. So a
+  task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
   all hold the count off. A foreground agent's report is over once it is
