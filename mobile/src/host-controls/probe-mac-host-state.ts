@@ -21,7 +21,7 @@ export const WINDOWS_HOST_STATE_PROBE_TIMEOUT_MS = 15000
 
 /** Opens the same kind of throwaway terminal the actions use, watches its screen for
  *  the marker line, then closes the tab. Never guesses: a screen that never paints the
- *  marker comes back unknown, and the sheet then offers every row. The first whole
+ *  marker comes back unknown, and the sheet then offers every row but Unlock. The first whole
  *  marker ends the watch, whatever it holds: the Windows one carries no lock at all,
  *  and a rule that waited for a lock answer would sit out the whole 15 s. */
 export async function probeMacHostState(args: {

@@ -67,15 +67,16 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
 
 /** Only the rows that can do anything from where the Mac actually is: you cannot lock a
  *  locked Mac, wake a display that is already on, or mute a muted Mac. An unknown half offers both of its
- *  rows — a wrong row is better than a missing one when the Mac would not say. */
+ *  rows — a wrong row is better than a missing one when the Mac would not say.
+ *
+ *  Unlock is the exception. It types the password, then Return, into whatever is in
+ *  front on the Mac, and on a Mac that is not locked that is a chat window, a
+ *  terminal or a browser field (review, 2026-09-26). So it is offered only when the
+ *  Mac said it is locked, and an unknown lock gets Lock alone, which does nothing to
+ *  a Mac that is locked already. The command checks again before it types
+ *  (MAC_SCREEN_LOCK_GATE); this keeps the row from asking for that in the first place. */
 function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction[] {
-  const lock: MacHostAction[] = !canUnlock
-    ? ['lock']
-    : state.lock === 'locked'
-      ? ['unlock']
-      : state.lock === 'unlocked'
-        ? ['lock']
-        : ['lock', 'unlock']
+  const lock: MacHostAction[] = canUnlock && state.lock === 'locked' ? ['unlock'] : ['lock']
   const display: MacHostAction[] =
     state.display === 'off'
       ? ['wake-display']

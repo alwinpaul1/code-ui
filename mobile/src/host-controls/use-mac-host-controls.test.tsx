@@ -45,6 +45,8 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
     /** 'stuck' never prints the done marker; 'throw' answers the action's tab with
      *  nothing at all, which throws inside the watch. */
     actionMode: 'done' as 'done' | 'stuck' | 'throw',
+    /** What an action's tab shows instead of the done marker, when set. */
+    actionScreen: null as string[] | null,
     /** How long an action's tab takes to print its done marker, and how long after
      *  that `afterAction` becomes the host's answer. */
     actionDoneAfterMs: 0,
@@ -78,6 +80,9 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           const createdAt = createdAtByTerminal.get(args.terminal ?? '') ?? 0
           if (host.actionMode === 'stuck' || Date.now() < createdAt + host.actionDoneAfterMs) {
             return ok({ terminal: { lines: [] } })
+          }
+          if (host.actionScreen) {
+            return ok({ terminal: { lines: [command, ...host.actionScreen] } })
           }
           // The host takes a moment to settle after the command says it is done:
           // a display sleeps about a second after pmset returns.
@@ -391,4 +396,27 @@ describe('the host menu after one of its rows ran', () => {
     await elapse(400)
     expect(latest?.macOptions?.state).toEqual(UNLOCKED_AWAKE_STATE)
   })
+})
+
+// Review, 2026-09-26: Unlock types the password into whatever is in front on the
+// Mac, so the command types nothing unless the screen is locked when it runs. The
+// user must be told which happened, and never shown the password doing it.
+describe('the host menu when an Unlock typed nothing', () => {
+  for (const [marker, toast] of [
+    ['CUIREFUSED unlocked', "The Mac isn't locked, so nothing was typed."],
+    ['CUIREFUSED unconfirmed', "Couldn't confirm the Mac is locked, so nothing was typed."]
+  ] as const) {
+    it(`says "${toast}" as soon as the Mac says so`, async () => {
+      const mac = fakeHost('mac', 'darwin')
+      mac.actionScreen = [marker]
+      render({ clients: clientsOf(mac), worktreeInfo: { mac: infoFor('mac') }, openHostId: null })
+      await elapse(10)
+      act(() => latest?.onPasswordSaved('mac', 'fake-pw-not-real'))
+      await elapse(1000)
+      expect(latest?.toast).toBe(toast)
+      expect(mac.created).toHaveLength(1)
+      expect(mac.created[0]).toContain('fake-pw-not-real')
+      expect(latest?.toast).not.toContain('fake-pw-not-real')
+    })
+  }
 })

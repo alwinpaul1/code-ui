@@ -1,4 +1,9 @@
-import { MAC_HOST_COMMAND_DONE_PATTERN } from './mac-host-commands'
+import {
+  MAC_HOST_COMMAND_DONE_PATTERN,
+  MAC_UNLOCK_REFUSAL_REASONS,
+  readMacUnlockRefusal,
+  type MacUnlockRefusal
+} from './mac-host-commands'
 import { watchThrowawayTerminal, type ThrowawayTerminalClient } from './throwaway-terminal'
 
 export type MacHostCommandOutcome = { ok: true } | { ok: false; reason: string }
@@ -24,23 +29,31 @@ export async function runMacHostCommand(args: {
   /** How the host is named in the one failure this can report. */
   hostNoun?: string
 }): Promise<MacHostCommandOutcome> {
-  const outcome = await watchThrowawayTerminal({
+  const outcome = await watchThrowawayTerminal<MacUnlockRefusal | 'done'>({
     client: args.client,
     worktreeId: args.worktreeId,
     command: args.command,
     timeoutMs: args.timeoutMs ?? MAC_HOST_COMMAND_TIMEOUT_MS,
     secret: args.secret,
     ...(args.hostNoun ? { hostNoun: args.hostNoun } : {}),
-    read: (lines) => (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? true : null)
+    // A refusal is the unlock saying it typed nothing (mac-host-commands.ts); it
+    // ends the watch as the done marker does.
+    read: (lines) =>
+      readMacUnlockRefusal(lines) ?? (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? 'done' : null)
   })
   if (!outcome.ok) {
     return outcome
   }
-  // The shell prints the marker once the command is through. Never seeing it
-  // inside the budget means it did not finish — a wrong unlock password, or
-  // osascript refused Accessibility. Reporting that as success left both
-  // outcomes ending in silence (2026-09-14 review).
-  return outcome.answer === true
+  if (outcome.answer !== null && outcome.answer !== 'done') {
+    // A fixed line chosen by the marker, never the host's text: the unlock's screen
+    // carries the password.
+    return { ok: false, reason: MAC_UNLOCK_REFUSAL_REASONS[outcome.answer] }
+  }
+  // The shell prints the marker once the command is through, whether or not
+  // osascript succeeded. Never seeing it inside the budget means the command did
+  // not get through: a shell that never ran it, or an osascript still running.
+  // Reporting that as success ended it in silence (2026-09-14 review).
+  return outcome.answer === 'done'
     ? { ok: true }
     : { ok: false, reason: `The ${args.hostNoun ?? 'Mac'} did not finish that. Check the desktop.` }
 }

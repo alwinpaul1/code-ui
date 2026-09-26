@@ -58,13 +58,21 @@ export async function watchThrowawayTerminal<T>(
   const host = args.hostNoun ?? 'Mac'
   let created
   try {
-    created = await args.client.sendRequest('session.tabs.createTerminal', {
-      worktree: `id:${args.worktreeId}`,
-      command: args.command,
-      activate: false,
-      select: false,
-      navigation: 'caller'
-    })
+    created = await args.client.sendRequest(
+      'session.tabs.createTerminal',
+      {
+        worktree: `id:${args.worktreeId}`,
+        command: args.command,
+        activate: false,
+        select: false,
+        navigation: 'caller'
+      },
+      // Why: sent while the link is down, a request waits and goes out on the next
+      // socket (rpc-client-connect-wait-replay.test.ts), and the direct client's
+      // wait has no end. The unlock would then type the password whenever the
+      // phone next reached the Mac, long after the tap. A secret goes now or never.
+      args.secret ? { failWhenDisconnected: true } : undefined
+    )
   } catch {
     // Why a fixed string: the thrown error can carry the command, and the unlock
     // command carries the user's password. Nothing derived from it may be shown.

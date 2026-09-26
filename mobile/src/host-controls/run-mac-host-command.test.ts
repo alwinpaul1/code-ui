@@ -172,6 +172,67 @@ describe('running a Mac control on the host', () => {
     expect(fake.methods()).toContain('terminal.closeTab')
   })
 
+  // Review, 2026-09-26: Unlock types the password into whatever is in front on the
+  // Mac. The command now checks the screen is locked first and types nothing if it
+  // is not, and the phone must say which of the two happened.
+  it("says the Mac isn't locked and nothing was typed, as soon as the unlock says so", async () => {
+    const fake = fakeClient([[SECRET, 'CUIREFUSED unlocked']])
+    expect(await run(fake, SECRET, { secret: true })).toEqual({
+      ok: false,
+      reason: "The Mac isn't locked, so nothing was typed."
+    })
+    expect(fake.methods()).toEqual(['session.tabs.createTerminal', 'terminal.read', 'session.tabs.close'])
+  })
+
+  it("says it couldn't confirm the Mac is locked and nothing was typed, when the check could not tell", async () => {
+    const fake = fakeClient([[SECRET, 'CUIREFUSED unconfirmed']])
+    expect(await run(fake, SECRET, { secret: true })).toEqual({
+      ok: false,
+      reason: "Couldn't confirm the Mac is locked, so nothing was typed."
+    })
+    expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
+  })
+
+  it("does not take the unlock's own echo of its refusal for a refusal", async () => {
+    const fake = fakeClient([[`${SECRET} (unlocked) printf 'CUIREFUSED %s\\n' unlocked ;;`]])
+    const outcome = await run(fake, SECRET, { secret: true })
+    expect(outcome.ok === false && outcome.reason).toMatch(/did not finish/i)
+  })
+
+  // A request sent while the link is down parks and goes out on the next socket
+  // (rpc-client-connect-wait-replay.test.ts), and the direct client's wait has no
+  // end. An unlock parked that way would type the password whenever the phone next
+  // reached the Mac, minutes or hours after the tap.
+  it('never leaves an unlock waiting to be delivered on a later connection', async () => {
+    let connected = false
+    const parked: (() => void)[] = []
+    const delivered: string[] = []
+    const client = {
+      sendRequest: vi.fn(async (method: string, _params?: unknown, options?: { failWhenDisconnected?: boolean }) => {
+        if (!connected) {
+          if (options?.failWhenDisconnected) {
+            throw new Error(`Not connected: ${method}`)
+          }
+          await new Promise<void>((resolve) => parked.push(resolve))
+        }
+        delivered.push(method)
+        return method === 'session.tabs.createTerminal'
+          ? okResponse({ tab: { id: 'tab-9', type: 'terminal', terminal: 'term-9' } })
+          : okResponse({ terminal: { lines: ['CUIDONE ok'] } })
+      })
+    }
+    let outcome: unknown = null
+    void runMacHostCommand({ client, worktreeId: 'wt-1', command: SECRET, secret: true }).then((value) => {
+      outcome = value
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(outcome).toEqual({ ok: false, reason: 'The Mac did not answer.' })
+    connected = true
+    parked.forEach((resume) => resume())
+    await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS + THROWAWAY_TERMINAL_SECRET_POLL_MS)
+    expect(delivered).not.toContain('session.tabs.createTerminal')
+  })
+
   // 2026-09-23, from the phone: Wake display on a Windows host that did not
   // answer said "The Mac did not answer."
   it('names the PC, not the Mac, in every failure a Windows host can cause', async () => {

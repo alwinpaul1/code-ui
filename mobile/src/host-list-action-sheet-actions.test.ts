@@ -157,13 +157,17 @@ function buildWithMac(mac: {
   return { actions, onMacAction }
 }
 
+/** A Mac that said it is locked, and one that said it is not: between them, every Mac row. */
+const LOCKED_MAC: MacHostState = { lock: 'locked', display: 'unknown', mute: 'unknown' }
+const UNLOCKED_MAC: MacHostState = { lock: 'unlocked', display: 'unknown', mute: 'unknown' }
+
 describe('the Mac controls on the host sheet', () => {
-  it('offers lock, unlock, sleep and wake on a Mac', () => {
+  it('offers lock, sleep, wake and mute, and no Unlock, on a Mac that has not said whether it is locked', () => {
     const { actions } = buildWithMac({ hostPlatform: 'darwin' })
     expect(actions.map((action) => action.label)).toEqual([
       'Reconnect',
       'Disconnect',
-      ...MAC_LABELS,
+      ...MAC_LABELS.filter((label) => label !== 'Unlock Mac'),
       'Network diagnostics',
       'Edit host',
       'Remove'
@@ -342,9 +346,16 @@ describe('the Mac controls on the host sheet', () => {
     expect(macLabelsOf(actions)).toEqual(['Lock Mac', 'Wake display', 'Unmute Mac'])
   })
 
-  it('falls back to every row when the Mac would not say what state it is in', () => {
+  // 2026-09-26 review: Unlock types the password, then Return, into whatever is in
+  // front on the Mac. Offered on a Mac that would not say it was locked, it could
+  // type the password into a chat window or a terminal. Lock stays: locking a
+  // locked Mac does nothing.
+  it('never offers Unlock when the Mac would not say whether it is locked, and still offers Lock', () => {
     const { actions } = buildWithMac({ hostPlatform: 'darwin', state: UNKNOWN_MAC_HOST_STATE })
-    expect(macLabelsOf(actions)).toEqual(MAC_LABELS)
+    expect(macLabelsOf(actions)).toEqual(['Lock Mac', 'Sleep display', 'Wake display', 'Mute Mac', 'Unmute Mac'])
+    const knowsTheRest = buildWithMac({ hostPlatform: 'darwin', state: { lock: 'unknown', display: 'on', mute: 'muted' } })
+    expect(macLabelsOf(knowsTheRest.actions)).toEqual(['Lock Mac', 'Sleep display', 'Unmute Mac'])
+    expect(knowsTheRest.actions.find((action) => action.label === 'Lock Mac')?.group).toBe('Mac')
   })
 
   it('offers the half it does know when only one answer came back', () => {
@@ -372,7 +383,7 @@ describe('the Mac controls on the host sheet', () => {
   })
 
   it('waits for the sheet to close before Unlock can raise the password drawer', () => {
-    const { actions } = buildWithMac({ hostPlatform: 'darwin' })
+    const actions = [LOCKED_MAC, UNLOCKED_MAC].flatMap((state) => buildWithMac({ hostPlatform: 'darwin', state }).actions)
     for (const label of MAC_LABELS) {
       expect(actions.find((action) => action.label === label)?.closeBeforePress).toBe(true)
     }
@@ -396,18 +407,19 @@ describe('the Mac controls on the host sheet', () => {
   })
 
   it('hands each tap its own action', () => {
-    const { actions, onMacAction } = buildWithMac({ hostPlatform: 'darwin' })
-    for (const [label, action] of [
-      ['Lock Mac', 'lock'],
-      ['Unlock Mac', 'unlock'],
-      ['Sleep display', 'sleep-display'],
-      ['Wake display', 'wake-display'],
-      ['Mute Mac', 'mute'],
-      ['Unmute Mac', 'unmute']
+    const locked = buildWithMac({ hostPlatform: 'darwin', state: LOCKED_MAC })
+    const unlocked = buildWithMac({ hostPlatform: 'darwin', state: UNLOCKED_MAC })
+    for (const [label, action, sheet] of [
+      ['Lock Mac', 'lock', unlocked],
+      ['Unlock Mac', 'unlock', locked],
+      ['Sleep display', 'sleep-display', locked],
+      ['Wake display', 'wake-display', locked],
+      ['Mute Mac', 'mute', unlocked],
+      ['Unmute Mac', 'unmute', unlocked]
     ] as const) {
-      onMacAction.mockClear()
-      actions.find((entry) => entry.label === label)?.onPress()
-      expect(onMacAction).toHaveBeenCalledWith(action)
+      sheet.onMacAction.mockClear()
+      sheet.actions.find((entry) => entry.label === label)?.onPress()
+      expect(sheet.onMacAction).toHaveBeenCalledWith(action)
     }
   })
 })

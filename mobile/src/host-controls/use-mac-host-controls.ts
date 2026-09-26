@@ -36,7 +36,8 @@ const ACTION_SETTLE_MS = 3000
  *  reconnect) held the menu on "Checking" past the probe's own 12 s. The wait comes
  *  off the probe's budget, so the row still ends inside it, and the probe keeps at
  *  least 5 s of its 12. Counted from the menu, not the tap: Unlock spends 3.3 s by
- *  design before it types, and a 5 s cap from the tap let the probe read the login
+ *  design before it types, a little more since it checks the lock twice first
+ *  (mac-host-commands.ts), and a 5 s cap from the tap let the probe read the login
  *  window before it let the user in (2026-09-26 review). */
 const MENU_WAIT_MAX_MS = 7000
 /** When a gate comes down even if its run never settles, so no host is left

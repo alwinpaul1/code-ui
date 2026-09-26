@@ -14,7 +14,9 @@ describe('mac host commands', () => {
       expect(buildMacHostCommand(action)).toMatch(/; printf 'CUIDONE %s\\n' ok$/)
       expect(buildMacHostCommand(action)).not.toMatch(/exit\s*$/)
     }
-    expect(buildMacUnlockCommand('pw')).toMatch(/; printf 'CUIDONE %s\\n' ok$/)
+    // Unlock ends in the case that picks done or refused (mac-unlock-lock-gate.test.ts).
+    expect(buildMacUnlockCommand('pw')).toContain("(typed|failed) printf 'CUIDONE %s\\n' ok ;;")
+    expect(buildMacUnlockCommand('pw')).not.toMatch(/exit\s*$/)
     expect(MAC_HOST_COMMAND_DONE_PATTERN.test("printf 'CUIDONE %s\\n' ok")).toBe(false)
     expect(MAC_HOST_COMMAND_DONE_PATTERN.test('CUIDONE ok')).toBe(true)
   })
@@ -50,8 +52,10 @@ describe('mac host commands', () => {
   })
 
   it('wakes the display, waits, then types the password and Return', () => {
-    expect(buildMacUnlockCommand('hunter2')).toBe(
-      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events"' -e 'repeat 40 times' -e 'key code 51' -e 'end repeat' -e 'keystroke "hunter2"' -e 'keystroke return' -e 'end tell'; printf 'CUIDONE %s\\n' ok`
+    const command = buildMacUnlockCommand('hunter2')
+    expect(command).toMatch(/^caffeinate -u -t 2; sleep 1; cui_lock=\$\(/)
+    expect(command).toContain(
+      `-e 'tell application "System Events"' -e 'keystroke "hunter2"' -e 'keystroke return' -e 'end tell' -e 'return "typed"'`
     )
   })
 
@@ -66,9 +70,12 @@ describe('mac host commands', () => {
   it('does not let a single quote break the shell quoting', () => {
     // The '\'' idiom: close the quote, hand the shell an escaped one, reopen —
     // so the whole -e argument still reaches osascript as one word.
-    expect(buildMacUnlockCommand("a'b")).toBe(
-      `caffeinate -u -t 2; sleep 1; osascript -e 'tell application "System Events"' -e 'repeat 40 times' -e 'key code 51' -e 'end repeat' -e 'keystroke "a'\\''b"' -e 'keystroke return' -e 'end tell'; printf 'CUIDONE %s\\n' ok`
-    )
+    expect(buildMacUnlockCommand("a'b")).toContain(`-e 'keystroke "a'\\''b"'`)
+  })
+
+  it('adds nothing to the unlock that an interactive shell would rewrite before running it', () => {
+    // bash expands `!` on an interactive command line outside single quotes.
+    expect(buildMacUnlockCommand('hunter2')).not.toContain('!')
   })
 
   it('leaves $ and backtick literal because single quotes already disarm them', () => {

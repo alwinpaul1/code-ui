@@ -1,3 +1,5 @@
+import { MAC_SCREEN_LOCKED_KEY } from './mac-host-state'
+
 /** The one-tap Mac controls the host card offers on a darwin host. */
 export type MacHostAction = 'lock' | 'unlock' | 'sleep-display' | 'wake-display' | 'mute' | 'unmute'
 
@@ -70,20 +72,91 @@ export function buildMacHostCommand(action: MacHostPasswordlessAction): string {
  *  long mistype; on an empty field each one does nothing. */
 const CLEAR_PASSWORD_FIELD_DELETES = 40
 
-/** Wakes the screen, gives the login window a beat to accept input, clears the
- *  password field, then types the password and Return. The password is only
- *  ever interpolated here; it must never reach a log line, an error message
- *  or a toast. */
-export function buildMacUnlockCommand(password: string): string {
-  const lines = [
+/** Why the unlock typed nothing: the Mac said it is not locked, or would not say. */
+export type MacUnlockRefusal = 'unlocked' | 'unconfirmed'
+
+export const MAC_UNLOCK_REFUSAL_REASONS: Record<MacUnlockRefusal, string> = {
+  unlocked: "The Mac isn't locked, so nothing was typed.",
+  unconfirmed: "Couldn't confirm the Mac is locked, so nothing was typed."
+}
+
+const ON_CONSOLE_KEY = '"kCGSSessionOnConsoleKey"=Yes'
+
+/**
+ * Prints one word: `locked`, `unlocked`, or `unconfirmed` when it cannot tell.
+ *
+ * Why the unlock asks at all (review, 2026-09-26): it types Deletes, the password
+ * and Return as keystrokes into whatever is in front. On a locked Mac that is the
+ * login window. On any other Mac it is a chat window, a terminal or a browser
+ * field, and the password lands there. The phone's own answer can be minutes old
+ * by the time a tap arrives, so the Mac is asked as the command runs.
+ *
+ * The probe's key (MAC_SCREEN_LOCKED_KEY), in the same `ioreg -w0` text form, but
+ * read from the ONE session on the console. Each session is a flat `{…}` in
+ * IOConsoleUsers (checked on macOS 27.0, 2026-09-26), so cutting the text at `}`
+ * leaves one session per line. A second user switched out behind the one on
+ * screen may be locked while the screen in front is not; the probe's grep over
+ * the whole registry would call that Mac locked. An ioreg that fails does not
+ * count, whatever it printed, and no session on the console is `unconfirmed`.
+ * The `(pattern)` form keeps bash 3.2 from misreading a case inside `$(…)`.
+ */
+export const MAC_SCREEN_LOCK_GATE =
+  'cui_s=$(ioreg -w0 -n Root -d1) || cui_s=; ' +
+  `case "$(printf '%s\\n' "$cui_s" | tr '}' '\\n' | grep '${ON_CONSOLE_KEY}')" in ` +
+  `(*'${MAC_SCREEN_LOCKED_KEY}'*) printf locked ;; ` +
+  `(*'${ON_CONSOLE_KEY}'*) printf unlocked ;; ` +
+  '(*) printf unconfirmed ;; esac'
+
+// Anchored, and a `%s` in the command: its own echo on the screen must not match.
+const REFUSED_PATTERN = /^CUIREFUSED (unlocked|unconfirmed)\b/
+
+/** The refusal the unlock command printed, or null while there is none. */
+export function readMacUnlockRefusal(lines: string[]): MacUnlockRefusal | null {
+  for (const line of lines) {
+    const match = REFUSED_PATTERN.exec(line)
+    if (match) {
+      return match[1] === 'unlocked' ? 'unlocked' : 'unconfirmed'
+    }
+  }
+  return null
+}
+
+/** Clears the password field, asks again whether the screen is locked, and only
+ *  then types the password and Return. The second ask is the one that counts: a
+ *  Watch or Touch ID can let the user in once the wake below has lit the screen,
+ *  and the Deletes take a moment. The script's answer is `typed`, or the word
+ *  that stopped it. */
+export function macUnlockAppleScriptLines(password: string): string[] {
+  return [
     'tell application "System Events"',
     `repeat ${CLEAR_PASSWORD_FIELD_DELETES} times`,
     'key code 51',
     'end repeat',
+    'end tell',
+    `set cuiLock to do shell script "${escapeAppleScriptString(MAC_SCREEN_LOCK_GATE)}"`,
+    'if cuiLock is not "locked" then return cuiLock',
+    'tell application "System Events"',
     `keystroke "${escapeAppleScriptString(password)}"`,
     'keystroke return',
-    'end tell'
+    'end tell',
+    'return "typed"'
   ]
-  const script = lines.map((line) => `-e '${escapeShellSingleQuoted(line)}'`).join(' ')
-  return `caffeinate -u -t 2; sleep 1; osascript ${script}${SELF_CLOSE}`
+}
+
+/** Wakes the screen, gives the login window a beat to accept input, and runs the
+ *  script only if the Mac then says its screen is locked. Otherwise it types
+ *  nothing and prints why, and the phone says so. The password is only ever
+ *  interpolated here; it must never reach a log line, an error message or a
+ *  toast. An osascript that fails (Accessibility refused) still ends in the done
+ *  marker, as it always has. */
+export function buildMacUnlockCommand(password: string): string {
+  const script = macUnlockAppleScriptLines(password)
+    .map((line) => `-e '${escapeShellSingleQuoted(line)}'`)
+    .join(' ')
+  return (
+    `caffeinate -u -t 2; sleep 1; cui_lock=$(${MAC_SCREEN_LOCK_GATE}); ` +
+    `case $cui_lock in (locked) cui_lock=$(osascript ${script}) || cui_lock=failed ;; esac; ` +
+    `case $cui_lock in (typed|failed) printf 'CUIDONE %s\\n' ok ;; ` +
+    `(unlocked) printf 'CUIREFUSED %s\\n' unlocked ;; (*) printf 'CUIREFUSED %s\\n' unconfirmed ;; esac`
+  )
 }

@@ -23,7 +23,10 @@ const MARKER = 'CUIMAC'
 // against 260 ms at background priority on the same Mac under heavy load. The key
 // sits deep inside one long line, and `-w0` keeps ioreg from ever clipping it to
 // a terminal's width (into a pipe it does not clip today, checked at 80 columns).
-const LOCK_READ = `ioreg -w0 -n Root -d1 | grep -c '"CGSSessionScreenIsLocked"=Yes'`
+/** What a locked session carries in that text form. The unlock command checks for
+ *  it too, just before it types (mac-host-commands.ts). */
+export const MAC_SCREEN_LOCKED_KEY = '"CGSSessionScreenIsLocked"=Yes'
+const LOCK_READ = `ioreg -w0 -n Root -d1 | grep -c '${MAC_SCREEN_LOCKED_KEY}'`
 
 // Mute and display from ONE osascript. Starting osascript is most of what either
 // question costs, so asking both in one process saves a whole start: 278 ms for
@@ -93,7 +96,7 @@ export function readMacHostStateMarker(lines: string[]): MacHostState | null {
 }
 
 /** The last marker painted on the screen, or unknown. Unknown is a real answer here —
- *  it means "show every row" rather than "assume the Mac is awake". */
+ *  it means "show every row but Unlock" rather than "assume the Mac is awake". */
 export function parseMacHostState(lines: string[]): MacHostState {
   return readMacHostStateMarker(lines) ?? UNKNOWN_MAC_HOST_STATE
 }

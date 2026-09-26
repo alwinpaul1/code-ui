@@ -119,6 +119,46 @@ describe('the Mac controls in both themes', () => {
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
+  // 2026-09-26 review: Unlock types the password into whatever is in front on the
+  // Mac, so a Mac that would not say it is locked gets Lock and no Unlock.
+  it("draws a Mac's rows with Lock and no Unlock when it would not say whether it is locked, in light and dark", () => {
+    const macRows = () =>
+      createElement(ActionSheetContent, {
+        actions: getMacHostSheetActions({
+          hostPlatform: 'darwin',
+          worktreeId: 'wt-1',
+          state: { lock: 'unknown', display: 'on', mute: 'unmuted' },
+          onAction: vi.fn()
+        })
+      })
+    const light = renderInScheme('light', macRows())
+    const dark = renderInScheme('dark', macRows())
+    for (const renderer of [light, dark]) {
+      const labels = renderer.root
+        .findAll((node) => String(node.type) === 'Text')
+        .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+      expect(labels).toEqual(['Mac', 'Lock Mac', 'Sleep display', 'Mute Mac'])
+    }
+    expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
+  })
+
+  it('says nothing was typed from the live theme, in light and dark', () => {
+    for (const message of [
+      "The Mac isn't locked, so nothing was typed.",
+      "Couldn't confirm the Mac is locked, so nothing was typed."
+    ]) {
+      const light = renderInScheme('light', createElement(MacHostToast, { message }))
+      const dark = renderInScheme('dark', createElement(MacHostToast, { message }))
+      for (const renderer of [light, dark]) {
+        const drawn = renderer.root
+          .findAll((node) => String(node.type) === 'Text')
+          .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+        expect(drawn).toEqual([message])
+      }
+      expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
+    }
+  })
+
   it('holds Unlock Mac to forget the saved password, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const onForget = vi.fn()
