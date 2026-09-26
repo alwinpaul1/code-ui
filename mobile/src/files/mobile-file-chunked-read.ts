@@ -51,6 +51,8 @@ export async function readMobileFileBase64Chunked(
     onProgress?: (bytesSoFar: number) => void
     /** A zero-byte file is a real file to a save; to a viewer it is nothing to show. */
     allowEmpty?: boolean
+    /** Aborted: no further wave is asked for. The one in flight still lands. */
+    signal?: AbortSignal
   } = {}
 ): Promise<{ base64: string; byteLength: number }> {
   const maxBytes = options.maxBytes ?? MOBILE_CHUNKED_READ_MAX_BYTES
@@ -80,6 +82,9 @@ export async function readMobileFileBase64Chunked(
   let ended = false
   // A wave is `parallelism` consecutive chunks; the eof chunk ends the read.
   while (!ended) {
+    if (options.signal?.aborted) {
+      throw new Error('aborted')
+    }
     const offsets: number[] = []
     for (let i = 0; i < parallelism; i++) {
       offsets.push(nextOffset)

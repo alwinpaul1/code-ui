@@ -46,6 +46,8 @@ const terminals: Terminal[] = [
 ]
 
 const client = { sendRequest: vi.fn() }
+const sessionLifetime = new AbortController()
+const onScreen = vi.fn(() => true)
 
 function actionsFor(
   tab: MobileSessionTab | null,
@@ -57,7 +59,8 @@ function actionsFor(
     client: overrides.client === undefined ? client : overrides.client,
     worktreeId: 'wt-1',
     terminals,
-    showToast: notify
+    showToast: notify,
+    saveToPhonePresence: { signal: () => sessionLifetime.signal, onScreen }
   }
   const actions = saveToPhoneSheetActions(session, tab as never, dismiss)
   return { actions, dismiss, notify }
@@ -80,8 +83,23 @@ describe("Save to Phone in a file tab's own menu", () => {
         path: 'src/app.ts',
         terminalHandles: ['term-active', 'term-other']
       },
-      notify
+      notify,
+      signal: sessionLifetime.signal,
+      onScreen
     })
+  })
+
+  it('ties the save to the session, so it cannot open the picker after the user leaves it', () => {
+    device.save.mockClear()
+    const { actions } = actionsFor(fileTab)
+
+    actions[0]!.onPress()
+
+    // The tab menu has no screen of its own: the save outlives the menu and the tab, and answers
+    // to the session instead (use-mobile-session-save-to-phone-presence.ts).
+    expect(device.save).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: sessionLifetime.signal, onScreen })
+    )
   })
 
   it('says on a markdown tab that it saves the desktop copy, not the phone draft', () => {

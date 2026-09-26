@@ -160,7 +160,9 @@ describe('Save to phone in the file preview header', () => {
     expect(save).toHaveBeenCalledWith({
       client,
       source: { source: 'worktree', worktreeId: 'wt-1', relativePath: 'docs/README.md' },
-      notify: expect.any(Function)
+      notify: expect.any(Function),
+      // Aborted when the preview closes (mobile-file-preview-save-after-leaving.test.tsx).
+      signal: expect.any(AbortSignal)
     })
   })
 

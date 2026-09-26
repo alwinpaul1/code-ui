@@ -106,7 +106,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // 302 since 2026-09-25 (Orca #22362): the Markdown actions' useBackClaim, the page's claim on
 // Back while a draft is dirty. Upstream's count held because its claim replaced a native
 // BackHandler effect; this fork never had that effect, so here it is +1.
-const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e129dc711bcc117d00'
+// 303 since 2026-09-26: useMobileSessionSaveToPhonePresence in the controller, which tells a
+// tab-menu Save to Phone whether the user is still in the session. Not expanded here: its own
+// refs, focus effect and memo stay inside it, so the callback, effect and JSX pins held.
+const HEAD_MAIN_HOOK_SHA256 = 'cd8240c0471804bae7d54d452d06191f4ac0a0462a9de578ce06456406394451'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -114,7 +117,8 @@ const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e12
 // 2026-09-25: hasDirtyDraft binds for the Markdown actions' page Back claim (Orca #22362).
 // 2026-09-25 (later): the file actions also take fileTapMatchPicker out of
 // useMobileFileTapHandlers, the drawer for a bare chat name found in several folders.
-const HEAD_HOOK_BINDING_SHA256 = 'cbcf879f60bbe699a6c3a437c4643e08750e61936f1b7d254e516ab393c506b9'
+// 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
+const HEAD_HOOK_BINDING_SHA256 = 'be919c549cf9f0dd18137f8e4dd89e21e9bae17fedfc49eaaf36d6dc476631c7'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -863,7 +867,8 @@ describe('mobile session route extraction parity', () => {
     // 301 since 2026-09-25: the terminal fields' submit seam — submitLiveInput (useCallback) and
     // one useTerminalTextFieldSubmitBinding per field in the send actions (Orca #22300).
     // 302 since 2026-09-25: the Markdown actions' page Back claim (Orca #22362).
-    expect(main.hooks).toHaveLength(302)
+    // 303 since 2026-09-26: useMobileSessionSaveToPhonePresence (the tab menu's Save to Phone).
+    expect(main.hooks).toHaveLength(303)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.

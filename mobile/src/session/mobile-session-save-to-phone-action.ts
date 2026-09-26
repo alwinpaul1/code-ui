@@ -6,6 +6,7 @@ import {
 } from '../files/mobile-file-save-device'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import type { SaveToPhonePresence } from './use-mobile-session-save-to-phone-presence'
 
 type DocumentTab = Extract<MobileSessionTab, { type: 'file' | 'markdown' }>
 
@@ -20,19 +21,24 @@ const WAITING_NOTICE_MS = 1600
  * A path outside the worktree reads through a grant that a terminal here vouches for, so the
  * connected terminals go along, the active one first, as the tab's own read does
  * (use-mobile-session-document-readers.ts).
+ *
+ * The menu has no screen of its own, so the save answers to the session: it keeps running while
+ * the tab closes or another screen covers the session, but never opens the picker over that
+ * screen, and stops when the user leaves the session (use-mobile-session-save-to-phone-presence.ts).
  */
 export function saveToPhoneSheetActions(
-  /** The session controller, or the four members of it this reads. */
+  /** The session controller, or the five members of it this reads. */
   session: {
     client: MobileFilePreviewRpcSender | null
     worktreeId: string
     terminals: readonly Terminal[]
     showToast: (message: string, durationMs?: number) => void
+    saveToPhonePresence: SaveToPhonePresence
   },
   tab: DocumentTab | null,
   onDismiss: () => void
 ): ActionSheetAction[] {
-  const { client, worktreeId, terminals, showToast: notify } = session
+  const { client, worktreeId, terminals, showToast: notify, saveToPhonePresence } = session
   if (!isSaveToPhoneSupported || !tab) {
     return []
   }
@@ -59,7 +65,9 @@ export function saveToPhoneSheetActions(
               ...connected.filter((terminal) => !terminal.isActive)
             ].map((terminal) => terminal.handle)
           },
-          notify
+          notify,
+          signal: saveToPhonePresence.signal(),
+          onScreen: saveToPhonePresence.onScreen
         })
       }
     }

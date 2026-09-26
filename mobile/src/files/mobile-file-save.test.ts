@@ -665,3 +665,95 @@ describe('the feedback a save gives', () => {
     expect((await run({ client: host, source: worktree('a.txt'), notify })).status).toBe('saved')
   })
 })
+
+describe('a save whose screen the user has left', () => {
+  /** A desktop whose chunk replies wait for `release`, so the user can leave mid-read. */
+  function slowDesktop(bytes: Buffer) {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const inner = desktop({ 'big.log': bytes })
+    const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
+      await gate
+      return inner.sendRequest(method, params)
+    })
+    return { host: { sendRequest } as unknown as MobileFilePreviewRpcSender, sendRequest, release }
+  }
+
+  it('never opens the picker once the screen it was asked from is gone', async () => {
+    const { host, release } = slowDesktop(Buffer.from('hello'))
+    const { target } = phone()
+    const notify = vi.fn()
+    const left = new AbortController()
+
+    const running = createSaveToPhoneRunner(target)({
+      client: host,
+      source: worktree('big.log'),
+      notify,
+      signal: left.signal
+    })
+    left.abort()
+    release()
+
+    expect(await running).toEqual({ status: 'abandoned', fileName: 'big.log' })
+    expect(target.createDocument).not.toHaveBeenCalled()
+    // Nobody is there to read it: only the "Getting…" notice from before the user left.
+    expect(notify.mock.calls.map(([message]) => message)).toEqual([
+      'Getting big.log from the desktop…'
+    ])
+  })
+
+  it('stops paging the file once the screen is gone', async () => {
+    // Three waves of four 30-byte chunks; the user leaves during the first.
+    const { host, sendRequest, release } = slowDesktop(Buffer.alloc(300, 0x61))
+    const { target } = phone()
+    const left = new AbortController()
+
+    const running = createSaveToPhoneRunner(target, { chunkBytes: 30 })({
+      client: host,
+      source: worktree('big.log'),
+      notify: vi.fn(),
+      signal: left.signal
+    })
+    left.abort()
+    release()
+    await running
+
+    expect(sendRequest).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not open the picker over another screen, and says it was not saved', async () => {
+    const host = desktop({ 'a.txt': Buffer.from('hello') })
+    const { target } = phone()
+    const notify = vi.fn()
+
+    const outcome = await createSaveToPhoneRunner(target)({
+      client: host,
+      source: worktree('a.txt'),
+      notify,
+      onScreen: () => false
+    })
+
+    expect(outcome).toEqual({ status: 'abandoned', fileName: 'a.txt' })
+    expect(target.createDocument).not.toHaveBeenCalled()
+    // The session is still mounted behind the other screen; this replaces its lingering
+    // "Getting…" so the user does not come back to a save that is no longer running.
+    expect(notify.mock.calls.at(-1)?.[0]).toBe('Not saved: you left before a.txt was ready')
+  })
+
+  it('opens the picker as before while the user is still there', async () => {
+    const host = desktop({ 'a.txt': Buffer.from('hello') })
+    const { target } = phone()
+
+    const outcome = await createSaveToPhoneRunner(target)({
+      client: host,
+      source: worktree('a.txt'),
+      notify: vi.fn(),
+      signal: new AbortController().signal,
+      onScreen: () => true
+    })
+
+    expect(outcome).toMatchObject({ status: 'saved' })
+  })
+})

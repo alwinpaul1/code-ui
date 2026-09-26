@@ -64,6 +64,8 @@ export type WholeDesktopFileReadOptions = {
   maxBytes?: number
   chunkBytes?: number
   onProgress?: (bytesSoFar: number) => void
+  /** Aborted when nobody is waiting for the file any more; a chunked read stops at its next wave. */
+  signal?: AbortSignal
 }
 
 const HOST_TEXT_CAP = '512 KB'
@@ -133,6 +135,7 @@ async function readWorktreeFile(
         maxBytes,
         ...(options.chunkBytes ? { chunkBytes: options.chunkBytes } : {}),
         ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
         allowEmpty: true
       }
     )

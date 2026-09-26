@@ -27,11 +27,24 @@ export type MobileFileSaveOutcome =
   /** The file cannot be saved whole; `message` says why. */
   | { status: 'refused'; fileName: string; message: string }
   | { status: 'failed'; fileName: string; message: string }
+  /** The user left before the picker could open, so it never opened and nothing was written. */
+  | { status: 'abandoned'; fileName: string }
 
 export type MobileFileSaveRequest = {
   source: MobileFileSaveSource
   /** The name the file is offered under; its path's last segment when absent. */
   fileName?: string
+}
+
+/** Where the user is while a save runs. Android's picker is a system screen: opened after the user
+ *  has walked away, it lands over whatever they went to, and the result toast shows nowhere. */
+export type SaveToPhonePresence = {
+  /** Aborted once the screen the save was asked from is gone: the read stops at its next wave,
+   *  the picker never opens, and nothing more is said. */
+  signal?: AbortSignal
+  /** Asked the moment the picker would open. False while another screen covers the one the save
+   *  was asked from: the picker stays shut and the save ends unsaved. */
+  onScreen?: () => boolean
 }
 
 /**
@@ -45,15 +58,21 @@ export async function saveDesktopFileToPhone(
   client: MobileFilePreviewRpcSender,
   request: MobileFileSaveRequest,
   target: MobileFileSaveTarget,
-  options: WholeDesktopFileReadOptions = {}
+  options: WholeDesktopFileReadOptions & Pick<SaveToPhonePresence, 'onScreen'> = {}
 ): Promise<MobileFileSaveOutcome> {
   const fileName = suggestedSaveFileName(request.fileName ?? sourcePath(request.source))
   const read = await readWholeDesktopFile(client, request.source, options)
+  if (options.signal?.aborted) {
+    return { status: 'abandoned', fileName }
+  }
   if (read.status === 'refused') {
     return { status: 'refused', fileName, message: `Can't save ${fileName}: ${read.reason}` }
   }
   if (read.status === 'failed') {
     return { status: 'failed', fileName, message: `Couldn't save ${fileName}: ${read.reason}` }
+  }
+  if (options.onScreen?.() === false) {
+    return { status: 'abandoned', fileName }
   }
   let uri: string | null
   try {
@@ -95,6 +114,8 @@ export function saveOutcomeMessage(outcome: MobileFileSaveOutcome): string {
       return `Saved ${outcome.fileName} (${formatPreviewByteLength(outcome.byteLength)})`
     case 'cancelled':
       return 'Not saved'
+    case 'abandoned':
+      return `Not saved: you left before ${outcome.fileName} was ready`
     case 'refused':
     case 'failed':
       return outcome.message
@@ -105,7 +126,7 @@ export function saveOutcomeMessage(outcome: MobileFileSaveOutcome): string {
   }
 }
 
-export type SaveToPhoneRun = {
+export type SaveToPhoneRun = SaveToPhonePresence & {
   client: MobileFilePreviewRpcSender
   source: MobileFileSaveSource
   fileName?: string
@@ -134,7 +155,7 @@ export function createSaveToPhoneRunner(
   } = {}
 ): (run: SaveToPhoneRun) => Promise<SaveToPhoneRunOutcome> {
   const inFlight = new Set<string>()
-  return async ({ client, source, fileName: requestedName, notify }) => {
+  return async ({ client, source, fileName: requestedName, notify, signal, onScreen }) => {
     const fileName = suggestedSaveFileName(requestedName ?? sourcePath(source))
     const key = `${source.worktreeId}\n${sourcePath(source)}`
     if (inFlight.has(key)) {
@@ -148,6 +169,8 @@ export function createSaveToPhoneRunner(
       const outcome = await saveDesktopFileToPhone(client, { source, fileName }, target, {
         ...(options.maxBytes ? { maxBytes: options.maxBytes } : {}),
         ...(options.chunkBytes ? { chunkBytes: options.chunkBytes } : {}),
+        ...(signal ? { signal } : {}),
+        ...(onScreen ? { onScreen } : {}),
         onProgress: (bytes) => {
           const step = Math.floor(bytes / PROGRESS_STEP_BYTES)
           if (step > lastStep) {
@@ -159,14 +182,20 @@ export function createSaveToPhoneRunner(
           }
         }
       })
+      if (outcome.status === 'abandoned' && signal?.aborted) {
+        // The screen is gone; there is nobody to tell.
+        return outcome
+      }
       if (outcome.status === 'saved') {
         options.onSaved?.()
-      } else if (outcome.status !== 'cancelled') {
+      } else if (outcome.status !== 'cancelled' && outcome.status !== 'abandoned') {
         options.onProblem?.()
       }
       notify(
         saveOutcomeMessage(outcome),
-        outcome.status === 'saved' || outcome.status === 'cancelled'
+        outcome.status === 'saved' ||
+          outcome.status === 'cancelled' ||
+          outcome.status === 'abandoned'
           ? RESULT_NOTICE_MS
           : PROBLEM_NOTICE_MS
       )
