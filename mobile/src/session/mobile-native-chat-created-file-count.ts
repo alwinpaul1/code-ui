@@ -188,7 +188,16 @@ function normalizedPath(path: string): string {
  *  extra spellings can only find more calls that name the file, which then
  *  refuse unless the command provably leaves it alone. */
 function spellings(text: string): string[] {
-  return [...new Set([text, text.replace(/\\(.)/gs, '$1'), text.replace(/`(.)/gs, '$1')])]
+  return [...new Set([text, text.replace(/\\(.)/gs, '$1'), text.replace(/`(.)/gs, '$1'), squashed(text)])]
+}
+
+/** A string with every quote and escape character taken out, to match a
+ *  name the shell rebuilds from quoted pieces: bash's `'it'\\''s-done.md'`,
+ *  PowerShell's `'it''s-done.md'`, `pages/blog/'[slug]'.tsx` (re-review of
+ *  3e3eb9ae: +94 on the 93-line create). Both the call and the file's name
+ *  are matched this way too, which can only find more calls that name it. */
+function squashed(text: string): string {
+  return text.replace(/['"\\`]/g, '')
 }
 
 /** The path with its `.` and `..` segments resolved as far as the path
@@ -295,7 +304,7 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
     return true
   }
   const name = lastSegment(target)
-  if (name === '' || !callWords(call).some((word) => namesFile(word, name))) {
+  if (name === '' || !callWords(call).some((word) => namesFile(word, name) || namesFile(word, squashed(name)))) {
     return name === ''
   }
   const command = kind === 'command' ? stringField(call.input, 'command') : null

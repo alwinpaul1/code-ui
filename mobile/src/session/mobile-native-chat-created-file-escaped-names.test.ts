@@ -82,6 +82,28 @@ describe('a call that names the created file in its escaped spelling', () => {
   })
 })
 
+// Re-review of 3e3eb9ae: a name the shell rebuilds from quoted pieces was
+// still not seen, and the chip drew +94 on the 93-line create.
+describe('a call that names the created file in quoted pieces', () => {
+  it("draws no count after bash appends to it through the '\\'' apostrophe idiom", () => {
+    expect(touched("/Users/dev/notes/it's-done.md", 'Bash', "echo '- shipped' >> 'it'\\''s-done.md'")).toBe(true)
+  })
+
+  it('draws no count after PowerShell appends to it through a doubled apostrophe', () => {
+    expect(
+      touched("C:\\Users\\dev\\notes\\it's-done.md", 'PowerShell', "Add-Content -Path 'it''s-done.md' -Value '- shipped'")
+    ).toBe(true)
+  })
+
+  it('draws no count after a command appends to a route file whose brackets alone are quoted', () => {
+    expect(touched('/Users/dev/Desktop/Project/Site/pages/blog/[slug].tsx', 'Bash', "cat footer.tsx >> pages/blog/'[slug]'.tsx")).toBe(true)
+  })
+
+  it('still counts a create whose quoted name the next command only reads', () => {
+    expect(touched("/Users/dev/notes/it's-done.md", 'Bash', "cat 'it'\\''s-done.md'")).toBe(false)
+  })
+})
+
 describe('PowerShell running code through a verb the count lets through', () => {
   const SCRIPT = 'C:\\Users\\dev\\proj\\queue.ps1'
 
