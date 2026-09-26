@@ -191,11 +191,16 @@ function collapsedPath(path: string): string {
  *  `c:/users/x` or `/root`. */
 const HOME = /^(?:(?:[a-z]:)?\/users\/[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
 
+function fromHome(path: string): boolean {
+  return path === '~' || path.startsWith('~/')
+}
+
 /** A path from `~`, spelled out against the home the other path is under.
- *  When it is under none, `~/rest` is matched as the relative `rest`, which
- *  can only find more touches. */
+ *  When it is under none, `~/rest` is matched as the relative `rest`: for a
+ *  touch that finds more of them, which refuses. `isTheFile`, where a match
+ *  keeps a count, does not take that guess. */
 function expandedHome(path: string, other: string): string {
-  if (path !== '~' && !path.startsWith('~/')) {
+  if (!fromHome(path)) {
     return path
   }
   const rest = path.slice(2)
@@ -269,9 +274,15 @@ function lastSegment(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1)
 }
 
-/** Whether a command's word is the file's own path, or its name. */
+/** Whether a command's word is the file's own path, or its name. A path
+ *  from `~` is the file only when the other side names the home it is in:
+ *  `bash ~/queue.sh` runs another script than /opt/work/jobs/queue.sh. */
 function isTheFile(word: string, target: string): boolean {
   const spelled = normalizedPath(word)
+  const unspelledHome = (a: string, b: string) => fromHome(a) && !fromHome(b) && !HOME.test(b)
+  if (unspelledHome(spelled, target) || unspelledHome(target, spelled)) {
+    return false
+  }
   return lastSegment(spelled) === lastSegment(target) && samePath(spelled, target)
 }
 

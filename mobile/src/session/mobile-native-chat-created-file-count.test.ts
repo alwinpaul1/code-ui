@@ -299,6 +299,37 @@ describe('a file touched after its create', () => {
     expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(true)
   })
 
+  // Review of 2026-09-26: `bash ~/queue.sh` read as running the file
+  // created at /opt/work/jobs/queue.sh, which is under no home, so the ~ has
+  // nothing to spell out against, and kept its count. That command runs
+  // another script, which may write the file.
+  it.each([
+    ['a command runs a script from ~ with its name', '/opt/work/jobs/queue.sh', 'bash ~/queue.sh'],
+    [
+      'a command runs it by a path under no home when the create spelled it from ~',
+      '~/jobs/queue.sh',
+      'bash /opt/work/jobs/queue.sh'
+    ]
+  ])('draws no count for a create when %s', (_, created, command) => {
+    const made = write(created, `${'echo step\n'.repeat(500)}${CUT}`)
+    const madeKey = cutCreateOf(
+      made[0] as NativeChatToolCallBlock,
+      made[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Bash', { command })
+    expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(true)
+  })
+
+  it('counts a create under a home through a command that runs it spelled from ~', () => {
+    const made = write('/home/dev/jobs/queue.sh', `${'echo step\n'.repeat(500)}${CUT}`)
+    const madeKey = cutCreateOf(
+      made[0] as NativeChatToolCallBlock,
+      made[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Bash', { command: 'chmod +x ~/jobs/queue.sh && bash ~/jobs/queue.sh' })
+    expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(false)
+  })
+
   it('is not touched by an Edit from ~ of a file with the same name at the top of the home', () => {
     const later = call('Edit', {
       file_path: '~/queue-sweep-k-one.sh',
