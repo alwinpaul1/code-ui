@@ -53,7 +53,6 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
   let whole = false
   let replayPending = false
   let wholeBeforeReplay = false
-  let connection = connectedAt
   // A connection is new the first time either source names it: a client that
   // cannot say yet (null) names none, and React rendering a value the client
   // already reported on a frame is not a second one. Not "later than the last":
@@ -68,7 +67,6 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
     if (seen.size > SEEN_CONNECTIONS_KEPT) {
       seen.delete(seen.values().next().value!)
     }
-    connection = lastConnectedAt
     if (!replayPending) {
       wholeBeforeReplay = whole
     }

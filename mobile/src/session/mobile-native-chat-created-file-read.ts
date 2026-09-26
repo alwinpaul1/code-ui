@@ -68,6 +68,14 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Never held for the next connection: a direct client waits out a drop and
+ *  sends a held request on the new link, where the host answers with the file
+ *  as the calls made while the phone was away left it, before the replay that
+ *  carries those calls has landed (third verification of the line count,
+ *  2026-09-26: +125 on the 93-line create). Failing instead leaves the count
+ *  to its once-per-connection retry, which waits for that transcript. */
+const READ_OPTIONS = { timeoutMs: READ_RPC_TIMEOUT_MS, failWhenDisconnected: true } as const
+
 export async function readCreatedFile(input: {
   client: CreatedFileReadSender
   worktreeId: string
@@ -80,7 +88,7 @@ export async function readCreatedFile(input: {
     const reply = await createdFilePathResolve.request(
       client,
       { worktree, pathText: path },
-      { timeoutMs: READ_RPC_TIMEOUT_MS }
+      READ_OPTIONS
     )
     const resolved = createdFilePathResolve.interpret(reply)
     if (!resolved.exists || resolved.isDirectory) {
@@ -104,7 +112,7 @@ export async function readCreatedFile(input: {
     const reply = await createdFileRead.request(
       client,
       { worktree, relativePath },
-      { timeoutMs: READ_RPC_TIMEOUT_MS }
+      READ_OPTIONS
     )
     const text = createdFileRead.interpret(reply)
     return { kind: 'read', content: text.content, truncated: text.truncated }
