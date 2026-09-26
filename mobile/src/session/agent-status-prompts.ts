@@ -123,5 +123,7 @@ export function observeAgentStatusPrompt(
     seenAt: Date.now()
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
-  return { sessionKey, last: text, prompts }
+  // The subagent messages stay: dropping them here took the words off a
+  // "Message from" row the moment the person replied (review of 2026-09-27).
+  return { sessionKey, last: text, prompts, agentMessages: state.agentMessages ?? [] }
 }

@@ -241,6 +241,18 @@ describe("a subagent message's copy on the tab status", () => {
     expect(observe('<agent-message from="x"> keeps showing in my log, why?').agentMessages ?? []).toEqual([])
   })
 
+  // Review of 2026-09-27: the next prompt dropped them, so a "Message from"
+  // row lost its words the moment the person replied.
+  it('keeps them when the person\'s next prompt comes', () => {
+    const message = observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>')
+    const next = observeAgentStatusPrompt(message, 'sess-1', { ...LIVE, prompt: 'thanks, carry on', updatedAt: LIVE.updatedAt + 1000 })
+    expect(next.prompts.map((prompt) => prompt.text)).toEqual(['thanks, carry on'])
+    expect(next.agentMessages).toEqual(message.agentMessages)
+    expect(next.agentMessages?.map(({ from, body, cut }) => ({ from, body, cut }))).toEqual([
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false }
+    ])
+  })
+
   it('starts over with the session', () => {
     const first = observe(MIDTURN_HANDBACK_STATUS_PROMPT)
     expect(observeAgentStatusPrompt(first, 'sess-2', { ...LIVE, prompt: '' }).agentMessages).toEqual([])
