@@ -320,6 +320,36 @@ describe('a count the wire cut is no count', () => {
     ).toBeNull()
   })
 
+  // Second review: a command that only searches for an envelope quotes both
+  // markers and applies nothing.
+  it('keeps the run count beside a command that searches for a patch envelope', () => {
+    expect(
+      toolRunDiffStat([
+        {
+          type: 'tool-call',
+          name: 'shell',
+          input: { command: ['bash', '-lc', "grep -rnF '*** Begin Patch' codex-rs/apply_patch/src"] }
+        },
+        { type: 'tool-result', output: 'codex-rs/apply_patch/src/parser.rs:12:*** Begin Patch' },
+        ...LANDED_EDIT
+      ])
+    ).toEqual({ added: 14, removed: 2 })
+  })
+
+  // A structured diff the producer named by a file count reaches no file
+  // (the vendored reader will not name a card after "2 files"), and its
+  // lines are still lines the run changed.
+  it('draws no count beside a Codex diff named by a file count, rather than the other diff alone', () => {
+    expect(
+      toolRunDiffStat([
+        { type: 'tool-call', name: 'Diff', input: { path: '2 files' } },
+        { type: 'tool-result', output: '@@ -1,1 +1,1 @@\n-a\n+b\n@@ -1,1 +1,1 @@\n-c\n+d' },
+        { type: 'tool-call', name: 'Diff', input: { path: 'src/a.ts' } },
+        { type: 'tool-result', output: '@@ -1,1 +1,1 @@\n-e\n+f' }
+      ])
+    ).toBeNull()
+  })
+
   it('keeps the run count beside commands that ran no patch, even one that names apply_patch', () => {
     expect(
       toolRunDiffStat([

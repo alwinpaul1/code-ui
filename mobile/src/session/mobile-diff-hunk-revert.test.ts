@@ -428,6 +428,29 @@ describe('reverting one hunk of a landed edit', () => {
       expect(hunkRevertPrecheck(card, 39)).toMatchObject({ ok: true })
     })
 
+    // Second review: every entry of a snippet card ends just before a gap, so
+    // the gap rule must stay with the resolved hunks Orca cuts at 400 rows.
+    it('offers a whole MultiEdit entry on a card whose last entry the wire cut', () => {
+      const files = editFilesForToolCall(
+        {
+          type: 'tool-call',
+          name: 'MultiEdit',
+          input: {
+            file_path: '/w/a.ts',
+            edits: [
+              { old_string: 'alpha', new_string: 'beta' },
+              { old_string: 'gamma', new_string: 'delta… (truncated)' }
+            ]
+          }
+        },
+        { type: 'tool-result', output: 'Applied 2 edits to /w/a.ts' }
+      )
+      const card = files![0]!
+      expect(card.truncated).toBe(true)
+      expect(hunkRevertPrecheck(card, 0)).toMatchObject({ ok: true })
+      expect(hunkRevertPrecheck(card, 1)).toMatchObject({ ok: false, refusal: 'hunk-cut-by-truncation' })
+    })
+
     it('refuses a file with mixed line endings rather than normalising it on the way back', () => {
       const card = file([ctx('a', 1, 1), del('b', 2), add('c', 2)])
       expect(planHunkRevert(card, 0, 'a\r\nc\nx\n')).toMatchObject({

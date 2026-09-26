@@ -246,13 +246,12 @@ export function hunkRevertPrecheck(
     return refuse('whole-file-change')
   }
   // A cut ends a change block where it fell: at the last row, or, when Orca
-  // kept only the first 400 rows of a hunk, just before the next hunk's gap.
-  // Claude's whole hunks carry context after their change unless they end the
-  // file, so on a cut card this refuses more than it must, never less.
-  if (
-    file.truncated &&
-    (hunk.endIndex === file.lines.length - 1 || file.lines[hunk.endIndex + 1]?.kind === 'gap')
-  ) {
+  // kept only the first 400 rows of a resolved hunk, just before the next
+  // hunk's gap. Only resolved hunks carry line numbers, and a whole one has
+  // context after its change unless it ends the file. A snippet card's
+  // entries all end at a gap, so there the rule would refuse every entry.
+  const cutBeforeGap = file.lineNumbersKnown && file.lines[hunk.endIndex + 1]?.kind === 'gap'
+  if (file.truncated && (hunk.endIndex === file.lines.length - 1 || cutBeforeGap)) {
     return refuse('hunk-cut-by-truncation')
   }
   return { ok: true, hunk }

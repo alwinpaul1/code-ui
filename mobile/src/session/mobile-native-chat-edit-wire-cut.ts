@@ -26,6 +26,7 @@
 // in for it.
 
 import type { NativeChatEditFile } from '../../../src/shared/native-chat-edit-model'
+import { splitMoveMarker } from '../../../src/shared/native-chat-edit-patch-files'
 import { stripBoundedTextMarker } from '../../../src/shared/structured-agent-session-projection'
 import type {
   NativeChatEditPatchHunk,
@@ -54,7 +55,20 @@ const FILE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'apply_patch'])
  *  COMMAND_PATCH_TOOLS). */
 const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
 const BEGIN_PATCH = '*** Begin Patch'
+/** The envelope inside a script's string literal, its newlines escaped. */
+const SCRIPT_BEGIN_PATCH = `${BEGIN_PATCH}\\n`
 const APPLY_PATCH = /apply_?patch/
+
+/** Every string in a call's input, as the provider wrote it. */
+function inputStrings(value: unknown, depth = 0): string[] {
+  if (typeof value === 'string') {
+    return [value]
+  }
+  if (typeof value !== 'object' || value === null || depth >= MAX_CUT_DEPTH) {
+    return []
+  }
+  return Object.values(value).flatMap((entry) => inputStrings(entry, depth + 1))
+}
 
 function carriesMobileCut(value: unknown, depth = 0): boolean {
   if (typeof value === 'string') {
@@ -127,10 +141,11 @@ function landed(call: NativeChatToolCallBlock, result: NativeChatToolResultBlock
 
 /** A call that landed an edit the phone has no rows for, so a run holding one
  *  has no total: a file-editing tool whose edit the wire took, a Codex diff
- *  the journal bounded before its first hunk, or a Codex command that applied
- *  a patch whose envelope was cut or is written as a script string. A diff
- *  with no hunks at all only moved a file, and a command that ran no patch
- *  changed nothing the phone could count either way. */
+ *  with a body no file could be read from (bounded, or named by a file
+ *  count), or a Codex command that applied a patch whose envelope was cut or
+ *  is written as a script string. A diff whose body is empty or only a move
+ *  changed no line, and a command that only quotes an envelope applied
+ *  nothing. */
 export function landedEditIsUncountable(
   call: NativeChatToolCallBlock,
   result: NativeChatToolResultBlock | null
@@ -142,11 +157,16 @@ export function landedEditIsUncountable(
     return true
   }
   if (call.name === 'Diff') {
-    return result !== null && stripBoundedTextMarker(result.output).truncated
+    const bounded = stripBoundedTextMarker(result?.output ?? '')
+    return bounded.truncated || splitMoveMarker(bounded.text).body.trim() !== ''
   }
   if (!COMMAND_PATCH_TOOLS.has(call.name)) {
     return false
   }
-  const text = typeof call.input === 'string' ? call.input : JSON.stringify(call.input ?? null)
-  return text.includes(BEGIN_PATCH) && APPLY_PATCH.test(text)
+  const words = inputStrings(call.input)
+  const quotesEnvelope = words.some((word) => word.includes(BEGIN_PATCH))
+  if (!quotesEnvelope || !words.some((word) => APPLY_PATCH.test(word))) {
+    return false
+  }
+  return carriesMobileCut(call.input) || words.some((word) => word.includes(SCRIPT_BEGIN_PATCH))
 }
