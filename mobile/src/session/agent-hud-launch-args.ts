@@ -149,7 +149,9 @@ export const CLAUDE_HUD_HEARTBEAT_SECONDS_WIN32 = 15
  * `used_percentage` is disambiguated by the `remaining_percentage` that only
  * the context block carries. `current_usage` and `used_percentage` are null
  * before the first reply, in which case those keys are simply left off the
- * payload — the phone shows what is known and nothing else.
+ * payload — the phone shows what is known and nothing else. Claude Code 2.1.283
+ * builds the payload, and runs the command, with 2.1.282's code, so every key
+ * and its order is unchanged (binaries compared 2026-09-26).
  *
  * NO SINGLE QUOTES ANYWHERE: the whole script travels inside a JSON string
  * inside a single-quoted shell token. Orca tokenizes agent args with the Unix
@@ -210,6 +212,8 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // because the transcript also holds every command and every line of prose
   // that merely QUOTES those strings — a grep for them, a test fixture — and
   // on 2026-09-11 those read as launches (an empty id, one called "b").
+  // Claude Code 2.1.283's flag-gated JSON task result is not read here either
+  // (mobile-background-task-transcript.ts says why).
   // The tail is 4 MiB, not 1: a busy session writes several MB an hour, and a
   // completion that scrolled out while its launch was still in the phone's
   // window stayed "running". Same tail, same tools. Launched minus done is what is still running, and
@@ -555,8 +559,9 @@ export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive
  *
  * The agent knows exactly. Its Stop payload carries `background_tasks` with an
  * `id` and a `status` each (verified against Claude Code 2.1.267; the captured
- * payload is the fixture beside this file's test). The hook beacons the ids
- * still running, and the phone takes that over its own guesswork.
+ * payload is the fixture beside this file's test; 2.1.283 builds the Stop and
+ * UserPromptSubmit payloads with 2.1.282's code, 2026-09-26). The hook beacons
+ * the ids still running, and the phone takes that over its own guesswork.
  *
  * Parsed with tr, grep and sed alone: a Claude Code native install is a single
  * binary, so the host may have no node, python3 or jq — the same reason the

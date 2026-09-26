@@ -6,7 +6,9 @@
  * were mid-turn `attachment` records and 20 `isMeta` rows; 3 reached the
  * phone). Claude does paint each landing as a row. Two forms, both from tmux
  * captures of Claude Code 2.1.278 at 46 columns (2026-09-20, fixtures beside
- * the test):
+ * the test). 2.1.283 draws the row with 2.1.282's code, "(ctrl+o to expand)"
+ * included; its new click-to-expand in fullscreen mode does not change the row
+ * (binaries compared 2026-09-26):
  *
  * A subagent's message names the sender and nothing more (the message is
  * behind ctrl+o):

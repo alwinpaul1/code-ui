@@ -10,10 +10,15 @@
 // is past 16 s, the token count, and a thinking status. The thinking words are
 // read out of the Claude Code 2.1.281 bundle (`Oo()` and `Ao()` beside the
 // spinner): "thinking", "still thinking", "thinking more", "thinking some
-// more", "deep in thought", "thought for 3s". The Claude app draws the same
-// three facts on its own status line, "✳ 1m 16s · 5 running tasks · thinking
-// some more…" (recordings of 2026-09-24), with the verb, "Cooking…", until an
-// elapsed time is showing.
+// more", "deep in thought", "thought for 3s". 2.1.283 has the same words,
+// thresholds and 16 s cut (`Lo()` and `Eo()` there, read 2026-09-26). The
+// Claude app draws the same three facts on its own status line, "✳ 1m 16s ·
+// 5 running tasks · thinking some more…" (recordings of 2026-09-24), with the
+// verb, "Cooking…", until an elapsed time is showing.
+//
+// A compaction paints "Compacting conversation…", two words, which this does
+// not read, on 2.1.282 and 2.1.283 alike. 2.1.283 adds the compaction's own
+// time and token count to that line where 2.1.282 drew a bar under it.
 //
 // Codex paints "• Working (5s • esc to interrupt)", which this does not read:
 // the glyph and separator differ, and a Codex tab falls back to "Working".

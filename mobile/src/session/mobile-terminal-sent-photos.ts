@@ -20,7 +20,8 @@ const MORE_PHOTO_ROW = /^\s+⎿[\s\u00a0]+\[Image #\d+\]$/
  * while the terminal and the VS Code extension both show it (the user,
  * 2026-09-24). Claude Code paints one marker row per photo directly above the
  * message's `❯` row. Captured with `tmux capture-pane -p` from Claude Code
- * 2.1.281 (fixtures/claude-screen-sent-photos-2.1.281.txt), one photo, then two:
+ * 2.1.281 (fixtures/claude-screen-sent-photos-2.1.281.txt; 2.1.283 draws these
+ * rows with 2.1.282's code, binaries compared 2026-09-26), one photo, then two:
  *
  *     [Image #1]
  *

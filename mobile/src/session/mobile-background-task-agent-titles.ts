@@ -22,7 +22,8 @@ import {
 // acknowledged, not in the order it made the calls. Five agents launched on
 // 2026-09-23 (Claude Code 2.1.281, fixtures/claude-parallel-agents-2.1.281.ts)
 // had their results written 4th, 2nd, 1st, 3rd, 5th, so three of the five
-// rows carried another agent's title, time, and transcript.
+// rows carried another agent's title, time, and transcript. (2.1.283 writes the
+// task notification the same way as 2.1.282, binaries compared 2026-09-26.)
 //
 // Claude Code does say which id is which, in two places the phone reads:
 //   - the host's roster (`agentStatus.subagents`), which Orca fills from

@@ -5,7 +5,8 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  * Claude app draws them.
  *
  * Claude Code injects such a message as a USER-role turn (real records on
- * this machine, 2.1.25x–2.1.278):
+ * this machine, 2.1.25x–2.1.278; 2.1.283 writes and reads the same wrapper as
+ * 2.1.282, binaries compared 2026-09-26):
  *
  *     Another Claude session sent a message:
  *     <cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="observer-sessions-17" from-mode="prompting">

@@ -12,7 +12,8 @@ import { sendQueueNowWrite } from './claude-send-queue-now-operations'
  *
  * Verified against the binary's own strings ("ctrl+x ctrl+s",
  * "input_send_now_key", "queued_send_now") and the release notes. Not against
- * a phone. Nothing here interprets the sequence; the agent does.
+ * a phone. Nothing here interprets the sequence; the agent does. 2.1.283's
+ * default keybindings still map both chords to `chat:sendNow` (2026-09-26).
  */
 export const CLAUDE_SEND_NOW_BYTES = ''
 

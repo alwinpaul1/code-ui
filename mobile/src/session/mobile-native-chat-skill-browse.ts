@@ -32,7 +32,8 @@ export type SkillBrowseRoot = {
 /** The session's Claude config dir, or both profiles on this machine when the
  *  session has not said which it runs under, and, when a worktree is open,
  *  that repo's `.claude` roots. Claude Code 2.1.282 reads the user's skills
- *  and commands from `CLAUDE_CONFIG_DIR` (or `~/.claude`) alone, so a known
+ *  and commands from `CLAUDE_CONFIG_DIR` (or `~/.claude`) alone, and 2.1.283
+ *  the same (binary read 2026-09-26; the plugin cache layout too), so a known
  *  config dir is the only home root: listing the other profile offered skills
  *  the session cannot run. A directory that is not on disk lists as nothing. */
 export function claudeSkillRoots(

@@ -6,7 +6,8 @@
  * the phone has only the words. Claude Code 2.1.281 builds every such record
  * from one constant, "API Error", as `API Error: …`, `API Error (<model>): …`,
  * `<hint> · API Error: …`, `Failed to authenticate. API Error: …` or the bare
- * constant (read out of its binary, 2026-09-24). A safeguards refusal is one
+ * constant (read out of its binary, 2026-09-24; 2.1.283's is the same,
+ * 2026-09-26). A safeguards refusal is one
  * of them and has no status code ("API Error: Opus 5.5 (1M context)'s
  * safeguards flagged this message …", session 967668df), so a code is not
  * part of the shape. Only the first line is read: that is where Claude Code

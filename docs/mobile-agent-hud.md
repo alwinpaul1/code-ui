@@ -3,6 +3,10 @@
 Verified against Orca 1.4.197, Claude Code 2.1.266 and codex-cli 0.153.4 on
 macOS; the heartbeat (`refreshInterval`) and the session id against Claude
 Code 2.1.276; the C0 channel against Claude Code 2.1.281 (2026-09-25). A Windows host gets no flag: the first real Windows run failed (see below).
+Claude Code 2.1.283 (2026-09-26, the two binaries compared, not run): the
+status-line payload, the `--settings` and `statusLine.refreshInterval`
+handling, the hook list and the Stop and UserPromptSubmit payloads are built
+with 2.1.282's code, so every field and key order the scripts read is unchanged.
 
 **The rule this is built to:** a Code UI user sets up nothing on their desktop.
 No status line, no plugin, no config, no Orca change — and no code written to

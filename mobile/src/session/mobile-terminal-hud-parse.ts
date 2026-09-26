@@ -225,7 +225,9 @@ const CONTEXT_PATTERNS = [
   /(\d{1,3})%\s*(?:ctx|context)\b/i
 ]
 // Claude Code's OWN footer, painted with no status line configured (strings in
-// the 2.1.266 binary: "% until auto-compact", "Context low (", "% remaining)").
+// the 2.1.266 binary: "% until auto-compact", "Context low (", "% remaining)";
+// 2.1.283 draws them with 2.1.282's code, and the mode footer with the same
+// output from a reworked row, 2026-09-26).
 // These state what is LEFT, so the ring shows 100 minus the figure. "Until
 // auto-compact" is measured to the compaction point rather than the window's
 // end; it is the closest figure Claude Code offers a bare host and is labelled

@@ -8,7 +8,15 @@
 // xhigh on every host. Claude Code 2.1.282 lists Sonnet 4.6, and Opus 4.6 when
 // `opus` resolves to it, as low/medium/high/max (captured 2026-09-25, see
 // fixtures/claude-list-models-*-2.1.282.jsonl), so the seed offered Extra and
-// Ultracode on models that refuse both.
+// Ultracode on models that refuse both. 2.1.283 builds the answer with the same
+// code and effort tables (both binaries read 2026-09-26; not captured again).
+// Its picker drops "(1M context)" from an Opus that has a native 1M window;
+// on a first-party account that row is then `opus` / "Opus" where 2.1.282
+// listed a `[1m]` row labelled "Opus (1M context)". Bedrock's rows come from
+// the same code, but until its first catalog fetch a third-party session reads
+// a bundled fallback catalog, which 2.1.283 ships as a three-model placeholder
+// (version 0, where 2.1.282 had the published one). claude-model-identity.ts
+// reads the id's `[1m]` before any label.
 import { z } from 'zod'
 import { createClaudeCatalogOptions } from '../../../src/shared/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../../src/shared/agent-session-option-catalog-types'

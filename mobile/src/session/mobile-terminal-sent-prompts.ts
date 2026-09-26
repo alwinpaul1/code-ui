@@ -17,7 +17,8 @@
  * transcript does.
  *
  * The shape, captured with `tmux capture-pane -p` from Claude Code 2.1.270
- * (2026-09-13):
+ * (2026-09-13; 2.1.283 draws the prompt row with 2.1.282's code, binaries
+ * compared 2026-09-26):
  *
  *     ❯ run echo one and then echo two, then reply with the single word done
  *       second prompt that is long enough to wrap around the terminal width

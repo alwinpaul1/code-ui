@@ -11,6 +11,16 @@ import type { BackgroundTaskKind } from './mobile-background-tasks'
 // Anchored to the start of the result: a command whose OUTPUT merely quotes
 // these strings (a grep for them, a printed fixture) is not a launch.
 // Reviewed 2026-09-11 — this session's own greps had counted as shells.
+// Claude Code 2.1.283 has a second shape behind the server flag
+// `tengu_violin_rosin` (switched off in 2.1.282, whose gate always returns
+// false). On 2026-09-26 the two configs in use cache it false, but a stale
+// ~/.claude/.claude.json from 2026-09-17 holds true, so it has been served to
+// one of this machine's accounts. The whole result is then JSON,
+// `{"resultType":"task","taskId":…,"status":"working","statusMessage":…}`
+// with these sentences inside `statusMessage`, and the finish can reach Claude
+// as a tool result instead of a <task-notification>. Neither is read: no real
+// record of either exists yet, and a launch read without its finish would pile
+// up running shells again.
 const SHELL_STARTED = /^\s*Command running in background with ID:\s*([A-Za-z0-9_-]+)/
 const SHELL_MOVED = /^\s*Command did not complete[^\n]{0,120}?moved to the background \(ID:\s*([A-Za-z0-9_-]+)\)/
 // ctrl+b on a running command (Claude Code 2.1.270, 2026-09-13): a third

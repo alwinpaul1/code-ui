@@ -123,6 +123,11 @@ const TWO_QUESTIONS: AskPrompt = {
 // with one Enter. (2.1.282's own code agrees: a lone single-select question
 // hides its Submit tab and answers straight from the option's change handler.)
 // So the key plans are right as they are, and these screens pin them.
+// 2.1.283 draws the model's own questions with 2.1.282's code (binaries
+// compared 2026-09-26, not driven live). Its one change is for a confirmation
+// Claude Code forces itself (`isEngineConfirm`): the question text is split at
+// its first blank line and the rest drawn under the title, above the options,
+// which moves no option number.
 describe('answering Claude AskUserQuestion, on the screens Claude Code 2.1.281 and 2.1.282 draw', () => {
   it.each([
     ['2.1.282', 'claude-screen-ask-single-select-2.1.282.txt', 1],

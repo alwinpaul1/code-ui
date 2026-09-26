@@ -177,7 +177,10 @@ hint now counts as empty.
 ### Validation
 
 Verified against Claude Code 2.1.263 at 80 columns through a tmux harness that
-drives `native-queue-editor.ts` with Orca's `terminal.read` shape.
+drives `native-queue-editor.ts` with Orca's `terminal.read` shape. Claude Code
+2.1.283 draws the hints, the queue block and its send-now row, and keeps the
+same default keys, with 2.1.282's code (the two binaries compared 2026-09-26;
+not driven live).
 
 Stock, no environment changes, three queued messages: the middle one was
 recalled, edited, and the queue retyped as

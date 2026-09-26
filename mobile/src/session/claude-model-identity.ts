@@ -4,12 +4,14 @@ import type {
 } from '../../../src/shared/agent-session-option-catalog-types'
 import { matchNativeChatCatalogModelId } from '../../../src/shared/native-chat-session-option-state'
 
-// Claude Code 2.1.282's canonicaliser, in its own order: the first family id
-// the lowercased string CONTAINS wins, so region prefixes (`eu.anthropic.`),
-// `[1m]` and date suffixes all fall away. Opus 4.6 must be tried after 4.8 and
-// 4.7, and the bare `claude-opus-4` form (Opus 4.0) only when no minor follows.
-// The explicit `-4-0` ids are ours: Claude Code reaches them through its own
-// id table, which this does not copy. Anything else is unknown, not guessed.
+// Claude Code 2.1.282's canonicaliser, in its own order (2.1.283 ships the
+// same chain and the same embedded model table: both binaries read
+// 2026-09-26): the first family id the lowercased string CONTAINS wins, so
+// region prefixes (`eu.anthropic.`), `[1m]` and date suffixes all fall away.
+// Opus 4.6 must be tried after 4.8 and 4.7, and the bare `claude-opus-4` form
+// (Opus 4.0) only when no minor follows. The explicit `-4-0` ids are ours:
+// Claude Code reaches them through its own id table, which this does not
+// copy. Anything else is unknown, not guessed.
 const CANONICAL: ReadonlyArray<readonly [RegExp | string, string]> = [
   ['claude-fable-5-1', 'claude-fable-5-1'],
   ['claude-fable-5', 'claude-fable-5'],

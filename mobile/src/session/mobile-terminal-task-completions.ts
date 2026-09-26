@@ -24,7 +24,9 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
  * in a terminator. A row the terminal cut with an ellipsis is refused.
  *
  * Row shape from `tmux capture-pane -p` of Claude Code 2.1.278 at 46
- * columns (2026-09-20, fixtures/claude-screen-task-completions-2.1.278.txt):
+ * columns (2026-09-20, fixtures/claude-screen-task-completions-2.1.278.txt;
+ * the summary's wording is the same in 2.1.282 and 2.1.283, binaries compared
+ * 2026-09-26):
  *
  *     ⏺ Background command "Short nap for a capture"
  *     completed (exit code 0)

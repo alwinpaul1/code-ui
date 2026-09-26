@@ -8,7 +8,9 @@ import { claudeCanonicalModel, matchClaudeCatalogModelId } from './claude-model-
  * Which effort levels Claude Code itself allows on a model.
  *
  * Read out of the Claude Code 2.1.282 binary on 2026-09-25 (in 2.1.281 the
- * xhigh check was `gfe`, in 2.1.282 `yme`; max is `zq`, effort at all `ib`).
+ * xhigh check was `gfe`, in 2.1.282 `yme`; max is `zq`, effort at all `ib`),
+ * and out of 2.1.283 on 2026-09-26: the same three tables and the same
+ * Ultracode gate, under the names `_he`, `SK`, `Ob` and `hx`.
  * Each check consults the user's capability overrides and the model list's own
  * `effortLevels` first, and only then these tables, keyed by the canonical id
  * (claude-model-identity.ts):

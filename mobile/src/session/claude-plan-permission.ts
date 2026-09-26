@@ -4,7 +4,8 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
  * Claude Code's ExitPlanMode review offers this exact option to reject the
  * plan and say what to change instead of approving it. Verified against a
  * live Claude Code 2.1.276 `claude --permission-mode plan` session
- * (2026-09-18, tmux capture): the review reads
+ * (2026-09-18, tmux capture; 2.1.283 draws the review with 2.1.282's code,
+ * binaries compared 2026-09-26): the review reads
  *
  *   Claude has written up a plan and is ready to execute. Would you like to proceed?
  *   1. Yes, and use auto mode

@@ -5,7 +5,9 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
  * the legacy whole-queue recall, and the per-message selector that only appears
  * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
  * Claude Code 2.1.277 keeps the placeholder but redraws the block itself —
- * see `columnZeroQueueEntries`. */
+ * see `columnZeroQueueEntries`. Claude Code 2.1.283 draws the hints, the block,
+ * its send-now row and the layout above the spinner with 2.1.282's code
+ * (binaries compared 2026-09-26, not captured live). */
 export const QUEUE_HINT =
   /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
 export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
@@ -165,6 +167,10 @@ const SPINNER_DETAIL_ROW = /^\s+⎿\s+\S/
  * Tip:" row stand between them; not skipping those read no queue, and the chat
  * drew a queued message as already sent. A "⎿" row is skipped only when a
  * spinner owns it: anything else there is not this layout, and is refused.
+ * That includes the progress bar row 2.1.282 hung under the spinner while it
+ * compacted. 2.1.283 draws no such row: it puts the compaction's time and
+ * token count on the spinner row itself (read from both binaries 2026-09-26;
+ * no compaction with a queue has been captured on either).
  */
 function sendNowHintAbove(lines: readonly string[], footer: number): number {
   let details = 0
