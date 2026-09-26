@@ -201,7 +201,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: null, thinking: null }
     })
-    expect(statusLine(view)).toEqual(['Working…', ' · ', '1 running task'])
+    expect(statusLine(view)).toEqual(['Working', '·', '1 running task'])
     expect(view.root.findAll((node) => String(node.type) === 'WorkingIndicator')).toHaveLength(0)
   })
 
@@ -213,12 +213,12 @@ describe('the status line above the composer, as the Claude app draws it', () =>
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: '1m 16s', thinking: 'thinking some more' }
     })
-    expect(statusLine(view)).toEqual(['Working…', ' · ', '1 running task', ' · thinking some more…'])
+    expect(statusLine(view)).toEqual(['Working', '·', '1 running task', '·', 'thinking some more…'])
   })
 
   it('says Working when no spinner has been read', async () => {
     const view = await show({ agentWorking: true })
-    expect(statusLine(view)).toEqual(['Working…'])
+    expect(statusLine(view)).toEqual(['Working'])
   })
 
   it('keeps the count there after the turn ends, counted from the unfiltered transcript', async () => {

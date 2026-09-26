@@ -292,13 +292,13 @@ Nothing here is built.
   `supportsTaskStop`; the thinking status "almost done thinking", which the
   Claude app showed but Claude Code 2.1.281 does not paint (its words are
   read when they are). Codex's spinner is not read, so a Codex tab says
-  "Working…". The drag-to-full-screen sheet has not run on the device yet.
+  "Working". The drag-to-full-screen sheet has not run on the device yet.
   The running rows' label shimmer (2026-09-26) replaced a breath that faded
   icon and label together; its numbers come from the user's screen recording
   of the Claude app: one sweep every 1.5 s, a band about six characters wide
   at its foot, a glyph at its centre kept at 26% of its contrast. In that
   recording the "N running tasks" star never moved, so the phone's star now
-  stands still unless "Working…" shows beside it. The shimmer has not run on
+  stands still unless "Working" shows beside it. The shimmer has not run on
   the device yet either.
 - **Working after the turn ended (7).** Session 967668df. Claude Code
   2.1.281 fires StopFailure, not Stop, when a turn's last record is an API

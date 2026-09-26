@@ -10,7 +10,7 @@ const AnimatedSvg = Animated.createAnimatedComponent(Svg)
  *  beside the status line's words. Earlier tries — a lucide star that turned,
  *  then a hand-rolled dot — read as no icon at all on the device.
  *
- *  It breathes only beside "Working…". Beside "4 running tasks" with the turn
+ *  It breathes only beside "Working". Beside "4 running tasks" with the turn
  *  over it stands still: the user's recording of the Claude app (2026-09-26)
  *  shows that star keep one shape for 10.5 s, with no fade, scale or turn. The
  *  scale and opacity run on the native driver, so a busy turn costs it

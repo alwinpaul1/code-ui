@@ -428,7 +428,7 @@ export function MobileNativeChatView({
         agentWorking={agentWorking}
         canStop={canStop ?? agentWorking}
         // The structured lane says "Working for N" per turn; a second, static
-        // "Working…" on the status line would report the same fact twice.
+        // "Working" on the status line would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
         onStop={onStop}
