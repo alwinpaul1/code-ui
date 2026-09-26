@@ -326,8 +326,8 @@ export function MobileNativeChatOverlay({
   // …and one the hook took after a subagent message at the same row is drawn
   // below that message's row, as it came (2026-09-26).
   const pendingInArrivalOrder = useMemo(
-    () => drawnAfterEarlierAgentMessages(pendingWithDesktopPrompts, agentMessages, folded),
-    [agentMessages, folded, pendingWithDesktopPrompts]
+    () => drawnAfterEarlierAgentMessages(pendingWithDesktopPrompts, agentMessages, folded, session.messages),
+    [agentMessages, folded, pendingWithDesktopPrompts, session.messages]
   )
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void) =>

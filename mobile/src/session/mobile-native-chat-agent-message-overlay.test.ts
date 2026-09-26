@@ -6,6 +6,7 @@ import { agentMessageOf, beaconAgentMessages } from './mobile-native-chat-agent-
 import { resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
 
@@ -30,7 +31,7 @@ vi.mock('./MobileNativeChatView', async () => {
   }
 })
 
-import { agentRow, at, landingHarness, userRow, words } from './mobile-chat-phone-photo-landing.test-support'
+import { SESSION, agentRow, at, landingHarness, userRow, words } from './mobile-chat-phone-photo-landing.test-support'
 
 // A subagent's message to its lead, Claude Code 2.1.283 (2026-09-26): the
 // desktop TUI folds it in the turn as "› Message from @general-purpose (ctrl+o
@@ -263,6 +264,27 @@ describe('a desk prompt typed after a subagent message, both mid-turn after the 
       ...fromBeacon([{ nonce: '4100', text: DESK, anchorId: 'a1' }, MESSAGE])
     })
     expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', `user: ${DESK}`, 'Message from'])
+  })
+
+  // Review of 2026-09-27: on a host that publishes a tab status, the status
+  // copy of the prompt is the one drawn (mergeDesktopPrompts keeps it over
+  // the beacon's), and it names no row: it is placed by the last row written
+  // before it, here the result of the Agent call the step folded in.
+  it('is drawn below the "Message from" row when the tab status copy is the one drawn', async () => {
+    const messages = [PROMPT, OPENING, ...LAUNCH]
+    await show('12:40:30.000', { messages, working: true, promptHook: true, ...fromBeacon([MESSAGE]) })
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:34.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { prompt: DESK, updatedAt: at('12:40:35.000') })
+    const beacon = [MESSAGE, { nonce: '4102', text: DESK, anchorId: 'a1' }]
+    await show('12:40:40.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      prompts: mergeDesktopPrompts([...state.prompts], beacon),
+      agentMessages: beaconAgentMessages(beacon)
+    })
+    expect((frames.at(-1)!.pending as { id: string }[]).map((item) => item.id)).toEqual([expect.stringMatching(/^desk-status:/)])
+    expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', 'Message from', `user: ${DESK}`])
   })
 
   it('goes between two messages after the same row when it came between them', async () => {

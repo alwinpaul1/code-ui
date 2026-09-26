@@ -153,22 +153,32 @@ export function withAgentMessageRows(
 export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPendingMessage>(
   pending: readonly T[],
   messages: readonly BeaconAgentMessage[],
-  folded: readonly NativeChatMessage[]
+  folded: readonly NativeChatMessage[],
+  raw: readonly NativeChatMessage[] = folded
 ): T[] {
   if (!messages.some((message) => message.laterAtSameRow)) {
     return pending as T[]
   }
   const position = new Map(folded.map((row, index) => [row.id, index]))
+  const foldedIds = new Set(position.keys())
+  // Compared by the row each is drawn after, not by the raw id each names: a
+  // tab status copy of the prompt is placed by the last row written before it
+  // (lastRowBefore), often a tool row the named row's step folded in, and on
+  // any host that publishes a status that copy is the one drawn (review of
+  // 2026-09-27: the order came out reversed there).
+  const holderOf = (id: string | null | undefined) =>
+    !id ? null : foldedIds.has(id) ? id : foldedHolder(id, raw, foldedIds)
   let moved = false
   const out = pending.map((item) => {
-    const row = pendingPlacementAnchorId(item)
+    const row = holderOf(pendingPlacementAnchorId(item))
     let after: string | undefined
     for (const message of messages) {
       const at = position.get(message.id)
       if (
         at !== undefined &&
+        row !== null &&
         (after === undefined || at > position.get(after)!) &&
-        message.anchorId === row &&
+        holderOf(message.anchorId) === row &&
         message.laterAtSameRow?.includes(item.text)
       ) {
         after = message.id
