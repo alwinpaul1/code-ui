@@ -15,7 +15,7 @@ import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
  * reader drops both (fixtures/claude-agent-message-read-image-2.1.283.ts), so
  * the phone draws it from what it does get:
  *   - the phone's own prompt hook, which Claude fires for these too: the
- *     message, cut at 2,000 characters, and the row it came after;
+ *     message, cut at 2,000 bytes of its JSON-escaped text, and the row it came after;
  *   - on a tab launched without that hook, the TUI's own row
  *     (`› Message from @general-purpose (ctrl+o to expand)`), which names
  *     the sender and nothing more (screen-peer-notices.ts).

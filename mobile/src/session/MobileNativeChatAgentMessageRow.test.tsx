@@ -110,7 +110,7 @@ describe("a subagent's message in the chat", () => {
   })
 
   // Bug B review, 2026-09-27: words that are only the start of the message
-  // (the hook's 2,000 characters, the tab status's 200) must never read as
+  // (the hook's 2,000 bytes, the tab status's 200 characters) must never read as
   // the whole of it.
   it('says so under the words when only the start of the message reached the phone', () => {
     const root = render('Request for one read-only device probe…', 'light', true)

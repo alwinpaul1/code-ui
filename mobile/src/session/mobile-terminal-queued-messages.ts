@@ -1,7 +1,6 @@
 import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
-import { isPeerRowHead } from './mobile-terminal-peer-notices'
 /** Verified against Claude Code 2.1.263. Two different queue footers exist:
  * the legacy whole-queue recall, and the per-message selector that only appears
  * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
@@ -225,9 +224,16 @@ function columnZeroQueueEntries(lines: readonly string[], sendNow: number): stri
   return queueEntries(rows, /^[❯›>]\s+(.+)$/)
 }
 
+/** The head of the TUI's row for a peer message, as a queue row: the `›`
+ *  pointer, then "Message from @x" or "Cross-session message from @x". */
+const PEER_HEAD = /^\s*›\s+(?:Cross-session message|Message) from @\S/
+/** How the TUI's row for a peer message ends, however it wrapped. */
+const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
+
 /**
  * The messages of a queue block, one per marked row with its wrapped lines
- * joined on, less the peer messages in it.
+ * joined on, less the peer messages in it; none at all when a row may be one
+ * and can't be told.
  *
  * Claude Code paints a message from another session or one of its own agents
  * that waits in its queue as the TUI's own row, "› Message from
@@ -236,22 +242,28 @@ function columnZeroQueueEntries(lines: readonly string[], sendNow: number): stri
  * 790eafa8, 2026-09-26, Claude Code 2.1.283), with nothing to open. It is not
  * the user's to edit either. The chat draws it from the screen's own row
  * (screen-peer-notices.ts) and from the prompt hook.
+ *
+ * At a narrow width the row wraps, "(ctrl+o to" on its line and "expand)" on
+ * the next, so it is told by its head and by its own lines ending in the
+ * hint. A head no line closes that way could be a person's message or a cut
+ * peer row, and the whole reading is refused: an empty queue only hides a
+ * pencil, a wrong one draws the peer's row as the user's (re-review of
+ * 2026-09-27).
  */
 function queueEntries(rows: readonly string[], marked: RegExp): string[] {
-  const entries: string[] = []
-  let peer = false
+  const read: { text: string; peer: boolean }[] = []
   for (const line of rows) {
     const match = marked.exec(line)
     if (match) {
-      peer = isPeerRowHead(line)
-      if (!peer) {
-        entries.push(match[1]!.trim())
-      }
-    } else if (!peer && entries.length) {
-      entries[entries.length - 1] += '\n' + line.trim()
+      read.push({ text: match[1]!.trim(), peer: PEER_HEAD.test(line) })
+    } else if (read.length) {
+      read[read.length - 1]!.text += '\n' + line.trim()
     }
   }
-  return entries
+  if (read.some((entry) => entry.peer && !PEER_TAIL.test(entry.text.replace(/\s+/g, ' ')))) {
+    return []
+  }
+  return read.filter((entry) => !entry.peer).map((entry) => entry.text)
 }
 
 /** Claude's own context warning, drawn in the composer box beside the queue

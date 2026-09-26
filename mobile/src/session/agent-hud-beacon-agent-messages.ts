@@ -19,7 +19,7 @@ import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
 export type AgentMessagePrompt = DesktopPrompt & { restored?: true; drawnAfter?: string }
 
 /** A session's subagent messages the chat keeps drawing; oldest shed first.
- *  Each is up to the hook's 2,000 characters, and the whole beacon goes to
+ *  Each is up to the hook's 2,000 bytes, and the whole beacon goes to
  *  one warm-start record. */
 export const AGENT_MESSAGE_PROMPT_CAP = 32
 
