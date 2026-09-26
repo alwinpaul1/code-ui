@@ -25,6 +25,9 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * is honest, 2026-09-20).
  */
 
+/** Every row this module draws has an id that starts so. */
+export const SCREEN_NOTICE_ID_PREFIX = 'peer-notice:'
+
 export type ScreenPeerNotice = {
   id: string
   sender: string
@@ -72,7 +75,7 @@ export function observeScreenPeerNotices(
       next ??= [...previous]
       const { body, above } = list[list.length - fresh + taken - 1]!
       next.push({
-        id: `peer-notice:${sender}:${known.length + taken}`,
+        id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${known.length + taken}`,
         sender,
         ...(body ? { body } : {}),
         ...(above !== undefined ? { above } : {}),
