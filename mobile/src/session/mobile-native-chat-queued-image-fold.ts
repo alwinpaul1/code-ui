@@ -49,16 +49,42 @@ export function trailingCompanionOwner(
   end: number,
   companion: NativeChatMessage
 ): NativeChatMessage | null {
-  let at = end - 1
-  while (at >= 0 && rows[at]!.source === companion.source && isImageSourceUserTurn(rows[at]!)) {
-    at -= 1
-  }
-  const prompt = rows[at]
-  if (!prompt || prompt.role !== 'user' || prompt.source !== companion.source || promptMarkerCount(prompt) === 0) {
+  const source = companion.source
+  const ownerAt = rowBehindCompanions(rows, end, source)
+  const owner = rows[ownerAt]
+  if (!isPhotoPrompt(owner, source)) {
     return null
   }
-  const before = rows[at - 1]
-  return before && before.source === prompt.source && isImageSourceUserTurn(before) ? null : prompt
+  // Companions in front of a prompt are its own in the older order, and then
+  // the run after it is not; unless they trail an earlier photo message,
+  // which is what two photo messages written back to back look like (review,
+  // 2026-09-26: the second message's photo went to a third that named as
+  // many). So walk back through prompt and companion pairs to the first
+  // prompt with none in front of it.
+  let at = ownerAt
+  for (;;) {
+    const behind = rowBehindCompanions(rows, at, source)
+    if (behind === at - 1) {
+      return owner!
+    }
+    if (!isPhotoPrompt(rows[behind], source)) {
+      return null
+    }
+    at = behind
+  }
+}
+
+/** The index of the row before the run of companions that ends at `end`. */
+function rowBehindCompanions(rows: readonly NativeChatMessage[], end: number, source: NativeChatMessage['source']): number {
+  let at = end - 1
+  while (at >= 0 && rows[at]!.source === source && isImageSourceUserTurn(rows[at]!)) {
+    at -= 1
+  }
+  return at
+}
+
+function isPhotoPrompt(row: NativeChatMessage | undefined, source: NativeChatMessage['source']): boolean {
+  return !!row && row.role === 'user' && row.source === source && promptMarkerCount(row) > 0
 }
 
 /**
@@ -91,7 +117,9 @@ export function foldQueuedImageTurns(messages: NativeChatMessage[]): NativeChatM
       continue
     }
     const message = messages[index]!
-    if (!isImageSourceUserTurn(message) || trailingCompanionOwner(out, out.length, message)) {
+    // A run the loaded window starts with trails a prompt on the page before
+    // it, and is not the next photo message's (review, 2026-09-26).
+    if (!isImageSourceUserTurn(message) || out.length === 0 || trailingCompanionOwner(out, out.length, message)) {
       out.push(message)
       continue
     }

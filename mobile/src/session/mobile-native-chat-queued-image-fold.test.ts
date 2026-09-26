@@ -125,6 +125,42 @@ describe('queued-message images fold into their prompt', () => {
     expect(paths('p2')).toEqual(Array.from({ length: count }, (_, index) => `/t/${70 + index}.png`))
   })
 
+  // Review, 2026-09-26: 3 of the 617 companion runs on this machine are two
+  // photo messages written back to back. The second prompt then has the
+  // first one's companion in front of it, and was read as having taken it.
+  it('keeps the second of two photo messages written back to back with its own photo, not the next one’s', () => {
+    const out = pipeline([
+      assistant('a0'),
+      user('p1', '[Image #1] first photo message'),
+      user('c1', '[Image: source: /t/one.png]'),
+      user('p2', '[Image #2] second photo message'),
+      user('c2', '[Image: source: /t/two.png]'),
+      assistant('reply'),
+      user('p3', '[Image #3] third photo message'),
+      user('c3', '[Image: source: /t/three.png]')
+    ])
+    const paths = (id: string) =>
+      out.find((message) => message.id === id)!.blocks.flatMap((block) => (block.type === 'image-ref' ? [block.path] : []))
+    expect(out.map((message) => message.id)).toEqual(['a0', 'p1', 'p2', 'reply', 'p3'])
+    expect([paths('p1'), paths('p2'), paths('p3')]).toEqual([['/t/one.png'], ['/t/two.png'], ['/t/three.png']])
+  })
+
+  it('leaves a photo whose message is on the page before the window where it is, not on the next message with as many', () => {
+    const out = pipeline([
+      user('c1', '[Image: source: /t/one.png]'),
+      assistant('reply'),
+      user('p2', '[Image #2] second photo message'),
+      user('c2', '[Image: source: /t/two.png]')
+    ])
+    expect(summary(out)).toEqual([
+      { id: 'c1', role: 'user', types: ['image-ref'] },
+      { id: 'reply', role: 'assistant', types: ['tool-call'] },
+      { id: 'p2', role: 'user', types: ['image-ref', 'text'] }
+    ])
+    const p2 = out.find((message) => message.id === 'p2')!
+    expect(p2.blocks[0]).toMatchObject({ path: '/t/two.png' })
+  })
+
   it('still moves a stranded run past a prompt that already has its own photos in front of it', () => {
     const out = pipeline([
       user('img0', '[Image: source: /t/1.png]'),

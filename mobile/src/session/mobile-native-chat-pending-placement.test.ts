@@ -139,6 +139,15 @@ describe('a message sent right after a photo message, before the agent wrote any
     expect(render(replied, [sentAfterIt])).toEqual(['m1', 'm2', 'm3', 'p', 'q', 'r'])
   })
 
+  it('stays under the second of two photo messages written back to back', () => {
+    const backToBack = [
+      ...photoMessage,
+      row('p2', 'user', '[Image #68] and this one'),
+      imageTurn('c2', '/var/folders/0y/x/T/orca-paste-1790405982176-42c80aee-6038-4de8-aa23-68dca155febb.png')
+    ]
+    expect(render(backToBack, [{ ...sentAfterIt, baselineTailMessageId: 'c2' }])).toEqual(['m1', 'm2', 'm3', 'p', 'p2', 'q'])
+  })
+
   it('still goes under the prompt a photo was written BEFORE, when the photo was the last row', () => {
     const photoFirst = [...settledRead, imageTurn('c', '/var/tmp/photo.png'), row('p', 'user', '[Image #1] see this')]
     expect(render(photoFirst, [sentAfterIt])).toEqual(['m1', 'm2', 'm3', 'p', 'q'])
