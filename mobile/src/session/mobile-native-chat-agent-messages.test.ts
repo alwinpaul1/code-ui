@@ -390,7 +390,8 @@ describe('a subagent message the beacon carried, later on', () => {
     consumeAgentHudBeacons(handle(), hookFrame('101', 'typed after it', A1))
     consumeAgentHudBeacons(handle(), hookFrame('102', 'typed after the next row', 'b2b2b2b2-0000-4000-8000-000000000002'))
     const [message] = agentMessagesOfBeacon(getAgentHudBeacon(handle()))
-    expect(message?.laterAtSameRow).toEqual(['typed after it'])
+    expect(message?.laterAtSameRow).toEqual([{ nonce: '101', text: 'typed after it' }])
+    expect(message?.earlierAtSameRow).toEqual([{ nonce: '99', text: 'typed before it' }])
     // None after it: no list at all.
     expect(beaconAgentMessages([{ nonce: '1', text: SUBAGENT_REQUEST_PROMPT, anchorId: A1 }])[0]).not.toHaveProperty('laterAtSameRow')
   })

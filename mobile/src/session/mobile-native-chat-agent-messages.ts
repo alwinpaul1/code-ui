@@ -31,6 +31,9 @@ export const AGENT_MESSAGE_PRESENTATION = 'agent-message'
 
 export type SubagentMessage = { from: string; body: string }
 
+/** A prompt the hook took at the row a subagent message names. */
+export type SameRowPrompt = { nonce: string; text: string }
+
 /** A subagent message the prompt hook carried, not yet placed. */
 export type BeaconAgentMessage = {
   id: string
@@ -44,10 +47,12 @@ export type BeaconAgentMessage = {
   restored?: true
   /** The row the chat drew it after before it was stored. */
   drawnAfter?: string
-  /** The prompts the hook took after this message at the same row, by their
-   *  text: each is drawn below the message, in the order they came, rather
-   *  than straight after the row above it (mobile-native-chat-agent-message-rows.ts). */
-  laterAtSameRow?: string[]
+  /** The prompts the hook took after this message at the same row: each is
+   *  drawn below the message, in the order they came, rather than straight
+   *  after the row above it (mobile-native-chat-agent-message-rows.ts). */
+  laterAtSameRow?: SameRowPrompt[]
+  /** And those it took before the message at that row, which stay above it. */
+  earlierAtSameRow?: SameRowPrompt[]
 }
 
 const OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:[ \t]*\n/
@@ -136,9 +141,11 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
     if (!parsed) {
       return
     }
-    const later = prompt.anchorId === undefined
-      ? []
-      : list.slice(index + 1).filter((next) => next.anchorId === prompt.anchorId && !isSubagentMessagePrompt(next))
+    const atSameRow = (other: AgentMessagePrompt) =>
+      prompt.anchorId !== undefined && other.anchorId === prompt.anchorId && !isSubagentMessagePrompt(other)
+    const sameRow = (others: readonly AgentMessagePrompt[]) => others.filter(atSameRow).map(({ nonce, text }) => ({ nonce, text }))
+    const later = sameRow(list.slice(index + 1))
+    const earlier = sameRow(list.slice(0, index))
     found.push({
       id: `agent-message:${prompt.nonce}`,
       from: parsed.from,
@@ -147,7 +154,8 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
       ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
       ...(prompt.restored ? { restored: true as const } : {}),
       ...(prompt.drawnAfter ? { drawnAfter: prompt.drawnAfter } : {}),
-      ...(later.length > 0 ? { laterAtSameRow: later.map((next) => next.text) } : {})
+      ...(later.length > 0 ? { laterAtSameRow: later } : {}),
+      ...(later.length > 0 && earlier.length > 0 ? { earlierAtSameRow: earlier } : {})
     })
   })
   return found

@@ -6,8 +6,10 @@ import { rememberAgentMessagePlacement } from './agent-hud-beacon'
 import {
   agentMessageRow,
   subagentNames,
-  type BeaconAgentMessage
+  type BeaconAgentMessage,
+  type SameRowPrompt
 } from './mobile-native-chat-agent-messages'
+import { deskEchoId } from './use-desktop-prompt-echoes'
 
 /**
  * Where each subagent message the prompt hook carried is drawn: after the row
@@ -188,7 +190,7 @@ export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPending
         row !== null &&
         (after === undefined || at > position.get(after)!) &&
         holderOf(message.anchorId) === row &&
-        message.laterAtSameRow?.includes(item.text)
+        cameAfter(message, item)
       ) {
         after = message.id
       }
@@ -214,6 +216,27 @@ export function agentMessagePlacements(
     const nonce = message.id.slice(message.id.indexOf(':') + 1)
     return rowId !== undefined && rowId !== message.drawnAfter ? [{ nonce, rowId }] : []
   })
+}
+
+/**
+ * Whether a pending bubble is a prompt the hook took after this message. The
+ * beacon's own copy says so by its nonce (`desk-<nonce>`). Another copy, the
+ * tab status's or a phone send, only by its text, and only when no prompt of
+ * that text came before the message at the same row: matched by text alone,
+ * an "ok" typed before the message moved below it with the one typed after
+ * (review of 2026-09-27).
+ */
+function cameAfter(message: BeaconAgentMessage, item: { id: string; text: string }): boolean {
+  const later = message.laterAtSameRow ?? []
+  const earlier = message.earlierAtSameRow ?? []
+  const byNonce = (prompts: readonly SameRowPrompt[]) => prompts.some((prompt) => deskEchoId(prompt.nonce) === item.id)
+  if (byNonce(later)) {
+    return true
+  }
+  if (byNonce(earlier)) {
+    return false
+  }
+  return later.some((prompt) => prompt.text === item.text) && !earlier.some((prompt) => prompt.text === item.text)
 }
 
 /** The folded chat with the prompt hook's subagent messages drawn in. Where

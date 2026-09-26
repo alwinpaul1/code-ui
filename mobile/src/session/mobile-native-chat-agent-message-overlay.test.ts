@@ -287,6 +287,24 @@ describe('a desk prompt typed after a subagent message, both mid-turn after the 
     expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', 'Message from', `user: ${DESK}`])
   })
 
+  // Review of 2026-09-27: matched by text alone, an identical "ok" typed
+  // before the message moved below it too.
+  it('keeps an identical prompt typed before the message above it, and draws the one typed after below it', async () => {
+    const messages = [PROMPT, OPENING]
+    await show('12:40:40.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      ...fromBeacon([{ nonce: '4100', text: 'ok', anchorId: 'a1' }, MESSAGE, { nonce: '4102', text: 'ok', anchorId: 'a1' }])
+    })
+    expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', 'user: ok', 'Message from', 'user: ok'])
+    const pendingIds = (frames.at(-1)!.pending as { id: string; drawAfterId?: string }[]).map((item) => [item.id, item.drawAfterId])
+    expect(pendingIds).toEqual([
+      ['desk-4100', undefined],
+      ['desk-4102', 'agent-message:4101']
+    ])
+  })
+
   it('goes between two messages after the same row when it came between them', async () => {
     const messages = [PROMPT, OPENING]
     const second = { nonce: '4103', text: '<agent-message from="a7a46867b4f497c96">\nSecond report.\n</agent-message>', anchorId: 'a1' }
