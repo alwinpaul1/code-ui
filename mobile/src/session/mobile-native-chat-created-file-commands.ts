@@ -45,9 +45,13 @@
 /** Redirects that write no file: a descriptor copied onto another, or
  *  output thrown away. `>&2.log` and `>/dev/null.bak` name files. */
 const HARMLESS_REDIRECT = /(?:\d*>&\d+|&>>?\s*\/dev\/null|\d*>>?\s*\/dev\/null)(?=$|[\s;&|])/g
-/** A redirect left over, or a command whose words do not show what it runs. */
-const UNREADABLE = /[`>()]/
-const SEPARATOR = /&&|\|\||[;|&\n]/
+/** A redirect left over, or a command whose words do not show what it runs:
+ *  a subshell, a substitution, or a script block, which PowerShell runs even
+ *  when a reading verb is handed it (`cat -Path {Add-Content f 'x'}`, review
+ *  of 8b2ef369). */
+const UNREADABLE = /[`>(){}]/
+/** A bare carriage return ends a PowerShell statement. */
+const SEPARATOR = /&&|\|\||[;|&\n\r]/
 const WRITES_A_NAMED_FILE = /^--output/
 const QUOTED = /^(["'])(.*)\1$/
 /** What the shell may turn a word into something else with: a quote or an

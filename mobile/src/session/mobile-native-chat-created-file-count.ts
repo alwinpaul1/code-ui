@@ -181,6 +181,16 @@ function normalizedPath(path: string): string {
   return path.replaceAll('\\ ', ' ').replaceAll('\\', '/').toLowerCase()
 }
 
+/** A string as written, and as a shell reads it with its escapes taken out:
+ *  a backslash's for sh, bash and zsh, a backtick's for PowerShell. A name
+ *  escaped either way still names the file (review of 8b2ef369: zsh needs
+ *  `\\[slug\\].tsx` for a Next.js route, and a sed there went unseen). The
+ *  extra spellings can only find more calls that name the file, which then
+ *  refuse unless the command provably leaves it alone. */
+function spellings(text: string): string[] {
+  return [...new Set([text, text.replace(/\\(.)/gs, '$1'), text.replace(/`(.)/gs, '$1')])]
+}
+
 /** The path with its `.` and `..` segments resolved as far as the path
  *  itself allows. A `..` above a relative path's start is dropped, and what
  *  is left is matched as a suffix: for a touch that finds more of them, which
@@ -257,7 +267,7 @@ function callWords(call: NativeChatToolCallBlock): string[] {
   if (cached) {
     return cached
   }
-  const words = inputStrings(call.input).map(normalizedPath)
+  const words = inputStrings(call.input).flatMap(spellings).map(normalizedPath)
   wordsOfCall.set(call, words)
   return words
 }
