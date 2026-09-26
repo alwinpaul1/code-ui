@@ -192,6 +192,24 @@ describe('a file whose name says nothing is read for its language', () => {
     )
   })
 
+  it('reads a #! line that runs its interpreter through env -S, uv or a package runner', () => {
+    const cases: [string, string][] = [
+      ['#!/usr/bin/env -S uv run --script', 'python'],
+      ['#!/usr/bin/env uv run', 'python'],
+      ['#!/usr/bin/env -S npx tsx', 'typescript'],
+      ['#!/usr/bin/env npx ts-node', 'typescript'],
+      ['#!/usr/bin/env -S pnpm dlx tsx', 'typescript'],
+      ['#!/usr/bin/env -S bun run', 'typescript'],
+      ['#!/usr/bin/env -S NODE_OPTIONS=--no-warnings node', 'javascript'],
+      ['#!/usr/bin/env -S deno run --allow-read', 'typescript']
+    ]
+    for (const [shebang, language] of cases) {
+      expect(detectMobileSyntaxLanguage(`${shebang}\nprint(1)\n`), shebang).toBe(language)
+    }
+    // A runner with nothing after it says nothing.
+    expect(detectMobileSyntaxLanguage('#!/usr/bin/env npx\n')).toBeNull()
+  })
+
   it('colours JSON and XML by their shape', () => {
     expect(resolveMobileSyntaxLanguageForContent('data/settings', '{\n  "theme": "dark",\n  "wrap": false\n}\n')).toBe(
       'json'

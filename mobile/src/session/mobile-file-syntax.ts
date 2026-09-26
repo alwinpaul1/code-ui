@@ -76,6 +76,36 @@ export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?
 
 /** JSON is recognised by parsing it whole; past this it is left plain. */
 const MAX_JSON_DETECT_CHARS = 2_000_000
+/** Commands that run another program named after them: `npx tsx`,
+ *  `pnpm dlx tsx`, `bunx ts-node`. */
+const RUNNERS = new Set(['npx', 'bunx', 'pnpx', 'pnpm', 'yarn', 'dlx', 'exec', 'run'])
+
+/**
+ * The language a `#!` line runs: the interpreter's name, past `env`, its
+ * flags (`-S`) and variables (`NODE_OPTIONS=…`), and past a package runner
+ * (`npx tsx` runs tsx). `#!/usr/bin/env -S uv run --script` is Python.
+ * Null for an interpreter it does not know.
+ */
+function shebangLanguage(firstLine: string): string | null {
+  const words = firstLine.slice(2).trim().split(/\s+/)
+  let at = 0
+  const basename = (word: string) => word.slice(word.lastIndexOf('/') + 1)
+  if (basename(words[0] ?? '') === 'env') {
+    at = 1
+  }
+  while (at < words.length) {
+    const word = basename(words[at]!)
+    if (word.startsWith('-') || word.includes('=') || RUNNERS.has(word)) {
+      at += 1
+      continue
+    }
+    // python3.11 runs python; an own entry only, so `constructor` is not one.
+    const name = [word.replace(/[\d.]+$/, ''), word].find((key) => Object.hasOwn(SHEBANG_LANGUAGES, key))
+    return name ? SHEBANG_LANGUAGES[name]! : null
+  }
+  return null
+}
+
 /** Interpreters named on a `#!` line, by the language they run. */
 const SHEBANG_LANGUAGES: Record<string, string> = {
   sh: 'bash', bash: 'bash', zsh: 'bash', dash: 'bash', ksh: 'bash', fish: 'bash',
@@ -86,7 +116,9 @@ const SHEBANG_LANGUAGES: Record<string, string> = {
   pwsh: 'powershell', powershell: 'powershell', make: 'makefile', awk: 'awk',
   gawk: 'awk', tclsh: 'tcl', osascript: 'applescript', groovy: 'groovy',
   julia: 'julia', elixir: 'elixir', escript: 'erlang', runhaskell: 'haskell',
-  scala: 'scala', crystal: 'crystal', swift: 'swift'
+  scala: 'scala', crystal: 'crystal', swift: 'swift',
+  // `uv run` runs a Python script.
+  uv: 'python'
 }
 
 /**
@@ -104,13 +136,8 @@ export function detectMobileSyntaxLanguage(content: string, filePath = ''): stri
   const text = content.replace(/^\uFEFF/, '')
   const lineEnd = text.indexOf('\n')
   const firstLine = lineEnd === -1 ? text : text.slice(0, lineEnd)
-  // `#!/usr/bin/env -S deno run` names deno; `#!/bin/sh` names sh.
-  const shebang = /^#!\s*(?:\S*\/)?([^/\s]+)(?:\s+(?:-\S+\s+)*([^\s-]\S*))?/.exec(firstLine)
-  if (shebang) {
-    const interpreter = (shebang[1] === 'env' ? shebang[2] : shebang[1]) ?? ''
-    // python3.11 runs python; an own entry only, so `constructor` is not one.
-    const name = [interpreter.replace(/[\d.]+$/, ''), interpreter].find((key) => Object.hasOwn(SHEBANG_LANGUAGES, key))
-    return name ? SHEBANG_LANGUAGES[name]! : null
+  if (firstLine.startsWith('#!')) {
+    return shebangLanguage(firstLine)
   }
   // The marks below sit at the top of a file; look no further than 4 KB.
   const head = text.length > 4_096 ? text.slice(0, 4_096) : text
