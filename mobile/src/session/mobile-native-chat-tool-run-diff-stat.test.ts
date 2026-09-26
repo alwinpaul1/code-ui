@@ -251,6 +251,100 @@ describe('a count the wire cut is no count', () => {
     ).toBeNull()
   })
 
+  // Review of f042077a. A diff item that only moved a file, or whose patch is
+  // empty, changed no lines: it adds nothing to the run, and must not void it.
+  it('keeps the run count beside a Codex diff that only moved a file or carries an empty patch', () => {
+    for (const output of ['Moved to: src/b.ts', '']) {
+      expect(
+        toolRunDiffStat([
+          { type: 'tool-call', name: 'Diff', input: { path: 'src/a.ts' } },
+          { type: 'tool-result', output },
+          ...LANDED_EDIT
+        ])
+      ).toEqual({ added: 14, removed: 2 })
+    }
+  })
+
+  it('draws no count beside a Codex diff the journal bounded before its first hunk', () => {
+    // With a file header left the reader names a cut file; with none, no file.
+    for (const output of ['diff --git a/src/a.ts b/src/a.ts\n… (48210 bytes)', 'index 1a2b3c..4d5e6f 100644\n… (48210 bytes)']) {
+      expect(
+        toolRunDiffStat([
+          { type: 'tool-call', name: 'Diff', input: { path: 'src/a.ts' } },
+          { type: 'tool-result', output },
+          ...LANDED_EDIT
+        ])
+      ).toBeNull()
+    }
+  })
+
+  // An older Codex runs apply_patch through its shell tool, the envelope one
+  // word of the argument vector. Cut, it has no closing marker and no files,
+  // and the other patch's count is not the run's.
+  it('draws no count for a Codex run whose shell apply_patch the wire cut, rather than the other patch alone', () => {
+    expect(
+      toolRunDiffStat([
+        {
+          type: 'tool-call',
+          name: 'apply_patch',
+          input: '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-was\n+now\n*** End Patch\n'
+        },
+        { type: 'tool-result', output: 'Success. Updated the following files:\nM src/a.ts\n' },
+        {
+          type: 'tool-call',
+          name: 'shell',
+          input: { command: ['apply_patch', `*** Begin Patch\n*** Add File: src/b.ts\n+one\n+tw${CUT}`] }
+        },
+        { type: 'tool-result', output: 'Success. Updated the following files:\nA src/b.ts\n' }
+      ])
+    ).toBeNull()
+  })
+
+  it('draws no count for a run holding a Codex exec script that applied a patch it cannot split', () => {
+    expect(
+      toolRunDiffStat([
+        {
+          type: 'tool-call',
+          name: 'apply_patch',
+          input: '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-was\n+now\n*** End Patch\n'
+        },
+        { type: 'tool-result', output: 'Success. Updated the following files:\nM src/a.ts\n' },
+        {
+          type: 'tool-call',
+          name: 'exec',
+          input:
+            'const patch = "*** Begin Patch\\n*** Update File: src/b.ts\\n@@\\n-was\\n+now\\n*** End Patch";\nconst out = await tools.apply_patch(patch);\ntext(out);\n'
+        },
+        { type: 'tool-result', output: 'Script completed\nWall time: 0.4 seconds\n{}' }
+      ])
+    ).toBeNull()
+  })
+
+  it('keeps the run count beside commands that ran no patch, even one that names apply_patch', () => {
+    expect(
+      toolRunDiffStat([
+        { type: 'tool-call', name: 'shell', input: { command: ['bash', '-lc', 'ls'] } },
+        { type: 'tool-result', output: 'a.ts' },
+        { type: 'tool-call', name: 'exec', input: { command: ['rg', '-n', 'apply_patch', 'src'] } },
+        { type: 'tool-result', output: 'src/a.ts:1:apply_patch' },
+        ...LANDED_EDIT
+      ])
+    ).toEqual({ added: 14, removed: 2 })
+  })
+
+  // No provider Orca decodes names a tool `str_replace`; the text-editor
+  // shape that does uses `old_str`/`new_str` and a `view` command, which the
+  // vendored reader cannot turn into files. Its landing proves no edit.
+  it('keeps the run count beside a str_replace call it cannot read', () => {
+    expect(
+      toolRunDiffStat([
+        { type: 'tool-call', name: 'str_replace', input: { command: 'view', path: '/repo/a.ts' } },
+        { type: 'tool-result', output: '1\tconst a = 1' },
+        ...LANDED_EDIT
+      ])
+    ).toEqual({ added: 14, removed: 2 })
+  })
+
   it('draws no count for an empty run, or a lone result with no call', () => {
     expect(toolRunDiffStat([])).toBeNull()
     expect(toolRunDiffStat([{ type: 'tool-result', output: 'ok' }])).toBeNull()

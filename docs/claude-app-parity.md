@@ -49,15 +49,17 @@ failing-first test and has been checked on the phone in light and dark.
   as it was written. So the chip is left off whenever a count cannot be the
   edit's own: an input the diet cut or a key it dropped, a resolved hunk
   Orca kept only 400 rows of, a patch at Orca's 40-hunk cap, a file the
-  journal bounded, or a file-editing call that landed with nothing left to
-  count (`mobile-native-chat-edit-wire-cut.ts`). The diff card shows "Diff
-  truncated" in place of its count for the same files. Codex: a whole
-  `apply_patch` envelope still counts, and one cut before `*** End Patch`
-  voids its run's chip. Codex 0.153.4 applies every patch from inside an
-  `exec` script, as a JavaScript string with escaped newlines, which nothing
-  on the phone splits into files, so those runs draw no chip. A command that
-  edits a file some other way (`sed -i`, `cat > file`) is never counted: what
-  it changed is not on the wire.
+  journal bounded, or an edit that landed with nothing left to count
+  (`mobile-native-chat-edit-wire-cut.ts`). The diff card shows "Diff
+  truncated" in place of its count for the same files, and hunk revert
+  refuses a hunk the 400-row cut split. Codex: a whole `apply_patch`
+  envelope still counts, and a diff that only moved a file adds nothing. An
+  envelope cut before `*** End Patch`, whether the `apply_patch` tool's or
+  a shell command's, voids its run's chip. Codex 0.153.4 applies every patch
+  from inside an `exec` script, as a JavaScript string with escaped
+  newlines, which nothing on the phone splits into files, so a run holding
+  one draws no chip. A command that edits a file some other way (`sed -i`,
+  `cat > file`) is never counted: what it changed is not on the wire.
 - **Hand-backs (5).** Since Claude Code 2.1.272 every subagent report is a
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops

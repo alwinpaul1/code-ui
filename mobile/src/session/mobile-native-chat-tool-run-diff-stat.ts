@@ -13,24 +13,29 @@ import {
   editFilesFromToolPair,
   isEditToolName
 } from '../../../src/shared/native-chat-edit-normalize'
-import type { NativeChatEditFile } from '../../../src/shared/native-chat-edit-model'
 import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
-import { isLandedFileEdit, markWireCutEditFiles } from './mobile-native-chat-edit-wire-cut'
+import {
+  editFileCountIsWhole,
+  landedEditIsUncountable,
+  markWireCutEditFiles,
+  type MobileEditFile
+} from './mobile-native-chat-edit-wire-cut'
 
 /** The files one call is known to have changed, across every shape the
  *  vendored decoder understands — null when the tool isn't edit-shaped, or
  *  when the call is still running, failed, or has no answer yet. A file whose
- *  count the wire cut comes back `truncated`. The one place the chip, the
+ *  rows the wire cut comes back `truncated`, and one whose patch may go on
+ *  past its last hunk `mayContinue`. The one place the chip, the
  *  diff card and the sentence's "created a file" wording ask this question,
  *  so they read the same evidence the same way. */
 export function editFilesForToolCall(
   call: NativeChatToolCallBlock,
   result: NativeChatToolResultBlock | null
-): NativeChatEditFile[] | null {
+): MobileEditFile[] | null {
   if (!isEditToolName(call.name)) {
     return null
   }
@@ -50,9 +55,9 @@ export type NativeChatToolRunDiffStat = { added: number; removed: number }
 /** The run's total added/removed line count, summed over every file an
  *  edit-shaped call in the run (not only the rows a collapsed view still
  *  shows) is known to have changed. Null when the run touched no file, or
- *  when any edit in it landed without a whole count — a cut file, or a
- *  file-editing call with nothing left to count. A sum that leaves one out
- *  is not the run's total, so there is nothing honest to draw. */
+ *  when any edit in it landed without a whole count — a cut file, or an edit
+ *  with nothing left to count. A sum that leaves one out is not the run's
+ *  total, so there is nothing honest to draw. */
 export function toolRunDiffStat(
   blocks: readonly NativeChatBlock[]
 ): NativeChatToolRunDiffStat | null {
@@ -66,13 +71,13 @@ export function toolRunDiffStat(
     const result = pair.result ?? null
     const files = editFilesForToolCall(pair.call, result)
     if (!files || files.length === 0) {
-      if (isLandedFileEdit(pair.call, result)) {
+      if (landedEditIsUncountable(pair.call, result)) {
         return null
       }
       continue
     }
     for (const file of files) {
-      if (file.truncated) {
+      if (!editFileCountIsWhole(file)) {
         return null
       }
       added += file.added

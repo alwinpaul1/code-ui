@@ -10,7 +10,9 @@
 import { describe, expect, it } from 'vitest'
 import { finalizeEditFile, type NativeChatEditFile } from '../../../src/shared/native-chat-edit-model'
 import { editFilesFromToolPair } from '../../../src/shared/native-chat-edit-normalize'
-import { editCardHunks, planHunkRevert } from './mobile-diff-hunk-revert'
+import { editCardHunks, hunkRevertPrecheck, planHunkRevert } from './mobile-diff-hunk-revert'
+import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import type { NativeChatEditPatchHunk } from '../../../src/shared/native-chat-types'
 
 /** A Claude `Edit` as the structured lane reports it: the snippet pair plus the
  *  hunks the provider resolved against the real file, so rows are numbered. */
@@ -383,6 +385,47 @@ describe('reverting one hunk of a landed edit', () => {
         ok: false,
         refusal: 'hunk-cut-by-truncation'
       })
+    })
+
+    // A card as the chat builds it (editFilesForToolCall), from a landed Edit
+    // whose result carried these resolved hunks.
+    function landedEditCard(hunks: NativeChatEditPatchHunk[]): NativeChatEditFile {
+      const files = editFilesForToolCall(
+        { type: 'tool-call', name: 'Edit', input: { file_path: '/w/a.ts', old_string: 'x', new_string: 'y' } },
+        { type: 'tool-result', output: 'The file /w/a.ts has been updated.', editPatch: { filePath: '/w/a.ts', hunks } }
+      )
+      return files![0]!
+    }
+
+    // Orca keeps 400 rows of a resolved hunk (transcript-line-decoders-claude.ts).
+    // Cut, the change block ends where the cut fell and the next hunk's gap
+    // follows; reverting it put back all 300 removed lines over only the 100
+    // added ones that survived, leaving the other 200 in the file.
+    it('refuses a hunk Orca cut to 400 rows even when another hunk follows it', () => {
+      const removed = Array.from({ length: 300 }, (_, i) => `-old ${i}`)
+      const added = Array.from({ length: 300 }, (_, i) => `+new ${i}`)
+      const card = landedEditCard([
+        { oldStart: 1, oldLines: 300, newStart: 1, newLines: 300, lines: [...removed, ...added].slice(0, 400) },
+        { oldStart: 400, oldLines: 3, newStart: 400, newLines: 3, lines: [' p', '-q', '+r', ' s'] }
+      ])
+      expect(hunkRevertPrecheck(card, 0)).toMatchObject({ ok: false, refusal: 'hunk-cut-by-truncation' })
+      // The whole hunk after it is still its own to put back.
+      expect(hunkRevertPrecheck(card, 1)).toMatchObject({ ok: true })
+    })
+
+    // …and 40 hunks, all whole. More may have been dropped after the last,
+    // which costs the card its count, but no row of these is cut.
+    it("offers every hunk of a patch at Orca's 40-hunk cap, whose rows are all there", () => {
+      const card = landedEditCard(
+        Array.from({ length: 40 }, (_, i) => ({
+          oldStart: 1 + i * 10,
+          oldLines: 2,
+          newStart: 1 + i * 10,
+          newLines: 2,
+          lines: [` ctx ${i}`, `-old ${i}`, `+new ${i}`]
+        }))
+      )
+      expect(hunkRevertPrecheck(card, 39)).toMatchObject({ ok: true })
     })
 
     it('refuses a file with mixed line endings rather than normalising it on the way back', () => {

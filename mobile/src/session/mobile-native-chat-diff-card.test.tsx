@@ -280,6 +280,24 @@ describe('an agent file edit in the chat transcript', () => {
     }
   )
 
+  // Orca keeps 40 hunks of a patch. The rows are whole, but the patch may go
+  // on past them, so the card cannot know the file's count either.
+  it('prints no line count for a patch at the hunk cap, and says the diff may be cut', () => {
+    const hunks = Array.from({ length: 40 }, (_, i) => ({
+      oldStart: 1 + i * 10,
+      oldLines: 3,
+      newStart: 1 + i * 10,
+      newLines: 3,
+      lines: [` a${i}`, `-b${i}`, `+c${i}`, ` d${i}`]
+    }))
+    const { texts } = render([
+      CLAUDE_EDIT[0]!,
+      { type: 'tool-result', output: 'The file /w/src/app.ts has been updated.', editPatch: { filePath: '/w/src/app.ts', hunks } }
+    ])
+    expect(texts).toContain('Diff truncated')
+    expect(renderer!.root.findAllByProps({ testID: 'diff-card-added' })).toHaveLength(0)
+  })
+
   it.each(['light', 'dark'] as const)(
     "heads the edit run's card and its run with the Claude app's +14 −2, in %s",
     (scheme) => {

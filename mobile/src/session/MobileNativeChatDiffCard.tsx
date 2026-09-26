@@ -24,6 +24,7 @@ import {
 } from './mobile-diff-hunk-revert-marks'
 import type { HunkRevertOutcome } from './mobile-diff-hunk-revert-request'
 import { useDiffCardStyles, type DiffCardStyles } from './mobile-native-chat-diff-card-styles'
+import { editFileCountIsWhole, type MobileEditFile } from './mobile-native-chat-edit-wire-cut'
 
 /** A phone renders every row it is given, so the card takes its own ceiling
  *  rather than the model's 2,000. */
@@ -176,7 +177,8 @@ function DiffCard({
   const { colors } = useTheme()
   const styles = useDiffCardStyles()
   const rows = file.lines.slice(0, rowLimit)
-  const clipped = file.truncated || rows.length < file.lines.length
+  const countWhole = editFileCountIsWhole(file)
+  const clipped = !countWhole || rows.length < file.lines.length
   // Per-hunk action state, keyed by what the hunk is rather than by its index,
   // so a re-render with a re-derived `file` keeps it. A hunk already put back
   // is read from the shared marks, which outlive this mount.
@@ -286,9 +288,10 @@ function DiffCard({
         >
           {baseName(file.path)}
         </Text>
-        {file.truncated ? null : (
-          // A cut file's rows are what survived the cut, so their count is
-          // not the edit's; "Diff truncated" beside the name says so instead.
+        {countWhole ? (
+          // A cut file's rows are what survived the cut, and a patch that may
+          // go on has more than its rows, so neither count is the edit's;
+          // "Diff truncated" beside the name says so instead.
           <>
             <Text testID="diff-card-added" style={styles.added}>
               {`+${file.added}`}
@@ -297,7 +300,7 @@ function DiffCard({
               {`−${file.removed}`}
             </Text>
           </>
-        )}
+        ) : null}
         {clipped ? (
           // Beside the counts, not under the rows: a card clipped down to no
           // rows at all would otherwise say nothing about what it dropped.
@@ -340,7 +343,7 @@ function DiffCard({
 }
 
 type Props = {
-  file: NativeChatEditFile
+  file: MobileEditFile
   /** Rows this card will draw before it reports itself clipped. */
   rowLimit?: number
   /** Replaces the past-tense verb. The permission card shows an edit that has
