@@ -450,7 +450,13 @@ const HEAD_HOST_JSX_SHA256 = 'ff5cde7d96e6e239172814c5770f2e3cd4dee6dd446137901f
 // 73 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
 // (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
 // MobileSyntaxLine and the line action bar left; MobileSessionFileSource came in.
-const HEAD_LEAF_JSX_SHA256 = '786d369ba055f899d5ec37631781113f2bb4436c038009f32b1031d5b86bb2d1'
+// 2026-09-27: the file tab tells its source view the file was truncated
+// (review should-fix: it copied partial text as "Copy file", with no notice).
+// Same record count; two records moved, checked by dumping the facts before
+// and after: MobileSessionFileSource gains `truncated` and `byteLength`, and
+// the markdown preview's renderSource passes doc.truncated and
+// doc.byteLength. Every other fact set is unchanged.
+const HEAD_LEAF_JSX_SHA256 = 'f86aa7b9d0410f8b26fca25f7025a27116c4d348cb4d0c46cfc98b973b593d11'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).

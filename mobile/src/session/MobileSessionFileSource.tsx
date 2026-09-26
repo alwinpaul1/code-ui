@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { View } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
-import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
+import { previewTruncatedText, REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
 import { useMobileSyntaxLanguage } from './use-mobile-syntax-language'
@@ -25,7 +25,9 @@ export function MobileSessionFileSource({
   language,
   title,
   relativePath,
-  onAskAboutLines
+  onAskAboutLines,
+  truncated = false,
+  byteLength
 }: {
   content: string
   /** The highlighter's language by name (resolveMobileSyntaxLanguage); a
@@ -34,6 +36,9 @@ export function MobileSessionFileSource({
   title: string
   relativePath: string
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
+  /** The host sent only part of the file: say so, and copy only what came. */
+  truncated?: boolean
+  byteLength?: number
 }) {
   // A file whose name says nothing (`bin/deploy`) is read for its language,
   // a tick after it is drawn.
@@ -53,9 +58,11 @@ export function MobileSessionFileSource({
   const { range, clear } = selection
   const notice = linesCopy.error
     ? copyFailedNotice(linesCopy.error)
-    : document.reformatted
-      ? REFORMATTED_JSON_NOTICE
-      : null
+    : truncated
+      ? previewTruncatedText(byteLength ?? content.length)
+      : document.reformatted
+        ? REFORMATTED_JSON_NOTICE
+        : null
   return (
     <View style={styles.markdownEditor}>
       <MobileCodeView
@@ -65,6 +72,7 @@ export function MobileSessionFileSource({
         lineProps={selection.lineProps}
         extraData={selection.extraData}
         copyText={content}
+        copyLoadedOnly={truncated}
       />
       {selection.open ? (
         <MobileSessionFileReaderLineActionBar

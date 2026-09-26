@@ -3,7 +3,7 @@ import { Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
 import { useMobileSyntaxLanguage } from '../session/use-mobile-syntax-language'
-import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
+import { previewTruncatedText, REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
 import {
@@ -11,7 +11,6 @@ import {
   fileReaderSelectedLinesText
 } from '../session/mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from '../session/MobileSessionFileReaderLineActionBar'
-import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
 /**
@@ -62,7 +61,7 @@ export function MobileFilePreviewSourceText({
         lineProps={selection.lineProps}
         extraData={selection.extraData}
         copyText={content}
-        copyLabel={truncated ? 'Copy loaded text' : 'Copy file'}
+        copyLoadedOnly={truncated === true}
       />
       {range ? (
         <MobileSessionFileReaderLineActionBar
@@ -81,10 +80,6 @@ export function MobileFilePreviewSourceText({
       ) : null}
     </View>
   )
-}
-
-function previewTruncatedText(byteLength: number): string {
-  return `Preview truncated. File size: ${formatPreviewByteLength(byteLength)}.`
 }
 
 export function MobileFilePreviewTruncatedNote({

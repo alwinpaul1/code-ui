@@ -287,15 +287,18 @@ export function FileReader({
     )
   }
 
-  const renderSourceText = (content: string) => (
+  const renderSourceText = (content: string, truncated?: boolean, byteLength?: number) => (
     // The desktop editor's view of a source file: the code face, line
-    // numbers, indent guides, its colours and no wrapping (2026-09-26).
+    // numbers, indent guides, its colours and no wrapping (2026-09-26). A
+    // file the host cut short says so, and copies only what came.
     <MobileSessionFileSource
       content={content}
       language={syntaxLanguage}
       title={title}
       relativePath={relativePath}
       onAskAboutLines={onAskAboutLines}
+      truncated={truncated}
+      byteLength={byteLength}
     />
   )
 
@@ -321,11 +324,11 @@ export function FileReader({
           byteLength={doc.byteLength}
           readingPositionKey={readingPositionKey}
           resolveImage={resolveImage}
-          renderSource={() => renderSourceText(doc.content)}
+          renderSource={() => renderSourceText(doc.content, doc.truncated, doc.byteLength)}
         />
       </View>
     )
   }
 
-  return renderSourceText(doc.content)
+  return renderSourceText(doc.content, doc.truncated, doc.byteLength)
 }

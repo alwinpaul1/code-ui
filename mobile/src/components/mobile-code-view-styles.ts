@@ -92,6 +92,18 @@ export function makeCodeViewStyles(theme: Pick<Theme, 'colors' | 'syntax' | 'fon
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border
     },
+    toolButtonWide: {
+      width: 'auto',
+      flexDirection: 'row',
+      gap: 6,
+      paddingHorizontal: 10
+    },
+    toolLabel: {
+      fontFamily: fonts.medium,
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.textSecondary
+    },
     toolButtonOn: {
       backgroundColor: colors.accentSoft,
       borderColor: colors.accent

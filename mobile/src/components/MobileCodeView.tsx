@@ -43,7 +43,7 @@ export function MobileCodeView({
   lineProps,
   extraData,
   copyText,
-  copyLabel = 'Copy file'
+  copyLoadedOnly = false
 }: {
   document: MobileCodeDocument
   accessibilityLabel: string
@@ -59,8 +59,9 @@ export function MobileCodeView({
   /** The text the toolbar's Copy button puts on the clipboard: the file as
    *  written. No button without it, or when it is empty. */
   copyText?: string
-  /** That button's label: "Copy loaded text" for a cut preview. */
-  copyLabel?: string
+  /** The host sent only part of the file: the button copies what arrived,
+   *  and says so in words ("Copy loaded text"), not only to TalkBack. */
+  copyLoadedOnly?: boolean
 }) {
   const theme = useTheme()
   const { fontScale } = useWindowDimensions()
@@ -203,10 +204,10 @@ export function MobileCodeView({
             // block of lines is copied from the long-press bar (2026-09-26:
             // one Text per row ended the OS selection at the row's end).
             <Pressable
-              style={styles.toolButton}
+              style={copyLoadedOnly ? [styles.toolButton, styles.toolButtonWide] : styles.toolButton}
               onPress={() => fileCopy.copy(copyText)}
               accessibilityRole="button"
-              accessibilityLabel={copyLabel}
+              accessibilityLabel={copyLoadedOnly ? 'Copy loaded text' : 'Copy file'}
               hitSlop={8}
             >
               {fileCopy.copied ? (
@@ -214,6 +215,7 @@ export function MobileCodeView({
               ) : (
                 <Copy size={16} color={theme.colors.textSecondary} strokeWidth={2.2} />
               )}
+              {copyLoadedOnly ? <Text style={styles.toolLabel}>Copy loaded text</Text> : null}
             </Pressable>
           ) : null}
           <Pressable
