@@ -140,10 +140,10 @@ export async function loadHostImage(args: {
 }): Promise<string | null> {
   const key = `${args.hostId}\0${args.path}`
   const cached = dataUriByPath.get(key)
-  if (cached && hostImageStillThere(cached, args.files)) {
+  if (cached && hostImageStillThere(cached, args.files, key)) {
     return cached
   }
-  // Its cache file was cleared: read it again.
+  // Its cache file was cleared, or now holds another picture: read it again.
   dataUriByPath.delete(key)
   if ((failedPaths.get(key) ?? 0) > Date.now()) {
     return null
