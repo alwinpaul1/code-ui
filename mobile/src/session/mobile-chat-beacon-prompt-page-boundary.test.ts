@@ -139,6 +139,22 @@ describe('a beacon copy of a desk prompt, found long after it arrived', () => {
     warn.mockRestore()
   })
 
+  // Sixth review: before the chat's first read settles, `hasMore` is false
+  // and no row is held, which read as "every row loaded, the row is missing".
+  it('logs nothing while the first read is still in flight, and is drawn once when it lands', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.setSystemTime(at('21:30:00.000'))
+    const prompts = [beaconCopy(MIDTURN, '48218', at('13:20:50.000'))]
+    await show('21:30:00.000', { messages: [], loading: true, prompts })
+    await show('21:30:01.000', { messages: [], loading: true, prompts })
+    const whole = [previousAnswer, itsReply, ...tailPage]
+    await show('21:30:02.000', { messages: whole, hasMore: false, prompts })
+    await show('21:30:03.000', { messages: whole, hasMore: false, prompts })
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[desk-prompt]'))).toEqual([])
+    expect(rowsIn(frames.at(-1)!).map((row) => row.id)).toEqual([previousAnswer.id, 'desk-48218', itsReply.id, stopping.id, laterAnswer.id])
+    warn.mockRestore()
+  })
+
   it('still waits at the tail when it arrived just now, as the live case always has', async () => {
     vi.setSystemTime(at('21:30:00.000'))
     const prompts = [beaconCopy(MIDTURN, '48215', at('21:29:59.500'))]

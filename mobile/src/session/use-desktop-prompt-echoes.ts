@@ -133,7 +133,11 @@ export function useDesktopPromptEchoes(
    *  bubble to place: it shows when the page that holds it loads, and the
    *  hook copy retires against it (device, 2026-09-20: a 2,858-character
    *  prompt drawn as its 200-character hook cut, under the tool fold). */
-  hasEarlier = false
+  hasEarlier = false,
+  /** Whether the chat's read of this session has settled. Before it does,
+   *  `hasEarlier` is false and no row is held, which says nothing about a
+   *  row being missing (sixth review of this rule, 2026-09-27). */
+  readSettled = true
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   const refused: DesktopPrompt[] = []
@@ -144,7 +148,7 @@ export function useDesktopPromptEchoes(
       continue
     }
     if (foundWithoutItsRow(prompt, rawMessages)) {
-      if (!hasEarlier) {
+      if (!hasEarlier && readSettled) {
         refused.push(prompt)
       }
       continue

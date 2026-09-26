@@ -255,7 +255,8 @@ export function MobileNativeChatOverlay({
     unlandedPrompts,
     baseFolded,
     session.messages,
-    session.hasMore
+    session.hasMore,
+    session.status === 'ready' && session.baseRetained !== true
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],
