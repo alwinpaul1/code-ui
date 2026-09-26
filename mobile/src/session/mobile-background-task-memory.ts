@@ -22,13 +22,17 @@ import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 //     before the row started: the lead's own (a foreground agent has no id
 //     anywhere until it ends), one row per call, earliest first;
 //   - the benefit of the doubt, until it stops, when the phone cannot tell:
-//     it was on the first roster the phone read; it arrived with a
-//     description (Orca rebuilt it from the lead's own task list, or restored
-//     it); no other agent was running just before it to have started it; the
-//     phone had just lost sight of the session (no status, or an empty
-//     window) and got it back less than a minute ago; or it started before
-//     the loaded window reaches back to;
+//     it was on the first roster the phone read; no other agent was running
+//     to have started it (none on the roster before it, none on this one
+//     started earlier); or it started before the loaded window reaches back
+//     to;
 //   - otherwise, a reviewer, and it stays one as the window slides.
+// Rows are placed only on a SETTLED transcript: back on a tab the chat first
+// paints the tail it cached when the user left, which does not hold what the
+// lead launched meanwhile. Not on a description: Orca's fold writes one from
+// `background_tasks`, which lists every subagent, reviewers included. Not on
+// a status blip or the first minute after opening either — a window that is
+// settled holds every launch since its oldest row whenever it is read.
 // A row that stopped and came back was resumed by whoever started it: the
 // lead's SendMessage is in its transcript, a subagent's is not (a874 in
 // session 967668df, running at the first look, finished at 00:03:54 and was
@@ -64,10 +68,6 @@ export type SessionTaskEvidence = {
   lastPane: { state: AgentStatusState; stateStartedAt: number } | null
   /** Undefined until the phone has seen the pane working. */
   runBoundaryAt: number | null | undefined
-  /** Whether the last sighting had no status or no window, and when sight
-   *  came back after one that did (phone clock). */
-  sightLost: boolean
-  sightReturnedAt: number | null
 }
 
 export const EMPTY_SESSION_TASK_EVIDENCE: SessionTaskEvidence = {
@@ -80,20 +80,19 @@ export const EMPTY_SESSION_TASK_EVIDENCE: SessionTaskEvidence = {
   lastShellCount: null,
   leadOnlyShellCount: null,
   lastPane: null,
-  runBoundaryAt: undefined,
-  sightLost: false,
-  sightReturnedAt: null
+  runBoundaryAt: undefined
 }
 
 /** How far before a call the host may stamp the row it started, and how long
  *  after it the row may start and still be that call's. */
 const CALL_TO_ROW_SKEW_MS = 2_000
 const CALL_TO_ROW_MAX_MS = 30_000
-/** How long rows appearing after the phone got sight back are not judged. */
-const SIGHT_RECOVERY_MS = 60_000
 
 type Seen = {
   window: WindowTaskEvidence
+  /** Whether `window` is the settled read, not a cached tail painted while
+   *  the fresh one loads. */
+  settled: boolean
   agentStatus: AgentStatusEntry | null
   onScreenShellCount: number | null
   now: number
@@ -104,10 +103,8 @@ type Seen = {
  *  do not recount. */
 export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen): SessionTaskEvidence {
   const { window, agentStatus, onScreenShellCount, now } = seen
-  const sighted = agentStatus !== null && window.oldestAt !== null
-  const sightReturnedAt = sighted && (previous.sightLost || previous.lastStatus === null) ? now : previous.sightReturnedAt
   const working = agentStatus ? (agentStatus.subagents ?? []).filter((row) => row.state !== 'idle') : null
-  const placed = working ? placeRows(previous, seen, working, sightReturnedAt) : null
+  const placed = working ? placeRows(previous, seen, working) : null
   return {
     ownAgentIds: rememberFinishedTaskIds(previous.ownAgentIds, [...window.ownAgentIds, ...(placed?.own ?? [])]),
     retiredTaskIds: rememberFinishedTaskIds(previous.retiredTaskIds, window.retiredTaskIds),
@@ -120,16 +117,14 @@ export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen):
       onScreenShellCount !== null && working !== null && working.length === 0
         ? { count: onScreenShellCount, at: now }
         : previous.leadOnlyShellCount,
-    sightLost: !sighted,
-    sightReturnedAt,
     ...nextPane(previous, agentStatus)
   }
 }
 
 type Placement = { own: string[]; preexisting: readonly string[]; placed: string[]; vouched: string[] }
 
-function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly RosterRow[], sightReturnedAt: number | null): Placement {
-  const { window, now } = seen
+function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly RosterRow[]): Placement {
+  const { window } = seen
   const own: string[] = []
   const placed: string[] = []
   const vouched: string[] = []
@@ -154,22 +149,21 @@ function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly 
   }
   const still = new Set(working.map((row) => row.id))
   const preexisting: string[] = previous.preexistingAgentIds.filter((id) => still.has(id))
-  if (window.oldestAt === null) {
-    // No window loaded (a re-subscribe starts from an empty list): nothing
-    // new is placed until one is.
+  const oldestAt = window.oldestAt
+  if (oldestAt === null || !seen.settled) {
+    // No settled window (a re-subscribe starts from an empty list, then paints
+    // the cached tail): nothing new is placed until the fresh read lands.
     return { own, preexisting: sameOrNew(previous.preexistingAgentIds, preexisting), placed, vouched }
   }
   const known = new Set([...previous.placedAgentIds, ...previous.ownAgentIds, ...window.ownAgentIds])
   const before = (previous.lastStatus?.status.subagents ?? []).filter((row) => row.state !== 'idle').map((row) => row.id)
-  const recovering = sightReturnedAt !== null && now - sightReturnedAt < SIGHT_RECOVERY_MS
   for (const row of byStart.filter((candidate) => !known.has(candidate.id))) {
     placed.push(row.id)
     if (vouch(row)) {
       continue
     }
-    const rebuilt = Boolean(row.description?.trim())
-    const noParent = !before.some((id) => id !== row.id)
-    if (rebuilt || noParent || recovering || row.startedAt < window.oldestAt) {
+    const parent = before.some((id) => id !== row.id) || working.some((other) => other.id !== row.id && other.startedAt < row.startedAt)
+    if (!parent || row.startedAt < oldestAt) {
       preexisting.push(row.id)
     }
   }

@@ -207,7 +207,7 @@ export function useMobileNativeChatController(
   // what a window showed ending, the last host status (use-active-tab-task-report.ts).
   const backgroundTaskReportWithScreen = useActiveTabTaskReport({
     report: backgroundTaskReport, handle: activeHandle, sessionId: activeChatSessionId, agent: activeChatResolution?.agent ?? null,
-    messages: nativeChatSession.messages, agentStatus: activeSessionTab?.agentStatus ?? null,
+    messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready', agentStatus: activeSessionTab?.agentStatus ?? null,
     onScreenShellCount: hudObservation?.runningShellCount ?? null, screenTaskCompletions
   })
 

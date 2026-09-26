@@ -65,6 +65,9 @@ export function useActiveTabTaskReport(input: {
   agent: string | null
   /** The UNFILTERED transcript window the chat holds. */
   messages: readonly NativeChatMessage[]
+  /** Whether that window is the settled read, not the tail cached when the
+   *  user left, painted while the fresh one loads. */
+  transcriptSettled: boolean
   agentStatus: AgentStatusEntry | null
   onScreenShellCount: number | null
   screenTaskCompletions: readonly ScreenTaskCompletion[]
@@ -72,7 +75,7 @@ export function useActiveTabTaskReport(input: {
   const { report, sessionId, agentStatus, onScreenShellCount } = input
   const screenCompletions = useActiveTabScreenCompletions(input.handle, sessionId, input.screenTaskCompletions)
   const window = useMemo(() => readTaskEvidence(input.messages), [input.messages])
-  const { evidence, now } = observeSession(sessionId, { window, agentStatus, onScreenShellCount })
+  const { evidence, now } = observeSession(sessionId, { window, settled: input.transcriptSettled, agentStatus, onScreenShellCount })
   // Claude's transcript records every launch the lead makes (OpenClaude
   // writes the same one); a Codex one records none the phone reads, so its
   // roster is taken as it stands.
@@ -94,7 +97,9 @@ export function useActiveTabTaskReport(input: {
   const heldOnScreenShellCount = onScreenShellCount === null ? (evidence?.lastShellCount ?? null) : null
   // Only while a subagent runs, the one time the reader uses it: while none
   // does it is re-stamped at every render, and would make the report new.
-  const subagentRunning = (agentStatus?.subagents ?? []).some((row) => row.state !== 'idle')
+  // Judged on the status the reader will use, held one included.
+  const readerStatus = agentStatus ?? heldAgentStatus
+  const subagentRunning = (readerStatus?.subagents ?? []).some((row) => row.state !== 'idle')
   const leadOnlyShellCount = subagentRunning ? (evidence?.leadOnlyShellCount ?? null) : null
   const runBoundaryAt = evidence?.runBoundaryAt
   return useMemo(

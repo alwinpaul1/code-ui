@@ -290,15 +290,26 @@ and changed 38 times; the sources, one by one:
   anywhere until it ends; one row per call, earliest first, and a call whose
   agent was already up at the first look is used by it; an Agent call is
   answered only by a result shaped like an Agent result, so a quick call's
-  result landing first does not use it up). The benefit of the doubt, until
-  the row stops: it was on the first roster the phone read; it arrived with
-  a description (Orca rebuilt it from the lead's own task list, or restored
-  it); no other agent was running just before it to have started it; the
-  phone had just lost sight of the session (no status, or an empty window)
-  and got it back less than a minute ago; or it started before the loaded
-  window reaches back to. Otherwise a subagent's, which stays so as the
-  window slides. A teammate or named agent (`a<name>-<hex>`) always counts.
-  A doubted row that stops loses the doubt: whoever resumes it next shows it.
+  result landing first does not use it up, nor does a Read that prints an
+  id). The benefit of the doubt, until the row stops: it was on the first
+  roster the phone read; no other agent was running to have started it
+  (none on the roster before it, none on this one started earlier); or it
+  started before the loaded window reaches back to. Otherwise a subagent's,
+  which stays so as the window slides. Rows are placed only on a settled
+  transcript, never on the tail the chat cached when the user left and
+  paints while the fresh read loads. Not on a description (Orca's fold
+  writes one for reviewers too), a status blip, or the first minute after
+  opening: a settled window holds every launch since its oldest row. A
+  teammate or named agent (`a<name>-<hex>`) always counts. A doubted row
+  that stops loses the doubt: whoever resumes it next shows it.
+- **What this cannot place.** If Orca loses its own roster (a restart with
+  no saved snapshot) and lists the lead's long agents again later, stamped
+  with the moment it saw them, they look like new rows with no launch in
+  the window: they are not counted until they stop or the lead messages
+  them. A reviewer already running when the phone first looks, or one that
+  started before the window the phone reloads reaches back, is counted
+  until it first stops. A question answered while the phone looked away
+  reads as a missed `done` (below).
 - The footer count caps the lead's named shells always. It pads unnamed ones
   up to its count while no subagent runs. While one does, it pads at most
   the unnamed shells the lead had when the footer last counted its shells

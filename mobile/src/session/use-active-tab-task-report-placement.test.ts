@@ -6,7 +6,6 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   NESTED_REVIEWERS,
   OWN_AGENTS,
-  ROSTER_FIRST_OBSERVED,
   backgroundShellLaunch,
   leadTurn,
   ownAgentLaunch,
@@ -20,9 +19,11 @@ import { resetTaskEvidenceForTests, useActiveTabTaskReport } from './use-active-
 // The second review round (2026-09-26) drove 2c371292 through these and each
 // read wrong. Placing a roster row as the lead's or a reviewer's has only weak
 // evidence to go on — Orca's `startedAt` is when ORCA first saw the row — so
-// the rules below lean on what cannot be a reviewer: a row with no running
-// agent before it to have started it, a row Orca rebuilt (it arrives with a
-// description), a row that appeared across a gap in what the phone saw.
+// the rules lean on what cannot be a reviewer (mobile-background-task-memory.ts).
+// Two cases this file once pinned, a row Orca rebuilt with a description and
+// rows Orca listed again late after losing its own roster, were dropped in the
+// third round: the rules that counted them also counted reviewers after every
+// return to the chat (use-active-tab-task-report-returns.test.ts).
 
 const SESSION = '967668df-a7d9-40e7-964b-7812815c010d'
 const NO_BEACON: ActiveTabBackgroundTaskReport = { finishedTaskIds: [], runningTaskIds: null, runningTaskIdsAt: null, launchedTaskIds: [] }
@@ -37,6 +38,7 @@ function Probe({ frame }: { frame: Frame }) {
     sessionId: frame.sessionId ?? SESSION,
     agent: 'claude',
     messages: frame.messages,
+    transcriptSettled: true,
     agentStatus: frame.agentStatus,
     onScreenShellCount: frame.onScreenShellCount ?? null,
     screenTaskCompletions: []
@@ -56,8 +58,6 @@ function pane(subagents: AgentSubagentSnapshot[], state: AgentStatusState = 'wor
     subagents
   }
 }
-const lead = (count: number, from: string) =>
-  Array.from({ length: count }, (_unused, index) => leadTurn(new Date(Date.parse(from) + index * 20_000).toISOString()))
 const agentCall = (id: string, iso: string, input: Record<string, unknown>): NativeChatMessage => ({
   id,
   role: 'assistant',
@@ -90,32 +90,6 @@ describe('placing a roster row as the lead’s or a reviewer’s', () => {
     })
     return latest
   }
-
-  it("counts the lead's long agents when Orca, restarted, lists them again only after the phone's first look", () => {
-    // ROSTER_FIRST_OBSERVED: Orca stamped the four at 23:07, though they
-    // launched from 19:31 to 22:04 — it only saw them from then on. The
-    // phone lost sight while Orca was down: no status, and the transcript
-    // subscription started over from an empty list.
-    show('2026-09-25T22:50:00.000Z', { messages: lead(40, '2026-09-25T22:40:00.000Z'), agentStatus: pane([]) })
-    show('2026-09-25T23:06:50.000Z', { messages: [], agentStatus: null })
-    const long = [OWN_AGENTS.a441, OWN_AGENTS.acf3, OWN_AGENTS.a776, OWN_AGENTS.adfd].map((agent) => rosterRow(agent.id, ROSTER_FIRST_OBSERVED[agent.id]!))
-    show('2026-09-25T23:07:05.000Z', { messages: lead(40, '2026-09-25T22:55:00.000Z'), agentStatus: pane(long.slice(0, 1)) })
-    show('2026-09-25T23:07:11.000Z', { messages: lead(40, '2026-09-25T22:55:00.000Z'), agentStatus: pane(long.slice(0, 2)) })
-    const listed = show('2026-09-25T23:07:20.000Z', { messages: lead(40, '2026-09-25T22:55:00.000Z'), agentStatus: pane(long) })
-
-    expect(listed.sort()).toEqual(long.map((row) => row.id).sort())
-  })
-
-  it('counts a row Orca rebuilt from the lead’s own task list, which arrives with its description', () => {
-    show('2026-09-25T23:50:00.000Z', { messages: lead(3, '2026-09-25T23:40:00.000Z'), agentStatus: pane([rosterRow(OWN_AGENTS.a441.id, Date.parse(OWN_AGENTS.a441.result))]) })
-    const rebuilt = rosterRow(OWN_AGENTS.a776.id, Date.parse('2026-09-25T23:55:34.200Z'), '[description of a776]')
-    const later = show('2026-09-25T23:55:35.000Z', {
-      messages: lead(3, '2026-09-25T23:40:00.000Z'),
-      agentStatus: pane([rosterRow(OWN_AGENTS.a441.id, Date.parse(OWN_AGENTS.a441.result)), rebuilt])
-    })
-
-    expect(later.sort()).toEqual([OWN_AGENTS.a441.id, OWN_AGENTS.a776.id].sort())
-  })
 
   it('does not let a foreground call left from before the first look vouch for a reviewer', () => {
     const fg = rosterRow('af0reground00000a', Date.parse('2026-09-26T08:00:01.000Z'))

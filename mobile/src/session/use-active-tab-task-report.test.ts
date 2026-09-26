@@ -52,6 +52,7 @@ function Probe({ frame }: { frame: Frame }) {
     sessionId: frame.sessionId === undefined ? SESSION : frame.sessionId,
     agent: frame.agent ?? 'claude',
     messages: frame.messages,
+    transcriptSettled: true,
     agentStatus: frame.agentStatus,
     onScreenShellCount: frame.onScreenShellCount ?? null,
     screenTaskCompletions: []

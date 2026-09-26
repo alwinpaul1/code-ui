@@ -38,6 +38,7 @@ import {
   readLaunch,
   readNotifications,
   readString,
+  takeAnsweredCall,
   truncate,
   type Launch,
   type Notification,
@@ -210,8 +211,9 @@ export function deriveBackgroundTasks(
         }
       } else if (isToolResultBlock(block)) {
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
-        // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts).
-        const call = pending.shift()
+        // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts), save
+        // that an Agent call waits for an Agent-shaped result.
+        const call = takeAnsweredCall(pending, block.output)
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
           launches.set(launch.id, launch)

@@ -9,6 +9,7 @@ import {
   readLaunch,
   readNotifications,
   readString,
+  takeAnsweredCall,
   type PendingCall
 } from './mobile-background-task-transcript'
 
@@ -105,18 +106,4 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
     .filter((call) => call.name === 'Agent' && Reflect.get(Object(call.input), 'run_in_background') !== true)
     .map((call) => ({ key: call.key, at: call.startedAt, subagentType: readString(call.input, 'subagent_type') }))
   return { ownAgentIds, retiredTaskIds, pendingAgentCalls, oldestAt }
-}
-
-/** An Agent result: a launch, a finished run's report with its id and usage,
- *  or the tool's own error. */
-const AGENT_RESULT = /\bagentId:\s*[A-Za-z0-9_-]+|^\s*Async agent launched successfully\.|<usage>\s*subagent_tokens:/
-
-/** The call a result answers. First in, first out, except that an Agent call
- *  is answered only by a result shaped like one: a turn's quick call (a Read
- *  beside a foreground Agent) can answer first, and handing its result to the
- *  Agent call would leave the agent that is still running with no call. */
-function takeAnsweredCall(pending: Pending[], output: string): Pending | undefined {
-  const agentShaped = AGENT_RESULT.test(output)
-  const index = pending.findIndex((call) => (call.name === 'Agent') === agentShaped)
-  return index !== -1 ? pending.splice(index, 1)[0] : pending.shift()
 }
