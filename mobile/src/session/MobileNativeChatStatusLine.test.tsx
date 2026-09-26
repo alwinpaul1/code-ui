@@ -10,6 +10,7 @@ import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
   Animated: {
+    View: 'View',
     createAnimatedComponent: (c: unknown) => c,
     Value: class {
       interpolate() {

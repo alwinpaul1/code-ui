@@ -13,6 +13,7 @@ vi.mock('react-native', async () => {
     React.createElement('Text', props, children)
   return {
     Animated: {
+      View: 'View',
       Text,
       Value: class {
         constructor(private value: number) {}
