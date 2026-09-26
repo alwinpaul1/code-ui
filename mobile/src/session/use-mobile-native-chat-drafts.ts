@@ -331,9 +331,12 @@ export function useMobileNativeChatDrafts(args: {
   // Decided while rendering, so the render that first draws a landed row also
   // draws its photos and no echo beside it; the effect then stores the same
   // result (mobile-native-chat-landed-own-sends.ts, 2026-09-26).
+  // Until the store has read the session's previews back, what this process
+  // last knew of them, so a chat that comes back draws its photos at once.
+  const storedPreviews = pendingKey ? (imagePreviewsBySession[pendingKey] ?? knownNativeChatImagePreviews(pendingKey)) : undefined
   const landed = useMemo(
-    () => (pendingKey ? settleLandedOwnSends(messages, pending, transcriptSettled) : null),
-    [messages, pending, pendingKey, transcriptSettled]
+    () => (pendingKey ? settleLandedOwnSends(messages, pending, transcriptSettled, storedPreviews) : null),
+    [messages, pending, pendingKey, storedPreviews, transcriptSettled]
   )
   useEffect(() => {
     if (!pendingKey) {
@@ -363,9 +366,6 @@ export function useMobileNativeChatDrafts(args: {
       return { ...previous, [pendingKey]: next }
     })
   }, [landed, messages, pending, pendingKey])
-  // Until the store has read the session's previews back, what this process
-  // last knew of them, so a chat that comes back draws its photos at once.
-  const storedPreviews = pendingKey ? (imagePreviewsBySession[pendingKey] ?? knownNativeChatImagePreviews(pendingKey)) : undefined
   const written = pendingKey ? waitingPhotoSends(pendingKey) : undefined
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 

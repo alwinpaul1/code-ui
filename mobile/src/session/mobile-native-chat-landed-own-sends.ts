@@ -13,6 +13,11 @@ const NO_PREVIEWS: LandedImagePreviewEcho[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
 const NO_STORED_PREVIEWS: Record<string, string[]> = {}
 
+function boundRows(stored: Record<string, string[]> | undefined): ReadonlySet<string> {
+  const ids = Object.keys(stored ?? NO_STORED_PREVIEWS)
+  return ids.length > 0 ? new Set(ids) : NO_IDS
+}
+
 /** The phone's own sends after one transcript read is taken in. */
 export type LandedOwnSends = {
   /** The sends still waiting for a row: rebased onto a settled read, and
@@ -46,19 +51,23 @@ export type LandedOwnSends = {
 export function settleLandedOwnSends(
   messages: readonly NativeChatMessage[],
   pending: MobileNativeChatPendingMessage[],
-  transcriptSettled: boolean
+  transcriptSettled: boolean,
+  /** The previews the chat already draws, by row: those rows are taken. */
+  stored?: Record<string, string[]>
 ): LandedOwnSends {
   if (pending.length === 0) {
     return { pending, rebased: pending, landedImagePreviews: NO_PREVIEWS, landedImagePendingIds: NO_IDS }
   }
   // Only a send judged against a read known to be this session's binds. That
   // does NOT give an image echo a boundary (the rebase leaves those on
-  // whatever they captured), so a caption-less photo sent before any read
-  // settled can still claim an older photo turn.
+  // whatever they captured); a photo sent before the read settled is kept
+  // off older photo rows by their time and by the photos they already draw
+  // (findLandedImagePreviewEchoes).
   const rebased = transcriptSettled ? rebaseMobileNativeChatPendingBaselines(messages, pending) : pending
   const landedImagePreviews = findLandedImagePreviewEchoes(
     messages,
-    rebased.filter((item) => item.baselineResolved)
+    rebased.filter((item) => item.baselineResolved),
+    boundRows(stored)
   )
   const landedImagePendingIds = landedImagePreviews.length
     ? new Set(landedImagePreviews.map((preview) => preview.pendingId))
@@ -114,7 +123,7 @@ export function previewsAsDrawn(
   const notReadBack = (written ?? []).filter((item) => item.baselineResolved && !held.has(item.id))
   const landed = [
     ...(settled?.landedImagePreviews ?? NO_PREVIEWS),
-    ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack) : NO_PREVIEWS)
+    ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack, boundRows(kept)) : NO_PREVIEWS)
   ]
   const drawn = landed.length > 0 ? mergeLandedImagePreviewEchoes(migrated, sessionKey, landed) : migrated
   return drawn[sessionKey] ?? kept

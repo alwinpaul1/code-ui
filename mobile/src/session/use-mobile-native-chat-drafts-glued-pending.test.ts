@@ -307,7 +307,10 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
         }
       })
 
-      const withEcho = [assistantTurn('m1', 'ready', 1000), imageTurn('m2', '/tmp/new.png', 5000)]
+      // Stamped by the desktop's clock after the send: the binder leaves a
+      // photo row stamped well before a send to an older message (2026-09-26).
+      const sentAt = Date.now()
+      const withEcho = [assistantTurn('m1', 'ready', sentAt - 60_000), imageTurn('m2', '/tmp/new.png', sentAt + 1_000)]
       await update(withEcho)
       expect(state?.pending).toEqual([])
       expect(state?.imagePreviewsByMessageId).toEqual({ m2: ['file:///new.png'] })

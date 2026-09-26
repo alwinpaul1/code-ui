@@ -22,6 +22,53 @@ function pending(id: string, images: string[], expectedOccurrence = 1): PendingI
   return { id, text: '', images, expectedOccurrence, baselineTailMessageId: null }
 }
 
+// 2026-09-26, Claude Code 2.1.283: a photo sent with no words before the
+// chat's read settled took the first photo row after whatever the phone had
+// on screen, an older message's. Rows the desktop stamped well before the
+// send, and rows already drawing another send's photos, are not candidates.
+describe('a photo sent with no words, kept off older photo rows', () => {
+  const sentAt = Date.parse('2026-09-26T09:30:03.500Z')
+  const photoRow = (id: string, clock: string): NativeChatMessage => ({
+    ...userText(id, '[Image #17]'),
+    timestamp: Date.parse(`2026-09-26T${clock}Z`)
+  })
+  const photo = { ...pending('pending', ['file:///p17.jpg']), sentAt }
+
+  it('binds the row written after the send, not an older one before it', () => {
+    const messages = [photoRow('older', '08:43:47.644'), photoRow('mine', '09:30:03.923')]
+    expect(findLandedImagePreviewEchoes(messages, [photo])).toEqual([
+      { pendingId: 'pending', messageId: 'mine', images: ['file:///p17.jpg'] }
+    ])
+  })
+
+  it('still binds a row the desktop stamped a little before the send, for a phone clock running ahead', () => {
+    const messages = [photoRow('mine', '09:29:10.000')]
+    expect(findLandedImagePreviewEchoes(messages, [photo]).map((landed) => landed.messageId)).toEqual(['mine'])
+  })
+
+  it('binds nothing when the only photo row is more than a minute older than the send', () => {
+    expect(findLandedImagePreviewEchoes([photoRow('older', '09:29:03.000')], [photo])).toEqual([])
+  })
+
+  it('binds as before a send from an older build, which kept no send time', () => {
+    const messages = [photoRow('older', '08:43:47.644')]
+    expect(findLandedImagePreviewEchoes(messages, [pending('pending', ['file:///p17.jpg'])]).map((landed) => landed.messageId)).toEqual(['older'])
+  })
+
+  it('binds a photo sent with words by them, whatever time the desktop stamped its row', () => {
+    const captioned = { ...photo, text: 'look at this' }
+    const row = { ...userText('mine', '[Image #17] look at this'), timestamp: Date.parse('2026-09-26T09:20:00.000Z') }
+    expect(findLandedImagePreviewEchoes([row], [captioned]).map((landed) => landed.messageId)).toEqual(['mine'])
+  })
+
+  it('leaves a row already drawing another send’s photos to that send', () => {
+    const messages = [photoRow('first', '09:29:31.000'), photoRow('mine', '09:30:03.923')]
+    expect(
+      findLandedImagePreviewEchoes(messages, [photo], new Set(['first'])).map((landed) => landed.messageId)
+    ).toEqual(['mine'])
+  })
+})
+
 describe('mobile native chat image preview reconciliation', () => {
   it('binds a local thumbnail when the agent echoes the uploaded path before the caption', () => {
     const path =

@@ -130,6 +130,8 @@ function claudeScreen(queued: readonly string[]): string[] {
 }
 
 type Tick = {
+  /** The chat's transcript read has not settled: a kept transcript, or none. */
+  loading?: boolean
   messages: NativeChatMessage[]
   working?: boolean
   prompts?: DesktopPrompt[]
@@ -193,15 +195,19 @@ describe('a message the phone sent with photos, as its row lands', () => {
       tabId: 'tab',
       sessionId: SESSION,
       messages: tick.messages,
-      transcriptLoading: false,
-      transcriptSettled: true
+      transcriptLoading: tick.loading ?? false,
+      transcriptSettled: !tick.loading
     })
     const controller = {
       showNativeChat: true,
       activeChatEligible: true,
       viewResolved: true,
       terminalPeekActive: false,
-      nativeChatSession: { messages: tick.messages, status: 'ready', transcriptLoading: false },
+      nativeChatSession: {
+        messages: tick.messages,
+        status: tick.loading ? 'loading' : 'ready',
+        transcriptLoading: tick.loading ?? false
+      },
       nativeChatAgent: tick.agent ?? 'claude',
       nativeChatStructured: false,
       nativeChatAgentWorking: tick.working ?? false,
@@ -467,6 +473,69 @@ describe('a message the phone sent with photos, as its row lands', () => {
       for (const frame of framesFrom(back)) {
         expect(frame).toEqual([{ id: '40b55aba', images: 'PPP', text: words(TEXT1) }])
       }
+    })
+  })
+
+  // Reported 2026-09-26 against Claude Code 2.1.283, session 76ba8f2f (a
+  // Thesis session), 1-based lines 4941 and 4944: a photo sent from the phone
+  // with no words, 30 minutes after the last turn (an away_summary sits
+  // between). The prompt row's text is the marker alone, "[Image #17]", and
+  // its companion, the same millisecond, is one `[Image: source: …]` block
+  // of 131 characters, the form 2.1.281 writes. The phone drew the new row
+  // as one "Image on Desktop" chip: sent before the chat's read settled, a
+  // photo with no words has only the order of photo rows to go by, and took
+  // the first one after whatever the phone had on screen, an older one.
+  describe('a photo with no words, sent before the chat’s read settled (Claude Code 2.1.283)', () => {
+    const PHOTO = ['file:///phone/p17.jpg']
+    const earlier = [
+      agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000'),
+      promptRow('4665aaaa', 16, 1, '', '08:43:47.644'),
+      companionRow('4670aaaa', PATHS2.slice(0, 1), '08:43:47.644'),
+      agentRow('4671aaaa', 'Looked at the earlier photo.', '08:44:10.000'),
+      agentRow('0b0bbe84', 'Final answer of that turn.', '08:57:06.630')
+    ]
+    const P17 = promptRow('add90135', 17, 1, '', '09:30:03.923')
+    const C17 = companionRow('344189e5', PATHS1.slice(0, 1), '09:30:03.923')
+    const reply = agentRow('d4f3162c', 'Here is what the photo shows.', '09:30:13.156')
+
+    it.each([
+      ['an earlier visit’s transcript', earlier.slice(0, 1)],
+      ['nothing yet', []]
+    ])('draws it on its own row, not an older photo message’s, when the chat showed %s', async (_label, onScreen) => {
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: onScreen, loading: true })
+      await send('09:30:03.500', '', PHOTO)
+      const landedFrom = frames.length
+      await show('09:30:04.000', { messages: [...earlier, P17, C17], working: true })
+      await show('09:30:14.000', { messages: [...earlier, P17, C17, reply] })
+      for (const frame of framesFrom(landedFrom)) {
+        expect(frame).toEqual([
+          { id: '4665aaaa', images: 'D', text: '' },
+          { id: 'add90135', images: 'P', text: '' }
+        ])
+      }
+      expect((frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>)['add90135']).toEqual(PHOTO)
+    })
+
+    it('keeps it off an older photo the phone sent a moment before, which keeps its own', async () => {
+      vi.setSystemTime(at('09:29:00.000'))
+      const first = promptRow('4665bbbb', 16, 1, '', '09:29:31.000')
+      const firstCompanion = companionRow('4670bbbb', PATHS2.slice(0, 1), '09:29:31.000')
+      await show('09:29:00.000', { messages: earlier.slice(0, 1) })
+      await send('09:29:30.000', '', ['file:///phone/p16.jpg'])
+      await show('09:29:32.000', { messages: [...earlier.slice(0, 1), first, firstCompanion] })
+      // The chat goes and comes back, and a second photo is sent at once.
+      act(() => renderer?.unmount())
+      renderer = null
+      await show('09:30:00.000', { messages: earlier.slice(0, 1), loading: true })
+      await send('09:30:03.500', '', PHOTO)
+      await show('09:30:04.000', { messages: [...earlier.slice(0, 1), first, firstCompanion, P17, C17], working: true })
+      const drawn = frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>
+      expect([drawn['4665bbbb'], drawn['add90135']]).toEqual([['file:///phone/p16.jpg'], PHOTO])
+      expect(lastFrame()).toEqual([
+        { id: '4665bbbb', images: 'P', text: '' },
+        { id: 'add90135', images: 'P', text: '' }
+      ])
     })
   })
 

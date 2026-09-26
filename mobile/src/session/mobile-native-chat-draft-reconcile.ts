@@ -66,7 +66,18 @@ export type PendingImagePreviewEcho = {
   images?: string[]
   expectedOccurrence: number
   baselineTailMessageId: string | null
+  /** When the phone sent it, by the phone's clock (absent from older builds). */
+  sentAt?: number
 }
+
+/**
+ * How far before a send, by the phone's clock, a row may be stamped by the
+ * desktop's and still be that send's. A send's row is written after its
+ * photos are pasted, so it trails the send; this only allows for a phone
+ * clock that runs ahead. A photo row older than that is another message's.
+ */
+const SEND_ROW_CLOCK_SLACK_MS = 60_000
+const NO_MESSAGE_IDS: ReadonlySet<string> = new Set()
 
 export type LandedImagePreviewEcho = {
   pendingId: string
@@ -154,7 +165,9 @@ export function migrateImagePreviewMessageIds(
  *  the phone-local photo without this handoff. */
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
-  entries: readonly PendingImagePreviewEcho[]
+  entries: readonly PendingImagePreviewEcho[],
+  /** Rows already drawing the phone's photos from another send. */
+  boundMessageIds: ReadonlySet<string> = NO_MESSAGE_IDS
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
@@ -197,7 +210,7 @@ export function findLandedImagePreviewEchoes(
     }
     const targetText = normalizeNativeChatUserText(entry.text)
     const candidates = normalized.filter((message) => {
-      if (message.role !== 'user') {
+      if (message.role !== 'user' || boundMessageIds.has(message.id) || (!targetText && writtenBefore(message, entry))) {
         return false
       }
       if (targetText) {
@@ -250,6 +263,26 @@ export function findLandedImagePreviewEchoes(
     landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
   }
   return landed
+}
+
+/**
+ * A row the desktop stamped well before the phone sent this is another
+ * message's. The tail alone could not say so for a send made before the chat's
+ * read settled: its tail is whatever the phone had, a kept transcript from an
+ * earlier visit or nothing, and a photo sent with no words, which has only
+ * the order of photo rows to go by, took the first photo row after it. So an
+ * older photo message drew the new photo, and the new one "Image on Desktop"
+ * (2026-09-26, Claude Code 2.1.283). Asked only for a send with no words: one
+ * with words is matched by them, and a phone clock running far ahead must
+ * not cost it its photos.
+ */
+function writtenBefore(message: NativeChatMessage, entry: PendingImagePreviewEcho): boolean {
+  return (
+    typeof entry.sentAt === 'number' &&
+    Number.isFinite(entry.sentAt) &&
+    message.timestamp !== null &&
+    message.timestamp < entry.sentAt - SEND_ROW_CLOCK_SLACK_MS
+  )
 }
 
 /** `segment` appears in `text` as a run of whole words (the glue joins sends
