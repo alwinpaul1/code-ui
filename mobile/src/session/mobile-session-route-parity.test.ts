@@ -443,7 +443,12 @@ const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b20
 // Phone" for the tab's file. Its label, hint and toasts live in
 // mobile-session-save-to-phone-action.ts, outside this family, so the string
 // pin did not move. Same record count; only those two records moved.
-const HEAD_LEAF_JSX_SHA256 = 'fc2adec6e241a8f02263a8ee90c62177d68c334719b00200272074d79ddb0578'
+// 2026-09-26 (later still): FileReader's <MobileFileMarkdownPreview> call no
+// longer hands it `byteLength`. On a cut read that is what the host read, not
+// the file's size, and the truncated note called every file over the cap
+// 512 KB; the note now names the cap instead. Same record count (74); only
+// that record moved.
+const HEAD_LEAF_JSX_SHA256 = 'a55708a4779aceb5157ac06b2224fd065bcae5af9d805c60190f5ac28af00899'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`

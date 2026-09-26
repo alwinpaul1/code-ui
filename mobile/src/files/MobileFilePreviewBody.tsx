@@ -99,7 +99,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}
-        byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
         readingPositionKey={options.readingPositionKey}
         resolveImage={options.resolveImage ?? undefined}
@@ -114,7 +113,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}
-        byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
       />
     )
@@ -127,7 +125,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       relativePath={options.relativePath}
       content={preview.content}
       truncated={preview.truncated}
-      byteLength={preview.byteLength}
       initialLine={options.lineColumn?.line}
     />
   )

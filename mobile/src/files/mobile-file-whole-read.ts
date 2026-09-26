@@ -13,7 +13,7 @@ import {
   type MobileFilePreviewRpcSender
 } from './mobile-file-preview-operations'
 import type { MobileFilePreviewSource } from './mobile-file-preview-request'
-import { formatPreviewByteLength } from './mobile-file-preview-response'
+import { DESKTOP_TEXT_READ_CAP, formatPreviewByteLength } from './mobile-file-preview-response'
 import { isAbsoluteTabPath, resolveOutsideWorktree } from './mobile-file-tab-outside-worktree'
 import {
   refreshTerminalArtifactSourceAfterGrantFailure,
@@ -68,7 +68,6 @@ export type WholeDesktopFileReadOptions = {
   signal?: AbortSignal
 }
 
-const HOST_TEXT_CAP = '512 KB'
 const HOST_PREVIEW_CAP = '10 MB'
 
 /** The chunked read is missing on this host or for this worktree; anything else is a real failure
@@ -250,14 +249,17 @@ function imageRead(outcome: Settled): WholeDesktopFileRead {
 
 function textRead(outcome: Settled): WholeDesktopFileRead {
   if (!outcome.accepted) {
-    return refusalRead(outcome.refusal, HOST_TEXT_CAP)
+    return refusalRead(outcome.refusal, DESKTOP_TEXT_READ_CAP)
   }
   const text = outcome.value as { content: string; truncated?: unknown }
   if (text.truncated === true) {
     // No size here: the host's `byteLength` on a cut read is the length of what it READ (512 KiB
     // and a byte, truncateMobileFilePreview), not of the file, so "(the file is 512 KB)" was said
     // of every file over the cap. The desktop never tells the phone the real size on this path.
-    return { status: 'refused', reason: `the desktop sends only the first ${HOST_TEXT_CAP} of it` }
+    return {
+      status: 'refused',
+      reason: `the desktop sends only the first ${DESKTOP_TEXT_READ_CAP} of it`
+    }
   }
   return decodedTextRead(text.content)
 }

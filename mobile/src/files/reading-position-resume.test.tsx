@@ -97,7 +97,6 @@ async function renderMarkdown(scrollTo: ReturnType<typeof vi.fn>): Promise<React
         relativePath: 'docs/thesis.md',
         content: '# Thesis\n\nlong',
         truncated: false,
-        byteLength: 20,
         readingPositionKey: markdownKey
       }),
       { createNodeMock: (element) => (element.type === 'ScrollView' ? { scrollTo } : null) }

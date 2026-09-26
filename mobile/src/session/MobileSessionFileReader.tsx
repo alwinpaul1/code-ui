@@ -414,7 +414,6 @@ export function FileReader({
           relativePath={relativePath}
           content={doc.content}
           truncated={doc.truncated}
-          byteLength={doc.byteLength}
           readingPositionKey={readingPositionKey}
           resolveImage={resolveImage}
           renderSource={() => renderSourceText(doc.content)}

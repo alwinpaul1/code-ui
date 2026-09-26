@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { ScrollView, Text, type StyleProp, type TextStyle } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
-import { formatPreviewByteLength } from './mobile-file-preview-request'
+import { DESKTOP_TEXT_READ_CAP } from './mobile-file-preview-response'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
 import { filePreviewStyles } from './mobile-file-preview-styles'
@@ -11,13 +11,11 @@ export function MobileFilePreviewSourceText({
   relativePath,
   content,
   truncated,
-  byteLength,
   initialLine
 }: {
   relativePath: string
   content: string
   truncated?: boolean
-  byteLength?: number
   initialLine?: number
 }) {
   const { scheme } = useTheme()
@@ -51,9 +49,7 @@ export function MobileFilePreviewSourceText({
       contentContainerStyle={styles.textContent}
       onContentSizeChange={revealInitialLine}
     >
-      {truncated ? (
-        <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
-      ) : null}
+      {truncated ? <MobileFilePreviewTruncatedNote /> : null}
       <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
         <MobileSyntaxSegments segments={syntax.segments} scheme={scheme} />
       </Text>
@@ -61,20 +57,21 @@ export function MobileFilePreviewSourceText({
   )
 }
 
+/** Over a text file the desktop cut. It names what the preview shows, not the file's size: the
+ *  phone is never told that (DESKTOP_TEXT_READ_CAP), and the reply's byteLength made every file
+ *  over the cap "File size: 512 KB". */
 export function MobileFilePreviewTruncatedNote({
-  byteLength,
   // Why: the markdown preview draws this note over a themed surface, so it
   // hands in its own colour. It layers over the shared one rather than
   // replacing it, so a field added below still reaches every caller.
   style
 }: {
-  byteLength: number
   style?: StyleProp<TextStyle>
 }) {
   const styles = useThemedStyles(filePreviewStyles)
   return (
     <Text style={[styles.truncatedNote, style]}>
-      Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
+      Preview truncated: showing the first {DESKTOP_TEXT_READ_CAP} of the file.
     </Text>
   )
 }
