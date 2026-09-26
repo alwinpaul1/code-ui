@@ -31,11 +31,15 @@ import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
  *   - `files.readChunk`: raw bytes of any file in a LOCAL worktree, 512 KiB a call and no
  *     whole-file cap. The phone stops at MOBILE_CHUNKED_READ_MAX_BYTES. The host refuses it for an
  *     SSH worktree ("SSH runtime chunked download is unavailable").
- *   - `files.readPreview` / `files.readTerminalArtifactPreview`: an image, whole and base64, up to
- *     10 MB (RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES), refused above that.
+ *   - `files.readPreview` / `files.readTerminalArtifactPreview`: an image or a PDF, whole and
+ *     base64, up to 10 MB (RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES), refused above that. On an SSH
+ *     worktree `files.readPreview` also sends TEXT whole up to 10 MB (the relay's
+ *     readRelayFileContent, src/relay/fs-handler-file-read.ts); a local host's refuses text past
+ *     512 KiB.
  *   - `files.read` / `files.readTerminalArtifact`: text decoded as UTF-8, 512 KiB
- *     (MOBILE_FILE_READ_MAX_BYTES). `files.read` cuts and says `truncated`; the artifact read
- *     refuses with file_too_large. A binary extension is refused with binary_file.
+ *     (MOBILE_FILE_READ_MAX_BYTES). `files.read` cuts and says `truncated` (an SSH worktree's
+ *     refuses with file_too_large instead); the artifact read refuses with file_too_large. A binary
+ *     extension, PDFs included, is refused with binary_file.
  * The capped reads are the only way to a file outside the workspace (through a terminal's grant)
  * and to a file in an SSH worktree.
  */
@@ -63,7 +67,7 @@ export type WholeDesktopFileReadOptions = {
 }
 
 const HOST_TEXT_CAP = '512 KB'
-const HOST_IMAGE_CAP = '10 MB'
+const HOST_PREVIEW_CAP = '10 MB'
 
 /** The chunked read is missing on this host or for this worktree; anything else is a real failure
  *  that a capped read would only disguise (a dropped connection read again as "cut at 512 KB"). */
@@ -146,27 +150,51 @@ async function readWorktreeFile(
     }
   }
   const params = { worktree, relativePath: source.relativePath }
-  return classifyMobileArtifact(source.relativePath) === 'image'
-    ? imageRead(
-        settle(await filePreviewImageRead.request(client, params), filePreviewImageRead.interpret)
-      )
-    : textRead(
-        settle(await filePreviewTextRead.request(client, params), filePreviewTextRead.interpret)
-      )
+  const readPreview = async () =>
+    settle(await filePreviewImageRead.request(client, params), filePreviewImageRead.interpret)
+  if (sentWholeByPreview(source.relativePath)) {
+    return imageRead(await readPreview())
+  }
+  const capped = settle(
+    await filePreviewTextRead.request(client, params),
+    filePreviewTextRead.interpret
+  )
+  if (!cutForSize(capped)) {
+    return textRead(capped)
+  }
+  // Past the capped read's 512 KiB. An SSH worktree's preview read sends text whole up to 10 MB; a
+  // local host's refuses it too, and then the capped read's own refusal stands.
+  const preview = await readPreview()
+  const whole = wholeTextFromPreview(preview)
+  if (whole) {
+    return whole
+  }
+  if (!capped.accepted && !preview.accepted && isTooLarge(preview.refusal)) {
+    // Both reads refused on size: an SSH worktree, where the preview's 10 MB is the cap that held.
+    return refusalRead(preview.refusal, HOST_PREVIEW_CAP)
+  }
+  return textRead(capped)
+}
+
+/** Images and PDFs: the preview reads send these whole, as base64. The text reads refuse a PDF as
+ *  binary_file, so a PDF outside the workspace or on an SSH worktree used to be refused. */
+function sentWholeByPreview(path: string): boolean {
+  const kind = classifyMobileArtifact(path)
+  return kind === 'image' || kind === 'pdf'
 }
 
 async function readThroughGrant(
   client: MobileFilePreviewRpcSender,
   source: MobileTerminalArtifactPreviewSource
 ): Promise<WholeDesktopFileRead> {
-  const image = classifyMobileArtifact(source.absolutePath) === 'image'
+  const viaPreview = sentWholeByPreview(source.absolutePath)
   const send = async (grant: MobileTerminalArtifactPreviewSource) => {
     const params = {
       worktree: `id:${grant.worktreeId}`,
       absolutePath: grant.absolutePath,
       grantId: grant.grantId
     }
-    return image
+    return viaPreview
       ? settle(
           await terminalArtifactImageRead.request(client, params),
           terminalArtifactImageRead.interpret
@@ -188,7 +216,7 @@ async function readThroughGrant(
       outcome = await send(refreshed)
     }
   }
-  return image ? imageRead(outcome) : textRead(outcome)
+  return viaPreview ? imageRead(outcome) : textRead(outcome)
 }
 
 type Settled =
@@ -208,7 +236,7 @@ function settle(
 
 function imageRead(outcome: Settled): WholeDesktopFileRead {
   if (!outcome.accepted) {
-    return refusalRead(outcome.refusal, HOST_IMAGE_CAP)
+    return refusalRead(outcome.refusal, HOST_PREVIEW_CAP)
   }
   const preview = outcome.value as { content?: unknown; isImage?: unknown }
   if (preview.isImage !== true || typeof preview.content !== 'string' || !preview.content) {
@@ -228,22 +256,59 @@ function textRead(outcome: Settled): WholeDesktopFileRead {
     // of every file over the cap. The desktop never tells the phone the real size on this path.
     return { status: 'refused', reason: `the desktop sends only the first ${HOST_TEXT_CAP} of it` }
   }
-  // Text is decoded on the desktop; a replacement character or a NUL means the bytes it came from
-  // were not UTF-8 text, and they cannot be rebuilt from what arrived.
-  if (text.content.includes(REPLACEMENT_CHARACTER) || text.content.includes(NUL)) {
+  return decodedTextRead(text.content)
+}
+
+/** The capped read cut the text or refused it for its size. */
+function cutForSize(outcome: Settled): boolean {
+  return outcome.accepted
+    ? (outcome.value as { truncated?: unknown }).truncated === true
+    : isTooLarge(outcome.refusal)
+}
+
+/** What the preview read sent for text the capped read would not send whole; null when it did not
+ *  send it either (a local host's preview read refuses text past 512 KiB, an old host has none). */
+function wholeTextFromPreview(outcome: Settled): WholeDesktopFileRead | null {
+  if (!outcome.accepted) {
+    return null
+  }
+  const preview = outcome.value as { content?: unknown; isBinary?: unknown; isImage?: unknown }
+  if (typeof preview.content !== 'string') {
+    return null
+  }
+  if (preview.isImage === true) {
+    return imageRead(outcome)
+  }
+  if (preview.isBinary === true) {
     return { status: 'refused', reason: PREVIEW_ONLY }
   }
-  const bytes = new TextEncoder().encode(text.content)
+  return decodedTextRead(preview.content)
+}
+
+/**
+ * Text the desktop decoded as UTF-8, back to its bytes. A replacement character means the bytes it
+ * came from were not UTF-8, and they cannot be rebuilt from what arrived. A NUL is no such sign: it
+ * decodes to U+0000 and encodes back to 0x00. The desktop refuses a file as binary only on a NUL in
+ * its first 8 KB, so text with one later came back as text and is saved as it is.
+ */
+function decodedTextRead(content: string): WholeDesktopFileRead {
+  if (content.includes(REPLACEMENT_CHARACTER)) {
+    return { status: 'refused', reason: PREVIEW_ONLY }
+  }
+  const bytes = new TextEncoder().encode(content)
   return { status: 'read', base64: bytesToBase64(bytes), byteLength: bytes.length }
 }
 
 const PREVIEW_ONLY = 'the desktop sends only a preview of this kind of file, not the file'
 const REPLACEMENT_CHARACTER = String.fromCharCode(0xfffd)
-const NUL = String.fromCharCode(0)
+
+function isTooLarge(refusal: RpcFailure['error']): boolean {
+  return `${refusal.code} ${refusal.message}`.toLowerCase().includes('file_too_large')
+}
 
 function refusalRead(refusal: RpcFailure['error'], cap: string): WholeDesktopFileRead {
   const text = `${refusal.code} ${refusal.message}`.toLowerCase()
-  if (text.includes('file_too_large')) {
+  if (isTooLarge(refusal)) {
     return {
       status: 'refused',
       reason: `it is larger than the ${cap} the desktop sends of this file`

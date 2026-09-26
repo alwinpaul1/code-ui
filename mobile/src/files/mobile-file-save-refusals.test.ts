@@ -82,3 +82,172 @@ describe('a refusal names only sizes the desktop really reported', () => {
     expect(target.createDocument).not.toHaveBeenCalled()
   })
 })
+
+describe('files the desktop does send whole are saved, not refused', () => {
+  it('saves a PDF outside the workspace, which the grant preview read sends whole', async () => {
+    const pdf = Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n')
+    const desktop = host({
+      'files.readTerminalArtifact': () => fail('binary_file', 'binary_file'),
+      'files.readTerminalArtifactPreview': () =>
+        ok({
+          content: pdf.toString('base64'),
+          isBinary: true,
+          isImage: true,
+          mimeType: 'application/pdf'
+        })
+    })
+    const { target, written } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      {
+        source: {
+          source: 'terminalArtifact',
+          worktreeId: 'wt-1',
+          absolutePath: '/tmp/agent/report.pdf',
+          grantId: 'grant-1'
+        }
+      },
+      target
+    )
+
+    expect(outcome).toEqual({ status: 'saved', fileName: 'report.pdf', byteLength: pdf.length })
+    expect(written.get('content://downloads/document/7')).toBe(pdf.toString('base64'))
+  })
+
+  it('saves a PDF from an SSH worktree, which the preview read sends whole', async () => {
+    const pdf = Buffer.from('%PDF-1.4\n%%EOF\n')
+    const desktop = host({
+      'files.readChunk': SSH_CHUNK_REFUSAL,
+      'files.read': () => fail('binary_file', 'binary_file'),
+      'files.readPreview': () =>
+        ok({
+          content: pdf.toString('base64'),
+          isBinary: true,
+          isImage: true,
+          mimeType: 'application/pdf'
+        })
+    })
+    const { target, written } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-ssh', relativePath: 'out/paper.pdf' } },
+      target
+    )
+
+    expect(outcome).toEqual({ status: 'saved', fileName: 'paper.pdf', byteLength: pdf.length })
+    expect(written.get('content://downloads/document/7')).toBe(pdf.toString('base64'))
+  })
+
+  it('saves a 600 KB text file from an SSH worktree, which the preview read sends whole', async () => {
+    const text = 'line of a log\n'.repeat(Math.ceil((600 * 1024) / 14))
+    const desktop = host({
+      'files.readChunk': SSH_CHUNK_REFUSAL,
+      'files.read': () => fail('file_too_large', 'file_too_large'),
+      'files.readPreview': () => ok({ content: text, isBinary: false })
+    })
+    const { target, written } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-ssh', relativePath: 'logs/run.log' } },
+      target
+    )
+
+    expect(outcome).toMatchObject({ status: 'saved', byteLength: Buffer.byteLength(text) })
+    expect(
+      Buffer.from(written.get('content://downloads/document/7') ?? '', 'base64').toString('utf8')
+    ).toBe(text)
+  })
+
+  it('still refuses text the preview read will not send whole either', async () => {
+    // A local host with no chunked read: its files.readPreview refuses text over 512 KiB too.
+    const desktop = host({
+      'files.readChunk': () => fail('method files.readChunk is not available to mobile clients'),
+      'files.read': () =>
+        ok({ content: 'x'.repeat(64), truncated: true, byteLength: MOBILE_FILE_READ_MAX_BYTES + 1 }),
+      'files.readPreview': () => fail('file_too_large', 'file_too_large')
+    })
+    const { target } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-1', relativePath: 'logs/big.log' } },
+      target
+    )
+
+    expect(outcome).toEqual({
+      status: 'refused',
+      fileName: 'big.log',
+      message: "Can't save big.log: the desktop sends only the first 512 KB of it"
+    })
+    expect(target.createDocument).not.toHaveBeenCalled()
+  })
+
+  it('names the 10 MB cap when an SSH worktree sends the text neither way', async () => {
+    const desktop = host({
+      'files.readChunk': SSH_CHUNK_REFUSAL,
+      'files.read': () => fail('file_too_large', 'file_too_large'),
+      'files.readPreview': () => fail('file_too_large', 'file_too_large')
+    })
+    const { target } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-ssh', relativePath: 'logs/huge.log' } },
+      target
+    )
+
+    expect(outcome).toEqual({
+      status: 'refused',
+      fileName: 'huge.log',
+      message: "Can't save huge.log: it is larger than the 10 MB the desktop sends of this file"
+    })
+  })
+
+  it('refuses a binary the preview read gives no bytes for', async () => {
+    const desktop = host({
+      'files.readChunk': SSH_CHUNK_REFUSAL,
+      'files.read': () => fail('file_too_large', 'file_too_large'),
+      'files.readPreview': () => ok({ content: '', isBinary: true })
+    })
+    const { target } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-ssh', relativePath: 'build/app.out' } },
+      target
+    )
+
+    expect(outcome).toMatchObject({ status: 'refused' })
+    expect(target.createDocument).not.toHaveBeenCalled()
+  })
+
+  it('saves text whose NUL byte sits past the 8 KB the desktop checks, byte for byte', async () => {
+    // The desktop said text (no binary_file), so this came back decoded. A NUL decodes to U+0000
+    // and encodes back to 0x00: nothing was lost in the decoding.
+    const bytes = Buffer.concat([
+      Buffer.alloc(9000, 0x61),
+      Buffer.from([0x00]),
+      Buffer.from('tail\n')
+    ])
+    const desktop = host({
+      'files.readChunk': SSH_CHUNK_REFUSAL,
+      'files.read': () =>
+        ok({ content: bytes.toString('utf8'), truncated: false, byteLength: bytes.length })
+    })
+    const { target, written } = phone()
+
+    const outcome = await saveDesktopFileToPhone(
+      desktop,
+      { source: { source: 'worktree', worktreeId: 'wt-ssh', relativePath: 'data/records.txt' } },
+      target
+    )
+
+    expect(outcome).toMatchObject({ status: 'saved', byteLength: bytes.length })
+    expect(
+      Buffer.from(written.get('content://downloads/document/7') ?? '', 'base64').equals(bytes)
+    ).toBe(true)
+  })
+})
