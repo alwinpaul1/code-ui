@@ -49,7 +49,7 @@ vi.mock('./MobileNativeChatView', async () => {
   return { MobileNativeChatView: (props: Record<string, unknown>) => h('ChatView', props) }
 })
 
-type Window = { baseRetained: boolean; hasMore: boolean }
+type Window = { baseRetained: boolean; wholeSession: boolean }
 
 function overlay(
   messages: NativeChatMessage[],
@@ -143,8 +143,8 @@ describe('a created file counted only from the whole settled session', () => {
   }
 
   it.each([
-    ['a kept tail, which lacks what was written while the chat was away', { baseRetained: true, hasMore: false }],
-    ['a window that starts after the session’s first row', { baseRetained: false, hasMore: true }]
+    ['a kept tail, which lacks what was written while the chat was away', { baseRetained: true, wholeSession: true }],
+    ['a window that starts after the session’s first row', { baseRetained: false, wholeSession: false }]
   ])('draws no count, and reads nothing, from %s', async (_, window) => {
     expect(await countWith(APPENDED, window)).toEqual({ count: null, reads: 0 })
   })
@@ -159,12 +159,12 @@ describe('a created file counted only from the whole settled session', () => {
       subscribe: vi.fn(() => () => {})
     } as unknown as CreatedFileCountStore
     await act(async () => {
-      renderer = create(overlay(CLAUDE_EDIT_RUN_ROWS, store, { baseRetained: true, hasMore: false }))
+      renderer = create(overlay(CLAUDE_EDIT_RUN_ROWS, store, { baseRetained: true, wholeSession: true }))
     })
     expect(setTranscript.mock.calls.at(-1)?.[1]).toBe(false)
   })
 
   it('counts +93 from the file when the chat holds the whole session, settled', async () => {
-    expect(await countWith(CREATED_FILE_ON_DISK, { baseRetained: false, hasMore: false })).toEqual({ count: 93, reads: 1 })
+    expect(await countWith(CREATED_FILE_ON_DISK, { baseRetained: false, wholeSession: true })).toEqual({ count: 93, reads: 1 })
   })
 })

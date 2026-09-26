@@ -51,7 +51,14 @@ export type MobileNativeChatSession = {
    *  though live rows fold on after it. Cleared by the next real snapshot.
    *  Absent on a lane that never keeps one (the structured session). */
   baseRetained?: boolean
+  /** True only while `messages` starts at the session's first row, as the
+   *  host said (`hasMore: false` on the window or on a page it answered):
+   *  never inferred from a row count, never for a window that live appends
+   *  trimmed, a kept tail, a page stopped at the cap, or rows that came
+   *  before the snapshot. Absent on a lane that does not track it. */
+  wholeSession?: boolean
 }
+
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
@@ -167,6 +174,7 @@ export function useMobileNativeChatSession(args: {
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
   const baseRetainedRef = useRef(false)
+  const wholeSessionRef = useRef(false)
   // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
   const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
@@ -192,6 +200,7 @@ export function useMobileNativeChatSession(args: {
     limitRef.current = attemptLimit
     loadingEarlierRef.current = false
     snapshotSeenRef.current = false
+    wholeSessionRef.current = false
     let frameSeen = false
     setLoadingEarlier(false)
     setList([])
@@ -248,6 +257,8 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
         }
         if (applied.windowReplaced) {
+          // Only the host's own word makes a window the whole session.
+          wholeSessionRef.current = applied.hasMore === false && !applied.pending
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.
           limitRef.current = INITIAL_LIMIT
@@ -265,6 +276,7 @@ export function useMobileNativeChatSession(args: {
             : null
         if (retained && retained.length > 0) {
           baseRetainedRef.current = true
+          wholeSessionRef.current = false
           setList(retained)
         } else {
           baseRetainedRef.current = baseRetainedRef.current && !applied.windowReplaced
@@ -277,6 +289,8 @@ export function useMobileNativeChatSession(args: {
           beforeOffsetRef.current = applied.beforeOffset
         }
         if (applied.cursorInvalidated) {
+          // The window no longer reaches the session's first row.
+          wholeSessionRef.current = false
           // Fall back to a growing-tail read so history trimmed by live appends
           // cannot leave a gap between the retained window and the old cursor.
           streamGenerationRef.current += 1
@@ -357,6 +371,9 @@ export function useMobileNativeChatSession(args: {
           return
         }
         limitRef.current = nextLimit
+        // A page that reached the first row says so; one stopped at the cap,
+        // or that says nothing, does not.
+        wholeSessionRef.current = result.hasMore === false
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
           setList(mergeNativeChatMessages(result.messages, mergerRef.current.list))
@@ -409,6 +426,7 @@ export function useMobileNativeChatSession(args: {
     hasMore,
     loadingEarlier,
     loadEarlier,
-    baseRetained: baseRetainedRef.current
+    baseRetained: baseRetainedRef.current,
+    wholeSession: wholeSessionRef.current
   }
 }

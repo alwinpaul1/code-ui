@@ -36,6 +36,7 @@ import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-reque
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
 import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
+import { holdsWholeSession } from './mobile-native-chat-whole-session'
 const CLIPBOARD_POLL_MS = 3000
 
 const NO_PROMPTS: DesktopPrompt[] = []
@@ -446,15 +447,16 @@ export function MobileNativeChatOverlay({
     </View>
   )
   // The loaded transcript says whether a later call touched a created file,
-  // but only a settled read of the whole session can: a kept tail lacks what
-  // was written while the chat was away, and a window that starts after the
-  // first row can hide a background agent launched before it that is still
-  // writing the file (review of 8b2ef369: +125 on a 93-line create).
+  // but only a settled read of the whole session can (holdsWholeSession): a
+  // kept tail lacks what was written while the chat was away, and a window
+  // that starts after the first row can hide a background agent launched
+  // before it that is still writing the file (review of 8b2ef369: +125 on a
+  // 93-line create).
   const drawn = (
     <CreatedFileCountProvider
       store={createdFileCounts}
       messages={session.messages}
-      live={session.status === 'ready' && !session.baseRetained && session.hasMore === false}
+      live={holdsWholeSession(session)}
     >
       {chat}
     </CreatedFileCountProvider>

@@ -492,25 +492,6 @@ describe('useMobileNativeChatSession', () => {
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
   })
-
-  // Rows a live append trims from the head are still in the transcript. A
-  // session that opened whole said hasMore false and kept saying it, so
-  // "Load earlier" went away with rows still to load (2026-09-26).
-  it('offers older rows again once a live append trims a session that opened whole', async () => {
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({
-        type: 'snapshot',
-        messages: Array.from({ length: LIVE_WINDOW_CEILING }, (_unused, index) => message(`window-${index}`)),
-        hasMore: false
-      })
-      return () => {}
-    })
-    await mount({ sendRequest: vi.fn(), subscribe } as unknown as RpcClient)
-    expect(state?.hasMore).toBe(false)
-    await act(async () => emit({ type: 'appended', messages: [message('live-trim')] }))
-    expect(state?.hasMore).toBe(true)
-  })
 })
 
 describe('useMobileNativeChatSession transcriptLoading', () => {

@@ -240,7 +240,12 @@
             // tail of an empty re-subscribe, which the running-task reader
             // must not read as a whole window: the ref, its two writes, the
             // returned field and its type line. Fork-only, like the kept tail.
-            "max": 310,
+            // Later that day: 318. `wholeSession` says the list starts at the
+            // session's first row, which the created-file count needs: the
+            // ref, its reset, its four writes, the returned field and its
+            // type line. `hasMore` could not say it (the paging cap, rows
+            // before the snapshot, a host that omits it). Fork-only.
+            "max": 318,
             "skipBlankLines": true,
             "skipComments": true
           }

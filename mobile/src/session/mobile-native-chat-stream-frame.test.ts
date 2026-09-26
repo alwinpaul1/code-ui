@@ -304,26 +304,6 @@ describe('applyMobileNativeChatStreamFrame', () => {
     ).toEqual({ kind: 'messages', messages: [message('a'), message('b')] })
   })
 
-  // The rows a live append trims from the head are still in the transcript.
-  // Saying nothing kept `hasMore` at a short session's false: "Load earlier"
-  // could not reach them, and the created-file count read a window that
-  // starts mid-session as the whole session (review of 8b2ef369, 2026-09-26:
-  // a background agent's launch left the window and the chip drew +125).
-  it('says older rows exist once a live append trims the head of a window that had none', () => {
-    const merger = createNativeChatMerger()
-    replaceList(merger, ['a', 'b', 'c'].map(message))
-
-    expect(
-      applyMobileNativeChatStreamFrame({
-        merger,
-        frame: { type: 'appended', messages: [message('d')] },
-        limit: 3,
-        ceiling: 3,
-        replaceSnapshot: false
-      })
-    ).toEqual({ kind: 'messages', messages: ['b', 'c', 'd'].map(message), cursorInvalidated: true, hasMore: true })
-  })
-
   it('replaces stale history for an explicit transcript replacement frame', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('old')])

@@ -37,7 +37,8 @@ export function CreatedFileCountProvider({
   store: CreatedFileCountStore | undefined
   /** The loaded transcript, which says whether a later call touched a file. */
   messages: readonly NativeChatMessage[]
-  /** The chat's own read of it settled; not a transcript held over. */
+  /** The chat holds its own settled read of the whole session, from its
+   *  first row (holdsWholeSession); nothing is read or counted otherwise. */
   live: boolean
   children: ReactNode
 }) {

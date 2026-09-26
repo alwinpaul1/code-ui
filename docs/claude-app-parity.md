@@ -194,7 +194,11 @@ Nothing here is built.
   chat's own settled read of the whole session, from its first row: never
   one held over from before it loaded, never a tail kept over a re-subscribe
   that came back empty (`baseRetained`), and never a window that starts
-  later. The chat opens on the last 40 rows and live appends trim it at 150,
+  later: the session hook's `wholeSession` is set only by the host's own
+  `hasMore: false`, on the window or on a page it answered, and cleared by a
+  live trim, a kept tail, a page stopped at the 2000-row cap and rows that
+  came before the snapshot (`holdsWholeSession`). The chat opens on the last
+  40 rows and live appends trim it at 150,
   so a background agent launched before the window is not in it, and the
   review of 8b2ef369 drew +125 on the 93-line create that way; the phone
   cannot ask the desktop when the file last changed instead, since
