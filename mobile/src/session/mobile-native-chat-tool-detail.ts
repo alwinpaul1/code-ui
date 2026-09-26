@@ -2,7 +2,7 @@ import { isEditToolName, editFilesFromToolPair } from '../../../src/shared/nativ
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { sendMessageRecipient, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
 
 /** "Completed" / "Failed" / "Running" for ONE call, the way the Claude app's
  *  sheet states it under the title. A result settles the call regardless of
@@ -26,11 +26,17 @@ export function toolDetailStatus(pair: NativeChatToolPair): ToolDetailStatus {
 }
 
 /** The sheet's title: the row's own sentence, reused for one call instead of
- *  a whole run so "Ran a command" / "Messaged @agent" stays one source of
- *  truth with the collapsed row (`toolRunSentence`) rather than a second
- *  wording invented for the sheet. Falls back to the bare tool name when the
+ *  a whole run so "Ran a command" stays one source of truth with the
+ *  collapsed row (`toolRunSentence`) rather than a second wording invented
+ *  for the sheet. A SendMessage is the exception: the Claude app titles its
+ *  sheet "Messaged @<recipient>" alone and keeps the message preview for the
+ *  row (2026-09-26 screenshots). Falls back to the bare tool name when the
  *  call is nameless or the pair is a result with no call at all. */
 export function toolDetailTitle(pair: NativeChatToolPair): string {
+  if (pair.call && toolCallKind(pair.call.name) === 'message') {
+    const to = sendMessageRecipient(pair.call.input)
+    return to ? `Messaged @${to}` : 'Messaged an agent'
+  }
   const blocks: NativeChatBlock[] = []
   if (pair.call) {
     blocks.push(pair.call)

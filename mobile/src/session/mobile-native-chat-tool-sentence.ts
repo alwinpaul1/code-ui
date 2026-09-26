@@ -11,9 +11,9 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * One plain sentence for a run of tool calls, the way the Claude app puts it:
  * "Ran 3 commands, read a file", "Ran 12 commands (2 failed), read 6 files",
  * "Ran Fix count wording and append cell diff" for a run of one described command,
- * "Ran skill", "Messaged @agent <summary>", "created a file" for a Write the
- * result is certain is new. Requested on 2026-09-12 in place of "20× Bash
- * cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
+ * "Ran skill", "Messaged @agent <summary or message>", "created a file" for
+ * a Write the result is certain is new. Requested on 2026-09-12 in place of
+ * "20× Bash cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
  * to the Claude app's own wording for a single described command, a Skill
  * call, a SendMessage, and a whole-file write. Tool names are grouped by what
  * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
@@ -106,16 +106,51 @@ function soleCallLabel(block: NativeChatBlock): string | null {
   return readFileName(block) ?? commandDescription(block)
 }
 
-/** SendMessage's own `to`/`summary` (verified 2026-09-24 against real
- *  `SendMessage` tool_use records in local Claude Code project transcripts). */
-function sendMessageDetail(block: NativeChatBlock): { to: string; summary: string } | null {
+/** Longest SendMessage preview the row is given. The row draws one line and
+ *  ellipsizes it natively; this only keeps a long message out of text
+ *  layout, and is wide enough to fill a tablet row first. */
+export const SEND_MESSAGE_PREVIEW_MAX = 200
+
+function firstText(input: Record<string, unknown> | null, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = input?.[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+  return null
+}
+
+/** Who a SendMessage went to, as the agent wrote it: a teammate's name or an
+ *  agent id. `to` first, then `recipient`; the 2026-09-26 call carried both
+ *  with the same id, the 2026-09-24 ones `to` alone. Null when neither names
+ *  anyone. */
+export function sendMessageRecipient(input: unknown): string | null {
+  return firstText(record(input), ['to', 'recipient'])?.trim() ?? null
+}
+
+/** SendMessage's recipient plus a one-line preview: its `summary` when it has
+ *  one (the Claude app's row, 2026-09-24, checked against real `SendMessage`
+ *  tool_use records in local Claude Code transcripts), else the `message`
+ *  itself, else `content`. The 2026-09-26 call, seen in the sheet's Inputs
+ *  list and the Claude app's row, had no summary and a `content` already cut
+ *  ("…read of the fra..."), so the full `message` comes first. */
+function sendMessageDetail(block: NativeChatBlock): { to: string; preview: string | null } | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'message') {
     return null
   }
-  const input = record(block.input)
-  const to = input?.to
-  const summary = input?.summary
-  return typeof to === 'string' && typeof summary === 'string' ? { to, summary } : null
+  const to = sendMessageRecipient(block.input)
+  if (!to) {
+    return null
+  }
+  const text = firstText(record(block.input), ['summary', 'message', 'content'])
+  if (!text) {
+    return { to, preview: null }
+  }
+  const line = text.replace(/\s+/g, ' ').trim()
+  const preview =
+    line.length > SEND_MESSAGE_PREVIEW_MAX ? `${line.slice(0, SEND_MESSAGE_PREVIEW_MAX)}…` : line
+  return { to, preview }
 }
 
 /** True only when a single edit-shaped call's own result is certain the file
@@ -138,7 +173,7 @@ type Group = {
    *  it is still the only call of this kind in the run. */
   label: string | null
   /** The lone call and its result, kept only long enough to ask whether it
-   *  created a file or to read a SendMessage's `to`/`summary` — cleared the
+   *  created a file or to read a SendMessage's recipient and text — cleared the
    *  moment a second call of the same kind arrives, since neither question
    *  has one answer for a group. */
   soleCall: NativeChatToolCallBlock | null
@@ -190,7 +225,8 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
     if (entry.kind === 'message' && entry.total === 1 && entry.soleCall) {
       const detail = sendMessageDetail(entry.soleCall)
       if (detail) {
-        parts.push(`messaged @${detail.to} ${detail.summary}${failed}`)
+        const preview = detail.preview ? ` ${detail.preview}` : ''
+        parts.push(`messaged @${detail.to}${preview}${failed}`)
         continue
       }
     }

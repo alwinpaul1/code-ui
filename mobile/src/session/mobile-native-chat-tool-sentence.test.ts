@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { SEND_MESSAGE_PREVIEW_MAX, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { CREATED_A_FILE_RUN, EDITED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
+import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 
 function call(name: string): NativeChatBlock {
   return { type: 'tool-call', id: `c-${name}-${Math.random()}`, name, input: {} }
@@ -141,7 +142,7 @@ describe('toolRunSentence', () => {
     )
   })
 
-  it('falls back to the generic noun when a SendMessage lacks to/summary', () => {
+  it('falls back to the generic noun when a SendMessage names no recipient', () => {
     const send: NativeChatBlock = {
       type: 'tool-call',
       id: 'c-send-2',
@@ -149,6 +150,66 @@ describe('toolRunSentence', () => {
       input: {}
     }
     expect(toolRunSentence([send, result()])).toBe('Messaged an agent')
+  })
+
+  // 2026-09-26: the Claude app drew "Messaged @a07ea6f616a8e32a1 Agreed. Your
+  // measurem… ›" for a SendMessage with no `summary`, where the phone said
+  // "Messaged an agent".
+  describe('a SendMessage with no summary (2026-09-26 screenshots)', () => {
+    const blocks = (input: Record<string, unknown>): NativeChatBlock[] => [
+      { type: 'tool-call', id: 'c-send-3', name: 'SendMessage', input },
+      result()
+    ]
+    const real = SEND_MESSAGE_BY_ID_2026_09_26.call!.input as Record<string, unknown>
+
+    it('names the recipient and previews the message on the row', () => {
+      const sentence = toolRunSentence(blocks(real))
+      expect(sentence.startsWith('Messaged @a07ea6f616a8e32a1 Agreed. Your measurement beats my read of the frames.')).toBe(true)
+      // Cut before native layout; the row's own one-line ellipsis does the rest.
+      expect(sentence.endsWith('…')).toBe(true)
+      expect(sentence.length).toBeLessThan((real.message as string).length)
+    })
+
+    it('shows a named recipient as its name', () => {
+      expect(toolRunSentence(blocks({ to: 'researcher', message: 'Look at the parser.' }))).toBe(
+        'Messaged @researcher Look at the parser.'
+      )
+    })
+
+    it('reads the recipient from `recipient` when there is no `to`', () => {
+      expect(toolRunSentence(blocks({ recipient: 'reviewer', message: 'Done.' }))).toBe(
+        'Messaged @reviewer Done.'
+      )
+    })
+
+    it('previews `content` when there is no `message`', () => {
+      expect(toolRunSentence(blocks({ to: 'reviewer', content: 'Short note' }))).toBe(
+        'Messaged @reviewer Short note'
+      )
+    })
+
+    it('keeps a multi-line message on one line', () => {
+      expect(toolRunSentence(blocks({ to: 'reviewer', message: 'First line\n\n  second line\t end' }))).toBe(
+        'Messaged @reviewer First line second line end'
+      )
+    })
+
+    it('names the recipient alone when the message is empty or blank', () => {
+      expect(toolRunSentence(blocks({ to: 'reviewer', message: '' }))).toBe('Messaged @reviewer')
+      expect(toolRunSentence(blocks({ to: 'reviewer', message: ' \n ' }))).toBe('Messaged @reviewer')
+      expect(toolRunSentence(blocks({ to: 'reviewer' }))).toBe('Messaged @reviewer')
+    })
+
+    it('keeps a message of exactly the preview cap whole, and cuts one character more', () => {
+      const exact = 'x'.repeat(SEND_MESSAGE_PREVIEW_MAX)
+      expect(toolRunSentence(blocks({ to: 'r', message: exact }))).toBe(`Messaged @r ${exact}`)
+      expect(toolRunSentence(blocks({ to: 'r', message: `${exact}y` }))).toBe(`Messaged @r ${exact}…`)
+    })
+
+    it('says "Messaged an agent" when there is no recipient, whatever the message', () => {
+      expect(toolRunSentence(blocks({ message: 'Hello' }))).toBe('Messaged an agent')
+      expect(toolRunSentence(blocks({ to: '  ', message: 'Hello' }))).toBe('Messaged an agent')
+    })
   })
 
   // A whole-content Write reads identically whether it created the file or

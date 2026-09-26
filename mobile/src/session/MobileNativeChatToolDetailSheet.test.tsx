@@ -5,6 +5,7 @@ import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fo
 import { MAX_TOOL_DETAIL_LENGTH } from '../../../src/shared/native-chat-tool-summary'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
+import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 import { ToolDetailBody, ToolDetailHeader } from './MobileNativeChatToolDetailSheet'
 
 // The header/body are tested apart from `DraggableDetailSheet`, the same way
@@ -79,6 +80,12 @@ function textColor(renderer: ReactTestRenderer, testID: string): string | undefi
   return entries.find((entry: { color?: string } | null) => entry?.color)?.color
 }
 
+function flatStyle(node: ReactTestInstance): Record<string, unknown> {
+  const style = node.props.style
+  const entries = (Array.isArray(style) ? style : [style]) as (Record<string, unknown> | null | undefined)[]
+  return Object.assign({}, ...entries.filter(Boolean))
+}
+
 // The first host element above `node`, skipping composites like `Txt`: the
 // view a gesture-handler detector would attach its handler to.
 function nearestHostAncestor(node: ReactTestInstance): ReactTestInstance | null {
@@ -104,11 +111,34 @@ describe('tool detail header: title and status', () => {
     renderer = null
   })
 
-  it('shows the row sentence as the title and Completed as the status', () => {
+  it('titles a SendMessage by its recipient alone, with Completed as the status', () => {
     renderer = renderTree(createElement(ToolDetailHeader, { pair: SEND_MESSAGE_PAIR }))
-    // The row's own sentence, as the Claude app titles the sheet ("Messaged @…").
-    expect(findText(renderer, 'tool-detail-title')).toBe('Messaged @a8f65c53ecfad2908 Fixed the count.')
+    // The Claude app's sheet title (2026-09-26): "Messaged @<to>", no summary.
+    expect(findText(renderer, 'tool-detail-title')).toBe('Messaged @a8f65c53ecfad2908')
     expect(findText(renderer, 'tool-detail-status')).toBe('Completed')
+  })
+
+  // 2026-09-26 screenshots: the Claude app centres the title, on one line, with
+  // the status centred under it, and the close cross on the left. Code UI had
+  // both left-aligned, clear of a cross on the right.
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('centres the title on one line and the status under it (%s)', (scheme, colors) => {
+    renderer = renderTree(createElement(ToolDetailHeader, { pair: SEND_MESSAGE_BY_ID_2026_09_26 }), scheme)
+    expect(findText(renderer, 'tool-detail-title')).toBe('Messaged @a07ea6f616a8e32a1')
+    const title = findTextNode(renderer, 'tool-detail-title')
+    expect(title.props.numberOfLines).toBe(1)
+    expect(flatStyle(title).textAlign).toBe('center')
+    expect(flatStyle(findTextNode(renderer, 'tool-detail-status')).textAlign).toBe('center')
+    // Centred on the sheet, not in the space beside the cross: equal room both sides.
+    const box = flatStyle(nearestHostAncestor(title)!)
+    const left = box.paddingLeft ?? box.paddingHorizontal ?? 0
+    const right = box.paddingRight ?? box.paddingHorizontal ?? 0
+    expect(left).toBeGreaterThan(0)
+    expect(right).toBe(left)
+    expect(textColor(renderer, 'tool-detail-title')).toBe(colors.text)
+    expect(textColor(renderer, 'tool-detail-status')).toBe(colors.textSecondary)
   })
 
   it('shows Failed in the danger tone, in both light and dark', () => {

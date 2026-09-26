@@ -8,6 +8,7 @@ import {
   toolDetailTitle,
   toolPairOpensDetailSheet
 } from './mobile-native-chat-tool-detail'
+import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 
 describe('tool detail status: Completed / Failed / Running under the sheet title', () => {
   it('reads Completed off a clean result', () => {
@@ -65,6 +66,29 @@ describe('tool detail title: the row sentence, reused for one call', () => {
     // toolRunSentence classifies an unrecognised name as "other"/"used a tool";
     // the title only needs to be non-empty and traceable to this call.
     expect(toolDetailTitle(pair).length).toBeGreaterThan(0)
+  })
+
+  // 2026-09-26: the Claude app titles a SendMessage sheet "Messaged @<to>"
+  // alone; the preview is the row's, not the title's.
+  it('titles a SendMessage "Messaged @<recipient>", with no preview or summary', () => {
+    expect(toolDetailTitle(SEND_MESSAGE_BY_ID_2026_09_26)).toBe('Messaged @a07ea6f616a8e32a1')
+    const withSummary: NativeChatToolPair = {
+      call: {
+        type: 'tool-call',
+        name: 'SendMessage',
+        input: { to: 'researcher', summary: 'Re-check the fix', message: 'Full text' }
+      },
+      result: { type: 'tool-result', output: '{"success":true}' }
+    }
+    expect(toolDetailTitle(withSummary)).toBe('Messaged @researcher')
+  })
+
+  it('titles a SendMessage with no recipient "Messaged an agent"', () => {
+    const pair: NativeChatToolPair = {
+      call: { type: 'tool-call', name: 'SendMessage', input: { message: 'Hello' } },
+      result: { type: 'tool-result', output: '{"success":true}' }
+    }
+    expect(toolDetailTitle(pair)).toBe('Messaged an agent')
   })
 
   it('falls back to "Tool call" for an orphan result with no call at all', () => {

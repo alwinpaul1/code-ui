@@ -70,12 +70,15 @@ export function MobileNativeChatToolDetailSheet({
  *  itself never touches (the body's only gesture is the output text's own). */
 export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
   const status = toolDetailStatus(pair)
+  // The Claude app's layout (2026-09-26): title centred on one line, status
+  // centred under it, close cross on the left. Equal room on both sides keeps
+  // the title centred on the sheet and clear of the cross.
   return (
-    <View style={{ gap: 4, paddingRight: 32 }}>
-      <Txt variant="heading" weight="semibold" testID="tool-detail-title">
+    <View style={{ gap: 4, paddingHorizontal: 32 }}>
+      <Txt variant="heading" weight="semibold" align="center" numberOfLines={1} testID="tool-detail-title">
         {toolDetailTitle(pair)}
       </Txt>
-      <Txt variant="label" tone={STATUS_TONE[status]} testID="tool-detail-status">
+      <Txt variant="label" tone={STATUS_TONE[status]} align="center" testID="tool-detail-status">
         {status}
       </Txt>
     </View>
