@@ -6,8 +6,12 @@ export const CODE_VIEW_LINE_HEIGHT = 20
 /** JetBrains Mono's advance width: 600 of its 1000 units per em, for every
  *  glyph (read from the bundled TTF's hmtx table). */
 const JETBRAINS_MONO_ADVANCE_EM = 0.6
-/** Space between the line numbers and the code. */
-const GUTTER_GAP = 14
+/** Space after the line numbers, before the fold toggles. */
+const NUMBER_GAP = 6
+/** The fold toggles' column (▾/▸), between the numbers and the code: two
+ *  cells and a little, so the glyph sits clear of the code. */
+const FOLD_COLUMN_CELLS = 2
+const FOLD_COLUMN_PAD = 2
 const PADDING_START = 6
 /** Room past the longest line, so its last character is not against the edge. */
 const PADDING_END = 24
@@ -26,7 +30,11 @@ export type CodeViewMetrics = {
   /** One row, in points: the line height at the phone's font scale. */
   rowHeight: number
   gutterDigits: number
-  /** Line numbers plus the gap after them. */
+  /** The line numbers and the gap after them. */
+  numberWidth: number
+  /** The fold toggles' column. */
+  foldWidth: number
+  /** Everything left of the code: numbers and fold toggles. */
   gutterWidth: number
   /** Everything an unwrapped row needs, so no row has to wrap. */
   contentWidth: number
@@ -47,7 +55,9 @@ export function codeViewMetrics({
   const scale = fontScale > 0 ? fontScale : 1
   const cellWidth = CODE_VIEW_FONT_SIZE * JETBRAINS_MONO_ADVANCE_EM * scale
   const gutterDigits = Math.max(2, String(Math.max(lineCount, 1)).length)
-  const gutterWidth = Math.ceil(gutterDigits * cellWidth + GUTTER_GAP)
+  const numberWidth = Math.ceil(gutterDigits * cellWidth + NUMBER_GAP)
+  const foldWidth = Math.ceil(FOLD_COLUMN_CELLS * cellWidth + FOLD_COLUMN_PAD)
+  const gutterWidth = numberWidth + foldWidth
   // A line past the limit is cut and ends in a note; the row is as wide as
   // the longest note the file can need (no more characters are hidden than
   // it has columns), or the count would be cut off with the line.
@@ -61,6 +71,8 @@ export function codeViewMetrics({
     cellWidth,
     rowHeight: CODE_VIEW_LINE_HEIGHT * scale,
     gutterDigits,
+    numberWidth,
+    foldWidth,
     gutterWidth,
     contentWidth: Math.ceil(PADDING_START + gutterWidth + columns * cellWidth + PADDING_END)
   }

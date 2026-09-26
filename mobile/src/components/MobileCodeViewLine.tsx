@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import type { SyntaxPalette } from '../theme/syntax-palette'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'
@@ -15,10 +15,16 @@ export type MobileCodeLineInteraction = {
   onPress?: () => void
 }
 
+/** A line that starts a foldable block: whether it is folded, the toggle's
+ *  spoken name ("Fold lines 12–40"), and what a tap does. */
+export type MobileCodeLineFold = { folded: boolean; label: string; onToggle: () => void }
+
 /**
- * One numbered line of the code viewer: the number in its own column, then
- * the code, with a faint guide at each indent level. The guides come before
- * the text in the tree, so the text paints over them without a z-index.
+ * One numbered line of the code viewer: the number in its own column, the
+ * fold toggle (▾ open, ▸ folded) on a block's first line, then the code,
+ * with a faint guide at each indent level. A folded header ends in a "…"
+ * that unfolds it too. The guides come before the text in the tree, so the
+ * text paints over them without a z-index.
  */
 export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   number,
@@ -34,7 +40,8 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   highlighted = false,
   highlightStyle,
   onLongPress,
-  onPress
+  onPress,
+  fold
 }: MobileCodeLineInteraction & {
   number: number
   segments: MobileSyntaxSegment[]
@@ -48,6 +55,7 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   rowStyle: StyleProp<ViewStyle>
   /** 1 while unwrapped: the row is exactly one line tall. */
   numberOfLines: 1 | undefined
+  fold?: MobileCodeLineFold
 }) {
   return (
     <View style={[styles.row, rowStyle, highlighted && highlightStyle]}>
@@ -59,6 +67,22 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
       >
         {String(number).padStart(gutterDigits, ' ')}
       </Text>
+      {fold ? (
+        <Pressable
+          style={styles.foldToggle}
+          onPress={fold.onToggle}
+          accessibilityRole="button"
+          accessibilityLabel={fold.label}
+          accessibilityState={{ expanded: !fold.folded }}
+          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+        >
+          <Text style={highlighted ? [styles.foldGlyph, styles.foldGlyphSelected] : styles.foldGlyph}>
+            {fold.folded ? '▸' : '▾'}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={styles.foldColumn} />
+      )}
       <View style={styles.code}>
         {Array.from({ length: guides }, (_, level) => (
           <View
@@ -76,6 +100,11 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
           onPress={onPress}
         >
           <MobileSyntaxSegments segments={segments} palette={palette} />
+          {fold?.folded ? (
+            <Text testID="code-fold-marker" style={styles.foldMarker} onPress={fold.onToggle}>
+              {'  …'}
+            </Text>
+          ) : null}
         </Text>
       </View>
     </View>

@@ -3,6 +3,7 @@ import { View } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
 import { previewTruncatedText, REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
+import { useCodeFolding } from '../components/use-code-folding'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
 import { useMobileSyntaxLanguage } from './use-mobile-syntax-language'
@@ -49,10 +50,12 @@ export function MobileSessionFileSource({
   // lines that do not exist: a long-press there opens the bar for the whole
   // file alone, with no range and nothing highlighted.
   const canAsk = onAskAboutLines != null && content.length > 0
+  const folding = useCodeFolding(document)
   const selection = useCodeLineSelection({
     canOpen: canAsk,
     canRange: canAsk && !document.reformatted,
-    resetKey: relativePath
+    resetKey: relativePath,
+    coverRange: folding.coverFolds
   })
   const linesCopy = useCopyToClipboard()
   const { range, clear } = selection
@@ -71,6 +74,7 @@ export function MobileSessionFileSource({
         notice={notice}
         lineProps={selection.lineProps}
         extraData={selection.extraData}
+        folding={folding}
         copyText={content}
         copyLoadedOnly={truncated}
       />

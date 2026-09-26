@@ -52,12 +52,35 @@ export function makeCodeViewStyles(theme: Pick<Theme, 'colors' | 'syntax' | 'fon
     },
     gutter: {
       ...code,
-      width: metrics.gutterWidth,
-      paddingRight: metrics.gutterWidth - metrics.gutterDigits * metrics.cellWidth,
+      width: metrics.numberWidth,
+      paddingRight: metrics.numberWidth - metrics.gutterDigits * metrics.cellWidth,
       textAlign: 'right',
       color: syntax.gutter
     },
     gutterSelected: {
+      color: syntax.gutterActive
+    },
+    foldColumn: {
+      width: metrics.foldWidth,
+      alignSelf: 'stretch'
+    },
+    foldToggle: {
+      width: metrics.foldWidth,
+      alignSelf: 'stretch'
+    },
+    foldGlyph: {
+      ...code,
+      width: metrics.cellWidth * 2,
+      textAlign: 'center',
+      color: syntax.gutter
+    },
+    foldGlyphSelected: {
+      color: syntax.gutterActive
+    },
+    /** "…" after a folded header: the palette's active line-number colour,
+     *  which reads on the code and on a selected line (4.5:1 in both). */
+    foldMarker: {
+      ...code,
       color: syntax.gutterActive
     },
     code: {

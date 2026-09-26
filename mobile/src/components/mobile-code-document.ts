@@ -10,6 +10,7 @@ import {
   indentGuideCounts
 } from './mobile-code-indent'
 import { formatMinifiedJsonForReading } from './mobile-code-json-format'
+import { computeFoldRegions, type CodeFoldRegion } from './mobile-code-folding'
 import { scanBracketDepth, startBracketScan, type BracketScanState } from './mobile-code-bracket-depth'
 import { colorBracketPairs } from './mobile-syntax-brackets'
 import { splitSyntaxIntoLines } from './mobile-syntax-lines'
@@ -63,6 +64,9 @@ export type MobileCodeDocument = {
   /** The widest line in grid columns, tabs expanded. */
   maxColumns: number
   highlight: MobileCodeHighlightMode
+  /** The blocks the reader can fold, by indentation (mobile-code-folding.ts).
+   *  A truncated preview has blocks only within what was loaded. */
+  folds: CodeFoldRegion[]
 }
 
 export function buildMobileCodeDocument(content: string, language: string): MobileCodeDocument {
@@ -75,6 +79,7 @@ export function buildMobileCodeDocument(content: string, language: string): Mobi
   for (const line of lines) {
     maxColumns = Math.max(maxColumns, displayColumns(line, tabWidth))
   }
+  const offSide = OFF_SIDE_LANGUAGES.has(language)
   return {
     lines,
     language,
@@ -82,13 +87,10 @@ export function buildMobileCodeDocument(content: string, language: string): Mobi
     lineBreak: formatted === null && content.includes('\r\n') ? '\r\n' : '\n',
     tabWidth,
     indentStep,
-    guides: indentGuideCounts(lines, {
-      tabWidth,
-      indentStep,
-      offSide: OFF_SIDE_LANGUAGES.has(language)
-    }),
+    guides: indentGuideCounts(lines, { tabWidth, indentStep, offSide }),
     maxColumns,
-    highlight: highlightModeFor(text, language)
+    highlight: highlightModeFor(text, language),
+    folds: computeFoldRegions(lines, { tabWidth, offSide })
   }
 }
 

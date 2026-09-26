@@ -4,6 +4,7 @@ import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
 import { useMobileSyntaxLanguage } from '../session/use-mobile-syntax-language'
 import { previewTruncatedText, REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
+import { useCodeFolding } from '../components/use-code-folding'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
 import {
@@ -37,6 +38,7 @@ export function MobileFilePreviewSourceText({
 }) {
   const language = useMobileSyntaxLanguage(relativePath, content)
   const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
+  const folding = useCodeFolding(document)
   // Pretty-printed JSON's rows are not the file's lines, so a range of them
   // would copy text the file does not hold: no line selection there, as in
   // the file tab. The toolbar still copies the file as written.
@@ -44,7 +46,8 @@ export function MobileFilePreviewSourceText({
   const selection = useCodeLineSelection({
     canOpen: canSelectLines,
     canRange: canSelectLines,
-    resetKey: relativePath
+    resetKey: relativePath,
+    coverRange: folding.coverFolds
   })
   const linesCopy = useCopyToClipboard()
   const { range, clear } = selection
@@ -64,6 +67,7 @@ export function MobileFilePreviewSourceText({
         notice={notice}
         lineProps={selection.lineProps}
         extraData={selection.extraData}
+        folding={folding}
         copyText={content}
         copyLoadedOnly={truncated === true}
       />

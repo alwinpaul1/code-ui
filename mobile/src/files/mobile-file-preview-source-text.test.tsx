@@ -99,7 +99,12 @@ describe('opening a code file from the file explorer', () => {
 
   it('pretty-prints a minified JSON file and says so', () => {
     const r = mount({ relativePath: 'package.json', content: '{"name":"orca","private":true}' })
-    expect(list(r).props.data).toEqual(['{', '  "name": "orca",', '  "private": true', '}'])
+    // The list draws line indices (folded lines are skipped); read the rows.
+    const drawn = (list(r).props.data as unknown[]).map((item, index) => {
+      const line = list(r).props.renderItem({ item, index })
+      return (line.props.segments as { text: string }[]).map((segment) => segment.text).join('')
+    })
+    expect(drawn).toEqual(['{', '  "name": "orca",', '  "private": true', '}'])
     expect(texts(r).some((text) => text.startsWith('Formatted for reading'))).toBe(true)
   })
 

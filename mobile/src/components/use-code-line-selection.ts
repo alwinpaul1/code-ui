@@ -3,7 +3,6 @@ import { useTheme } from '../theme/theme-context'
 import {
   extendFileReaderLineSelection,
   fileReaderLineSelectionRange,
-  isFileReaderLineSelected,
   startFileReaderLineSelection,
   type FileReaderLineRange,
   type FileReaderLineSelection
@@ -32,12 +31,16 @@ export type CodeLineSelection = {
 export function useCodeLineSelection({
   canOpen,
   canRange,
-  resetKey
+  resetKey,
+  coverRange
 }: {
   canOpen: boolean
   canRange: boolean
   /** A new file: a selection made on one must not carry onto the next. */
   resetKey: string
+  /** Grows a range over what it stands for: the hidden lines of a folded
+   *  block whose header it holds (useCodeFolding's `coverFolds`). */
+  coverRange?: (range: FileReaderLineRange) => FileReaderLineRange
 }): CodeLineSelection {
   const { syntax } = useTheme()
   const [selection, setSelection] = useState<FileReaderLineSelection>(null)
@@ -47,10 +50,12 @@ export function useCodeLineSelection({
   // The code palette's own fill: every code colour and the selected line's
   // number read on it at 4.5:1 in both schemes (syntax-palette.ts).
   const highlightStyle = useMemo(() => ({ backgroundColor: syntax.selection }), [syntax.selection])
+  const raw = canRange ? fileReaderLineSelectionRange(selection) : null
+  const range = useMemo(() => (raw && coverRange ? coverRange(raw) : raw), [coverRange, raw?.start, raw?.end])
   const lineProps = useCallback(
     (lineNumber: number): MobileCodeLineInteraction => ({
       selectable: canOpen ? selection === null : undefined,
-      highlighted: canRange && isFileReaderLineSelected(selection, lineNumber),
+      highlighted: range !== null && lineNumber >= range.start && lineNumber <= range.end,
       highlightStyle,
       onLongPress: canOpen ? () => setSelection(startFileReaderLineSelection(lineNumber)) : undefined,
       onPress:
@@ -58,14 +63,14 @@ export function useCodeLineSelection({
           ? () => setSelection(extendFileReaderLineSelection(selection, lineNumber))
           : undefined
     }),
-    [canOpen, canRange, highlightStyle, selection]
+    [canOpen, canRange, highlightStyle, range, selection]
   )
   const clear = useCallback(() => setSelection(null), [])
   return {
-    range: canRange ? fileReaderLineSelectionRange(selection) : null,
+    range,
     open: canOpen && selection !== null,
     clear,
     lineProps,
-    extraData: selection
+    extraData: range ? `${range.start}-${range.end}` : selection ? 'open' : null
   }
 }

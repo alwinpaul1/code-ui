@@ -21,7 +21,9 @@ import {
 } from './mobile-code-view-layout'
 import { makeCodeViewStyles } from './mobile-code-view-styles'
 import { MobileCodeViewLine, type MobileCodeLineInteraction } from './MobileCodeViewLine'
+import { listIndexOfLine } from './mobile-code-folding'
 import { useCodeDocumentHighlight } from './use-code-document-highlight'
+import { useCodeFolding, type CodeFolding } from './use-code-folding'
 import { copyFailedNotice, useCopyToClipboard } from './use-copy-to-clipboard'
 
 export type { MobileCodeLineInteraction } from './MobileCodeViewLine'
@@ -43,7 +45,8 @@ export function MobileCodeView({
   lineProps,
   extraData,
   copyText,
-  copyLoadedOnly = false
+  copyLoadedOnly = false,
+  folding: givenFolding
 }: {
   document: MobileCodeDocument
   accessibilityLabel: string
@@ -62,8 +65,14 @@ export function MobileCodeView({
   /** The host sent only part of the file: the button copies what arrived,
    *  and says so in words ("Copy loaded text"), not only to TalkBack. */
   copyLoadedOnly?: boolean
+  /** The document's folds, when the caller reads them too (a line selection
+   *  over a fold takes in its hidden lines); the view keeps its own if not. */
+  folding?: CodeFolding
 }) {
   const theme = useTheme()
+  const ownFolding = useCodeFolding(document)
+  const folding = givenFolding?.document === document ? givenFolding : ownFolding
+  const { visible } = folding
   const { fontScale } = useWindowDimensions()
   const metrics = useMemo(
     () =>
@@ -85,17 +94,22 @@ export function MobileCodeView({
   const lastIndex = document.lines.length - 1
   // Flipping wrap moves the list in or out of the sideways scroller, which
   // mounts it afresh; the line the reader was on comes along (`topLine`).
-  const requestedIndex =
+  // Lines are the file's (0-based); rows are the list's, which skip folded
+  // lines, so a line is found on its row, or on the header folding it away.
+  const requestedLine =
     wrapChoice?.doc === document
       ? wrapChoice.topLine
       : initialLine !== undefined && !document.reformatted
         ? initialLine - 1
         : undefined
-  const startIndex =
-    requestedIndex === undefined ? undefined : Math.min(Math.max(requestedIndex, 0), lastIndex)
-  const { chunks, segmentsFor, requestLines } = useCodeDocumentHighlight(document, startIndex ?? 0)
-  const listRef = useRef<FlatList<string>>(null)
-  const topLineRef = useRef(startIndex ?? 0)
+  const startLine =
+    requestedLine === undefined ? undefined : Math.min(Math.max(requestedLine, 0), lastIndex)
+  const startIndex = startLine === undefined ? undefined : listIndexOfLine(visible, startLine)
+  const { chunks, segmentsFor, requestLines } = useCodeDocumentHighlight(document, startLine ?? 0)
+  const listRef = useRef<FlatList<number>>(null)
+  const topLineRef = useRef(startLine ?? 0)
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
   const clip = !wrap && document.maxColumns > CODE_VIEW_MAX_NO_WRAP_COLUMNS
   const guideSpacing = document.indentStep * metrics.cellWidth
 
@@ -104,10 +118,28 @@ export function MobileCodeView({
   const requestRef = useRef(requestLines)
   requestRef.current = requestLines
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const indices = viewableItems.flatMap((item) => (item.index == null ? [] : [item.index]))
-    if (indices.length > 0) {
-      topLineRef.current = Math.min(...indices)
-      requestRef.current(topLineRef.current, Math.max(...indices))
+    const rows = viewableItems.flatMap((item) => (item.index == null ? [] : [item.index])).sort((a, b) => a - b)
+    const lines = rows.flatMap((row) => {
+      const line = visibleRef.current[row]
+      return line === undefined ? [] : [line]
+    })
+    if (lines.length === 0) {
+      return
+    }
+    topLineRef.current = lines[0]!
+    // Colour each run of lines on screen, not the folded lines between two
+    // runs: a fold can hide thousands of lines, chunks of them.
+    let runStart = lines[0]!
+    for (let at = 1; at <= lines.length; at += 1) {
+      const line = lines[at]
+      const previous = lines[at - 1]!
+      // A folded header's next row is the line after its block.
+      if (line !== previous + 1) {
+        requestRef.current(runStart, previous)
+        if (line !== undefined) {
+          runStart = line
+        }
+      }
     }
   }).current
 
@@ -131,36 +163,51 @@ export function MobileCodeView({
     []
   )
 
-  const renderItem: ListRenderItem<string> = useCallback(
+  const renderItem: ListRenderItem<number> = useCallback(
     ({ index }) => {
-      const segments = segmentsFor(index)
+      const line = visible[index]
+      if (line === undefined) {
+        return null
+      }
+      const segments = segmentsFor(line)
+      const region = folding.regionAt(line)
+      const folded = region !== undefined && folding.isFolded(line)
       return (
         <MobileCodeViewLine
-          number={index + 1}
+          number={line + 1}
           segments={clip ? clipSegmentsToColumns(segments, CODE_VIEW_MAX_NO_WRAP_COLUMNS) : segments}
-          guides={document.guides[index] ?? 0}
+          guides={document.guides[line] ?? 0}
           guideSpacing={guideSpacing}
           gutterDigits={metrics.gutterDigits}
           styles={styles}
           palette={theme.syntax}
           rowStyle={layout.rowStyle}
           numberOfLines={layout.numberOfLines}
-          {...lineProps?.(index + 1)}
+          fold={
+            region
+              ? {
+                  folded,
+                  label: `${folded ? 'Unfold' : 'Fold'} lines ${region.start + 1}–${region.end + 1}`,
+                  onToggle: () => folding.toggle(line)
+                }
+              : undefined
+          }
+          {...lineProps?.(line + 1)}
         />
       )
     },
-    [clip, document, guideSpacing, layout, lineProps, metrics, segmentsFor, styles, theme.syntax]
+    [clip, document, folding, guideSpacing, layout, lineProps, metrics, segmentsFor, styles, theme.syntax, visible]
   )
   const listExtraData = useMemo(() => ({ chunks, extraData }), [chunks, extraData])
 
   const list = (
     <FlatList
       ref={listRef}
-      data={document.lines}
+      data={visible}
       style={[styles.list, layout.listStyle]}
       contentContainerStyle={styles.listContent}
       accessibilityLabel={accessibilityLabel}
-      keyExtractor={(_line, index) => String(index)}
+      keyExtractor={(line) => String(line)}
       renderItem={renderItem}
       extraData={listExtraData}
       getItemLayout={layout.getItemLayout}
