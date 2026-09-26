@@ -241,4 +241,65 @@ describe('when the chat holds the whole session', () => {
       gateOpen: true
     })
   })
+
+  // Fourth review of the line count (2026-09-26), both passing on c6d8394a:
+  // after a new connection the gate waited for a replay that set it again
+  // only when the host's replay started at the window's oldest row, which the
+  // subscription's own 40-row tail never does once the user has paged up. So
+  // any reconnect shut it for the rest of the visit, with "Load earlier"
+  // gone too.
+  it.each([
+    ['nothing new while away', [] as NativeChatMessage[]],
+    ['one row written while away', [message('away')]]
+  ])('opens the count again after a reconnect of a chat paged to its first row (%s)', async (_case, away) => {
+    const TAIL = Array.from({ length: 40 }, (_unused, index) => message(`tail-${index}`))
+    const OLDER = Array.from({ length: 20 }, (_unused, index) => message(`older-${index}`))
+    const client = {
+      sendRequest: vi.fn(async () => ({ ok: true, result: { messages: OLDER, hasMore: false, beforeOffset: 0 } })),
+      subscribe: vi.fn((_method, _params, onData) => {
+        emit = onData
+        onData({ type: 'snapshot', messages: TAIL, hasMore: true, beforeOffset: 10 })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mount(client)
+    await loadEarlier()
+    expect(countGateOpen(state)).toBe(true)
+    await act(async () => {
+      renderer?.update(createElement(Harness, { client, lastConnectedAt: 2 }))
+    })
+    await act(async () =>
+      emit({ type: 'snapshot', messages: [...TAIL.slice(away.length), ...away], hasMore: true, beforeOffset: 10 + away.length })
+    )
+    expect({ first: state?.messages[0]?.id, rows: state?.messages.length, gateOpen: countGateOpen(state) }).toEqual({
+      first: 'older-0',
+      rows: 60 + away.length,
+      gateOpen: true
+    })
+  })
+
+  // The client can re-attach the subscription, and the host answer with the
+  // replay, before React renders the new connection time: the gate then
+  // waited for a replay that had already come.
+  it('opens the count again when the replay landed before the new connection was rendered', async () => {
+    const ROWS = [message('first'), message('second'), message('third')]
+    const client = {
+      sendRequest: vi.fn(),
+      subscribe: vi.fn((_method, _params, onData) => {
+        emit = onData
+        onData({ type: 'snapshot', messages: ROWS, hasMore: false, beforeOffset: 0 })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mount(client)
+    await act(async () => emit({ type: 'snapshot', messages: [...ROWS, message('away')], hasMore: false, beforeOffset: 0 }))
+    await act(async () => {
+      renderer?.update(createElement(Harness, { client, lastConnectedAt: 2 }))
+    })
+    await act(async () => emit({ type: 'appended', messages: [message('live')] }))
+    expect({ rows: state?.messages.map((entry) => entry.id), gateOpen: countGateOpen(state) }).toEqual({
+      rows: ['first', 'second', 'third', 'away', 'live'],
+      gateOpen: true
+    })
+  })
 })

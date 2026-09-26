@@ -33,6 +33,12 @@ export type WholeSessionTracker = {
 export function createWholeSessionTracker(connectedAt: number | null): WholeSessionTracker {
   let whole = false
   let replayPending = false
+  // What the window was before the new connection, or reached by a page
+  // answered while its replay was pending: the replay merged onto the same
+  // window, untrimmed, leaves it starting where it did (fourth review of the
+  // line count: the subscription's own 40-row tail is what the host replays,
+  // and read as the only way back it shut the gate for the rest of the visit).
+  let wholeBeforeReplay = false
   let connection = connectedAt
   return {
     get whole() {
@@ -40,20 +46,30 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
     },
     subscribed() {
       whole = false
+      replayPending = false
+      wholeBeforeReplay = false
     },
     connected(lastConnectedAt) {
       if (lastConnectedAt !== connection) {
         connection = lastConnectedAt
+        wholeBeforeReplay = whole
         replayPending = true
         whole = false
       }
     },
     frame(type, applied) {
-      if (type === 'snapshot') {
+      // The replay is the new subscription's first frame, and a live row
+      // only follows it; either ends the wait, which may have begun after a
+      // replay that came first.
+      if (replayPending && (type === 'snapshot' || type === 'appended')) {
         replayPending = false
-        if (!applied.windowReplaced && applied.hasMore === false && !applied.cursorInvalidated) {
-          whole = true
+        if (!applied.windowReplaced && !applied.cursorInvalidated) {
+          whole = wholeBeforeReplay
         }
+        wholeBeforeReplay = false
+      }
+      if (type === 'snapshot' && !applied.windowReplaced && applied.hasMore === false && !applied.cursorInvalidated) {
+        whole = true
       }
       if (applied.windowReplaced) {
         whole = applied.hasMore === false && !applied.pending
@@ -66,7 +82,11 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
       whole = false
     },
     page(hasMore) {
-      whole = hasMore === false && !replayPending
+      if (replayPending) {
+        wholeBeforeReplay = hasMore === false
+        return
+      }
+      whole = hasMore === false
     }
   }
 }
