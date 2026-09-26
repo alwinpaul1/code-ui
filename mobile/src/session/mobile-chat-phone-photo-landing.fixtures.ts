@@ -1,9 +1,17 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, vi } from 'vitest'
+import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
+import { mergeImagePreviews } from './use-host-image-previews'
+import { sentPhotosFromScreen } from './mobile-terminal-sent-photos'
+import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
-import type { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
 // The rows, photos and helpers of mobile-chat-phone-photo-landing.test.ts,
 // kept here so the file of cases stays readable.
@@ -131,3 +139,151 @@ export function bubblesIn(props: Record<string, unknown>): Bubble[] {
     }))
 }
 export const words = (text: string) => text.replace(/\s+/g, ' ').trim()
+
+/** The real draft store feeding the real overlay, with every render the
+ *  chat list is handed: register it inside a `describe`, whose tests then
+ *  send, show transcript reads, and read the frames back. `frames` is the
+ *  test file's own hoisted list its MobileNativeChatView mock pushes to. */
+export function landingHarness(frames: Record<string, unknown>[]) {
+  let renderer: ReactTestRenderer | null = null
+  // What the draft store handed the last render, read by the tests.
+  const seen: { drafts: Drafts | null } = { drafts: null }
+  let current: Tick = { messages: before }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(at('07:00:00.000'))
+    frames.length = 0
+  })
+  afterEach(async () => {
+    act(() => renderer?.unmount())
+    renderer = null
+    seen.drafts = null
+    vi.useRealTimers()
+    await clearNativeChatDraftStores()
+  })
+
+  /** The real draft store feeding the real overlay, with the host's previews
+   *  not in yet: only what the phone holds can draw a picture. */
+  function Route({ tick }: { tick: Tick }) {
+    const drafts = useMobileNativeChatDrafts({
+      hostId: 'host',
+      worktreeId: 'worktree',
+      tabId: 'tab',
+      sessionId: SESSION,
+      messages: tick.messages,
+      transcriptLoading: tick.loading ?? false,
+      transcriptSettled: !tick.loading
+    })
+    seen.drafts = drafts
+    const controller = {
+      showNativeChat: true,
+      activeChatEligible: true,
+      viewResolved: true,
+      terminalPeekActive: false,
+      nativeChatSession: {
+        messages: tick.messages,
+        status: tick.loading ? 'loading' : 'ready',
+        transcriptLoading: tick.loading ?? false
+      },
+      nativeChatAgent: tick.agent ?? 'claude',
+      nativeChatStructured: false,
+      nativeChatAgentWorking: tick.working ?? false,
+      nativeChatStreamLive: tick.working ?? false,
+      nativeChatStreamScopeKey: `tab:${SESSION}`,
+      nativeChatSpinner: null,
+      chatPending: drafts.pending,
+      rememberEcho: drafts.rememberEcho,
+      takeOwnSends: drafts.takeSends,
+      nativeChatDesktopPrompts: tick.prompts,
+      nativeChatQueuedMessages: tick.queued ?? [],
+      nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
+      chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),
+      chatComposerText: '',
+      setChatComposerText: vi.fn()
+    } as unknown as MobileNativeChatController
+    return createElement(MobileNativeChatOverlay, {
+      controller,
+      hasTerminalUnderneath: true,
+      hostAllowsRewind: true,
+      images: {} as never,
+      onMicPress: vi.fn(),
+      micActive: false,
+      dictationMode: 'toggle',
+      onMicPressIn: vi.fn(),
+      onMicPressOut: vi.fn(),
+      inputLockReason: null,
+      sendErrorMessage: null,
+      onClearSendError: vi.fn(),
+      sendSurfaceId: 'tab',
+      getSendCompletionGeneration: () => 0,
+      keyboardInset: 0,
+      onOpenFile: vi.fn()
+    })
+  }
+
+  async function show(clock: string, tick: Tick): Promise<void> {
+    const delta = at(clock) - Date.now()
+    if (delta > 0) {
+      await act(async () => {
+        vi.advanceTimersByTime(delta)
+      })
+    }
+    current = tick
+    await act(async () => {
+      if (renderer) {
+        renderer.update(createElement(Route, { tick }))
+      } else {
+        renderer = create(createElement(Route, { tick }))
+      }
+    })
+    for (let turn = 0; turn < 5; turn += 1) {
+      await act(async () => {
+        await Promise.resolve()
+      })
+    }
+  }
+
+  /** Send from the phone: the composer's words and the local previews of the
+   *  photos that rode along. */
+  /** The desktop path the terminal paste typed for each photo, as the app
+   *  records it (use-mobile-native-chat-image-attachments.ts): the fixture's
+   *  own for the session's photos, none where a case does not say. */
+  const PASTED = new Map([
+    ...PHOTOS1.map((photo, index) => [photo, `${TEMP}/${PATHS1[index]}.png`] as const),
+    ...PHOTOS2.map((photo, index) => [photo, `${TEMP}/${PATHS2[index]}.png`] as const),
+    // The photos with no words below, and the Codex one.
+    ['file:///phone/p17.jpg', `${TEMP}/${PATHS1[0]}.png`],
+    ['file:///phone/p16.jpg', `${TEMP}/${PATHS2[0]}.png`],
+    ['file:///phone/e1.jpg', `${TEMP}/orca-paste-1788692837713-14c67aef-b415-4e02-af69-9b7196dbe54e.png`]
+  ])
+  async function send(clock: string, body: string, photos: readonly string[], pasted?: readonly string[]): Promise<void> {
+    vi.setSystemTime(at(clock))
+    const origin = seen.drafts!.captureSendOrigin(body)!
+    const paths = pasted ?? (photos.length > 0 && photos.every((photo) => PASTED.has(photo)) ? photos.map((photo) => PASTED.get(photo)!) : undefined)
+    await act(async () => {
+      seen.drafts!.acceptSend(origin, body, [...photos], paths ? [...paths] : undefined)
+    })
+    await show(clock, current)
+  }
+
+  /** Every render from `from` on, as its user bubbles. */
+  const framesFrom = (from: number): Bubble[][] => frames.slice(from).map(bubblesIn)
+  const lastFrame = (): Bubble[] => bubblesIn(frames.at(-1)!)
+  /** The bubbles in a frame that carry these words. */
+  const drawing = (frame: Bubble[], body: string) => frame.filter((bubble) => bubble.text === words(body))
+
+  return {
+    show,
+    send,
+    framesFrom,
+    lastFrame,
+    drawing,
+    /** The chat torn down, as leaving the project does. */
+    unmount(): void {
+      act(() => renderer?.unmount())
+      renderer = null
+    },
+    drafts: (): Drafts | null => seen.drafts
+  }
+}

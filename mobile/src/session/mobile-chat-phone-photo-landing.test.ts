@@ -1,17 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react-test-renderer'
+import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
-import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
-import { mergeImagePreviews } from './use-host-image-previews'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
-import { sentPhotosFromScreen } from './mobile-terminal-sent-photos'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
-import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
 import {
   hydrateNativeChatImagePreviewCache,
   resetNativeChatImagePreviewCacheForTests
@@ -42,7 +35,6 @@ vi.mock('./MobileNativeChatView', async () => {
 })
 
 import {
-  SESSION,
   at,
   TEXT1,
   TEXT2,
@@ -64,140 +56,13 @@ import {
   C2,
   hookCopy,
   claudeScreen,
-  bubblesIn,
   words,
-  type Tick,
-  type Drafts,
-  type Bubble
+  landingHarness
 } from './mobile-chat-phone-photo-landing.fixtures'
 
 
 describe('a message the phone sent with photos, as its row lands', () => {
-  let renderer: ReactTestRenderer | null = null
-  let drafts: Drafts | null = null
-  let current: Tick = { messages: before }
-
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(at('07:00:00.000'))
-    frames.length = 0
-  })
-  afterEach(async () => {
-    act(() => renderer?.unmount())
-    renderer = null
-    drafts = null
-    vi.useRealTimers()
-    await clearNativeChatDraftStores()
-  })
-
-  /** The real draft store feeding the real overlay, with the host's previews
-   *  not in yet: only what the phone holds can draw a picture. */
-  function Route({ tick }: { tick: Tick }) {
-    drafts = useMobileNativeChatDrafts({
-      hostId: 'host',
-      worktreeId: 'worktree',
-      tabId: 'tab',
-      sessionId: SESSION,
-      messages: tick.messages,
-      transcriptLoading: tick.loading ?? false,
-      transcriptSettled: !tick.loading
-    })
-    const controller = {
-      showNativeChat: true,
-      activeChatEligible: true,
-      viewResolved: true,
-      terminalPeekActive: false,
-      nativeChatSession: {
-        messages: tick.messages,
-        status: tick.loading ? 'loading' : 'ready',
-        transcriptLoading: tick.loading ?? false
-      },
-      nativeChatAgent: tick.agent ?? 'claude',
-      nativeChatStructured: false,
-      nativeChatAgentWorking: tick.working ?? false,
-      nativeChatStreamLive: tick.working ?? false,
-      nativeChatStreamScopeKey: `tab:${SESSION}`,
-      nativeChatSpinner: null,
-      chatPending: drafts.pending,
-      rememberEcho: drafts.rememberEcho,
-      takeOwnSends: drafts.takeSends,
-      nativeChatDesktopPrompts: tick.prompts,
-      nativeChatQueuedMessages: tick.queued ?? [],
-      nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
-      chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),
-      chatComposerText: '',
-      setChatComposerText: vi.fn()
-    } as unknown as MobileNativeChatController
-    return createElement(MobileNativeChatOverlay, {
-      controller,
-      hasTerminalUnderneath: true,
-      hostAllowsRewind: true,
-      images: {} as never,
-      onMicPress: vi.fn(),
-      micActive: false,
-      dictationMode: 'toggle',
-      onMicPressIn: vi.fn(),
-      onMicPressOut: vi.fn(),
-      inputLockReason: null,
-      sendErrorMessage: null,
-      onClearSendError: vi.fn(),
-      sendSurfaceId: 'tab',
-      getSendCompletionGeneration: () => 0,
-      keyboardInset: 0,
-      onOpenFile: vi.fn()
-    })
-  }
-
-  async function show(clock: string, tick: Tick): Promise<void> {
-    const delta = at(clock) - Date.now()
-    if (delta > 0) {
-      await act(async () => {
-        vi.advanceTimersByTime(delta)
-      })
-    }
-    current = tick
-    await act(async () => {
-      if (renderer) {
-        renderer.update(createElement(Route, { tick }))
-      } else {
-        renderer = create(createElement(Route, { tick }))
-      }
-    })
-    for (let turn = 0; turn < 5; turn += 1) {
-      await act(async () => {
-        await Promise.resolve()
-      })
-    }
-  }
-
-  /** Send from the phone: the composer's words and the local previews of the
-   *  photos that rode along. */
-  /** The desktop path the terminal paste typed for each photo, as the app
-   *  records it (use-mobile-native-chat-image-attachments.ts): the fixture's
-   *  own for the session's photos, none where a case does not say. */
-  const PASTED = new Map([
-    ...PHOTOS1.map((photo, index) => [photo, `${TEMP}/${PATHS1[index]}.png`] as const),
-    ...PHOTOS2.map((photo, index) => [photo, `${TEMP}/${PATHS2[index]}.png`] as const),
-    // The photos with no words below, and the Codex one.
-    ['file:///phone/p17.jpg', `${TEMP}/${PATHS1[0]}.png`],
-    ['file:///phone/p16.jpg', `${TEMP}/${PATHS2[0]}.png`],
-    ['file:///phone/e1.jpg', `${TEMP}/orca-paste-1788692837713-14c67aef-b415-4e02-af69-9b7196dbe54e.png`]
-  ])
-  async function send(clock: string, body: string, photos: readonly string[], pasted?: readonly string[]): Promise<void> {
-    vi.setSystemTime(at(clock))
-    const origin = drafts!.captureSendOrigin(body)!
-    const paths = pasted ?? (photos.length > 0 && photos.every((photo) => PASTED.has(photo)) ? photos.map((photo) => PASTED.get(photo)!) : undefined)
-    await act(async () => {
-      drafts!.acceptSend(origin, body, [...photos], paths ? [...paths] : undefined)
-    })
-    await show(clock, current)
-  }
-
-  /** Every render from `from` on, as its user bubbles. */
-  const framesFrom = (from: number): Bubble[][] => frames.slice(from).map(bubblesIn)
-  const lastFrame = (): Bubble[] => bubblesIn(frames.at(-1)!)
-  /** The bubbles in a frame that carry these words. */
-  const drawing = (frame: Bubble[], body: string) => frame.filter((bubble) => bubble.text === words(body))
+  const { show, send, framesFrom, lastFrame, drawing, unmount, drafts } = landingHarness(frames)
 
   describe('sent while Claude was idle (session 967668df, lines 23621 to 23682)', () => {
     it.each([
@@ -316,8 +181,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await send('07:00:18.000', TEXT1, PHOTOS1)
       await show('07:00:20.000', { messages: [...before, P1, C1], working: true })
       await show('07:00:21.000', { messages: [...before, P1, C1, reply1] })
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       if (relaunch) {
         // The run goes on long enough for its writes to land, then ends.
         for (let turn = 0; turn < 3; turn += 1) {
@@ -348,8 +212,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
       await show('07:00:19.000', { messages: before })
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       await act(async () => {
         await Promise.resolve()
       })
@@ -381,8 +244,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await send('07:00:18.000', TEXT1, marked)
       await show('07:00:20.000', { messages: [...before, P1, C1], working: true })
       await show('07:00:21.000', { messages: [...before, P1, C1, reply1] })
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       const back = frames.length
       await show('07:05:00.000', { messages: [...before, P1, C1, reply1] })
       expect(frames.length).toBeGreaterThan(back)
@@ -441,8 +303,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await send('09:29:30.000', '', ['file:///phone/p16.jpg'])
       await show('09:29:32.000', { messages: [...earlier.slice(0, 1), first, firstCompanion] })
       // The chat goes and comes back, and a second photo is sent at once.
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       await show('09:30:00.000', { messages: earlier.slice(0, 1), loading: true })
       await send('09:30:03.500', '', PHOTO)
       await show('09:30:04.000', { messages: [...earlier.slice(0, 1), first, firstCompanion, P17, C17], working: true })
@@ -484,7 +345,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       const second = [promptRow('r2r2r2r2', 19, 1, '', '09:30:04.500'), companionRow('r2c2r2c2', PATHS1.slice(1, 2), '09:30:04.500')]
       await show('09:30:03.000', { messages: [...earlier, ...first], working: true })
       await show('09:30:05.000', { messages: [...earlier, ...first, ...second], working: true })
-      expect(drafts!.pending).toEqual([])
+      expect(drafts()!.pending).toEqual([])
       const drawn = frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>
       expect([drawn['r1r1r1r1'], drawn['r2r2r2r2']]).toEqual([['file:///phone/one.jpg'], ['file:///phone/two.jpg']])
     })
@@ -498,7 +359,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       const gluedCompanion = companionRow('g2g2g2g2', PATHS1.slice(0, 2), '09:30:05.000')
       await show('09:30:06.000', { messages: [...earlier, glued, gluedCompanion], working: true })
       await show('09:30:07.000', { messages: [...earlier, glued, gluedCompanion], working: true })
-      expect(drafts!.pending).toEqual([])
+      expect(drafts()!.pending).toEqual([])
       expect(lastFrame()).toEqual([
         { id: '4665aaaa', images: 'D', text: '' },
         { id: 'g1g1g1g1', images: 'PP', text: 'look at this and this one' }
@@ -676,8 +537,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
       await send('07:00:19.000', TEXT2, PHOTOS2)
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       const back = frames.length
       const P2b = promptRow('e96491cb', 70, 3, TEXT2, '07:00:20.100')
       const C2b = companionRow('394fac0f', PATHS2, '07:00:20.100')
@@ -692,8 +552,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
     it('never hands a photo pasted at the desk the phone’s photos when the window starts at a phone photo’s companion', async () => {
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       const desk = promptRow('deskdesk', 70, 1, 'pasted at the desk', '07:00:20.100')
       const deskCompanion = companionRow('deskcomp', PATHS2.slice(0, 1), '07:00:20.100')
       await show('07:05:00.000', { messages: [C1, desk, deskCompanion, reply2] })
@@ -710,8 +569,7 @@ describe('a message the phone sent with photos, as its row lands', () => {
       vi.setSystemTime(at('09:29:00.000'))
       await show('09:29:00.000', { messages: earlier, loading: true })
       await send('09:30:03.500', body, ['file:///phone/p17.jpg'])
-      act(() => renderer?.unmount())
-      renderer = null
+      unmount()
       await act(async () => {
         await Promise.resolve()
       })
