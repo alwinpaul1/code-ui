@@ -14,6 +14,11 @@ describe('the width of code in the paragraph face', () => {
     expect(width('')).toBe(10)
   })
 
+  it("scales a pill's text by what the phone draws, not its padding and border", () => {
+    const text = codeTextWidth('68a160e5', 14)
+    expect(codePillWidth('68a160e5', { ...FONT, scale: 1.1 })).toBeCloseTo(text * 1.1 + 10, 9)
+  })
+
   it('prices a wide character at a full em, never at nothing', () => {
     expect(codeTextWidth('漢', 14)).toBe(14)
     expect(codeTextWidth('é', 14)).toBeGreaterThan(0)
@@ -59,6 +64,20 @@ describe('a span cut to the line it starts on', () => {
   it('moves a span that fits a line but not the room left down whole, like a word', () => {
     expect(cutCodePills('68a160e5', 30, 330, FONT)).toEqual({ pieces: ['68a160e5'], fresh: true })
     expect(cutCodePills('fix/chat-rows', 60, 330, FONT)).toEqual({ pieces: ['fix/', 'chat-rows'], fresh: false })
+  })
+
+  // Sweep of the phone model, 2026-09-27: a last piece cut to exactly fill
+  // its line, with a full stop after the span, ran past the edge: "`path`."
+  // cannot break before the stop.
+  it('keeps the full stop glued to a last piece on its line', () => {
+    const stop = codeTextWidth('.', 15)
+    const room = width('fix/chat-rows') + 1.5
+    expect(cutCodePills('fix/chat-rows', room, 300, FONT).pieces).toEqual(['fix/chat-rows'])
+    expect(cutCodePills('fix/chat-rows', room, 300, FONT, stop).pieces).toEqual(['fix/', 'chat-rows'])
+    // Only the last piece carries it.
+    const long = cutCodePills('/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows', 200, 330, FONT, stop)
+    expect(width(long.pieces.at(-1)!) + stop).toBeLessThanOrEqual(330 - 1)
+    expect(long.pieces[0]).toBe('/Users/alwinpaul/Desktop/')
   })
 
   it('cuts a command at its spaces', () => {

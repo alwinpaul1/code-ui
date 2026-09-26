@@ -221,7 +221,8 @@ function renderInline(
           : undefined
       if (isInlineCodeChip(code)) {
         // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
-        pills.cut(code).forEach((piece, pieceIndex) => {
+        const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex))
+        pieces.forEach((piece, pieceIndex) => {
           parts.push(
             <MobileMarkdownCodeChip
               // The paragraph's length is in the key on purpose. Android
@@ -234,10 +235,10 @@ function renderInline(
               // `match.index` alone only changes when text before the chip
               // grows; the length changes when text after it does too. A
               // changed key is a remount, and a remounted View is placed from
-              // the current layout. The pill run's version is in it for the
-              // same reason: a span re-cut to its line moves every pill after
-              // it without changing the text.
-              key={`${key}c${pieceIndex}:${text.length}:${pills.version}`}
+              // the current layout. The span's version is in it for the same
+              // reason: a span re-cut to its line moves every pill after it
+              // without changing the text, and bumps only those.
+              key={`${key}c${pieceIndex}:${text.length}:${version}`}
               piece={piece}
               styles={styles}
               chipScale={pills.chipScale}
@@ -305,7 +306,7 @@ function MobileMarkdownInner({
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
-  const pillRuns = useMarkdownCodePillRuns(textScale, documentKey)
+  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -371,13 +372,14 @@ function MobileMarkdownInner({
           ))
           return (
             // `simple` is greedy breaking, as the Claude app lays out: a line
-            // takes all that fits. The default balances lines, which could
-            // break before a pill that fits and re-break the lines above one.
+            // takes all that fits. Android's default balances lines, which
+            // could break before a pill that fits and re-break the lines above
+            // one. Only where there is a pill; plain prose keeps the default.
             <Text
               key={index}
               selectable={selectable}
               style={[styles.paragraph, proseScale]}
-              textBreakStrategy="simple"
+              textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
               onTextLayout={pills.layoutReader()}
             >
               {members}
@@ -409,7 +411,7 @@ function MobileMarkdownInner({
               <Text
                 selectable={selectable}
                 style={[styles.quoteText, proseScale]}
-                textBreakStrategy="simple"
+                textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}
               >
                 {quoted}
@@ -454,7 +456,7 @@ function MobileMarkdownInner({
                 key={cellIndex}
                 selectable={selectable}
                 style={[styles.tableCell, header ? styles.tableHeader : null, { width }]}
-                textBreakStrategy="simple"
+                textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}
               >
                 {children}

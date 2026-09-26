@@ -69,11 +69,15 @@ export type CodePillFont = {
   fontSize: number
   /** Border and padding, both sides together. */
   insets: number
+  /** How much wider than estimated the phone draws a pill's text, learnt
+   *  from its own layout (mobile-markdown-code-pill-fit.ts); 1 until known.
+   *  Padding and border are dp, and not scaled. */
+  scale?: number
 }
 
 /** What one pill takes on the line: its text, its padding and border. */
 export function codePillWidth(text: string, font: CodePillFont): number {
-  return codeTextWidth(text, font.fontSize) + font.insets
+  return codeTextWidth(text, font.fontSize) * (font.scale ?? 1) + font.insets
 }
 
 /** A pill must clear the room by this much: Android rounds an inline view up
@@ -95,13 +99,25 @@ export function cutCodePills(
   code: string,
   firstRoom: number,
   lineRoom: number,
-  font: CodePillFont
+  font: CodePillFont,
+  /** What is glued to the span's end and cannot break from it, as `path` is
+   *  to the full stop in "`path`." A last piece that just fills its line
+   *  with that on it runs past the edge. */
+  glue = 0
 ): CodePillCut {
   const pieces: string[] = []
   let fresh = false
   let line = ''
   let room = firstRoom
-  const fits = (text: string, space: number) => codePillWidth(text.trimEnd(), font) <= space - FIT_SLACK
+  // Everything up to `consumed` is placed; a candidate that reaches the end
+  // of the code carries the glue.
+  let consumed = 0
+  const fits = (text: string, space: number) =>
+    codePillWidth(text.trimEnd(), font) + (consumed + text.length - line.length === code.length ? glue : 0) <=
+    space - FIT_SLACK
+  /** Whether `text` fits a line of its own; asked before the line wraps. */
+  const fitsAlone = (text: string, space: number) =>
+    codePillWidth(text.trimEnd(), font) + (consumed + text.length === code.length ? glue : 0) <= space - FIT_SLACK
   const wrap = () => {
     if (line) {
       pieces.push(line)
@@ -111,25 +127,29 @@ export function cutCodePills(
     line = ''
     room = lineRoom
   }
+  const place = (text: string) => {
+    line += text
+    consumed += text.length
+  }
   for (const unit of splitAfter(code, /[/\s]/)) {
     if (fits(line + unit, room)) {
-      line += unit
+      place(unit)
       continue
     }
-    if (fits(unit, lineRoom)) {
+    if (fitsAlone(unit, lineRoom)) {
       wrap()
-      line = unit
+      place(unit)
       continue
     }
     // Longer than a whole line: break inside it, filling this line first.
     for (const part of splitAfter(unit, /[-_.=:]/)) {
       if (fits(line + part, room)) {
-        line += part
+        place(part)
         continue
       }
-      if (fits(part, lineRoom)) {
+      if (fitsAlone(part, lineRoom)) {
         wrap()
-        line = part
+        place(part)
         continue
       }
       const chars = Array.from(part)
@@ -139,11 +159,11 @@ export function cutCodePills(
       for (const ch of chars) {
         // A lone character wider than the line still has to go somewhere.
         if (!line || fits(line + ch, room)) {
-          line += ch
+          place(ch)
           continue
         }
         wrap()
-        line = ch
+        place(ch)
       }
     }
   }
