@@ -22,10 +22,18 @@ import { useChatRowOnScreen } from './native-chat-row-visibility'
  * breath that faded the icon and the whole label together (2026-09-26).
  *
  * One text, one span per character, each span's colour driven from one shared
- * phase on the UI thread. It is still a single paragraph, so kerning, the
- * one-line cut and TalkBack read it exactly as the plain label, and a row that
- * settles does not shift. A colour-only change keeps the text measure cache
- * warm (React Native compares text layout without colour).
+ * phase on the UI thread. It is still a single paragraph, so the one-line cut
+ * and TalkBack read it as the plain label, and a colour-only change keeps the
+ * text measure cache warm (React Native compares text layout without colour).
+ * It is not drawn identically, though: on Android each span is its own
+ * metric-affecting run, so no kerning pair crosses from one glyph to the next,
+ * and the swept word can sit a pixel or so off the plain one's width.
+ *
+ * Every glyph names the label's own face. The patched Text (patches/
+ * react-native@0.86.3.patch) gives any Text that names none Instrument Sans
+ * Regular, nested spans included, and a span's family beats the paragraph's:
+ * a bare `{ color }` drew "Running agent" in Regular under a Medium label
+ * (code review of c03f5328).
  *
  * The plain label, and no loop at all, when the row has finished, when motion
  * is reduced or not yet known, and when the row is scrolled off screen.
@@ -75,6 +83,7 @@ export function ShimmerText({
   }
   const glyphs = Array.from(text)
   const band = shimmerBandColor(color, colors.bg)
+  const face = namedFace(style)
   return (
     <Text style={[style, { color }]} numberOfLines={numberOfLines} testID={testID}>
       {glyphs.map((glyph, index) => (
@@ -84,6 +93,7 @@ export function ShimmerText({
           index={index}
           count={glyphs.length}
           phase={phase}
+          face={face}
           color={color}
           band={band}
         />
@@ -92,11 +102,35 @@ export function ShimmerText({
   )
 }
 
+/** The face the label's style names, read the way StyleSheet.flatten would
+ *  (a later entry wins), for each glyph to name again. */
+function namedFace(style: StyleProp<TextStyle>): TextStyle {
+  const face: TextStyle = {}
+  const visit = (entry: unknown) => {
+    if (Array.isArray(entry)) {
+      entry.forEach(visit)
+      return
+    }
+    if (entry && typeof entry === 'object') {
+      const { fontFamily, fontWeight } = entry as TextStyle
+      if (fontFamily !== undefined) {
+        face.fontFamily = fontFamily
+      }
+      if (fontWeight !== undefined) {
+        face.fontWeight = fontWeight
+      }
+    }
+  }
+  visit(style)
+  return face
+}
+
 function ShimmerGlyph({
   glyph,
   index,
   count,
   phase,
+  face,
   color,
   band
 }: {
@@ -104,6 +138,7 @@ function ShimmerGlyph({
   index: number
   count: number
   phase: SharedValue<number>
+  face: TextStyle
   color: string
   band: string
 }) {
@@ -114,5 +149,5 @@ function ShimmerGlyph({
     // Named so the mapper has inputs where no Babel closure is written (the web bundle).
     [phase, index, count, color, band]
   )
-  return <Animated.Text style={sweep}>{glyph}</Animated.Text>
+  return <Animated.Text style={[face, sweep]}>{glyph}</Animated.Text>
 }
