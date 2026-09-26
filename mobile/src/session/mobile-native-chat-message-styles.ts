@@ -263,6 +263,13 @@ export function makeChatMessageStyles(theme: Theme) {
     toolMetaFailed: {
       color: colors.danger
     },
+    // A finished run's sentence hugs its words so the "+A −R" pill follows
+    // them, and it is the one that shrinks and ellipsizes on a narrow row,
+    // never the pill or the chevron (2026-09-26 screenshot).
+    toolRunSentence: {
+      flex: 0,
+      flexShrink: 1
+    },
     toolSearchResults: {
       gap: 2
     },

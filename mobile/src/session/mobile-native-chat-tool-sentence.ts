@@ -180,7 +180,7 @@ type Group = {
   soleResult: NativeChatToolResultBlock | null
 }
 
-export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
+function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const groups: Group[] = []
   const indexByKind = new Map<Kind, number>()
   const pending: number[] = []
@@ -219,6 +219,22 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
       }
     }
   }
+  return groups
+}
+
+/** How many failed calls `toolRunSentence` states, its "(N failed)" summed
+ *  over every group. A run header uses it to leave out a second "N failed"
+ *  label when the sentence already says it (2026-09-26 screenshot). */
+export function toolRunSentenceFailures(blocks: readonly NativeChatBlock[]): number {
+  let failed = 0
+  for (const entry of runGroups(blocks)) {
+    failed += entry.failed
+  }
+  return failed
+}
+
+export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
+  const groups = runGroups(blocks)
   const parts: string[] = []
   for (const entry of groups) {
     const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''

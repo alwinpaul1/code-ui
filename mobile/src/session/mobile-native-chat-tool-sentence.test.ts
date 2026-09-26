@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { SEND_MESSAGE_PREVIEW_MAX, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
+import {
+  SEND_MESSAGE_PREVIEW_MAX,
+  toolCallKind,
+  toolRunSentence,
+  toolRunSentenceFailures
+} from './mobile-native-chat-tool-sentence'
 import { CREATED_A_FILE_RUN, EDITED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
 import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 
@@ -259,5 +264,29 @@ describe('toolRunSentence', () => {
     expect(toolRunSentence([call('Bash'), result(), call('Bash'), result(), write, created])).toBe(
       'Ran 2 commands, created a file'
     )
+  })
+})
+
+// The run header drops its separate "N failed" label only when the sentence
+// already says it (2026-09-26), so this must count exactly what the sentence
+// states: its "(N failed)" over every group, and nothing it does not draw.
+describe('toolRunSentenceFailures', () => {
+  it('sums the "(N failed)" of every group the sentence draws', () => {
+    const blocks = [call('Bash'), result(true), call('Bash'), result(), call('Read'), result(true)]
+    expect(toolRunSentence(blocks)).toBe('Ran 2 commands (1 failed), read a file (1 failed)')
+    expect(toolRunSentenceFailures(blocks)).toBe(2)
+  })
+
+  it('counts nothing for a clean run, an empty run, or an error result with no call', () => {
+    expect(toolRunSentenceFailures([call('Bash'), result()])).toBe(0)
+    expect(toolRunSentenceFailures([])).toBe(0)
+    expect(toolRunSentence([result(true)])).toBe('')
+    expect(toolRunSentenceFailures([result(true)])).toBe(0)
+  })
+
+  it("counts nothing for a call whose failure is only its own `failed` state", () => {
+    const failedState: NativeChatBlock = { ...call('shell'), state: 'failed' } as NativeChatBlock
+    expect(toolRunSentence([failedState])).toBe('Ran a command')
+    expect(toolRunSentenceFailures([failedState])).toBe(0)
   })
 })

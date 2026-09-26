@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
@@ -90,18 +90,21 @@ function Harness({
   blocks,
   activeTurnIsWorking,
   defaultExpanded = false,
-  expandChildren
+  expandChildren,
+  focusView
 }: {
   blocks: NativeChatBlock[]
   activeTurnIsWorking?: boolean
   defaultExpanded?: boolean
   expandChildren?: boolean
+  focusView?: boolean
 }): React.JSX.Element {
   const styles = useChatMessageStyles()
   return createElement(ToolRun, {
     blocks,
     defaultExpanded,
     expandChildren,
+    focusView,
     activeCall:
       activeTurnIsWorking === undefined
         ? null
@@ -183,11 +186,12 @@ describe('a batch of tool calls in one run header', () => {
   })
 
   // Orca #21151. A run whose call failed used to read exactly like a clean one
-  // once collapsed; the failure was only findable by expanding it. The header
-  // now says `N failed`, counted over every call, in the muted type of
-  // whichever theme is on — text only, since a tool error is routine work.
+  // once collapsed; the failure was only findable by expanding it. The
+  // sentence says "(N failed)" itself, the way the Claude app's row does, and
+  // a second right-aligned "N failed" said it twice and cut the sentence
+  // (2026-09-26 screenshot). Counted over every call.
   it.each(['light', 'dark'] as const)(
-    'says how many calls failed in a collapsed run, in %s',
+    'says how many calls failed once, in the sentence, in %s',
     (scheme) => {
       const mixed: NativeChatBlock[] = [
         { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' },
@@ -198,12 +202,9 @@ describe('a batch of tool calls in one run header', () => {
         { type: 'tool-result', output: 'ok' }
       ]
       const { texts } = render(mixed, scheme)
-      expect(texts).toContain('2 failed')
-      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
-      expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 2')
-      expect(flattenColor(mark.props.style)).toBe(
-        (scheme === 'dark' ? darkColors : lightColors).textMuted
-      )
+      expect(texts).toContain('Ran 2 commands (2 failed), read a.ts')
+      expect(texts).not.toContain('2 failed')
+      expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
     }
   )
 
@@ -212,8 +213,49 @@ describe('a batch of tool calls in one run header', () => {
       { type: 'tool-call', name: 'Bash', input: { command: 'a' } },
       { type: 'tool-result', output: 'exit 1', isError: true }
     ]
-    expect(render(legacy).texts).toContain('1 failed')
+    const { texts } = render(legacy)
+    expect(texts).toContain('Ran a command (1 failed)')
+    expect(texts).not.toContain('1 failed')
   })
+
+  // The label stays where nothing else on the row says a call failed: focus
+  // view's bare count, and a failure known only from the call's own `failed`
+  // state, which the sentence (counting error results) does not state.
+  it.each(['light', 'dark'] as const)(
+    'keeps the muted "N failed" label where the row states the failure nowhere else, in %s',
+    (scheme) => {
+      const palette = scheme === 'dark' ? darkColors : lightColors
+      const failing: NativeChatBlock[] = [
+        { type: 'tool-call', name: 'Bash', input: { command: 'a' } },
+        { type: 'tool-result', output: 'exit 1', isError: true },
+        { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } },
+        { type: 'tool-result', output: 'ok' }
+      ]
+      act(() => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(Harness, { blocks: failing, focusView: true })
+          )
+        )
+      })
+      const focus = readTree(renderer!).texts
+      expect(focus).toContain('2 tool calls')
+      expect(focus).toContain('1 failed')
+      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 1')
+      expect(flattenColor(mark.props.style)).toBe(palette.textMuted)
+      act(() => renderer!.unmount())
+
+      const stateOnly: NativeChatBlock[] = [
+        { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' }
+      ]
+      const { texts } = render(stateOnly, scheme)
+      expect(texts).toContain('Ran a command')
+      expect(texts).toContain('1 failed')
+    }
+  )
 
   it('says nothing about failures on a clean run', () => {
     expect(render(LONG_RUN).texts.some((text) => text.endsWith(' failed'))).toBe(false)
@@ -251,6 +293,169 @@ describe('a batch of tool calls in one run header', () => {
     const { texts } = render(LONG_RUN)
     expect(texts.some((text) => text.startsWith('+') || text.startsWith('−'))).toBe(false)
     expect(renderer!.root.findAllByProps({ testID: 'tool-run-diff-added' })).toHaveLength(0)
+  })
+})
+
+// The Claude app's row, 2026-09-26 screenshot: "Ran 2 commands (1 failed),
+// created a file [+15 −0] ›". The sentence whole, then a pill (green "+15" on
+// a green tint joined to red "−0" on a red tint, rounded as one), then the
+// chevron. Code UI cut the sentence to "Ran 2 commands (1 failed), …" behind a
+// second "1 failed" and plain green/red text pinned to the right edge.
+const FIFTEEN_LINES = Array.from({ length: 15 }, (_, i) => `line ${i + 1}`).join('\n') + '\n'
+const RAN_2_COMMANDS_1_FAILED_CREATED_FILE: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Bash', input: { command: 'a' } },
+  { type: 'tool-result', output: '' },
+  { type: 'tool-call', name: 'Bash', input: { command: 'b' } },
+  { type: 'tool-result', output: 'exit 1', isError: true },
+  { type: 'tool-call', name: 'Write', input: { file_path: '/repo/NEW.md', content: FIFTEEN_LINES } },
+  { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
+]
+const COMMAND_FAILED_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Bash', input: { command: 'false' } },
+  { type: 'tool-result', output: 'exit 1', isError: true }
+]
+const LONG_NAME = `${'a-very-long-generated-module-name-'.repeat(4)}index.ts`
+const LONG_SENTENCE_RUN: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Read', input: { file_path: `/repo/src/${LONG_NAME}` } },
+  { type: 'tool-result', output: 'ok' },
+  ...RAN_2_COMMANDS_1_FAILED_CREATED_FILE
+]
+const EMPTY_FILE_CREATED: NativeChatBlock[] = [
+  { type: 'tool-call', name: 'Write', input: { file_path: '/repo/EMPTY.md', content: '' } },
+  { type: 'tool-result', output: 'File created successfully at: /repo/EMPTY.md' }
+]
+
+describe('a finished run row as the Claude app draws it: sentence, pill, chevron', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function render(blocks: NativeChatBlock[], scheme: 'light' | 'dark'): ReactTestRenderer {
+    act(() => {
+      renderer = create(
+        createElement(ThemeProvider, { initialPreference: scheme }, createElement(Harness, { blocks }))
+      )
+    })
+    return renderer!
+  }
+
+  function flat(style: unknown): Record<string, unknown> {
+    const entries = (Array.isArray(style) ? style.flat(Infinity) : [style]) as unknown[]
+    return Object.assign({}, ...entries.filter((entry) => entry && typeof entry === 'object'))
+  }
+
+  // What the header draws, left to right: the toggle's host children, with
+  // any composite (the chip component) resolved to the views it renders.
+  function hostChildren(node: ReactTestInstance): ReactTestInstance[] {
+    const out: ReactTestInstance[] = []
+    for (const child of node.children) {
+      if (typeof child === 'string') {
+        continue
+      }
+      if (typeof child.type === 'string') {
+        out.push(child)
+      } else {
+        out.push(...hostChildren(child))
+      }
+    }
+    return out
+  }
+
+  function headerOrder(tree: ReactTestRenderer): string[] {
+    const header = tree.root.findByProps({ testID: 'tool-run-header' })
+    const host = header.findByType('Pressable' as never)
+    return hostChildren(host).map(
+      (child) => (child.props.testID as string | undefined) ?? String(child.type)
+    )
+  }
+
+  function expectPill(
+    tree: ReactTestRenderer,
+    scheme: 'light' | 'dark',
+    added: string,
+    removed: string
+  ): void {
+    const palette = scheme === 'dark' ? darkColors : lightColors
+    const sentence = flat(tree.root.findByProps({ testID: 'tool-run-sentence' }).props.style)
+    const pill = tree.root.findAll(
+      (node) => node.props?.testID === 'tool-run-diff-chip' && typeof node.type === 'string'
+    )[0]!
+    const pillStyle = flat(pill.props.style)
+    expect(pillStyle.flexDirection).toBe('row')
+    expect(pillStyle.overflow).toBe('hidden')
+    expect(pillStyle.borderRadius).toBeGreaterThan(0)
+    expect(pillStyle.flexShrink ?? 0).toBe(0)
+    const segments = pill.findAllByType('Text' as never)
+    expect(segments.map((segment) => segment.props.children)).toEqual([added, removed])
+    const [plus, minus] = segments.map((segment) => flat(segment.props.style))
+    expect(plus!.color).toBe(palette.diffAddText)
+    expect(plus!.backgroundColor).toBe(palette.diffAddBg)
+    expect(minus!.color).toBe(palette.diffDelText)
+    expect(minus!.backgroundColor).toBe(palette.diffDelBg)
+    for (const segment of [plus!, minus!]) {
+      // The row's own size, and tight like the inline code pills.
+      expect(segment.fontSize).toBe(sentence.fontSize)
+      expect(segment.paddingHorizontal).toBeLessThanOrEqual(5)
+      expect(segment.paddingVertical ?? 0).toBeLessThanOrEqual(1)
+      expect(segment.margin ?? segment.marginHorizontal ?? 0).toBe(0)
+    }
+  }
+
+  it.each(['light', 'dark'] as const)(
+    'draws "Ran 2 commands (1 failed), created a file [+15 −0] ›" whole, in %s',
+    (scheme) => {
+      const tree = render(RAN_2_COMMANDS_1_FAILED_CREATED_FILE, scheme)
+      expect(tree.root.findByProps({ testID: 'tool-run-sentence' }).props.children).toBe(
+        'Ran 2 commands (1 failed), created a file'
+      )
+      expect(tree.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
+      expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
+      expectPill(tree, scheme, '+15', '−0')
+    }
+  )
+
+  it.each(['light', 'dark'] as const)('draws the pill on a run with no failures, in %s', (scheme) => {
+    const tree = render(RAN_2_COMMANDS_CREATED_FILE, scheme)
+    expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
+    expectPill(tree, scheme, '+2', '−0')
+  })
+
+  it.each(['light', 'dark'] as const)(
+    'draws a failure with no chip as the sentence and the chevron alone, in %s',
+    (scheme) => {
+      const tree = render(COMMAND_FAILED_RUN, scheme)
+      expect(tree.root.findByProps({ testID: 'tool-run-sentence' }).props.children).toBe(
+        'Ran a command (1 failed)'
+      )
+      expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'ChevronRight'])
+    }
+  )
+
+  it.each(['light', 'dark'] as const)(
+    'lets a very long sentence ellipsize while the pill and chevron stay, in %s',
+    (scheme) => {
+      const tree = render(LONG_SENTENCE_RUN, scheme)
+      const sentence = tree.root.findByProps({ testID: 'tool-run-sentence' })
+      expect(String(sentence.props.children)).toContain(LONG_NAME)
+      expect(sentence.props.numberOfLines).toBe(1)
+      const style = flat(sentence.props.style)
+      // Shrinks to fit, never grows: a growing sentence pins the pill to the
+      // row's far edge instead of right after the words.
+      expect(style.flexShrink).toBe(1)
+      expect(style.flex ?? 0).toBe(0)
+      expect(style.flexGrow ?? 0).toBe(0)
+      expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
+      expectPill(tree, scheme, '+15', '−0')
+    }
+  )
+
+  it.each(['light', 'dark'] as const)('draws "+0 −0" as a whole pill, in %s', (scheme) => {
+    const tree = render(EMPTY_FILE_CREATED, scheme)
+    expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
+    expectPill(tree, scheme, '+0', '−0')
   })
 })
 

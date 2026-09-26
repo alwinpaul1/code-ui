@@ -23,7 +23,7 @@ import {
   ToolRowName,
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
-import { toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { toolRunSentence, toolRunSentenceFailures } from './mobile-native-chat-tool-sentence'
 import {
   editFilesForToolCall,
   toolRunDiffStat,
@@ -331,11 +331,12 @@ export function ToolRun({
   }
   callCount ||= pairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
-  // A collapsed run that contained failures says so (Orca #21151): a quiet
-  // `N failed` in the header's muted type, counted over every call, not the
-  // latest. Text only — a tool error is routine work, so no danger tint. This
-  // fork's header never drew a completion mark, so there was no false one to
-  // withhold; the count is the half of the fix the phone can show.
+  // A collapsed run that contained failures says so (Orca #21151), counted
+  // over every call, not the latest: in the sentence's "(N failed)", or a
+  // quiet `N failed` in the header's muted type where the sentence cannot say
+  // it (below). Text only — a tool error is routine work, so no danger tint.
+  // This fork's header never drew a completion mark, so there was no false
+  // one to withhold; the count is the half of the fix the phone can show.
   const { failedCallCount } = nativeChatToolRunOutcome(blocks, {
     activeTurnIsWorking: activeCall !== null
   })
@@ -402,6 +403,13 @@ export function ToolRun({
       </View>
     )
   }
+  const sentence = focusView ? '' : toolRunSentence(blocks)
+  // The sentence says "(N failed)" itself, as the Claude app's row does; a
+  // second "N failed" beside it said it twice and cut the sentence
+  // (2026-09-26). The label stays where nothing else on the row says it:
+  // focus view's bare count, an empty sentence, or a failure known only from
+  // a call's `failed` state, which the sentence does not count.
+  const sentenceStatesFailures = sentence !== '' && toolRunSentenceFailures(blocks) > 0
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -419,15 +427,19 @@ export function ToolRun({
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
         >
-          <Text style={styles.toolRunLabel} numberOfLines={1} testID="tool-run-sentence">
-            {focusView ? countLabel : toolRunSentence(blocks) || countLabel}
+          <Text
+            style={[styles.toolRunLabel, styles.toolRunSentence]}
+            numberOfLines={1}
+            testID="tool-run-sentence"
+          >
+            {sentence || countLabel}
           </Text>
           {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>
           ) : null}
-          {failedCallCount > 0 ? (
+          {failedCallCount > 0 && !sentenceStatesFailures ? (
             <Text
               testID="tool-run-failed-count"
               accessibilityLabel={`Failed tool calls: ${failedCallCount}`}
