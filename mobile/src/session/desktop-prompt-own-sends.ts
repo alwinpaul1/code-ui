@@ -186,7 +186,13 @@ export function pairPendingWithHookPrompts(
     // A witness is its own prompt's, by id, even when its text has no key: a
     // desk photo of no words is its markers alone, which no key names, and it
     // drew twice, as the witness and as its prompt (seventh review, 2026-09-26).
-    const itsPrompt = prompts.findIndex((prompt, index) => !taken.has(index) && deskEchoId(prompt.nonce) === item.id)
+    // Its text too: a status nonce is `status:<session>:<state start>:0` at
+    // every first sight in one working run, so a later first sight reuses the
+    // id for another prompt (eighth review: the photo's witness took the desk's
+    // later text, and the photo vanished).
+    const itsPrompt = prompts.findIndex(
+      (prompt, index) => !taken.has(index) && deskEchoId(prompt.nonce) === item.id && prompt.text === item.text
+    )
     const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, () => true)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
