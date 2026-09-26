@@ -156,8 +156,9 @@ Nothing here is built.
   `diff`, `status`, `log` or `show`, or the file itself run by its path or
   by `bash`, `sh`, `zsh`, `python`, `python3` or `node`, with no redirect but
   `2>&1` or `/dev/null`, no backticks or brackets, no `--output`, and no
-  `NAME=value` setting in front (`BASH_ENV` loads code first, and a quoted
-  space in one can hide the verb). The verb, every word of a `less` or a
+  `NAME=value` setting in front (`BASH_ENV` loads code first, a quoted
+  space in one can hide the verb, and in review one whose value ended in
+  the file's path read as the file run by its path). The verb, every word of a `less` or a
   `git`, and the file an interpreter runs must also read as written: a quote
   inside a word, an escape, a `$`, a glob or a brace list refuses there,
   since `less \-O` and `git diff '--output'=` still write, and a quoted `~`

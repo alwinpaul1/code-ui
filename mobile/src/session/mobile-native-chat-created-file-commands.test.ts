@@ -156,26 +156,55 @@ describe('a create followed by a command that names it', () => {
     expect(ranAfter(command)).toBe(true)
   })
 
+  function ranAfterCreateFromHome(command: string, path = FROM_HOME): boolean | undefined {
+    const write: NativeChatToolCallBlock = {
+      ...WRITE,
+      input: { ...(WRITE.input as object), file_path: path }
+    }
+    const result: NativeChatToolResultBlock = {
+      type: 'tool-result',
+      output: `File created successfully at: ${path}`
+    }
+    const run = message('assistant', [{ type: 'tool-call', name: 'Bash', input: { command } }])
+    const create = [message('assistant', [write]), message('user', [result])]
+    return cutCreateStandings([...create, run]).get(cutCreateOf(write, result)!.key)?.touched
+  }
+
   // A create spelled from ~ names no home, so a path under any folder that
   // ends in its own is read as it, and a variable can name any folder.
   it.each([
     ['runs a script of its name under a folder a variable names', 'bash $DIR/'],
     ['is a script of its name under a folder a variable names', '$DIR/']
   ])('draws no count for a create spelled from ~ when the next command %s', (_, lead) => {
-    const write: NativeChatToolCallBlock = {
-      ...WRITE,
-      input: { ...(WRITE.input as object), file_path: FROM_HOME }
-    }
-    const result: NativeChatToolResultBlock = {
-      type: 'tool-result',
-      output: `File created successfully at: ${FROM_HOME}`
-    }
-    const run = message('assistant', [
-      { type: 'tool-call', name: 'Bash', input: { command: `${lead}${FROM_HOME.slice(2)}` } }
-    ])
-    const create = [message('assistant', [write]), message('user', [result])]
-    const standing = cutCreateStandings([...create, run]).get(cutCreateOf(write, result)!.key)
-    expect(standing?.touched).toBe(true)
+    expect(ranAfterCreateFromHome(`${lead}${FROM_HOME.slice(2)}`)).toBe(true)
+  })
+
+  // Review of 5b257b16: a setting whose value ends in the file's path read as
+  // the file run by its path, and every word after it went unread.
+  it.each([
+    ['hands its path to another script in a setting', `QUEUE=${FROM_HOME} node trim.js`],
+    ['hands its path to python in a setting', `QUEUE=${FROM_HOME} python3 fix.py`],
+    ['edits it behind a setting that names it', `F=${FROM_HOME} sed -i '$d' ${FROM_HOME}`],
+    ['hands its relative path to another script in a setting', `QUEUE=./${RELATIVE} node trim.js`]
+  ])('draws no count for a create spelled from ~ when the next command %s', (_, command) => {
+    expect(ranAfterCreateFromHome(command)).toBe(true)
+  })
+
+  it('draws no count for a short create spelled from ~ when the next command hands its relative path to another script in a setting', () => {
+    expect(ranAfterCreateFromHome('QUEUE=./jobs/queue.sh node trim.js', '~/jobs/queue.sh')).toBe(
+      true
+    )
+  })
+
+  it.each([
+    ['hands its path to another script in a setting', `QUEUE=${PATH} node trim.js`],
+    [
+      'hands its path, climbing out of a folder, to another script in a setting',
+      `QUEUE=x/../${RELATIVE} node trim.js`
+    ],
+    ['hands its relative path to another script in a setting', `QUEUE=./${RELATIVE} node trim.js`]
+  ])('draws no count for a create when the next command %s', (_, command) => {
+    expect(ranAfter(command)).toBe(true)
   })
 
   it('draws no count for a PowerShell echo whose bracketed argument removes it', () => {

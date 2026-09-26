@@ -20,7 +20,9 @@
 //   by its path;
 // - no `NAME=value` setting, which can load code before the verb runs
 //   (`BASH_ENV`, `NODE_OPTIONS`, `LD_PRELOAD`) or hide the verb behind a
-//   quoted or escaped space (`X=a\ cat rm f` runs `rm`).
+//   quoted or escaped space (`X=a\ cat rm f` runs `rm`), and whose value can
+//   end in the file's path (review of 5b257b16: `Q=~/jobs/queue.sh node
+//   trim.js` read as the file run by its path, before the check was made).
 //
 // Anything else still voids the count: `tee`, `sed`, `perl`, `mv`, `cp`, `rm`
 // and `git commit` are no such verb, so an in-place flag never reaches one
@@ -50,6 +52,8 @@ const QUOTED = /^(["'])(.*)\1$/
 /** What the shell may turn a word into something else with: a quote or an
  *  escape left in it, an expansion, a glob, or a brace list. */
 const REWRITTEN = /["'\\$*?[\]{}]/
+/** A `NAME=value` setting in the verb's place. */
+const SETTING = /^[A-Za-z_][A-Za-z0-9_]*=/
 
 /** Verbs that write no file, whatever they are given. `less` is read
  *  apart, since two of its options write one. */
@@ -99,7 +103,7 @@ function partLeavesFileAlone(part: string, isTheFile: (word: string) => boolean)
   if (verb === undefined) {
     return true
   }
-  if (!readsAsWritten(verb)) {
+  if (!readsAsWritten(verb) || SETTING.test(verb)) {
     return false
   }
   if (verb === 'less') {
