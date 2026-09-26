@@ -4,6 +4,7 @@ import { Keyboard } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { radius, space } from '../theme/tokens'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
+import { peekImagePreview, resetImagePreviewForTests } from './image-preview-store'
 
 const getNoComposerEditGeneration = () => 0
 
@@ -312,9 +313,12 @@ describe('MobileNativeChatComposer', () => {
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
-  // 2026-09-13: only the chip still uploading holds the send; the picker
-  // being open (isAttaching) no longer locks the whole box.
-  it('disables send while an attachment is still uploading, not while merely attaching', async () => {
+  // 2026-09-13: the picker being open (isAttaching) does not lock the box.
+  // 2026-09-26: nor does a chip still uploading. The send waits for it and
+  // takes it along (use-mobile-native-chat-send-chips.ts); greying Send for
+  // a first upload only, while markup's re-upload greyed nothing, is how a
+  // marked-up screenshot went out without its marks.
+  it('keeps Send live beside a photo still uploading, and while merely attaching', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     await render(onSend, vi.fn(), true)
     expect(sendButton().props).toMatchObject({ disabled: false })
@@ -323,7 +327,7 @@ describe('MobileNativeChatComposer', () => {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
-          value: ' hello ',
+          value: '',
           onChangeText: vi.fn(),
           onSend,
           sendSurfaceId: 'tab-a',
@@ -333,9 +337,46 @@ describe('MobileNativeChatComposer', () => {
         })
       )
     })
-    expect(sendButton().props).toMatchObject({ disabled: true })
+    expect(sendButton().props).toMatchObject({ disabled: false })
     await act(async () => sendButton().props.onPress())
-    expect(onSend).not.toHaveBeenCalled()
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('')
+  })
+
+  // A pencil reached while the send waits or writes would mark up a photo
+  // the send has already taken as it was.
+  it('offers no markup while a send is in flight, and offers it again after', async () => {
+    let finish: (accepted: boolean) => void = () => {}
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)))
+    const onEditAttachment = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: 'look',
+          onChangeText: vi.fn(),
+          onSend,
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: () => 0,
+          attachments: [{ id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }],
+          onEditAttachment
+        })
+      )
+    })
+    const photo = () =>
+      renderer!.root.find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Preview image')
+    try {
+      await act(async () => {
+        void sendButton().props.onPress()
+      })
+      act(() => photo().props.onPress())
+      expect(peekImagePreview()?.uri).toBe('file:///a.jpg')
+      expect(peekImagePreview()?.onEdit).toBeUndefined()
+
+      await act(async () => finish(false))
+      act(() => photo().props.onPress())
+      expect(peekImagePreview()?.onEdit).toEqual(expect.any(Function))
+    } finally {
+      resetImagePreviewForTests()
+    }
   })
 
   it('keeps the text input editable while the send is locked', async () => {

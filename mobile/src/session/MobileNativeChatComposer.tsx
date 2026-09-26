@@ -207,14 +207,15 @@ export function MobileNativeChatComposer({
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
   // along even when the user sends no accompanying text.
-  // A chip still uploading holds the send, but nothing else in the box
-  // waits on it: the text stays editable and the + keeps working.
-  const uploading = attachments.some((attachment) => attachment.uploading)
+  // A chip still uploading does not grey Send: the tap waits for it and sends
+  // it with the text (use-mobile-native-chat-send-chips.ts), and `sending`
+  // greys Send meanwhile. Until 2026-09-26 only a first upload greyed it,
+  // markup's re-upload never marked its chip, and a send tapped just after
+  // Done pasted the photo without its marks.
   const canSend =
     (trimmed.length > 0 || attachments.length > 0) &&
     !disabled &&
     !sending &&
-    !uploading &&
     !sessionOptionDispatching
 
   const { trigger, suggestions, popoverMaxHeight, onPopoverLayout } = useComposerSuggestions({
@@ -326,10 +327,12 @@ export function MobileNativeChatComposer({
           }}
           testID="native-chat-composer"
         >
+          {/* No markup while a send is out: marks made after it has written
+              the photo would never reach the desktop. */}
           <MobileNativeChatAttachmentChips
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
-            onEditAttachment={onEditAttachment}
+            onEditAttachment={sending ? undefined : onEditAttachment}
           />
           {/* While the `/` or `@` menu is up the draft folds to its last two
               lines, so a long prompt leaves the menu its rows, as the Claude

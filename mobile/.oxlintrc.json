@@ -490,7 +490,15 @@
             // mobile-native-chat-send-readiness.ts; this file gains the gate's
             // hook call and a separate refusal for a tab with no terminal,
             // which the old "(disconnected)" line had covered wrongly.
-            "max": 327,
+            // 2026-09-26: +3 for a send tapped beside a chip still uploading,
+            // which now waits for it instead of leaving it for the next send.
+            // The wait, its refusals and the join of a second tap live in
+            // use-mobile-native-chat-send-chips.ts; this file gains that
+            // hook's call and import, hands it the rest of the send to run
+            // once the chips have settled, and threads markup's re-uploading
+            // mark to its hook (two of the three are those calls wrapped to
+            // the formatter's 100 columns).
+            "max": 330,
             "skipBlankLines": true,
             "skipComments": true
           }

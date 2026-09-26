@@ -20,12 +20,18 @@ export function sendResult(accepted: boolean): RpcSuccess {
   return { id: 'send', ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
 }
 
+/** Answers a request by its method, for a case where the order of requests is what it tests. */
+export type RespondByMethod = (
+  method: string,
+  params: Record<string, unknown>
+) => RpcResponse | Promise<RpcResponse>
+
 // A connected client: a send reads the live state before it writes
 // (mobile-native-chat-send-readiness.ts), so the double carries it too.
-export function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): Pick<
-  RpcClient,
-  'sendRequest' | 'getState' | 'notifyForeground'
-> & {
+// Answers from the queue in turn, or by method when handed a function.
+export function makeClient(
+  responses: (RpcResponse | Promise<RpcResponse>)[] | RespondByMethod
+): Pick<RpcClient, 'sendRequest' | 'getState' | 'notifyForeground'> & {
   calls: { method: string; params: Record<string, unknown> }[]
 } {
   const calls: { method: string; params: Record<string, unknown> }[] = []
@@ -35,6 +41,9 @@ export function makeClient(responses: (RpcResponse | Promise<RpcResponse>)[]): P
     notifyForeground: vi.fn(),
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params: params as Record<string, unknown> })
+      if (typeof responses === 'function') {
+        return responses(method, params as Record<string, unknown>)
+      }
       const response = responses.shift()
       if (!response) {
         throw new Error(`unexpected request: ${method}`)

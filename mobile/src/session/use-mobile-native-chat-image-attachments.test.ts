@@ -98,13 +98,14 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     // `batch` names the selection that put the chip here, so one selection's
-    // sweep cannot clear another's (2026-09-13).
+    // sweep cannot clear another's (2026-09-13). The count is the app's, not
+    // this mount's (2026-09-26), so its number depends on the cases before.
     expect(hook!.attachments).toEqual([
       {
         id: 'img-1',
         path: '/tmp/a.png',
         previewUri: 'file:///a.jpg',
-        batch: 'batch-1',
+        batch: expect.stringMatching(/^batch-\d+$/),
         contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
       }
     ])

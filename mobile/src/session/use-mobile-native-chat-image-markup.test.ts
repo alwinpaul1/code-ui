@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useMobileNativeChatImageMarkup } from './use-mobile-native-chat-image-markup'
 
 const NOT_SAVED = 'Markup not saved — the photo is still attached without it'
+const PHOTO = { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
 
 /**
  * The markup editor's Done voids what this returns, so any exit that neither
@@ -30,6 +31,7 @@ describe('a markup Done that could not save says so', () => {
         client,
         getActiveWorktreeConnectionId: async () => null,
         scopeKey: 'h\0w\0tab',
+        markAttachmentReuploading: () => PHOTO,
         replaceAttachmentImage,
         showToast
       })
@@ -63,7 +65,8 @@ describe('a markup Done that could not save says so', () => {
 
     await act(() => replace!('img-1', 'ZZZZ'))
 
-    expect(replaceAttachmentImage).not.toHaveBeenCalled()
+    // The chip goes back to the photo as it was, from under the loading ring.
+    expect(replaceAttachmentImage).toHaveBeenCalledExactlyOnceWith('h\0w\0tab', 'img-1', PHOTO)
     expect(showToast).toHaveBeenCalledExactlyOnceWith(NOT_SAVED, 1500)
   })
 })

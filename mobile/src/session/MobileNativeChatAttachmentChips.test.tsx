@@ -1,15 +1,19 @@
-import { useEffect } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ImagePreviewModal } from '../components/ImagePreviewModal'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import { openImageMarkup, peekImageMarkup, resetImageMarkupForTests } from './image-markup-store'
 import { peekImagePreview, resetImagePreviewForTests } from './image-preview-store'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
+import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
+import { methodNotFound, ok } from './use-mobile-native-chat-image-attachments.test-support'
 import { useMobileNativeChatImageMarkup } from './use-mobile-native-chat-image-markup'
+import { useNativeChatAttachmentScopeWriters } from './use-native-chat-attachment-scope-writers'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -51,6 +55,7 @@ const PALETTE = { light: lightColors, dark: darkColors }
 const PHOTO: PendingNativeChatImage = { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
 const SECOND: PendingNativeChatImage = { id: 'img-2', path: '/tmp/b.png', previewUri: 'file:///b.jpg' }
 const THIRD: PendingNativeChatImage = { id: 'img-3', path: '/tmp/c.png', previewUri: 'file:///c.jpg' }
+const MARKUP_SCOPE = 'h\0w\0tab'
 
 type ChipProps = Parameters<typeof MobileNativeChatAttachmentChips>[0]
 
@@ -104,6 +109,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     renderer = null
     resetImagePreviewForTests()
     resetImageMarkupForTests()
+    useNativeChatImageAttachmentsStore.getState().reset()
   })
 
   function draw(scheme: Scheme, props: ChipProps): ReactTestRenderer {
@@ -234,41 +240,33 @@ describe('a photo in the attachment strip opens full-screen first', () => {
   })
 
   // From the pencil onward: the same arrow the overlay hands the composer
-  // (the overlay's own copy is pinned in MobileNativeChatOverlay.test.ts) and
-  // the real markup hook, which 72f03556 and 4b70940f taught to say when Done
-  // could not save. Opening the preview first must not lose that on the way.
-  it.each(SCHEMES)('still says markup was not saved when Done cannot upload, via the preview\'s pencil (%s)', async (scheme) => {
-    const showToast = vi.fn()
-    const replaceAttachmentImage = vi.fn()
-    const refused = {
-      sendRequest: vi.fn(async () => ({
-        id: 'save',
-        ok: false,
-        error: { code: 'failed', message: 'disk full' },
-        _meta: { runtimeId: 'r' }
-      }))
-    } as unknown as RpcClient
-    let replace: ((id: string, base64: string) => Promise<void>) | null = null
+  // (the overlay's own copy is pinned in MobileNativeChatOverlay.test.ts), the
+  // real markup hook, which 72f03556 and 4b70940f taught to say when Done
+  // could not save, and the real chip store it writes. Opening the preview
+  // first must not lose that on the way.
+  function markupComposer(scheme: Scheme, client: RpcClient, showToast: (message: string, ms?: number) => void) {
     function Composer(): React.JSX.Element {
-      const replaceAttachment = useMobileNativeChatImageMarkup({
-        client: refused,
+      const attachments = useNativeChatImageAttachmentsStore(
+        (state) => state.byScope[MARKUP_SCOPE] ?? NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
+      )
+      const { markAttachmentReuploading, replaceAttachmentImage } = useNativeChatAttachmentScopeWriters()
+      const replace = useMobileNativeChatImageMarkup({
+        client,
         getActiveWorktreeConnectionId: async () => null,
-        scopeKey: 'h\0w\0tab',
+        scopeKey: MARKUP_SCOPE,
+        markAttachmentReuploading,
         replaceAttachmentImage,
         showToast
       })
-      useEffect(() => {
-        replace = replaceAttachment
-      })
       return (
         <MobileNativeChatAttachmentChips
-          attachments={[PHOTO]}
-          onEditAttachment={(id, uri) =>
-            openImageMarkup(uri, { onDone: (result) => void replace?.(id, result.base64) })
-          }
+          attachments={attachments}
+          onRemoveAttachment={() => {}}
+          onEditAttachment={(id, uri) => openImageMarkup(uri, { onDone: (result) => void replace(id, result.base64) })}
         />
       )
     }
+    useNativeChatImageAttachmentsStore.getState().update(() => ({ [MARKUP_SCOPE]: [PHOTO] }))
     act(() => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
@@ -282,14 +280,73 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     tap(pressables(screenNow, 'Edit image')[0])
     const editor = peekImageMarkup()
     expect(editor?.uri).toBe('file:///a.jpg')
+    return { screenNow, done: (base64: string) => act(() => editor!.onDone({ base64 })) }
+  }
 
+  function uploadRings(renderer: ReactTestRenderer): ReactTestInstance[] {
+    return renderer.root.findAll((node) => String(node.type) === 'View' && node.props.testID === 'attachment-uploading')
+  }
+
+  it.each(SCHEMES)('still says markup was not saved when Done cannot upload, via the preview\'s pencil (%s)', async (scheme) => {
+    const showToast = vi.fn()
+    const refused = {
+      sendRequest: vi.fn(async () => ({
+        id: 'save',
+        ok: false,
+        error: { code: 'failed', message: 'disk full' },
+        _meta: { runtimeId: 'r' }
+      }))
+    } as unknown as RpcClient
+    const { screenNow, done } = markupComposer(scheme, refused, showToast)
+
+    done('ZZZZ')
     await act(async () => {
-      editor!.onDone({ base64: 'ZZZZ' })
       await vi.waitFor(() => expect(showToast).toHaveBeenCalled())
     })
 
     expect(showToast).toHaveBeenCalledExactlyOnceWith('Markup not saved — the photo is still attached without it', 1500)
-    expect(replaceAttachmentImage).not.toHaveBeenCalled()
+    // The photo is back as it was, settled, so what the chip shows is what a send takes.
     expect(chipPictures(screenNow)).toEqual(['file:///a.jpg'])
+    expect(uploadRings(screenNow)).toHaveLength(0)
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]).toEqual([PHOTO])
+  })
+
+  // 2026-09-26: a send tapped just after Done pasted the photo without its
+  // marks, because the chip looked settled while the marks were still on
+  // their way to the host. The chip now shows the marks under the loading
+  // ring until they land, in the reader's own theme.
+  it.each(SCHEMES)('draws the marks under the loading ring until the host has them (%s)', async (scheme) => {
+    const save = Promise.withResolvers<RpcResponse>()
+    const client = {
+      sendRequest: vi.fn(async (method: string) =>
+        method === 'clipboard.startImageUpload' ? methodNotFound('start') : save.promise
+      )
+    } as unknown as RpcClient
+    const { screenNow, done } = markupComposer(scheme, client, vi.fn())
+
+    done('ZZZZ')
+
+    expect(chipPictures(screenNow)).toEqual(['data:image/png;base64,ZZZZ'])
+    const ring = uploadRings(screenNow)
+    expect(ring).toHaveLength(1)
+    expect(ring[0]!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].bgOverlay })
+    const spinner = ring[0]!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]
+    expect(spinner?.props.color).toBe(PALETTE[scheme].text)
+    // Nothing to take out or mark up again while the marks upload.
+    expect(pressables(screenNow, 'Remove image')).toHaveLength(0)
+    tap(thumbnails(screenNow)[0])
+    expect(pictureInViewer(screenNow)).toBe('data:image/png;base64,ZZZZ')
+    expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
+    tap(pressables(screenNow, 'Close')[0])
+
+    await act(async () => {
+      save.resolve(ok('save', '/tmp/a-marked.png'))
+      await vi.waitFor(() => expect(uploadRings(screenNow)).toHaveLength(0))
+    })
+    expect(chipPictures(screenNow)).toEqual(['data:image/png;base64,ZZZZ'])
+    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]).toEqual([
+      expect.objectContaining({ id: 'img-1', path: '/tmp/a-marked.png', previewUri: 'data:image/png;base64,ZZZZ' })
+    ])
   })
 })

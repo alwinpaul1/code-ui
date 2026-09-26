@@ -20,6 +20,13 @@ type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
 type ShowToast = (message: string, durationMs?: number) => void
 
+// Counted for the app, not per mount: a selection's sweep takes the chips
+// still uploading under its name, and those chips outlive the composer in a
+// module-level store. A remount named its first selection batch-1 again, so
+// the earlier mount's sweep took a photo the new one was still uploading
+// (2026-09-26 review).
+let nativeChatUploadBatches = 0
+
 export function useMobileNativeChatImageUpload(args: {
   client: RpcClient | null
   activeHandleRef: CurrentRef<string | null>
@@ -58,7 +65,6 @@ export function useMobileNativeChatImageUpload(args: {
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
-  const batchCounter = useRef(0)
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
     connStateRef.current = connState
@@ -79,8 +85,8 @@ export function useMobileNativeChatImageUpload(args: {
         return
       }
       let started = false
-      batchCounter.current += 1
-      const batch = `batch-${batchCounter.current}`
+      nativeChatUploadBatches += 1
+      const batch = `batch-${nativeChatUploadBatches}`
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
       try {
@@ -88,7 +94,7 @@ export function useMobileNativeChatImageUpload(args: {
           client,
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages,
-          onImageUploaded: (image) => uploadedImages.push(image),
+          onImageUploaded: (image) => uploadedImages.push({ ...image, batch }),
           onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
           onUploadStart: () => {
             started = true

@@ -16,8 +16,10 @@ export type PendingNativeChatImage = {
    *  in text instead of being pasted as an image. Absent means image. */
   readonly kind?: 'image' | 'file'
   readonly name?: string
-  /** Picked and on its way to the host: drawn as a chip with a spinner, not
-   *  sendable yet (2026-09-13, the Claude app's per-file loading ring). */
+  /** Bytes on their way to the host, from a pick (`path` still empty) or
+   *  from markup's Done (`path` still the photo as it was): drawn as a chip
+   *  with a spinner (2026-09-13, the Claude app's per-file loading ring). A
+   *  send tapped now waits for it (use-mobile-native-chat-send-chips.ts). */
   readonly uploading?: boolean
   /** Which selection put this chip here. One selection's sweep must not clear
    *  another's chips: picking a large video then a small photo let the photo
@@ -48,9 +50,14 @@ export function appendPendingNativeChatImages(
 ): PendingNativeChatImage[] {
   // An upload that announced itself already holds a chip; the finished
   // image takes that chip's place and id, so the strip does not reshuffle.
+  // Its own selection's chip: the same photo picked twice draws two chips
+  // with one picture, and the pick that landed first filled the other's,
+  // whose sweep then took the chip still on its way (2026-09-26 review).
   const next = [...current]
   for (const image of uploaded) {
-    const slot = next.findIndex((chip) => chip.uploading && chip.previewUri === image.previewUri)
+    const slot = next.findIndex(
+      (chip) => chip.uploading && chip.previewUri === image.previewUri && chip.batch === image.batch
+    )
     if (slot !== -1) {
       const { uploading: _done, ...rest } = next[slot] as PendingNativeChatImage
       next[slot] = { ...rest, ...image }
@@ -83,9 +90,10 @@ export function dropUploadingNativeChatImages(
 }
 
 /** Swaps one attachment's bytes for a marked-up version, keeping its id,
- *  kind and name so the chip's position and label do not change. Used by the
- *  markup editor's Done; a stale id (the chip was removed or already sent
- *  while the editor was open) is a no-op rather than resurrecting it. */
+ *  kind and name so the chip's position and label do not change, and settles
+ *  it. Used by the markup editor's Done, and to put the photo back when that
+ *  upload fails; a stale id (the chip was removed or already sent while the
+ *  editor was open) is a no-op rather than resurrecting it. */
 export function replaceNativeChatImageAttachment(
   current: readonly PendingNativeChatImage[],
   id: string,
@@ -96,7 +104,35 @@ export function replaceNativeChatImageAttachment(
     return [...current]
   }
   const updated = [...current]
-  updated[index] = { ...updated[index]!, ...next }
+  const { uploading: _settled, ...chip } = updated[index]!
+  updated[index] = { ...chip, ...next }
+  return updated
+}
+
+/** The picture a marked-up chip shows. The chip takes it the moment Done is
+ *  tapped and the finished upload carries the same string, so a send waiting
+ *  on the chip can tell the marks landed from the photo being put back. */
+export function markedUpNativeChatImagePreviewUri(base64: string): string {
+  return `data:image/png;base64,${base64}`
+}
+
+/** Draws a chip as uploading again while its marked-up bytes go to the host
+ *  (2026-09-26: the re-upload never marked its chip, so a send tapped just
+ *  after Done pasted the photo without its marks). It keeps its path, so a
+ *  send that gives up waiting still has the photo, and drops its batch, so no
+ *  selection's sweep of stranded chips can take it. */
+export function markNativeChatImageReuploading(
+  current: readonly PendingNativeChatImage[],
+  id: string,
+  previewUri: string
+): PendingNativeChatImage[] {
+  const index = current.findIndex((attachment) => attachment.id === id)
+  if (index === -1) {
+    return [...current]
+  }
+  const updated = [...current]
+  const { batch: _swept, ...chip } = updated[index]!
+  updated[index] = { ...chip, previewUri, uploading: true }
   return updated
 }
 
@@ -116,7 +152,7 @@ export async function uploadMarkedUpNativeChatImage(
   const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
   return {
     path,
-    previewUri: `data:image/png;base64,${base64}`,
+    previewUri: markedUpNativeChatImagePreviewUri(base64),
     contentFingerprint: mobileNativeChatImageContentFingerprint(base64)
   }
 }
