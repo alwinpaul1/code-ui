@@ -324,11 +324,14 @@ describe('a file touched after its create', () => {
     ).toBe(true)
   })
 
-  it('is touched by a later command that names the file, by path or by name', () => {
+  it('is touched by a later command that may write the file, by path or by name', () => {
     const byName = call('Bash', {
       command: 'cd hybrid-model/scripts/cluster/jobs && sed -i "" s/a/b/ queue-sweep-k-one.sh'
     })
-    const byPath = call('Bash', { command: `chmod +x ${PATH}` })
+    // A command that only makes it executable leaves it alone
+    // (mobile-native-chat-created-file-commands.test.ts); one that appends
+    // to it does not.
+    const byPath = call('Bash', { command: `echo '# tuned' >> ${PATH}` })
     expect(cutCreateStandings(rows(create, byName)).get(key)?.touched).toBe(true)
     expect(cutCreateStandings(rows(create, byPath)).get(key)?.touched).toBe(true)
   })

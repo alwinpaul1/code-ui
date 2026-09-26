@@ -94,14 +94,15 @@ Nothing here is built.
   starts with every character the wire kept, and no later call in the loaded
   transcript may have changed it (an edit tool naming the same path however
   it spells it, `./`, `..`, `~` or absolute, with `~` read as the home the
-  other path is under; any other call naming the file,
-  a command the user ran with `!` among them; a
-  call the wire cut, whose dropped part may have named it; or a subagent
-  launched or a message sent after it, since the agent's own calls are not in
-  this transcript), and no background work launched before it was still
-  running when it landed: a shell, a monitor, an agent or a teammate that has
-  not reported by then may write the file with no call here, and a background
-  agent that did drew +125 on a 93-line create in review. That reuses the
+  other path is under; any other call naming the file, a command the user
+  ran with `!` among them, except a command that only makes it executable,
+  runs it, reads it or stages it; a call the wire cut, whose dropped part
+  may have named it; or a subagent launched or a message sent after it,
+  since the agent's own calls are not in this transcript), and no
+  background work launched before it was still running when it landed: a
+  shell, a monitor, an agent or a teammate that has not reported by then may
+  write the file with no call here, and a background agent that did drew
+  +125 on a 93-line create in review. That reuses the
   background-task reader's launch and finish records
   (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
   sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
@@ -117,7 +118,16 @@ Nothing here is built.
   only when drawing. So the count reads them as Bash calls, and a `!` command
   that went to the background, whose output turn carries the Bash call's own
   sentence (13 of them, 2.1.247 to 2.1.263), runs until its notification the
-  same way. The count
+  same way. The exception for commands is what lets the commonest run, the
+  Claude app's "Created a file, ran a command", keep its count, and it is
+  narrow (`mobile-native-chat-created-file-commands.ts`): every part of the
+  command is `chmod`, `cat`, `head`, `tail`, `wc`, `less`, `stat`, `file`,
+  `ls`, `cd`, `echo`, `pwd` or `true`, a `git add`, `diff`, `status`, `log`
+  or `show`, or the file itself run by its path or by `bash`, `sh`, `zsh`,
+  `python`, `python3` or `node`, with no redirect but `2>&1` or `/dev/null`,
+  no backticks or brackets, and no `--output`. A `tee`, a `sed -i`, a `mv`,
+  `cp` or `rm`, a `git commit`, and a command given as an argument list, the
+  way Codex sends one, still void the count. The count
   is then the uncut Write's count of that text, through the same pipeline,
   so a small create and a large one agree
   (`mobile-native-chat-created-file-count.ts`). A finished run on screen
@@ -135,8 +145,10 @@ Nothing here is built.
   worktree, a binary one, one over the host's cap, or one past the uncut
   Write's own 2000-row or 96,000-character bound gets no number. What this
   cannot see: a command that changed the file without naming it (a glob, a
-  directory-wide `sed -i`), and a change on the desktop that left the kept
-  prefix alone. The card keeps "Diff truncated" beside the count, since
+  directory-wide `sed -i`), a script with the file's name run from another
+  folder (a relative name is matched as a suffix, and the shell's working
+  folder is not in the transcript), and a change on the desktop that left
+  the kept prefix alone. The card keeps "Diff truncated" beside the count, since
   its rows are still the cut ones. Otherwise the chip is left off whenever a
   count cannot be the edit's own: an input the diet cut or a key it dropped, a resolved hunk
   Orca kept only 400 rows of, a patch at Orca's 40-hunk cap, a file the

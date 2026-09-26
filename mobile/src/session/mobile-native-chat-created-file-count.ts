@@ -10,9 +10,11 @@
 // - it still starts with every character the wire kept, and
 // - no later call in the loaded transcript may have changed it: an edit tool
 //   naming the same path, any other call naming the file (a command the user
-//   ran with `!` among them), any call the wire cut (the part it dropped may
-//   have named it), or a subagent launched or a message sent after it (the
-//   agent's own calls are not in this transcript), and
+//   ran with `!` among them, unless it only makes the file executable, runs,
+//   reads or stages it: mobile-native-chat-created-file-commands.ts), any
+//   call the wire cut (the part it dropped may have named it), or a subagent
+//   launched or a message sent after it (the agent's own calls are not in
+//   this transcript), and
 // - no background work launched before it was still running when it landed
 //   (mobile-native-chat-created-file-work.ts).
 //
@@ -33,6 +35,7 @@ import {
   inputStrings,
   MOBILE_CUT
 } from './mobile-native-chat-edit-wire-cut'
+import { commandLeavesFileAlone } from './mobile-native-chat-created-file-commands'
 import { backgroundWorkRunningAt } from './mobile-native-chat-created-file-work'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
@@ -254,8 +257,22 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
   if (carriesMobileCut(call.input)) {
     return true
   }
-  const name = target.slice(target.lastIndexOf('/') + 1)
-  return name === '' || callWords(call).some((word) => namesFile(word, name))
+  const name = lastSegment(target)
+  if (name === '' || !callWords(call).some((word) => namesFile(word, name))) {
+    return name === ''
+  }
+  const command = kind === 'command' ? stringField(call.input, 'command') : null
+  return command === null || !commandLeavesFileAlone(command, (word) => isTheFile(word, target))
+}
+
+function lastSegment(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1)
+}
+
+/** Whether a command's word is the file's own path, or its name. */
+function isTheFile(word: string, target: string): boolean {
+  const spelled = normalizedPath(word)
+  return lastSegment(spelled) === lastSegment(target) && samePath(spelled, target)
 }
 
 /** A command the user ran with `!`. Claude Code writes it as a user turn,
