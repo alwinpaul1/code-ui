@@ -6,7 +6,7 @@ import {
   readWarmStartBeacons,
   rememberWarmStartBeacon
 } from './agent-hud-beacon-warm-start'
-import { withAgentMessagePrompt, withRestoredAgentMessages, type AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
+import { agentMessagesIdentity, withAgentMessagesOf, withRestoredAgentMessages, type AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 
 /**
  * The phone half of the invisible HUD channel.
@@ -228,7 +228,10 @@ function splitPrefixLength(text: string): number {
 /** What the warm start actually needs; a repainting agent must not write to
  *  disk on every frame just because its token count moved. */
 function beaconIdentity(beacon: AgentHudBeacon): string {
-  return `${beacon.agent}\u0000${beacon.sessionId ?? ''}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}`
+  // The subagent messages too: their rows have no other source, and one that
+  // came within the rewrite window of the last write was never stored when the
+  // tab then went quiet (review of 2026-09-27).
+  return `${beacon.agent}\u0000${beacon.sessionId ?? ''}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}\u0000${agentMessagesIdentity(beacon.agentMessagePrompts)}`
 }
 
 const WARM_START_REWRITE_MS = 30_000
@@ -286,7 +289,7 @@ function publish(handle: string, payload: string): void {
         receivedAt: beacon.receivedAt
       }
     : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
-  const merged = withAgentMessagePrompt(joined, beacon.desktopPrompt)
+  const merged = withAgentMessagesOf(handle, joined, previous === undefined, beacon.desktopPrompt)
   // A repeat says nothing new: keep the object readers already hold.
   if (previous && unchangedBeacon(previous, merged)) {
     return
@@ -312,7 +315,7 @@ export async function hydrateAgentHudBeacons(): Promise<void> {
   let restored = false
   for (const [handle, beacon] of Object.entries(stored)) {
     if (!beacons.has(handle)) {
-      beacons.set(handle, withRestoredAgentMessages(beacon))
+      beacons.set(handle, withRestoredAgentMessages(beacon, handle))
       restored = true
     }
   }

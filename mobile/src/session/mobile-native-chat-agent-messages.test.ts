@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   agentMessageOf,
@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { mergeDesktopPrompts } from './desktop-prompt-merge'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
-import { AGENT_MESSAGE_PROMPT_CAP, keepAgentMessagePrompt } from './agent-hud-beacon-agent-messages'
+import { AGENT_MESSAGE_PROMPT_CAP, keepAgentMessagePrompt, resetKeptAgentMessagesForTests } from './agent-hud-beacon-agent-messages'
 import { resetAgentMessageAnchorsForTests, withAgentMessageRows } from './mobile-native-chat-agent-message-rows'
 import {
   SUBAGENT_HANDBACK_PROMPT,
@@ -282,10 +282,18 @@ describe('a subagent message the beacon carried, later on', () => {
   const handle = () => `agent-message-terminal-${terminal}`
   /** The store's write is fire-and-forget; let it land before the kill. */
   const written = () => new Promise((resolve) => setTimeout(resolve, 0))
+  /** A status-line beacon: the agent repainting, no prompt in it. */
+  const statusFrame = (used: number) => `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION_ID} model=claude-opus-5 used=${used}\u0007`
+  const storedNonces = async () =>
+    (JSON.parse((await AsyncStorage.getItem('codeui:agent-hud-beacons.v2')) ?? '{}')[handle()]?.agentMessagePrompts ?? []).map(
+      (prompt: { nonce: string }) => prompt.nonce
+    )
   const rowsNow = (raw: NativeChatMessage[]) => withAgentMessageRows(raw, raw, agentMessagesOfBeacon(getAgentHudBeacon(handle())), 'scope')
   afterEach(() => {
     resetAgentMessageAnchorsForTests()
     resetAgentHudBeacons()
+    resetKeptAgentMessagesForTests()
+    vi.restoreAllMocks()
     terminal += 1
   })
 
@@ -368,6 +376,42 @@ describe('a subagent message the beacon carried, later on', () => {
     expect(message?.laterAtSameRow).toEqual(['typed after it'])
     // None after it: no list at all.
     expect(beaconAgentMessages([{ nonce: '1', text: SUBAGENT_REQUEST_PROMPT, anchorId: A1 }])[0]).not.toHaveProperty('laterAtSameRow')
+  })
+
+  // Review of 2026-09-27: the warm start is rewritten at most every 30 s
+  // unless the model, effort or session changed, so a message that came
+  // within that of the last write was never stored when the tab then went
+  // quiet.
+  it('is on disk when it came within 30 s of the last write', async () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    consumeAgentHudBeacons(handle(), statusFrame(1000))
+    await written()
+    now += 5_000
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    now += 5_000
+    consumeAgentHudBeacons(handle(), statusFrame(1400))
+    await written()
+    expect(await storedNonces()).toEqual(['100'])
+  })
+
+  // Review of 2026-09-27: every worktree switch drops the terminal cache,
+  // beacons included (clearTerminalCache), and the next beacon of the session
+  // started the list over and wrote that over the stored record.
+  it('is kept, and stays on disk, when the terminal cache is dropped and the session speaks again', async () => {
+    let now = 2_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    await written()
+    resetAgentHudBeacons()
+    now += 31_000
+    consumeAgentHudBeacons(handle(), statusFrame(2000))
+    await written()
+    expect(await storedNonces()).toEqual(['100'])
+    expect(getAgentHudBeacon(handle())?.agentMessagePrompts?.map((prompt) => prompt.nonce)).toEqual(['100'])
+    // A beacon of another session on that terminal does not take it.
+    consumeAgentHudBeacons(handle(), `\u001b]7777;CUIHUD1 agent=claude sid=01a08736-aaaa-bbbb-cccc-000000000002 model=m\u0007`)
+    expect(getAgentHudBeacon(handle())?.agentMessagePrompts).toBeUndefined()
   })
 
   it('a new one heard after a relaunch is still drawn where the chat was, before its row loads', async () => {
