@@ -383,7 +383,9 @@
             // 2026-09-26: 332. A session's subagent messages are kept apart
             // from the last 40 prompts (an import, the field, the merge); the
             // list itself lives in agent-hud-beacon-agent-messages.ts.
-            "max": 332,
+            // 2026-09-27: 342 for rememberAgentMessagePlacement, which has to
+            // reach the store's own map, listeners and warm-start write.
+            "max": 342,
             "skipBlankLines": true,
             "skipComments": true
           }

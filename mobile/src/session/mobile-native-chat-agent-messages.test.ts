@@ -1,3 +1,5 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
@@ -14,7 +16,7 @@ import { mergeDesktopPrompts } from './desktop-prompt-merge'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { AGENT_MESSAGE_PROMPT_CAP, keepAgentMessagePrompt, resetKeptAgentMessagesForTests } from './agent-hud-beacon-agent-messages'
-import { resetAgentMessageAnchorsForTests, withAgentMessageRows } from './mobile-native-chat-agent-message-rows'
+import { resetAgentMessageAnchorsForTests, useAgentMessageRows, withAgentMessageRows } from './mobile-native-chat-agent-message-rows'
 import {
   SUBAGENT_HANDBACK_PROMPT,
   SUBAGENT_HANDBACK_USER_ROW,
@@ -289,6 +291,21 @@ describe('a subagent message the beacon carried, later on', () => {
       (prompt: { nonce: string }) => prompt.nonce
     )
   const rowsNow = (raw: NativeChatMessage[]) => withAgentMessageRows(raw, raw, agentMessagesOfBeacon(getAgentHudBeacon(handle())), 'scope')
+  /** The rows as the chat draws them, through the hook, whose effect stores
+   *  where each message went. */
+  const drawnByTheChat = async (raw: NativeChatMessage[]) => {
+    let rows: NativeChatMessage[] = []
+    function Chat() {
+      rows = useAgentMessageRows(agentMessagesOfBeacon(getAgentHudBeacon(handle())), raw, raw, 'scope')
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(Chat))
+    })
+    act(() => renderer.unmount())
+    return rows
+  }
   afterEach(() => {
     resetAgentMessageAnchorsForTests()
     resetAgentHudBeacons()
@@ -412,6 +429,34 @@ describe('a subagent message the beacon carried, later on', () => {
     // A beacon of another session on that terminal does not take it.
     consumeAgentHudBeacons(handle(), `\u001b]7777;CUIHUD1 agent=claude sid=01a08736-aaaa-bbbb-cccc-000000000002 model=m\u0007`)
     expect(getAgentHudBeacon(handle())?.agentMessagePrompts).toBeUndefined()
+  })
+
+  // Review of 2026-09-27: the hook can name a row Orca never publishes (with
+  // two agents running, one's delivery is an isMeta row Orca drops, and the
+  // other's `at=` names it). Such a message is drawn at the tail live; held
+  // back after a relaunch, it was gone for good.
+  it('whose own row the phone never holds is drawn where it was, after a relaunch', async () => {
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, 'dddddddd-0000-4000-8000-00000000dead'))
+    const raw = [said(A1, 'Waiting for the agents.'), said('a2', 'Both reported.')]
+    expect(drawn(await drawnByTheChat(raw))).toEqual([A1, 'a2', 'from a7a46867b4f497c96'])
+    await written()
+    resetAgentHudBeacons()
+    resetAgentMessageAnchorsForTests()
+    resetKeptAgentMessagesForTests()
+    await hydrateAgentHudBeacons()
+    const later = [...raw, said('a3', 'The next step.')]
+    expect(drawn(rowsNow(later))).toEqual([A1, 'a2', 'from a7a46867b4f497c96', 'a3'])
+  })
+
+  it('is held back after a relaunch when neither its own row nor the one it was drawn after is loaded', async () => {
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, 'dddddddd-0000-4000-8000-00000000dead'))
+    await drawnByTheChat([said('a2', 'Both reported.')])
+    await written()
+    resetAgentHudBeacons()
+    resetAgentMessageAnchorsForTests()
+    resetKeptAgentMessagesForTests()
+    await hydrateAgentHudBeacons()
+    expect(drawn(rowsNow([said('z1', 'An hour later.')]))).toEqual(['z1'])
   })
 
   it('a new one heard after a relaunch is still drawn where the chat was, before its row loads', async () => {

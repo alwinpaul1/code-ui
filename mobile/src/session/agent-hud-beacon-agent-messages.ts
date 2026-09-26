@@ -13,8 +13,10 @@ import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
  * with the rest of the beacon (agent-hud-beacon-warm-start.ts).
  */
 
-/** `restored`: read back from the warm-start store, not heard this run. */
-export type AgentMessagePrompt = DesktopPrompt & { restored?: true }
+/** `restored`: read back from the warm-start store, not heard this run.
+ *  `drawnAfter`: the transcript row the chat drew it after, this run or the
+ *  one it was stored in (mobile-native-chat-agent-message-rows.ts). */
+export type AgentMessagePrompt = DesktopPrompt & { restored?: true; drawnAfter?: string }
 
 /** A session's subagent messages the chat keeps drawing; oldest shed first.
  *  Each is up to the hook's 2,000 characters, and the whole beacon goes to
@@ -58,7 +60,19 @@ export function withRestoredAgentMessages(beacon: AgentHudBeacon, handle?: strin
 
 /** What the warm-start write compares of a beacon's subagent messages. */
 export function agentMessagesIdentity(prompts: readonly AgentMessagePrompt[] | undefined): string {
-  return (prompts ?? []).map((prompt) => prompt.nonce).join(',')
+  return (prompts ?? []).map((prompt) => `${prompt.nonce}@${prompt.drawnAfter ?? ''}`).join(',')
+}
+
+/** The beacon with the row its message `nonce` was drawn after recorded;
+ *  the same object when it holds no such message or already says so. */
+export function withAgentMessagePlaced(handle: string, beacon: AgentHudBeacon, nonce: string, rowId: string): AgentHudBeacon {
+  const prompts = beacon.agentMessagePrompts
+  if (!prompts?.some((prompt) => prompt.nonce === nonce && prompt.drawnAfter !== rowId)) {
+    return beacon
+  }
+  const placed = { ...beacon, agentMessagePrompts: prompts.map((prompt) => (prompt.nonce === nonce ? { ...prompt, drawnAfter: rowId } : prompt)) }
+  keepAgentMessages(handle, placed)
+  return placed
 }
 
 /**

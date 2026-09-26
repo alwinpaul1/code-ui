@@ -42,6 +42,8 @@ export type BeaconAgentMessage = {
   anchorId?: string
   /** Read back from the warm-start store, not heard this run. */
   restored?: true
+  /** The row the chat drew it after before it was stored. */
+  drawnAfter?: string
   /** The prompts the hook took after this message at the same row, by their
    *  text: each is drawn below the message, in the order they came, rather
    *  than straight after the row above it (mobile-native-chat-agent-message-rows.ts). */
@@ -134,6 +136,7 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
       cut: prompt.cut === true,
       ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
       ...(prompt.restored ? { restored: true as const } : {}),
+      ...(prompt.drawnAfter ? { drawnAfter: prompt.drawnAfter } : {}),
       ...(later.length > 0 ? { laterAtSameRow: later.map((next) => next.text) } : {})
     })
   })

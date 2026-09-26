@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { pendingPlacementAnchorId } from './mobile-native-chat-render-data'
+import { rememberAgentMessagePlacement } from './agent-hud-beacon'
 import {
   agentMessageRow,
   subagentNames,
@@ -50,8 +51,12 @@ export function resetAgentMessageAnchorsForTests(): void {
  *  an hour-old message under the newest reply after every relaunch (review of
  *  2026-09-26). It is drawn after the row the hook named once that row is
  *  loaded, and held back until paging brings it in, the way a remembered echo
- *  is (mobile-native-chat-render-data.ts, 2026-09-13). One the hook named no
- *  row for (an older hook) has nowhere to go and stays held back. */
+ *  is (mobile-native-chat-render-data.ts, 2026-09-13). The row it was drawn
+ *  after before it was stored (`drawnAfter`) stands in when the named row is
+ *  not held: the hook can name a row Orca never publishes (another agent's
+ *  delivery, an `isMeta` row), and such a message, drawn at the tail live,
+ *  vanished after a relaunch (review of 2026-09-27). With neither loaded it
+ *  stays held back. */
 function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly NativeChatMessage[]): string | undefined {
   const key = `${scope}\0${message.id}`
   const known = anchorByKey.get(key)
@@ -63,6 +68,10 @@ function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly Nat
     provisionalByKey.delete(key)
     remember(anchorByKey, key, message.anchorId)
     return message.anchorId
+  }
+  if (message.restored && message.drawnAfter && raw.some((row) => row.id === message.drawnAfter)) {
+    remember(anchorByKey, key, message.drawnAfter)
+    return message.drawnAfter
   }
   if (!tail || message.restored) {
     return undefined
@@ -193,15 +202,38 @@ export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPending
   return moved ? out : (pending as T[])
 }
 
-/** The folded chat with the prompt hook's subagent messages drawn in. */
+/** Where each message is drawn now, by the row it follows, when that is not
+ *  the row it was stored with. */
+export function agentMessagePlacements(
+  scope: string,
+  messages: readonly BeaconAgentMessage[]
+): { nonce: string; rowId: string }[] {
+  return messages.flatMap((message) => {
+    const key = `${scope}\0${message.id}`
+    const rowId = anchorByKey.get(key) ?? provisionalByKey.get(key)
+    const nonce = message.id.slice(message.id.indexOf(':') + 1)
+    return rowId !== undefined && rowId !== message.drawnAfter ? [{ nonce, rowId }] : []
+  })
+}
+
+/** The folded chat with the prompt hook's subagent messages drawn in. Where
+ *  each was drawn is stored with the beacon (rememberAgentMessagePlacement). */
 export function useAgentMessageRows(
   messages: readonly BeaconAgentMessage[],
   folded: readonly NativeChatMessage[],
   raw: readonly NativeChatMessage[],
   scope: string | null
 ): NativeChatMessage[] {
-  return useMemo(
+  const rows = useMemo(
     () => (scope === null ? (folded as NativeChatMessage[]) : withAgentMessageRows(folded, raw, messages, scope)),
     [folded, messages, raw, scope]
   )
+  useEffect(() => {
+    if (scope !== null) {
+      for (const { nonce, rowId } of agentMessagePlacements(scope, messages)) {
+        rememberAgentMessagePlacement(nonce, rowId)
+      }
+    }
+  }, [messages, rows, scope])
+  return rows
 }
