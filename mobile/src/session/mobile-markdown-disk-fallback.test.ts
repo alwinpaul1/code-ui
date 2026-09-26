@@ -88,7 +88,7 @@ describe('buildMarkdownDiskFallbackDoc', () => {
     ).toMatchObject({
       editable: false,
       stale: true,
-      readOnlyReason: 'Desktop has unsaved changes. Showing the start of the file on disk, too large to show in full.'
+      readOnlyReason: 'Desktop has unsaved changes. Showing the start of the file on disk.'
     })
   })
 

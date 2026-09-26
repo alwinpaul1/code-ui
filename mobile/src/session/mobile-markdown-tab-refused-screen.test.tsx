@@ -171,7 +171,7 @@ describe('a markdown tab the desktop refuses to read', () => {
       tab(false)
     )
     expect(shownMarkdown).toContain('# first 512 KB')
-    expect(texts.join(' | ')).toMatch(/too large/i)
+    expect(texts.join(' | ')).toMatch(/start of the file/i)
   })
 
   it('names a read-only reason the desktop sends in words, not as a code', async () => {

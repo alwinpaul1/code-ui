@@ -19,17 +19,20 @@ export function buildMarkdownDiskFallbackDoc(args: {
   desktopRefusal?: string
 }) {
   // Every reason that applies, most pressing first: unsaved changes on the
-  // desktop mean the copy shown is old; a cut-short copy is not all of it; and
-  // the desktop's refusal says why Refresh will not bring its copy back. One
-  // of them alone dropped the others (second review of the file-open fix).
-  const showing = args.truncated ? 'Showing the start of the file on disk, too large to show in full' : 'Showing the file on disk'
-  const refused = args.desktopRefusal ? ` (${args.desktopRefusal})` : ''
+  // desktop mean the copy shown is old; the desktop's refusal says why Refresh
+  // will not bring its copy back; and a cut-short copy is not all of it. One
+  // alone dropped the others (second review of the file-open fix), and the
+  // whole must fit the two-line status line (final check).
+  const showing = args.truncated ? 'Showing the start of the file on disk.' : 'Showing the file on disk.'
+  const refused = args.desktopRefusal ? `couldn't open this tab (${args.desktopRefusal})` : null
   const readOnlyReason = args.tabIsDirty
-    ? args.truncated || args.desktopRefusal
-      ? `Desktop has unsaved changes. ${showing}${refused}.`
-      : 'Desktop has unsaved changes. Showing disk content.'
-    : args.desktopRefusal
-      ? `The desktop could not read this tab${refused}. ${showing}.`
+    ? refused
+      ? `Desktop has unsaved changes and ${refused}. ${showing}`
+      : args.truncated
+        ? `Desktop has unsaved changes. ${showing}`
+        : 'Desktop has unsaved changes. Showing disk content.'
+    : refused
+      ? `Desktop ${refused}. ${showing}`
       : args.truncated
         ? 'File too large for mobile preview'
         : 'Editing needs Orca desktop running.'
@@ -66,13 +69,21 @@ export function markdownReadOnlyStatus(reason: string): string {
   return /^[a-z_]+$/.test(reason) ? `Read only (${reason})` : reason
 }
 
+/** Why the desktop refused a save, in words. Not the read-only table: a
+ *  save refused as too large leaves the tab editable, and trimming the text
+ *  saves (final check of the file-open fix, 2026-09-26). */
+const DESKTOP_SAVE_REFUSALS: Readonly<Record<string, string>> = {
+  file_too_large: "Couldn't save: too large to save from the phone",
+  unsupported_preview: "Couldn't save: a preview tab on the desktop",
+  unsupported_untitled: "Couldn't save: an unsaved new file on the desktop",
+  renderer_unavailable: "Couldn't save: editing needs Orca desktop running",
+  conflict: "Couldn't save: the file changed on the desktop"
+}
+
 /** A refused save's status line: the desktop's code in words, as a read's is. */
 export function markdownSaveErrorStatus(error: string): string {
-  if (Object.hasOwn(DESKTOP_READ_ONLY_REASONS, error)) {
-    return `Couldn't save. ${DESKTOP_READ_ONLY_REASONS[error]!}`
-  }
-  if (error === 'conflict') {
-    return "Couldn't save: the file changed on the desktop"
+  if (Object.hasOwn(DESKTOP_SAVE_REFUSALS, error)) {
+    return DESKTOP_SAVE_REFUSALS[error]!
   }
   return /^[a-z_]+$/.test(error) ? `Couldn't save (${error})` : error
 }
