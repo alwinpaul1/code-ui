@@ -196,6 +196,24 @@ describe('a create followed by a command that names it', () => {
     )
   })
 
+  // Review of 5b257b16: `~alice` is another user's home, and `~+` or a zsh
+  // named folder is somewhere else again, yet each read as a relative name.
+  it.each([
+    ["runs a script of its name from another user's home", 'bash ~alice/jobs/queue.sh'],
+    ["is a script of its name in another user's home", '~alice/jobs/queue.sh'],
+    ['runs a script of its name from the folder the shell is in', 'bash ~+/jobs/queue.sh']
+  ])('draws no count for a create spelled from ~ when the next command %s', (_, command) => {
+    expect(ranAfterCreateFromHome(command, '~/jobs/queue.sh')).toBe(true)
+  })
+
+  it("draws no count for a create in another user's home when the next command runs a script of its name from ~", () => {
+    expect(ranAfterCreateFromHome('bash ~/jobs/queue.sh', '~alice/jobs/queue.sh')).toBe(true)
+  })
+
+  it("draws no count for a create when the next command runs a script of its name from another user's home", () => {
+    expect(ranAfter(`bash ~alice/${RELATIVE}`)).toBe(true)
+  })
+
   it.each([
     ['hands its path to another script in a setting', `QUEUE=${PATH} node trim.js`],
     [

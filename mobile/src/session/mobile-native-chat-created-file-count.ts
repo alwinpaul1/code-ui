@@ -289,14 +289,22 @@ function lastSegment(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1)
 }
 
+/** `~name`, another user's home, or `~+`, `~-` and a zsh named folder:
+ *  somewhere the transcript does not say. */
+const OTHER_TILDE = /^~[^/]/
+
 /** Whether a command's word is the file's own path, or its name. A path
  *  from `~` is not the file when the other side is absolute and under no
  *  home: `bash ~/queue.sh` runs another script than /opt/work/jobs/queue.sh
- *  or /Users/Shared/queue.sh. */
+ *  or /Users/Shared/queue.sh. Nor is a path from any other `~` word, which
+ *  would otherwise be matched as a relative name. */
 function isTheFile(word: string, target: string): boolean {
   const spelled = normalizedPath(word)
   const outsideTheHome = (a: string, b: string) => fromHome(a) && ABSOLUTE.test(b) && !HOME.test(b)
   if (outsideTheHome(spelled, target) || outsideTheHome(target, spelled)) {
+    return false
+  }
+  if (OTHER_TILDE.test(spelled) || OTHER_TILDE.test(target)) {
     return false
   }
   return lastSegment(spelled) === lastSegment(target) && samePath(spelled, target)
