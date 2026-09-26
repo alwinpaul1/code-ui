@@ -42,7 +42,17 @@ describe('clearDraftAtSendStartWith', () => {
     clearDraftAtSendStartWith(deps, 'hi', ['file:///a.jpg'])
 
     expect(deps.clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'hi')
-    expect(deps.acceptSend).toHaveBeenCalledWith(ORIGIN, 'hi', ['file:///a.jpg'])
+    expect(deps.acceptSend).toHaveBeenCalledWith(ORIGIN, 'hi', ['file:///a.jpg'], undefined)
+  })
+
+  // The binder finds a photo's row by the desktop path its paste typed
+  // (mobile-native-chat-photo-rows.ts), so the echo keeps them.
+  it('hands the pasted desktop paths to the bubble with its photos', () => {
+    const deps = drafts()
+
+    clearDraftAtSendStartWith(deps, 'hi', ['file:///a.jpg'], ['/var/folders/0y/T/orca-paste-1-a.png'])
+
+    expect(deps.acceptSend).toHaveBeenCalledWith(ORIGIN, 'hi', ['file:///a.jpg'], ['/var/folders/0y/T/orca-paste-1-a.png'])
   })
 
   it('retracts the bubble alongside the text when the undo runs (a definite rejection)', () => {
