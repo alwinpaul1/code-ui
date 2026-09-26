@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import {
+  hydrateWaitingPhotoSends,
   rememberWaitingPhotoSends,
   resetWaitingPhotoSendsForTests,
   waitingPhotoSends
@@ -19,7 +21,15 @@ const send = (id: string, images?: string[]): MobileNativeChatPendingMessage => 
 // back yet from these (mobile-chat-phone-photo-landing.test.ts covers the
 // frames); here, what is kept and when it is let go.
 describe('the photo sends a chat that comes back binds before its read', () => {
-  afterEach(() => resetWaitingPhotoSendsForTests())
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.clear()
+    resetWaitingPhotoSendsForTests()
+  })
+  afterEach(() => {
+    resetWaitingPhotoSendsForTests()
+    vi.useRealTimers()
+  })
 
   it('keeps only the sends with photos, marked-up ones too', () => {
     rememberWaitingPhotoSends('s1', [send('pending-1', ['data:image/png;base64,AAAA']), send('pending-2')])
@@ -29,18 +39,37 @@ describe('the photo sends a chat that comes back binds before its read', () => {
   it('lets a session go once the store writes it with no photo send left', () => {
     rememberWaitingPhotoSends('s1', [send('pending-1', ['file:///a1.jpg'])])
     rememberWaitingPhotoSends('s1', [send('pending-2')])
-    expect(waitingPhotoSends('s1')).toBeUndefined()
+    expect(waitingPhotoSends('s1')).toEqual([])
     rememberWaitingPhotoSends('s1', [send('pending-1', ['file:///a1.jpg'])])
     rememberWaitingPhotoSends('s1', [])
-    expect(waitingPhotoSends('s1')).toBeUndefined()
+    expect(waitingPhotoSends('s1')).toEqual([])
+    rememberWaitingPhotoSends('s2', [send('pending-3')])
+    expect(waitingPhotoSends('s2')).toBeUndefined()
   })
 
-  it('keeps the last eight sessions of the run', () => {
+  it('holds the last eight sessions of the run as written, and older ones as storage keeps them', () => {
     for (let index = 0; index < 9; index += 1) {
-      rememberWaitingPhotoSends(`s${index}`, [send(`pending-${index}`, [`file:///${index}.jpg`])])
+      rememberWaitingPhotoSends(`s${index}`, [send(`pending-${index}`, [`file:///${index}.jpg`, 'data:image/png;base64,AA'])])
     }
-    expect(waitingPhotoSends('s0')).toBeUndefined()
-    expect(waitingPhotoSends('s1')?.map((item) => item.id)).toEqual(['pending-1'])
-    expect(waitingPhotoSends('s8')?.map((item) => item.id)).toEqual(['pending-8'])
+    expect(waitingPhotoSends('s0')?.map((item) => item.images)).toEqual([['file:///0.jpg']])
+    expect(waitingPhotoSends('s8')?.map((item) => item.images)).toEqual([['file:///8.jpg', 'data:image/png;base64,AA']])
+  })
+
+  it('brings the recent sessions’ photo sends back after a relaunch, without data: previews', async () => {
+    rememberWaitingPhotoSends('s1', [
+      send('pending-1', ['file:///a1.jpg', 'data:image/png;base64,AA']),
+      send('pending-2', ['data:image/png;base64,BB'])
+    ])
+    vi.advanceTimersByTime(1_000)
+    await Promise.resolve()
+    resetWaitingPhotoSendsForTests()
+    await hydrateWaitingPhotoSends()
+    expect(waitingPhotoSends('s1')?.map((item) => [item.id, item.images])).toEqual([['pending-1', ['file:///a1.jpg']]])
+  })
+
+  it('leaves each chat to wait for its own read when the recent copy will not parse', async () => {
+    await AsyncStorage.setItem('codeui:chat-waiting-photo-sends-recent', '{not json')
+    await expect(hydrateWaitingPhotoSends()).resolves.toBeUndefined()
+    expect(waitingPhotoSends('s1')).toBeUndefined()
   })
 })

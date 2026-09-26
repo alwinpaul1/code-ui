@@ -26,7 +26,9 @@ const RUN_SESSIONS = 8
 const RECENT_SESSIONS = 12
 
 const lastKnown = new Map<string, Record<string, string[]>>()
-const recent = createPersistedMap<Record<string, string[]>>({
+/** A session's save still in flight, which the next one waits for. */
+const saving = new Map<string, Promise<void>>()
+const recent =createPersistedMap<Record<string, string[]>>({
   storageKey: 'codeui:chat-image-previews-recent',
   maxEntries: RECENT_SESSIONS
 })
@@ -62,15 +64,37 @@ function remember(sessionKey: string, previews: Record<string, string[]>): void 
  * read came back. Writing the map alone replaced the entry and lost them for
  * good (review, 2026-09-26), so such a write goes on top of what storage has.
  */
-export async function saveNativeChatImagePreviews(
+export function saveNativeChatImagePreviews(
   sessionKey: string,
   previews: Record<string, string[]>
 ): Promise<void> {
+  const earlier = saving.get(sessionKey)
+  if (!earlier && lastKnown.has(sessionKey)) {
+    remember(sessionKey, previews)
+    return writeNativeChatImagePreviews(sessionKey, previews)
+  }
+  // In the order they were made: a save that waits for its read must not
+  // land after a later one (review, 2026-09-26).
+  // Nothing in flight: start now, so its read is asked for before anything
+  // the caller does next.
+  const run = earlier ? earlier.then(() => saveInOrder(sessionKey, previews)) : saveInOrder(sessionKey, previews)
+  const done = run.catch(() => undefined)
+  saving.set(sessionKey, done)
+  void done.then(() => {
+    if (saving.get(sessionKey) === done) {
+      saving.delete(sessionKey)
+    }
+  })
+  return run
+}
+
+async function saveInOrder(sessionKey: string, previews: Record<string, string[]>): Promise<void> {
   if (lastKnown.has(sessionKey)) {
     remember(sessionKey, previews)
     return writeNativeChatImagePreviews(sessionKey, previews)
   }
   const stored = await readNativeChatImagePreviews(sessionKey)
+  // The chat's own read may have come back meanwhile: it is storage too.
   const merged = stored ? { ...stored, ...lastKnown.get(sessionKey), ...previews } : previews
   remember(sessionKey, merged)
   return writeNativeChatImagePreviews(sessionKey, merged)
@@ -96,5 +120,6 @@ export function hydrateNativeChatImagePreviewCache(): Promise<void> {
 
 export function resetNativeChatImagePreviewCacheForTests(): void {
   lastKnown.clear()
+  saving.clear()
   recent.reset()
 }

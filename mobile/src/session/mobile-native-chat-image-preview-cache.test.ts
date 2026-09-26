@@ -124,6 +124,30 @@ describe('the phone’s photo previews, known before a chat reads them', () => {
     expect(knownNativeChatImagePreviews(S1)).toEqual({ '40b55aba': ['file:///new.jpg'] })
   })
 
+  // Review, 2026-09-26: a save waiting for its read, the chat's own read
+  // coming back, then a later save that found the session known and wrote at
+  // once. The earlier save landed last, with its older map.
+  it('keeps the newer of two saves when the older one’s read comes back last', async () => {
+    await AsyncStorage.setItem(sessionEntry(S1), JSON.stringify({ m1: ['file:///stored.jpg'] }))
+    const realGetItem = AsyncStorage.getItem.bind(AsyncStorage)
+    const stored = (await realGetItem(sessionEntry(S1)))!
+    const answers: ((raw: string | null) => void)[] = []
+    vi.spyOn(AsyncStorage, 'getItem').mockImplementation(
+      () => new Promise<string | null>((resolve) => answers.push(resolve))
+    )
+    const read = loadNativeChatImagePreviews(S1)
+    const older = saveNativeChatImagePreviews(S1, { m2: ['file:///first-binding.jpg'] })
+    await Promise.resolve()
+    answers[0]!(stored)
+    await read
+    const newer = saveNativeChatImagePreviews(S1, { m1: ['file:///stored.jpg'], m2: ['file:///rebound.jpg'] })
+    await Promise.resolve()
+    answers[1]!(stored)
+    await Promise.all([older, newer])
+    expect(knownNativeChatImagePreviews(S1)?.m2).toEqual(['file:///rebound.jpg'])
+    expect(JSON.parse((await realGetItem(sessionEntry(S1)))!).m2).toEqual(['file:///rebound.jpg'])
+  })
+
   it('knows a session whose photos were all cleared as cleared', async () => {
     await saveNativeChatImagePreviews(S1, { '40b55aba': ['file:///a1.jpg'] })
     await saveNativeChatImagePreviews(S1, {})

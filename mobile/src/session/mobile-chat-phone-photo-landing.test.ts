@@ -19,6 +19,7 @@ import {
   hydrateNativeChatImagePreviewCache,
   resetNativeChatImagePreviewCacheForTests
 } from './mobile-native-chat-image-preview-cache'
+import { hydrateWaitingPhotoSends, resetWaitingPhotoSendsForTests } from './mobile-native-chat-waiting-photo-sends'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -418,7 +419,10 @@ describe('a message the phone sent with photos, as its row lands', () => {
     // the chat comes back, so a row that landed while the chat was away (a
     // photo queued mid-turn and dequeued at the turn's end while the user was
     // in another project) was drawn from the row alone until then.
-    it('keeps the phone’s photos in the first frame of a chat that comes back after their row landed while it was away', async () => {
+    it.each([
+      ['the chat comes back', false],
+      ['the app is relaunched', true]
+    ])('keeps the phone’s photos in the first frame after %s, when their row landed while it was away', async (_label, relaunch) => {
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
       await show('07:00:19.000', { messages: before })
@@ -427,6 +431,18 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await act(async () => {
         await Promise.resolve()
       })
+      if (relaunch) {
+        for (let turn = 0; turn < 3; turn += 1) {
+          await act(async () => {
+            vi.advanceTimersByTime(1_000)
+            await Promise.resolve()
+          })
+        }
+        resetNativeChatImagePreviewCacheForTests()
+        resetWaitingPhotoSendsForTests()
+        await hydrateNativeChatImagePreviewCache()
+        await hydrateWaitingPhotoSends()
+      }
       const back = frames.length
       await show('07:02:30.000', { messages: [...before, P1, C1, reply1] })
       expect(frames.length).toBeGreaterThan(back)
