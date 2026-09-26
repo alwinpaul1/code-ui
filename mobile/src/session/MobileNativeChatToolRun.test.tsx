@@ -789,3 +789,48 @@ describe('tapping a tool row opens the Claude-app detail sheet', () => {
     expect(sheetPair(tree)?.call?.name).toBe('Bash')
   })
 })
+
+describe('the running row lays out like the settled one', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  // Review of c714c9bc: the settled row's chevron follows its sentence, but
+  // the running row's label grew to fill the row and pinned its chevron to
+  // the far edge, so the chevron jumped left the moment the run settled.
+  it.each(['light', 'dark'] as const)(
+    'keeps the chevron right after the Running label, where it sits once the run settles, in %s',
+    (scheme) => {
+      act(() => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(Harness, { blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+          )
+        )
+      })
+      const tree = renderer!
+      const label = tree.root.findAll(
+        (node) => node.props?.testID === 'tool-run-active-label' && typeof node.type === 'string'
+      )[0]!
+      const entries = (
+        Array.isArray(label.props.style) ? label.props.style.flat(Infinity) : [label.props.style]
+      ) as (Record<string, unknown> | null)[]
+      const style = Object.assign({}, ...entries.filter(Boolean)) as Record<string, unknown>
+      expect(style.flex ?? 0).toBe(0)
+      expect(style.flexGrow ?? 0).toBe(0)
+      expect(style.flexShrink).toBe(1)
+      const toggle = tree.root
+        .findByProps({ testID: 'tool-run-active-header' })
+        .findByType('Pressable' as never)
+      const order = toggle.children
+        .filter((child): child is ReactTestInstance => typeof child !== 'string')
+        .map((child) => (child.props.testID as string | undefined) ?? String(child.type))
+      expect(order.indexOf('ChevronRight')).toBe(order.indexOf('tool-run-active-label') + 1)
+    }
+  )
+})

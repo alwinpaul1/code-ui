@@ -137,8 +137,10 @@ export function makeChatMessageStyles(theme: Theme) {
       gap: space.sm,
       paddingVertical: 3
     },
+    // Hugs its words like the settled sentence, so the chevron sits after
+    // it in both states and does not jump when the run settles.
     toolRunActiveLabel: {
-      flex: 1,
+      flexShrink: 1,
       color: colors.textSecondary,
       fontFamily: fonts.regular,
       fontSize: 13
