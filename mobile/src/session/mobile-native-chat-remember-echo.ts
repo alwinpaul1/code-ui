@@ -213,6 +213,11 @@ function isWitnessed(id: string): boolean {
  *  painted as the TUI's row, "Message from @a9d5c2f85e94ca47f (ctrl+o to
  *  expand)", which the queue-box witness stored as the user's message (Bug
  *  B, session 790eafa8, 2026-09-26; mobile-terminal-queued-messages.ts). */
+/** How the TUI's row for a peer message ends: a row that only opens like
+ *  one, "Message from @sarah: the deploy failed", is a person's message
+ *  (review of 2026-09-27). */
+const PEER_ROW_TAIL = /\(ctrl\+o to expand\)\s*$/
+
 export function sweepWitnessedEchoes(
   list: readonly MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
@@ -221,7 +226,7 @@ export function sweepWitnessedEchoes(
     (parseSubagentMessage(item.text) !== null ||
       isCutHandback(item.text) ||
       isCrossSessionMessagePrompt(item.text) ||
-      (item.id.startsWith('absorbed-') && isPeerRowHead(`› ${item.text}`)))
+      (item.id.startsWith('absorbed-') && isPeerRowHead(`› ${item.text}`) && PEER_ROW_TAIL.test(item.text)))
   // Phone sends first so they win against witnessed readings of themselves.
   const ordered = [...list.filter((item) => !isWitnessed(item.id)), ...list.filter((item) => isWitnessed(item.id) && !injected(item))]
   const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text).map((item) => item.id))

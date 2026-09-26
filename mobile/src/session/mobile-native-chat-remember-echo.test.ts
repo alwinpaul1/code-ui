@@ -182,6 +182,17 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
   })
 
+  // Review of 9f9aa4a0..a6857609, item 4: a person's queued message that
+  // opens "Message from @name:" was swept, and for a mid-turn send with no
+  // desk copy that witness is the only record of it.
+  it('is restored from the queue box when it opens "Message from @name:" in the person\'s own words', () => {
+    const stored = [
+      { id: 'absorbed-typed', text: 'Message from @sarah: the deploy failed, can you look?', ...base },
+      { id: 'absorbed-peer', text: 'Message from @code-ui-6f: Capture probe from the Code UI session (ctrl+o to expand)', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])
