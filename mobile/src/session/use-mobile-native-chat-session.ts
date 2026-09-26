@@ -259,7 +259,9 @@ export function useMobileNativeChatSession(args: {
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
         }
-        whole.frame(frame.type, applied)
+        // The client's own connection time: its replay may land before React
+        // renders the new connection. A test double may not say.
+        whole.frame(frame.type, applied, client.getLastConnectedAt?.())
         if (applied.windowReplaced) {
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.

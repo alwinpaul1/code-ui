@@ -17,15 +17,31 @@ export function holdsWholeSession(
  * replay merged from the window's oldest row, or on a page it answered. Never
  * inferred from a row count (a host that omits `hasMore`, the 12-row retry),
  * and never at the 2000-row paging cap (review of c914027d). A live trim, a
- * kept tail and a new subscription clear it. A healthy reconnect replays the
- * transcript on the same subscription, so until that snapshot lands a page
- * cannot set it (review of c6d8394a: +94 on the 93-line create).
+ * kept tail and a new subscription clear it.
+ *
+ * A healthy reconnect replays the transcript on the same subscription, and
+ * the window lacks what was written while the phone was away until that
+ * snapshot lands, so from a new connection to its replay it is false (review
+ * of c6d8394a: +94 on the 93-line create). Only the replay, or a window the
+ * host replaces, ends that wait; a live row does not, as it may come first
+ * (verification of c9480154: +125). The replay merged onto the same window,
+ * untrimmed, leaves it starting where it did before the connection, or where
+ * a page answered during the wait reached (fourth review of the line count:
+ * read as the only way back, the subscription's 40-row tail shut the count
+ * for the rest of the visit). A connection is taken from the client when a
+ * frame lands, as well as from React's render of it, which may come after
+ * the replay; a second connection before the replay keeps what the first
+ * saved.
  */
 export type WholeSessionTracker = {
   readonly whole: boolean
   subscribed(): void
-  connected(lastConnectedAt: number | null): void
-  frame(type: string | undefined, applied: { windowReplaced?: boolean; hasMore?: boolean; pending?: boolean; cursorInvalidated?: boolean }): void
+  connected(lastConnectedAt: number | null | undefined): void
+  frame(
+    type: string | undefined,
+    applied: { windowReplaced?: boolean; hasMore?: boolean; pending?: boolean; cursorInvalidated?: boolean },
+    connectedAt?: number | null
+  ): void
   retained(): void
   page(hasMore: boolean | undefined): void
 }
@@ -33,13 +49,21 @@ export type WholeSessionTracker = {
 export function createWholeSessionTracker(connectedAt: number | null): WholeSessionTracker {
   let whole = false
   let replayPending = false
-  // What the window was before the new connection, or reached by a page
-  // answered while its replay was pending: the replay merged onto the same
-  // window, untrimmed, leaves it starting where it did (fourth review of the
-  // line count: the subscription's own 40-row tail is what the host replays,
-  // and read as the only way back it shut the gate for the rest of the visit).
   let wholeBeforeReplay = false
   let connection = connectedAt
+  // Connection times only move forward; a client that cannot say yet (null)
+  // or says an older one is not a new connection.
+  const connected = (lastConnectedAt: number | null | undefined): void => {
+    if (typeof lastConnectedAt !== 'number' || (connection !== null && lastConnectedAt <= connection)) {
+      return
+    }
+    connection = lastConnectedAt
+    if (!replayPending) {
+      wholeBeforeReplay = whole
+    }
+    replayPending = true
+    whole = false
+  }
   return {
     get whole() {
       return whole
@@ -49,23 +73,15 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
       replayPending = false
       wholeBeforeReplay = false
     },
-    connected(lastConnectedAt) {
-      if (lastConnectedAt !== connection) {
-        connection = lastConnectedAt
-        wholeBeforeReplay = whole
-        replayPending = true
-        whole = false
-      }
-    },
-    frame(type, applied) {
-      // The replay is the new subscription's first frame, and a live row
-      // only follows it; either ends the wait, which may have begun after a
-      // replay that came first.
-      if (replayPending && (type === 'snapshot' || type === 'appended')) {
+    connected,
+    frame(type, applied, frameConnectedAt) {
+      connected(frameConnectedAt)
+      if (replayPending && (applied.windowReplaced || applied.cursorInvalidated)) {
         replayPending = false
-        if (!applied.windowReplaced && !applied.cursorInvalidated) {
-          whole = wholeBeforeReplay
-        }
+        wholeBeforeReplay = false
+      } else if (replayPending && type === 'snapshot') {
+        replayPending = false
+        whole = wholeBeforeReplay
         wholeBeforeReplay = false
       }
       if (type === 'snapshot' && !applied.windowReplaced && applied.hasMore === false && !applied.cursorInvalidated) {

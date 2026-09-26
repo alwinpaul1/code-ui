@@ -280,10 +280,13 @@ describe('when the chat holds the whole session', () => {
 
   // The client can re-attach the subscription, and the host answer with the
   // replay, before React renders the new connection time: the gate then
-  // waited for a replay that had already come.
+  // waited for a replay that had already come. The client says which
+  // connection the replay came on.
   it('opens the count again when the replay landed before the new connection was rendered', async () => {
     const ROWS = [message('first'), message('second'), message('third')]
+    let connectedAt = 1
     const client = {
+      getLastConnectedAt: () => connectedAt,
       sendRequest: vi.fn(),
       subscribe: vi.fn((_method, _params, onData) => {
         emit = onData
@@ -292,6 +295,7 @@ describe('when the chat holds the whole session', () => {
       })
     } as unknown as RpcClient
     await mount(client)
+    connectedAt = 2
     await act(async () => emit({ type: 'snapshot', messages: [...ROWS, message('away')], hasMore: false, beforeOffset: 0 }))
     await act(async () => {
       renderer?.update(createElement(Harness, { client, lastConnectedAt: 2 }))
