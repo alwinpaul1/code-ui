@@ -41,7 +41,15 @@ export function resetAgentMessageAnchorsForTests(): void {
 }
 
 /** The raw row a message is drawn after, or undefined while there is no row
- *  at all to anchor on (a beacon restored before the transcript loaded). */
+ *  at all to anchor on (a beacon restored before the transcript loaded).
+ *
+ *  A message restored from the warm-start store (`restored`) has no anchor in
+ *  memory, and the tail is the newest page, not where it came: taking it drew
+ *  an hour-old message under the newest reply after every relaunch (review of
+ *  2026-09-26). It is drawn after the row the hook named once that row is
+ *  loaded, and held back until paging brings it in, the way a remembered echo
+ *  is (mobile-native-chat-render-data.ts, 2026-09-13). One the hook named no
+ *  row for (an older hook) has nowhere to go and stays held back. */
 function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly NativeChatMessage[]): string | undefined {
   const key = `${scope}\0${message.id}`
   const known = anchorByKey.get(key)
@@ -54,7 +62,7 @@ function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly Nat
     remember(anchorByKey, key, message.anchorId)
     return message.anchorId
   }
-  if (!tail) {
+  if (!tail || message.restored) {
     return undefined
   }
   if (message.anchorId) {

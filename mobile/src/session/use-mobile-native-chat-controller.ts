@@ -128,7 +128,7 @@ export function useMobileNativeChatController(
     nativeChatStatus,
     hudBeacon?.desktopPrompts
   )
-  const agentMessages = useBeaconAgentMessages(hudBeacon?.desktopPrompts)
+  const agentMessages = useBeaconAgentMessages(hudBeacon)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,

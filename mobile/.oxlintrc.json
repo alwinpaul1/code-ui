@@ -380,7 +380,10 @@
             // 2026-09-25: 329. The C0 channel is read first on every chunk (an
             // import, the take, the publish, the reset); its state lives in
             // agent-hud-channel.ts.
-            "max": 329,
+            // 2026-09-26: 332. A session's subagent messages are kept apart
+            // from the last 40 prompts (an import, the field, the merge); the
+            // list itself lives in agent-hud-beacon-agent-messages.ts.
+            "max": 332,
             "skipBlankLines": true,
             "skipComments": true
           }

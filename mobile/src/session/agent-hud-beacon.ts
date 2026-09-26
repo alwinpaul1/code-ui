@@ -6,6 +6,7 @@ import {
   readWarmStartBeacons,
   rememberWarmStartBeacon
 } from './agent-hud-beacon-warm-start'
+import { withAgentMessagePrompt, withRestoredAgentMessages, type AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 
 /**
  * The phone half of the invisible HUD channel.
@@ -90,8 +91,13 @@ export type AgentHudBeacon = {
   promptHook: boolean
   /** Null on every beacon that is not a prompt submission. */
   desktopPrompt: DesktopPrompt | null
-  /** Every desktop prompt seen on this terminal, oldest first, newest last. */
+  /** The last desktop prompts seen on this terminal (MAX_DESKTOP_PROMPTS),
+   *  oldest first, newest last. */
   desktopPrompts: DesktopPrompt[]
+  /** The subagent messages among them, kept apart from that rolling list so
+   *  their rows stay drawn (agent-hud-beacon-agent-messages.ts). Absent until
+   *  one arrives. */
+  agentMessagePrompts?: AgentMessagePrompt[]
   /** When `runningTaskIds` was received (phone clock, epoch ms); null until a
    *  beacon has carried `run=`. The Stop hook speaks only when a turn ends,
    *  so its list cannot name a shell launched after it — the reader uses this
@@ -260,7 +266,7 @@ function publish(handle: string, payload: string): void {
   // wholesale would blank the HUD every time a turn ended.
   const held = beacons.get(handle)
   const previous = held && !sessionChanged(held, beacon) ? held : undefined
-  const merged: AgentHudBeacon = previous
+  const joined: AgentHudBeacon = previous
     ? {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
@@ -280,6 +286,7 @@ function publish(handle: string, payload: string): void {
         receivedAt: beacon.receivedAt
       }
     : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
+  const merged = withAgentMessagePrompt(joined, beacon.desktopPrompt)
   // A repeat says nothing new: keep the object readers already hold.
   if (previous && unchangedBeacon(previous, merged)) {
     return
@@ -305,7 +312,7 @@ export async function hydrateAgentHudBeacons(): Promise<void> {
   let restored = false
   for (const [handle, beacon] of Object.entries(stored)) {
     if (!beacons.has(handle)) {
-      beacons.set(handle, beacon)
+      beacons.set(handle, withRestoredAgentMessages(beacon))
       restored = true
     }
   }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { isToolCallBlock, isToolResultBlock, isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { DesktopPrompt } from './agent-hud-beacon'
+import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
+import type { AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { readLaunch, readString, takeAnsweredCall, type PendingCall } from './mobile-background-task-transcript'
 
 /**
@@ -38,6 +39,8 @@ export type BeaconAgentMessage = {
   cut: boolean
   /** The transcript row that was last when the message was taken. */
   anchorId?: string
+  /** Read back from the warm-start store, not heard this run. */
+  restored?: true
 }
 
 const OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:[ \t]*\n/
@@ -101,7 +104,7 @@ function dedent(report: string): string {
 }
 
 /** The subagent messages among the prompt hook's beacons, in order. */
-export function beaconAgentMessages(prompts: readonly DesktopPrompt[] | undefined): BeaconAgentMessage[] {
+export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | undefined): BeaconAgentMessage[] {
   const found: BeaconAgentMessage[] = []
   for (const prompt of prompts ?? []) {
     const parsed = parseSubagentMessage(prompt.text, { cut: prompt.cut === true })
@@ -111,16 +114,28 @@ export function beaconAgentMessages(prompts: readonly DesktopPrompt[] | undefine
         from: parsed.from,
         body: parsed.body,
         cut: prompt.cut === true,
-        ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {})
+        ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
+        ...(prompt.restored ? { restored: true as const } : {})
       })
     }
   }
   return found
 }
 
-/** The same, for the beacon of the session this tab shows. */
-export function useBeaconAgentMessages(prompts: readonly DesktopPrompt[] | undefined): BeaconAgentMessage[] {
-  return useMemo(() => beaconAgentMessages(prompts), [prompts])
+/** The same, for the beacon of the session this tab shows: its own list of
+ *  them, which outlives the last 40 prompts, else its prompts. */
+export function agentMessagesOfBeacon(
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+): BeaconAgentMessage[] {
+  return beaconAgentMessages(beacon?.agentMessagePrompts ?? beacon?.desktopPrompts)
+}
+
+export function useBeaconAgentMessages(
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+): BeaconAgentMessage[] {
+  const kept = beacon?.agentMessagePrompts
+  const prompts = beacon?.desktopPrompts
+  return useMemo(() => agentMessagesOfBeacon({ desktopPrompts: prompts ?? [], agentMessagePrompts: kept }), [kept, prompts])
 }
 
 /**

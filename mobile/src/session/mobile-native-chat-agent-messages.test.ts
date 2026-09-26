@@ -2,11 +2,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   agentMessageOf,
+  agentMessagesOfBeacon,
   beaconAgentMessages,
   parseSubagentMessage,
   subagentNames,
   type BeaconAgentMessage
 } from './mobile-native-chat-agent-messages'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
+import { AGENT_MESSAGE_PROMPT_CAP, keepAgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { resetAgentMessageAnchorsForTests, withAgentMessageRows } from './mobile-native-chat-agent-message-rows'
 import {
   SUBAGENT_HANDBACK_PROMPT,
@@ -208,5 +212,116 @@ describe("where a subagent's message is drawn", () => {
     const out = withAgentMessageRows(raw, raw, [message('1', { anchorId: 'a1' }), message('2', { anchorId: 'a1', body: 'second' })], 'scope')
     expect(drawn(out)).toEqual(['a1', 'from a7a46867b4f497c96: Request for one read-only device probe', 'from a7a46867b4f497c96: second'])
     expect(withAgentMessageRows(raw, raw, [], 'scope')).toBe(raw)
+  })
+})
+
+// Review of 2026-09-26. The prompt hook is the row's only source, and what the
+// phone keeps of it is the beacon: the last 40 prompts of the terminal, stored
+// across launches (agent-hud-beacon-warm-start.ts). The rows' anchors were in
+// memory only.
+describe('a subagent message the beacon carried, later on', () => {
+  const SESSION_ID = '01a08736-aaaa-bbbb-cccc-000000000001'
+  const A1 = 'a1a1a1a1-0000-4000-8000-000000000001'
+  /** The hook's frame for one submission, as the host writes it. */
+  const hookFrame = (nonce: string, text: string, anchorId?: string) =>
+    `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION_ID} up=${nonce}:${encodeURIComponent(JSON.stringify(text).slice(1, -1))}${
+      anchorId ? ` at=${anchorId}` : ''
+    }\u0007`
+  const drawn = (rows: readonly NativeChatMessage[]) =>
+    rows.map((entry) => {
+      const agent = agentMessageOf(entry)
+      return agent ? `from ${agent.sender}` : entry.id
+    })
+  // A terminal of its own per case: the warm-start store outlives a case, and
+  // it writes a terminal's record at most every 30 s.
+  let terminal = 0
+  const handle = () => `agent-message-terminal-${terminal}`
+  /** The store's write is fire-and-forget; let it land before the kill. */
+  const written = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const rowsNow = (raw: NativeChatMessage[]) => withAgentMessageRows(raw, raw, agentMessagesOfBeacon(getAgentHudBeacon(handle())), 'scope')
+  afterEach(() => {
+    resetAgentMessageAnchorsForTests()
+    resetAgentHudBeacons()
+    terminal += 1
+  })
+
+  it('is still drawn after the step it came in once the terminal has taken 40 more prompts', () => {
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    const raw = [said(A1, 'Reconnected.'), said('a2', 'Next step.')]
+    expect(drawn(rowsNow(raw))).toEqual([A1, 'from a7a46867b4f497c96', 'a2'])
+    for (let index = 0; index < 40; index += 1) {
+      consumeAgentHudBeacons(handle(), hookFrame(String(200 + index), `follow-up ${index}`))
+    }
+    expect(getAgentHudBeacon(handle())?.desktopPrompts.some((prompt) => prompt.nonce === '100')).toBe(false)
+    expect(drawn(rowsNow(raw))).toEqual([A1, 'from a7a46867b4f497c96', 'a2'])
+  })
+
+  it('is not drawn under the newest row after a relaunch, and is drawn after its step once paging loads it', async () => {
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    const before = [said(A1, 'Reading the code.'), said('a2', 'Done.')]
+    expect(drawn(rowsNow(before))).toEqual([A1, 'from a7a46867b4f497c96', 'a2'])
+    // Killed and relaunched: the beacon comes back from the store, the
+    // anchors do not, and the window is the last page, an hour later.
+    await written()
+    resetAgentHudBeacons()
+    resetAgentMessageAnchorsForTests()
+    await hydrateAgentHudBeacons()
+    const window = [said('z1', 'An hour later.'), said('z2', 'The newest reply.')]
+    expect(drawn(rowsNow(window))).toEqual(['z1', 'z2'])
+    // Paging brings the step back in.
+    const paged = [...before, ...window]
+    expect(drawn(rowsNow(paged))).toEqual([A1, 'from a7a46867b4f497c96', 'a2', 'z1', 'z2'])
+  })
+
+  it('is drawn after its step at once after a relaunch when the step is loaded', async () => {
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    await written()
+    resetAgentHudBeacons()
+    await hydrateAgentHudBeacons()
+    const raw = [said(A1, 'Reading the code.'), said('a2', 'Done.')]
+    expect(drawn(rowsNow(raw))).toEqual([A1, 'from a7a46867b4f497c96', 'a2'])
+  })
+
+  it('is held back after a relaunch from a record written before it had a list of its own', async () => {
+    // The build before this one kept it only among the desktop prompts.
+    const stored = {
+      [handle()]: {
+        agent: 'claude',
+        sessionId: SESSION_ID,
+        desktopPrompts: [{ nonce: '100', text: SUBAGENT_REQUEST_PROMPT, cut: false, anchorId: A1 }],
+        receivedAt: 1
+      }
+    }
+    await AsyncStorage.setItem('codeui:agent-hud-beacons.v2', JSON.stringify(stored))
+    await hydrateAgentHudBeacons()
+    expect(drawn(rowsNow([said('z1', 'An hour later.')]))).toEqual(['z1'])
+    expect(drawn(rowsNow([said(A1, 'Reading the code.'), said('z1', 'An hour later.')]))).toEqual([
+      A1,
+      'from a7a46867b4f497c96',
+      'z1'
+    ])
+  })
+
+  it('keeps the last 32 of a session, the oldest shed first, and only subagent messages', () => {
+    let kept = keepAgentMessagePrompt(undefined, { nonce: '1', text: 'typed at the desk' })
+    expect(kept).toBeUndefined()
+    for (let index = 0; index < AGENT_MESSAGE_PROMPT_CAP + 1; index += 1) {
+      kept = keepAgentMessagePrompt(kept, { nonce: String(index), text: SUBAGENT_REQUEST_PROMPT })
+    }
+    expect(kept).toHaveLength(AGENT_MESSAGE_PROMPT_CAP)
+    expect(kept?.[0]?.nonce).toBe('1')
+    // The same one again, or a prompt that is not one: the same list back.
+    expect(keepAgentMessagePrompt(kept, { nonce: '5', text: SUBAGENT_REQUEST_PROMPT })).toBe(kept)
+    expect(keepAgentMessagePrompt(kept, { nonce: '99', text: 'typed at the desk' })).toBe(kept)
+  })
+
+  it('a new one heard after a relaunch is still drawn where the chat was, before its row loads', async () => {
+    consumeAgentHudBeacons(handle(), hookFrame('90', 'an early desk prompt'))
+    await written()
+    resetAgentHudBeacons()
+    await hydrateAgentHudBeacons()
+    consumeAgentHudBeacons(handle(), hookFrame('101', SUBAGENT_REQUEST_PROMPT, 'b2b2b2b2-0000-4000-8000-000000000002'))
+    const window = [said('z1', 'An hour later.'), said('z2', 'The newest reply.')]
+    expect(drawn(rowsNow(window))).toEqual(['z1', 'z2', 'from a7a46867b4f497c96'])
   })
 })
