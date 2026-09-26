@@ -166,7 +166,11 @@ Nothing here is built.
   since `less \-O` and `git diff '--output'=` still write, and a quoted `~`
   is a folder called `~`. A `tee`, a `sed -i`, a `less -O`, a `mv`,
   `cp` or `rm`, a `git commit`, and a command given as an argument list, the
-  way Codex sends one, still void the count. The count
+  way Codex sends one, still void the count. A call that reaches the file
+  without naming it is not seen at all: a glob (`sed -i '$d' jobs/*.sh`), a
+  folder, a variable, or another script that edits it (`python3 fix.py`).
+  Only the file's own check, that it still starts with what the wire kept,
+  stands against those, and it misses an edit past that point. The count
   is then the uncut Write's count of that text, through the same pipeline,
   so a small create and a large one agree
   (`mobile-native-chat-created-file-count.ts`). A finished run on screen

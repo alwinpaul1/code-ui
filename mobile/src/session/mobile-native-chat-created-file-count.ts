@@ -18,6 +18,11 @@
 // - no background work launched before it was still running when it landed
 //   (mobile-native-chat-created-file-work.ts).
 //
+// A call that reaches the file without naming it is not seen: a glob
+// (`sed -i '$d' jobs/*.sh`), a folder, a variable, or another script that
+// edits it (`python3 fix.py`). Only the first check stands against those,
+// and it misses an edit past what the wire kept (review of 5b257b16).
+//
 // Anything else is no number, as before. The count itself is the uncut
 // Write's count, taken through the same pipeline, so a small create and a
 // large one agree. The reading is in mobile-native-chat-created-file-count-store.ts.
