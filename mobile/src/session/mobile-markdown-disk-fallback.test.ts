@@ -75,7 +75,10 @@ describe('buildMarkdownDiskFallbackDoc', () => {
     })
   })
 
-  it('warns when the disk read is truncated', () => {
+  // Second review of the file-open fix (2026-09-26): a cut-short copy of a
+  // tab with unsaved desktop changes said only "File too large", so the old
+  // copy read as the desktop's.
+  it('warns about unsaved desktop changes and a cut-short copy together', () => {
     expect(
       buildMarkdownDiskFallbackDoc({
         content: '# Partial',
@@ -85,6 +88,12 @@ describe('buildMarkdownDiskFallbackDoc', () => {
     ).toMatchObject({
       editable: false,
       stale: true,
+      readOnlyReason: 'Desktop has unsaved changes. Showing the start of the file on disk, too large to show in full.'
+    })
+  })
+
+  it('warns when the disk read is truncated', () => {
+    expect(buildMarkdownDiskFallbackDoc({ content: '# Partial', truncated: true, tabIsDirty: false })).toMatchObject({
       readOnlyReason: 'File too large for mobile preview'
     })
   })

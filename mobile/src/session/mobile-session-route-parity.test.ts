@@ -201,8 +201,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // submitLiveInput, and the per-render submitBufferedDraft calls handleSend.
 // 2026-09-26: readMarkdownTab reads the disk on any refusal of the tab and
 // keeps the desktop's reason; readFileTab's generic copy carries the reason.
-// Then: it never reads the disk for a file the desktop called binary.
-const HEAD_CALLBACK_BODY_SHA256 = 'fe4fe10a054daa25c5f76ece35f8d0d0f4b091f5bec1f1f6d7d66ba20a46aca6'
+// Then: it never reads the disk for a file the desktop called binary, read off
+// the refusal's code and message both.
+const HEAD_CALLBACK_BODY_SHA256 = 'f4b6162c9d5792a45af22d3ada917e9cf10c80f51c5f2076f042392a81bee929'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23

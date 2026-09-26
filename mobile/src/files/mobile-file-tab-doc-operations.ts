@@ -20,7 +20,7 @@ import {
  * publishes what it read into a typed ready document with no guard, so a member the preview screen
  * normalizes is one the tab renders as `undefined`. An unreadable reply now reaches `readFileTab`'s
  * catch as one named error instead of a property-read TypeError, and that catch already shows
- * "Couldn't load file preview" for both.
+ * "Couldn't load file preview", with the error's own words after it, for both.
  */
 
 /**

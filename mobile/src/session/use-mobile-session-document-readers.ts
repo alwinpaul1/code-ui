@@ -75,7 +75,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         const refused = response as RpcFailure
         const headless = shouldReadMarkdownFromDiskAfterReadTabFailure(refused)
         const desktopReason = refused.error.message || refused.error.code
-        if (refusalBarsDiskRead(desktopReason)) {
+        if (refusalBarsDiskRead(refused.error)) {
           throw new Error(desktopReason)
         }
         let fallback: ReturnType<typeof filePreviewTextRead.interpret> | null = null

@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -100,7 +100,7 @@ async function screenAfterRead(
     screen = create(
       createElement(
         ThemeProvider,
-        { initialPreference: theme, children: null },
+        { initialPreference: theme } as ComponentProps<typeof ThemeProvider>,
         createElement(MarkdownReader, {
           documentId: markdownTab.id,
           doc,
