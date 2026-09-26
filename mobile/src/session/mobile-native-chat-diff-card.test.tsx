@@ -268,9 +268,10 @@ describe('an agent file edit in the chat transcript', () => {
   // The 2026-09-26 report's runs (fixtures/claude-edit-runs-2.1.282.ts). The
   // wire kept 3896 of the created file's 6111 characters, and the card headed
   // the rows that survived "+65 −0" as though they were the file. The Claude
-  // app's +93 is in no field that reaches the phone.
+  // app's +93 is in no field that reaches the phone; only a read of the file
+  // can give it (mobile-native-chat-created-file-count-chip.test.tsx).
   it.each(['light', 'dark'] as const)(
-    'says a created file the wire cut is cut, and prints no line count for it, in %s',
+    'says a created file the wire cut is cut, and prints no line count for it from the wire alone, in %s',
     (scheme) => {
       const { texts } = render(CREATED_A_FILE_RUN, scheme)
       expect(texts).toContain('Added file')

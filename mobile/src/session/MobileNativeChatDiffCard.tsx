@@ -172,13 +172,21 @@ function DiffCard({
   verb,
   onRevertHunk,
   revertScope = '',
-  onOpenFile
+  onOpenFile,
+  verifiedAdded
 }: Props): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useDiffCardStyles()
   const rows = file.lines.slice(0, rowLimit)
   const countWhole = editFileCountIsWhole(file)
   const clipped = !countWhole || rows.length < file.lines.length
+  // A cut create's rows stay cut, but the file itself may have told us its
+  // count, and a create removes nothing.
+  const counts = countWhole
+    ? { added: file.added, removed: file.removed }
+    : verifiedAdded !== undefined
+      ? { added: verifiedAdded, removed: 0 }
+      : null
   // Per-hunk action state, keyed by what the hunk is rather than by its index,
   // so a re-render with a re-derived `file` keeps it. A hunk already put back
   // is read from the shared marks, which outlive this mount.
@@ -288,16 +296,17 @@ function DiffCard({
         >
           {baseName(file.path)}
         </Text>
-        {countWhole ? (
+        {counts ? (
           // A cut file's rows are what survived the cut, and a patch that may
           // go on has more than its rows, so neither count is the edit's;
-          // "Diff truncated" beside the name says so instead.
+          // "Diff truncated" beside the name says so instead. A verified
+          // create count is the file's, drawn beside it.
           <>
             <Text testID="diff-card-added" style={styles.added}>
-              {`+${file.added}`}
+              {`+${counts.added}`}
             </Text>
             <Text testID="diff-card-removed" style={styles.removed}>
-              {`−${file.removed}`}
+              {`−${counts.removed}`}
             </Text>
           </>
         ) : null}
@@ -362,6 +371,10 @@ type Props = {
   /** Opens the file from its name, the same open a path on the tool line
    *  does. Absent on a proposal, where the file does not exist yet. */
   onOpenFile?: (path: string) => void
+  /** The line count of a created file the wire cut, read back from the file
+   *  and verified to be the create's (mobile-native-chat-created-file-count.ts).
+   *  Drawn only on a card whose own count is not whole. */
+  verifiedAdded?: number
 }
 
 export const MobileNativeChatDiffCard = memo(DiffCard)

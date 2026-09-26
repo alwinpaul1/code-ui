@@ -10,7 +10,7 @@ failing-first test and has been checked on the phone in light and dark.
 |---|---|---|---|
 | 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100). The line now goes only beside a `reasoning` message, drawn as its text, and no assistant prose has one (2026-09-26). A terminal Claude tab gets no line at all until Orca marks thinking (below); the structured lane, Codex and Grok already do |
 | 2 | Tool-run labels: a single command by its description ("Ran Count K*_F changes in section3 accountings"), "Ran skill", a SendMessage as "Messaged @agent <summary>", a new file as "created a file"; a described command beside other work as "ran a command" ("Created a file, ran a command", 2026-09-26) | "Ran a command" for every single command; no skill or message wording; then a described command named by its description beside an edit too | done (7816f8c5); the mixed run's wording fixed after the 2026-09-26 screenshot |
-| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, has no chip, and only Orca could carry its count |
+| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, is counted from the file on the desktop when that is provably the file the Write made, and draws no count otherwise (below) |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards. The sheet caps each input and the output at the inline row's `MAX_TOOL_DETAIL_LENGTH`, so a huge output cannot stall text layout; the Tools toggle no longer expands a row that opens the sheet, which the user chose to keep (2026-09-24; the Claude app has no such toggle). Drag feel needs a phone check |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
 | 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a breathing label; parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
@@ -89,8 +89,34 @@ Nothing here is built.
   characters and read "+61 −0"). No RPC the phone may call returns the uncut
   input: `nativeChat.readSession` applies the same diet, `agentSession.history`
   is the structured lane's, and `files.read` gives the file as it is now, not
-  as it was written. So the chip is left off whenever a count cannot be the
-  edit's own: an input the diet cut or a key it dropped, a resolved hunk
+  as it was written. The phone reads it anyway for a cut create, and takes the
+  count only when the file is provably the one the Write made: it still
+  starts with every character the wire kept, and no later call in the loaded
+  transcript may have changed it (an edit tool naming the same path however
+  it spells it, `./`, `..` or absolute; any other call naming the file; a
+  call the wire cut, whose dropped part may have named it; or a subagent
+  launched after it, whose own calls are not in this transcript). The count
+  is then the uncut Write's count of that text, through the same pipeline,
+  so a small create and a large one agree
+  (`mobile-native-chat-created-file-count.ts`). A finished run on screen
+  that draws a count asks for it; a run still going, or one folded away in
+  focus view, reads nothing. Two reads go out at a time, and only from the
+  chat's own settled transcript, never one held over from before it loaded:
+  after a reconnect or a move to another worktree the read waits for the
+  transcript that connection brings, since the one in hand may lack calls
+  made while the phone was away. Each file is read once per connection
+  (`files.resolveTerminalPath`, then `files.read`, which the host caps at
+  512 KiB), and a verdict holds only for the message it was read for, so the
+  same create run again in another session is read again. A read that
+  failed is asked again on the next connection, once its transcript is in;
+  if the chat brings none, the count stays off. A file outside the
+  worktree, a binary one, one over the host's cap, or one past the uncut
+  Write's own 2000-row or 96,000-character bound gets no number. What this
+  cannot see: a command that changed the file without naming it (a glob, a
+  directory-wide `sed -i`), and a change on the desktop that left the kept
+  prefix alone. The card keeps "Diff truncated" beside the count, since
+  its rows are still the cut ones. Otherwise the chip is left off whenever a
+  count cannot be the edit's own: an input the diet cut or a key it dropped, a resolved hunk
   Orca kept only 400 rows of, a patch at Orca's 40-hunk cap, a file the
   journal bounded, or an edit that landed with nothing left to count
   (`mobile-native-chat-edit-wire-cut.ts`). The diff card shows "Diff

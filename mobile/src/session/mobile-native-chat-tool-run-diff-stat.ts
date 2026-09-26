@@ -6,7 +6,10 @@
 // old/new strings — never a guess, so a run with no resolvable edit draws
 // nothing rather than a false "+0 −0", and a run whose edit the wire cut
 // (mobile-native-chat-edit-wire-cut.ts) draws nothing rather than the count
-// of what survived the cut.
+// of what survived the cut. The one exception is a created file the wire cut
+// whose file on the desktop is provably the one the Write made: its count is
+// read back from the file (mobile-native-chat-created-file-count.ts) and
+// handed in as `verifiedCreateCount`.
 
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
@@ -52,14 +55,22 @@ export function editFilesForToolCall(
 
 export type NativeChatToolRunDiffStat = { added: number; removed: number }
 
+/** The line count of a created file the wire cut, read back from the file
+ *  and verified to be the create's, or null for none. */
+export type VerifiedCreateCount = (
+  call: NativeChatToolCallBlock,
+  result: NativeChatToolResultBlock | null
+) => number | null
+
 /** The run's total added/removed line count, summed over every file an
  *  edit-shaped call in the run (not only the rows a collapsed view still
  *  shows) is known to have changed. Null when the run touched no file, or
- *  when any edit in it landed without a whole count — a cut file, or an edit
- *  with nothing left to count. A sum that leaves one out is not the run's
- *  total, so there is nothing honest to draw. */
+ *  when any edit in it landed without a whole count — a cut file with no
+ *  verified count, or an edit with nothing left to count. A sum that leaves
+ *  one out is not the run's total, so there is nothing honest to draw. */
 export function toolRunDiffStat(
-  blocks: readonly NativeChatBlock[]
+  blocks: readonly NativeChatBlock[],
+  verifiedCreateCount?: VerifiedCreateCount
 ): NativeChatToolRunDiffStat | null {
   let added = 0
   let removed = 0
@@ -77,11 +88,18 @@ export function toolRunDiffStat(
       continue
     }
     for (const file of files) {
-      if (!editFileCountIsWhole(file)) {
+      if (editFileCountIsWhole(file)) {
+        added += file.added
+        removed += file.removed
+        continue
+      }
+      // A create removes nothing, so its read-back count is the whole of it.
+      const verified =
+        files.length === 1 ? (verifiedCreateCount?.(pair.call, result) ?? null) : null
+      if (verified === null) {
         return null
       }
-      added += file.added
-      removed += file.removed
+      added += verified
     }
     counted = true
   }

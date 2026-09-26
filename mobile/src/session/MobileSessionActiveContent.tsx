@@ -20,6 +20,7 @@ import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-acce
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import { readingPositionKey } from '../storage/reading-positions'
 import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
+import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
 
 export function MobileSessionActiveContent({
   controller
@@ -113,6 +114,8 @@ export function MobileSessionActiveContent({
     createTabBusy
   } = controller
 
+  // The line counts of created files the wire cut, read back from the host.
+  const createdFileCounts = useMobileNativeChatCreatedFileCounts({ client, hostId, worktreeId })
   // Images a document names, read off the host for the .md tab and the file
   // tab's rendered view; one resolver per document, so a figure fetches once.
   const documentPath = activeMarkdownTab?.relativePath ?? activeFileTab?.relativePath ?? null
@@ -338,6 +341,7 @@ export function MobileSessionActiveContent({
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
         onOpenFile={handleNativeChatFileTap}
         onRevertHunk={handleNativeChatRevertHunk}
+        createdFileCounts={createdFileCounts}
         hostAllowsRewind={hostAllowsRewind}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}

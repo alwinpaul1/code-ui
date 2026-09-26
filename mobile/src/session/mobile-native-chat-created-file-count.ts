@@ -1,0 +1,269 @@
+// docs/claude-app-parity.md item 3: the count of a created file the wire cut,
+// read back from the file itself.
+//
+// Orca's mobile diet keeps 4000 characters of a tool call's input, and a
+// Claude Write keeps its lines nowhere else, so a create over the budget
+// reaches the phone as a prefix and `… (truncated)`, with no line count. The
+// desktop still has the file. Its count is the create's count only when the
+// file is provably the one the Write made:
+//
+// - it still starts with every character the wire kept, and
+// - no later call in the loaded transcript may have changed it: an edit tool
+//   naming the same path, any other call naming the file, any call the wire
+//   cut (the part it dropped may have named it), or a subagent launched after
+//   it (its own calls are not in this transcript).
+//
+// Anything else is no number, as before. The count itself is the uncut
+// Write's count, taken through the same pipeline, so a small create and a
+// large one agree. The reading is in mobile-native-chat-created-file-count-store.ts.
+
+import type {
+  NativeChatBlock,
+  NativeChatMessage,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../src/shared/native-chat-types'
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import {
+  carriesMobileCut,
+  editFileCountIsWhole,
+  inputStrings,
+  MOBILE_CUT
+} from './mobile-native-chat-edit-wire-cut'
+import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import { toolCallKind } from './mobile-native-chat-tool-sentence'
+
+/** A Write whose content the wire cut: the path it names, and what the wire
+ *  kept. The key is both, so two creates of one path with different content
+ *  are two creates. */
+export type CutCreate = { key: string; path: string; prefix: string }
+
+export type CreatedFileRefusal = 'cut-read' | 'binary' | 'changed' | 'uncountable'
+
+export type CreatedFileVerdict =
+  | { kind: 'counted'; added: number }
+  | { kind: 'refused'; reason: CreatedFileRefusal }
+
+/** The file as `files.read` returned it. */
+export type CreatedFileText = { content: string; truncated: boolean }
+
+/** Tools that read and never write. */
+const READ_ONLY_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS'])
+/** Tools that change the one file their structured path names. */
+const PATH_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
+const PATH_KEYS = ['file_path', 'notebook_path', 'path'] as const
+/** A character that continues a file name on its left. A `.` does, since
+ *  `a.queue.sh` is not `queue.sh`. */
+const NAME_BEFORE = /[A-Za-z0-9._-]/
+/** A character that continues a file name on its right. A `.` does not: the
+ *  name may end a sentence, or be the stem of `name.sh.new`, which a command
+ *  can move over it. */
+const NAME_AFTER = /[A-Za-z0-9_-]/
+
+function stringField(input: unknown, key: string): string | null {
+  if (typeof input !== 'object' || input === null) {
+    return null
+  }
+  const value = (input as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value : null
+}
+
+/** The Write call's path and kept prefix, when the wire cut its content and
+ *  kept at least one character of it. */
+function cutWriteOf(call: NativeChatToolCallBlock): CutCreate | null {
+  if (call.name !== 'Write') {
+    return null
+  }
+  const path = stringField(call.input, 'file_path')
+  const content = stringField(call.input, 'content')
+  if (!path || path.endsWith(MOBILE_CUT) || content === null || !content.endsWith(MOBILE_CUT)) {
+    return null
+  }
+  const prefix = content.slice(0, -MOBILE_CUT.length)
+  if (prefix === '') {
+    return null
+  }
+  return { key: `${path}\u0000${prefix}`, path, prefix }
+}
+
+/** A cut Write that landed as a create. A Write that overwrote a file, failed,
+ *  or has no answer yet is not one: its count is not the file's. */
+export function cutCreateOf(
+  call: NativeChatToolCallBlock,
+  result: NativeChatToolResultBlock | null
+): CutCreate | null {
+  const create = cutWriteOf(call)
+  if (!create || !result || (result.editPatch?.hunks.length ?? 0) > 0) {
+    return null
+  }
+  const files = editFilesForToolCall(call, result)
+  return files?.length === 1 && files[0]?.changeKind === 'added' ? create : null
+}
+
+/** Every cut create in a run of tool blocks, in order. */
+export function cutCreatesIn(blocks: readonly NativeChatBlock[]): CutCreate[] {
+  const creates: CutCreate[] = []
+  for (const pair of pairToolBlocks(blocks)) {
+    const create = pair.call ? cutCreateOf(pair.call, pair.result ?? null) : null
+    if (create) {
+      creates.push(create)
+    }
+  }
+  return creates
+}
+
+/** What an uncut Write of `content` counts, through the same pipeline the
+ *  chip reads: null where it would draw no chip (an empty file, one past the
+ *  row or character cap). */
+export function createdFileLineCount(content: string): number | null {
+  const files = editFilesForToolCall(
+    { type: 'tool-call', name: 'Write', input: { file_path: 'created', content } },
+    { type: 'tool-result', output: 'File created successfully at: created' }
+  )
+  const file = files?.length === 1 ? files[0] : undefined
+  return file && editFileCountIsWhole(file) ? file.added : null
+}
+
+function foldNewlines(text: string): string {
+  return text.replaceAll('\r\n', '\n')
+}
+
+/** The kept prefix, less a last character the cut may have split: the CR of
+ *  a CRLF (the file has the pair, folded to LF), or the U+FFFD the relay may
+ *  put in place of half a surrogate pair. A half kept as is needs nothing: it
+ *  is the file's own first half. */
+function comparablePrefix(prefix: string): string {
+  const folded = foldNewlines(prefix)
+  const last = folded.charCodeAt(folded.length - 1)
+  const splitLast = last === 0x0d || last === 0xfffd
+  return splitLast ? folded.slice(0, -1) : folded
+}
+
+/** Whether the file as read now is the one the create made, and if so its
+ *  count. Refuses a read the host cut, a binary file, a file that does not go
+ *  on past everything the wire kept, and one the uncut pipeline would not
+ *  count. */
+export function judgeCreatedFile(create: CutCreate, file: CreatedFileText): CreatedFileVerdict {
+  if (file.truncated) {
+    return { kind: 'refused', reason: 'cut-read' }
+  }
+  if (file.content.includes('\u0000')) {
+    return { kind: 'refused', reason: 'binary' }
+  }
+  const kept = comparablePrefix(create.prefix)
+  const now = foldNewlines(file.content)
+  // The wire cuts only a string longer than what it keeps, so the file the
+  // create made goes on past the prefix.
+  if (now.length <= kept.length || !now.startsWith(kept)) {
+    return { kind: 'refused', reason: 'changed' }
+  }
+  const added = createdFileLineCount(file.content)
+  return added === null ? { kind: 'refused', reason: 'uncountable' } : { kind: 'counted', added }
+}
+
+function normalizedPath(path: string): string {
+  return path.replaceAll('\\ ', ' ').replaceAll('\\', '/').toLowerCase()
+}
+
+/** The path with its `.` and `..` segments resolved as far as the path
+ *  itself allows. A `..` above a relative path's start is dropped, and what
+ *  is left is matched as a suffix, which can only find more touches. */
+function collapsedPath(path: string): string {
+  const kept: string[] = []
+  for (const segment of path.split('/')) {
+    if (segment === '..') {
+      kept.pop()
+    } else if (segment !== '' && segment !== '.') {
+      kept.push(segment)
+    }
+  }
+  return `${path.startsWith('/') ? '/' : ''}${kept.join('/')}`
+}
+
+function samePath(a: string, b: string): boolean {
+  const x = collapsedPath(a)
+  const y = collapsedPath(b)
+  return x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`)
+}
+
+function namesFile(word: string, name: string): boolean {
+  let at = word.indexOf(name)
+  while (at !== -1) {
+    const before = at === 0 ? '' : word.charAt(at - 1)
+    const after = word.charAt(at + name.length)
+    if (!NAME_BEFORE.test(before) && !NAME_AFTER.test(after)) {
+      return true
+    }
+    at = word.indexOf(name, at + 1)
+  }
+  return false
+}
+
+/** Every string in a call's input, normalised for matching once per call. */
+const wordsOfCall = new WeakMap<NativeChatToolCallBlock, string[]>()
+
+function callWords(call: NativeChatToolCallBlock): string[] {
+  const cached = wordsOfCall.get(call)
+  if (cached) {
+    return cached
+  }
+  const words = inputStrings(call.input).map(normalizedPath)
+  wordsOfCall.set(call, words)
+  return words
+}
+
+/** Whether `call`, run after the create of `path`, may have changed it. */
+function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
+  if (READ_ONLY_TOOLS.has(call.name)) {
+    return false
+  }
+  // A subagent's own calls are in its sidechain, not this transcript, so what
+  // its prompt names says nothing about what it edited.
+  if (toolCallKind(call.name) === 'agent') {
+    return true
+  }
+  const target = normalizedPath(path)
+  if (PATH_EDIT_TOOLS.has(call.name)) {
+    const named = PATH_KEYS.map((key) => stringField(call.input, key)).find((value) => value)
+    if (named && !named.endsWith(MOBILE_CUT)) {
+      return samePath(normalizedPath(named), target)
+    }
+  }
+  if (carriesMobileCut(call.input)) {
+    return true
+  }
+  const name = target.slice(target.lastIndexOf('/') + 1)
+  return name === '' || callWords(call).some((word) => namesFile(word, name))
+}
+
+/** Where a cut create stands in the loaded transcript: the message holding
+ *  it, and whether a later call may have changed its file. */
+export type CutCreateStanding = { messageId: string; touched: boolean }
+
+/** Every cut create in the transcript, keyed by `CutCreate.key`. The same
+ *  create twice counts as touched: the second wrote the file again. */
+export function cutCreateStandings(
+  messages: readonly NativeChatMessage[]
+): Map<string, CutCreateStanding> {
+  const standings = new Map<string, CutCreateStanding>()
+  const open: { path: string; standing: CutCreateStanding }[] = []
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (block.type !== 'tool-call') {
+        continue
+      }
+      for (const { path, standing } of open) {
+        if (!standing.touched && mayTouch(block, path)) {
+          standing.touched = true
+        }
+      }
+      const create = cutWriteOf(block)
+      if (create && !standings.has(create.key)) {
+        const standing = { messageId: message.id, touched: false }
+        standings.set(create.key, standing)
+        open.push({ path: create.path, standing })
+      }
+    }
+  }
+  return standings
+}
