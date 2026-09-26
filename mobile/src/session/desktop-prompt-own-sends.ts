@@ -1,5 +1,6 @@
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
@@ -63,14 +64,17 @@ function holdsItsOwnPlace(item: PendingCopy): boolean {
   return Boolean(item.images?.length) || Number.isFinite(item.sentAt)
 }
 
-/** Whether a prompt reports this text: the same key, or a prompt the hook
+/** Whether a prompt reports this copy: the same key, or a prompt the hook
  *  had to cut, as a prefix of it (the tab status caps the field at 200
- *  characters and says when it cut one). */
-function reports(prompt: DesktopPrompt, promptKey: string, copyKey: string): boolean {
-  return (
-    promptKey.length > 0 &&
-    (promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey)))
-  )
+ *  characters and says when it cut one). A photo sent with no words has no
+ *  key, and the hook reports it as its markers alone, `[Image #17]`: as many
+ *  of them as it has photos (third review, 2026-09-26: never paired, the hook
+ *  copy stood beside the phone's photo as an "Image on Desktop" bubble). */
+function reports(prompt: DesktopPrompt, promptKey: string, copyKey: string, photos: number): boolean {
+  if (promptKey.length === 0) {
+    return copyKey.length === 0 && photos > 0 && photosOnlyPrompt(withoutPasteWrappers(prompt.text)) === photos
+  }
+  return promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey))
 }
 
 /** The prompt of one source timed nearest the send (an untimed one only when
@@ -122,11 +126,12 @@ export function pairPendingWithHookPrompts(
   const taken = new Set<number>()
   const standIns = new Set<string>()
   const steppedAside = new Set<string>()
-  const open = (text: string, include: (prompt: DesktopPrompt) => boolean): number[] => {
-    const copyKey = key(text)
+  const open = (item: PendingCopy, include: (prompt: DesktopPrompt) => boolean): number[] => {
+    const copyKey = key(item.text)
+    const photos = item.images?.length ?? 0
     return keys.flatMap((promptKey, index) => {
       const prompt = prompts[index]!
-      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey) ? [index] : []
+      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey, photos) ? [index] : []
     })
   }
   const notSomeoneElses = (prompt: DesktopPrompt) => !remembered.has(deskEchoId(prompt.nonce))
@@ -142,14 +147,14 @@ export function pairPendingWithHookPrompts(
         sourceOf(prompt) === source &&
         notSomeoneElses(prompt) &&
         !promptTakenBetween(messages, item, prompt.at, margin)
-      const copy = nearestCopy(item.sentAt, open(item.text, ofSource), prompts)
+      const copy = nearestCopy(item.sentAt, open(item, ofSource), prompts)
       if (copy !== undefined) {
         claim(copy, true)
       }
     }
   }
   for (const item of pending.filter((candidate) => !holdsItsOwnPlace(candidate))) {
-    const candidates = open(item.text, () => true)
+    const candidates = open(item, () => true)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
     if (timed.length > 0) {

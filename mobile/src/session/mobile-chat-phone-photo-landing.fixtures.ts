@@ -193,6 +193,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatStreamScopeKey: `tab:${SESSION}`,
       nativeChatSpinner: null,
       chatPending: drafts.pending,
+      chatWaitingPhotoSends: drafts.waitingPhotoSends,
       rememberEcho: drafts.rememberEcho,
       takeOwnSends: drafts.takeSends,
       nativeChatDesktopPrompts: tick.prompts,

@@ -79,6 +79,9 @@ export function useMobileNativeChatDrafts(args: {
   appendComposerMention: (tabId: string, mention: string) => void
   getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
+  /** Photo sends the store has not read back yet for this chat, as last
+   *  written (waitingPhotoSends); none once it has. */
+  waitingPhotoSends: readonly MobileNativeChatPendingMessage[] | undefined
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
@@ -383,6 +386,7 @@ export function useMobileNativeChatDrafts(args: {
     appendComposerMention,
     getComposerEditGeneration: draftEditGenerationsRef.current.readComposer,
     pending: landed?.pending ?? pending,
+    waitingPhotoSends: written,
     imagePreviewsByMessageId: drawnPreviews,
     captureSendOrigin,
     readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho, takeSends,

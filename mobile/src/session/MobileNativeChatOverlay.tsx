@@ -196,9 +196,20 @@ export function MobileNativeChatOverlay({
   // phone's send keeps its photos and its send-time place; only a copy with
   // no send time steps aside for the hook's. One copy each way: a pending
   // "yes" must not hide a later "yes" typed at the desk (desktop-prompt-own-sends.ts).
+  // The photo sends the draft store has not read back yet pair too: in the
+  // first frame back the hook's copy drew as chips, then the photos (third
+  // review of the photo binder, 2026-09-26).
+  const waitingPhotoSends = controller.chatWaitingPhotoSends
+  const pairingPending = useMemo(
+    () =>
+      waitingPhotoSends?.length
+        ? [...controller.chatPending, ...waitingPhotoSends.filter((send) => !controller.chatPending.some((item) => item.id === send.id))]
+        : controller.chatPending,
+    [controller.chatPending, waitingPhotoSends]
+  )
   const hookPairing = useMemo(
-    () => pairPendingWithHookPrompts(controller.chatPending, desktopPrompts, session.messages),
-    [controller.chatPending, desktopPrompts, session.messages]
+    () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages),
+    [pairingPending, desktopPrompts, session.messages]
   )
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
@@ -207,9 +218,10 @@ export function MobileNativeChatOverlay({
       withoutLandedDesktopPrompts(
         promptsNoCopyStandsFor(desktopPrompts, hookPairing),
         baseFolded,
-        queuedMessages ?? []
+        queuedMessages ?? [],
+        session.messages
       ),
-    [hookPairing, desktopPrompts, baseFolded, queuedMessages]
+    [hookPairing, desktopPrompts, baseFolded, queuedMessages, session.messages]
   )
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).

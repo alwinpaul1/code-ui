@@ -141,3 +141,24 @@ export function rowWillNamePastedPhotos(entry: { images?: readonly string[]; ima
     entry.imagePaths!.every((path) => splitOrcaPastedImagePaths(path).paths.length === 1)
   )
 }
+
+/** `segment` appears in `text` as a run of whole words (the glue joins sends
+ *  with a space), so "does it" matches "… does [gap] … does it" at its end
+ *  but "it" alone does not match "edit". */
+export function containsGluedSegment(text: string, segment: string): boolean {
+  let from = 0
+  while (from <= text.length - segment.length) {
+    const at = text.indexOf(segment, from)
+    if (at === -1) {
+      return false
+    }
+    const end = at + segment.length
+    const startsWord = at === 0 || text[at - 1] === ' '
+    const endsWord = end === text.length || text[end] === ' '
+    if (startsWord && endsWord) {
+      return true
+    }
+    from = at + 1
+  }
+  return false
+}

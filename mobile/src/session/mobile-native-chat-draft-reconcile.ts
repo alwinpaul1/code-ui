@@ -1,6 +1,6 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { carriesPhoto, pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
-import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
+import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -122,6 +122,14 @@ function imagePreviewReplacementMessageId(
   const source = messages[sourceIndex]
   if (!source || !isImageSourceUserTurn(source)) {
     return null
+  }
+  // From Claude Code 2.1.228 a companion follows its prompt: the prompt right
+  // before the run owns it, as the chat draws it (trailingCompanionOwner).
+  // A run bound on its own at the window's start went forward to the next
+  // message once the page above it loaded (third review, 2026-09-26).
+  const owner = trailingCompanionOwner(messages, sourceIndex, source)
+  if (owner) {
+    return owner.id
   }
   let nextIndex = sourceIndex + 1
   while (
@@ -332,26 +340,6 @@ export function findLandedImagePreviewEchoes(
   return landed
 }
 
-/** `segment` appears in `text` as a run of whole words (the glue joins sends
- *  with a space), so "does it" matches "… does [gap] … does it" at its end
- *  but "it" alone does not match "edit". */
-function containsGluedSegment(text: string, segment: string): boolean {
-  let from = 0
-  while (from <= text.length - segment.length) {
-    const at = text.indexOf(segment, from)
-    if (at === -1) {
-      return false
-    }
-    const end = at + segment.length
-    const startsWord = at === 0 || text[at - 1] === ' '
-    const endsWord = end === text.length || text[end] === ' '
-    if (startsWord && endsWord) {
-      return true
-    }
-    from = at + 1
-  }
-  return false
-}
 
 export function findLandedUnconfirmedSends(
   messages: readonly NativeChatMessage[],

@@ -65,6 +65,9 @@ export type MobileNativeChatController = {
   requestComposerFocus: () => void
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
+  /** The phone's photo sends the draft store has not read back yet for this
+   *  chat (waitingPhotoSends): the hook's copies of them are not drawn. */
+  chatWaitingPhotoSends?: readonly MobileNativeChatPendingMessage[]
   /** Keep a witnessed desktop message with the phone's own sends; see mobile-native-chat-remember-echo.ts. */
   rememberEcho: (id: string, text: string, anchorId: string | null) => void
   /** Own sends the agent took out of its queue box, which no row is owed for
