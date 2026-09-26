@@ -1,6 +1,7 @@
 // Background work a cut create's count cannot see past. A shell, a monitor,
-// an agent or a teammate launched before the create keeps running after its
-// call returns, and what it writes has no call in this transcript. So while
+// an agent or a teammate launched before the create, or a command the user
+// ran with `!` that went to the background, keeps running after its call
+// returns, and what it writes has no call in this transcript. So while
 // one launched before the create has not reported by it, the file on the
 // desktop is not provably the Write's (review of 2026-09-26: a background
 // agent went on writing to a 93-line create and the chip drew +125).
@@ -31,6 +32,7 @@ import {
   readNotifications,
   readString,
   takeAnsweredCall,
+  type Launch,
   type PendingCall
 } from './mobile-background-task-transcript'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
@@ -53,6 +55,18 @@ function mayRunOn(call: Pending): boolean {
     call.name === 'Monitor' ||
     Reflect.get(Object(call.input), 'run_in_background') === true
   )
+}
+
+const USER_COMMAND_OUTPUT = '<bash-stdout>'
+
+/** A command the user ran with `!` that went to the background. Its output
+ *  turn holds the Bash call's own sentence (Claude Code 2.1.247 to 2.1.263). */
+function userCommandLaunch(text: string): Launch | null {
+  if (!text.startsWith(USER_COMMAND_OUTPUT)) {
+    return null
+  }
+  const output = text.slice(USER_COMMAND_OUTPUT.length)
+  return readLaunch({ name: 'Bash', input: null, startedAt: null }, output)
 }
 
 /** For each call in `messages`, whether background work launched before it
@@ -99,6 +113,10 @@ export function backgroundWorkRunningAt(
         }
       } else if (isTextBlock(block)) {
         text += block.text
+        const launch = userCommandLaunch(block.text)
+        if (launch) {
+          spans.push({ from: at, id: launch.id })
+        }
       }
     }
     if (INTERRUPTED.test(text)) {

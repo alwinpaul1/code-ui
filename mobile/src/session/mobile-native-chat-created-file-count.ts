@@ -9,10 +9,10 @@
 //
 // - it still starts with every character the wire kept, and
 // - no later call in the loaded transcript may have changed it: an edit tool
-//   naming the same path, any other call naming the file, any call the wire
-//   cut (the part it dropped may have named it), or a subagent launched or a
-//   message sent after it (the agent's own calls are not in this transcript),
-//   and
+//   naming the same path, any other call naming the file (a command the user
+//   ran with `!` among them), any call the wire cut (the part it dropped may
+//   have named it), or a subagent launched or a message sent after it (the
+//   agent's own calls are not in this transcript), and
 // - no background work launched before it was still running when it landed
 //   (mobile-native-chat-created-file-work.ts).
 //
@@ -242,6 +242,27 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
   return name === '' || callWords(call).some((word) => namesFile(word, name))
 }
 
+/** A command the user ran with `!`. Claude Code writes it as a user turn,
+ *  `<bash-input>…</bash-input>`, raw, and Orca hands the phone that turn as
+ *  text. One the wire cut has lost its closing tag. */
+const USER_COMMAND = /<bash-input>([\s\S]*?)(?:<\/bash-input>|$)/g
+
+/** The `!` commands in a user's text block, as the Bash calls they amount
+ *  to. The agent's own prose may quote one; that ran nothing. */
+function userCommandCalls(
+  message: NativeChatMessage,
+  block: NativeChatBlock
+): NativeChatToolCallBlock[] {
+  if (message.role !== 'user' || block.type !== 'text' || !block.text.includes('<bash-input>')) {
+    return []
+  }
+  return [...block.text.matchAll(USER_COMMAND)].map((match) => ({
+    type: 'tool-call',
+    name: 'Bash',
+    input: { command: match[1] ?? '' }
+  }))
+}
+
 /** Where a cut create stands in the loaded transcript: the message holding
  *  it, and whether a later call may have changed its file. */
 export type CutCreateStanding = { messageId: string; touched: boolean }
@@ -257,13 +278,16 @@ export function cutCreateStandings(
   const workRunningAt = backgroundWorkRunningAt(messages)
   for (const message of messages) {
     for (const block of message.blocks) {
+      const calls = block.type === 'tool-call' ? [block] : userCommandCalls(message, block)
+      for (const call of calls) {
+        for (const { path, standing } of open) {
+          if (!standing.touched && mayTouch(call, path)) {
+            standing.touched = true
+          }
+        }
+      }
       if (block.type !== 'tool-call') {
         continue
-      }
-      for (const { path, standing } of open) {
-        if (!standing.touched && mayTouch(block, path)) {
-          standing.touched = true
-        }
       }
       const create = cutWriteOf(block)
       if (create && !standings.has(create.key)) {

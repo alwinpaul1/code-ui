@@ -93,7 +93,8 @@ Nothing here is built.
   count only when the file is provably the one the Write made: it still
   starts with every character the wire kept, and no later call in the loaded
   transcript may have changed it (an edit tool naming the same path however
-  it spells it, `./`, `..` or absolute; any other call naming the file; a
+  it spells it, `./`, `..` or absolute; any other call naming the file,
+  a command the user ran with `!` among them; a
   call the wire cut, whose dropped part may have named it; or a subagent
   launched or a message sent after it, since the agent's own calls are not in
   this transcript), and no background work launched before it was still
@@ -107,7 +108,15 @@ Nothing here is built.
   2.1.228 to 2.1.281 wrote), so a task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
-  all hold the count off. The count
+  all hold the count off. A `!` command is no tool call: Claude Code writes
+  it as a user turn, `<bash-input>…</bash-input>`, and its output as the
+  next one (136 of them on this machine, Claude Code 2.1.228 to 2.1.282).
+  Orca does not filter these out (its Claude decoder drops only meta,
+  synthetic and compact-summary turns, at ac675ded6e); the phone hides them
+  only when drawing. So the count reads them as Bash calls, and a `!` command
+  that went to the background, whose output turn carries the Bash call's own
+  sentence (13 of them, 2.1.247 to 2.1.263), runs until its notification the
+  same way. The count
   is then the uncut Write's count of that text, through the same pipeline,
   so a small create and a large one agree
   (`mobile-native-chat-created-file-count.ts`). A finished run on screen
