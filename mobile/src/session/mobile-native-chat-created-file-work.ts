@@ -8,23 +8,34 @@
 //
 // The launch and finish records are the background-task reader's own
 // (mobile-background-task-transcript.ts), paired the way
-// `deriveBackgroundTasks` pairs them, except for a TaskStop. The pairing
-// hands a failure to the first call waiting and anything else to the first
-// that is no Agent call, so a stop's own answer can go to the call beside it
-// (review of 311f41ad). A stop therefore ends its task unless a failure
-// landed among the answers of its batch, the calls waiting together, and no
-// answer there is TaskStop's own word that the task is no longer running:
-// its JSON, or `Task <id> is not running (status: completed|failed|killed)`
-// (Claude Code 2.1.283). A failure is a `<tool_use_error>`, a turn-down, a
-// cancel, a denial, or an answer Orca marks as an error; a batch the user
-// interrupted with a call still waiting counts as one. The limits, each of
-// which refuses:
+// `deriveBackgroundTasks` pairs them, which in a batch, the calls waiting for
+// answers together, is a guess. The pairing hands a failure to the first call
+// waiting and anything else to the first that is no Agent call, so a quick
+// call can take another's answer. So when a batch closes:
+// - a call that may launch (a shell, a monitor, an agent) and was handed an
+//   answer that launched nothing (for an agent, a failure or a report), or
+//   that is still waiting, runs under any launch of it an answer in the batch
+//   names (review of 5b257b16: a background agent beside a Read that failed
+//   first lost its launch to the Read). This holds for a call answered last
+//   and alone too: the answer it lost may have gone to a call answered
+//   before it;
+// - a stop ends its task unless a failure landed in the batch and no answer
+//   there is TaskStop's own word that the task is no longer running: its
+//   JSON, or `Task <id> is not running (status: completed|failed|killed)`
+//   (Claude Code 2.1.283; review of 311f41ad: a stop turned down beside a
+//   Read took the Read's answer). A failure is a `<tool_use_error>`, a
+//   turn-down, a cancel, a denial, or an answer Orca marks as an error; a
+//   batch the user interrupted with a call still waiting counts as one.
+// The limits, each of which refuses:
 // - a task that ended in a way the transcript does not record (a mid-turn
 //   completion Orca does not surface) is still running here;
 // - a teammate never reports, so it runs for the rest of the transcript;
 // - an agent a message woke runs until its next report;
 // - an Agent call with no answer yet, or one whose answer names no id and is
-//   no foreground report, runs for good.
+//   no foreground report, runs for good;
+// - a launch in a batch also runs from every call there that may launch and
+//   was handed none, so a create between the two refuses even when the
+//   launch was called after it.
 // A task launched before the loaded window is not seen at all. A foreground
 // report long enough for the wire to cut has lost its usage block, and its
 // id line past about 3,900 characters, so a cut answer is read as a finished
@@ -61,10 +72,17 @@ import { toolCallKind } from './mobile-native-chat-tool-sentence'
 
 type Ending = { id: string; at: number }
 type Pending = PendingCall & { at: number }
-/** The calls waiting for answers together: the endings their TaskStops
- *  recorded, whether any answer was a failure, and the ids TaskStop's own
- *  word said were no longer running. */
-type Batch = { stops: Ending[]; failed: boolean; confirmed: Set<string> }
+/** The calls waiting for answers together: the answers they took, the
+ *  endings their TaskStops recorded, the calls that may have lost their
+ *  launch to another call, whether any answer was a failure, and the ids
+ *  TaskStop's own word said were no longer running. */
+type Batch = {
+  answers: string[]
+  stops: Ending[]
+  unsure: Pending[]
+  failed: boolean
+  confirmed: Set<string>
+}
 /** A task running from `from` until its first ending after that, if any. A
  *  null id is a task no ending names. */
 type Span = { from: number; id: string | null }
@@ -119,12 +137,38 @@ function saysStopped(output: string, id: string): boolean {
 }
 
 function openBatch(): Batch {
-  return { stops: [], failed: false, confirmed: new Set() }
+  return { answers: [], stops: [], unsure: [], failed: false, confirmed: new Set() }
 }
 
-/** Takes back each stop of a batch a failure landed in, unless TaskStop said
- *  its task was no longer running. */
-function settle(batch: Batch, endings: Ending[]): void {
+/** Calls whose answer can launch work that keeps running. */
+function mayLaunch(call: Pending): boolean {
+  return toolCallKind(call.name) === 'agent' || call.name === 'Bash' || call.name === 'Monitor'
+}
+
+/** The id an answer launches `call` under: null for a launch that names no
+ *  id, undefined when the answer is no launch of it. */
+function launchIn(call: Pending, answer: string): string | null | undefined {
+  if (toolCallKind(call.name) !== 'agent') {
+    return readLaunch(call, answer)?.id
+  }
+  const launches =
+    AGENT_LAUNCH_OPENING.test(answer) || (JSON_OPENING.test(answer) && askedForBackground(call))
+  return launches ? (readLaunch(call, answer)?.id ?? null) : undefined
+}
+
+/** Closes a batch. Each call that may have lost its launch to another, and
+ *  each call still waiting, runs under every launch of it an answer there
+ *  names. Then each stop is taken back if a failure landed in the batch,
+ *  unless TaskStop said its task was no longer running. */
+function settle(batch: Batch, waiting: Pending[], endings: Ending[], spans: Span[]): void {
+  for (const call of [...batch.unsure, ...waiting.filter(mayLaunch)]) {
+    for (const answer of batch.answers) {
+      const id = launchIn(call, answer)
+      if (id !== undefined) {
+        spans.push({ from: call.at, id })
+      }
+    }
+  }
   if (!batch.failed) {
     return
   }
@@ -188,26 +232,28 @@ export function backgroundWorkRunningAt(
         // Named as the pairing names it: `takeAnsweredCall` holds only an Agent call apart.
         const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
         batch.failed ||= isFailure(block)
+        batch.answers.push(block.output)
         for (const stop of batch.stops) {
           if (saysStopped(block.output, stop.id)) {
             batch.confirmed.add(stop.id)
           }
         }
         const call = takeAnsweredCall(pending, block.output)
-        if (pending.length === 0) {
-          settle(batch, endings)
-          batch = openBatch()
-        }
-        if (!call) {
-          continue
-        }
-        const launch = readLaunch(call, block.output)
-        if (toolCallKind(call.name) === 'agent') {
-          if (leftAgentRunning(call, block.output, onlyAgentsWaited)) {
+        if (call) {
+          const launch = readLaunch(call, block.output)
+          const running =
+            toolCallKind(call.name) === 'agent'
+              ? leftAgentRunning(call, block.output, onlyAgentsWaited)
+              : launch !== null
+          if (running) {
             spans.push({ from: call.at, id: launch?.id ?? null })
+          } else if (mayLaunch(call)) {
+            batch.unsure.push(call)
           }
-        } else if (launch) {
-          spans.push({ from: call.at, id: launch.id })
+        }
+        if (pending.length === 0) {
+          settle(batch, pending, endings, spans)
+          batch = openBatch()
         }
       } else if (isTextBlock(block)) {
         text += block.text
@@ -219,7 +265,7 @@ export function backgroundWorkRunningAt(
     }
     if (INTERRUPTED.test(text)) {
       batch.failed ||= pending.length > 0
-      settle(batch, endings)
+      settle(batch, pending, endings, spans)
       batch = openBatch()
       pending.length = 0
     }
@@ -227,7 +273,7 @@ export function backgroundWorkRunningAt(
       endings.push({ id: notification.id, at })
     }
   }
-  settle(batch, endings)
+  settle(batch, pending, endings, spans)
   for (const call of pending) {
     if (mayRunOn(call)) {
       spans.push({ from: call.at, id: null })

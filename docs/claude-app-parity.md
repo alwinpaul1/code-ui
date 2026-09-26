@@ -110,9 +110,14 @@ Nothing here is built.
   (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
   sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
   2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
-  2.1.228 to 2.1.281 wrote), except for a TaskStop. The pairing hands a
-  failure to the first call waiting, so a stop's answer can go to the call
-  beside it. A stop therefore ends its task unless a failure (a
+  2.1.228 to 2.1.281 wrote), except where that pairing guesses. It hands a
+  failure to the first call waiting and anything else to the first that is
+  no Agent call, so among calls waiting together one can take another's
+  answer: a background agent beside a Read that failed first lost its launch
+  to the Read in review. So a shell, monitor or agent call handed no launch,
+  or still waiting when the user interrupted, is read against every answer
+  the calls waiting with it took, and runs under any launch of it one names.
+  And a stop ends its task unless a failure (a
   `<tool_use_error>`, a turn-down, a cancel, a denial, an answer Orca marks
   as an error, or an interrupt with a call still waiting) landed among the
   answers of the calls waiting with it and none of those answers is

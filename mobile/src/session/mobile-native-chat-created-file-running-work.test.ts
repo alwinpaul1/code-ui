@@ -363,6 +363,94 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...SHELL, ...stop, ...CREATE])).toBe(true)
   })
 
+  // Review of 5b257b16: a failure goes to the first call waiting, so a quick
+  // call beside a launch that fails first takes the launch's place, and the
+  // launch's own answer falls to that call, where it reads as nothing.
+  const TEAMMATE = {
+    description: 'Review',
+    prompt: 'Review',
+    name: 'reviewer',
+    team_name: 'review'
+  }
+  const besideAFailedRead = (name: string, input: unknown, output: string) => [
+    message('assistant', [
+      { type: 'tool-call', name, input },
+      { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/missing.txt' } }
+    ]),
+    answered(MISSING_FILE),
+    answered(output)
+  ]
+
+  it.each([
+    ['a background agent', 'Agent', BACKGROUND_AGENT, asyncAgentLaunchResult(AGENT_ID)],
+    ['a teammate', 'Agent', TEAMMATE, TEAMMATE_SPAWN_OUTPUT],
+    ['a monitor', 'Monitor', { command: 'tail -f sweep.log' }, monitorStartOutput(SHELL_ID)],
+    [
+      'a background agent in the JSON shape a server flag serves',
+      'Agent',
+      BACKGROUND_AGENT,
+      `{"resultType":"task","taskId":"${AGENT_ID}","status":"working","statusMessage":${JSON.stringify(asyncAgentLaunchResult(AGENT_ID))}}`
+    ]
+  ])(
+    'draws no count for a create made after %s whose launch answered after the failed read beside it',
+    (_, name, input, output) => {
+      expect(touched([...besideAFailedRead(name, input, output), ...CREATE])).toBe(true)
+    }
+  )
+
+  it('draws no count for a create made after a monitor whose launch the read before it took, answered last and alone', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/sweep.log' } },
+        { type: 'tool-call', name: 'Monitor', input: { command: 'tail -f sweep.log' } }
+      ]),
+      answered(monitorStartOutput(SHELL_ID)),
+      answered('1\tsweep started')
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a monitor whose launch the read before it took, when the user interrupted before the read answered', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/sweep.log' } },
+        { type: 'tool-call', name: 'Monitor', input: { command: 'tail -f sweep.log' } }
+      ]),
+      answered(monitorStartOutput(SHELL_ID)),
+      said('[Request interrupted by user for tool use]')
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a background agent whose launch answered after a stop the user turned down beside it', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'Agent', input: BACKGROUND_AGENT },
+        { type: 'tool-call', name: 'TaskStop', input: { task_id: 'b0therid1' } }
+      ]),
+      answered(USER_TURNED_DOWN),
+      answered(asyncAgentLaunchResult(AGENT_ID))
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(true)
+  })
+
+  it('still counts a create made after a foreground agent reported after the failed read beside it', () => {
+    const turn = besideAFailedRead(
+      'Agent',
+      { description: 'Find the flag', prompt: 'Find it' },
+      FOREGROUND_AGENT_OUTPUT
+    )
+    expect(touched([...turn, ...CREATE])).toBe(false)
+  })
+
+  it('still counts a create made after a background agent beside a read that failed first reported it finished', () => {
+    const turn = [
+      ...besideAFailedRead('Agent', BACKGROUND_AGENT, asyncAgentLaunchResult(AGENT_ID)),
+      said(agentFinishedNotification(AGENT_ID, BACKGROUND_AGENT.description))
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(false)
+  })
+
   it('draws no count when the only report came after the create', () => {
     const launch = launched(
       'Bash',
