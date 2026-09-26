@@ -58,7 +58,7 @@ import {
   claudeScreen,
   words,
   landingHarness
-} from './mobile-chat-phone-photo-landing.fixtures'
+} from './mobile-chat-phone-photo-landing.test-support'
 
 
 describe('a message the phone sent with photos, as its row lands', () => {

@@ -19,7 +19,7 @@ import {
   claudeScreen,
   words,
   landingHarness
-} from './mobile-chat-phone-photo-landing.fixtures'
+} from './mobile-chat-phone-photo-landing.test-support'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
