@@ -1,9 +1,11 @@
 import { useDebouncedPersist } from './use-debounced-persist'
-import { useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import {
-  readNativeChatImagePreviews,
-  writeNativeChatImagePreviews
-} from '../storage/native-chat-image-previews'
+  knownNativeChatImagePreviews,
+  loadNativeChatImagePreviews,
+  nativeChatImagePreviewsSettledThisRun,
+  saveNativeChatImagePreviews
+} from './mobile-native-chat-image-preview-cache'
 
 const PREVIEW_WRITE_DEBOUNCE_MS = 250
 
@@ -22,30 +24,39 @@ export function useMobileNativeChatImagePreviewPersistence(
   setPreviewsBySession: Dispatch<SetStateAction<PreviewsBySession>>
 ): void {
   const known = sessionKey ? previewsBySession[sessionKey] !== undefined : true
+  // The read answers for the session it was asked for, however soon the
+  // state gains an entry: the cached copy below and a photo that lands both
+  // give it one, and neither holds everything storage does.
+  const activeKey = useRef(sessionKey)
+  activeKey.current = sessionKey
   useEffect(() => {
     if (!sessionKey || known) {
       return
     }
-    let cancelled = false
-    void readNativeChatImagePreviews(sessionKey).then((stored) => {
-      if (cancelled || !stored || Object.keys(stored).length === 0) {
-        return
+    // Previews that landed meanwhile win per message; stored ones fill the rest.
+    const fill = (stored: Record<string, string[]> | null | undefined) => {
+      if (stored && Object.keys(stored).length > 0) {
+        setPreviewsBySession((previous) => ({ ...previous, [sessionKey]: { ...stored, ...previous[sessionKey] } }))
       }
-      // Previews that landed meanwhile win per message; stored ones fill the rest.
-      setPreviewsBySession((previous) => ({
-        ...previous,
-        [sessionKey]: { ...stored, ...previous[sessionKey] }
-      }))
-    })
-    return () => {
-      cancelled = true
     }
+    // What the chat already drew from the cache (use-mobile-native-chat-drafts.ts).
+    fill(knownNativeChatImagePreviews(sessionKey))
+    // Written or read in this run, storage holds nothing newer; a previous
+    // run's copy is only the start, and the read below completes it.
+    if (nativeChatImagePreviewsSettledThisRun(sessionKey)) {
+      return
+    }
+    void loadNativeChatImagePreviews(sessionKey).then((stored) => {
+      if (activeKey.current === sessionKey) {
+        fill(stored)
+      }
+    })
   }, [known, sessionKey, setPreviewsBySession])
 
   useDebouncedPersist(
     sessionKey,
     sessionKey ? previewsBySession[sessionKey] : undefined,
     PREVIEW_WRITE_DEBOUNCE_MS,
-    writeNativeChatImagePreviews
+    saveNativeChatImagePreviews
   )
 }

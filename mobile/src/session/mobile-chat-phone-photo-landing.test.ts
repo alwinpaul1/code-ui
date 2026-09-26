@@ -15,6 +15,10 @@ import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-st
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
+import {
+  hydrateNativeChatImagePreviewCache,
+  resetNativeChatImagePreviewCacheForTests
+} from './mobile-native-chat-image-preview-cache'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -376,6 +380,34 @@ describe('a message the phone sent with photos, as its row lands', () => {
         expect(drawing(frame, TEXT1)).toHaveLength(1)
       }
       expect(lastFrame()).toEqual([{ id: 'e1e2e3e4', images: expected, text: words(TEXT1) }])
+    })
+
+    // Leaving the project tears the chat down; coming back paints the kept
+    // transcript at once, so the photos must be there in that first frame too,
+    // and after a relaunch, once the app-start caches are read.
+    it.each([
+      ['after the chat comes back', false],
+      ['after the app is relaunched', true]
+    ])('keeps the phone’s photos in the first frame %s', async (_label, relaunch) => {
+      await show('07:00:00.000', { messages: before })
+      await send('07:00:18.000', TEXT1, PHOTOS1)
+      await show('07:00:20.000', { messages: [...before, P1, C1], working: true })
+      await show('07:00:21.000', { messages: [...before, P1, C1, reply1] })
+      act(() => renderer?.unmount())
+      renderer = null
+      if (relaunch) {
+        await act(async () => {
+          await Promise.resolve()
+        })
+        resetNativeChatImagePreviewCacheForTests()
+        await hydrateNativeChatImagePreviewCache()
+      }
+      const back = frames.length
+      await show('07:05:00.000', { messages: [...before, P1, C1, reply1] })
+      expect(frames.length).toBeGreaterThan(back)
+      for (const frame of framesFrom(back)) {
+        expect(frame).toEqual([{ id: '40b55aba', images: 'PPP', text: words(TEXT1) }])
+      }
     })
   })
 

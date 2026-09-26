@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act } from 'react-test-renderer'
 import { resetHandedOnWitnessesForTests } from './use-mobile-native-chat-pending-persistence'
+import { resetNativeChatImagePreviewCacheForTests } from './mobile-native-chat-image-preview-cache'
 
 /**
  * Empties the chat draft and pending-echo stores between tests.
@@ -18,4 +19,5 @@ export async function clearNativeChatDraftStores(): Promise<void> {
   })
   await AsyncStorage.clear()
   resetHandedOnWitnessesForTests()
+  resetNativeChatImagePreviewCacheForTests()
 }
