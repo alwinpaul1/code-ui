@@ -7,6 +7,7 @@ import {
   saveChatFocusView
 } from '../storage/session-view-preferences'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import type { ChatRowVisibility } from './native-chat-row-visibility'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
@@ -541,6 +542,36 @@ describe('MobileNativeChatView', () => {
     await pressSend()
 
     expect(onClearSendError).toHaveBeenCalledOnce()
+  })
+
+  // Code review of c03f5328: the rows' on-screen store answers by index, so a
+  // row's scope must carry the index FlashList draws it at now, not one kept
+  // per message. FlashList re-renders a cell whenever its index changes
+  // (ViewHolder's memo compares `index`) and hands renderItem the new one.
+  it('scopes each row by the index it is drawn at, so an arriving message moves the rest up one', async () => {
+    const older = [assistantTurn('m1', 'one'), assistantTurn('m2', 'two')]
+    const scopes = () => {
+      const list = renderer!.root.find((node) => node.type === 'FlashList')
+      return (list.props.data as NativeChatMessage[]).map((item, index) => {
+        const row = list.props.renderItem({ item, index }) as {
+          props: { index: number; visibility: ChatRowVisibility }
+        }
+        return { id: item.id, index: row.props.index, visibility: row.props.visibility }
+      })
+    }
+    await render({ messages: older, folded: older })
+    const before = scopes()
+    expect(before.map(({ id, index }) => [id, index])).toEqual([['m2', 0], ['m1', 1]])
+    const newer = [...older, assistantTurn('m3', 'three')]
+    await update({ messages: newer, folded: newer })
+    const after = scopes()
+    expect(after.map(({ id, index }) => [id, index])).toEqual([['m3', 0], ['m2', 1], ['m1', 2]])
+    // One store for the list's life, read by the index each row has now.
+    expect(after[0]!.visibility).toBe(before[0]!.visibility)
+    const newest = { index: 0, isViewable: true, item: newer[2], key: 'm3', timestamp: 0 }
+    after[0]!.visibility.onViewableItemsChanged({ viewableItems: [newest], changed: [newest] })
+    expect(after[0]!.visibility.isOnScreen(after[0]!.index)).toBe(true)
+    expect(after[0]!.visibility.isOnScreen(after[1]!.index)).toBe(false)
   })
 
   // The gate that decides `streaming` lives in MobileNativeChatOverlay, which
