@@ -265,6 +265,49 @@ describe('a file touched after its create', () => {
     expect(cutCreateStandings(rows(create, later)).get(key)?.touched).toBe(true)
   })
 
+  // Review of 2026-09-26: a path spelled from `~` did not match the same
+  // file spelled from `/Users/dev`, so an Edit of it left the count standing.
+  const FROM_HOME = PATH.replace('/Users/dev/', '~/')
+
+  it('is touched by a later Edit that spells its path from ~', () => {
+    const later = call('Edit', { file_path: FROM_HOME, old_string: 'a', new_string: 'b' })
+    expect(cutCreateStandings(rows(create, later)).get(key)?.touched).toBe(true)
+  })
+
+  it('is touched by a later Edit of the absolute path when the create spelled it from ~', () => {
+    const fromHome = write(FROM_HOME, `${WRITTEN.slice(0, 3896)}${CUT}`)
+    const homeKey = cutCreateOf(
+      fromHome[0] as NativeChatToolCallBlock,
+      fromHome[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Edit', { file_path: PATH, old_string: 'a', new_string: 'b' })
+    expect(cutCreateStandings(rows(fromHome, later)).get(homeKey)?.touched).toBe(true)
+  })
+
+  it.each([
+    ['a Linux home', '/home/dev/jobs/queue.sh', '~/jobs/queue.sh'],
+    ["root's home", '/root/jobs/queue.sh', '~/jobs/queue.sh'],
+    ['a Windows home', 'C:\\Users\\dev\\jobs\\queue.sh', '~\\jobs\\queue.sh'],
+    ['a folder under no home', '/opt/work/jobs/queue.sh', '~/jobs/queue.sh']
+  ])('is touched by a later Edit from ~ of a file created under %s', (_, created, spelled) => {
+    const made = write(created, `${'echo step\n'.repeat(500)}${CUT}`)
+    const madeKey = cutCreateOf(
+      made[0] as NativeChatToolCallBlock,
+      made[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Edit', { file_path: spelled, old_string: 'a', new_string: 'b' })
+    expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(true)
+  })
+
+  it('is not touched by an Edit from ~ of a file with the same name at the top of the home', () => {
+    const later = call('Edit', {
+      file_path: '~/queue-sweep-k-one.sh',
+      old_string: 'a',
+      new_string: 'b'
+    })
+    expect(cutCreateStandings(rows(create, later)).get(key)?.touched).toBe(false)
+  })
+
   it('is not touched by an Edit whose `..` leads out of its folder to another file', () => {
     const elsewhere = call('Edit', {
       file_path: PATH.replace('/jobs/queue-sweep-k-one.sh', '/jobs/../queue-sweep-k-one.sh'),

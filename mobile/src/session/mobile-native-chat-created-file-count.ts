@@ -184,9 +184,25 @@ function collapsedPath(path: string): string {
   return `${path.startsWith('/') ? '/' : ''}${kept.join('/')}`
 }
 
+/** The home folder a normalised path spells out: `/users/x`, `/home/x`,
+ *  `c:/users/x` or `/root`. */
+const HOME = /^(?:(?:[a-z]:)?\/users\/[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
+
+/** A path from `~`, spelled out against the home the other path is under.
+ *  When it is under none, `~/rest` is matched as the relative `rest`, which
+ *  can only find more touches. */
+function expandedHome(path: string, other: string): string {
+  if (path !== '~' && !path.startsWith('~/')) {
+    return path
+  }
+  const rest = path.slice(2)
+  const home = HOME.exec(other)?.[0]
+  return home ? `${home}/${rest}` : rest
+}
+
 function samePath(a: string, b: string): boolean {
-  const x = collapsedPath(a)
-  const y = collapsedPath(b)
+  const x = collapsedPath(expandedHome(a, b))
+  const y = collapsedPath(expandedHome(b, a))
   return x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`)
 }
 
