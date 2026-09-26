@@ -113,3 +113,39 @@ describe("a subagent message's copy on the tab status, across a reconnect", () =
     ])
   })
 })
+
+// The same shape for a person's prompt: one typed at the desk while the link
+// was down reaches the phone on the first status after the reconnect, whose
+// `updatedAt` the reconnect restamped. Timed by it, the bubble sat at the tail
+// under rows written after it; the run it came in is its time.
+describe('a desk prompt taken while the phone was away', () => {
+  it('is timed by the run it came in, not by the reconnect, on the first status read after it', () => {
+    let listed: readonly { text: string; at?: number }[] = []
+    function Chat({ status, connected }: { status: AgentStatusPromptSource; connected: boolean }) {
+      listed = useAgentStatusPrompts('sess-1', status, undefined, connected).prompts
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    const show = (status: AgentStatusPromptSource, connected: boolean) =>
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(Chat, { status, connected }))
+        } else {
+          renderer = create(createElement(Chat, { status, connected }))
+        }
+      })
+    const history = [{ state: 'done', prompt: 'earlier', startedAt: 500 }]
+    const watched = { state: 'working', prompt: 'run the migration', updatedAt: 1_000, stateStartedAt: 1_000, stateHistory: history }
+    show(watched, true)
+    show(watched, false)
+    show(watched, true)
+    // Typed at the desk mid-run at 1,400 while the phone was away; the status
+    // the reconnect delivers is stamped 9,000.
+    show({ ...watched, prompt: 'and keep the old table', updatedAt: 9_000 }, true)
+    act(() => renderer.unmount())
+    expect(listed.map((prompt) => [prompt.text, prompt.at])).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 1_000]
+    ])
+  })
+})

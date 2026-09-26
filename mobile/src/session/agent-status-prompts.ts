@@ -106,7 +106,10 @@ export function observeAgentStatusPrompt(
   if (firstOfSession) {
     state = { ...state, read: true }
   }
-  const found = firstOfSession
+  // Nor did it watch the first status after a reconnect arrive: a prompt taken
+  // while the link was down came unseen, and the reconnect restamped
+  // `updatedAt` (use-agent-status-prompts.ts).
+  const found = firstOfSession || (options.firstRead === true && status != null)
   const text = typeof status?.prompt === 'string' ? status.prompt : ''
   if (text.trim().length === 0) {
     // Empty is "unknown" or a pane reset: the next prompt is new even if it
@@ -134,7 +137,7 @@ export function observeAgentStatusPrompt(
     // old with its row off the screen, and timed by the read it paired with
     // the sender's next row and gave it the old words (re-review of
     // 2026-09-27). Kept untimed, it never pairs.
-    const live = !firstOfSession && options.firstRead !== true
+    const live = !found
     const seen = message ? (live ? { ...message, seenAt: Date.now() } : message) : null
     return seen
       ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), seen].slice(-PROMPT_CAP) }
