@@ -3,8 +3,8 @@
   "family": "session.tab-documents",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "ca51be0612fbeb119d4cfeb521d883533256fe54",
-  "lockfileSha256": "6d66a4d09cda041ad35a88d271619131e23dbc20e14f611286a1b8df3bcb78f2",
+  "baseline": "f9e2faf4703ac32fddec2546d14bb71bb1232239",
+  "lockfileSha256": "fc17f4cc6e9b73532dda8f68ccb31bccb82ecd1bf386c2198328989e1970146e",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "64e570554490b2fe5fa00f7fdfb293a4685b2fa5c64358ab8a3b8891f9f5fba6",
   "scenarioSha256": "63227f28110e90acac78058baa875b1bc7f8895b5033e47016a2ffa9f42f66ce",
@@ -54,22 +54,49 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.readTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\"}}"
     },
-    "877720375363": {
+    "8b449f25dbea": {
       "file": {},
       "markdown": {
         "tab-md": {
-          "message": "Couldn't load markdown",
-          "status": "error"
+          "status": "loading"
         }
       }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a33b196f0e31": {
+      "name": "files.read#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
+    },
+    "d4be01606497": {
+      "name": "files.read#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
     }
   },
   "recording": {
@@ -78,12 +105,12 @@
       {
         "id": "errored",
         "observation": {
-          "sender": ["31e723411add"],
-          "payloads": ["44abbe2af7aa"],
+          "sender": ["31e723411add", "a33b196f0e31"],
+          "payloads": ["44abbe2af7aa", "d4be01606497"],
           "settlements": {
-            "markdown": "eb79a9b3682a"
+            "markdown": "9270aeb7d9c6"
           },
-          "state": "877720375363",
+          "state": "8b449f25dbea",
           "effects": []
         }
       }
