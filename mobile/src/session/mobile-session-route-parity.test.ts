@@ -199,7 +199,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-09-24 (Orca #22256): both dictation failure paths call reportDictationFailure.
 // 2026-09-25 (Orca #22300): the live field's submit body moved out of the dock's JSX into
 // submitLiveInput, and the per-render submitBufferedDraft calls handleSend.
-const HEAD_CALLBACK_BODY_SHA256 = 'e5ace7997cbd032c0a02428e5995be9a38511f9bb57073f5dfe1b2c6d72ecc96'
+// 2026-09-26: readMarkdownTab reads the disk on any refusal of the tab and
+// keeps the desktop's reason; readFileTab's generic copy carries the reason.
+// Then: it never reads the disk for a file the desktop called binary, read off
+// the refusal's code and message both.
+const HEAD_CALLBACK_BODY_SHA256 = 'f4b6162c9d5792a45af22d3ada917e9cf10c80f51c5f2076f042392a81bee929'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -341,8 +345,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // listeners now.
 // 674 since 2026-09-25 (Orca #22362): the Markdown actions' 'web' check, which holds the page's
 // Back claim to the page.
+// 682 since 2026-09-26: the markdown and file readers' copy with the desktop's reason.
+// 681 since the same day: the reader's 'Read only' gives way to the reason itself.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '909abd2d2bb5ad6672de6879fdf6958ad52921f919276eba41339c4124ab7b11'
+  'c561124ee6c3bb49250ca86a6380778498bbb3c78094baf426bcb9fad1504a1c'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -957,7 +963,9 @@ describe('mobile session route extraction parity', () => {
     // 673 since 2026-09-24: the Keyboard pair's event names ('ios' twice,
     // keyboardWill/DidShow, keyboardWill/DidHide) leave with it (Orca #22252).
     // 674 since 2026-09-25: the Markdown actions' 'web' check (Orca #22362).
-    expect(strings).toHaveLength(674)
+    // 682 since 2026-09-26: the readers' copy with the desktop's reason.
+    // 681 since the same day: the reader's 'Read only' gives way to the reason.
+    expect(strings).toHaveLength(681)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

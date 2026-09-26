@@ -11,6 +11,7 @@ import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
 import {
   buildMarkdownDiskFallbackDoc,
+  refusalBarsDiskRead,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from './mobile-markdown-disk-fallback'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -66,18 +67,30 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           )
           return
         }
-        if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
-          throw new Error((response as RpcFailure).error.message)
+        // Any refusal falls back to the file on disk, read-only, and says
+        // why: a headless host fails markdown.readTab (renderer_unavailable),
+        // and a desktop that has the window can still refuse the tab (a
+        // picked file's tab said "Couldn't load markdown" on every Retry,
+        // 2026-09-26, and the phone had dropped the desktop's reason).
+        const refused = response as RpcFailure
+        const headless = shouldReadMarkdownFromDiskAfterReadTabFailure(refused)
+        const desktopReason = refused.error.message || refused.error.code
+        if (refusalBarsDiskRead(refused.error)) {
+          throw new Error(desktopReason)
         }
-        // Why: a headless host fails markdown.readTab (renderer_unavailable); fall back to the on-disk file for read-only render.
-        const fallback = filePreviewTextRead.interpret(
-          await filePreviewTextRead.request(client, {
-            worktree: `id:${worktreeId}`,
-            relativePath: tab.relativePath
-          })
-        )
-        if (!fallback.accepted) {
-          throw new Error('Unable to read markdown')
+        let fallback: ReturnType<typeof filePreviewTextRead.interpret> | null = null
+        try {
+          fallback = filePreviewTextRead.interpret(
+            await filePreviewTextRead.request(client, {
+              worktree: `id:${worktreeId}`,
+              relativePath: tab.relativePath
+            })
+          )
+        } catch {
+          fallback = null
+        }
+        if (!fallback?.accepted) {
+          throw new Error(desktopReason)
         }
         const fileResult = fallback.value
         setMarkdownDocs((prev) =>
@@ -86,15 +99,17 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             buildMarkdownDiskFallbackDoc({
               content: fileResult.content,
               truncated: fileResult.truncated,
-              tabIsDirty: tab.isDirty
+              tabIsDirty: tab.isDirty,
+              ...(headless ? {} : { desktopRefusal: desktopReason })
             })
           )
         )
-      } catch {
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : ''
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',
-            message: "Couldn't load markdown"
+            message: reason ? `Couldn't load markdown (${reason})` : "Couldn't load markdown"
           })
         )
       }
@@ -141,9 +156,11 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
                   // still shows its path (the host vouches for the last 64 KB
                   // of a terminal's output, and a grant lives ten minutes).
                   `${classifyMobileArtifact(tab.relativePath) === 'image' ? 'Image' : 'File'} on Desktop. The phone can show it only while a terminal here still shows its path.`
-                : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
-                ? "Couldn't load diff preview"
-                : "Couldn't load file preview"
+                : `${tab.diffSource === 'staged' || tab.diffSource === 'unstaged' ? "Couldn't load diff preview" : "Couldn't load file preview"}${
+                    // The desktop's own reason: without it every failure read
+                    // the same and could not be told apart (2026-09-26).
+                    message ? ` (${message})` : ''
+                  }`
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',

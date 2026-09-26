@@ -15,8 +15,8 @@ function matchPickerTitle(offer: FileTapMatchOffer): string {
 }
 
 /**
- * Asks which file a bare chat tap meant when the name is in more than one folder, or whether the
- * lone match of a search that covered only part of the workspace is the one.
+ * Asks which file a bare chat tap meant when the name is in more than one folder. A lone match
+ * opens without it, even from a search that covered only part of the workspace (2026-09-26).
  *
  * Every row carries the same name, so each is labelled by its folder alone: that is the one thing
  * that tells them apart. `PickerModal` draws from `useTheme()`, so the sheet follows the

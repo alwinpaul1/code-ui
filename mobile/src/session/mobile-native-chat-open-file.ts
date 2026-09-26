@@ -28,8 +28,8 @@ export type OpenMobileNativeChatFileTapOptions<T extends FileTapSessionTab> = Om
    *  cwd cannot misplace it, and the path is echoed in this terminal's output,
    *  which is the provenance the host accepts for a user-pasted file. */
   absolutePathTerminalHandle?: string | null
-  /** Asks the user which of several same-named files they meant, or whether the one match a
-   *  partial search found is it. The tap never picks for them. */
+  /** Asks the user which of several same-named files they meant. The tap never picks among
+   *  several for them. */
   offerFileTapMatches: (offer: FileTapMatchOffer) => void
 }
 
@@ -92,8 +92,10 @@ export function openMobileNativeChatFileTap<T extends FileTapSessionTab>(
       report({ kind: 'no-file-named', name, partial: !complete })
       return
     }
-    // Only a complete answer proves a lone match is the file the agent meant.
-    if (paths.length === 1 && complete) {
+    // One match opens, even from a search that covered part of the workspace:
+    // a sheet with one row to tap was only a step in the way (2026-09-26).
+    // Several are offered.
+    if (paths.length === 1) {
       open(paths[0]!, false)
       return
     }
