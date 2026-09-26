@@ -143,9 +143,14 @@ const RESULT_NOTICE_MS = 2500
 const PROBLEM_NOTICE_MS = 4500
 
 /**
- * A save with its feedback: "Getting…", a line per megabyte while it pages, then the outcome. One
- * save per file at a time; a second tap on the same file says it is already going rather than
- * reading it twice.
+ * A save with its feedback: "Getting…", a line per megabyte while it pages, then the outcome.
+ *
+ * One save per file at a time, but only while the user can still see the save they asked for. A
+ * second tap on the same screen says it is already going rather than reading the file twice. A save
+ * whose screen is gone or covered does not hold the file: a save asked for from the screen in front
+ * takes over, and the one it replaces stops reading, never opens the picker, and says nothing more.
+ * Why: the runner is shared by the preview and every session's tab menu, so a save the user left
+ * would otherwise answer "Already saving" to the one they asked for next, and neither would open.
  */
 export function createSaveToPhoneRunner(
   target: MobileFileSaveTarget,
@@ -154,36 +159,52 @@ export function createSaveToPhoneRunner(
     onProblem?: () => void
   } = {}
 ): (run: SaveToPhoneRun) => Promise<SaveToPhoneRunOutcome> {
-  const inFlight = new Set<string>()
+  const inFlight = new Map<string, InFlightSave>()
   return async ({ client, source, fileName: requestedName, notify, signal, onScreen }) => {
     const fileName = suggestedSaveFileName(requestedName ?? sourcePath(source))
     const key = `${source.worktreeId}\n${sourcePath(source)}`
-    if (inFlight.has(key)) {
+    const holder = inFlight.get(key)
+    if (holder && !holder.signal?.aborted && holder.onScreen?.() !== false) {
       notify(`Already saving ${fileName}`, RESULT_NOTICE_MS)
       return { status: 'busy', fileName }
     }
-    inFlight.add(key)
+    holder?.replaced.abort()
+    const self: InFlightSave = { signal, onScreen, replaced: new AbortController() }
+    inFlight.set(key, self)
+    // Ended by the user leaving (their signal) or by a save that took over (`replaced`).
+    const stopped = new AbortController()
+    const stop = () => stopped.abort()
+    signal?.addEventListener('abort', stop)
+    self.replaced.signal.addEventListener('abort', stop)
+    if (signal?.aborted) {
+      stop()
+    }
+    const say = (message: string, durationMs: number) => {
+      if (!self.replaced.signal.aborted) {
+        notify(message, durationMs)
+      }
+    }
     try {
-      notify(`Getting ${fileName} from the desktop…`, FETCHING_NOTICE_MS)
+      say(`Getting ${fileName} from the desktop…`, FETCHING_NOTICE_MS)
       let lastStep = 0
       const outcome = await saveDesktopFileToPhone(client, { source, fileName }, target, {
         ...(options.maxBytes ? { maxBytes: options.maxBytes } : {}),
         ...(options.chunkBytes ? { chunkBytes: options.chunkBytes } : {}),
-        ...(signal ? { signal } : {}),
-        ...(onScreen ? { onScreen } : {}),
+        signal: stopped.signal,
+        onScreen: () => !self.replaced.signal.aborted && onScreen?.() !== false,
         onProgress: (bytes) => {
           const step = Math.floor(bytes / PROGRESS_STEP_BYTES)
           if (step > lastStep) {
             lastStep = step
-            notify(
+            say(
               `Getting ${fileName}… ${formatPreviewByteLength(step * PROGRESS_STEP_BYTES)}`,
               FETCHING_NOTICE_MS
             )
           }
         }
       })
-      if (outcome.status === 'abandoned' && signal?.aborted) {
-        // The screen is gone; there is nobody to tell.
+      if (outcome.status === 'abandoned' && stopped.signal.aborted) {
+        // The screen is gone, or another save of this file took over; there is nobody to tell.
         return outcome
       }
       if (outcome.status === 'saved') {
@@ -191,7 +212,7 @@ export function createSaveToPhoneRunner(
       } else if (outcome.status !== 'cancelled' && outcome.status !== 'abandoned') {
         options.onProblem?.()
       }
-      notify(
+      say(
         saveOutcomeMessage(outcome),
         outcome.status === 'saved' ||
           outcome.status === 'cancelled' ||
@@ -201,10 +222,17 @@ export function createSaveToPhoneRunner(
       )
       return outcome
     } finally {
-      inFlight.delete(key)
+      signal?.removeEventListener('abort', stop)
+      // A save that was taken over must not free the slot of the one that took it.
+      if (inFlight.get(key) === self) {
+        inFlight.delete(key)
+      }
     }
   }
 }
+
+/** The save holding a file's slot: whose screen it answers to, and how to end it. */
+type InFlightSave = SaveToPhonePresence & { replaced: AbortController }
 
 /** `docs/out/Report.PDF` → `Report.PDF`. */
 export function suggestedSaveFileName(path: string): string {

@@ -1,5 +1,5 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileFileSaveTarget } from './mobile-file-save'
 
 // The preview's Save to phone with the REAL runner (createSaveToPhoneRunner) behind it and a fake
@@ -16,11 +16,15 @@ const phone = vi.hoisted(() => {
 
 const desktop = vi.hoisted(() => {
   let releaseChunk: (() => void) | null = null
-  const chunkGate = new Promise<void>((resolve) => {
-    releaseChunk = resolve
-  })
+  let chunkGate: Promise<void> = Promise.resolve()
   const file = Buffer.from('export const answer = 42\n')
   return {
+    /** Chunk replies wait from here until `release()`. */
+    hold: () => {
+      chunkGate = new Promise<void>((resolve) => {
+        releaseChunk = resolve
+      })
+    },
     release: () => releaseChunk?.(),
     connection: {
       client: {
@@ -94,37 +98,74 @@ vi.mock('../transport/client-context', () => ({
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 
+beforeEach(() => {
+  phone.target.createDocument.mockClear()
+  desktop.hold()
+})
+
+async function openPreview(): Promise<ReactTestRenderer> {
+  let tree: ReactTestRenderer | null = null
+  await act(async () => {
+    tree = create(
+      <ThemeProvider initialPreference="light">
+        <MobileFilePreviewScreen
+          route={{
+            ok: true,
+            params: { hostId: 'host-a', worktreeId: 'wt-1', relativePath: 'src/answer.ts' }
+          }}
+        />
+      </ThemeProvider>
+    )
+  })
+  return tree as unknown as ReactTestRenderer
+}
+
+async function tapSave(rendered: ReactTestRenderer): Promise<void> {
+  const save = rendered.root.findAll(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Save to phone'
+  )[0]!
+  await act(async () => {
+    save.props.onPress()
+  })
+}
+
+function shownText(rendered: ReactTestRenderer): string[] {
+  return rendered.root
+    .findAll((node) => String(node.type) === 'Text')
+    .map((node) => node.props.children)
+    .filter((child): child is string => typeof child === 'string')
+}
+
+async function desktopAnswers(): Promise<void> {
+  await act(async () => {
+    desktop.release()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  })
+}
+
 describe('walking away from a save that is still reading', () => {
   it('does not open the system save picker after the user has left the preview', async () => {
-    let tree: ReactTestRenderer | null = null
-    await act(async () => {
-      tree = create(
-        <ThemeProvider initialPreference="light">
-          <MobileFilePreviewScreen
-            route={{
-              ok: true,
-              params: { hostId: 'host-a', worktreeId: 'wt-1', relativePath: 'src/answer.ts' }
-            }}
-          />
-        </ThemeProvider>
-      )
-    })
-    const rendered = tree as unknown as ReactTestRenderer
-    const save = rendered.root.findAll(
-      (node) =>
-        String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Save to phone'
-    )[0]!
-
-    await act(async () => {
-      save.props.onPress()
-    })
+    const rendered = await openPreview()
+    await tapSave(rendered)
     // The read is under way; the user gives up waiting and goes back.
     act(() => rendered.unmount())
-    await act(async () => {
-      desktop.release()
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    })
+    await desktopAnswers()
 
     expect(phone.target.createDocument).not.toHaveBeenCalled()
+  })
+
+  it('opens the picker, not "Already saving", when the user reopens the file and saves it again', async () => {
+    const first = await openPreview()
+    await tapSave(first)
+    act(() => first.unmount())
+
+    const second = await openPreview()
+    await tapSave(second)
+    expect(shownText(second)).not.toContain('Already saving answer.ts')
+    await desktopAnswers()
+
+    expect(phone.target.createDocument).toHaveBeenCalledTimes(1)
+    expect(shownText(second)).toContain('Saved answer.ts (25 B)')
+    act(() => second.unmount())
   })
 })
