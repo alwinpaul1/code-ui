@@ -1,6 +1,11 @@
 import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
-import { isPeerBoilerplateRow, surfacePeerMessages } from './mobile-native-chat-peer-messages'
+import {
+  isPeerBoilerplateRow,
+  surfacePeerMessages,
+  TEAMMATE_TASK_PRESENTATION,
+  teammateTask
+} from './mobile-native-chat-peer-messages'
 import { withoutPasteWrappers, withoutPasteWrappersInRows } from './mobile-native-chat-paste-wrapper'
 import { desktopPromptImageBlocks } from './mobile-desktop-prompt-images'
 import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholders'
@@ -43,6 +48,13 @@ export type MobileNativeChatPendingItem = {
 
 /** The row an echo is DRAWN after: its own captured boundary when it has one,
  *  otherwise the one the rebase handed it on the first settled read. */
+function pendingTextBlocks(text: string): NativeChatBlock[] {
+  const task = teammateTask(text)
+  return task
+    ? [{ type: 'text', text: task.text, presentation: `${TEAMMATE_TASK_PRESENTATION}:${task.sender}` }]
+    : desktopPromptImageBlocks(withoutPasteWrappers(text))
+}
+
 export function pendingPlacementAnchorId(item: MobileNativeChatPendingItem): string | null {
   return item.drawAfterId !== undefined
     ? item.drawAfterId
@@ -297,8 +309,10 @@ export function buildMobileNativeChatTransientData({
         // Drawn, not matched: a desktop-pasted image becomes an "Image on
         // Desktop" chip above the caption here so the reader can see one was
         // sent, while `item.text` keeps the raw marker that retirement
-        // matches on (2026-09-15; chips instead of words 2026-09-19).
-        ...(item.text ? desktopPromptImageBlocks(withoutPasteWrappers(item.text)) : [])
+        // matches on (2026-09-15; chips instead of words 2026-09-19). A lead's
+        // message in a teammate session is drawn as its words, as its row is
+        // once it lands (teammateTask; review of 2026-09-27).
+        ...(item.text ? pendingTextBlocks(item.text) : [])
       ],
       timestamp: null,
       source: 'transcript'

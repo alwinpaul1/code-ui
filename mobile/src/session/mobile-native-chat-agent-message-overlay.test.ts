@@ -163,6 +163,32 @@ describe("the lead's mid-turn follow-up in a teammate session with the prompt ho
     })
     expect(lastFrame().filter((bubble) => bubble.text.includes('Also time the CPU path.'))).toHaveLength(1)
   })
+
+  // Review of 2026-09-27: the follow-up was drawn with its raw XML, and once
+  // it landed (a turn it started, surfaced as its words by teammateTask) the
+  // hook's copy never retired against it, so it drew twice.
+  const task = userRow('task', ['<teammate-message teammate_id="team-lead">Build the job.</teammate-message>'], '12:40:00.000')
+  const followUp = '<teammate-message teammate_id="team-lead">Also time the CPU path.</teammate-message>'
+
+  it('is drawn as its words, as the task is, not as the XML', async () => {
+    await show('12:40:30.000', {
+      messages: [task, agentRow('a1', 'Reading the code.', '12:40:10.000')],
+      working: true,
+      promptHook: true,
+      ...fromBeacon([{ nonce: '7001', text: followUp, anchorId: 'a1' }])
+    })
+    expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Build the job.', 'Also time the CPU path.'])
+  })
+
+  it('is drawn once when it lands as a turn of its own', async () => {
+    const beacon = fromBeacon([{ nonce: '7001', text: followUp, anchorId: 'a1' }])
+    const rows = [task, agentRow('a1', 'Reading the code.', '12:40:10.000')]
+    await show('12:40:30.000', { messages: rows, working: false, promptHook: true, ...beacon })
+    await show('12:40:40.000', { messages: [...rows, userRow('f1', [followUp], '12:40:31.000')], working: true, promptHook: true, ...beacon })
+    expect(lastFrame().filter((bubble) => bubble.text.includes('Also time the CPU path.'))).toEqual([
+      { id: 'f1', images: '', text: 'Also time the CPU path.' }
+    ])
+  })
 })
 
 // Review of 2026-09-26: the screen's peer notices were anchored on the tail of
