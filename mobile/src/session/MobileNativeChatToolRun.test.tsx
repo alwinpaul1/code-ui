@@ -27,6 +27,8 @@ vi.mock('react-native', () => ({
     sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
     timing: () => ({ start: vi.fn(), stop: vi.fn() })
   },
+  // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
+  Platform: { OS: 'android', Version: 34 },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',

@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => {
     /** Where the one shared phase stands for this render. */
     phase: 0,
     repeats: 0,
-    cancels: 0
+    cancels: 0,
+    os: 'android',
+    version: 34 as number | string,
+    /** What AccessibilityInfo.isAccessibilityServiceEnabled answers. */
+    serviceEnabled: Promise.resolve(false) as Promise<boolean>
   }
   const phase = {
     get value() {
@@ -24,6 +28,18 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('react-native', () => ({
+  AccessibilityInfo: {
+    isAccessibilityServiceEnabled: () => mocks.state.serviceEnabled,
+    addEventListener: () => ({ remove: () => undefined })
+  },
+  Platform: {
+    get OS() {
+      return mocks.state.os
+    },
+    get Version() {
+      return mocks.state.version
+    }
+  },
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
   useColorScheme: () => 'light'
@@ -75,6 +91,9 @@ describe('a running label with the Claude app shimmer', () => {
     mocks.state.phase = 0
     mocks.state.repeats = 0
     mocks.state.cancels = 0
+    mocks.state.os = 'android'
+    mocks.state.version = 34
+    mocks.state.serviceEnabled = Promise.resolve(false)
   })
 
   afterEach(() => {
@@ -202,6 +221,50 @@ describe('a running label with the Claude app shimmer', () => {
     expect(after).toEqual(before)
     mocks.state.phase = 0.3843
     expect(glyphs(draw().tree).map((glyph) => glyph.color)).not.toEqual(before)
+  })
+
+  // Android 12 and older announce every setText to the nearest live-region
+  // ancestor (TextView.setText, then View.notifyViewAccessibilityStateChangedIfNeeded
+  // walking ViewGroup.notifySubtreeAccessibilityStateChanged up), so a sweep
+  // under the row's polite live region would send TalkBack a content change
+  // ten times a second. Android 13 and later drop a change that only recolours
+  // spans (AccessibilityUtils.textOrSpanChanged).
+  it('holds still on Android 12 while an accessibility service is on', async () => {
+    mocks.state.version = 32
+    mocks.state.serviceEnabled = Promise.resolve(true)
+    const { tree } = draw()
+    await act(async () => {
+      await mocks.state.serviceEnabled
+    })
+    expect(labelNode(tree).props.children).toBe(LABEL)
+    expect(mocks.state.repeats).toBe(0)
+  })
+
+  it('holds still on Android 12 until it knows whether a service is on, then sweeps when none is', async () => {
+    mocks.state.version = 32
+    let answer: (enabled: boolean) => void = () => undefined
+    mocks.state.serviceEnabled = new Promise((resolve) => {
+      answer = resolve
+    })
+    const { tree } = draw()
+    expect(labelNode(tree).props.children).toBe(LABEL)
+    expect(mocks.state.repeats).toBe(0)
+    await act(async () => {
+      answer(false)
+      await mocks.state.serviceEnabled
+    })
+    expect(glyphs(tree)).toHaveLength(LABEL.length)
+    expect(mocks.state.repeats).toBe(1)
+  })
+
+  it('sweeps on Android 13 and later with a service on, since a recolour sends no event there', async () => {
+    mocks.state.version = 33
+    mocks.state.serviceEnabled = Promise.resolve(true)
+    const { tree } = draw()
+    await act(async () => {
+      await mocks.state.serviceEnabled
+    })
+    expect(glyphs(tree)).toHaveLength(LABEL.length)
   })
 
   it('does not animate a row scrolled off screen, and picks up again when it comes back', () => {

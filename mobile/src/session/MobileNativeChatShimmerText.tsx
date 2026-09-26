@@ -18,6 +18,7 @@ import {
   shimmerBandWeight,
   shimmerFramePhase
 } from './mobile-native-chat-shimmer'
+import { useShimmerHeldForAccessibility } from './native-chat-shimmer-accessibility'
 import { useChatRowOnScreen } from './native-chat-row-visibility'
 
 /**
@@ -42,8 +43,9 @@ import { useChatRowOnScreen } from './native-chat-row-visibility'
  * (code review of c03f5328).
  *
  * The plain label, and no loop at all, when the row has finished, when motion
- * is reduced or not yet known, and when the row is scrolled off screen or its
- * screen is covered.
+ * is reduced or not yet known, when the row is scrolled off screen or its
+ * screen is covered, and on Android 12 and older while an accessibility
+ * service is on (native-chat-shimmer-accessibility.ts).
  */
 export function ShimmerText({
   text,
@@ -65,7 +67,9 @@ export function ShimmerText({
   const { colors } = useTheme()
   const reducedMotion = useReducedMotion()
   const onScreen = useChatRowOnScreen()
-  const sweeping = active && reducedMotion === false && onScreen && text.length > 0
+  const heldForAccessibility = useShimmerHeldForAccessibility()
+  const sweeping =
+    active && reducedMotion === false && onScreen && !heldForAccessibility && text.length > 0
   const phase = useSharedValue(0)
   useEffect(() => {
     if (!sweeping) {
