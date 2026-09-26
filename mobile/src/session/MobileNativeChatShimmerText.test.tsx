@@ -191,6 +191,19 @@ describe('a running label with the Claude app shimmer', () => {
     expect(mocks.state.repeats).toBe(1)
   })
 
+  // Code review of c03f5328: 40 steps a second, not a commit per display
+  // frame. Two 120 Hz frames inside one step draw the same colours, here
+  // across the moment the unstepped band would have tipped "n" into it.
+  it('draws the same colours for two display frames inside one step of the sweep', () => {
+    mocks.state.phase = 0.367
+    const before = glyphs(draw().tree).map((glyph) => glyph.color)
+    mocks.state.phase = 0.38
+    const after = glyphs(draw().tree).map((glyph) => glyph.color)
+    expect(after).toEqual(before)
+    mocks.state.phase = 0.3843
+    expect(glyphs(draw().tree).map((glyph) => glyph.color)).not.toEqual(before)
+  })
+
   it('does not animate a row scrolled off screen, and picks up again when it comes back', () => {
     const visibility = createChatRowVisibility()
     visibility.onViewableItemsChanged({

@@ -3,10 +3,12 @@ import { darkColors, lightColors } from '../theme/tokens'
 import {
   mixHexColor,
   SHIMMER_BAND_DEPTH,
+  SHIMMER_FRAMES_PER_SECOND,
   SHIMMER_HALF_BAND,
   SHIMMER_PERIOD_MS,
   shimmerBandColor,
-  shimmerBandWeight
+  shimmerBandWeight,
+  shimmerFramePhase
 } from './mobile-native-chat-shimmer'
 
 // Measured 2026-09-26 from the user's screen recording of the Claude app
@@ -81,6 +83,30 @@ describe('the running label shimmer, as the Claude app sweeps it', () => {
     expect(drawn[3]).toBe(0)
     expect(drawn[7]).toBeCloseTo(drawn[5]!)
     expect(drawn[8]).toBeCloseTo(drawn[4]!)
+  })
+
+  // Code review of c03f5328: every display frame of the sweep was a full
+  // Fabric commit, 120 a second on the S23, for as long as an agent ran. The
+  // phase now steps 40 times a second; the frames in between compute the same
+  // colours, and Reanimated's styleUpdater skips a style that is shallowEqual
+  // to the last one, commit and all.
+  it('steps the sweep 40 times a second instead of on every display frame', () => {
+    expect(SHIMMER_FRAMES_PER_SECOND).toBe(40)
+    const steps = new Set(Array.from({ length: 1500 }, (_, ms) => shimmerFramePhase(ms / 1500)))
+    expect(steps.size).toBe((SHIMMER_PERIOD_MS / 1000) * SHIMMER_FRAMES_PER_SECOND)
+    expect(shimmerFramePhase(1)).toBe(0)
+    expect(shimmerFramePhase(1.25)).toBe(shimmerFramePhase(0.25))
+  })
+
+  it('draws the same colours on every display frame inside one step, and moves on at the next', () => {
+    const step = 22 / 60
+    // 120 Hz frames, 8.3 ms of a 1.5 s sweep apart, all inside that step.
+    const frames = [0.0005, 0.0005 + 1 / 180, 0.0005 + 2 / 180, 1 / 60 - 0.0005].map((offset) => step + offset)
+    const first = weights(shimmerFramePhase(frames[0]!))
+    for (const frame of frames) {
+      expect(weights(shimmerFramePhase(frame))).toEqual(first)
+    }
+    expect(weights(shimmerFramePhase(step + 1 / 60 + 0.0005))).not.toEqual(first)
   })
 
   it('still sweeps a one-character label, and draws nothing for an empty one or a stray index', () => {

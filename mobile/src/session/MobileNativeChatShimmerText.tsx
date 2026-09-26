@@ -12,7 +12,12 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
-import { SHIMMER_PERIOD_MS, shimmerBandColor, shimmerBandWeight } from './mobile-native-chat-shimmer'
+import {
+  SHIMMER_PERIOD_MS,
+  shimmerBandColor,
+  shimmerBandWeight,
+  shimmerFramePhase
+} from './mobile-native-chat-shimmer'
 import { useChatRowOnScreen } from './native-chat-row-visibility'
 
 /**
@@ -22,12 +27,13 @@ import { useChatRowOnScreen } from './native-chat-row-visibility'
  * breath that faded the icon and the whole label together (2026-09-26).
  *
  * One text, one span per character, each span's colour driven from one shared
- * phase on the UI thread. It is still a single paragraph, so the one-line cut
- * and TalkBack read it as the plain label, and a colour-only change keeps the
- * text measure cache warm (React Native compares text layout without colour).
- * It is not drawn identically, though: on Android each span is its own
- * metric-affecting run, so no kerning pair crosses from one glyph to the next,
- * and the swept word can sit a pixel or so off the plain one's width.
+ * phase on the UI thread, stepped 40 times a second. It is still a single
+ * paragraph, so the one-line cut and TalkBack read it as the plain label, and a
+ * colour-only change keeps the text measure cache warm (React Native compares
+ * text layout without colour). It is not drawn identically, though: on Android
+ * each span is its own metric-affecting run, so no kerning pair crosses from
+ * one glyph to the next, and the swept word can sit a pixel or so off the
+ * plain one's width.
  *
  * Every glyph names the label's own face. The patched Text (patches/
  * react-native@0.86.3.patch) gives any Text that names none Instrument Sans
@@ -36,7 +42,8 @@ import { useChatRowOnScreen } from './native-chat-row-visibility'
  * (code review of c03f5328).
  *
  * The plain label, and no loop at all, when the row has finished, when motion
- * is reduced or not yet known, and when the row is scrolled off screen.
+ * is reduced or not yet known, and when the row is scrolled off screen or its
+ * screen is covered.
  */
 export function ShimmerText({
   text,
@@ -144,7 +151,11 @@ function ShimmerGlyph({
 }) {
   const sweep = useAnimatedStyle(
     () => ({
-      color: interpolateColor(shimmerBandWeight(phase.value, index, count), [0, 1], [color, band])
+      color: interpolateColor(
+        shimmerBandWeight(shimmerFramePhase(phase.value), index, count),
+        [0, 1],
+        [color, band]
+      )
     }),
     // Named so the mapper has inputs where no Babel closure is written (the web bundle).
     [phase, index, count, color, band]

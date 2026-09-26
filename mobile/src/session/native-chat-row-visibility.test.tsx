@@ -1,12 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ChatRowOnScreenScope,
   createChatRowVisibility,
-  useChatRowOnScreen
+  useChatRowOnScreen,
+  useChatRowVisibility
 } from './native-chat-row-visibility'
+
+const focus = vi.hoisted(() => ({ report: null as ((focused: boolean) => void) | null }))
+
+// The list's navigation focus, as the session screen's navigator reports it.
+vi.mock('./use-native-chat-screen-focus', () => ({
+  useNativeChatScreenFocus: (report: (focused: boolean) => void) => {
+    focus.report = report
+  }
+}))
 
 /** What FlashList hands `onViewableItemsChanged`: a token per row on screen. */
 function tokens(indices: number[]) {
@@ -104,6 +114,40 @@ describe('which chat rows are on screen', () => {
       .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, '')
     expect(source).toMatch(/onViewableItemsChanged=\{rowVisibility\.onViewableItemsChanged\}/)
     expect(source).toMatch(/<ChatRowOnScreenScope visibility=\{rowVisibility\} index=\{index\}>/)
-    expect(source).toMatch(/const \[rowVisibility\] = useState\(createChatRowVisibility\)/)
+    expect(source).toMatch(/const rowVisibility = useChatRowVisibility\(\)/)
+  })
+
+  // Code review of c03f5328: a session screen left mounted under a pushed
+  // route (Settings and the like) kept sweeping where nobody could see it.
+  it('stops every row while the screen is covered, and picks up where the list left off', () => {
+    const visibility = createChatRowVisibility()
+    visibility.setScreenFocused(false)
+    expect(visibility.isOnScreen(0)).toBe(false)
+    visibility.onViewableItemsChanged(tokens([0, 1]))
+    expect(visibility.isOnScreen(0)).toBe(false)
+    visibility.setScreenFocused(true)
+    expect(visibility.isOnScreen(0)).toBe(true)
+    expect(visibility.isOnScreen(5)).toBe(false)
+  })
+
+  it('tells a row when its screen is covered by a pushed route and when it comes back', () => {
+    focus.report = null
+    const seen: boolean[] = []
+    function List() {
+      const visibility = useChatRowVisibility()
+      return (
+        <ChatRowOnScreenScope visibility={visibility} index={0}>
+          <Probe seen={seen} />
+        </ChatRowOnScreenScope>
+      )
+    }
+    act(() => {
+      renderer = create(<List />)
+    })
+    expect(seen.at(-1)).toBe(true)
+    act(() => focus.report?.(false))
+    expect(seen.at(-1)).toBe(false)
+    act(() => focus.report?.(true))
+    expect(seen.at(-1)).toBe(true)
   })
 })

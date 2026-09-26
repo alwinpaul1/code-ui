@@ -28,6 +28,24 @@ export const SHIMMER_HALF_BAND = 3
  *  leaves it the recording's 26% of its contrast. */
 export const SHIMMER_BAND_DEPTH = 0.74
 
+/** How often the glyph colours change. Each change is a Fabric commit (the
+ *  clone to the label, Yoga, a new paragraph state, a new Spannable and
+ *  setText on Android), so the sweep steps rather than following a 120 Hz
+ *  display: 60 steps a sweep, the band about a third of a character further
+ *  on each step, about nine steps across a glyph's ramp in or out. */
+export const SHIMMER_FRAMES_PER_SECOND = 40
+
+const SHIMMER_STEPS = (SHIMMER_PERIOD_MS / 1000) * SHIMMER_FRAMES_PER_SECOND
+
+/** The phase held to the start of its step, so every display frame inside a
+ *  step computes the same colours and Reanimated skips their commit (its
+ *  styleUpdater updates nothing for a style shallowEqual to the last). */
+export function shimmerFramePhase(phase: number): number {
+  'worklet'
+  const sweep = phase - Math.floor(phase)
+  return Math.floor(sweep * SHIMMER_STEPS) / SHIMMER_STEPS
+}
+
 /**
  * How much the band covers character `index` of `count` at `phase` (one sweep
  * is 0 to 1; whole numbers wrap): 1 under the band's centre, falling off in a
