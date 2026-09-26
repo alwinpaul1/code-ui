@@ -7,6 +7,8 @@ import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 
+const mocks = vi.hoisted(() => ({ reduced: true, loops: 0 }))
+
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
   Animated: {
@@ -17,7 +19,10 @@ vi.mock('react-native', () => ({
         return 0
       }
     },
-    loop: () => ({ start: () => {}, stop: () => {} }),
+    loop: () => {
+      mocks.loops += 1
+      return { start: () => {}, stop: () => {} }
+    },
     timing: () => ({}),
     sequence: () => ({})
   },
@@ -28,7 +33,7 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
-vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => mocks.reduced }))
 
 type Drawn = { texts: string[]; colors: string[] }
 
@@ -37,6 +42,8 @@ describe('the status line above the composer', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    mocks.reduced = true
+    mocks.loops = 0
   })
 
   function draw(args: {
@@ -112,5 +119,40 @@ describe('the status line above the composer', () => {
     const dark = draw({ runningCount: 5, working: true, spinner, scheme: 'dark' }).colors
     expect(dark).toEqual(expect.arrayContaining([darkColors.accentText, darkColors.info]))
     expect(dark).not.toContain(lightColors.info)
+  })
+
+  /** The star's own drawing: what the Svg is styled with, if anything. */
+  function starStyle(): unknown {
+    const star = renderer!.root.find((node) => node.props.testID === 'background-tasks-pulse')
+    return star.findAllByType('Svg' as never)[0]?.props.style
+  }
+
+  // 2026-09-26, the user's recording of the Claude app, "4 running tasks" with
+  // the turn over: the star kept one shape the whole 10.5 s, with no fade, no
+  // scale and no turn, and the words never moved. The phone's star breathed.
+  it('keeps the star still beside the running-task count once the turn is over', () => {
+    mocks.reduced = false
+    const drawn = draw({ runningCount: 4, working: false })
+    expect(drawn.texts).toEqual(['4 running tasks'])
+    expect(mocks.loops).toBe(0)
+    expect(starStyle()).toBeUndefined()
+  })
+
+  it('draws the still star in the accent of either theme', () => {
+    mocks.reduced = false
+    for (const [scheme, palette] of [['light', lightColors], ['dark', darkColors]] as const) {
+      draw({ runningCount: 4, working: false, scheme })
+      const path = renderer!.root.findAllByType('Path' as never)[0]
+      expect(path?.props.fill).toBe(palette.accentText)
+    }
+  })
+
+  // Not in the recording, which caught no working turn: the star beside
+  // "Working…" keeps the breath it had.
+  it('still breathes the star beside Working…', () => {
+    mocks.reduced = false
+    draw({ runningCount: 4, working: true, spinner: null })
+    expect(mocks.loops).toBe(1)
+    expect(starStyle()).toBeDefined()
   })
 })

@@ -7,15 +7,21 @@ const BOX = 15
 const AnimatedSvg = Animated.createAnimatedComponent(Svg)
 
 /** Claude's own starburst, from the mark the user supplied (2026-09-13),
- *  breathing beside the running-task count. Earlier tries — a lucide star that
- *  turned, then a hand-rolled dot — read as no icon at all on the device. The
+ *  beside the status line's words. Earlier tries — a lucide star that turned,
+ *  then a hand-rolled dot — read as no icon at all on the device.
+ *
+ *  It breathes only beside "Working…". Beside "4 running tasks" with the turn
+ *  over it stands still: the user's recording of the Claude app (2026-09-26)
+ *  shows that star keep one shape for 10.5 s, with no fade, scale or turn. The
  *  scale and opacity run on the native driver, so a busy turn costs it
  *  nothing. */
-export function MobileBackgroundTasksPulse({ color }: { color: string }) {
+export function MobileBackgroundTasksPulse({ color, breathing }: { color: string; breathing: boolean }) {
   const wave = useRef(new Animated.Value(0)).current
-  // Still while motion is reduced or not yet known: the mark draws at rest,
-  // full size and opacity, with no breathing style applied at all.
-  const still = useReducedMotion() !== false
+  // Still while motion is reduced or not yet known, and whenever the line has
+  // no working turn to show: the mark draws at rest, full size and opacity,
+  // with no breathing style applied at all.
+  const reducedMotion = useReducedMotion()
+  const still = !breathing || reducedMotion !== false
   useEffect(() => {
     if (still) {
       return undefined

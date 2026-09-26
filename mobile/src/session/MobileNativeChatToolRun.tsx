@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Animated, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
   ChevronRight,
@@ -47,7 +47,7 @@ import type {
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
-import { PulsingText, usePulseOpacity } from './MobileNativeChatToolPulsingText'
+import { ShimmerText } from './MobileNativeChatShimmerText'
 
 const MAX_VISIBLE_TOOL_PAIRS = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -304,8 +304,6 @@ export function ToolRun({
 }) {
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
-  // One breath for the live row's icon and label, called before any return.
-  const activePulse = usePulseOpacity(activeCall !== null)
   // The Claude-app detail sheet for whichever call was tapped, in this run or
   // one of its lines; null closes it. Kept local to the run rather than
   // threaded up through the message/view props that already carry
@@ -381,17 +379,15 @@ export function ToolRun({
             accessibilityState={{ expanded: open }}
             accessibilityLiveRegion="polite"
           >
-            <Animated.View testID="tool-run-active-icon" style={{ opacity: activePulse }}>
-              <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
-            </Animated.View>
-            <PulsingText
+            <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
+            <ShimmerText
+              text={focusView ? countLabel : 'Running'}
+              active
+              color={colors.textSecondary}
               style={styles.toolRunActiveLabel}
               numberOfLines={1}
               testID="tool-run-active-label"
-              opacity={activePulse}
-            >
-              {focusView ? countLabel : 'Running'}
-            </PulsingText>
+            />
             <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
             {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
           </Pressable>

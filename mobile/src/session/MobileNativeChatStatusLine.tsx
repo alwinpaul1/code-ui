@@ -45,7 +45,7 @@ export function MobileNativeChatStatusLine({
       accessibilityLiveRegion="polite"
       testID="native-chat-status-line"
     >
-      <MobileBackgroundTasksPulse color={colors.accentText} />
+      <MobileBackgroundTasksPulse color={colors.accentText} breathing={working} />
       <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
         {lead}
         {runningCount > 0 ? (

@@ -1,7 +1,7 @@
 // Focus view (extension `claudeCode.focusView`): a run of tool calls folds to
 // one "N tool calls" row so only the conversation shows, and one tap unfolds
 // it. Off, the run reads exactly as it does today — the sentence, the member
-// arguments, the pulsing "Running" — which the first test pins by comparing
+// arguments, the shimmering "Running" — which the first test pins by comparing
 // the two trees, not by trusting the default.
 
 import { createElement } from 'react'

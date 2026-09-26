@@ -36,6 +36,7 @@ import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
+import { ChatRowOnScreenScope, createChatRowVisibility } from './native-chat-row-visibility'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { composerPlaceholder, useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
 import {
@@ -133,6 +134,8 @@ export function MobileNativeChatView({
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
   const drawDistance = chatListDrawDistanceDp(useWindowDimensions().height)
+  // Which rows are on screen, so a running row's shimmer stops a screen away.
+  const [rowVisibility] = useState(createChatRowVisibility)
   const [toolsExpanded, setToolsExpanded] = useState(false)
   // Focus view is a device preference (Settings → Chat UI); the store notifies,
   // so a toggle made while this chat was open lands on its rows at once.
@@ -237,7 +240,7 @@ export function MobileNativeChatView({
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
-      <>
+      <ChatRowOnScreenScope visibility={rowVisibility} index={index}>
         {dividerLabels.has(item.id) ? (
           <MobileNativeChatTimeDivider label={dividerLabels.get(item.id) as string} />
         ) : null}
@@ -265,7 +268,7 @@ export function MobileNativeChatView({
         {...turns.resolveRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
         />
-      </>
+      </ChatRowOnScreenScope>
     ),
     [
       dividerLabels,
@@ -283,7 +286,8 @@ export function MobileNativeChatView({
       turnActivity,
       turns,
       data.length,
-      taskListPredecessors
+      taskListPredecessors,
+      rowVisibility
     ]
   )
 
@@ -325,6 +329,7 @@ export function MobileNativeChatView({
             inverted
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            onViewableItemsChanged={rowVisibility.onViewableItemsChanged}
             contentContainerStyle={styles.listContent}
             // Let link/file taps land while the composer keyboard is up
             // instead of being swallowed by the dismiss gesture.
