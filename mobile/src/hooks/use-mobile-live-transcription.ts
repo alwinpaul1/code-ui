@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition'
 import type { DictationStatus, UseMobileDictationResult } from './mobile-dictation-session-state'
 import { composeLiveTranscript, DICTATION_SILENCE_STOP_MS } from './mobile-live-transcript'
+import { createEngineTake } from './live-transcription-engine-take'
 
 export type UseMobileLiveTranscriptionOptions = {
   /** Fires on every partial and final result with the full transcript so far.
@@ -41,7 +42,9 @@ export function speechLevel(raw: number, noiseFloor: number): number {
 type Recognizer = Pick<
   typeof ExpoSpeechRecognitionModule,
   'start' | 'stop' | 'abort' | 'addListener' | 'requestPermissionsAsync' | 'isRecognitionAvailable'
->
+> &
+  // Android lists its engines (live-transcription-engine-take.ts); without them the default is kept.
+  Partial<Pick<typeof ExpoSpeechRecognitionModule, 'getSpeechRecognitionServices' | 'getDefaultRecognitionService'>>
 
 /**
  * On-phone dictation with text that appears as you speak, the way Claude Code's
@@ -72,6 +75,8 @@ export function useMobileLiveTranscription(
   const segmentsRef = useRef<string[]>([])
   const interimRef = useRef('')
   const activeRef = useRef(false)
+  // Which engine each take listens with: Google's when the phone has it.
+  const engine = useMemo(() => createEngineTake(recognizer), [recognizer])
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearSilence = useCallback(() => {
     if (silenceTimerRef.current) {
@@ -92,10 +97,11 @@ export function useMobileLiveTranscription(
       if (!activeRef.current) {
         return
       }
+      engine.ending()
       setStatus('processing')
       recognizer.stop()
     }, DICTATION_SILENCE_STOP_MS)
-  }, [clearSilence, recognizer])
+  }, [clearSilence, engine, recognizer])
   // The meter follows speech, not the room: the recognizer's speechstart /
   // speechend (and each partial result, for platforms without speechend) gate
   // it, and a running estimate of the ambient level is subtracted so a fan or
@@ -124,7 +130,9 @@ export function useMobileLiveTranscription(
 
   useEffect(() => {
     const started = recognizer.addListener('start', () => {
-      setStatus('recording')
+      if (activeRef.current) {
+        setStatus('recording')
+      }
     })
     // The recognizer reports -2..10; below 0 is silence. Map to 0..1, learn the
     // ambient level while nobody speaks, and show only what rises above it.
@@ -138,6 +146,9 @@ export function useMobileLiveTranscription(
       setLevel(speechLevel(raw, noiseFloorRef.current))
     })
     const speechStarted = recognizer.addListener('speechstart', () => {
+      // Speech heard is speech a retry would drop, transcribed or not
+      // (review of 5c7643bd): the take no longer retries on the default.
+      engine.heardWords()
       markSpeaking()
       armSilence()
     })
@@ -150,6 +161,7 @@ export function useMobileLiveTranscription(
         return
       }
       const transcript = event.results[0]?.transcript ?? ''
+      engine.heardWords()
       // A new result means speech is being recognised right now.
       markSpeaking()
       if (event.isFinal) {
@@ -162,7 +174,22 @@ export function useMobileLiveTranscription(
       publish(false)
     })
     const ended = recognizer.addListener('end', () => {
-      if (!activeRef.current) {
+      if (!activeRef.current || engine.swallowsStaleEnd()) {
+        return
+      }
+      // A pinned engine failed before it heard a word: this take goes on on the default.
+      const retry = engine.takeRetry()
+      if (retry) {
+        armSilence()
+        try {
+          recognizer.start(retry)
+        } catch (err) {
+          const failure = err instanceof Error ? err : new Error(String(err))
+          activeRef.current = false
+          setStatus('error')
+          setError(failure.message)
+          onErrorRef.current?.(failure)
+        }
         return
       }
       clearSilence()
@@ -174,6 +201,9 @@ export function useMobileLiveTranscription(
       onTranscriptRef.current(spoken, true, '')
     })
     const failed = recognizer.addListener('error', (event) => {
+      if (activeRef.current && engine.absorbsError(event.error, event.message)) {
+        return
+      }
       // "aborted" is our own cancel; "no-speech" on release is a quiet room.
       // A call taking the mic stops the take and leaves the words already heard.
       if (event.error === 'aborted' || event.error === 'no-speech') {
@@ -209,7 +239,7 @@ export function useMobileLiveTranscription(
       ended.remove()
       failed.remove()
     }
-  }, [armSilence, clearSilence, markSilent, markSpeaking, publish, recognizer])
+  }, [armSilence, clearSilence, engine, markSilent, markSpeaking, publish, recognizer])
 
   const start = useCallback(async () => {
     if (activeRef.current) {
@@ -226,26 +256,18 @@ export function useMobileLiveTranscription(
     setError(null)
     setStatus('starting')
     armSilence()
-    recognizer.start({
-      lang,
-      interimResults: true,
-      continuous: true,
-      maxAlternatives: 1,
-      addsPunctuation: true,
-      volumeChangeEventOptions: { enabled: true, intervalMillis: 80 },
-      // Hold-to-talk: never stop on a pause; the release stops it.
-      androidIntentOptions: { EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: DICTATION_SILENCE_STOP_MS }
-    })
-  }, [armSilence, lang, recognizer])
+    recognizer.start(engine.begin(lang))
+  }, [armSilence, engine, lang, recognizer])
 
   const stop = useCallback(async () => {
     if (!activeRef.current) {
       return
     }
     clearSilence()
+    engine.ending()
     setStatus('processing')
     recognizer.stop()
-  }, [clearSilence, recognizer])
+  }, [clearSilence, engine, recognizer])
 
   const cancel = useCallback(async () => {
     if (!activeRef.current) {
@@ -253,12 +275,13 @@ export function useMobileLiveTranscription(
     }
     clearSilence()
     activeRef.current = false
+    engine.ending()
     segmentsRef.current = []
     interimRef.current = ''
     setStatus('idle')
     markSilent()
     recognizer.abort()
-  }, [clearSilence, markSilent, recognizer])
+  }, [clearSilence, engine, markSilent, recognizer])
 
   const prime = useCallback(async () => {
     try {
@@ -276,9 +299,10 @@ export function useMobileLiveTranscription(
     if (!activeRef.current) {
       return
     }
+    engine.ending()
     setStatus('processing')
     recognizer.stop()
-  }, [clearSilence, recognizer])
+  }, [clearSilence, engine, recognizer])
 
   return {
     status,
