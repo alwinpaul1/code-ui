@@ -8,7 +8,9 @@
 //
 // The launch and finish records are the background-task reader's own
 // (mobile-background-task-transcript.ts), paired the way
-// `deriveBackgroundTasks` pairs them. The limits, each of which refuses:
+// `deriveBackgroundTasks` pairs them, except that a TaskStop answered with a
+// failure (the user turned it down) ends nothing. The limits, each of which
+// refuses:
 // - a task that ended in a way the transcript does not record (a mid-turn
 //   completion Orca does not surface) is still running here;
 // - a teammate never reports, so it runs for the rest of the transcript;
@@ -44,7 +46,10 @@ import {
 import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
 
-type Pending = PendingCall & { at: number }
+type Ending = { id: string; at: number }
+/** `stops` is the ending a TaskStop call recorded, taken back if its answer
+ *  is a failure. */
+type Pending = PendingCall & { at: number; stops: Ending | null }
 /** A task running from `from` until its first ending after that, if any. A
  *  null id is a task no ending names. */
 type Span = { from: number; id: string | null }
@@ -91,7 +96,7 @@ export function backgroundWorkRunningAt(
   const places = new Map<NativeChatToolCallBlock, number>()
   const pending: Pending[] = []
   const spans: Span[] = []
-  const endings: { id: string; at: number }[] = []
+  const endings: Ending[] = []
   let at = 0
   for (const message of messages) {
     let text = ''
@@ -99,11 +104,18 @@ export function backgroundWorkRunningAt(
       at += 1
       if (isToolCallBlock(block)) {
         places.set(block, at)
-        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at })
         const stopped = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
-        if (stopped) {
-          endings.push({ id: stopped, at })
+        const stops = stopped ? { id: stopped, at } : null
+        if (stops) {
+          endings.push(stops)
         }
+        pending.push({
+          name: block.name,
+          input: block.input,
+          startedAt: message.timestamp,
+          at,
+          stops
+        })
         // A message wakes an agent that had finished, or reaches a teammate.
         if (toolCallKind(block.name) === 'message') {
           spans.push({
@@ -115,6 +127,9 @@ export function backgroundWorkRunningAt(
         const call = takeAnsweredCall(pending, block.output)
         if (!call) {
           continue
+        }
+        if (call.stops && ANY_TOOL_FAILURE.test(block.output)) {
+          endings.splice(endings.indexOf(call.stops), 1)
         }
         const launch = readLaunch(call, block.output)
         if (toolCallKind(call.name) === 'agent') {

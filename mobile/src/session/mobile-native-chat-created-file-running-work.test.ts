@@ -256,6 +256,20 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...history, ...CREATE])).toBe(false)
   })
 
+  // Review of 3598d39b: a TaskStop the user turned down ended the task all
+  // the same, so the command still running kept the count of a create after.
+  it('draws no count for a create made after a stop of the background task the user turned down', () => {
+    const history = [
+      ...launched(
+        'Bash',
+        { command: 'npm run watch', run_in_background: true },
+        backgroundStartOutput(SHELL_ID)
+      ),
+      ...launched('TaskStop', { task_id: SHELL_ID }, USER_TURNED_DOWN)
+    ]
+    expect(touched([...history, ...CREATE])).toBe(true)
+  })
+
   it('draws no count when the only report came after the create', () => {
     const launch = launched(
       'Bash',

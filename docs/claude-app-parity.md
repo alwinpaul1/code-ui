@@ -108,7 +108,8 @@ Nothing here is built.
   (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
   sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
   2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
-  2.1.228 to 2.1.281 wrote), so a task that ended where the transcript does not
+  2.1.228 to 2.1.281 wrote), except that a TaskStop the user turned down, or
+  one that failed, ends nothing. So a task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
   all hold the count off. A foreground agent's report is over once it is
