@@ -173,8 +173,9 @@ function SelectableSheetText({
   children: string
 }) {
   const gesture = useMemo(() => Gesture.Native(), [])
+  // The detector sets user-select: none on web unless told otherwise.
   return (
-    <GestureDetector gesture={gesture}>
+    <GestureDetector gesture={gesture} userSelect="text">
       <Txt variant="mono" tone={tone} testID={testID} selectable>
         {children}
       </Txt>

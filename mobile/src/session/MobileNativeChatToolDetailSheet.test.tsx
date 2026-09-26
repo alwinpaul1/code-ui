@@ -275,6 +275,15 @@ describe('tool detail body: Inputs and Output', () => {
     }
   )
 
+  // Review of a1bda082: gesture-handler's detector sets user-select: none on
+  // web unless told otherwise, so the web bundle lost the output's selection.
+  it.each(['light', 'dark'] as const)('still lets the web bundle select the output (%s)', (scheme) => {
+    renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }), scheme)
+    const detector = nearestHostAncestor(findTextNode(renderer, 'tool-detail-output'))
+    expect(detector?.type).toBe('GestureDetector')
+    expect(detector?.props.userSelect).toBe('text')
+  })
+
   it('keeps an output of exactly the cap whole, with no ellipsis', () => {
     const exact: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'Bash', input: { command: 'yes' } },
