@@ -210,12 +210,12 @@ export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPending
 export function agentMessagePlacements(
   scope: string,
   messages: readonly BeaconAgentMessage[]
-): { nonce: string; rowId: string }[] {
+): { nonce: string; rowId: string; terminal?: string }[] {
   return messages.flatMap((message) => {
     const key = `${scope}\0${message.id}`
     const rowId = anchorByKey.get(key) ?? provisionalByKey.get(key)
     const nonce = message.id.slice(message.id.indexOf(':') + 1)
-    return rowId !== undefined && rowId !== message.drawnAfter ? [{ nonce, rowId }] : []
+    return rowId !== undefined && rowId !== message.drawnAfter ? [{ nonce, rowId, terminal: message.terminal }] : []
   })
 }
 
@@ -254,8 +254,10 @@ export function useAgentMessageRows(
   )
   useEffect(() => {
     if (scope !== null) {
-      for (const { nonce, rowId } of agentMessagePlacements(scope, messages)) {
-        rememberAgentMessagePlacement(nonce, rowId)
+      for (const { nonce, rowId, terminal } of agentMessagePlacements(scope, messages)) {
+        if (terminal) {
+          rememberAgentMessagePlacement(terminal, nonce, rowId)
+        }
       }
     }
   }, [messages, rows, scope])

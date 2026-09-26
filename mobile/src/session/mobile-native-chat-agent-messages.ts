@@ -47,6 +47,10 @@ export type BeaconAgentMessage = {
   restored?: true
   /** The row the chat drew it after before it was stored. */
   drawnAfter?: string
+  /** The terminal whose beacon carried it, where that row is stored: a
+   *  nonce is the hook's process id, and another terminal can hold the same
+   *  one (review of 2026-09-27). */
+  terminal?: string
   /** The prompts the hook took after this message at the same row: each is
    *  drawn below the message, in the order they came, rather than straight
    *  after the row above it (mobile-native-chat-agent-message-rows.ts). */
@@ -166,29 +170,35 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
  *  prompts that list still holds. Those it no longer holds came before all
  *  of them. */
 export function agentMessagesOfBeacon(
-  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined,
+  /** The terminal the beacon is of: where each message's placement is stored. */
+  terminal?: string | null
 ): BeaconAgentMessage[] {
   const kept = beacon?.agentMessagePrompts
   const prompts = beacon?.desktopPrompts ?? []
-  if (!kept) {
-    return beaconAgentMessages(prompts)
-  }
-  const keptByNonce = new Map(kept.map((prompt) => [prompt.nonce, prompt]))
+  const keptByNonce = new Map((kept ?? []).map((prompt) => [prompt.nonce, prompt]))
   const held = new Set(prompts.map((prompt) => prompt.nonce))
-  return beaconAgentMessages([
-    ...kept.filter((prompt) => !held.has(prompt.nonce)),
-    // The kept copy, which knows whether it was restored; one the kept list
-    // shed is not drawn.
-    ...prompts.flatMap((prompt) => keptByNonce.get(prompt.nonce) ?? (isSubagentMessagePrompt(prompt) ? [] : [prompt]))
-  ])
+  const messages = kept
+    ? beaconAgentMessages([
+        ...kept.filter((prompt) => !held.has(prompt.nonce)),
+        // The kept copy, which knows whether it was restored; one the kept
+        // list shed is not drawn.
+        ...prompts.flatMap((prompt) => keptByNonce.get(prompt.nonce) ?? (isSubagentMessagePrompt(prompt) ? [] : [prompt]))
+      ])
+    : beaconAgentMessages(prompts)
+  return terminal ? messages.map((message) => ({ ...message, terminal })) : messages
 }
 
 export function useBeaconAgentMessages(
-  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined,
+  terminal?: string | null
 ): BeaconAgentMessage[] {
   const kept = beacon?.agentMessagePrompts
   const prompts = beacon?.desktopPrompts
-  return useMemo(() => agentMessagesOfBeacon({ desktopPrompts: prompts ?? [], agentMessagePrompts: kept }), [kept, prompts])
+  return useMemo(
+    () => agentMessagesOfBeacon({ desktopPrompts: prompts ?? [], agentMessagePrompts: kept }, terminal),
+    [kept, prompts, terminal]
+  )
 }
 
 /**

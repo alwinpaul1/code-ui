@@ -372,17 +372,16 @@ export function consumeAgentHudBeacons(handle: string, chunk: string): string {
   return out + text
 }
 
-/** Records the row the chat drew a subagent message after, on whichever
- *  terminal's beacon holds it, and stores it: a restored message goes back
+/** Records the row the chat drew a subagent message after, on the beacon of
+ *  the terminal that carried it, and stores it: a restored message goes back
  *  there when its own row is one the phone never holds. */
-export function rememberAgentMessagePlacement(nonce: string, rowId: string): void {
-  for (const [handle, beacon] of beacons) {
-    const placed = withAgentMessagePlaced(handle, beacon, nonce, rowId)
-    if (placed !== beacon) {
-      beacons.set(handle, placed)
-      storeForWarmStart(handle, placed)
-      listeners.forEach((listener) => listener())
-    }
+export function rememberAgentMessagePlacement(handle: string, nonce: string, rowId: string): void {
+  const beacon = beacons.get(handle)
+  const placed = beacon && withAgentMessagePlaced(handle, beacon, nonce, rowId)
+  if (placed && placed !== beacon) {
+    beacons.set(handle, placed)
+    storeForWarmStart(handle, placed)
+    listeners.forEach((listener) => listener())
   }
 }
 

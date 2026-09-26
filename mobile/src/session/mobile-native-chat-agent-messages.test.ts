@@ -293,10 +293,10 @@ describe('a subagent message the beacon carried, later on', () => {
   const rowsNow = (raw: NativeChatMessage[]) => withAgentMessageRows(raw, raw, agentMessagesOfBeacon(getAgentHudBeacon(handle())), 'scope')
   /** The rows as the chat draws them, through the hook, whose effect stores
    *  where each message went. */
-  const drawnByTheChat = async (raw: NativeChatMessage[]) => {
+  const drawnByTheChat = async (raw: NativeChatMessage[], terminal = handle()) => {
     let rows: NativeChatMessage[] = []
     function Chat() {
-      rows = useAgentMessageRows(agentMessagesOfBeacon(getAgentHudBeacon(handle())), raw, raw, 'scope')
+      rows = useAgentMessageRows(agentMessagesOfBeacon(getAgentHudBeacon(terminal), terminal), raw, raw, 'scope')
       return null
     }
     let renderer!: ReactTestRenderer
@@ -447,6 +447,18 @@ describe('a subagent message the beacon carried, later on', () => {
     await hydrateAgentHudBeacons()
     const later = [...raw, said('a3', 'The next step.')]
     expect(drawn(rowsNow(later))).toEqual([A1, 'a2', 'from a7a46867b4f497c96', 'a3'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, item 5: the nonce is the hook shell's
+  // process id, which the system hands out again, and the placement was
+  // written to every terminal holding a message of that nonce.
+  it('is placed on the terminal the chat shows, never on another with the same nonce', async () => {
+    const other = `${handle()}-other`
+    consumeAgentHudBeacons(handle(), hookFrame('4242', SUBAGENT_REQUEST_PROMPT, A1))
+    consumeAgentHudBeacons(other, hookFrame('4242', SUBAGENT_REQUEST_PROMPT, A1))
+    await drawnByTheChat([said(A1, 'Reading the code.')])
+    expect(getAgentHudBeacon(handle())?.agentMessagePrompts?.map((prompt) => prompt.drawnAfter)).toEqual([A1])
+    expect(getAgentHudBeacon(other)?.agentMessagePrompts?.map((prompt) => prompt.drawnAfter)).toEqual([undefined])
   })
 
   it('is held back after a relaunch when neither its own row nor the one it was drawn after is loaded', async () => {
