@@ -120,6 +120,25 @@ describe('a beacon copy of a desk prompt, found long after it arrived', () => {
     expect(frames.flatMap(deskRows)).toEqual([])
   })
 
+  // Review of c685c0cd: the row a copy was typed after is often a tool call
+  // Orca never projects. With every row loaded it never comes, so the copy is
+  // never drawn, and the log says so, once.
+  it('says once in the log why it is not drawn when the row it names never loads', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.setSystemTime(at('21:30:00.000'))
+    const toolRow = 'c0ffee00-0000-4000-8000-000000000001'
+    const prompts = [{ nonce: '48217', text: MIDTURN, anchorId: toolRow, seenAt: at('14:27:05.000') }]
+    const whole = [previousAnswer, prompt, itsReply, ...tailPage]
+    for (const clock of ['21:30:00.000', '21:30:01.000', '21:30:02.000']) {
+      await show(clock, { messages: whole, hasMore: false, prompts })
+    }
+    expect(frames.flatMap(deskRows)).toEqual([])
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[desk-prompt]'))).toEqual([
+      `[desk-prompt] not drawn: the beacon's copy of "and keep the old index until the…" was found long after it arrived, and the row it was typed after (${toolRow}) is not in the transcript`
+    ])
+    warn.mockRestore()
+  })
+
   it('still waits at the tail when it arrived just now, as the live case always has', async () => {
     vi.setSystemTime(at('21:30:00.000'))
     const prompts = [beaconCopy(MIDTURN, '48215', at('21:29:59.500'))]

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useStableEchoes } from './use-stable-echoes'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -135,6 +136,7 @@ export function useDesktopPromptEchoes(
   hasEarlier = false
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
+  const refused: DesktopPrompt[] = []
   for (const prompt of prompts) {
     // A status copy held back for want of a time pairs with the phone's sends
     // and is never drawn (agent-status-prompts.ts, 2026-09-26).
@@ -142,6 +144,9 @@ export function useDesktopPromptEchoes(
       continue
     }
     if (foundWithoutItsRow(prompt, rawMessages)) {
+      if (!hasEarlier) {
+        refused.push(prompt)
+      }
       continue
     }
     if (
@@ -255,8 +260,28 @@ export function useDesktopPromptEchoes(
       baselineResolved: true
     })
   }
+  // With every row loaded, a copy still held names a row the transcript does
+  // not have (a tool call Orca never projects): it will not be drawn, and the
+  // log says so once (2026-09-27).
+  const refusals = JSON.stringify(
+    refused.map((prompt) => [
+      prompt.nonce,
+      `[desk-prompt] not drawn: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" was found long after it arrived, and the row it was typed after (${prompt.anchorId}) is not in the transcript`
+    ])
+  )
+  useEffect(() => {
+    for (const [nonce, line] of JSON.parse(refusals) as [string, string][]) {
+      if (!loggedRefusals.has(nonce)) {
+        loggedRefusals.add(nonce)
+        console.warn(line)
+      }
+    }
+  }, [refusals])
   return useStableEchoes(echoes)
 }
+
+/** The refusals already logged, so each says so once. */
+const loggedRefusals = new Set<string>()
 
 /**
  * Whether a beacon copy is one the chat found long after it arrived, with the
@@ -264,7 +289,9 @@ export function useDesktopPromptEchoes(
  * time, so while the row is on a page not loaded there is nowhere to draw it:
  * waiting for it drew the copy at the tail, and after the wait it stayed there
  * for good (2026-09-27, the beacon's side of session 76ba8f2f's 13:20 prompt;
- * a relaunch restores 40 such copies). It is drawn once the row loads.
+ * a relaunch restores 40 such copies). It is drawn once the row loads. A row
+ * Orca never projects (a tool call) never loads, and such a copy is never
+ * drawn; with every row loaded the chat logs that once.
  *
  * Only a copy no chat has placed or waited on this run, and that arrived more
  * than TIMED_ANCHOR_OPEN_MS before this reading. One that arrived just before

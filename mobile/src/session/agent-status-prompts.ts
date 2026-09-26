@@ -54,6 +54,9 @@ export type AgentStatusPromptState = {
   /** The last prompt text seen, so a status ping that repeats it (tool
    *  events keep the field) does not become a second bubble. */
   last: string | null
+  /** The `updatedAt` of the last status read. A prompt first seen on the
+   *  first read after a reconnect came after it. */
+  readAt?: number
   prompts: readonly DesktopPrompt[]
   /** The subagent messages the status carried, in the order it did: never
    *  desktop prompts, but the only words of one a tab without the prompt
@@ -103,8 +106,10 @@ export function observeAgentStatusPrompt(
   // The chat can mount before the tab's status reaches it; the prompt on the
   // first status it does read was already there all the same.
   const firstOfSession = !state.read && status != null
-  if (firstOfSession) {
-    state = { ...state, read: true }
+  const readBefore = state.readAt
+  const readAt = typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : readBefore
+  if (firstOfSession || (status != null && readAt !== readBefore)) {
+    state = { ...state, read: true, ...(readAt !== undefined ? { readAt } : {}) }
   }
   // Nor did it watch the first status after a reconnect arrive: a prompt taken
   // while the link was down came unseen, and the reconnect restamped
@@ -177,7 +182,11 @@ export function observeAgentStatusPrompt(
   // (device, 2026-09-20). The run it came in began at or before it, so that
   // run's start is its time; a status with no state (a fixture) has only its
   // current state's start.
-  const runStart = typeof run === 'number' ? run : null
+  // After a reconnect, no earlier than the last status read before the drop:
+  // the prompt came after it, and the run can have begun an hour before
+  // (review of a615bde2).
+  const notBefore = !firstOfSession && options.firstRead === true ? readBefore : undefined
+  const runStart = typeof run === 'number' ? Math.max(run, notBefore ?? run) : null
   const byStateStart =
     runStart !== null || (found && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt))
   const clock = runStart ?? (byStateStart ? status?.stateStartedAt : status?.updatedAt)

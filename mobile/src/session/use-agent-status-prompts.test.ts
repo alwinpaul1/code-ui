@@ -149,3 +149,38 @@ describe('a desk prompt taken while the phone was away', () => {
     ])
   })
 })
+
+// Review of a615bde2: a short drop in a long run. The prompt came after the
+// last status the chat read before the drop, so that is a truer lower bound
+// than the run's start, an hour earlier.
+describe('a desk prompt typed during a short drop in a long run', () => {
+  it('is timed no earlier than the last status the chat read before the drop', () => {
+    let listed: readonly { text: string; at?: number }[] = []
+    function Chat({ status, connected }: { status: AgentStatusPromptSource; connected: boolean }) {
+      listed = useAgentStatusPrompts('sess-1', status, undefined, connected).prompts
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    const show = (status: AgentStatusPromptSource, connected: boolean) =>
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(Chat, { status, connected }))
+        } else {
+          renderer = create(createElement(Chat, { status, connected }))
+        }
+      })
+    const history = [{ state: 'done', prompt: 'earlier', startedAt: 500 }]
+    const run = { state: 'working', prompt: 'run the migration', updatedAt: 1_000, stateStartedAt: 1_000, stateHistory: history }
+    show(run, true)
+    const lastBeforeDrop = { ...run, updatedAt: 3_600_000 }
+    show(lastBeforeDrop, true)
+    show(lastBeforeDrop, false)
+    show(lastBeforeDrop, true)
+    show({ ...run, prompt: 'and keep the old table', updatedAt: 3_606_000 }, true)
+    act(() => renderer.unmount())
+    expect(listed.map((prompt) => [prompt.text, prompt.at])).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 3_600_000]
+    ])
+  })
+})

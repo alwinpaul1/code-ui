@@ -299,3 +299,53 @@ describe('a desk message typed mid-turn, first read after its turn ended', () =>
   })
 })
 
+
+// Review of the commits after 3c755ab5: after a remount, a phone send's own
+// copy found in a run that waited is timed at the run's start, hours before
+// the send; only a lower bound. Ranked by time, the desk's later repeat of
+// the same words was nearer, and the send claimed it and hid it.
+describe('a phone send Claude took mid-turn in a run that waited, after a remount', () => {
+  const { show, send, lastFrame, unmount } = landingHarness(frames)
+  const YES = 'yes do it'
+  const OTHER = 'and keep the old index until the counts match'
+
+  it('leaves the desk’s later repeat of its words drawn beside it', async () => {
+    const working = [...before, agentRow('080e05a3', 'Looking at the fold.', '07:03:19.619')]
+    await show('07:03:20.000', { messages: working, working: true })
+    await send('07:03:54.000', YES, [])
+    const own = hookCopy('07:03:54.573', YES)
+    await show('07:03:55.000', { messages: working, working: true, prompts: own, queued: queuedMessagesFromScreen(claudeScreen([YES])) })
+    const tookIt = [...working, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916')]
+    await show('07:04:36.000', { messages: tookIt, working: true, prompts: own, queued: [] })
+    unmount()
+    const run = {
+      state: 'working',
+      prompt: YES,
+      updatedAt: at('07:06:00.000'),
+      stateStartedAt: at('07:05:20.000'),
+      stateHistory: [
+        { state: 'done', prompt: 'earlier', startedAt: at('04:59:00.000') },
+        // A long run: its start is two hours before the send.
+        { state: 'working', prompt: YES, startedAt: at('05:00:00.000') },
+        { state: 'waiting', prompt: YES, startedAt: at('07:05:00.000') }
+      ]
+    }
+    vi.setSystemTime(at('07:06:30.000'))
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, run)
+    const later = [...tookIt, agentRow('44906d18', 'Still fixing.', '07:06:10.000')]
+    await show('07:06:30.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    vi.setSystemTime(at('07:07:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { ...run, prompt: OTHER, updatedAt: at('07:07:00.000') })
+    await show('07:07:01.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    vi.setSystemTime(at('07:10:40.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { ...run, prompt: YES, updatedAt: at('07:10:40.000') })
+    await show('07:10:41.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    await show('07:10:42.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    // The phone's bubble, and the desk's repeat by its own copy (watched at
+    // 07:10:40): not the send's copy found at the run's start.
+    const yes = lastFrame().filter((bubble) => bubble.text === YES)
+    expect(yes.map((bubble) => (bubble.id.startsWith('desk-') ? bubble.id : 'phone')).sort()).toEqual(
+      [`desk-status:${SESSION}:${at('07:10:40.000')}:2`, 'phone'].sort()
+    )
+  })
+})

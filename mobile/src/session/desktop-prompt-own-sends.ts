@@ -94,7 +94,8 @@ function reports(
  *  pane still carried them when the chat looked, so it is the send's own, and a
  *  timed copy of the same words watched since is a later message (re-review of
  *  0d5853d3). Read after a copy the chat watched arrive, it is that copy read
- *  again, and the watched one is the send's (third review, 280868b3). */
+ *  again, and the watched one is the send's (third review, 280868b3). The
+ *  same holds for a copy timed by the start of the run it was found in. */
 function nearestCopy(
   sentAt: number | undefined,
   open: readonly number[],
@@ -108,7 +109,11 @@ function nearestCopy(
     (first, index) => (first === undefined || prompts[index]!.seenAt! < prompts[first]!.seenAt! ? index : first),
     undefined
   )
-  if (firstRead !== undefined && prompts[firstRead]!.heldBack === true) {
+  // A copy timed by the start of the run it was found in has that time only
+  // as a lower bound (`atStateStart`), which can be hours before the send:
+  // ranked by it, a later repeat of the same words was nearer (review of
+  // a615bde2's branch). Read first after the send, it is the send's own too.
+  if (firstRead !== undefined && (prompts[firstRead]!.heldBack === true || prompts[firstRead]!.atStateStart === true)) {
     return firstRead
   }
   let best: number | undefined
