@@ -31,6 +31,13 @@ const TOAST_MS = 2200
 /** How long a host is left alone after one of its rows ran before its menu asks it
  *  again: long enough for a Mac to have finished locking or sleeping its display. */
 const ACTION_SETTLE_MS = 3000
+/** The longest a menu waits on an action, counted from the tap, before it asks the
+ *  host anyway. An action that never finishes (osascript held on a prompt, a relay
+ *  waiting to reconnect) held the menu on "Checking" past the probe's own 12 s. The
+ *  wait comes off the probe's budget, so the row still ends inside it. */
+const ACTION_GATE_MAX_MS = 5000
+
+type SettleEntry = { token: number; timers: ReturnType<typeof setTimeout>[] }
 
 export function useMacHostControls(args: {
   clients: HostClientEntry[]
@@ -47,7 +54,14 @@ export function useMacHostControls(args: {
   // Hosts whose action is running or settling; their menu waits before asking.
   const [settlingHostIds, setSettlingHostIds] = useState<ReadonlySet<string>>(() => new Set())
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const settleTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  // One entry per settling host. The token is the run that raised it: only that run's
+  // timers may lower it, so an earlier run ending cannot open the gate on a later one.
+  const settleRef = useRef(new Map<string, SettleEntry>())
+  const settleTokenRef = useRef(0)
+  const mountedRef = useRef(true)
+  // When the open menu started waiting on a settling host, so the probe that follows
+  // gets only what is left of its budget.
+  const gateWaitRef = useRef<{ hostId: string; since: number } | null>(null)
   const clientsRef = useRef(args.clients)
   clientsRef.current = args.clients
   const { openHostId } = args
@@ -68,24 +82,22 @@ export function useMacHostControls(args: {
     }, TOAST_MS)
   }, [])
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true
+    const settle = settleRef.current
+    return () => {
+      mountedRef.current = false
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current)
       }
-      for (const timer of settleTimersRef.current.values()) {
-        clearTimeout(timer)
+      for (const entry of settle.values()) {
+        entry.timers.forEach(clearTimeout)
       }
-    },
-    []
-  )
-
-  const markSettling = useCallback((hostId: string, settling: boolean) => {
-    const timer = settleTimersRef.current.get(hostId)
-    if (timer) {
-      clearTimeout(timer)
-      settleTimersRef.current.delete(hostId)
+      settle.clear()
     }
+  }, [])
+
+  const setSettling = useCallback((hostId: string, settling: boolean) => {
     setSettlingHostIds((previous) => {
       if (previous.has(hostId) === settling) {
         return previous
@@ -99,6 +111,45 @@ export function useMacHostControls(args: {
       return next
     })
   }, [])
+
+  /** Lowers the gate `afterMs` from now, if the run that raised it still owns it. */
+  const endSettling = useCallback(
+    (hostId: string, token: number, afterMs: number) => {
+      const entry = settleRef.current.get(hostId)
+      if (!mountedRef.current || entry?.token !== token) {
+        return
+      }
+      const finish = () => {
+        const current = settleRef.current.get(hostId)
+        if (current?.token !== token) {
+          return
+        }
+        current.timers.forEach(clearTimeout)
+        settleRef.current.delete(hostId)
+        setSettling(hostId, false)
+      }
+      if (afterMs <= 0) {
+        finish()
+        return
+      }
+      entry.timers.push(setTimeout(finish, afterMs))
+    },
+    [setSettling]
+  )
+
+  /** Raises the gate for one run, already timed to fall ACTION_GATE_MAX_MS from now. */
+  const beginSettling = useCallback(
+    (hostId: string) => {
+      settleTokenRef.current += 1
+      const token = settleTokenRef.current
+      settleRef.current.get(hostId)?.timers.forEach(clearTimeout)
+      settleRef.current.set(hostId, { token, timers: [] })
+      setSettling(hostId, true)
+      endSettling(hostId, token, ACTION_GATE_MAX_MS)
+      return token
+    },
+    [endSettling, setSettling]
+  )
 
   // Why ask at all: the host card must know darwin from win32 before the sheet opens,
   // so a Windows user never sees a Mac row appear a moment late. One ask per connect.
@@ -157,14 +208,20 @@ export function useMacHostControls(args: {
     // Forget the last answer at every change, so no render shows what an earlier
     // open, or an earlier connection, said.
     setProbed(null)
-    if (
-      !openHostId ||
-      !hasHostControls(openPlatform) ||
-      openHostConnection !== 'connected' ||
-      openHostSettling
-    ) {
+    if (!openHostId || !hasHostControls(openPlatform) || openHostConnection !== 'connected') {
+      gateWaitRef.current = null
       return
     }
+    if (openHostSettling) {
+      if (gateWaitRef.current?.hostId !== openHostId) {
+        gateWaitRef.current = { hostId: openHostId, since: Date.now() }
+      }
+      return
+    }
+    const gateWait = gateWaitRef.current
+    gateWaitRef.current = null
+    const alreadyWaitedMs =
+      gateWait?.hostId === openHostId ? Math.min(Date.now() - gateWait.since, ACTION_GATE_MAX_MS) : 0
     const client = clientsRef.current.find((entry) => entry.hostId === openHostId)?.client
     const worktreeId = openWorktreeId
     if (!client || !worktreeId) {
@@ -173,7 +230,12 @@ export function useMacHostControls(args: {
       return
     }
     let stale = false
-    void probeMacHostState({ client, worktreeId, platform: openPlatform ?? undefined }).then((state) => {
+    void probeMacHostState({
+      client,
+      worktreeId,
+      platform: openPlatform ?? undefined,
+      alreadyWaitedMs
+    }).then((state) => {
       if (!stale) {
         setProbed({ hostId: openHostId, state })
       }
@@ -202,30 +264,38 @@ export function useMacHostControls(args: {
       showToast(
         windows && action !== 'unlock' ? WINDOWS_HOST_ACTION_PROGRESS[action] : MAC_HOST_ACTION_PROGRESS[action]
       )
-      markSettling(hostId, true)
-      const outcome = await runMacHostCommand({
-        client,
-        worktreeId,
-        command,
-        // The unlock command line carries the password, so nothing the host
-        // says about it may reach a toast.
-        secret: action === 'unlock',
-        ...(windows ? { timeoutMs: WINDOWS_HOST_COMMAND_TIMEOUT_MS, hostNoun: 'PC' } : {})
-      })
-      if (!outcome.ok) {
-        // The reason comes from the host's own error text, never from the command.
-        showToast(outcome.reason)
+      const token = beginSettling(hostId)
+      let finished = false
+      try {
+        const outcome = await runMacHostCommand({
+          client,
+          worktreeId,
+          command,
+          // The unlock command line carries the password, so nothing the host
+          // says about it may reach a toast.
+          secret: action === 'unlock',
+          ...(windows ? { timeoutMs: WINDOWS_HOST_COMMAND_TIMEOUT_MS, hostNoun: 'PC' } : {})
+        })
+        finished = outcome.ok
+        if (!outcome.ok) {
+          // The reason comes from the host's own error text, never from the command.
+          showToast(outcome.reason)
+        }
+      } catch {
+        // Nothing thrown here may be shown: it can carry the command, and the
+        // unlock command is the password. A fixed line still says where to look.
+        showToast(windows ? 'The PC did not answer.' : 'The Mac did not answer.')
+      } finally {
+        // No second probe here. The sheet has closed, and the next open asks the
+        // host itself once it has settled; a probe three seconds after every action
+        // opened another tab on the desktop that nobody read unless the menu was
+        // open, and its answer could land in another host's menu (2026-09-26). A
+        // finished action gets its settle; a failed, unfinished or thrown one has
+        // nothing to wait for.
+        endSettling(hostId, token, finished ? ACTION_SETTLE_MS : 0)
       }
-      // No second probe here. The sheet has closed, and the next open asks the host
-      // itself once it has settled; a probe three seconds after every action opened
-      // another tab on the desktop that nobody read unless the menu was open, and
-      // its answer could land in another host's menu (2026-09-26).
-      settleTimersRef.current.set(
-        hostId,
-        setTimeout(() => markSettling(hostId, false), ACTION_SETTLE_MS)
-      )
     },
-    [markSettling, platforms, showToast, worktreeIdForHost]
+    [beginSettling, endSettling, platforms, showToast, worktreeIdForHost]
   )
 
   const onAction = useCallback(

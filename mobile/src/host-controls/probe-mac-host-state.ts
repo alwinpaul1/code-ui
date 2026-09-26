@@ -29,13 +29,17 @@ export async function probeMacHostState(args: {
   worktreeId: string
   /** 'win32' asks the Windows probe; anything else the Mac one. */
   platform?: NodeJS.Platform
+  /** How long the sheet has already said "Checking" before this probe could start
+   *  (it waited on an action). Taken off the budget, so the row never outlasts it. */
+  alreadyWaitedMs?: number
 }): Promise<MacHostState> {
   const windows = args.platform === 'win32'
+  const budget = windows ? WINDOWS_HOST_STATE_PROBE_TIMEOUT_MS : MAC_HOST_STATE_PROBE_TIMEOUT_MS
   const outcome = await watchThrowawayTerminal({
     client: args.client,
     worktreeId: args.worktreeId,
     command: windows ? WINDOWS_HOST_STATE_PROBE_COMMAND : MAC_HOST_STATE_PROBE_COMMAND,
-    timeoutMs: windows ? WINDOWS_HOST_STATE_PROBE_TIMEOUT_MS : MAC_HOST_STATE_PROBE_TIMEOUT_MS,
+    timeoutMs: Math.max(0, budget - Math.max(0, args.alreadyWaitedMs ?? 0)),
     read: windows ? readWindowsHostStateMarker : readMacHostStateMarker
   })
   return outcome.ok && outcome.answer ? outcome.answer : UNKNOWN_MAC_HOST_STATE

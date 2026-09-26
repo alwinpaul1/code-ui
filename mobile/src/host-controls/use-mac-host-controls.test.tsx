@@ -21,6 +21,7 @@ vi.mock('./mac-unlock-password-store', () => ({
 }))
 
 import { MAC_HOST_STATE_PROBE_COMMAND, type MacHostState } from './mac-host-state'
+import { MAC_HOST_STATE_PROBE_TIMEOUT_MS } from './probe-mac-host-state'
 import type { MacHostSheetState } from './mac-host-sheet-actions'
 import { useMacHostControls } from './use-mac-host-controls'
 
@@ -40,6 +41,9 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
     hostId,
     answer: null as string | null,
     afterAction: null as string | null,
+    /** 'stuck' never prints the done marker; 'throw' answers the action's tab with
+     *  nothing at all, which throws inside the watch. */
+    actionMode: 'done' as 'done' | 'stuck' | 'throw',
     liveWorktree: `${hostId}-wt`,
     created,
     client: {
@@ -52,6 +56,9 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           if (args.worktree !== `id:${host.liveWorktree}`) {
             return { id: '1', ok: false as const, error: { code: 'not_found', message: 'worktree_not_found' } }
           }
+          if (host.actionMode === 'throw' && args.command !== MAC_HOST_STATE_PROBE_COMMAND) {
+            return undefined
+          }
           const terminal = `${hostId}-term-${created.length + 1}`
           created.push(args.command ?? '')
           commandByTerminal.set(terminal, args.command ?? '')
@@ -61,6 +68,9 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           const command = commandByTerminal.get(args.terminal ?? '') ?? ''
           if (command === MAC_HOST_STATE_PROBE_COMMAND) {
             return ok({ terminal: { lines: host.answer ? [host.answer] : [] } })
+          }
+          if (host.actionMode === 'stuck') {
+            return ok({ terminal: { lines: [] } })
           }
           // The host takes a moment to settle after the command says it is done:
           // a display sleeps about a second after pmset returns.
@@ -121,6 +131,18 @@ async function elapse(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms)
   })
+}
+
+/** Steps time in tenths of a second, so each step's state change renders before the
+ *  next, and says how long the menu said "Checking", or null past the limit. */
+async function checkingFor(limitMs: number): Promise<number | null> {
+  for (let waited = 0; waited <= limitMs; waited += 100) {
+    if (latest?.macOptions?.state !== 'checking') {
+      return waited
+    }
+    await elapse(100)
+  }
+  return null
 }
 
 const LOCKED_MUTED = 'CUIMAC lock=1 mute=true display=off end'
@@ -251,6 +273,71 @@ describe('the host menu after one of its rows ran', () => {
     await elapse(500)
     expect(latest?.macOptions?.state).toEqual({ lock: 'unlocked', display: 'off', mute: 'unmuted' })
     expect(mac.probes()).toBe(2)
+  })
+
+  // Second review, 2026-09-26: the menu waited out the whole action before asking, so
+  // an action that never finished kept "Checking" up past the 12 s the check has.
+  it('keeps a menu reopened during an action that never finishes inside the 12 s the check has', async () => {
+    const mac = fakeHost('mac', 'darwin')
+    const props = { clients: clientsOf(mac), worktreeInfo: { mac: infoFor('mac') } }
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    mac.answer = UNLOCKED_AWAKE
+    render({ ...props, openHostId: 'mac' })
+    await elapse(400)
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    mac.actionMode = 'stuck'
+    act(() => onAction?.('lock'))
+    await elapse(500)
+    render({ ...props, openHostId: 'mac' })
+    const waited = await checkingFor(20_000)
+    expect(waited).not.toBeNull()
+    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS)
+    expect(latest?.macOptions?.state).toEqual(UNLOCKED_AWAKE_STATE)
+  })
+
+  it('gives a check that waited on an action only what is left of its 12 s', async () => {
+    const mac = fakeHost('mac', 'darwin')
+    const props = { clients: clientsOf(mac), worktreeInfo: { mac: infoFor('mac') } }
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    mac.answer = UNLOCKED_AWAKE
+    render({ ...props, openHostId: 'mac' })
+    await elapse(400)
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    act(() => onAction?.('mute'))
+    render({ ...props, openHostId: 'mac' })
+    // The host never answers the check that follows.
+    mac.answer = null
+    const waited = await checkingFor(20_000)
+    expect(waited).not.toBeNull()
+    // One screen read may be in flight when the budget runs out.
+    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS + 300)
+    expect(latest?.macOptions?.state).toEqual({ lock: 'unknown', display: 'unknown', mute: 'unknown' })
+  })
+
+  it('does not leave the menu checking for good when an action throws', async () => {
+    const mac = fakeHost('mac', 'darwin')
+    const props = { clients: clientsOf(mac), worktreeInfo: { mac: infoFor('mac') } }
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    mac.answer = UNLOCKED_AWAKE
+    render({ ...props, openHostId: 'mac' })
+    await elapse(400)
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    mac.actionMode = 'throw'
+    act(() => onAction?.('lock'))
+    await elapse(10)
+    // The failure is said, in words that name the host and nothing it was sent.
+    expect(latest?.toast).toBe('The Mac did not answer.')
+    render({ ...props, openHostId: 'mac' })
+    const waited = await checkingFor(20_000)
+    expect(waited).not.toBeNull()
+    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS)
+    expect(latest?.macOptions?.state).toEqual(UNLOCKED_AWAKE_STATE)
   })
 
   it("never shows one host's state in another host's menu", async () => {
