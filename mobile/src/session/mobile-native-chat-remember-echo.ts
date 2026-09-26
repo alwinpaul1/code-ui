@@ -2,6 +2,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { isCutHandback, parseSubagentMessage } from './mobile-native-chat-agent-messages'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
+import { isPeerRowHead } from './mobile-terminal-peer-notices'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
 import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import {
@@ -208,13 +209,19 @@ function isWitnessed(id: string): boolean {
  *  hand-back line: taken as cut on its first line alone, it swept a person's
  *  prompt that quotes that line (review of 2026-09-27). Another session's
  *  delivery too, told by the harness's opener line and envelope, which the
- *  same build stored the same way. */
+ *  same build stored the same way. And a queued peer message the queue box
+ *  painted as the TUI's row, "Message from @a9d5c2f85e94ca47f (ctrl+o to
+ *  expand)", which the queue-box witness stored as the user's message (Bug
+ *  B, session 790eafa8, 2026-09-26; mobile-terminal-queued-messages.ts). */
 export function sweepWitnessedEchoes(
   list: readonly MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
   const injected = (item: MobileNativeChatPendingMessage) =>
     isWitnessed(item.id) &&
-    (parseSubagentMessage(item.text) !== null || isCutHandback(item.text) || isCrossSessionMessagePrompt(item.text))
+    (parseSubagentMessage(item.text) !== null ||
+      isCutHandback(item.text) ||
+      isCrossSessionMessagePrompt(item.text) ||
+      (item.id.startsWith('absorbed-') && isPeerRowHead(`› ${item.text}`)))
   // Phone sends first so they win against witnessed readings of themselves.
   const ordered = [...list.filter((item) => !isWitnessed(item.id)), ...list.filter((item) => isWitnessed(item.id) && !injected(item))]
   const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text).map((item) => item.id))

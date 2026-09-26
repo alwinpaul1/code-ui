@@ -59,6 +59,13 @@ function paintedAbove(screen: readonly string[], row: number): string | undefine
 /** The marker Claude paints for these rows is `›` (U+203A), not the `❯` of a
  *  prompt; the sent-prompt reader skips them by wording for the same reason. */
 const HEAD = /^› (?:Cross-session message|Message) from @(\S+?)(?::\s(.*)| (\(ctrl\+o to expand\))\s*)$/
+
+/** Whether a screen line is the head of one of these rows, wherever it is
+ *  painted: the agent's queue box paints a queued peer message the same way
+ *  (mobile-terminal-queued-messages.ts). */
+export function isPeerRowHead(line: string): boolean {
+  return HEAD.test(line.replace(/^\s+/, ''))
+}
 /** A wrapped continuation row: at column 0, and not the start of anything
  *  else Claude paints there. */
 const CONTINUATION = /^(?![\s⏺⎿❯›>✻✳✽✶✢·*])(\S.*)$/

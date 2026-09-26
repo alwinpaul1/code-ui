@@ -5,6 +5,8 @@ import { mergeDesktopPrompts } from './desktop-prompt-merge'
 import { agentMessageOf, beaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
+import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { MIDTURN_HANDBACK_FROM, MIDTURN_HANDBACK_ROW } from './fixtures/claude-midturn-queued-commands-2.1.283'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
@@ -361,5 +363,43 @@ describe("another session's message the prompt hook took", () => {
     const text = 'Another Claude session sent a message: can you check what it says?'
     await show('12:40:30.000', { messages: [PROMPT, OPENING], working: true, promptHook: true, ...fromBeacon([{ nonce: '5003', text, anchorId: 'a1' }]) })
     expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?', text])
+  })
+})
+
+// Bug B, from the phone (a build from main), session 790eafa8, Claude Code
+// 2.1.283, 2026-09-26 21:44:51Z: a subagent's hand-back waited in the queue
+// box, painted as the TUI's row, and the chat drew "Message from
+// @a9d5c2f85e94ca47f (ctrl+o to expand)" as the user's bubble when the agent
+// took it, with nothing to open. The sender here is the agent's id, not a
+// type name like "@general-purpose" or "@probe".
+describe("a subagent's hand-back that waited in the queue box, on a tab with no prompt hook", () => {
+  const { show, lastFrame } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const queueBox = (rows: readonly string[]) =>
+    queuedMessagesFromScreen([
+      '● Running 1 shell command · 14s…',
+      '',
+      ...rows,
+      '  ctrl+x ctrl+s to send now',
+      '',
+      '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+      '',
+      '────────────────────────────────────────────────────────────────────────────────',
+      '❯ Press up to edit queued messages',
+      '────────────────────────────────────────────────────────────────────────────────'
+    ])
+
+  it('is never drawn as the user bubble, and is drawn once as "Message from a9d5c2f85e94ca47f"', async () => {
+    const lastFolded = () => (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+    await show('12:40:30.000', { messages: [PROMPT, OPENING], working: true, promptHook: false, queued: queueBox([MIDTURN_HANDBACK_ROW]) })
+    await show('12:40:40.000', {
+      messages: [PROMPT, OPENING],
+      working: true,
+      promptHook: false,
+      queued: [],
+      peerRows: peerNoticesFromScreen(['⏺ Reading the dump.', '', MIDTURN_HANDBACK_ROW])
+    })
+    expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
+    expect(lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!.sender] : []))).toEqual([MIDTURN_HANDBACK_FROM])
   })
 })

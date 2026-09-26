@@ -174,6 +174,14 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4107'])
   })
 
+  it('is restored from the queue box when it only reads like a peer row, and the TUI\'s own row stored as one is swept', () => {
+    const stored = [
+      { id: 'absorbed-peer', text: 'Message from @a9d5c2f85e94ca47f (ctrl+o to expand)', ...base },
+      { id: 'absorbed-typed', text: 'Message from me: please look at the queue', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])

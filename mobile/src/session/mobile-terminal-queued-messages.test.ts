@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MIDTURN_HANDBACK_ROW, MIDTURN_PHOTO_SEND_TEXT } from './fixtures/claude-midturn-queued-commands-2.1.283'
 import {
   claudeQueueViewFromScreen,
   queuedMessagesFromScreen,
@@ -581,3 +582,54 @@ describe('Claude Code 2.1.281 queue block, above the spinner', () => {
   })
 })
 
+
+// Session 790eafa8, Claude Code 2.1.283, 2026-09-26 21:44:51Z to 21:46:34Z: a
+// subagent's hand-back waited in the queue ahead of a phone send with a
+// photo, and the queue box painted it as the TUI's own row for it
+// (fixtures/claude-midturn-queued-commands-2.1.283.ts). Read as a queued
+// message of the user's, the chat drew it as the user's bubble once the
+// agent took it: "Message from @a9d5c2f85e94ca47f (ctrl+o to expand)".
+// The block around it is the 2.1.281 layout above.
+describe('a peer message waiting in the queue box', () => {
+  const block = (rows: readonly string[]) => [
+    '● Running 1 shell command · 14s…',
+    '',
+    ...rows,
+    '  ctrl+x ctrl+s to send now',
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────────────────────────────────────────────'
+  ]
+
+  it('is not a queued message of the user\'s, and the send under it still is', () => {
+    expect(claudeQueueViewFromScreen(block([MIDTURN_HANDBACK_ROW, `❯ ${MIDTURN_PHOTO_SEND_TEXT}`])).entries).toEqual([
+      MIDTURN_PHOTO_SEND_TEXT
+    ])
+  })
+
+  it('leaves no queue when it is the only one waiting', () => {
+    expect(claudeQueueViewFromScreen(block([MIDTURN_HANDBACK_ROW])).entries).toEqual([])
+  })
+
+  it('does not take the wrapped lines of the message above it, and keeps the one below it whole', () => {
+    expect(
+      claudeQueueViewFromScreen(block(['❯ first one', '  goes on here', MIDTURN_HANDBACK_ROW, '❯ second one'])).entries
+    ).toEqual(['first one\ngoes on here', 'second one'])
+  })
+
+  it('is left out of the older layout\'s indented block too', () => {
+    const older = [
+      '',
+      `  ${MIDTURN_HANDBACK_ROW}`,
+      '  ❯ We miss this',
+      '',
+      '────────────────────────────────────────────────────────────────────────────────',
+      '❯ Press up to edit queued messages',
+      '────────────────────────────────────────────────────────────────────────────────'
+    ]
+    expect(claudeQueueViewFromScreen(older).entries).toEqual(['We miss this'])
+  })
+})

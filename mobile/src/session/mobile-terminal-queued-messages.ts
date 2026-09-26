@@ -1,6 +1,7 @@
 import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
+import { isPeerRowHead } from './mobile-terminal-peer-notices'
 /** Verified against Claude Code 2.1.263. Two different queue footers exist:
  * the legacy whole-queue recall, and the per-message selector that only appears
  * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
@@ -118,17 +119,8 @@ export function claudeQueueViewFromScreen(
       selectedOldest: /up again for history/i.test(hint)
     }
   }
-  const entries: string[] = []
-  for (const line of block) {
-    const match = /^\s+[❯›>]\s+(.+)$/.exec(line)
-    if (match) {
-      entries.push(match[1]!.trim())
-    } else if (entries.length) {
-      entries[entries.length - 1] += '\n' + line.trim()
-    }
-  }
   return {
-    entries: entries.map(withoutComposerNotice),
+    entries: queueEntries(block, /^\s+[❯›>]\s+(.+)$/).map(withoutComposerNotice),
     selectable,
     selecting: false,
     selected: null,
@@ -230,12 +222,32 @@ function columnZeroQueueEntries(lines: readonly string[], sendNow: number): stri
   if (!bounded || rows.length === 0) {
     return []
   }
+  return queueEntries(rows, /^[❯›>]\s+(.+)$/)
+}
+
+/**
+ * The messages of a queue block, one per marked row with its wrapped lines
+ * joined on, less the peer messages in it.
+ *
+ * Claude Code paints a message from another session or one of its own agents
+ * that waits in its queue as the TUI's own row, "› Message from
+ * @a9d5c2f85e94ca47f (ctrl+o to expand)". Read as a queued message of the
+ * user's, it was drawn as the user's bubble once the agent took it (session
+ * 790eafa8, 2026-09-26, Claude Code 2.1.283), with nothing to open. It is not
+ * the user's to edit either. The chat draws it from the screen's own row
+ * (screen-peer-notices.ts) and from the prompt hook.
+ */
+function queueEntries(rows: readonly string[], marked: RegExp): string[] {
   const entries: string[] = []
+  let peer = false
   for (const line of rows) {
-    const match = /^[❯›>]\s+(.+)$/.exec(line)
+    const match = marked.exec(line)
     if (match) {
-      entries.push(match[1]!.trim())
-    } else {
+      peer = isPeerRowHead(line)
+      if (!peer) {
+        entries.push(match[1]!.trim())
+      }
+    } else if (!peer && entries.length) {
       entries[entries.length - 1] += '\n' + line.trim()
     }
   }
