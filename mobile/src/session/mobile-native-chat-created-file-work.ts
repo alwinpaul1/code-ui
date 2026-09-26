@@ -30,7 +30,11 @@
 //   (Claude Code 2.1.283; review of 311f41ad: a stop turned down beside a
 //   Read took the Read's answer). A failure is a `<tool_use_error>`, a
 //   turn-down, a cancel, a denial, or an answer Orca marks as an error; a
-//   batch the user interrupted with a call still waiting counts as one.
+//   batch the user interrupted with a call still waiting counts as one. The
+//   not-running line is no failure when a stop already called in the batch
+//   names its task: whichever call it answered, TaskStop's own answer is
+//   then that line or its JSON, so the stop holds (review of 39937aee: a
+//   stop of a task already done, beside an `npm test`, was taken back).
 //   TaskStop's word is taken only from a batch that closed with every call
 //   answered and held no call that could print it (review of 5b257b16: a
 //   `grep` printed the not-running line beside a stop turned down, and a
@@ -261,7 +265,10 @@ export function backgroundWorkRunningAt(
       } else if (isToolResultBlock(block)) {
         // Named as the pairing names it: `takeAnsweredCall` holds only an Agent call apart.
         const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
-        batch.failed ||= isFailure(block)
+        // TaskStop answers a task already done with a `<tool_use_error>`, and
+        // that says its stop holds.
+        const stopHolds = batch.stops.some((stop) => saysStopped(block.output, stop.id))
+        batch.failed ||= isFailure(block) && !stopHolds
         batch.answers.push(block.output)
         const call = takeAnsweredCall(pending, block.output)
         if (call) {

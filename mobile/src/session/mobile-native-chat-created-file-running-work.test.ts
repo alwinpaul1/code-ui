@@ -392,6 +392,51 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...history, ...CREATE, ...later])).toBe(true)
   })
 
+  // Review of 39937aee: TaskStop answers a task already done with a
+  // `<tool_use_error>`, which read as the batch failing, and any call beside
+  // it that could print that line then took the stop back. Claude Code marks
+  // the answer `is_error` and Orca carries that (transcript-record-blocks.ts,
+  // Orca ac675ded6e).
+  const alreadyDone = (id: string) =>
+    message('user', [
+      { type: 'tool-result', output: notRunningOutput(id, 'completed'), isError: true }
+    ])
+  it.each([
+    ['a command', 'Bash', { command: 'npm test' }, 'Tests  12 passed (12)'],
+    ['a search that found nothing', 'Grep', { pattern: 'queue' }, 'No files found'],
+    [
+      'a to-do update',
+      'TodoWrite',
+      { todos: [] },
+      'Todos have been modified successfully. Ensure that you continue to use the todo list to track your progress. Please proceed with the current tasks if applicable'
+    ]
+  ])(
+    'still counts a create made after a stop that found the task already completed, beside %s',
+    (_, name, input, output) => {
+      const turn = [
+        message('assistant', [
+          { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } },
+          { type: 'tool-call', name, input }
+        ]),
+        alreadyDone(SHELL_ID),
+        answered(output)
+      ]
+      expect(touched([...SHELL, ...turn, ...CREATE])).toBe(false)
+    }
+  )
+
+  it('draws no count for a create made after a stop that found another task already completed, beside a command', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } },
+        { type: 'tool-call', name: 'Bash', input: { command: 'npm test' } }
+      ]),
+      alreadyDone('b0therid1'),
+      answered('Tests  12 passed (12)')
+    ]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(true)
+  })
+
   it('still counts a create made after a stop answered after the search beside it failed', () => {
     const turn = [
       message('assistant', [

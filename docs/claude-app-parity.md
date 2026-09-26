@@ -133,7 +133,10 @@ Nothing here is built.
   2.1.283). That word counts only when every one of those calls answered
   and each is one that cannot print it for TaskStop (TaskStop, Read, Glob,
   LS and the edit tools): in review a `grep` printed the not-running line
-  beside a stop turned down. So a task that ended where the transcript does not
+  beside a stop turned down. The not-running line is itself no failure when
+  a stop called before it names its task, since TaskStop's own answer is
+  then that line or its JSON: in review a stop of a task already done,
+  beside an `npm test`, was taken back. So a task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
   all hold the count off. A foreground agent's report is over once it is
