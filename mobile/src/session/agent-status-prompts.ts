@@ -98,16 +98,18 @@ export function observeAgentStatusPrompt(
   // ping, and a prompt timed by it anchored at the tail under the tool fold
   // (device, 2026-09-20). The pane's current state began when its prompt was
   // taken, so that is the prompt's time at first sight.
-  const clock =
+  const byStateStart =
     firstSight && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt)
-      ? status.stateStartedAt
-      : status?.updatedAt
+  const clock = byStateStart ? status.stateStartedAt : status?.updatedAt
   const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
   const prompt: DesktopPrompt = {
     nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,
     ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
-    ...(at !== null ? { at } : {})
+    ...(at !== null ? { at } : {}),
+    // The row that carries a prompt is never timed before the prompt was
+    // taken; a state's start can be (desktop-prompt-photo-copies.ts).
+    ...(byStateStart ? { atStateStart: true as const } : {})
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
   return { sessionKey, last: text, prompts }

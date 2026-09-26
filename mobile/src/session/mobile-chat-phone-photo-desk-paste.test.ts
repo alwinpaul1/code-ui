@@ -1,7 +1,7 @@
 // Fourth review of the photo binder (2026-09-26), each case failing on edf03b37.
 // A photo pasted at the desk with no words is reported by Orca's hook as its
-// markers alone, like the phone's photo of no words: a phone send must only
-// stand for the hook copy timed within its own send window.
+// markers alone, like the phone's photo of no words: a phone send stands only
+// for the copy it paired with first (desktop-prompt-photo-copies.ts).
 import { describe, expect, it, vi } from 'vitest'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import {

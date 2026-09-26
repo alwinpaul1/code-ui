@@ -1,5 +1,5 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, writtenBefore } from './mobile-native-chat-photo-rows'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, stampedAfterSend, writtenBefore } from './mobile-native-chat-photo-rows'
 import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
@@ -287,14 +287,17 @@ export function findLandedImagePreviewEchoes(
       }
       // A row with no photo in it is not the row of a photo send the agent
       // took mid-turn, which gets none, whatever its words (review of
-      // becd6af2: it went to a later "yes" sent alone), nor of one sent
-      // before the read settled whose row will name its paths, which an older
-      // row of its words took after a quiet minute (fourth review). A settled
-      // send's row can carry none: its photo failed to attach, and still
-      // shows as the phone's (re-review of 4e25d63e).
+      // becd6af2: it went to a later "yes" sent alone). Nor is it the row of
+      // one sent before the read settled whose row will name its paths when
+      // the row is stamped well before the send: an older row of its words
+      // took it after a quiet minute (fourth review). A send's own row can
+      // carry none, its photo failed to attach, and still shows as the
+      // phone's (re-review of 4e25d63e; fifth review for an early send).
       const heldForItsRow = entry.sentBeforeReadSettled === true && rowWillNamePastedPhotos(entry)
-      if (pasted && (typeof entry.takenAt === 'number' || heldForItsRow) && !carriesPhoto(message, rawById.get(message.id))) {
-        return false
+      if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
+        if (typeof entry.takenAt === 'number' || (heldForItsRow && !stampedAfterSend(message, entry))) {
+          return false
+        }
       }
       if (targetText) {
         const text = normalizedUserText(message)

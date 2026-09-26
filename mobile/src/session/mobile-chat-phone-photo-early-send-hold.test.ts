@@ -37,7 +37,7 @@ vi.mock('./MobileNativeChatView', async () => {
 })
 
 describe('the early-send hold and an older row of the same words', () => {
-  const { show, send, lastFrame, drawing } = landingHarness(frames)
+  const { show, send, lastFrame, drawing, drafts } = landingHarness(frames)
   const WORDS = 'what about this one'
 
   it('draws the phone photo on its own row when Claude dequeues it after a long tool call', async () => {
@@ -122,5 +122,22 @@ describe('the early-send hold and an older row of the same words', () => {
       { id: 'old1old1', images: 'D', text: WORDS },
       { id: 'new1new1', images: 'P', text: WORDS }
     ])
+  })
+  // Fifth review (failing on cdbc8a35): the rule above kept such a send off
+  // every row with no photo, and its own row can have none, when the paste did
+  // not attach. It then stood as a second bubble for good.
+  it('draws a photo message sent while the chat loads once when its row lands with its words and no photo', async () => {
+    const earlier = [agentRow('0a0a0a0a', 'Earlier answer.', '09:20:00.000')]
+    vi.setSystemTime(at('09:29:59.000'))
+    await show('09:29:59.000', { messages: [], loading: true })
+    await send('09:30:03.500', WORDS, ['file:///phone/p17.jpg'])
+    await show('09:30:04.000', { messages: earlier })
+    const landed = [...earlier, userRow('new1new1', [WORDS], '09:30:04.100')]
+    await show('09:30:05.000', { messages: landed, working: true })
+    const replied = [...landed, agentRow('0c0c0c0c', 'I do not see an image.', '09:30:10.000')]
+    await show('09:30:11.000', { messages: replied })
+    await show('09:31:11.000', { messages: replied })
+    await show('10:31:11.000', { messages: [...replied] })
+    expect([drawing(lastFrame(), WORDS), drafts()!.pending]).toEqual([[{ id: 'new1new1', images: 'P', text: WORDS }], []])
   })
 })

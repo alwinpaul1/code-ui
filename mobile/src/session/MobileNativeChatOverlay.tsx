@@ -12,6 +12,7 @@ import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './Mo
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { witnessesToRemember } from './mobile-native-chat-witness-memory'
+import { boundPhotoCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
 import {
   inSendOrder,
   pairPendingWithHookPrompts,
@@ -208,9 +209,10 @@ export function MobileNativeChatOverlay({
     [controller.chatPending, waitingPhotoSends]
   )
   const hookPairing = useMemo(
-    () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages),
+    () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages, boundPhotoCopy),
     [pairingPending, desktopPrompts, session.messages]
   )
+  useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
   const unlandedPrompts = useMemo(
