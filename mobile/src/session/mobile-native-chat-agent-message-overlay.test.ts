@@ -539,3 +539,54 @@ describe("two messages from one subagent, each side missing a different one", ()
     ])
   })
 })
+
+// Re-review of a6857609..235dfa20 (blocker): one subagent row sitting under
+// tool output of the same turn was drawn again on every read. The tool
+// records had reached the phone before the row was first seen, but the fold
+// merges them into the turn's first record, which is the notice's anchor, so
+// they counted as painted after it.
+describe('one subagent row under the tool output of the turn it came in', () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const ROW = '› Message from @probe (ctrl+o to expand)'
+  const tool = (id: string, clock: string, block: NativeChatMessage['blocks'][number], role: NativeChatMessage['role']): NativeChatMessage => ({
+    id,
+    role,
+    timestamp: at(clock),
+    source: 'transcript',
+    blocks: [block]
+  })
+  const turn = [
+    userRow('p1', ['run the tests'], '12:40:00.000'),
+    agentRow('a1', 'Running the tests.', '12:40:10.000'),
+    tool('b1', '12:40:11.000', { type: 'tool-call', name: 'Bash', input: { command: 'pnpm vitest run src/session/some-long-test-file-name.test.ts' } }, 'assistant'),
+    tool('b2', '12:40:20.000', { type: 'tool-result', output: ' Test Files  12 passed (12)\n      Tests  340 passed (340)' }, 'tool'),
+    tool('b3', '12:40:21.000', { type: 'tool-call', name: 'Bash', input: { command: 'git status' } }, 'assistant'),
+    tool('b4', '12:40:22.000', { type: 'tool-result', output: 'On branch main' }, 'tool')
+  ]
+  const agentRows = () => ((frames.at(-1)!.folded as NativeChatMessage[]) ?? []).flatMap((row) => (agentMessageOf(row) ? [row.id] : []))
+
+  it('is drawn once however many times the chat reads the same screen, near its top', async () => {
+    const peerRows = peerNoticesFromScreen(['     Tests  340 passed (340)', '', ROW, '', '⏺ Bash(git status)', '  ⎿  On branch main'])
+    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows })
+    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows })
+    await show('12:40:32.000', { messages: turn, working: true, promptHook: false, peerRows })
+    expect(agentRows()).toEqual(['peer-notice:probe:1'])
+  })
+
+  it('is drawn once when the text above it is repainted from output the phone already held', async () => {
+    const first = ['⏺ Running the tests.', '', '⏺ I will check the status once they finish, then', '  report back here.', '', ROW]
+    const repainted = [
+      '⏺ Running the tests.',
+      '',
+      '⏺ Bash(pnpm vitest run src/session/some-long-test-file-name.test.ts)',
+      '  ⎿  Test Files  12 passed (12)',
+      '     Tests  340 passed (340)',
+      '',
+      ROW
+    ]
+    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(first) })
+    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(repainted) })
+    expect(agentRows()).toEqual(['peer-notice:probe:1'])
+  })
+})

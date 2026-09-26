@@ -376,7 +376,9 @@ describe('a prompt the tab status still carries after its turn', () => {
 // a desktop prompt, but on a tab with no prompt hook it is the only source of
 // the message's words.
 describe("a subagent message's copy on the tab status", () => {
-  const observe = (prompt: string) => observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt })
+  /** Read live: the phone had read this session's status before. */
+  const observe = (prompt: string) =>
+    observeAgentStatusPrompt(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '' }), 'sess-1', { ...LIVE, prompt })
 
   it("keeps the first words of a short message, marked as cut, and no desktop prompt", () => {
     // SUBAGENT_REQUEST_PROMPT as normalizePromptField leaves it.
@@ -423,5 +425,27 @@ describe("a subagent message's copy on the tab status", () => {
   it('starts over with the session', () => {
     const first = observe(MIDTURN_HANDBACK_STATUS_PROMPT)
     expect(observeAgentStatusPrompt(first, 'sess-2', { ...LIVE, prompt: '' }).agentMessages).toEqual([])
+  })
+})
+
+// Re-review of a6857609..235dfa20: a copy the phone reads on its first read
+// of a session (a launch, a return to the tab, the first read after a
+// reconnect) can be minutes old, its row long off the screen. Timed by that
+// read, it paired with the sender's NEXT row when that row's own copy was
+// missed, and the new row opened to the old words.
+describe("a subagent message's copy read on a first read of the tab status", () => {
+  const OLD = '<agent-message from="a7a46867b4f497c96"> OLD: probe step 1 done </agent-message>'
+
+  it('is kept with no time to pair by, and one read live after it has one', () => {
+    const first = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: OLD })
+    expect(first.agentMessages?.[0]).toEqual({ from: 'a7a46867b4f497c96', body: 'OLD: probe step 1 done', cut: false })
+    const live = observeAgentStatusPrompt(first, 'sess-1', { ...LIVE, prompt: '<agent-message from="a1111111111111111"> other report </agent-message>' })
+    expect(live.agentMessages?.[1]?.seenAt).toEqual(expect.any(Number))
+  })
+
+  it('has no time either when the caller says it is the first read after a reconnect', () => {
+    const seen = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: 'go on' })
+    const afterReconnect = observeAgentStatusPrompt(seen, 'sess-1', { ...LIVE, prompt: OLD }, { firstRead: true })
+    expect(afterReconnect.agentMessages?.[0]).not.toHaveProperty('seenAt')
   })
 })

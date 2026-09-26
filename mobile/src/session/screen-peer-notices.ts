@@ -25,6 +25,10 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * is honest, 2026-09-20).
  */
 
+/** A line above a row this long, read on its own, can tell rows apart: a
+ *  shorter one ("session:ok", "Done.") ends many replies. */
+export const LAST_LINE_EVIDENCE = 16
+
 /** Every row this module draws has an id that starts so. */
 export const SCREEN_NOTICE_ID_PREFIX = 'peer-notice:'
 
@@ -35,6 +39,8 @@ export type ScreenPeerNotice = {
   body?: string
   /** What the screen painted above the row at the sighting (ScreenPeerRow). */
   above?: string
+  /** The line right above it at the sighting (ScreenPeerRow). */
+  lastLine?: string
   /** The last folded transcript row when first seen; null on an empty chat.
    *  Never a row the phone drew itself: those come and go. */
   anchorId: string | null
@@ -78,12 +84,13 @@ export function observeScreenPeerNotices(
     const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list, paintedAfter))
     for (let taken = 1; taken <= fresh; taken += 1) {
       next ??= [...previous]
-      const { body, above } = list[list.length - fresh + taken - 1]!
+      const { body, above, lastLine } = list[list.length - fresh + taken - 1]!
       next.push({
         id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${known.length + taken}`,
         sender,
         ...(body ? { body } : {}),
         ...(above !== undefined ? { above } : {}),
+        ...(lastLine !== undefined ? { lastLine } : {}),
         anchorId: tailId,
         ...(afterId !== undefined ? { afterId } : {}),
         sightedAt: now,
@@ -96,7 +103,9 @@ export function observeScreenPeerNotices(
 
 /**
  * How many of one sender's rows on the screen came after the last message of
- * theirs already known, on positive evidence only.
+ * theirs already known, on positive evidence only. `paintedAfter` looks only
+ * in records that reached the phone after that message was first seen
+ * (use-screen-peer-notices.ts).
  *
  * The count alone cannot see a second message once the first has scrolled
  * off: a subagent's row names only its sender, so one row on screen and one
@@ -126,7 +135,17 @@ function newerThanLastKnown(
       }
     }
   }
-  const first = rows.findIndex((row) => paintedAfter(last, row))
+  // Refused where the row cannot be told from a known one: too near the top
+  // of the screen to read what was painted above it, or under the same line
+  // as a known row, output printed again. Either let one row draw as a new
+  // one on every read (re-review of 2026-09-27). A line too short to be
+  // evidence ("session:ok" ends every reply here) says nothing either way.
+  const first = rows.findIndex(
+    (row) =>
+      row.above !== undefined &&
+      !known.some((notice) => row.lastLine !== undefined && row.lastLine.length >= LAST_LINE_EVIDENCE && notice.lastLine === row.lastLine) &&
+      paintedAfter(last, row)
+  )
   return first === -1 ? 0 : rows.length - first
 }
 
@@ -246,7 +265,7 @@ export function withScreenPeerNotices(
 /** Words another source carried for a sender-only row: the tab status's copy
  *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
  *  the name the row shows, with when the phone first read it. */
-export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt: number }
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt?: number }
 
 /** How far apart the phone may first read a row and the status's copy of its
  *  message and still take them for one message. The hook that puts a message
@@ -268,7 +287,7 @@ function bodyOf(
   bodies: readonly ScreenRowBody[] | undefined
 ): ScreenRowBody | undefined {
   const near = (seenAt: number | undefined, body: ScreenRowBody) =>
-    seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
+    seenAt !== undefined && body.seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
   const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender) && near(notice.seenAt, body))
   const body = theirs.length === 1 ? theirs[0]! : undefined
   const rivals = notices.filter(

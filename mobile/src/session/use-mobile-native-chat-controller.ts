@@ -126,7 +126,7 @@ export function useMobileNativeChatController(
   const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
     showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
     nativeChatStatus,
-    hudBeacon?.desktopPrompts
+    hudBeacon?.desktopPrompts, connState === 'connected'
   )
   const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
   const {

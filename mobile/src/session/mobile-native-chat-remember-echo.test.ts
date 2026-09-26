@@ -214,6 +214,18 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4109', 'desk-4110'])
   })
 
+  // Re-review of a6857609..235dfa20: the beacon's unescape drops the "\r" of
+  // a "\r\n" line end, so written back a CRLF request came out two bytes a
+  // line short of the hook's cut and was not swept.
+  it('is swept when it is a cut subagent request whose lines ended in CRLF', () => {
+    const lines = Array.from({ length: 40 }, (_, index) => `${index + 1}. Please run the probe step ${index + 1} and report what the screen shows.`)
+    const prompt = `<agent-message from="a7a46867b4f497c96">\r\nRequest for device probes:\r\n${lines.join('\r\n')}\r\n</agent-message>`
+    const sent = unescapeJsonStringBody(JSON.stringify(prompt).slice(1, -1).slice(0, 2000))
+    expect(sent).not.toContain('</agent-message>')
+    expect(sent).not.toContain('\r')
+    expect(sweepWitnessedEchoes([{ id: 'desk-4111', text: sent, ...base }])).toEqual([])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])
