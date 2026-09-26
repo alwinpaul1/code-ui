@@ -59,10 +59,13 @@ export function parseSubagentMessage(text: string): SubagentMessage | null {
     return null
   }
   let body = rest.slice(open[0].length)
-  const close = body.indexOf(CLOSE_TAG)
-  // A hook cut the prompt when there is no closing tag; what came is the start.
-  if (close !== -1) {
-    body = body.slice(0, close)
+  // The wrapper's own closing tag is the one that ends the prompt. A report
+  // may quote the tag, and cutting at the first one dropped everything after
+  // the quote. A hook cut the prompt when it does not end with one; what came
+  // is the start.
+  const whole = body.trimEnd()
+  if (whole.endsWith(CLOSE_TAG)) {
+    body = whole.slice(0, whole.length - CLOSE_TAG.length)
   }
   if (HANDBACK_PREAMBLE.test(body)) {
     body = dedent(body.replace(HANDBACK_PREAMBLE, ''))
