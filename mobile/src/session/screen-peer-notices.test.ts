@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
-import { observeScreenPeerNotices, withScreenPeerNotices } from './screen-peer-notices'
+import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
+import { paintedAfterAnchor } from './use-screen-peer-notices'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
@@ -328,7 +329,18 @@ describe('a second message from the same subagent on a tab with no prompt hook',
   const box = capture.findIndex((line) => line.startsWith('───'))
   /** The turn after the first row, a second row, and the input box. */
   const later = [...capture.slice(at + 1, box), '', ROW, '', ...capture.slice(box)]
-  const folded = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('a3', 'assistant', 'three')]
+  // The transcript rows the chat holds: the reply above the first row, and
+  // the one the capture paints after it (its lines 32 to 35), as Claude
+  // wrote them.
+  const folded = [
+    row('a1', 'assistant', "The probe agent is running. I'll reply once its message arrives.\n\nsession:ok"),
+    row('a2', 'assistant', 'received\n\nsession:ok'),
+    row('a3', 'assistant', 'The probe agent has finished and gone idle.\nNothing further to do.\n\nsession:ok')
+  ]
+  /** What the chat reads above a row: its own transcript after the notice's anchor. */
+  const evidence = (notice: ScreenPeerNotice, above: string) => paintedAfterAnchor(folded, notice.anchorId, above)
+  const observe = (previous: readonly ScreenPeerNotice[], screen: readonly string[], tail: string, now: number) =>
+    observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, now, undefined, evidence)
   const drawn = (rows: readonly NativeChatMessage[]) =>
     rows.map((message) => (agentMessageOf(message) ? `from ${agentMessageOf(message)!.sender}` : message.id))
 
@@ -336,8 +348,8 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     // The first row and the reply above it are off this screen.
     expect(later.filter((line) => line === ROW)).toHaveLength(1)
     expect(later).not.toContain('  its message arrives.')
-    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
-    const second = observeScreenPeerNotices(first, peerNoticesFromScreen(later), 'a3', 9)
+    const first = observe([], capture, 'a1', 5)
+    const second = observe(first, later, 'a3', 9)
     expect(drawn(withScreenPeerNotices(folded, second, { subagentRows: true }))).toEqual([
       'a1',
       'from probe',
@@ -348,24 +360,40 @@ describe('a second message from the same subagent on a tab with no prompt hook',
   })
 
   it('is not drawn again while the first is still on screen, however far the screen scrolled', () => {
-    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
-    expect(observeScreenPeerNotices(first, peerNoticesFromScreen(capture.slice(8)), 'a3', 9)).toBe(first)
-    const both = observeScreenPeerNotices(first, peerNoticesFromScreen([...capture.slice(0, box), '', ROW, '', ...capture.slice(box)]), 'a3', 9)
+    const first = observe([], capture, 'a1', 5)
+    expect(observe(first, capture.slice(8), 'a3', 9)).toBe(first)
+    const both = observe(first, [...capture.slice(0, box), '', ROW, '', ...capture.slice(box)], 'a3', 9)
     expect(both.map((notice) => notice.anchorId)).toEqual(['a1', 'a3'])
-    expect(observeScreenPeerNotices(both, peerNoticesFromScreen(later), 'a3', 10)).toBe(both)
+    expect(observe(both, later, 'a3', 10)).toBe(both)
   })
 
   it('is refused while its row is too near the top of the screen to read what is above it', () => {
-    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
+    const first = observe([], capture, 'a1', 5)
     const top = later.slice(later.indexOf(ROW) - 1)
     expect(peerNoticesFromScreen(top)[0]?.above).toBeUndefined()
-    expect(observeScreenPeerNotices(first, peerNoticesFromScreen(top), 'a3', 9)).toBe(first)
+    expect(observe(first, top, 'a3', 9)).toBe(first)
   })
 
   it('is refused when it reads like an older message than the last one drawn', () => {
-    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
-    const second = observeScreenPeerNotices(first, peerNoticesFromScreen(later), 'a3', 9)
+    const first = observe([], capture, 'a1', 5)
+    const second = observe(first, later, 'a3', 9)
     // The desk scrolled back to the first: nothing new is drawn for it.
-    expect(observeScreenPeerNotices(second, peerNoticesFromScreen(capture), 'a3', 10)).toBe(second)
+    expect(observe(second, capture, 'a3', 10)).toBe(second)
+  })
+
+  // Review of 2026-09-27: the text above a known row changes when the desk
+  // repaints it, and a changed text alone is no evidence of a new message. A
+  // reply ending in a table is repainted with narrower borders after a resize.
+  it('is still one message when a table above its row is repainted narrower', () => {
+    const wide = ['⏺ Done. The two runs:', '  ┌──────────────────────┬────────────┐', '  │ run                  │ result     │', '  └──────────────────────┴────────────┘', '', ROW]
+    const narrow = ['⏺ Done. The two runs:', '  ┌──────────────┬──────────┐', '  │ run          │ result   │', '  └──────────────┴──────────┘', '', ROW]
+    const tables = [row('a1', 'assistant', 'Done. The two runs:\n\n| run | result |\n|---|---|')]
+    const seen = (previous: readonly ScreenPeerNotice[], screen: readonly string[]) =>
+      observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), 'a1', 5, undefined, (notice, above) =>
+        paintedAfterAnchor(tables, notice.anchorId, above)
+      )
+    const first = seen([], wide)
+    expect(seen(first, narrow)).toBe(first)
+    expect(seen(seen(first, narrow), wide)).toBe(first)
   })
 })

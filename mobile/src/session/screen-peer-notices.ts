@@ -52,7 +52,11 @@ export function observeScreenPeerNotices(
   rows: readonly ScreenPeerRow[],
   tailId: string | null,
   now: number,
-  afterId?: string
+  afterId?: string,
+  /** Whether text painted above a row belongs to a transcript row that came
+   *  after this notice's anchor: the only evidence, beside the notice's own
+   *  row, that a row is a later message (newerThanLastKnown). */
+  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean = () => false
 ): readonly ScreenPeerNotice[] {
   const seen = new Map<string, ScreenPeerRow[]>()
   for (const row of rows) {
@@ -63,7 +67,7 @@ export function observeScreenPeerNotices(
   let next: ScreenPeerNotice[] | null = null
   for (const [sender, list] of seen) {
     const known = previous.filter((notice) => notice.sender === sender)
-    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list))
+    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list, paintedAfter))
     for (let taken = 1; taken <= fresh; taken += 1) {
       next ??= [...previous]
       const { body, above } = list[list.length - fresh + taken - 1]!
@@ -83,30 +87,38 @@ export function observeScreenPeerNotices(
 
 /**
  * How many of one sender's rows on the screen came after the last message of
- * theirs already known, going by what was painted above each row.
+ * theirs already known, on positive evidence only.
  *
  * The count alone cannot see a second message once the first has scrolled
  * off: a subagent's row names only its sender, so one row on screen and one
- * message known read as nothing new (review of 2026-09-26). The rows below
- * the last known one on screen are newer. When it is not on screen, every row
- * is newer, but only if each can be told from every message known: a row too
- * near the top to read what is above it, or one painted like an older
- * message (the desk scrolled back), could be one already drawn, so nothing is
- * taken from this and the count stands.
+ * message known read as nothing new (review of 2026-09-26). Two things say a
+ * row is later. The last known row is still on screen, painted under the same
+ * text as when it was seen, and the rows below it are later. Or the text
+ * painted above a row belongs to a transcript row that came after the last
+ * known message's anchor (a reply the chat received since); that row and the
+ * ones below it are later. Text above a known row that merely changed is not
+ * evidence: a table repainted narrower after a resize made every row of the
+ * sender count as new, one more on each repaint (review of 2026-09-27). With
+ * no evidence the count stands.
  */
-function newerThanLastKnown(known: readonly ScreenPeerNotice[], rows: readonly ScreenPeerRow[]): number {
+function newerThanLastKnown(
+  known: readonly ScreenPeerNotice[],
+  rows: readonly ScreenPeerRow[],
+  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean
+): number {
   const last = known.at(-1)
-  if (last?.above === undefined) {
+  if (last === undefined) {
     return 0
   }
-  const same = (row: ScreenPeerRow, notice: ScreenPeerNotice) => row.above === notice.above && row.body === notice.body
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    if (same(rows[index]!, last)) {
-      return rows.length - 1 - index
+  if (last.above !== undefined) {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (rows[index]!.above === last.above && rows[index]!.body === last.body) {
+        return rows.length - 1 - index
+      }
     }
   }
-  const told = rows.every((row) => row.above !== undefined && !known.some((notice) => same(row, notice)))
-  return told ? rows.length : 0
+  const first = rows.findIndex((row) => row.above !== undefined && paintedAfter(last, row.above))
+  return first === -1 ? 0 : rows.length - first
 }
 
 /** The folded chat with each notice drawn after its anchor, minus the ones a

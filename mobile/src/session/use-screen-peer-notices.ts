@@ -1,10 +1,22 @@
 import { useMemo, useRef } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 const NONE: readonly ScreenPeerNotice[] = []
+
+/** Whether `above`, text painted on the screen with its spaces taken out
+ *  (ScreenPeerRow), is part of a row the chat holds after `anchorId`. */
+export function paintedAfterAnchor(folded: readonly NativeChatMessage[], anchorId: string | null, above: string): boolean {
+  const anchorAt = anchorId === null ? -1 : folded.findIndex((message) => message.id === anchorId)
+  if (anchorId !== null && anchorAt === -1) {
+    return false
+  }
+  return folded
+    .slice(anchorAt + 1)
+    .some((message) => message.blocks.some((block) => isTextBlock(block) && block.text.replaceAll(/\s+/g, '').includes(above)))
+}
 
 /** The peer-message rows this chat's screen has shown, remembered for as long
  *  as the tab shows the same stream (the scope key carries the session id, so
@@ -37,7 +49,8 @@ export function useScreenPeerNotices(
       rows,
       tail?.id ?? null,
       tail?.timestamp ?? 0,
-      drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined
+      drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined,
+      (notice, above) => paintedAfterAnchor(folded, notice.anchorId, above)
     )
   }
   const notices = memory.current.notices
