@@ -37,9 +37,13 @@ export function MobileFilePreviewSourceText({
 }) {
   const language = useMobileSyntaxLanguage(relativePath, content)
   const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
+  // Pretty-printed JSON's rows are not the file's lines, so a range of them
+  // would copy text the file does not hold: no line selection there, as in
+  // the file tab. The toolbar still copies the file as written.
+  const canSelectLines = content.length > 0 && !document.reformatted
   const selection = useCodeLineSelection({
-    canOpen: content.length > 0,
-    canRange: true,
+    canOpen: canSelectLines,
+    canRange: canSelectLines,
     resetKey: relativePath
   })
   const linesCopy = useCopyToClipboard()

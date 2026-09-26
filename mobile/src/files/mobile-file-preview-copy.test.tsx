@@ -176,6 +176,16 @@ describe.each(['dark', 'light'] as const)('copying code out of a file opened fro
     expect(clipboard.writeText).toHaveBeenCalledWith('print("hi")')
   })
 
+  it('offers no line range in pretty-printed JSON, whose lines are not the file\'s, and still copies the file', async () => {
+    const minified = '{"name":"orca","tags":["a","b"]}'
+    openInExplorer(minified, { relativePath: 'config/settings.json' })
+    // The rows are the viewer's lines, not the file's: "Copy lines 2–3"
+    // would copy text the file does not hold.
+    expect(rowProps(1).onLongPress).toBeUndefined()
+    await press('Copy file')
+    expect(clipboard.writeText).toHaveBeenCalledWith(minified)
+  })
+
   it('offers nothing to copy in an empty file', () => {
     openInExplorer('')
     expect(button('Copy file')).toBeUndefined()
