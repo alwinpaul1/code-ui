@@ -68,6 +68,17 @@ describe('the fullscreen preview\'s edit pencil', () => {
     expect(findByLabel(renderer, 'Close')).toHaveLength(1)
   })
 
+  // The user, 2026-09-26: the X goes left and the pencil right.
+  it('puts the close button on the left and the pencil on the right', () => {
+    openImagePreview('file:///a.png', 'a photo', 0, vi.fn())
+    renderer = render()
+    const order = renderer.root
+      .findAll((node) => String(node.type) === 'Pressable')
+      .map((node) => node.props.accessibilityLabel)
+      .filter((label) => label === 'Close' || label === 'Edit image')
+    expect(order).toEqual(['Close', 'Edit image'])
+  })
+
   it('closes the preview and opens the markup editor when the pencil is tapped', () => {
     const onEdit = vi.fn()
     openImagePreview('file:///a.png', 'a photo', 0, onEdit)
