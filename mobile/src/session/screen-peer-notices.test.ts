@@ -397,3 +397,34 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     expect(seen(seen(first, narrow), wide)).toBe(first)
   })
 })
+
+// Bug B, 2026-09-27: the words the tab status carried for a subagent message,
+// on the screen's sender-only row. The row names only its sender, so words go
+// on it only when one message from that sender is known on each side.
+describe("the words of a subagent's sender-only row", () => {
+  const folded = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two')]
+  const words = (rows: readonly NativeChatMessage[]) => rows.flatMap((message) => (agentMessageOf(message) ? [agentMessageOf(message)!] : []))
+  const probe = { senders: ['a7a46867b4f497c96', 'probe'], body: 'hello from probe', cut: false }
+
+  it('are the one message the status carried from that sender, by its id or its name', () => {
+    const byName = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+    expect(words(withScreenPeerNotices(folded, byName, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: 'hello from probe' }])
+    const byId = observeScreenPeerNotices([], [{ sender: 'a7a46867b4f497c96' }], 'a1', 5)
+    expect(words(withScreenPeerNotices(folded, byId, { subagentRows: true, bodies: [{ ...probe, cut: true }] }))).toEqual([
+      { sender: 'a7a46867b4f497c96', body: 'hello from probe…', cut: true }
+    ])
+  })
+
+  it('are none when two rows or two messages of that sender are known, or none at all', () => {
+    const two = observeScreenPeerNotices([], [{ sender: 'probe' }, { sender: 'probe' }], 'a1', 5)
+    expect(words(withScreenPeerNotices(folded, two, { subagentRows: true, bodies: [probe] })).map((row) => row.body)).toEqual(['', ''])
+    const one = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+    expect(words(withScreenPeerNotices(folded, one, { subagentRows: true, bodies: [probe, { ...probe, body: 'again' }] }))).toEqual([
+      { sender: 'probe', body: '' }
+    ])
+    expect(words(withScreenPeerNotices(folded, one, { subagentRows: true, bodies: [] }))).toEqual([{ sender: 'probe', body: '' }])
+    expect(words(withScreenPeerNotices(folded, one, { subagentRows: true, bodies: [{ ...probe, senders: ['general-purpose'] }] }))).toEqual([
+      { sender: 'probe', body: '' }
+    ])
+  })
+})

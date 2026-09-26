@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { MIDTURN_HANDBACK_STATUS_PROMPT } from './fixtures/claude-midturn-queued-commands-2.1.283'
+import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 
@@ -206,5 +208,41 @@ describe('a peer or subagent message that reached the hook', () => {
       prompt: 'Another Claude session sent a message: what does that mean?'
     })
     expect(state.prompts).toEqual([])
+  })
+})
+
+// Bug B, 2026-09-27: Orca's hook puts a subagent message on the tab status
+// like any prompt, folded to one line and cut at 200 characters. It is never
+// a desktop prompt, but on a tab with no prompt hook it is the only source of
+// the message's words.
+describe("a subagent message's copy on the tab status", () => {
+  const observe = (prompt: string) => observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt })
+
+  it("keeps the first words of a short message, marked as cut, and no desktop prompt", () => {
+    // SUBAGENT_REQUEST_PROMPT as normalizePromptField leaves it.
+    const onStatus = SUBAGENT_REQUEST_PROMPT.replaceAll(/\n+/g, ' ').slice(0, AGENT_STATUS_MAX_FIELD_LENGTH)
+    const state = observe(onStatus)
+    expect(state.prompts).toEqual([])
+    expect(state.agentMessages).toEqual([
+      { from: 'a7a46867b4f497c96', body: onStatus.slice('<agent-message from="a7a46867b4f497c96"> '.length).trim(), cut: true }
+    ])
+    expect(state.agentMessages?.[0]?.body.startsWith('Request for one read-only device probe (copy-flicker agent)')).toBe(true)
+  })
+
+  it('keeps nothing of a hand-back but who sent it: the harness line fills all 200 characters', () => {
+    expect(MIDTURN_HANDBACK_STATUS_PROMPT).toHaveLength(200)
+    expect(observe(MIDTURN_HANDBACK_STATUS_PROMPT).agentMessages).toEqual([{ from: 'a9d5c2f85e94ca47f', body: '', cut: true }])
+  })
+
+  it('keeps a message that fit whole, and not a person\'s short prompt that opens with the tag', () => {
+    expect(observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>').agentMessages).toEqual([
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false }
+    ])
+    expect(observe('<agent-message from="x"> keeps showing in my log, why?').agentMessages ?? []).toEqual([])
+  })
+
+  it('starts over with the session', () => {
+    const first = observe(MIDTURN_HANDBACK_STATUS_PROMPT)
+    expect(observeAgentStatusPrompt(first, 'sess-2', { ...LIVE, prompt: '' }).agentMessages).toEqual([])
   })
 })

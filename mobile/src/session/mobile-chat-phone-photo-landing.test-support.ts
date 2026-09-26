@@ -13,7 +13,7 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
-import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
+import type { BeaconAgentMessage, StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 // The rows, photos and helpers of mobile-chat-phone-photo-landing.test.ts,
@@ -118,6 +118,9 @@ export type Tick = {
   agentMessages?: BeaconAgentMessage[]
   /** The peer-message rows the agent's screen showed. */
   peerRows?: ScreenPeerRow[]
+  /** What the tab status carried of subagent messages (the controller's
+   *  `nativeChatStatusAgentMessages`). */
+  statusAgentMessages?: readonly StatusSubagentMessage[]
   /** Whether the tab was launched with the prompt hook. */
   promptHook?: boolean
 }
@@ -213,6 +216,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
       nativeChatAgentMessages: tick.agentMessages ?? [],
       nativeChatScreenPeerNotices: tick.peerRows ?? [],
+      nativeChatStatusAgentMessages: tick.statusAgentMessages ?? [],
       nativeChatPromptHook: tick.promptHook ?? null,
       chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),
       chatComposerText: '',

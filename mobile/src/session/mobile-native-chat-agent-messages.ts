@@ -217,29 +217,97 @@ export function subagentNames(messages: readonly NativeChatMessage[]): Map<strin
   return names
 }
 
+/** The hint of a row whose message the phone has only the start of. */
+const CUT_AGENT_MESSAGE_PRESENTATION = 'agent-message-cut'
+
 export function agentMessageRow(args: {
   id: string
   sender: string
   body: string
+  /** Only the start of the message reached the phone. */
+  cut?: boolean
   timestamp: number | null
 }): NativeChatMessage {
+  const hint = args.cut === true && args.body.length > 0 ? CUT_AGENT_MESSAGE_PRESENTATION : AGENT_MESSAGE_PRESENTATION
   return {
     id: args.id,
     role: 'system',
     timestamp: args.timestamp,
     source: 'transcript',
-    blocks: [{ type: 'text', text: args.body, presentation: `${AGENT_MESSAGE_PRESENTATION}:${args.sender}` }]
+    blocks: [{ type: 'text', text: args.body, presentation: `${hint}:${args.sender}` }]
   }
 }
 
-/** The sender and message of a row this module drew, or null for any other. */
-export function agentMessageOf(message: NativeChatMessage): { sender: string; body: string } | null {
+/** The sender and message of a row this module drew, or null for any other;
+ *  `cut` when the phone has only the start of the message. */
+export function agentMessageOf(message: NativeChatMessage): { sender: string; body: string; cut?: true } | null {
   const block = message.blocks[0]
-  const prefix = `${AGENT_MESSAGE_PRESENTATION}:`
   if (message.role !== 'system' || message.blocks.length !== 1 || !block || !isTextBlock(block)) {
     return null
   }
-  return block.presentation?.startsWith(prefix)
-    ? { sender: block.presentation.slice(prefix.length), body: block.text }
-    : null
+  const presentation = block.presentation ?? ''
+  const cutPrefix = `${CUT_AGENT_MESSAGE_PRESENTATION}:`
+  if (presentation.startsWith(cutPrefix)) {
+    return { sender: presentation.slice(cutPrefix.length), body: block.text, cut: true }
+  }
+  const prefix = `${AGENT_MESSAGE_PRESENTATION}:`
+  return presentation.startsWith(prefix) ? { sender: presentation.slice(prefix.length), body: block.text } : null
+}
+
+/** The status's copies as words for the screen's sender-only rows, each
+ *  under the agent's id and the name its launch gave it (the row shows one or
+ *  the other: "@a9d5c2f85e94ca47f" for a hand-back, "@general-purpose"). */
+export function screenRowBodies(
+  messages: readonly StatusSubagentMessage[],
+  raw: readonly NativeChatMessage[]
+): { senders: string[]; body: string; cut: boolean }[] {
+  if (messages.length === 0) {
+    return []
+  }
+  const names = subagentNames(raw)
+  return messages.map((message) => {
+    const name = names.get(message.from)
+    return { senders: name ? [message.from, name] : [message.from], body: message.body, cut: message.cut }
+  })
+}
+
+/** What the tab status carried of a subagent message: who sent it, and as
+ *  much of its words as fit (StatusSubagentPreview). */
+export type StatusSubagentMessage = { from: string; body: string; cut: boolean }
+
+const STATUS_OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:\s+/
+const STATUS_TAG = /^<agent-message\b([^>]*)>\s*/
+const HANDBACK_LINE = '[Subagent hand-back]'
+const REPORT_FOLLOWS = 'The report follows:'
+
+/**
+ * A subagent message as the tab status carries it, or null for anything else.
+ *
+ * Orca's hook puts every prompt on the tab status folded to one line and cut
+ * at 200 characters (normalizePromptField in
+ * src/shared/agent-status-field-normalization.ts), subagent messages
+ * included. So it holds the first words of a short message, and none of a
+ * hand-back's report: the harness's line before it is longer than that. A
+ * text of fewer characters than the cap with no closing tag was not cut, and
+ * is not the wrapper (a person's prompt that opens with the tag).
+ */
+export function parseStatusSubagentPreview(text: string, cut: boolean): StatusSubagentMessage | null {
+  const rest = text.replace(STATUS_OPENER, '')
+  const open = STATUS_TAG.exec(rest)
+  const from = open ? FROM.exec(open[1] ?? '')?.[1]?.trim() : undefined
+  if (!open || !from) {
+    return null
+  }
+  let body = rest.slice(open[0].length)
+  const close = body.lastIndexOf(CLOSE_TAG)
+  if (close !== -1) {
+    body = body.slice(0, close)
+  } else if (!cut) {
+    return null
+  }
+  if (body.startsWith(HANDBACK_LINE)) {
+    const report = body.indexOf(REPORT_FOLLOWS)
+    body = report === -1 ? '' : body.slice(report + REPORT_FOLLOWS.length)
+  }
+  return { from, body: body.trim(), cut: close === -1 }
 }

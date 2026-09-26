@@ -135,7 +135,7 @@ function newerThanLastKnown(
 export function withScreenPeerNotices(
   folded: readonly NativeChatMessage[],
   allNotices: readonly ScreenPeerNotice[],
-  options: { subagentRows?: boolean } = {}
+  options: { subagentRows?: boolean; bodies?: readonly ScreenRowBody[] } = {}
 ): NativeChatMessage[] {
   if (allNotices.length === 0) {
     return folded as NativeChatMessage[]
@@ -200,9 +200,16 @@ export function withScreenPeerNotices(
         anchorAt = position
       }
     }
+    const words = drawsPeerBubble(notice) ? undefined : bodyOf(notice, allNotices, options.bodies)
     const drawn = drawsPeerBubble(notice)
       ? peerBoilerplateRow(notice.id, notice.sightedAt)
-      : agentMessageRow({ id: notice.id, sender: notice.sender, body: '', timestamp: notice.sightedAt })
+      : agentMessageRow({
+          id: notice.id,
+          sender: notice.sender,
+          body: words ? (words.cut && words.body && !words.body.endsWith('…') ? `${words.body}…` : words.body) : '',
+          cut: words?.cut,
+          timestamp: notice.sightedAt
+        })
     if (anchorAt === null) {
       atEnd.push(drawn)
     } else if (anchorAt < 0) {
@@ -228,6 +235,27 @@ export function withScreenPeerNotices(
   })
   out.push(...atEnd)
   return out
+}
+
+/** Words another source carried for a sender-only row: the tab status's copy
+ *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
+ *  the name the row shows. */
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean }
+
+/**
+ * The words of a sender-only row, when exactly one message from that sender
+ * is known on each side: the row names only its sender, and with two of
+ * either no one can say which words are whose, so none are drawn rather than
+ * another message's.
+ */
+function bodyOf(
+  notice: ScreenPeerNotice,
+  notices: readonly ScreenPeerNotice[],
+  bodies: readonly ScreenRowBody[] | undefined
+): ScreenRowBody | undefined {
+  const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender))
+  const rows = notices.filter((other) => other.sender === notice.sender && !drawsPeerBubble(other))
+  return theirs.length === 1 && rows.length === 1 ? theirs[0] : undefined
 }
 
 /**

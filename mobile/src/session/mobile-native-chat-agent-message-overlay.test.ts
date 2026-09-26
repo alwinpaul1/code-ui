@@ -6,7 +6,11 @@ import { agentMessageOf, beaconAgentMessages } from './mobile-native-chat-agent-
 import { resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
-import { MIDTURN_HANDBACK_FROM, MIDTURN_HANDBACK_ROW } from './fixtures/claude-midturn-queued-commands-2.1.283'
+import {
+  MIDTURN_HANDBACK_FROM,
+  MIDTURN_HANDBACK_ROW,
+  MIDTURN_HANDBACK_STATUS_PROMPT
+} from './fixtures/claude-midturn-queued-commands-2.1.283'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
@@ -101,7 +105,7 @@ describe("a subagent's message to this session", () => {
     const peerRows = peerNoticesFromScreen([SCREEN_ROW])
     await show('12:40:30.000', { messages: MESSAGES, working: true, promptHook: true, peerRows, ...fromBeacon(beacon) })
     expect(agentRows()).toEqual([
-      { sender: 'general-purpose', body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…' }
+      { sender: 'general-purpose', body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…', cut: true }
     ])
   })
 })
@@ -401,5 +405,48 @@ describe("a subagent's hand-back that waited in the queue box, on a tab with no 
     })
     expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
     expect(lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!.sender] : []))).toEqual([MIDTURN_HANDBACK_FROM])
+  })
+})
+
+// Bug B, 2026-09-27: on a tab with no prompt hook the screen's row names only
+// the sender, and opened it said only that. Orca's hook puts the first 200
+// characters of the message on the tab status, folded to one line
+// (agent-status-prompts.ts), so a short message's first words are there.
+// A hand-back's are not: the harness's line before the report is longer.
+describe("a subagent's message on a tab with no prompt hook, with the tab status's copy of it", () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const lastFolded = () => (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+  const agentRows = () => lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!] : []))
+  const statusOf = (prompt: string) => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:20.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { prompt, updatedAt: at('12:40:21.000') })
+    return state.agentMessages ?? []
+  }
+
+  it('opens to the words the status carried, marked as only the start, under the name the screen shows', async () => {
+    // SUBAGENT_REQUEST_PROMPT as normalizePromptField leaves it: one line, 200 characters.
+    const onStatus = SUBAGENT_REQUEST_PROMPT.replaceAll(/\n+/g, ' ').slice(0, 200)
+    await show('12:40:30.000', {
+      messages: MESSAGES,
+      working: true,
+      promptHook: false,
+      peerRows: peerNoticesFromScreen([SCREEN_ROW]),
+      statusAgentMessages: statusOf(onStatus)
+    })
+    expect(agentRows()).toEqual([
+      { sender: 'general-purpose', body: expect.stringMatching(/^Request for one read-only device probe \(copy-flicker agent\).*…$/), cut: true }
+    ])
+  })
+
+  it('keeps saying only the sender reached the phone for a hand-back, whose report the status never holds', async () => {
+    await show('12:40:30.000', {
+      messages: [PROMPT, OPENING],
+      working: true,
+      promptHook: false,
+      peerRows: peerNoticesFromScreen(['⏺ Reading the dump.', '', MIDTURN_HANDBACK_ROW]),
+      statusAgentMessages: statusOf(MIDTURN_HANDBACK_STATUS_PROMPT)
+    })
+    expect(agentRows()).toEqual([{ sender: MIDTURN_HANDBACK_FROM, body: '' }])
   })
 })

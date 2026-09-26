@@ -25,7 +25,7 @@ import {
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
 import { drawnAfterEarlierAgentMessages, useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
-import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
+import { screenRowBodies, type BeaconAgentMessage, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -46,6 +46,7 @@ const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
 const NO_AGENT_MESSAGES: BeaconAgentMessage[] = []
+const NO_STATUS_AGENT_MESSAGES: readonly StatusSubagentMessage[] = []
 const NO_SENT_PHOTOS: ScreenSentPhotos[] = []
 
 type Props = {
@@ -288,11 +289,15 @@ export function MobileNativeChatOverlay({
   // transcript the phone reads; the agent's screen says one arrived, and
   // from whom, so that is drawn where it was seen (2026-09-20). A subagent's
   // is drawn off the screen only where no prompt hook carries it.
+  // Its words, where the tab status carried a subagent message (2026-09-27).
+  const statusAgentMessages = controller.nativeChatStatusAgentMessages ?? NO_STATUS_AGENT_MESSAGES
+  const screenBodies = useMemo(() => screenRowBodies(statusAgentMessages, session.messages), [session.messages, statusAgentMessages])
   const foldedWithoutPhotos = useScreenPeerNotices(
     controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
     foldedWithAgents,
     controller.nativeChatStreamScopeKey,
-    controller.nativeChatPromptHook !== true
+    controller.nativeChatPromptHook !== true,
+    screenBodies
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).

@@ -134,6 +134,7 @@ export function withAgentMessageRows(
       sender: names.get(message.from) ?? message.from,
       // The hook cut the prompt mid-word; say the message goes on.
       body: message.cut && message.body && !message.body.endsWith('…') ? `${message.body}…` : message.body,
+      cut: message.cut,
       timestamp: held?.timestamp ?? null
     })
     if (holder === null) {

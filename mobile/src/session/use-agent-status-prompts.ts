@@ -6,8 +6,10 @@ import {
   type AgentStatusPromptSource
 } from './agent-status-prompts'
 import { mergeDesktopPrompts } from './desktop-prompt-merge'
+import type { StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 
 const NO_PROMPTS: DesktopPrompt[] = []
+const NO_AGENT_MESSAGES: readonly StatusSubagentMessage[] = []
 
 /** The desktop prompts of the session a tab shows, read off its
  *  `agentStatus.prompt` as it changes, merged with the beacon's. Keyed on
@@ -17,12 +19,13 @@ export function useAgentStatusPrompts(
   sessionKey: string | null,
   status: AgentStatusPromptSource | undefined,
   beacon: readonly DesktopPrompt[] | undefined
-): DesktopPrompt[] {
+): { prompts: DesktopPrompt[]; agentMessages: readonly StatusSubagentMessage[] } {
   const stateRef = useRef(EMPTY_AGENT_STATUS_PROMPTS)
   // Reduced during render: the status is a prop of this render, and the
   // reducer is pure and idempotent for the same input, so a re-render with
   // the same status changes nothing.
   stateRef.current = observeAgentStatusPrompt(stateRef.current, sessionKey, status)
   const prompts = stateRef.current.prompts
-  return useMemo(() => mergeDesktopPrompts(prompts, beacon ?? NO_PROMPTS), [prompts, beacon])
+  const merged = useMemo(() => mergeDesktopPrompts(prompts, beacon ?? NO_PROMPTS), [prompts, beacon])
+  return { prompts: merged, agentMessages: stateRef.current.agentMessages ?? NO_AGENT_MESSAGES }
 }

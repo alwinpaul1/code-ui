@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
+import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice, type ScreenRowBody } from './screen-peer-notices'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
@@ -34,7 +34,9 @@ export function useScreenPeerNotices(
   folded: readonly NativeChatMessage[],
   scopeKey: string | null,
   /** Draw a subagent's sender-only row (see `withScreenPeerNotices`). */
-  subagentRows = false
+  subagentRows = false,
+  /** Words other sources carried for those rows. */
+  bodies?: readonly ScreenRowBody[]
 ): NativeChatMessage[] {
   const memory = useRef<{ scopeKey: string | null; notices: readonly ScreenPeerNotice[] }>({ scopeKey, notices: NONE })
   if (memory.current.scopeKey !== scopeKey) {
@@ -54,5 +56,5 @@ export function useScreenPeerNotices(
     )
   }
   const notices = memory.current.notices
-  return useMemo(() => withScreenPeerNotices(folded, notices, { subagentRows }), [folded, notices, subagentRows])
+  return useMemo(() => withScreenPeerNotices(folded, notices, { subagentRows, bodies }), [bodies, folded, notices, subagentRows])
 }
