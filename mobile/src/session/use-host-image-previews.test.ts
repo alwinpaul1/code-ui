@@ -157,3 +157,90 @@ describe('host image preview reads', () => {
     )
   })
 })
+
+// The pictures an agent reads (Claude Code 2.1.283 reads screenshots with its
+// Read tool) arrive from the host as base64. Held as `data:` strings, every
+// picture of a long session stayed in the phone's memory for the whole run
+// (the module cache never lets go). Each is written to the app's cache
+// directory once and held as its file URI; Android's image pipeline decodes a
+// local file down to the size it is drawn at.
+describe('an image the agent read, once the host sends it', () => {
+  afterEach(() => {
+    resetHostImagePreviewCacheForTests()
+    vi.restoreAllMocks()
+  })
+  const args = {
+    hostId: 'host',
+    worktreeId: 'worktree',
+    nativeChatContext: { tabId: 'tab', sessionId: 'session' },
+    terminalHandle: 'term',
+    path: '/private/tmp/claude-501/scratchpad/imgs/img39_1.jpeg'
+  }
+  const granted = {
+    ok: true,
+    result: { openTarget: { kind: 'absolute-file', absolutePath: args.path, grantId: 'grant' } }
+  }
+  const jpeg = { ok: true, result: { isBinary: true, isImage: true, mimeType: 'image/jpeg', content: '/9j/4AAQ' } }
+  function fakeFiles() {
+    const files = new Map<string, string>()
+    return {
+      files,
+      write: vi.fn((name: string, base64: string) => {
+        files.set(`file:///cache/${name}`, base64)
+        return `file:///cache/${name}`
+      }),
+      exists: (uri: string) => files.has(uri)
+    }
+  }
+  const client = (...answers: unknown[]) => {
+    const sendRequest = vi.fn()
+    for (const answer of answers) {
+      sendRequest.mockResolvedValueOnce(answer)
+    }
+    return { sendRequest } as unknown as import('../transport/rpc-client').RpcClient
+  }
+
+  it('is kept as a file in the cache, not as its base64 in memory, and read once', async () => {
+    const store = fakeFiles()
+    const rpc = client(granted, jpeg)
+    const uri = await loadHostImage({ ...args, client: rpc, files: store })
+    expect(uri).toMatch(/^file:\/\/\/cache\/codeui-host-image-[0-9a-f]+\.jpeg$/)
+    expect([...store.files.values()]).toEqual(['/9j/4AAQ'])
+    expect(await loadHostImage({ ...args, client: rpc, files: store })).toBe(uri)
+    expect(rpc.sendRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('is read from the host again when the cache file was cleared', async () => {
+    const store = fakeFiles()
+    const rpc = client(granted, jpeg, granted, jpeg)
+    const uri = await loadHostImage({ ...args, client: rpc, files: store })
+    store.files.clear()
+    expect(await loadHostImage({ ...args, client: rpc, files: store })).toBe(uri)
+    expect(rpc.sendRequest).toHaveBeenCalledTimes(4)
+  })
+
+  it('still shows when the file cannot be written: it stays the data it came as, and says why once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const store = { write: vi.fn(() => { throw new Error('ENOSPC: no space left on device') }), exists: () => false }
+    expect(await loadHostImage({ ...args, client: client(granted, jpeg), files: store })).toBe('data:image/jpeg;base64,/9j/4AAQ')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toContain('ENOSPC')
+  })
+
+  it('stays the data it came as where there is no file system (the web shell)', async () => {
+    expect(await loadHostImage({ ...args, client: client(granted, jpeg), files: null })).toBe('data:image/jpeg;base64,/9j/4AAQ')
+  })
+
+  // The host shares a file outside every workspace only when the agent's own
+  // words or its terminal output named it (Orca 1.4.212). A Read's path is
+  // neither, so the step drew nothing, and nothing anywhere said why.
+  it('leaves one line naming the path and why, when the host will not share it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const refused = { ok: true, result: { worktree: 'worktree', relativePath: null, absolutePath: args.path, exists: false } }
+    expect(await loadHostImage({ ...args, client: client(refused), files: fakeFiles() })).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]?.[0])).toBe(
+      `[host-image] no picture for ${args.path}: the desktop did not share it (outside every workspace, and not named in the agent's text or terminal output)`
+    )
+  })
+})

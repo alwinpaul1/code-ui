@@ -18,6 +18,12 @@ import {
 } from '../../../src/shared/native-chat-types'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
+import {
+  hostImageStillThere,
+  keepHostImageFile,
+  resetHostImageFilesForTests,
+  type HostImageFileStore
+} from './host-image-files'
 
 const IMAGE_FILE = /\.(png|jpe?g|gif|webp|bmp)$/i
 
@@ -87,16 +93,38 @@ export function mergeImagePreviews(
   return { ...host, ...local }
 }
 
+/** Host and path to the picture's URI: a cache file on the phone, or the
+ *  `data:` URI it came as where no file could be written (host-image-files.ts). */
 const dataUriByPath = new Map<string, string>()
 const failedPaths = new Map<string, number>()
 const RETRY_MS = 5_000
 const inFlight = new Map<string, Promise<string | null>>()
+/** Paths already explained, so a retry every few seconds says it once. */
+const explained = new Set<string>()
 
 export function resetHostImagePreviewCacheForTests(): void {
   dataUriByPath.clear()
   failedPaths.clear()
   inFlight.clear()
+  explained.clear()
+  resetHostImageFilesForTests()
 }
+
+/** The one line a picture that never came leaves behind: which path, and
+ *  where to look. Once per path per run. */
+function explainMissing(key: string, path: string, why: string): void {
+  if (explained.has(key)) {
+    return
+  }
+  explained.add(key)
+  console.warn(`[host-image] no picture for ${path}: ${why}`)
+}
+
+/** The host resolved the path and granted nothing: outside every workspace,
+ *  a file is shared only when the agent's words or its terminal output named
+ *  it (Orca 1.4.212's resolveTerminalPath), and a Read's path is neither. */
+const NOT_SHARED =
+  "the desktop did not share it (outside every workspace, and not named in the agent's text or terminal output)"
 
 export async function loadHostImage(args: {
   client: RpcClient
@@ -107,12 +135,16 @@ export async function loadHostImage(args: {
    *  one provenance the host accepts for a user-pasted file. */
   terminalHandle: string | null
   path: string
+  /** Where the picture is kept; the platform's own when not given. */
+  files?: HostImageFileStore | null
 }): Promise<string | null> {
   const key = `${args.hostId}\0${args.path}`
   const cached = dataUriByPath.get(key)
-  if (cached) {
+  if (cached && hostImageStillThere(cached, args.files)) {
     return cached
   }
+  // Its cache file was cleared: read it again.
+  dataUriByPath.delete(key)
   if ((failedPaths.get(key) ?? 0) > Date.now()) {
     return null
   }
@@ -138,6 +170,8 @@ export async function loadHostImage(args: {
       )
       if (!resolved.ok) {
         failedPaths.set(key, Date.now() + RETRY_MS)
+        const failure = (resolved as Partial<RpcFailure>).error
+        explainMissing(key, args.path, `the desktop could not resolve it (${failure?.message || failure?.code || 'no reason given'})`)
         return null
       }
       const resolution = (resolved as RpcSuccess).result as {
@@ -169,6 +203,7 @@ export async function loadHostImage(args: {
             : null
       if (!request) {
         failedPaths.set(key, Date.now() + RETRY_MS)
+        explainMissing(key, args.path, NOT_SHARED)
         return null
       }
       const read = await args.client.sendRequest(request.method, request.params, {
@@ -181,12 +216,15 @@ export async function loadHostImage(args: {
         : previewErrorFromRefusal((read as RpcFailure).error)
       if (preview.status !== 'ready' || preview.kind !== 'image') {
         failedPaths.set(key, Date.now() + RETRY_MS)
+        explainMissing(key, args.path, 'message' in preview ? preview.message : 'the desktop read it, but it is not an image')
         return null
       }
-      dataUriByPath.set(key, preview.dataUri)
-      return preview.dataUri
-    } catch {
+      const uri = keepHostImageFile(key, preview.dataUri, args.files)
+      dataUriByPath.set(key, uri)
+      return uri
+    } catch (error) {
       failedPaths.set(key, Date.now() + RETRY_MS)
+      explainMissing(key, args.path, error instanceof Error ? error.message : String(error))
       return null
     } finally {
       inFlight.delete(key)
