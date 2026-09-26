@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { AgentHudBeacon } from './agent-hud-beacon'
+import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
 
 /**
  * The last beacon each terminal wrote, kept across app launches.
@@ -44,6 +44,26 @@ function signed(record: unknown): record is AgentHudBeacon {
   )
 }
 
+/** A stored prompt every reader can take: a nonce and a text. */
+function wellFormedPrompt(prompt: unknown): prompt is DesktopPrompt {
+  return (
+    typeof prompt === 'object' &&
+    prompt !== null &&
+    typeof (prompt as { nonce?: unknown }).nonce === 'string' &&
+    typeof (prompt as { text?: unknown }).text === 'string'
+  )
+}
+
+/** The record with only well-formed prompts in its lists. A prompt with no
+ *  text made the restore throw, and with it every terminal after that one
+ *  lost its warm start (review of 2026-09-27); a reader would have thrown
+ *  on it too. */
+function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
+  const prompts = Array.isArray(record.desktopPrompts) ? record.desktopPrompts.filter(wellFormedPrompt) : []
+  const kept = Array.isArray(record.agentMessagePrompts) ? record.agentMessagePrompts.filter(wellFormedPrompt) : undefined
+  return { ...record, desktopPrompts: prompts, ...(kept ? { agentMessagePrompts: kept } : {}) }
+}
+
 /** Never throws: an unreadable store simply means no warm start. */
 export async function readWarmStartBeacons(): Promise<StoredBeacons> {
   try {
@@ -58,7 +78,7 @@ export async function readWarmStartBeacons(): Promise<StoredBeacons> {
     const restored: StoredBeacons = {}
     for (const [handle, record] of Object.entries(parsed as Record<string, unknown>)) {
       if (signed(record)) {
-        restored[handle] = record
+        restored[handle] = withWellFormedPrompts(record)
       }
     }
     return restored
