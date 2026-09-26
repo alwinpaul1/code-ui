@@ -1,4 +1,5 @@
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
+import { AGENT_STATE_HISTORY_MAX } from '../../../src/shared/agent-status-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { parseStatusSubagentPreview, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
@@ -35,10 +36,10 @@ export type AgentStatusPromptSource = {
   stateStartedAt?: number | null
   /** The pane's state (`working`, `waiting`, `blocked`, `done`), and the
    *  states before it, one entry per change (Orca's agent-status store): what
-   *  says whether the state began with `prompt`. Every status a host sends
+   *  says which run `prompt` came in (runItCameIn). Every status a host sends
    *  has a state; only a fixture leaves it out. */
   state?: string | null
-  stateHistory?: readonly { state: string; prompt?: string }[] | null
+  stateHistory?: readonly { state: string; prompt?: string; startedAt?: number }[] | null
   /** The session the row's last hook event came from (Claude `session_id`). */
   providerSession?: { id: string } | null
 } | null
@@ -130,14 +131,18 @@ export function observeAgentStatusPrompt(
       ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), seen].slice(-PROMPT_CAP) }
       : { ...state, last: text }
   }
-  // A prompt whose time the status does not hold is never drawn: placed by a
-  // time that is not its own, it sat in another turn (session 76ba8f2f,
+  // Found on the first reading, or on a pane that is not working (a
+  // submission makes it working), the prompt was already there: its time is
+  // the start of the run it came in, as the status's history says
+  // (runItCameIn). A prompt the history cannot place is never drawn: placed
+  // by a time that is not its own, it sat in another turn (session 76ba8f2f,
   // 2026-09-26: under an answer four turns after it). A transcript row of it
   // draws it where it belongs, when the page that holds it loads. The copy is
   // still kept, untimed, for the pairing: a phone send that is still pending
   // claims its own copy, and without it claimed the desk's next one instead
   // (review of 784531ee).
-  const why = whyNotTimedByState(status, found)
+  const run = typeof status?.state === 'string' && (found || status.state !== 'working') ? runItCameIn(status) : null
+  const why = typeof run === 'string' ? run : null
   if (why !== null) {
     const held: DesktopPrompt = {
       nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
@@ -157,12 +162,13 @@ export function observeAgentStatusPrompt(
   // phone is watching as the prompt arrives. For the first status a session
   // shows the phone — a tab opened an hour into its turn — it is the last tool
   // ping, and a prompt timed by it anchored at the tail under the tool fold
-  // (device, 2026-09-20). A working run the prompt started began when it was
-  // taken, so that run's start is its time at first sight; any other state
-  // began after it (whyNotTimedByState).
+  // (device, 2026-09-20). The run it came in began at or before it, so that
+  // run's start is its time; a status with no state (a fixture) has only its
+  // current state's start.
+  const runStart = typeof run === 'number' ? run : null
   const byStateStart =
-    found && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt)
-  const clock = byStateStart ? status.stateStartedAt : status?.updatedAt
+    runStart !== null || (found && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt))
+  const clock = runStart ?? (byStateStart ? status?.stateStartedAt : status?.updatedAt)
   const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
   const prompt: DesktopPrompt = {
     nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
@@ -184,51 +190,42 @@ export function observeAgentStatusPrompt(
 }
 
 /**
- * Why the pane's current state did not begin when its prompt was taken, or
- * null when nothing on the status says so.
+ * The start of the working run the status's prompt came in, or why the status
+ * cannot say.
  *
- * A person's prompt starts a `working` run, and Orca moves `stateStartedAt`
- * on every state change (its agent-status store), so any other state began
- * after the prompt: `done` when the turn ended, `waiting` or `blocked` when
- * the agent stopped to ask. The same holds for a prompt the chat watches
- * change on such a pane: a submission makes the pane `working`, and a turn
- * short enough to reach the phone already `done` began at an idle prompt,
- * which writes the prompt as its own row.
+ * `prompt` is the last prompt a person sent, and Orca pushes one history entry
+ * per state change, each with the prompt the pane carried when that state
+ * ended; `stateStartedAt` moves on every change. So the run where the pane
+ * first carried the prompt began at or before it was taken: its time, for a
+ * prompt that started the run, and a little early, in the same turn, for one
+ * sent during it. Walking back over the entries that carry it passes the
+ * pauses where the agent asked (`waiting`, `blocked`), which are the same run.
  *
- * Found on the chat's first reading, a working run began with the prompt, or
- * the prompt came during it, unless the state before the run carried the same
- * prompt. After `waiting` or `blocked` of it the run resumed after the prompt
- * was taken. After a `done` of it, something that keeps the cached prompt
- * started the run — a teammate's or another session's message (76ba8f2f,
- * 14:27:03) — or the same words were sent again, which the status cannot
- * tell apart.
+ * It stops at a `done` that carried it: the prompt outlived a turn, and the
+ * next was started by something that keeps the cached prompt, a teammate's or
+ * another session's message (76ba8f2f, 14:27:03), or by the same words sent
+ * again. The status cannot tell those apart. It stops too when the walk
+ * reaches the start of a full history (AGENT_STATE_HISTORY_MAX): the run it
+ * came in may have been dropped.
  */
-function whyNotTimedByState(status: AgentStatusPromptSource | undefined, found: boolean): string | null {
-  const state = status?.state
-  if (typeof state !== 'string') {
-    return null
+function runItCameIn(status: NonNullable<AgentStatusPromptSource>): number | string {
+  const history = status.stateHistory ?? []
+  const entries = [...history, { state: status.state ?? '', prompt: status.prompt ?? '', startedAt: status.stateStartedAt }]
+  let first = entries.length - 1
+  while (first > 0 && entries[first - 1]!.prompt === status.prompt) {
+    if (entries[first - 1]!.state === 'done') {
+      return 'it was carried past the end of a turn, which a harness message or the same words sent again then started'
+    }
+    first -= 1
   }
-  if (state !== 'working') {
-    return state === 'done' ? 'its turn has ended' : 'the agent has stopped to ask'
+  if (first === 0 && history.length >= AGENT_STATE_HISTORY_MAX) {
+    return 'the state history no longer reaches the run it came in'
   }
-  if (!found) {
-    return null
+  const entry = entries[first]!
+  if (entry.state !== 'working' || typeof entry.startedAt !== 'number' || !Number.isFinite(entry.startedAt)) {
+    return 'no working run carried it first'
   }
-  // Orca pushes history only on a state change, so the entry before a run is
-  // the state it followed however long the run has gone on. It names the
-  // prompt the pane carried then: a prompt that changed since came in this
-  // run, and the run's start is at or before it, as for any mid-run prompt.
-  const before = status?.stateHistory?.at(-1)
-  if (before === undefined || before.prompt !== status?.prompt) {
-    return null
-  }
-  if (before.state === 'waiting' || before.state === 'blocked') {
-    return `the run went on after the agent was ${before.state}`
-  }
-  if (before.state === 'done') {
-    return 'the run was started by something that kept the prompt of the turn before'
-  }
-  return null
+  return entry.startedAt
 }
 
 /** The start of a prompt, for the log line. */

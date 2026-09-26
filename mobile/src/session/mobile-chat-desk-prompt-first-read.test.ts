@@ -264,3 +264,38 @@ describe('a phone send whose own copy the chat watched, read again after the tur
   })
 })
 
+// A message typed at the desk mid-turn has no row. Read first after its turn
+// ended, the pane is `done`; the history still names the run it came in, so it
+// is drawn in that turn, from the run's start, never under the turn's answer.
+describe('a desk message typed mid-turn, first read after its turn ended', () => {
+  const { show } = landingHarness(frames)
+  const P1 = 'now run the tests'
+  const P2 = 'and paste the failing names here'
+  const opening = userRow('u1', [P1], '07:00:00.000')
+  const a1 = agentRow('a1', 'Running the suite.', '07:00:40.000')
+  const answer = agentRow('a2', 'All tests pass.', '07:02:00.000')
+  const status = {
+    state: 'done',
+    prompt: P2,
+    updatedAt: at('07:02:00.300'),
+    stateStartedAt: at('07:02:00.200'),
+    stateHistory: [
+      { state: 'done', prompt: 'earlier', startedAt: at('06:50:00.000') },
+      { state: 'working', prompt: P2, startedAt: at('07:00:00.000') }
+    ]
+  }
+
+  it('is drawn once inside its turn, above the turn\u2019s answer', async () => {
+    vi.setSystemTime(at('07:10:00.000'))
+    const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
+    const messages = [opening, a1, answer]
+    await show('07:10:00.000', { messages, prompts })
+    await show('07:10:01.000', { messages, prompts })
+    const rows = rowIds(frames.at(-1)!)
+    expect(rows.filter((row) => row.text === P2)).toHaveLength(1)
+    const index = rows.findIndex((row) => row.text === P2)
+    expect(index).toBeLessThan(rows.findIndex((row) => row.id === 'a2'))
+    expect(index).toBeGreaterThan(rows.findIndex((row) => row.id === 'u1'))
+  })
+})
+

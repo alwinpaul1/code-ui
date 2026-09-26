@@ -276,18 +276,33 @@ describe('a prompt the tab status still carries after its turn', () => {
     expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, working))).toEqual(HELD)
   })
 
-  it('is not drawn where the agent stopped to ask, nor where it went on after', () => {
+  // The ask began after the prompt, and so did the run that went on after it:
+  // the history's run the prompt came in is its time (13:20:44), not either.
+  it('is timed by the run it came in, not where the agent stopped to ask or went on after', () => {
+    const TIMED = [[PROMPT, T('13:20:44.026'), false]]
     const asking = { ...DONE, state: 'waiting', stateStartedAt: T('13:21:30.000'), stateHistory: history.slice(0, 2) }
-    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, asking))).toEqual(HELD)
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, asking))).toEqual(TIMED)
     const blocked = { ...asking, state: 'blocked' }
-    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, blocked))).toEqual(HELD)
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, blocked))).toEqual(TIMED)
     const resumed = {
       ...DONE,
       state: 'working',
       stateStartedAt: T('13:21:40.000'),
       stateHistory: [...history.slice(0, 2), { state: 'waiting', prompt: PROMPT, startedAt: T('13:21:30.000') }]
     }
-    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed))).toEqual(HELD)
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed))).toEqual(TIMED)
+  })
+
+  // The turn it came in ended, and no other took it over: its run is still
+  // in the history. Drawn in its own turn, never under the answer.
+  it('is timed by the run it came in when the chat opens after its own turn ended', () => {
+    const ended = { ...DONE, stateStartedAt: T('13:22:30.957'), stateHistory: history.slice(0, 2) }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, ended))).toEqual([[PROMPT, T('13:20:44.026'), false]])
+  })
+
+  it('is held back when the history is full and every entry carries it', () => {
+    const full = Array.from({ length: 20 }, (_, index) => ({ state: 'working', prompt: PROMPT, startedAt: T('13:20:44.026') + index }))
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { ...DONE, stateHistory: full }))).toEqual(HELD)
   })
 
   // Review of 784531ee: Orca keeps `waiting` as the entry before the run for
