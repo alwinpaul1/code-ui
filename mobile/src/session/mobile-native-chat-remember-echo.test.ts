@@ -157,6 +157,15 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-abc'])
   })
 
+  it('is swept when it is another session\'s delivery the old build stored, and kept when it only quotes the opener', () => {
+    const delivery = 'Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="code-ui-6f">\n<agent-message from="a379d31745861b502">\nCapture probe\n</agent-message>\n</cross-session-message>'
+    const stored = [
+      { id: 'desk-4105', text: delivery, ...base },
+      { id: 'desk-4106', text: 'Another Claude session sent a message: what does that mean?', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4106'])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])

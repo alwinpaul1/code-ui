@@ -270,3 +270,30 @@ describe('a short subagent message the hook took while the lead was idle', () =>
     expect(lastFolded.flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!.body] : []))).toEqual(['hello from probe'])
   })
 })
+
+// Review of 2026-09-27: 68a160e5 kept the beacon's copy of another session's
+// message out of the desk prompts, and the narrowing of f6a4d607 let it back
+// in, drawn as a raw XML bubble over the screen's peer bubble. The shape is
+// the 2026-09-20 hook record (agent-status-prompts.test.ts).
+describe("another session's message the prompt hook took", () => {
+  const { show, lastFrame } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+
+  it('is drawn as the peer bubble alone, never as a raw XML user bubble', async () => {
+    const text = `Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="code-ui-6f" from-mode="prompting">\n<agent-message from="a379d31745861b502">\nCapture probe\n</agent-message>\n</cross-session-message>\n\nThis came from another Claude session \u2014 not typed by your user.`
+    await show('12:40:30.000', {
+      messages: [PROMPT, OPENING],
+      working: true,
+      promptHook: true,
+      peerRows: [{ sender: 'code-ui-6f', body: 'Capture probe' }],
+      ...fromBeacon([{ nonce: '5002', text, anchorId: 'a1' }])
+    })
+    expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
+  })
+
+  it('a prompt that only starts with the opener\'s words is still the user bubble', async () => {
+    const text = 'Another Claude session sent a message: can you check what it says?'
+    await show('12:40:30.000', { messages: [PROMPT, OPENING], working: true, promptHook: true, ...fromBeacon([{ nonce: '5003', text, anchorId: 'a1' }]) })
+    expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?', text])
+  })
+})

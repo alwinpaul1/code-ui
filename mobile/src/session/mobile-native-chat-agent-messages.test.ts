@@ -11,6 +11,7 @@ import {
 } from './mobile-native-chat-agent-messages'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { mergeDesktopPrompts } from './desktop-prompt-merge'
+import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { AGENT_MESSAGE_PROMPT_CAP, keepAgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { resetAgentMessageAnchorsForTests, withAgentMessageRows } from './mobile-native-chat-agent-message-rows'
@@ -114,6 +115,17 @@ describe('a short subagent message delivered while the lead is idle, framed afte
   it('is a person\'s prompt when anything else follows the closing tag', () => {
     expect(parseSubagentMessage(`<agent-message from="x">\nhi\n</agent-message>\n${DESCENDANT_FRAME} And why?`)).toBeNull()
     expect(parseSubagentMessage(`<agent-message from="x">\nhi\n</agent-message>\nWhy does this show up?`)).toBeNull()
+  })
+})
+
+describe("another session's delivery, told by the harness's own two lines", () => {
+  it('is the opener line with the envelope under it, idle or mid-turn, and nothing shorter', () => {
+    expect(isCrossSessionMessagePrompt(CROSS_SESSION)).toBe(true)
+    expect(isCrossSessionMessagePrompt(CROSS_SESSION.replace('sent a message:', 'sent a message while you were working:'))).toBe(true)
+    expect(isCrossSessionMessagePrompt('Another Claude session sent a message:')).toBe(false)
+    expect(isCrossSessionMessagePrompt('Another Claude session sent a message:\nwhat is <cross-session-message>?')).toBe(false)
+    expect(isCrossSessionMessagePrompt('<cross-session-message from="x">hi</cross-session-message>')).toBe(false)
+    expect(isCrossSessionMessagePrompt('')).toBe(false)
   })
 })
 

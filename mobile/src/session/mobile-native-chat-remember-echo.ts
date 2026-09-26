@@ -1,6 +1,7 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { parseSubagentMessage } from './mobile-native-chat-agent-messages'
+import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
 import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import {
@@ -203,12 +204,15 @@ function isWitnessed(id: string): boolean {
  *  old build stored that way: the shared harness classifier swept real
  *  messages that start with "A message arrived from" or "No response
  *  requested." (review of 2026-09-26). The store kept no cut flag, and the
- *  hook cuts a long one before its closing tag, so either ending counts. */
+ *  hook cuts a long one before its closing tag, so either ending counts.
+ *  Another session's delivery too, told by the harness's opener line and
+ *  envelope, which the same build stored the same way (review of 2026-09-27). */
 export function sweepWitnessedEchoes(
   list: readonly MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
   const injected = (item: MobileNativeChatPendingMessage) =>
-    isWitnessed(item.id) && parseSubagentMessage(item.text, { cut: true }) !== null
+    isWitnessed(item.id) &&
+    (parseSubagentMessage(item.text, { cut: true }) !== null || isCrossSessionMessagePrompt(item.text))
   // Phone sends first so they win against witnessed readings of themselves.
   const ordered = [...list.filter((item) => !isWitnessed(item.id)), ...list.filter((item) => isWitnessed(item.id) && !injected(item))]
   const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text).map((item) => item.id))

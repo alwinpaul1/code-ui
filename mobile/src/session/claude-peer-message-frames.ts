@@ -14,6 +14,25 @@
 /** The opener line: while the lead is idle, and while it works. */
 export const PEER_OPENER_IDLE = 'Another Claude session sent a message:'
 export const PEER_OPENER_MID_TURN = 'Another Claude session sent a message while you were working:'
+/** `f`, the opener of the peer lane. */
+const PEER_SESSION_OPENER = 'A peer session sent a message while you were working:'
+const OPENERS = [PEER_OPENER_IDLE, PEER_OPENER_MID_TURN, PEER_SESSION_OPENER]
+const CROSS_SESSION_TAG = /^<cross-session-message[\s>]/
+
+/**
+ * Whether a hook prompt is Claude Code's delivery of another session's
+ * message: an opener line of its own, then the `<cross-session-message …>`
+ * envelope on the next. Both lines are the harness's, so a person's prompt
+ * is this only if it pastes a whole delivery. Nothing is told by leading
+ * words alone: that classifier dropped prompts a person typed (review of
+ * 2026-09-26), and without this one the beacon's copy of another session's
+ * message drew as a raw XML bubble over the screen's peer bubble (review of
+ * 2026-09-27).
+ */
+export function isCrossSessionMessagePrompt(text: string): boolean {
+  const lines = text.replace(/^\s+/, '').split('\n', 2)
+  return lines.length === 2 && OPENERS.includes(lines[0]!.trimEnd()) && CROSS_SESSION_TAG.test(lines[1]!)
+}
 
 /** `o`: a message from another Claude session. */
 const FROM_SESSION =
