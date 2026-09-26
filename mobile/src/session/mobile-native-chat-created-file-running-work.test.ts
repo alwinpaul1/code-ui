@@ -318,6 +318,49 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...agent, ...CREATE])).toBe(true)
   })
 
+  // Review of de0eef80: the command's long output quotes an agent's report,
+  // id line and all, so it is paired to the Agent call beside it and read as
+  // a finished report, and the teammate's spawn falls to the command.
+  it('draws no count for a create made after a teammate spawned beside a command whose long output quotes an agent report', () => {
+    const turn = [
+      called('Bash', { command: 'cat /tmp/agent-report.txt' }),
+      called('Agent', {
+        description: 'Review',
+        prompt: 'Review',
+        name: 'reviewer',
+        team_name: 'review'
+      }),
+      answered(cutByTheWire(reportWithUsageAt(4000))),
+      answered(TEAMMATE_SPAWN_OUTPUT)
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(true)
+  })
+
+  // Orca's diet spends one 4000-character budget across a call's input and
+  // drops every key past it for a `'…'` key (sanitizeToolInput, Orca
+  // ac675ded6e), so a long prompt takes `run_in_background` with it.
+  it('draws no count for a create made after a background agent with a long prompt launched in the JSON shape the wire cut', () => {
+    const onTheWire = {
+      description: BACKGROUND_AGENT.description,
+      prompt: `${'Keep the phone’s own copy of a message. '.repeat(100).slice(0, 3960)}… (truncated)`,
+      '…': 'truncated'
+    }
+    const output = `{"resultType":"task","taskId":"${AGENT_ID}","status":"working","statusMessage":${JSON.stringify(asyncAgentLaunchResult(AGENT_ID).repeat(4))}}`
+    const agent = launched('Agent', onTheWire, cutByTheWire(output))
+    expect(touched([...agent, ...CREATE])).toBe(true)
+  })
+
+  it('still counts a create made after two foreground agents whose long reports the wire cut', () => {
+    const report = cutByTheWire(reportWithUsageAt(4000))
+    const turn = [
+      called('Agent', { description: 'Find the flag', prompt: 'Find it' }),
+      called('Agent', { description: 'Find the site', prompt: 'Find it' }),
+      answered(report),
+      answered(report)
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(false)
+  })
+
   it('still counts a create made after an agent call the user turned down', () => {
     const agent = launched('Agent', BACKGROUND_AGENT, USER_TURNED_DOWN)
     expect(touched([...agent, ...CREATE])).toBe(false)

@@ -15,14 +15,18 @@
 //   completion Orca does not surface) is still running here;
 // - a teammate never reports, so it runs for the rest of the transcript;
 // - an agent a message woke runs until its next report;
-// - an Agent call with no answer yet, or one whose answer names no id, runs
-//   for good.
+// - an Agent call with no answer yet, or one whose answer names no id and is
+//   no foreground report, runs for good.
 // A task launched before the loaded window is not seen at all. A foreground
 // report long enough for the wire to cut has lost its usage block, and its
-// id line past about 3,900 characters, so a cut answer to an Agent call that
-// asked for no background, and opens with no launch sentence, is read as a
-// finished report (review of 3598d39b: such a report ran for good and held
-// every later count off).
+// id line past about 3,900 characters, so a cut answer is read as a finished
+// report when it goes to an Agent call that asked for no background, opens
+// with no launch sentence and no JSON, and no other kind of call was waiting
+// for it (review of 3598d39b: such a report ran for good and held every later
+// count off). A command's long output can quote a report, id line and all,
+// and is then paired to the Agent call beside it (review of de0eef80); and
+// the diet drops a long prompt's later keys, `run_in_background` among them,
+// so a launch in the JSON shape could pass for a report.
 
 import {
   isTextBlock,
@@ -58,15 +62,22 @@ function askedForBackground(call: Pending): boolean {
   return Reflect.get(Object(call.input), 'run_in_background') === true
 }
 
+const JSON_OPENING = /^\s*\{/
+
 /** An Agent call's answer that leaves an agent running: anything but a
  *  failure, or a foreground run's report (its usage block, or the cut that
- *  took it). */
-function leftAgentRunning(call: Pending, output: string): boolean {
+ *  took it). `onlyAgentsWaited` says no other kind of call could own the
+ *  answer. */
+function leftAgentRunning(call: Pending, output: string, onlyAgentsWaited: boolean): boolean {
   if (ANY_TOOL_FAILURE.test(output) || FINISHED_RUN_USAGE.test(output)) {
     return false
   }
   const cutReport =
-    output.endsWith(MOBILE_CUT) && !AGENT_LAUNCH_OPENING.test(output) && !askedForBackground(call)
+    onlyAgentsWaited &&
+    output.endsWith(MOBILE_CUT) &&
+    !AGENT_LAUNCH_OPENING.test(output) &&
+    !JSON_OPENING.test(output) &&
+    !askedForBackground(call)
   return !cutReport
 }
 
@@ -124,6 +135,8 @@ export function backgroundWorkRunningAt(
           })
         }
       } else if (isToolResultBlock(block)) {
+        // Named as the pairing names it: `takeAnsweredCall` holds only an Agent call apart.
+        const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
         const call = takeAnsweredCall(pending, block.output)
         if (!call) {
           continue
@@ -133,7 +146,7 @@ export function backgroundWorkRunningAt(
         }
         const launch = readLaunch(call, block.output)
         if (toolCallKind(call.name) === 'agent') {
-          if (leftAgentRunning(call, block.output)) {
+          if (leftAgentRunning(call, block.output, onlyAgentsWaited)) {
             spans.push({ from: call.at, id: launch?.id ?? null })
           }
         } else if (launch) {

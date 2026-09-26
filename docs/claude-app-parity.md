@@ -115,7 +115,15 @@ Nothing here is built.
   all hold the count off. A foreground agent's report is over once it is
   answered, even one long enough for Orca's 4000-character cut to take its
   usage block: a cut answer to an Agent call that asked for no background,
-  and opens with no launch sentence, is read as that report. A `!` command is no tool call: Claude Code writes
+  and opens with no launch sentence and no JSON, is read as that report,
+  but only while no other kind of call is waiting for an answer, since a
+  command's long output can quote a report, id line and all. Claude Code
+  2.1.283's Agent tool answers in four text shapes only (a teammate's spawn,
+  a cloud launch, a background launch, and a finished report; any other
+  status throws), and every one but the report opens with its sentence, as
+  the JSON shape a server flag serves opens with `{`. So
+  an agent sent to the background mid-run has no fifth shape to answer in,
+  though no record of one exists here. A `!` command is no tool call: Claude Code writes
   it as a user turn, `<bash-input>…</bash-input>`, and its output as the
   next one (136 of them on this machine, Claude Code 2.1.228 to 2.1.282).
   Orca does not filter these out (its Claude decoder drops only meta,
