@@ -289,15 +289,19 @@ and changed 38 times; the sources, one by one:
   was made up to 30 s before the row started (a foreground agent has no id
   anywhere until it ends; one row per call, earliest first, and a call whose
   agent was already up at the first look is used by it; an Agent call is
-  answered only by a result shaped like an Agent result, so a quick call's
-  result landing first does not use it up, nor does a Read that prints an
+  answered only by a result shaped like an Agent result — its launch or
+  spawn sentence, its report's id line and usage — or by a failure in plain
+  call order, so a quick call's result landing first does not use it up,
+  nor does a Read that prints an
   id). The benefit of the doubt, until the row stops: it was on the first
   roster the phone read; no other agent was running to have started it
   (none on the roster before it, none on this one started earlier); or it
   started before the loaded window reaches back to. Otherwise a subagent's,
   which stays so as the window slides. Rows are placed only on a settled
   transcript, never on the tail the chat cached when the user left and
-  paints while the fresh read loads. Not on a description (Orca's fold
+  paints while the fresh read loads, nor on the tail it keeps when a
+  re-subscribe comes back empty (`baseRetained`: live rows fold on after a
+  gap). Not on a description (Orca's fold
   writes one for reviewers too), a status blip, or the first minute after
   opening: a settled window holds every launch since its oldest row. A
   teammate or named agent (`a<name>-<hex>`) always counts. A doubted row

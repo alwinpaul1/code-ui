@@ -236,7 +236,11 @@
             // #22179's older-history guard adds five code lines: the null or
             // non-object return and the catch around the page read. Taken as
             // written so the next port of this hook stays a clean merge.
-            "max": 305,
+            // 2026-09-26: 310. `baseRetained` says when the list is the kept
+            // tail of an empty re-subscribe, which the running-task reader
+            // must not read as a whole window: the ref, its two writes, the
+            // returned field and its type line. Fork-only, like the kept tail.
+            "max": 310,
             "skipBlankLines": true,
             "skipComments": true
           }

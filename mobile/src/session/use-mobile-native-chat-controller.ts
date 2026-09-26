@@ -153,7 +153,7 @@ export function useMobileNativeChatController(
     // null reads as a host retraction, and a peek would decline the prefill forever.
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
-    transcriptSettled: nativeChatSession.status === 'ready',
+    transcriptSettled: nativeChatSession.status === 'ready' && !nativeChatSession.baseRetained,
     onUnconfirmedSendLanded: onSendResolved,
     beaconPromptReceipts: tailPrompts
   })

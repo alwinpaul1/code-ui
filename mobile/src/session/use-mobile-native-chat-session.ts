@@ -46,6 +46,11 @@ export type MobileNativeChatSession = {
   loadingEarlier: boolean
   /** Grow the window to page in older history. */
   loadEarlier: () => void
+  /** True while `messages` is the tail kept from an earlier read because a
+   *  re-subscribe came back empty: what was written in between is missing,
+   *  though live rows fold on after it. Cleared by the next real snapshot.
+   *  Absent on a lane that never keeps one (the structured session). */
+  baseRetained?: boolean
 }
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
@@ -161,6 +166,7 @@ export function useMobileNativeChatSession(args: {
   // Whether this subscription already delivered its base snapshot; later
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
+  const baseRetainedRef = useRef(false)
   // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
   const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
@@ -258,8 +264,10 @@ export function useMobileNativeChatSession(args: {
             ? transcriptRetentionRef.current.retained(identity)
             : null
         if (retained && retained.length > 0) {
+          baseRetainedRef.current = true
           setList(retained)
         } else {
+          baseRetainedRef.current = baseRetainedRef.current && !applied.windowReplaced
           setMessages(applied.messages)
         }
         if (!applied.windowReplaced && applied.hasMore != null) {
@@ -400,6 +408,7 @@ export function useMobileNativeChatSession(args: {
     error,
     hasMore,
     loadingEarlier,
-    loadEarlier
+    loadEarlier,
+    baseRetained: baseRetainedRef.current
   }
 }

@@ -157,20 +157,27 @@ export function readNotifications(
   return found
 }
 
-/** An Agent call's result: a background launch (its sentence opens the
- *  result), a finished run's report (its id line, then its usage block), or
- *  the call failing — a tool error, or the user turning it down. Anchored,
- *  so a Read or a grep that merely prints `agentId: …` is not one. */
+/** An Agent call's own result: a background launch or a teammate's spawn
+ *  (their sentences open the result), a remote launch, or a finished run's
+ *  report (its id line, then its usage block). Anchored, so a Read or a grep
+ *  that merely prints `agentId: …` is not one. */
 const AGENT_RESULT =
-  /^\s*Async agent launched successfully\.|<usage>\s*subagent_tokens:|(?:^|\n)agentId: [A-Za-z0-9_-]+ \(use SendMessage|^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
+  /^\s*(?:Async agent launched successfully|Spawned successfully|Cloud agent launched)\.|<usage>\s*subagent_tokens:|(?:^|\n)agentId: [A-Za-z0-9_-]+ \(use SendMessage/
+/** A failure any tool can answer with: a tool error, or the user turning the
+ *  call down. It says nothing about which call it answers. */
+const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
 
 /** The call a result answers. First in, first out — transcript blocks carry
- *  no tool ids — except that an Agent call is answered only by a result
- *  shaped like one: a turn's quick call (a Read beside a foreground Agent) can
- *  answer first, and handing its result to the Agent call would leave the
- *  agent that is still running with no call, and read any id the Read printed
- *  as a launch. */
+ *  no tool ids — except that an Agent call is taken only by a result shaped
+ *  like an Agent result, and such a result goes to the first Agent call. A
+ *  turn's quick call (a Read beside a foreground Agent) can answer first, and
+ *  handing its result to the Agent call would leave the agent still running
+ *  with no call, and read any id the Read printed as a launch. A failure is
+ *  plain first in, first out. */
 export function takeAnsweredCall<Call extends PendingCall>(pending: Call[], output: string): Call | undefined {
+  if (ANY_TOOL_FAILURE.test(output)) {
+    return pending.shift()
+  }
   const agentShaped = AGENT_RESULT.test(output)
   const index = pending.findIndex((call) => (call.name === 'Agent') === agentShaped)
   return index !== -1 ? pending.splice(index, 1)[0] : pending.shift()

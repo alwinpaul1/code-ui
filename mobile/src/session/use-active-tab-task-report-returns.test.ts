@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState, AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { NESTED_REVIEWERS, OWN_AGENTS, leadTurn, ownAgentLaunch, rosterRow } from './fixtures/claude-orchestration-2.1.281'
+import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
+import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { readTaskEvidence } from './mobile-background-task-evidence'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -162,6 +164,71 @@ describe('the running-task count when the user leaves the chat and comes back', 
 
 describe('which call a result answers', () => {
   const at = (iso: string) => Date.parse(iso)
+  const turn = (calls: { name: string; input: Record<string, unknown> }[], outputs: string[]): NativeChatMessage[] => [
+    {
+      id: 'calls',
+      role: 'assistant',
+      timestamp: at('2026-09-26T13:00:00.000Z'),
+      source: 'transcript',
+      blocks: calls.map((call) => ({ type: 'tool-call' as const, name: call.name, input: call.input }))
+    },
+    ...outputs.map((output, index) => ({
+      id: `result-${index}`,
+      role: 'tool' as const,
+      timestamp: at('2026-09-26T13:00:01.000Z') + index,
+      source: 'transcript' as const,
+      blocks: [{ type: 'tool-result' as const, output }]
+    }))
+  ]
+  const agentBg = { name: 'Agent', input: { description: 'Review the diff', prompt: '[prompt]', subagent_type: 'general-purpose', run_in_background: true } }
+  const now = at('2026-09-26T13:05:00.000Z')
+
+  it("still reads an agent's launch when a failed Read before it answers first, in call order", () => {
+    const messages = turn(
+      [{ name: 'Read', input: { file_path: '/x/missing.md' } }, agentBg],
+      ['<tool_use_error>File does not exist.</tool_use_error>', asyncAgentLaunchResult('a5c1d2e3f4a5b6c7d')]
+    )
+
+    expect(deriveBackgroundTasks(messages, now, null).running.map((task) => [task.id, task.title])).toEqual([['a5c1d2e3f4a5b6c7d', 'Review the diff']])
+  })
+
+  it("still reads an agent's launch beside a command the user turned down, in call order", () => {
+    const messages = turn(
+      [{ name: 'Bash', input: { command: '[command]', description: '[declined]' } }, agentBg],
+      [
+        "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
+        asyncAgentLaunchResult('a5c1d2e3f4a5b6c7d')
+      ]
+    )
+
+    expect(deriveBackgroundTasks(messages, now, null).running.map((task) => task.id)).toEqual(['a5c1d2e3f4a5b6c7d'])
+  })
+
+  it("does not hand a teammate's spawn result to the shell launched beside it", () => {
+    // 2.1.283 answers a teammate spawn with "Spawned successfully. (This tool
+    // result is internal metadata …)" and `agent_id:` / `name:` lines.
+    const messages = turn(
+      [
+        { name: 'Agent', input: { description: '[teammate]', prompt: '[prompt]', name: 'reviewer', team_name: 'review' } },
+        { name: 'Bash', input: { command: '[command]', description: 'Run the suite', run_in_background: true } }
+      ],
+      [
+        'Spawned successfully. (This tool result is internal metadata — never quote or paste any part of it into a user-facing reply.)\nagent_id: reviewer@review\nname: reviewer',
+        'Command running in background with ID: bq7x2k9mz. Output is being written to: /tmp/bq7x2k9mz.output.'
+      ]
+    )
+
+    expect(deriveBackgroundTasks(messages, now, null).running.map((task) => [task.id, task.title])).toEqual([['bq7x2k9mz', 'Run the suite']])
+  })
+
+  it('keeps a foreground agent’s call pending when a failed Edit before it answers first, in call order', () => {
+    const messages = turn(
+      [{ name: 'Edit', input: { file_path: '/x/a.ts' } }, { name: 'Agent', input: { description: '[audit]', prompt: '[prompt]', subagent_type: 'general-purpose' } }],
+      ['<tool_use_error>String to replace not found in file.</tool_use_error>']
+    )
+
+    expect(readTaskEvidence(messages).pendingAgentCalls.map((call) => call.key)).toEqual(['calls#1'])
+  })
 
   it('lets an Agent call that failed at once answer itself, not a long command beside it', () => {
     const turn: NativeChatMessage[] = [
