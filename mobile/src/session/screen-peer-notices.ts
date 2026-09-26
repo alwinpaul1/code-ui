@@ -30,6 +30,8 @@ export type ScreenPeerNotice = {
   sender: string
   /** The message as the screen painted it, when the row carried one. */
   body?: string
+  /** What the screen painted above the row at the sighting (ScreenPeerRow). */
+  above?: string
   /** The last folded transcript row when first seen; null on an empty chat.
    *  Never a row the phone drew itself: those come and go. */
   anchorId: string | null
@@ -41,9 +43,10 @@ export type ScreenPeerNotice = {
 }
 
 /** One poll's rows are a multiset by sender; a sender's Nth row is that
- *  sender's Nth message. New ones are appended, anchored at `tailId`, and
- *  drawn after `afterId` while it is drawn; the SAME array comes back when
- *  the poll showed nothing new. */
+ *  sender's Nth message, unless what was painted above the rows says the
+ *  earlier ones have scrolled off (newerThanLastKnown). New ones are
+ *  appended, anchored at `tailId`, and drawn after `afterId` while it is
+ *  drawn; the SAME array comes back when the poll showed nothing new. */
 export function observeScreenPeerNotices(
   previous: readonly ScreenPeerNotice[],
   rows: readonly ScreenPeerRow[],
@@ -59,14 +62,16 @@ export function observeScreenPeerNotices(
   }
   let next: ScreenPeerNotice[] | null = null
   for (const [sender, list] of seen) {
-    const known = previous.filter((notice) => notice.sender === sender).length
-    for (let ordinal = known + 1; ordinal <= list.length; ordinal += 1) {
+    const known = previous.filter((notice) => notice.sender === sender)
+    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list))
+    for (let taken = 1; taken <= fresh; taken += 1) {
       next ??= [...previous]
-      const body = list[ordinal - 1]?.body
+      const { body, above } = list[list.length - fresh + taken - 1]!
       next.push({
-        id: `peer-notice:${sender}:${ordinal}`,
+        id: `peer-notice:${sender}:${known.length + taken}`,
         sender,
         ...(body ? { body } : {}),
+        ...(above !== undefined ? { above } : {}),
         anchorId: tailId,
         ...(afterId !== undefined ? { afterId } : {}),
         sightedAt: now
@@ -74,6 +79,34 @@ export function observeScreenPeerNotices(
     }
   }
   return next ?? previous
+}
+
+/**
+ * How many of one sender's rows on the screen came after the last message of
+ * theirs already known, going by what was painted above each row.
+ *
+ * The count alone cannot see a second message once the first has scrolled
+ * off: a subagent's row names only its sender, so one row on screen and one
+ * message known read as nothing new (review of 2026-09-26). The rows below
+ * the last known one on screen are newer. When it is not on screen, every row
+ * is newer, but only if each can be told from every message known: a row too
+ * near the top to read what is above it, or one painted like an older
+ * message (the desk scrolled back), could be one already drawn, so nothing is
+ * taken from this and the count stands.
+ */
+function newerThanLastKnown(known: readonly ScreenPeerNotice[], rows: readonly ScreenPeerRow[]): number {
+  const last = known.at(-1)
+  if (last?.above === undefined) {
+    return 0
+  }
+  const same = (row: ScreenPeerRow, notice: ScreenPeerNotice) => row.above === notice.above && row.body === notice.body
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (same(rows[index]!, last)) {
+      return rows.length - 1 - index
+    }
+  }
+  const told = rows.every((row) => row.above !== undefined && !known.some((notice) => same(row, notice)))
+  return told ? rows.length : 0
 }
 
 /** The folded chat with each notice drawn after its anchor, minus the ones a

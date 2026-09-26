@@ -35,6 +35,25 @@ export type ScreenPeerRow = {
   /** The message as painted, when the row carried it; absent for the
    *  subagent form. */
   body?: string
+  /** The last ABOVE_CHARACTERS characters painted above the row, with every
+   *  space and line break taken out so a rewrap at another width reads the
+   *  same. A subagent's row names only its sender, so this is what tells a
+   *  second message from the same agent from the first once that one has
+   *  scrolled off (screen-peer-notices.ts). Absent for a row too near the top
+   *  of the screen to have that much above it. */
+  above?: string
+}
+
+/** Enough of what came before a row to tell it from another row of the same
+ *  sender: at 46 columns, the last line or two above it. */
+export const ABOVE_CHARACTERS = 48
+
+function paintedAbove(screen: readonly string[], row: number): string | undefined {
+  let text = ''
+  for (let line = row - 1; line >= 0 && text.length < ABOVE_CHARACTERS; line -= 1) {
+    text = (screen[line] ?? '').replaceAll(/\s+/g, '') + text
+  }
+  return text.length >= ABOVE_CHARACTERS ? text.slice(-ABOVE_CHARACTERS) : undefined
 }
 
 /** The marker Claude paints for these rows is `›` (U+203A), not the `❯` of a
@@ -58,8 +77,10 @@ export function peerNoticesFromScreen(screen: readonly string[]): ScreenPeerRow[
       continue
     }
     const sender = head[1]
+    const above = paintedAbove(screen, index)
+    const context = above === undefined ? {} : { above }
     if (head[3]) {
-      found.push({ sender })
+      found.push({ sender, ...context })
       index += 1
       continue
     }
@@ -78,7 +99,7 @@ export function peerNoticesFromScreen(screen: readonly string[]): ScreenPeerRow[
     }
     if (closed) {
       const body = (closed[1] ?? '').replaceAll(/\s+/g, ' ').trim()
-      found.push(body.length > 0 ? { sender, body } : { sender })
+      found.push(body.length > 0 ? { sender, body, ...context } : { sender, ...context })
       index = end + 1
     } else {
       index += 1

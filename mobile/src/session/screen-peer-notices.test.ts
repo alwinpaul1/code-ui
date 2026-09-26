@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
@@ -302,5 +304,68 @@ describe("a subagent's row on a tab with no prompt hook", () => {
     expect(drawn(withScreenPeerNotices(one, seen, { subagentRows: true }))).toEqual(['a1', 'Message from probe'])
     const empty = observeScreenPeerNotices([], [{ sender: 'probe' }], null, 5)
     expect(drawn(withScreenPeerNotices([], empty, { subagentRows: true }))).toEqual(['Message from probe'])
+  })
+})
+
+// Review of 2026-09-26: a sender's rows on the screen were counted, and the
+// Nth row taken as the Nth message. A subagent's row names only its sender,
+// and the first has scrolled off by the time the agent writes again, so the
+// screen shows one row, the count says one is known, and the second message
+// was never drawn. What was painted above each row tells them apart.
+//
+// The screen is the real capture of Claude Code 2.1.278 at 46 columns
+// (fixtures/claude-screen-peer-message-2.1.278.txt; the row is unchanged
+// through 2.1.283, mobile-terminal-peer-notices.ts). The later screen is that
+// capture scrolled past its row, with a second row from the same agent
+// painted the same way at the end of the turn.
+describe('a second message from the same subagent on a tab with no prompt hook', () => {
+  const capture = readFileSync(
+    fileURLToPath(new URL('./fixtures/claude-screen-peer-message-2.1.278.txt', import.meta.url)),
+    'utf8'
+  ).split('\n')
+  const ROW = '› Message from @probe (ctrl+o to expand)'
+  const at = capture.indexOf(ROW)
+  const box = capture.findIndex((line) => line.startsWith('───'))
+  /** The turn after the first row, a second row, and the input box. */
+  const later = [...capture.slice(at + 1, box), '', ROW, '', ...capture.slice(box)]
+  const folded = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('a3', 'assistant', 'three')]
+  const drawn = (rows: readonly NativeChatMessage[]) =>
+    rows.map((message) => (agentMessageOf(message) ? `from ${agentMessageOf(message)!.sender}` : message.id))
+
+  it('is drawn as a second row once the first has scrolled off', () => {
+    // The first row and the reply above it are off this screen.
+    expect(later.filter((line) => line === ROW)).toHaveLength(1)
+    expect(later).not.toContain('  its message arrives.')
+    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
+    const second = observeScreenPeerNotices(first, peerNoticesFromScreen(later), 'a3', 9)
+    expect(drawn(withScreenPeerNotices(folded, second, { subagentRows: true }))).toEqual([
+      'a1',
+      'from probe',
+      'a2',
+      'a3',
+      'from probe'
+    ])
+  })
+
+  it('is not drawn again while the first is still on screen, however far the screen scrolled', () => {
+    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
+    expect(observeScreenPeerNotices(first, peerNoticesFromScreen(capture.slice(8)), 'a3', 9)).toBe(first)
+    const both = observeScreenPeerNotices(first, peerNoticesFromScreen([...capture.slice(0, box), '', ROW, '', ...capture.slice(box)]), 'a3', 9)
+    expect(both.map((notice) => notice.anchorId)).toEqual(['a1', 'a3'])
+    expect(observeScreenPeerNotices(both, peerNoticesFromScreen(later), 'a3', 10)).toBe(both)
+  })
+
+  it('is refused while its row is too near the top of the screen to read what is above it', () => {
+    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
+    const top = later.slice(later.indexOf(ROW) - 1)
+    expect(peerNoticesFromScreen(top)[0]?.above).toBeUndefined()
+    expect(observeScreenPeerNotices(first, peerNoticesFromScreen(top), 'a3', 9)).toBe(first)
+  })
+
+  it('is refused when it reads like an older message than the last one drawn', () => {
+    const first = observeScreenPeerNotices([], peerNoticesFromScreen(capture), 'a1', 5)
+    const second = observeScreenPeerNotices(first, peerNoticesFromScreen(later), 'a3', 9)
+    // The desk scrolled back to the first: nothing new is drawn for it.
+    expect(observeScreenPeerNotices(second, peerNoticesFromScreen(capture), 'a3', 10)).toBe(second)
   })
 })
