@@ -3,6 +3,7 @@ import { isToolCallBlock, isToolResultBlock, isTextBlock, type NativeChatMessage
 import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
 import type { AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { readLaunch, readString, takeAnsweredCall, type PendingCall } from './mobile-background-task-transcript'
+import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
 
 /**
  * A message a subagent sent its lead, drawn the way the desktop TUI draws it:
@@ -63,7 +64,9 @@ const HANDBACK_INDENT = '  '
  *
  * Only Claude Code's own wrapper counts, as the whole prompt: its first line
  * is `<agent-message from="…">` and nothing else, and `</agent-message>` ends
- * it. A prompt that merely starts with the tag, or quotes the first line and
+ * it, or one of the harness's own framing paragraphs follows that tag (a
+ * delivery while the lead is idle, 2026-09-27 review: drawn as the user's
+ * bubble again). A prompt that merely starts with the tag, or quotes the first line and
  * goes on in someone's words, is a person's prompt (review of 2026-09-26: the
  * shared harness classifier matched by the leading tag, and a desk prompt that
  * quoted one was drawn nowhere). `cut`: the hook shortened the prompt, so the
@@ -77,12 +80,16 @@ export function parseSubagentMessage(text: string, options: { cut?: boolean } = 
     return null
   }
   let body = rest.slice(open[0].length)
-  // The wrapper's own closing tag is the one that ends the prompt. A report
-  // may quote the tag, and cutting at the first one dropped everything after
-  // the quote.
+  // The wrapper's own closing tag is the last one. A report may quote the tag,
+  // and cutting at the first one dropped everything after the quote. After it
+  // comes nothing, or one of the paragraphs Claude Code frames a delivery with
+  // (a short message delivered while the lead is idle ends with one); the
+  // same test its own display function makes (claude-peer-message-frames.ts).
   const whole = body.trimEnd()
-  if (whole.endsWith(CLOSE_TAG)) {
-    body = whole.slice(0, whole.length - CLOSE_TAG.length)
+  const close = whole.lastIndexOf(CLOSE_TAG)
+  const after = close === -1 ? null : whole.slice(close + CLOSE_TAG.length)
+  if (after !== null && (after === '' || PEER_TRAILING_FRAMES.includes(after))) {
+    body = whole.slice(0, close)
   } else if (options.cut !== true) {
     return null
   }
