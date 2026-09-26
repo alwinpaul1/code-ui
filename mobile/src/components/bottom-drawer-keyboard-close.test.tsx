@@ -1,6 +1,6 @@
 // Review of a81dfa20 (2026-09-26), failing there: a sheet that travels only
 // its own height on close left the part the keyboard had lifted on screen.
-import { cloneElement, createElement, type ReactElement } from 'react'
+import { cloneElement, createElement, type ComponentProps, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +20,7 @@ vi.mock('react-native', () => ({
   },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Keyboard: {
-    addListener: (name: string, fn: (event: never) => void) => {
+    addListener: (name: string, fn: (event: { endCoordinates: { height: number }; duration: number }) => void) => {
       keyboard.listeners.set(name, fn)
       return { remove: () => keyboard.listeners.delete(name) }
     },
@@ -120,7 +120,6 @@ vi.mock('./bottom-drawer-modal-host', () => ({
 import { MountedBottomDrawer as Drawer } from './mounted-bottom-drawer'
 import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
-const WINDOW = 956
 /** A rename / password sheet: handle, title, one field, two buttons. */
 const SHEET = 280
 /** Gboard / Samsung keyboard on a 412 dp wide phone. */
@@ -146,11 +145,8 @@ let visibleProp = true
 const onClose = () => {}
 const onHidden = () => {}
 function element(fillAvailable: boolean): ReactElement {
-  return createElement(
-    Drawer,
-    { visible: visibleProp, onClose, onHidden, fillAvailable },
-    createElement('View', { testID: 'field' })
-  )
+  const props = { visible: visibleProp, onClose, onHidden, fillAvailable } as unknown as ComponentProps<typeof Drawer>
+  return createElement(Drawer, props, createElement('View', { testID: 'field' }))
 }
 
 function flatten(style: unknown): Record<string, unknown> {
@@ -205,7 +201,7 @@ function fire(name: 'keyboardDidShow' | 'keyboardDidHide', height: number): void
 
 function tapBackdrop(): void {
   const backdrop = renderer!.root.findAll(
-    (node) => typeof node.type === 'string' && node.type === 'Pressable' && typeof node.props.onPress === 'function'
+    (node) => (node.type as unknown) === 'Pressable' && typeof node.props.onPress === 'function'
   )[0]
   expect(backdrop, 'backdrop pressable').toBeDefined()
   act(() => backdrop!.props.onPress())
