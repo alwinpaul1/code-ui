@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
 import { colors } from '../theme/mobile-theme'
+import { lightColors, type ThemeScheme } from '../theme/tokens'
 
 /** One numbered source line: the gutter in its own column, then the line's
  *  coloured segments beside it. A row, not one Text with the number as a span:
@@ -82,11 +83,24 @@ const lineStyles = StyleSheet.create({
   }
 })
 
-export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
+/**
+ * A line's coloured segments. `scheme` picks the palette for the surface underneath, not the app's
+ * appearance: the session file reader, diffs and fenced blocks draw on the static dark editor
+ * surface in both themes, so they keep the default. The file preview's source text sits on the
+ * themed page and passes the live scheme.
+ */
+export function MobileSyntaxSegments({
+  segments,
+  scheme = 'dark'
+}: {
+  segments: MobileSyntaxSegment[]
+  scheme?: ThemeScheme
+}) {
+  const tokenStyles = scheme === 'light' ? lightSyntaxTokenStyles : syntaxTokenStyles
   return (
     <>
       {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
+        <Text key={`${index}:${segment.kind}`} style={tokenStyles[segment.kind]}>
           {segment.text}
         </Text>
       ))}
@@ -121,5 +135,52 @@ const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.c
   },
   meta: {
     color: colors.syntaxMeta
+  }
+})
+
+/**
+ * The same token kinds for a light surface. VS Code's Light+ hues, darkened where Light+ falls under
+ * 4.5:1 on the warm canvas (its number and type greens and teal measure 4.1:1 on #F3F1EA). Every
+ * one clears 4.5:1 on lightColors.bg, codeBg and bgPanel (mobile-file-preview-light-dark.test.tsx
+ * measures them on the page it is drawn on).
+ */
+const LIGHT_SYNTAX = {
+  comment: '#34702A',
+  keyword: '#1A4FD6',
+  string: '#A31515',
+  number: '#0B6E4F',
+  type: '#1F6A80',
+  function: '#795E26',
+  variable: '#1F3A93',
+  meta: '#8E24AA'
+} as const
+
+const lightSyntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
+  plain: {
+    color: lightColors.text
+  },
+  comment: {
+    color: LIGHT_SYNTAX.comment
+  },
+  keyword: {
+    color: LIGHT_SYNTAX.keyword
+  },
+  string: {
+    color: LIGHT_SYNTAX.string
+  },
+  number: {
+    color: LIGHT_SYNTAX.number
+  },
+  type: {
+    color: LIGHT_SYNTAX.type
+  },
+  function: {
+    color: LIGHT_SYNTAX.function
+  },
+  variable: {
+    color: LIGHT_SYNTAX.variable
+  },
+  meta: {
+    color: LIGHT_SYNTAX.meta
   }
 })

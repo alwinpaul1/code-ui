@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import Pdf from 'react-native-pdf'
 import { Check, Download } from 'lucide-react-native'
-import { useTheme } from '../theme/theme-context'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { filePreviewStyles } from './mobile-file-preview-styles'
 import { savePreviewedPdf } from './mobile-pdf-download-device'
 import type { MobilePdfDownloadOutcome } from './mobile-pdf-download'
 import { saveReadingPosition } from '../storage/reading-positions'
@@ -29,6 +29,7 @@ export function MobileFilePdfPreview({
   readingPositionKey?: string | null
 }) {
   const { colors } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
   const [pageCount, setPageCount] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const restored = useRestoredReadingPosition(readingPositionKey)

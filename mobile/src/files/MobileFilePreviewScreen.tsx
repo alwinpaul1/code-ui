@@ -34,7 +34,7 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStyles } from './mobile-file-preview-styles'
 import { filePreviewHeaderStyles } from './mobile-file-preview-header-styles'
 import { useMobileFileSaveToPhone } from './use-mobile-file-save-to-phone'
 import { readingPositionKey } from '../storage/reading-positions'
@@ -62,6 +62,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const draftSourceKeyRef = useRef<string | null>(null)
   const { width, height } = useWindowDimensions()
   const { colors } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
   const headerStyles = useThemedStyles(filePreviewHeaderStyles)
   const saveToPhone = useMobileFileSaveToPhone()
   const routePreviewSource = useMemo(

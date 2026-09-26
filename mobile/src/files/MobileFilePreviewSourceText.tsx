@@ -4,7 +4,8 @@ import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { formatPreviewByteLength } from './mobile-file-preview-request'
 import { scrollOffsetForPreviewLine } from './mobile-file-preview-line-column'
 import { buildMobileFilePreviewSyntax } from './mobile-file-preview-syntax'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStyles } from './mobile-file-preview-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 export function MobileFilePreviewSourceText({
   relativePath,
@@ -19,6 +20,8 @@ export function MobileFilePreviewSourceText({
   byteLength?: number
   initialLine?: number
 }) {
+  const { scheme } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
   const scrollRef = useRef<ScrollView>(null)
   const revealedRef = useRef(false)
   const syntax = useMemo(
@@ -52,7 +55,7 @@ export function MobileFilePreviewSourceText({
         <MobileFilePreviewTruncatedNote byteLength={byteLength ?? content.length} />
       ) : null}
       <Text selectable style={styles.textPreview} accessibilityLabel="File preview">
-        <MobileSyntaxSegments segments={syntax.segments} />
+        <MobileSyntaxSegments segments={syntax.segments} scheme={scheme} />
       </Text>
     </ScrollView>
   )
@@ -68,6 +71,7 @@ export function MobileFilePreviewTruncatedNote({
   byteLength: number
   style?: StyleProp<TextStyle>
 }) {
+  const styles = useThemedStyles(filePreviewStyles)
   return (
     <Text style={[styles.truncatedNote, style]}>
       Preview truncated. File size: {formatPreviewByteLength(byteLength)}.
