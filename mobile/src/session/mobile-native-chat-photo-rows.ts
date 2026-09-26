@@ -1,5 +1,6 @@
 import { isImageRefBlock, isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { PendingImagePreviewEcho } from './mobile-native-chat-draft-reconcile'
+import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 
 // Which row is a photo send's, for findLandedImagePreviewEchoes: by the
 // paths the send pasted where the row names them, and otherwise by the rules
@@ -116,5 +117,27 @@ export function writtenBefore(
     message.timestamp !== null &&
     newestStamp !== null &&
     newestStamp - message.timestamp > now - entry.sentAt + SEND_ROW_ORDER_SLACK_MS
+  )
+}
+
+/** Whether a row carries a photo at all: an image block, or an `[Image #N]`
+ *  marker its words carried before its companion landed. */
+export function carriesPhoto(message: NativeChatMessage, raw: NativeChatMessage | undefined): boolean {
+  return (
+    message.blocks.some(isImageRefBlock) ||
+    (raw ?? message).blocks.some((block) => isTextBlock(block) && new RegExp(IMAGE_PROMPT_MARKERS.source).test(block.text))
+  )
+}
+
+/** Whether the send's own row will name the paths it pasted in a form the
+ *  phone reads: each is an Orca paste on a macOS host
+ *  (`/var/folders/…/T/orca-paste-<ms>-<uuid>.<ext>`), which the agent's
+ *  `[Image: source: …]` companion (Claude Code) or image block (Codex)
+ *  carries as written. Read off the send, since the rows loaded so far may
+ *  hold no photo at all. */
+export function rowWillNamePastedPhotos(entry: { images?: readonly string[]; imagePaths?: readonly string[] }): boolean {
+  return (
+    pastedPhotos(entry) !== null &&
+    entry.imagePaths!.every((path) => splitOrcaPastedImagePaths(path).paths.length === 1)
   )
 }

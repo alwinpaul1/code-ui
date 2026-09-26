@@ -1,5 +1,6 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
+import { carriesPhoto, pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
+import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -73,6 +74,9 @@ export type PendingImagePreviewEcho = {
   sentBeforeReadSettled?: boolean
   /** The desktop paths the send pasted, one per preview in `images`. */
   imagePaths?: string[]
+  /** False for a send whose tail was never resolved against this chat's
+   *  read: only the path rule binds it, since the others go by that tail. */
+  baselineResolved?: boolean
 }
 
 const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
@@ -124,6 +128,14 @@ function imagePreviewReplacementMessageId(
     nextIndex++
   }
   const prompt = messages[nextIndex]
+  // A prompt with a companion of its own right after it is another message:
+  // this run trails the prompt before the window, as the chat draws it
+  // (keepWindowStartRun), and moved here it gave that prompt the first
+  // message's photos (review of becd6af2).
+  const after = messages[nextIndex + 1]
+  if (after?.source === source.source && isImageSourceUserTurn(after)) {
+    return null
+  }
   return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
     ? prompt.id
     : null
@@ -220,7 +232,11 @@ export function findLandedImagePreviewEchoes(
   // is that send's, wherever it sits and whatever its stamp, and a row naming
   // only others is not. The rules below guess only among rows that name no
   // photo yet: a prompt row whose companion has not landed, or a host whose
-  // rows never name one.
+  // rows never name one. The path rule reads the rows as the chat draws them:
+  // a companion the loaded window starts with stays on its own there
+  // (foldQueuedImageTurns), and folded into the next prompt it gave that
+  // prompt the first message's photos (review of becd6af2).
+  const drawnRows = normalizeImageTranscriptMessages(foldQueuedImageTurns([...messages]))
 
   for (const entry of entries) {
     if (!entry.images?.length) {
@@ -228,7 +244,7 @@ export function findLandedImagePreviewEchoes(
     }
     const pasted = pastedPhotos(entry)
     if (pasted) {
-      const own = normalized.find(
+      const own = drawnRows.find(
         (message) => message.role === 'user' && photoNames(message).some((name) => pasted.has(name))
       )
       if (own) {
@@ -237,6 +253,9 @@ export function findLandedImagePreviewEchoes(
         landed.push({ pendingId: entry.id, messageId: own.id, images })
         continue
       }
+    }
+    if (entry.baselineResolved === false) {
+      continue
     }
     const targetText = normalizeNativeChatUserText(entry.text)
     const full = (message: NativeChatMessage) =>
@@ -251,6 +270,12 @@ export function findLandedImagePreviewEchoes(
       // (2026-09-26, Claude Code 2.1.283: an older photo row took a photo
       // sent with no words, and the send's own row drew "Image on Desktop").
       if (pasted && photoNames(message).length > 0) {
+        return false
+      }
+      // A row with no photo in it is not a photo send's row, whatever its
+      // words (review of becd6af2: a photo Claude took mid-turn, which gets
+      // no row, went to a later "yes" sent alone).
+      if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
         return false
       }
       if (targetText) {

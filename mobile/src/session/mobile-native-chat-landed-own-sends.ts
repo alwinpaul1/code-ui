@@ -8,6 +8,7 @@ import {
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
+import { pastedPhotos } from './mobile-native-chat-photo-rows'
 
 const NO_PREVIEWS: LandedImagePreviewEcho[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
@@ -116,7 +117,12 @@ export function previewsAsDrawn(
   const kept = stored ?? NO_STORED_PREVIEWS
   const migrated = migrateImagePreviewMessageIds({ [sessionKey]: kept }, sessionKey, messages)
   const held = new Set((settled?.rebased ?? []).map((item) => item.id))
-  const notReadBack = (written ?? []).filter((item) => item.baselineResolved && !held.has(item.id))
+  // A send made before the read settled was never rebased; only its pasted
+  // paths can bind it, and the binder asks nothing else of it (review of
+  // becd6af2: its row drew "Image on Desktop" in the first frame back).
+  const notReadBack = (written ?? []).filter(
+    (item) => (item.baselineResolved || pastedPhotos(item) !== null) && !held.has(item.id)
+  )
   const landed = [
     ...(settled?.landedImagePreviews ?? NO_PREVIEWS),
     ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack, kept) : NO_PREVIEWS)

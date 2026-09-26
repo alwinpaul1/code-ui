@@ -760,6 +760,126 @@ describe('a message the phone sent with photos, as its row lands', () => {
   // `local_image` with the host path beside the `[Image #1]` in the words
   // (rollout 01a07632-429d, 2026-09-06, ordinal 269), which Orca's reader turns
   // into an image block with that path.
+  // Review of becd6af2 (2026-09-26), each probe failing on it.
+  describe('what the review of the path rule found', () => {
+    const reply2 = agentRow('r2r2r2r2', 'Both photos seen.', '07:00:40.000')
+
+    // The tail page can start between a photo prompt and its companion. The
+    // chat keeps that companion on its own (keepWindowStartRun); the binder
+    // folded it into the next prompt, whose path rule then took the first
+    // message's photos for it.
+    it('draws the second photo message with its own photos when the chat comes back on a window that starts at the first one’s companion', async () => {
+      await show('07:00:00.000', { messages: before })
+      await send('07:00:18.000', TEXT1, PHOTOS1)
+      await send('07:00:19.000', TEXT2, PHOTOS2)
+      act(() => renderer?.unmount())
+      renderer = null
+      const back = frames.length
+      const P2b = promptRow('e96491cb', 70, 3, TEXT2, '07:00:20.100')
+      const C2b = companionRow('394fac0f', PATHS2, '07:00:20.100')
+      await show('07:05:00.000', { messages: [C1, P2b, C2b, reply2] })
+      for (const frame of framesFrom(back)) {
+        expect(drawing(frame, TEXT2)).toEqual([expect.objectContaining({ images: 'PPP' })])
+      }
+      const drawn = frames.at(-1)!.imagePreviewsByMessageId as Record<string, string[]>
+      expect(drawn['e96491cb']).toEqual(PHOTOS2)
+    })
+
+    it('never hands a photo pasted at the desk the phone’s photos when the window starts at a phone photo’s companion', async () => {
+      await show('07:00:00.000', { messages: before })
+      await send('07:00:18.000', TEXT1, PHOTOS1)
+      act(() => renderer?.unmount())
+      renderer = null
+      const desk = promptRow('deskdesk', 70, 1, 'pasted at the desk', '07:00:20.100')
+      const deskCompanion = companionRow('deskcomp', PATHS2.slice(0, 1), '07:00:20.100')
+      await show('07:05:00.000', { messages: [C1, desk, deskCompanion, reply2] })
+      expect(drawing(lastFrame(), 'pasted at the desk')).toEqual([{ id: 'deskdesk', images: 'D', text: 'pasted at the desk' }])
+    })
+
+    // The store had not read the send back when the chat came back, and the
+    // waiting copy of a send made before the read settled was skipped.
+    it.each([
+      ['with no words', ''],
+      ['with words', 'what is this']
+    ])('keeps the phone’s photo in the first frame back, for a photo %s sent before the read settled whose row landed while away', async (_label, body) => {
+      const earlier = [agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000')]
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: earlier, loading: true })
+      await send('09:30:03.500', body, ['file:///phone/p17.jpg'])
+      act(() => renderer?.unmount())
+      renderer = null
+      await act(async () => {
+        await Promise.resolve()
+      })
+      const back = frames.length
+      const mine = promptRow('add90135', 17, 1, body, '09:30:03.923')
+      const C17 = companionRow('344189e5', PATHS1.slice(0, 1), '09:30:03.923')
+      const reply = agentRow('d4f3162c', 'Here is what the photo shows.', '09:30:13.156')
+      await show('09:31:00.000', { messages: [...earlier, mine, C17, reply] })
+      for (const frame of framesFrom(back)) {
+        expect(frame.filter((bubble) => bubble.images.includes('D'))).toEqual([])
+      }
+      expect(lastFrame()).toEqual([{ id: 'add90135', images: 'P', text: body }])
+    })
+
+    // A captioned photo retired by the words of an older row, before its own
+    // row landed: its photo was bound nowhere, and its row drew the chip.
+    it.each([
+      [
+        'a photo row',
+        [
+          agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000'),
+          promptRow('old1old1', 16, 1, 'what about this one', '08:43:47.644'),
+          companionRow('old2old2', PATHS2.slice(0, 1), '08:43:47.644'),
+          agentRow('0b0bbe84', 'That one is fine.', '08:44:10.000')
+        ],
+        'D'
+      ],
+      [
+        'a row of words alone',
+        [
+          agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000'),
+          userRow('old1old1', ['what about this one'], '08:43:47.644'),
+          agentRow('0b0bbe84', 'That one is fine.', '08:44:10.000')
+        ],
+        ''
+      ]
+    ])('keeps a captioned photo sent before the read settled for its own row, when the settled read holds only %s with its words', async (_label, older, olderImages) => {
+      const mine = promptRow('new1new1', 17, 1, 'what about this one', '09:30:04.300')
+      const C17 = companionRow('344189e5', PATHS1.slice(0, 1), '09:30:04.300')
+      vi.setSystemTime(at('09:29:00.000'))
+      await show('09:29:00.000', { messages: [], loading: true })
+      await send('09:30:03.500', 'what about this one', ['file:///phone/p17.jpg'])
+      const sent = frames.length
+      await show('09:30:03.900', { messages: older, working: true })
+      await show('09:30:04.500', { messages: [...older, mine, C17], working: true })
+      for (const frame of framesFrom(sent)) {
+        expect(frame.filter((bubble) => bubble.id === 'new1new1' && bubble.images.includes('D'))).toEqual([])
+      }
+      expect(lastFrame()).toEqual([
+        { id: 'old1old1', images: olderImages, text: 'what about this one' },
+        { id: 'new1new1', images: 'P', text: 'what about this one' }
+      ])
+    })
+
+    // A photo Claude took mid-turn has no row of its own; a later message of
+    // the same words, with no photo in it, is not its row.
+    it('keeps a photo Claude took mid-turn off a later row of the same words with no photo in it', async () => {
+      const working = [...before, agentRow('080e05a3', 'Looking at the fold.', '07:03:19.619')]
+      vi.setSystemTime(at('07:03:20.000'))
+      await show('07:03:20.000', { messages: working, working: true })
+      await send('07:03:54.000', 'yes', ['file:///phone/taken.jpg'], [`${TEMP}/orca-paste-1790406034000-11111111-2222-4333-8444-555555555555.png`])
+      await show('07:03:55.000', { messages: working, working: true, queued: queuedMessagesFromScreen(claudeScreen(['[Image #73] yes'])) })
+      const tookIt = [...working, agentRow('33806c18', 'Took it.', '07:04:32.916')]
+      await show('07:04:36.000', { messages: tookIt, working: true, queued: [] })
+      const ended = [...tookIt, agentRow('a392b851', 'Done.', '07:05:12.454')]
+      await show('07:05:13.000', { messages: ended, queued: [] })
+      await send('07:06:00.000', 'yes', [])
+      await show('07:06:01.000', { messages: [...ended, userRow('yesyesye', ['yes'], '07:06:00.300')] })
+      expect(lastFrame().find((bubble) => bubble.id === 'yesyesye')).toEqual({ id: 'yesyesye', images: '', text: 'yes' })
+    })
+  })
+
   it('never draws the phone’s own photo as Image on Desktop on Codex either, as its row lands', async () => {
     const codexBefore = [agentRow('msg_01a07664-a8ff', 'Models load from the agent now.', '07:00:00.500')]
     await show('07:00:01.000', { messages: codexBefore, agent: 'codex' })

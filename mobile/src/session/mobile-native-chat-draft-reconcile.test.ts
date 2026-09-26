@@ -212,6 +212,16 @@ describe('the phone’s photos, bound by the paths it pasted', () => {
     ])
   })
 
+  // A send made before the chat's read settled and not yet rebased onto it
+  // (the chat's first frame back, previewsAsDrawn) has a tail from another
+  // read; only its paths may bind it.
+  it('binds a send never rebased onto this chat’s read only by the paths it pasted', () => {
+    const older = userText('older', '[Image #16] look')
+    const send = { ...sent('p', ['file:///p17.jpg'], [MINE], 'look'), baselineResolved: false }
+    expect(findLandedImagePreviewEchoes([older], [send])).toEqual([])
+    expect(findLandedImagePreviewEchoes([...rowsOf('mine', [MINE], 'look')], [send]).map((item) => item.messageId)).toEqual(['mine'])
+  })
+
   it('binds nothing for an empty transcript, and nothing for a send with no photo', () => {
     expect(findLandedImagePreviewEchoes([], [sent('p', ['file:///p17.jpg'], [MINE])])).toEqual([])
     expect(findLandedImagePreviewEchoes(rowsOf('mine', [MINE]), [sent('p', [], [])])).toEqual([])

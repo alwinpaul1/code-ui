@@ -5,6 +5,7 @@ import {
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { rowWillNamePastedPhotos } from './mobile-native-chat-photo-rows'
 
 const SPACE = ' '
 /** How long before, and after, the phone saw a taken send leave the queue box
@@ -311,6 +312,13 @@ export function retireLandedMobileNativeChatPending(
     // caption-less photo still waits, since it has no text to be sure by.
     const captioned = item.text.trim() !== ''
     if (item.images?.length && !captioned) {
+      continue
+    }
+    // A photo send whose own row will name the paths it pasted retires when
+    // that row binds it. Retired by an older row of the same words before its
+    // own landed, its photo was bound nowhere and its row drew "Image on
+    // Desktop" (review of becd6af2).
+    if (item.images?.length && rowWillNamePastedPhotos(item)) {
       continue
     }
     const key = normalizeReconcileText(item.text)
