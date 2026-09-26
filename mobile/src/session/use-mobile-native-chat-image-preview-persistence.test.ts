@@ -30,6 +30,13 @@ describe('useMobileNativeChatImagePreviewPersistence', () => {
     })
   }
 
+  /** The same chat showing another session: a tab switch. */
+  async function switchTo(sessionKey: string | null): Promise<void> {
+    await act(async () => {
+      renderer?.update(createElement(Harness, { sessionKey }))
+    })
+  }
+
   beforeEach(async () => {
     vi.useFakeTimers()
     await AsyncStorage.clear()
@@ -134,6 +141,59 @@ describe('useMobileNativeChatImagePreviewPersistence', () => {
     })
     expect(previews.s1).toEqual({ m1: ['file:///old.jpg'], m3: ['file:///new.jpg'] })
     read.mockRestore()
+  })
+
+  // Review, 2026-09-26. A read that came back after a tab switch was dropped,
+  // and the switch had already written the session's map, with only the new
+  // photo in it, over the stored entry: the older photos were gone for good.
+  it('keeps the older photos when the tab is switched away and back before the read lands', async () => {
+    const entry = `orca:chatImagePreviews:${encodeURIComponent('s1')}`
+    await AsyncStorage.setItem(entry, JSON.stringify({ m1: ['file:///old.jpg'] }))
+    let answer: (raw: string | null) => void = () => {}
+    const realGetItem = AsyncStorage.getItem.bind(AsyncStorage)
+    const read = vi
+      .spyOn(AsyncStorage, 'getItem')
+      .mockImplementationOnce(() => new Promise<string | null>((resolve) => (answer = resolve)))
+      .mockImplementation(realGetItem)
+    await mount('s1')
+    act(() => setPreviews((previous) => ({ ...previous, s1: { ...previous.s1, m3: ['file:///new.jpg'] } })))
+    await switchTo('s2')
+    await act(async () => {
+      answer(JSON.stringify({ m1: ['file:///old.jpg'] }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    await switchTo('s1')
+    await act(async () => {
+      vi.advanceTimersByTime(1_000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(previews.s1).toEqual({ m1: ['file:///old.jpg'], m3: ['file:///new.jpg'] })
+    expect(JSON.parse((await realGetItem(entry))!)).toEqual({ m1: ['file:///old.jpg'], m3: ['file:///new.jpg'] })
+    read.mockRestore()
+  })
+
+  // The previous run's copy is written 600 ms after the entry, so a run that
+  // ends inside that window leaves the copy one change behind the record.
+  it('lets the stored entry, not the previous run’s copy, decide a message both name', async () => {
+    await saveNativeChatImagePreviews('s1', { m1: ['file:///first.jpg'] })
+    await act(async () => {
+      vi.advanceTimersByTime(1_000)
+      await Promise.resolve()
+    })
+    await AsyncStorage.setItem(
+      `orca:chatImagePreviews:${encodeURIComponent('s1')}`,
+      JSON.stringify({ m1: ['file:///rebound.jpg'] })
+    )
+    resetNativeChatImagePreviewCacheForTests()
+    await hydrateNativeChatImagePreviewCache()
+    await mount('s1')
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(previews.s1).toEqual({ m1: ['file:///rebound.jpg'] })
   })
 
   it('removes the stored entry once a session has no file previews left', async () => {

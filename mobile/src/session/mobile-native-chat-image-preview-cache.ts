@@ -16,10 +16,13 @@ import { createPersistedMap } from './session-cache-persistence'
  * the phone had sent in the chat was drawn as "Image on Desktop" (2026-09-26).
  *
  * The per-session entries in storage stay the record. This holds what was
- * last written or read for each session in this run, and the most recent
- * sessions' previews for the next one, the same twelve a transcript is kept
- * for. Only what storage keeps is held: `data:` previews are left out there.
+ * last written or read for the sessions of this run, `data:` previews (a
+ * marked-up photo, a clipboard paste) included, for as many sessions as the
+ * draft store keeps previews for while mounted. For the next run it keeps the
+ * most recent sessions' previews as storage keeps them, without `data:`, the
+ * same twelve a transcript is kept for.
  */
+const RUN_SESSIONS = 8
 const RECENT_SESSIONS = 12
 
 const lastKnown = new Map<string, Record<string, string[]>>()
@@ -40,17 +43,37 @@ export function nativeChatImagePreviewsSettledThisRun(sessionKey: string): boole
 }
 
 function remember(sessionKey: string, previews: Record<string, string[]>): void {
+  lastKnown.delete(sessionKey)
   lastKnown.set(sessionKey, previews)
-  recent.set(sessionKey, previews)
+  for (const oldest of lastKnown.keys()) {
+    if (lastKnown.size <= RUN_SESSIONS) {
+      break
+    }
+    lastKnown.delete(oldest)
+  }
+  recent.set(sessionKey, persistableImagePreviews(previews))
 }
 
-/** Writes a session's previews to storage, and remembers what storage keeps. */
-export function saveNativeChatImagePreviews(
+/**
+ * Writes a session's previews to storage, and remembers them.
+ *
+ * A session this run never read may hold photos in storage the map being
+ * written never saw: a photo landed, then the tab changed, before the chat's
+ * read came back. Writing the map alone replaced the entry and lost them for
+ * good (review, 2026-09-26), so such a write goes on top of what storage has.
+ */
+export async function saveNativeChatImagePreviews(
   sessionKey: string,
   previews: Record<string, string[]>
 ): Promise<void> {
-  remember(sessionKey, persistableImagePreviews(previews))
-  return writeNativeChatImagePreviews(sessionKey, previews)
+  if (lastKnown.has(sessionKey)) {
+    remember(sessionKey, previews)
+    return writeNativeChatImagePreviews(sessionKey, previews)
+  }
+  const stored = await readNativeChatImagePreviews(sessionKey)
+  const merged = stored ? { ...stored, ...lastKnown.get(sessionKey), ...previews } : previews
+  remember(sessionKey, merged)
+  return writeNativeChatImagePreviews(sessionKey, merged)
 }
 
 /** Reads a session's previews from storage, and remembers them unless this

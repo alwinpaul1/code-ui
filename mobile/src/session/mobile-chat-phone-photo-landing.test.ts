@@ -396,12 +396,34 @@ describe('a message the phone sent with photos, as its row lands', () => {
       act(() => renderer?.unmount())
       renderer = null
       if (relaunch) {
-        await act(async () => {
-          await Promise.resolve()
-        })
+        // The run goes on long enough for its writes to land, then ends.
+        for (let turn = 0; turn < 3; turn += 1) {
+          await act(async () => {
+            vi.advanceTimersByTime(1_000)
+            await Promise.resolve()
+          })
+        }
         resetNativeChatImagePreviewCacheForTests()
         await hydrateNativeChatImagePreviewCache()
       }
+      const back = frames.length
+      await show('07:05:00.000', { messages: [...before, P1, C1, reply1] })
+      expect(frames.length).toBeGreaterThan(back)
+      for (const frame of framesFrom(back)) {
+        expect(frame).toEqual([{ id: '40b55aba', images: 'PPP', text: words(TEXT1) }])
+      }
+    })
+
+    // A marked-up photo, or a clipboard paste with no file, is a `data:`
+    // preview, which storage leaves out for its size cap (review, 2026-09-26).
+    it('keeps a marked-up photo a picture in the first frame after the chat comes back in the same run', async () => {
+      const marked = ['data:image/png;base64,AAAA', 'data:image/png;base64,BBBB', 'data:image/png;base64,CCCC']
+      await show('07:00:00.000', { messages: before })
+      await send('07:00:18.000', TEXT1, marked)
+      await show('07:00:20.000', { messages: [...before, P1, C1], working: true })
+      await show('07:00:21.000', { messages: [...before, P1, C1, reply1] })
+      act(() => renderer?.unmount())
+      renderer = null
       const back = frames.length
       await show('07:05:00.000', { messages: [...before, P1, C1, reply1] })
       expect(frames.length).toBeGreaterThan(back)
