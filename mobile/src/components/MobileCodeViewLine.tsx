@@ -51,7 +51,12 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
 }) {
   return (
     <View style={[styles.row, rowStyle, highlighted && highlightStyle]}>
-      <Text selectable={false} style={styles.gutter} onLongPress={onLongPress} onPress={onPress}>
+      <Text
+        selectable={false}
+        style={highlighted ? [styles.gutter, styles.gutterSelected] : styles.gutter}
+        onLongPress={onLongPress}
+        onPress={onPress}
+      >
         {String(number).padStart(gutterDigits, ' ')}
       </Text>
       <View style={styles.code}>

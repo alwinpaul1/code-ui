@@ -286,23 +286,26 @@ describe('selecting lines in the file reader to ask about them', () => {
     act(() => noHandlerRenderer?.unmount())
   })
 
-  it('paints the selection highlight with the light-mode accent-soft token', () => {
+  // The fill is the code palette's, not accentSoft: on accentSoft the dark
+  // comment green and the line numbers fell under 4.5:1
+  // (mobile-session-file-reader-selected-line-contrast.test.tsx).
+  it('paints the selection highlight with the light code palette\'s selection fill', () => {
     scheme = 'light'
     ;({ renderer } = renderFile(THREE_LINES))
     act(() => {
       lineElement(renderer!, 0).props.onLongPress()
     })
     const highlighted = lineElement(renderer!, 0)
-    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: THEME_COLORS.light.accentSoft })
+    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: lightSyntaxPalette.selection })
   })
 
-  it('paints the selection highlight with the dark-mode accent-soft token', () => {
+  it('paints the selection highlight with the dark code palette\'s selection fill', () => {
     scheme = 'dark'
     ;({ renderer } = renderFile(THREE_LINES))
     act(() => {
       lineElement(renderer!, 0).props.onLongPress()
     })
     const highlighted = lineElement(renderer!, 0)
-    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: THEME_COLORS.dark.accentSoft })
+    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: darkSyntaxPalette.selection })
   })
 })

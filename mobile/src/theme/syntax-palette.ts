@@ -8,6 +8,12 @@ export type SyntaxPalette = Record<MobileSyntaxTokenKind, string> & {
   surface: string
   gutter: string
   indentGuide: string
+  /** The fill behind a line selected to ask about. Every role and
+   *  `gutterActive` stay at 4.5:1 on it (a selected row read 3.7:1). */
+  selection: string
+  /** A selected line's number: Monaco's editorLineNumber.activeForeground,
+   *  which is how the desktop marks its current line. */
+  gutterActive: string
 }
 
 /** Every role a code span can take, for tests that walk the palette. */
@@ -24,6 +30,10 @@ export const darkSyntaxPalette: SyntaxPalette = {
   surface: '#1E1C19',
   gutter: '#858585',
   indentGuide: '#404040',
+  // The accent at 8% over the surface. accentSoft (about 17%) put Dark+'s
+  // comment green at 4.11:1 and the line numbers at 3.71:1.
+  selection: '#2D241F',
+  gutterActive: '#C6C6C6',
   plain: '#D4D4D4',
   comment: '#6A9955',
   keyword: '#569CD6',
@@ -53,6 +63,9 @@ export const lightSyntaxPalette: SyntaxPalette = {
   surface: '#FBFAF6',
   gutter: '#237893',
   indentGuide: '#D3D3D3',
+  // accentSoft: every role reads on it; only the line numbers did not (4.03:1).
+  selection: '#F4E3DA',
+  gutterActive: '#0B216F',
   plain: '#1E1C19',
   comment: '#007000',
   keyword: '#0000FF',

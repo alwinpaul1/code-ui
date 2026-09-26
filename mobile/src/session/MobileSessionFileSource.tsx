@@ -35,7 +35,7 @@ export function MobileSessionFileSource({
   relativePath: string
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
-  const { colors } = useTheme()
+  const { syntax } = useTheme()
   const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
   const [lineSelection, setLineSelection] = useState<FileReaderLineSelection>(null)
   // A freshly opened file starts with nothing selected — otherwise a
@@ -44,7 +44,9 @@ export function MobileSessionFileSource({
     setLineSelection(null)
   }, [relativePath])
   const selectedRange = fileReaderLineSelectionRange(lineSelection)
-  const highlightStyle = useMemo(() => ({ backgroundColor: colors.accentSoft }), [colors.accentSoft])
+  // The code palette's own fill: every code colour and the selected line's
+  // number read on it at 4.5:1 in both schemes (syntax-palette.ts).
+  const highlightStyle = useMemo(() => ({ backgroundColor: syntax.selection }), [syntax.selection])
   // An empty file has nothing to ask about. A pretty-printed JSON file's line
   // numbers are not the file's, so a range from it would point the agent at
   // lines that do not exist: no selection there either.

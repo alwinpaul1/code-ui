@@ -57,6 +57,9 @@ export function makeCodeViewStyles(theme: Pick<Theme, 'colors' | 'syntax' | 'fon
       textAlign: 'right',
       color: syntax.gutter
     },
+    gutterSelected: {
+      color: syntax.gutterActive
+    },
     code: {
       flex: 1,
       minWidth: 0
