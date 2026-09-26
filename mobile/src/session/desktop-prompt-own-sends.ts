@@ -69,10 +69,32 @@ function holdsItsOwnPlace(item: PendingCopy): boolean {
  *  characters and says when it cut one). A photo sent with no words has no
  *  key, and the hook reports it as its markers alone, `[Image #17]`: as many
  *  of them as it has photos (third review, 2026-09-26: never paired, the hook
- *  copy stood beside the phone's photo as an "Image on Desktop" bubble). */
-function reports(prompt: DesktopPrompt, promptKey: string, copyKey: string, photos: number): boolean {
+ *  copy stood beside the phone's photo as an "Image on Desktop" bubble). A
+ *  photo pasted at the desk with no words reads the same, so that copy is
+ *  the send's only when the hook timed it within the send's own window
+ *  (fourth review: an earlier phone photo Claude took mid-turn, which never
+ *  retires, hid a desk paste of as many photos). After a relaunch the status
+ *  copy is timed by when the pane's state began, which can be before the
+ *  send for the phone's own copy and a desk paste alike; one timed before the
+ *  send is left drawn then, since hiding a desk message loses it. */
+function reports(
+  prompt: DesktopPrompt,
+  promptKey: string,
+  copyKey: string,
+  photos: number,
+  sentAt: number | undefined,
+  marginMs: number
+): boolean {
   if (promptKey.length === 0) {
-    return copyKey.length === 0 && photos > 0 && photosOnlyPrompt(withoutPasteWrappers(prompt.text)) === photos
+    return (
+      copyKey.length === 0 &&
+      photos > 0 &&
+      photosOnlyPrompt(withoutPasteWrappers(prompt.text)) === photos &&
+      typeof sentAt === 'number' &&
+      prompt.at !== undefined &&
+      prompt.at >= sentAt - marginMs &&
+      prompt.at - sentAt <= OWN_COPY_WINDOW_MS
+    )
   }
   return promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey))
 }
@@ -131,7 +153,7 @@ export function pairPendingWithHookPrompts(
     const photos = item.images?.length ?? 0
     return keys.flatMap((promptKey, index) => {
       const prompt = prompts[index]!
-      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey, photos) ? [index] : []
+      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey, photos, item.sentAt, margin) ? [index] : []
     })
   }
   const notSomeoneElses = (prompt: DesktopPrompt) => !remembered.has(deskEchoId(prompt.nonce))

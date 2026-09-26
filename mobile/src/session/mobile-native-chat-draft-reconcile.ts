@@ -1,5 +1,5 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, writtenBefore } from './mobile-native-chat-photo-rows'
 import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
@@ -287,10 +287,13 @@ export function findLandedImagePreviewEchoes(
       }
       // A row with no photo in it is not the row of a photo send the agent
       // took mid-turn, which gets none, whatever its words (review of
-      // becd6af2: it went to a later "yes" sent alone). Any other send's row
-      // can carry none: its photo failed to attach, and still shows as the
-      // phone's (re-review of 4e25d63e).
-      if (pasted && typeof entry.takenAt === 'number' && !carriesPhoto(message, rawById.get(message.id))) {
+      // becd6af2: it went to a later "yes" sent alone), nor of one sent
+      // before the read settled whose row will name its paths, which an older
+      // row of its words took after a quiet minute (fourth review). A settled
+      // send's row can carry none: its photo failed to attach, and still
+      // shows as the phone's (re-review of 4e25d63e).
+      const heldForItsRow = entry.sentBeforeReadSettled === true && rowWillNamePastedPhotos(entry)
+      if (pasted && (typeof entry.takenAt === 'number' || heldForItsRow) && !carriesPhoto(message, rawById.get(message.id))) {
         return false
       }
       if (targetText) {

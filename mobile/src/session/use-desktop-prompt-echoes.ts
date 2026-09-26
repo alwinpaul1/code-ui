@@ -294,11 +294,15 @@ export function withoutLandedDesktopPrompts(
    *  (Claude Code numbers photos through a session). */
   raw: readonly NativeChatMessage[] = []
 ): DesktopPrompt[] {
+  // The rows as read, and what the agent's queue box lists (fourth review: a
+  // desk photo of no words drew in the box and as a bubble above it).
   const landedMarkers = new Set(
-    raw.flatMap((message) => {
-      const text = message.role === 'user' ? message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' ') : ''
-      return photosOnlyPrompt(text) > 0 ? [markersOf(text)] : []
-    })
+    [
+      ...raw.map((message) =>
+        message.role === 'user' ? message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' ') : ''
+      ),
+      ...alsoShown
+    ].flatMap((text) => (photosOnlyPrompt(text) > 0 ? [markersOf(text)] : []))
   )
   const seen = [
     ...folded

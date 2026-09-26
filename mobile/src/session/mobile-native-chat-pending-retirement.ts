@@ -5,7 +5,7 @@ import {
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { rowWillNamePastedPhotos, writtenBefore } from './mobile-native-chat-photo-rows'
+import { rowWillNamePastedPhotos } from './mobile-native-chat-photo-rows'
 
 const SPACE = ' '
 /** How long before, and after, the phone saw a taken send leave the queue box
@@ -265,22 +265,6 @@ function dequeuedRowLanded(
   )
 }
 
-/** Whether a row of these words was written after the send, by the rule
- *  that reads the send's time and the rows' stamps each off its own clock
- *  (writtenBefore). */
-function wordsLandedAfter(
-  messages: readonly NativeChatMessage[],
-  key: string,
-  item: MobileNativeChatPendingMessage
-): boolean {
-  const newest = messages.reduce<number | null>(
-    (latest, message) => (message.timestamp !== null && (latest === null || message.timestamp > latest) ? message.timestamp : latest),
-    null
-  )
-  const now = Date.now()
-  return messages.some((message) => normalizedUserText(message) === key && !writtenBefore(message, item, newest, now))
-}
-
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
@@ -337,18 +321,20 @@ export function retireLandedMobileNativeChatPending(
     // (review of becd6af2). A send made against a settled read counts its
     // rows as before, which retires one whose row names another path, a resend
     // after "Delivery unconfirmed" (re-review of 4e25d63e).
-    // Held only while no row of its words was written after it: one was,
-    // when the send was never delivered and sent again (third review,
-    // 2026-09-26: the lost send stood beside the resend's row for a day).
+    // Held until another send of its words has bound its own row: the send
+    // was never delivered and sent again (third review, 2026-09-26: the lost
+    // send stood beside the resend's row for a day). Not by the rows' time,
+    // which could not tell an older row answered within seconds from the
+    // send's (fourth review).
+    const key = normalizeReconcileText(item.text)
     if (
       item.images?.length &&
       item.sentBeforeReadSettled === true &&
       rowWillNamePastedPhotos(item) &&
-      !wordsLandedAfter(messages, normalizeReconcileText(item.text), item)
+      !current.some((other) => other.id !== item.id && landedImagePendingIds.has(other.id) && normalizeReconcileText(other.text) === key)
     ) {
       continue
     }
-    const key = normalizeReconcileText(item.text)
     // A row of its text stamped as a taken send ahead of it left the box is
     // that send's own, dequeued at the end of the turn after all, and the pass
     // below gives it there. Taken by this copy instead, the taken one waited
