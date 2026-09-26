@@ -113,15 +113,41 @@ function blankLineGuides(above: number, below: number, step: number, offSide: bo
  *  Most sit at U+1F300 and up, but ✅ ❌ ⭐ ⚡ ⏳ are below it, and they
  *  drew two cells wide on a grid that counted one. Hermes knows the property
  *  (hermesc 250829098.0.17 compiles it and rejects a property it does not
- *  know); the first of them is U+231A. */
+ *  know). Every such code point lies in U+231A–2B55 or U+1F000–1FAFF; the
+ *  regex is run once over those, into a table, not at every character (a
+ *  1.1 MB `├──` tree took 284 ms on Hermes testing each one). */
 const EMOJI_PRESENTATION = /\p{Emoji_Presentation}/u
-const FIRST_EMOJI_PRESENTATION = 0x231a
+const EMOJI_RANGES: readonly (readonly [number, number])[] = [
+  [0x231a, 0x2b55],
+  [0x1f000, 0x1f2ff]
+]
+let emojiTable: Set<number> | null = null
+
+function isEmojiPresentation(codePoint: number): boolean {
+  if (!emojiTable) {
+    emojiTable = new Set()
+    for (const [from, to] of EMOJI_RANGES) {
+      for (let point = from; point <= to; point += 1) {
+        if (EMOJI_PRESENTATION.test(String.fromCodePoint(point))) {
+          emojiTable.add(point)
+        }
+      }
+    }
+  }
+  return emojiTable.has(codePoint)
+}
 
 /** Columns a character takes on a monospace grid: two for East Asian wide
  *  and fullwidth characters and emoji, one otherwise. */
 export function codePointColumns(codePoint: number): 1 | 2 {
-  if (codePoint < FIRST_EMOJI_PRESENTATION) {
+  if (codePoint < 0x231a) {
     return codePoint >= 0x1100 && codePoint <= 0x115f ? 2 : 1
+  }
+  if (codePoint <= 0x2b55) {
+    return isEmojiPresentation(codePoint) ? 2 : 1
+  }
+  if (codePoint >= 0x1f000 && codePoint <= 0x1f2ff) {
+    return isEmojiPresentation(codePoint) ? 2 : 1
   }
   return (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
     (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
@@ -130,8 +156,7 @@ export function codePointColumns(codePoint: number): 1 | 2 {
     (codePoint >= 0xff00 && codePoint <= 0xff60) ||
     (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
     (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
-    (codePoint >= 0x20000 && codePoint <= 0x3fffd) ||
-    EMOJI_PRESENTATION.test(String.fromCodePoint(codePoint))
+    (codePoint >= 0x20000 && codePoint <= 0x3fffd)
     ? 2
     : 1
 }

@@ -50,4 +50,29 @@ describe('emoji that the phone draws two cells wide', () => {
     expect(cut[0]).toEqual({ text: '✅', kind: 'plain' })
     expect(cut.at(-1)!.text).toBe('  … 2 more characters')
   })
+
+  it('measures a box-drawing tree without testing each character for emoji', () => {
+    // A 1.1 MB `├──` tree took 284 ms on Hermes against 37 ms for ASCII: a
+    // regex ran on every code point from U+231A up (review, 2026-09-27).
+    const tree = '├── src\n│   └── index.ts\n'.repeat(2_000)
+    displayColumns(tree, 4) // the first call may build its tables
+    const test = RegExp.prototype.test
+    let tests = 0
+    RegExp.prototype.test = function (this: RegExp, value: string) {
+      tests += 1
+      return test.call(this, value)
+    }
+    try {
+      expect(displayColumns(tree, 4)).toBe([...tree].length)
+    } finally {
+      RegExp.prototype.test = test
+    }
+    expect(tests).toBeLessThan(10)
+    // And the answers are the same: box drawing one column, ✅ two.
+    expect(columnsOf('├')).toBe(1)
+    expect(columnsOf('│')).toBe(1)
+    expect(columnsOf('⏳')).toBe(2)
+    expect(columnsOf('🀄')).toBe(2)
+    expect(columnsOf('🂡')).toBe(1)
+  })
 })
