@@ -51,6 +51,9 @@ vi.mock('react-native', async () => {
       sequence: () => ({ start: () => {}, stop: () => {} })
     },
     Easing: { linear: 0, quad: 0, inOut: () => 0, out: () => 0 },
+    // The chat's follow hook listens for the app leaving the foreground
+    // (use-app-interruptions.ts, hold to copy, 6a1810e0).
+    AppState: { addEventListener: () => ({ remove: () => undefined }), currentState: 'active' },
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
     Pressable: host('Pressable'),
