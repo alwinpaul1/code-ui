@@ -1,4 +1,4 @@
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { withPhotosWhere, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { createPersistedMap } from './session-cache-persistence'
 
 /**
@@ -54,8 +54,8 @@ function withoutDataPreviews(
   photos: readonly MobileNativeChatPendingMessage[]
 ): MobileNativeChatPendingMessage[] {
   return photos.flatMap((item) => {
-    const images = item.images?.filter((uri) => !uri.startsWith('data:')) ?? []
-    return images.length > 0 ? [{ ...item, images }] : []
+    const kept = withPhotosWhere(item, (uri) => !uri.startsWith('data:'))
+    return kept.images?.length ? [kept] : []
   })
 }
 

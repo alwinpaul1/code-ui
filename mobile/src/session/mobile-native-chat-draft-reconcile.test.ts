@@ -120,6 +120,104 @@ describe('the phone’s photos, kept off rows that are not their send’s', () =
   })
 })
 
+// The companion Claude Code writes beside a photo row names the path the
+// phone pasted (2.1.283, the Thesis session: `[Image: source:
+// /var/folders/…/T/orca-paste-1790415003275-839747e3-….png]`), and Codex's
+// row carries it as an image block. A send that kept its pasted paths binds
+// by them.
+describe('the phone’s photos, bound by the paths it pasted', () => {
+  const TEMP = '/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T'
+  const pastePath = (stamp: number, uuid: string) => `${TEMP}/orca-paste-${stamp}-${uuid}.png`
+  const MINE = pastePath(1790415003275, '839747e3-c083-46eb-b11e-4ea29a8da649')
+  const MINE_TOO = pastePath(1790415003611, '5211776c-2f4a-4164-b0e1-6c2a8f1d9e07')
+  const OLDER = pastePath(1790414998000, '42c80aee-6038-4de8-a1b2-0c3d4e5f6a7b')
+  // The prompt row, then its companion, as Claude Code 2.1.283 writes them.
+  const rowsOf = (id: string, paths: string[], text = ''): NativeChatMessage[] => [
+    userText(id, `${paths.map((_, index) => `[Image #${index + 1}]`).join(' ')} ${text}`.trim()),
+    {
+      id: `${id}-companion`,
+      role: 'user',
+      blocks: paths.map((path) => ({ type: 'text' as const, text: `[Image: source: ${path}]` })),
+      timestamp: null,
+      source: 'transcript'
+    }
+  ]
+  const sent = (id: string, images: string[], imagePaths?: string[], text = ''): PendingImagePreviewEcho => ({
+    ...pending(id, images),
+    text,
+    ...(imagePaths ? { imagePaths } : {})
+  })
+
+  it('binds a photo with no words to the row naming its path, not an older photo row before it', () => {
+    const messages = [...rowsOf('older', [OLDER]), ...rowsOf('mine', [MINE])]
+    expect(findLandedImagePreviewEchoes(messages, [sent('p', ['file:///p17.jpg'], [MINE])])).toEqual([
+      { pendingId: 'p', messageId: 'mine', images: ['file:///p17.jpg'] }
+    ])
+  })
+
+  it('binds nothing while the only photo rows name other paths', () => {
+    expect(findLandedImagePreviewEchoes(rowsOf('older', [OLDER]), [sent('p', ['file:///p17.jpg'], [MINE])])).toEqual([])
+  })
+
+  it('draws each photo on the block that names it, and leaves a block naming another path the desktop’s', () => {
+    // A stale paste left on the input line went out with the send: the row
+    // names three photos, two of them the phone's.
+    const messages = rowsOf('mine', [OLDER, MINE_TOO, MINE], 'see these')
+    const send = sent('p', ['file:///a.jpg', 'file:///b.jpg'], [MINE, MINE_TOO], 'see these')
+    expect(findLandedImagePreviewEchoes(messages, [send])).toEqual([
+      { pendingId: 'p', messageId: 'mine', images: ['', 'file:///b.jpg', 'file:///a.jpg'] }
+    ])
+  })
+
+  it('puts two sends glued into one row each on its own block', () => {
+    const messages = rowsOf('glued', [MINE, MINE_TOO], 'look at this and this one')
+    const first = sent('first', ['file:///a.jpg'], [MINE], 'look at this')
+    const second = sent('second', ['file:///b.jpg'], [MINE_TOO], 'and this one')
+    expect(findLandedImagePreviewEchoes(messages, [first, second]).map((item) => item.images)).toEqual([
+      ['file:///a.jpg', ''],
+      ['file:///a.jpg', 'file:///b.jpg']
+    ])
+  })
+
+  it('matches a path the phone got back under /private', () => {
+    const send = sent('p', ['file:///p17.jpg'], [`/private${MINE}`])
+    expect(findLandedImagePreviewEchoes(rowsOf('mine', [MINE]), [send]).map((item) => item.messageId)).toEqual(['mine'])
+  })
+
+  // Claude Code writes the companion after the prompt, so a read can hold the
+  // prompt alone. Waiting for it there let the send retire by its words while
+  // its photos did not bind, and the row drew "Image on Desktop".
+  it('binds its own prompt row by the old rules before the companion lands, past an older row naming another path', () => {
+    const messages = [...rowsOf('older', [OLDER]), userText('mine', '[Image #1]')]
+    expect(findLandedImagePreviewEchoes(messages, [sent('p', ['file:///p17.jpg'], [MINE])]).map((item) => item.messageId)).toEqual([
+      'mine'
+    ])
+  })
+
+  it('binds by the old rules where the rows name no photo, as on a host that writes no companion', () => {
+    const bare = userText('mine', '[Image #1]')
+    expect(findLandedImagePreviewEchoes([bare], [sent('p', ['file:///p17.jpg'], [MINE])]).map((item) => item.messageId)).toEqual([
+      'mine'
+    ])
+  })
+
+  it.each([
+    ['kept no paths', undefined],
+    ['kept paths that do not pair with its photos', [MINE, MINE_TOO]],
+    ['kept an empty path', ['']]
+  ])('binds by the old rules a send that %s', (_, imagePaths) => {
+    const messages = [...rowsOf('first', [OLDER]), ...rowsOf('mine', [MINE])]
+    expect(findLandedImagePreviewEchoes(messages, [sent('p', ['file:///p17.jpg'], imagePaths)]).map((item) => item.messageId)).toEqual([
+      'first'
+    ])
+  })
+
+  it('binds nothing for an empty transcript, and nothing for a send with no photo', () => {
+    expect(findLandedImagePreviewEchoes([], [sent('p', ['file:///p17.jpg'], [MINE])])).toEqual([])
+    expect(findLandedImagePreviewEchoes(rowsOf('mine', [MINE]), [sent('p', [], [])])).toEqual([])
+  })
+})
+
 describe('mobile native chat image preview reconciliation', () => {
   it('binds a local thumbnail when the agent echoes the uploaded path before the caption', () => {
     const path =

@@ -7,6 +7,12 @@ export type MobileNativeChatPendingMessage = {
   expectedOccurrence: number
   /** Local preview URIs carried by the send for its optimistic echo. */
   images?: string[]
+  /** The desktop paths the send pasted, one per preview in `images` and in
+   *  the same order. The agent's row names them (`[Image: source: …]`), so
+   *  they tell the send's own row from any other photo row
+   *  (mobile-native-chat-draft-reconcile.ts). Absent on sends from an older
+   *  build, and dropped whenever it does not pair with `images`. */
+  imagePaths?: string[]
   baselineTailMessageId: string | null
   /** Where to DRAW an echo that captured no boundary of its own, kept apart
    *  from `baselineTailMessageId` because reconciliation and placement want
@@ -71,6 +77,37 @@ export function isTakenSend(item: Pick<MobileNativeChatPendingMessage, 'takenAt'
   return typeof item.takenAt === 'number' && Number.isFinite(item.takenAt)
 }
 
+/** The desktop paths `imagePaths` holds when it pairs one to one with
+ *  `images`, or undefined: a list that does not pair, from a bad write or an
+ *  older build, is read as no paths at all. */
+export function pairedImagePaths(
+  item: Pick<MobileNativeChatPendingMessage, 'images' | 'imagePaths'>
+): string[] | undefined {
+  const { images, imagePaths } = item
+  return Array.isArray(images) &&
+    Array.isArray(imagePaths) &&
+    imagePaths.length === images.length &&
+    imagePaths.every((path) => typeof path === 'string' && path.length > 0)
+    ? imagePaths
+    : undefined
+}
+
+/** `item` with only the photos whose preview `keep` takes, each desktop path
+ *  kept with its own preview. No photo left drops both lists. */
+export function withPhotosWhere<T extends Pick<MobileNativeChatPendingMessage, 'images' | 'imagePaths'>>(
+  item: T,
+  keep: (uri: string) => boolean
+): T {
+  const paths = pairedImagePaths(item)
+  const { images: _images, imagePaths: _paths, ...rest } = item
+  const kept = (item.images ?? []).flatMap((uri, index) => (keep(uri) ? [{ uri, path: paths?.[index] }] : []))
+  if (kept.length === 0) {
+    return rest as T
+  }
+  const images = kept.map((photo) => photo.uri)
+  return (paths ? { ...rest, images, imagePaths: kept.map((photo) => photo.path!) } : { ...rest, images }) as T
+}
+
 export type MobileNativeChatSendOrigin = {
   draftKey: string
   draftEditGeneration: number
@@ -118,9 +155,11 @@ export function appendMobileNativeChatPending(
   id: string,
   origin: MobileNativeChatSendOrigin,
   text: string,
-  images?: string[]
+  images?: string[],
+  imagePaths?: string[]
 ): PendingByKey {
   const current = previous[key] ?? []
+  const paths = pairedImagePaths({ images, imagePaths })
   // Count outstanding repeats with the same normalized key. A send the agent
   // took is not outstanding: no row is owed for it (isTakenSend).
   const earlierOutstanding = current.filter(
@@ -149,7 +188,8 @@ export function appendMobileNativeChatPending(
         baselineResolved: origin.baselineResolved,
         ...(origin.baselineResolved ? {} : { sentBeforeReadSettled: true }),
         ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {}),
-        ...(images?.length ? { images } : {})
+        ...(images?.length ? { images } : {}),
+        ...(images?.length && paths ? { imagePaths: paths } : {})
       }
     ]
   }

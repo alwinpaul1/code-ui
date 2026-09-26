@@ -16,18 +16,19 @@ export function clearDraftAtSendStartWith(
     captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
     clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
     restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-    acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => string | null
+    acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]) => string | null
     removePending: (id: string) => void
   },
   text: string,
-  images?: string[]
+  images?: string[],
+  imagePaths?: string[]
 ): (() => void) | null {
   const origin = drafts.captureSendOrigin(text)
   if (!origin) {
     return null
   }
   drafts.clearDraftForSend(origin, text)
-  const pendingId = images?.length ? drafts.acceptSend(origin, text, images) : null
+  const pendingId = images?.length ? drafts.acceptSend(origin, text, images, imagePaths) : null
   return () => {
     drafts.restoreRejectedDraft(origin, text)
     if (pendingId) {

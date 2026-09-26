@@ -87,3 +87,21 @@ it('sheds witnessed echoes from an envelope written before the witnessed generat
   const again = await readNativeChatPendingEchoes('s1', now + 3000)
   expect(again?.map((item) => item.id)).toEqual(['pending-1', 'absorbed-abc-5'])
 })
+
+// The binder finds a photo send's row by the paths it pasted, one per
+// preview (mobile-native-chat-draft-reconcile.ts): the `data:` preview the
+// store drops must take its own path with it, and a path list that does not
+// pair with the photos, from a bad write, must not come back at all.
+it('keeps each stored photo’s pasted path with it, and drops a path list that does not pair', async () => {
+  const P1 = '/var/folders/0y/T/orca-paste-1-a.png'
+  const P2 = '/var/folders/0y/T/orca-paste-2-b.png'
+  await writeNativeChatPendingEchoes('session', [
+    { ...echo('paired', ['data:image/png;base64,AA', 'file:///b.jpg']), imagePaths: [P1, P2] },
+    { ...echo('unpaired', ['file:///c.jpg']), imagePaths: [P1, P2] }
+  ])
+  const read = await readNativeChatPendingEchoes('session')
+  expect(read?.map((item) => [item.id, item.images, item.imagePaths])).toEqual([
+    ['paired', ['file:///b.jpg'], [P2]],
+    ['unpaired', ['file:///c.jpg'], undefined]
+  ])
+})

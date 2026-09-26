@@ -67,6 +67,24 @@ describe('the photo sends a chat that comes back binds before its read', () => {
     expect(waitingPhotoSends('s1')?.map((item) => [item.id, item.images])).toEqual([['pending-1', ['file:///a1.jpg']]])
   })
 
+  // The binder finds a send's row by the paths it pasted, one per preview:
+  // dropping a `data:` preview must drop its path, not the next photo's.
+  it('keeps each remaining photo’s pasted path with it after a relaunch', async () => {
+    rememberWaitingPhotoSends('s1', [
+      {
+        ...send('pending-1', ['data:image/png;base64,AA', 'file:///a2.jpg']),
+        imagePaths: ['/var/folders/0y/T/orca-paste-1-a.png', '/var/folders/0y/T/orca-paste-2-b.png']
+      }
+    ])
+    vi.advanceTimersByTime(1_000)
+    await Promise.resolve()
+    resetWaitingPhotoSendsForTests()
+    await hydrateWaitingPhotoSends()
+    expect(waitingPhotoSends('s1')?.map((item) => [item.images, item.imagePaths])).toEqual([
+      [['file:///a2.jpg'], ['/var/folders/0y/T/orca-paste-2-b.png']]
+    ])
+  })
+
   it('leaves each chat to wait for its own read when the recent copy will not parse', async () => {
     await AsyncStorage.setItem('codeui:chat-waiting-photo-sends-recent', '{not json')
     await expect(hydrateWaitingPhotoSends()).resolves.toBeUndefined()

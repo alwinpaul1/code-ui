@@ -68,7 +68,8 @@ type Args = {
   readonly beforeImagePaste?: () => Promise<void>
   /** Empties the composer as the send starts (the chips go with it) and returns
    *  the undo. `images` also adds the optimistic bubble in this same call. */
-  readonly beginImageSend?: (text: string, images?: string[]) => (() => void) | null
+  /** `imagePaths` are the desktop paths pasted, one per preview in `images`. */
+  readonly beginImageSend?: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -310,7 +311,8 @@ export function useMobileNativeChatImageAttachments({
             // the settle (2026-09-13: the Claude app sends both at once). A
             // paste that fails before the text goes puts all three back.
             const previewUris = pendingImages.map((attachment) => attachment.previewUri)
-            const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
+            // The agent's row names each path pasted: how the echo finds its row.
+            const undoDraftClear = beginImageSend?.(text, previewUris, pendingImages.map((image) => image.path)) ?? null
             clearSent()
             restoreOptimistic = (): void => {
               undoDraftClear?.()

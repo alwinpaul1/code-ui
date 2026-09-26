@@ -1,4 +1,5 @@
-import { isImageRefBlock, isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { pastedPhotos, photoNames, photoSlots, placedByName, writtenBefore } from './mobile-native-chat-photo-rows'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -70,14 +71,11 @@ export type PendingImagePreviewEcho = {
   sentAt?: number
   /** Sent before the chat's read settled, so its tail is not to be trusted. */
   sentBeforeReadSettled?: boolean
+  /** The desktop paths the send pasted, one per preview in `images`. */
+  imagePaths?: string[]
 }
 
-/** How much older than the newest row a row written after the send may look
- *  beyond the time since the send: stamps are taken when a record is made, and
- *  records can be written a little out of order. */
-const SEND_ROW_ORDER_SLACK_MS = 5_000
 const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
-const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 
 export type LandedImagePreviewEcho = {
   pendingId: string
@@ -217,10 +215,28 @@ export function findLandedImagePreviewEchoes(
     null
   )
   const landed: LandedImagePreviewEcho[] = []
+  // Claude Code and Codex name each photo a row carries by the path that was
+  // pasted, and the phone knows the paths it pasted: a row naming one of them
+  // is that send's, wherever it sits and whatever its stamp, and a row naming
+  // only others is not. The rules below guess only among rows that name no
+  // photo yet: a prompt row whose companion has not landed, or a host whose
+  // rows never name one.
 
   for (const entry of entries) {
     if (!entry.images?.length) {
       continue
+    }
+    const pasted = pastedPhotos(entry)
+    if (pasted) {
+      const own = normalized.find(
+        (message) => message.role === 'user' && photoNames(message).some((name) => pasted.has(name))
+      )
+      if (own) {
+        const images = placedByName(own, pasted, drawnOn(own.id))
+        drawn.set(own.id, images)
+        landed.push({ pendingId: entry.id, messageId: own.id, images })
+        continue
+      }
     }
     const targetText = normalizeNativeChatUserText(entry.text)
     const full = (message: NativeChatMessage) =>
@@ -229,6 +245,12 @@ export function findLandedImagePreviewEchoes(
         : drawnOn(message.id).length > 0
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user' || writtenBefore(message, entry, newestStamp, now)) {
+        return false
+      }
+      // It names photos and none of this send's: another message's row
+      // (2026-09-26, Claude Code 2.1.283: an older photo row took a photo
+      // sent with no words, and the send's own row drew "Image on Desktop").
+      if (pasted && photoNames(message).length > 0) {
         return false
       }
       if (targetText) {
@@ -276,49 +298,6 @@ export function findLandedImagePreviewEchoes(
     landed.push({ pendingId: entry.id, messageId: candidate.id, images })
   }
   return landed
-}
-
-/** How many photos a row has room for: its image blocks, or the `[Image #N]`
- *  markers its words carried before its companion landed; at least one. */
-function photoSlots(message: NativeChatMessage, raw: NativeChatMessage | undefined): number {
-  const blocks = message.blocks.filter(isImageRefBlock).length
-  const markers = (raw ?? message).blocks.reduce(
-    (count, block) => count + (isTextBlock(block) ? (block.text.match(IMAGE_PROMPT_MARKERS)?.length ?? 0) : 0),
-    0
-  )
-  return Math.max(1, blocks, markers)
-}
-
-/**
- * A row written before the phone sent this is another message's. For a send
- * made before the chat's read settled the tail cannot say so: it is whatever
- * the phone had, an earlier visit's transcript or nothing, and a photo sent
- * with no words took the first photo row after it, an older message's, which
- * then drew the new photo while the new row drew "Image on Desktop"
- * (2026-09-26, Claude Code 2.1.283).
- *
- * Told without setting the phone's clock against the desktop's: a row
- * written after the send is older than the newest row by at most the time
- * since the send, and each of those two spans is read off one clock. The
- * first version compared the send's time with the row's stamp, and a phone
- * running a minute ahead refused the send's own row, which a photo with no
- * words cannot retire without (review, 2026-09-26). A photo with words is
- * asked too: its words can be an older row's as well.
- */
-function writtenBefore(
-  message: NativeChatMessage,
-  entry: PendingImagePreviewEcho,
-  newestStamp: number | null,
-  now: number
-): boolean {
-  return (
-    entry.sentBeforeReadSettled === true &&
-    typeof entry.sentAt === 'number' &&
-    Number.isFinite(entry.sentAt) &&
-    message.timestamp !== null &&
-    newestStamp !== null &&
-    newestStamp - message.timestamp > now - entry.sentAt + SEND_ROW_ORDER_SLACK_MS
-  )
 }
 
 /** `segment` appears in `text` as a run of whole words (the glue joins sends

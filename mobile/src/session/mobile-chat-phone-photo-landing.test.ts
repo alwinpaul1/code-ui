@@ -268,11 +268,23 @@ describe('a message the phone sent with photos, as its row lands', () => {
 
   /** Send from the phone: the composer's words and the local previews of the
    *  photos that rode along. */
-  async function send(clock: string, body: string, photos: readonly string[]): Promise<void> {
+  /** The desktop path the terminal paste typed for each photo, as the app
+   *  records it (use-mobile-native-chat-image-attachments.ts): the fixture's
+   *  own for the session's photos, none where a case does not say. */
+  const PASTED = new Map([
+    ...PHOTOS1.map((photo, index) => [photo, `${TEMP}/${PATHS1[index]}.png`] as const),
+    ...PHOTOS2.map((photo, index) => [photo, `${TEMP}/${PATHS2[index]}.png`] as const),
+    // The photos with no words below, and the Codex one.
+    ['file:///phone/p17.jpg', `${TEMP}/${PATHS1[0]}.png`],
+    ['file:///phone/p16.jpg', `${TEMP}/${PATHS2[0]}.png`],
+    ['file:///phone/e1.jpg', `${TEMP}/orca-paste-1788692837713-14c67aef-b415-4e02-af69-9b7196dbe54e.png`]
+  ])
+  async function send(clock: string, body: string, photos: readonly string[], pasted?: readonly string[]): Promise<void> {
     vi.setSystemTime(at(clock))
     const origin = drafts!.captureSendOrigin(body)!
+    const paths = pasted ?? (photos.length > 0 && photos.every((photo) => PASTED.has(photo)) ? photos.map((photo) => PASTED.get(photo)!) : undefined)
     await act(async () => {
-      drafts!.acceptSend(origin, body, [...photos])
+      drafts!.acceptSend(origin, body, [...photos], paths ? [...paths] : undefined)
     })
     await show(clock, current)
   }

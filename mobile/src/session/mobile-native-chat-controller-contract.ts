@@ -165,7 +165,7 @@ export type MobileNativeChatController = {
    *  body share one budget instead of holding the composer for two. */
   /** Clears the composer as an image send starts; returns the undo for a
    *  failed paste. `images` also adds the optimistic bubble in this same call. */
-  beginNativeChatImageSend: (text: string, images?: string[]) => (() => void) | null
+  beginNativeChatImageSend: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],

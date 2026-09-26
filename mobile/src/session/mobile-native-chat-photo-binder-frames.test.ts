@@ -118,10 +118,10 @@ describe('which row takes the phone’s photos', () => {
       })
     }
   }
-  async function send(text: string, photos: readonly string[]): Promise<void> {
+  async function send(text: string, photos: readonly string[], pasted?: readonly string[]): Promise<void> {
     const origin = drafts!.captureSendOrigin(text)!
     await act(async () => {
-      drafts!.acceptSend(origin, text, [...photos])
+      drafts!.acceptSend(origin, text, [...photos], pasted ? [...pasted] : undefined)
     })
     await show(messagesNow, loadingNow)
   }
@@ -214,6 +214,38 @@ describe('which row takes the phone’s photos', () => {
     // Right in every frame, not only once a live row arrives.
     expect(afterSend.at(-1)).toEqual([{ id: 'add90135', images: 'P', text: '' }])
     expect(afterSend.filter((frame) => frame.length !== 1 || frame[0]!.images !== 'P')).toEqual([])
+  })
+
+  // 2026-09-26, Claude Code 2.1.283 (the Thesis session, the `[Image #17]` row
+  // and its `[Image: source: …]` companion): a photo sent with no words
+  // before the chat's read settled drew "Image on Desktop" on its own row
+  // while an older photo row drew it. Here the older row is a photo pasted on
+  // the desktop that Claude answered within seconds, so no span of time tells
+  // it from the send's own row. The path the phone pasted does: the
+  // companion names it, and names another path on the older row.
+  it('draws a photo with no words on the row that names the path it pasted, not an older desktop photo answered seconds before', async () => {
+    const mine = `${TEMP}/orca-paste-1790415003275-839747e3-c083-46eb-b11e-4ea29a8da649.png`
+    const older = [
+      row('d1', 'user', [markers(16, 1)], at('09:29:58.000')),
+      companion('dc1', 1, at('09:29:58.000'), 50),
+      row('a1', 'assistant', ['That is the login screen.'], at('09:30:01.000'))
+    ]
+    vi.setSystemTime(at('09:29:00.000'))
+    await show([], true)
+    vi.setSystemTime(at('09:30:03.500'))
+    await send('', ['file:///phone/p17.jpg'], [mine])
+    const from = frames.length
+    await show(older)
+    await show([
+      ...older,
+      row('add90135', 'user', [markers(17, 1)], at('09:30:03.923')),
+      row('344189e5', 'user', [`[Image: source: ${mine}]`], at('09:30:03.923'))
+    ])
+    expect(drawn()).toEqual([
+      { id: 'd1', images: 'D', text: '' },
+      { id: 'add90135', images: 'P', text: '' }
+    ])
+    expect(frames.slice(from).filter((frame) => frame.some((bubble) => bubble.id === 'd1' && bubble.images !== 'D'))).toEqual([])
   })
 
   // The same for a photo WITH words: its row refused, the send retired by its
