@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { cutLineNote, displayColumns } from './mobile-code-indent'
 import {
   CODE_VIEW_LINE_HEIGHT,
   CODE_VIEW_MAX_NO_WRAP_COLUMNS,
@@ -31,10 +32,14 @@ describe('the code grid', () => {
     expect(metrics.contentWidth).toBeGreaterThanOrEqual(metrics.gutterWidth + 120 * metrics.cellWidth)
   })
 
-  it('stops widening at the no-wrap limit, so one minified line cannot make a view miles wide', () => {
+  it('stops widening at the no-wrap limit but for the cut line\'s note, so one minified line cannot make a view miles wide', () => {
     const atLimit = codeViewMetrics({ lineCount: 1, maxColumns: CODE_VIEW_MAX_NO_WRAP_COLUMNS, fontScale: 1 })
     const past = codeViewMetrics({ lineCount: 1, maxColumns: 1_000_000, fontScale: 1 })
-    expect(past.contentWidth).toBe(atLimit.contentWidth)
+    // Past the limit the line is cut, and only its note is added: the count
+    // of what was left out, which must not be cut with it.
+    const note = displayColumns(cutLineNote(1_000_000), 1)
+    expect(past.contentWidth - atLimit.contentWidth).toBeGreaterThanOrEqual(Math.floor(note * past.cellWidth))
+    expect(past.contentWidth - atLimit.contentWidth).toBeLessThanOrEqual(Math.ceil(note * past.cellWidth) + 1)
   })
 })
 

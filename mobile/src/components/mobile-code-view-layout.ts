@@ -1,3 +1,5 @@
+import { cutLineNote, displayColumns } from './mobile-code-indent'
+
 /** Code text size and row height, before the phone's font scale. */
 export const CODE_VIEW_FONT_SIZE = 13
 export const CODE_VIEW_LINE_HEIGHT = 20
@@ -46,7 +48,13 @@ export function codeViewMetrics({
   const cellWidth = CODE_VIEW_FONT_SIZE * JETBRAINS_MONO_ADVANCE_EM * scale
   const gutterDigits = Math.max(2, String(Math.max(lineCount, 1)).length)
   const gutterWidth = Math.ceil(gutterDigits * cellWidth + GUTTER_GAP)
-  const columns = Math.min(maxColumns, CODE_VIEW_MAX_NO_WRAP_COLUMNS) + 2
+  // A line past the limit is cut and ends in a note; the row is as wide as
+  // the longest note the file can need (no more characters are hidden than
+  // it has columns), or the count would be cut off with the line.
+  const columns =
+    (maxColumns > CODE_VIEW_MAX_NO_WRAP_COLUMNS
+      ? CODE_VIEW_MAX_NO_WRAP_COLUMNS + displayColumns(cutLineNote(maxColumns), 1)
+      : maxColumns) + 2
   return {
     fontSize: CODE_VIEW_FONT_SIZE,
     lineHeight: CODE_VIEW_LINE_HEIGHT,

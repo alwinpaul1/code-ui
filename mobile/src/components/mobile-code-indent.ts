@@ -193,6 +193,13 @@ export function clipSegmentsToColumns(
   if (hidden === 0) {
     return segments as MobileSyntaxSegment[]
   }
-  kept.push({ text: `  … ${hidden} more characters`, kind: 'comment' })
+  kept.push({ text: cutLineNote(hidden), kind: 'comment' })
   return kept
+}
+
+/** What follows a cut line: how many characters were left out. The view's
+ *  width is sized for the longest of these a file can need
+ *  (codeViewMetrics), so the count itself is never cut. */
+export function cutLineNote(hidden: number): string {
+  return `  … ${hidden} more ${hidden === 1 ? 'character' : 'characters'}`
 }
