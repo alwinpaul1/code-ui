@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { pendingPlacementAnchorId } from './mobile-native-chat-render-data'
 import {
   agentMessageRow,
   subagentNames,
@@ -138,6 +140,47 @@ export function withAgentMessageRows(
     out.push(row, ...(after.get(row.id) ?? []))
   }
   return out
+}
+
+/**
+ * The pending bubbles, each prompt the hook took after a subagent message at
+ * the same row drawn below that message's row. A pending bubble is drawn
+ * straight after the row it anchors on, which put a desk prompt typed after
+ * the message above it (review of 2026-09-26). By the prompt's text: the
+ * pending copy may be the tab status's rather than the beacon's, and a phone
+ * send's hook copy reads the same. Same array when nothing moves.
+ */
+export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPendingMessage>(
+  pending: readonly T[],
+  messages: readonly BeaconAgentMessage[],
+  folded: readonly NativeChatMessage[]
+): T[] {
+  if (!messages.some((message) => message.laterAtSameRow)) {
+    return pending as T[]
+  }
+  const position = new Map(folded.map((row, index) => [row.id, index]))
+  let moved = false
+  const out = pending.map((item) => {
+    const row = pendingPlacementAnchorId(item)
+    let after: string | undefined
+    for (const message of messages) {
+      const at = position.get(message.id)
+      if (
+        at !== undefined &&
+        (after === undefined || at > position.get(after)!) &&
+        message.anchorId === row &&
+        message.laterAtSameRow?.includes(item.text)
+      ) {
+        after = message.id
+      }
+    }
+    if (after === undefined) {
+      return item
+    }
+    moved = true
+    return { ...item, drawAfterId: after }
+  })
+  return moved ? out : (pending as T[])
 }
 
 /** The folded chat with the prompt hook's subagent messages drawn in. */

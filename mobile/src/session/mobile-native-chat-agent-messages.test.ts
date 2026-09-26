@@ -315,6 +315,17 @@ describe('a subagent message the beacon carried, later on', () => {
     expect(keepAgentMessagePrompt(kept, { nonce: '99', text: 'typed at the desk' })).toBe(kept)
   })
 
+  it('knows which prompts the hook took after it at the same row, from the beacon it came on', () => {
+    consumeAgentHudBeacons(handle(), hookFrame('99', 'typed before it', A1))
+    consumeAgentHudBeacons(handle(), hookFrame('100', SUBAGENT_REQUEST_PROMPT, A1))
+    consumeAgentHudBeacons(handle(), hookFrame('101', 'typed after it', A1))
+    consumeAgentHudBeacons(handle(), hookFrame('102', 'typed after the next row', 'b2b2b2b2-0000-4000-8000-000000000002'))
+    const [message] = agentMessagesOfBeacon(getAgentHudBeacon(handle()))
+    expect(message?.laterAtSameRow).toEqual(['typed after it'])
+    // None after it: no list at all.
+    expect(beaconAgentMessages([{ nonce: '1', text: SUBAGENT_REQUEST_PROMPT, anchorId: A1 }])[0]).not.toHaveProperty('laterAtSameRow')
+  })
+
   it('a new one heard after a relaunch is still drawn where the chat was, before its row loads', async () => {
     consumeAgentHudBeacons(handle(), hookFrame('90', 'an early desk prompt'))
     await written()

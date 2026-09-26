@@ -5,6 +5,7 @@ import { mergeDesktopPrompts } from './desktop-prompt-merge'
 import { agentMessageOf, beaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
+import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
 
@@ -187,5 +188,66 @@ describe("another session's message seen while a subagent's row was the chat's l
     await show('12:40:40.000', { messages, working: true, promptHook: true, agentMessages, peerRows })
     await show('12:41:00.000', { messages, working: true, promptHook: true, agentMessages: [], peerRows })
     expect(ids()).toEqual(['p1', 'a1', 'peer-notice:code-ui-6f:1'])
+  })
+})
+
+// Review of 2026-09-26: the lead is mid-turn, running tools and writing no
+// text row. A subagent reports back, then the person types at the desk. The
+// hook names the same last text row for both (`at=a1`). The "Message from"
+// row was spliced in after a1, and every pending echo anchored at a1 is drawn
+// directly after a1, so the desk prompt was drawn ABOVE the message it
+// answers.
+describe('a desk prompt typed after a subagent message, both mid-turn after the same row', () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const MESSAGE = { nonce: '4101', text: SUBAGENT_REQUEST_PROMPT, anchorId: 'a1' }
+  const DESK = 'ok, run that probe it asked for'
+  const drawnOrder = () => {
+    const props = frames.at(-1)!
+    const { data } = buildMobileNativeChatTransientData({
+      messages: props.messages as NativeChatMessage[],
+      folded: props.folded as NativeChatMessage[],
+      streaming: null,
+      pending: props.pending as never,
+      imagePreviewsByMessageId: {}
+    })
+    return data.map((row) =>
+      agentMessageOf(row) ? 'Message from' : row.role === 'user' ? `user: ${row.blocks.map((b) => (b.type === 'text' ? b.text : '')).join('')}` : row.id
+    )
+  }
+
+  it('is drawn below the "Message from" row, in the order they came', async () => {
+    const messages = [PROMPT, OPENING]
+    await show('12:40:30.000', { messages, working: true, promptHook: true, ...fromBeacon([MESSAGE]) })
+    await show('12:40:40.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      ...fromBeacon([MESSAGE, { nonce: '4102', text: DESK, anchorId: 'a1' }])
+    })
+    expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', 'Message from', `user: ${DESK}`])
+  })
+
+  it('is drawn above it when it came first', async () => {
+    const messages = [PROMPT, OPENING]
+    await show('12:40:40.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      ...fromBeacon([{ nonce: '4100', text: DESK, anchorId: 'a1' }, MESSAGE])
+    })
+    expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', `user: ${DESK}`, 'Message from'])
+  })
+
+  it('goes between two messages after the same row when it came between them', async () => {
+    const messages = [PROMPT, OPENING]
+    const second = { nonce: '4103', text: '<agent-message from="a7a46867b4f497c96">\nSecond report.\n</agent-message>', anchorId: 'a1' }
+    await show('12:40:40.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      ...fromBeacon([MESSAGE, { nonce: '4102', text: DESK, anchorId: 'a1' }, second])
+    })
+    expect(drawnOrder()).toEqual(['user: Why is the copy flickering?', 'a1', 'Message from', `user: ${DESK}`, 'Message from'])
   })
 })

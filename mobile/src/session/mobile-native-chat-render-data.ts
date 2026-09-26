@@ -43,7 +43,7 @@ export type MobileNativeChatPendingItem = {
 
 /** The row an echo is DRAWN after: its own captured boundary when it has one,
  *  otherwise the one the rebase handed it on the first settled read. */
-function pendingPlacementAnchorId(item: MobileNativeChatPendingItem): string | null {
+export function pendingPlacementAnchorId(item: MobileNativeChatPendingItem): string | null {
   return item.drawAfterId !== undefined
     ? item.drawAfterId
     : (item.baselineTailMessageId ?? item.placementAnchorId ?? null)

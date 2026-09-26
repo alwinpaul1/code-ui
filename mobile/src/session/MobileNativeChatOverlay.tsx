@@ -24,7 +24,7 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
-import { useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
+import { drawnAfterEarlierAgentMessages, useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
 import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
 import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
@@ -277,8 +277,9 @@ export function MobileNativeChatOverlay({
   )
   // A subagent's message never reaches the transcript the phone reads; the
   // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
+  const agentMessages = controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES
   const foldedWithAgents = useAgentMessageRows(
-    controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES,
+    agentMessages,
     foldedWithoutPeers,
     session.messages,
     controller.nativeChatStreamScopeKey
@@ -322,6 +323,12 @@ export function MobileNativeChatOverlay({
     const sentAt = new Map(desktopPrompts.map((prompt) => [deskEchoId(prompt.nonce), prompt.at]))
     return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
   }, [absorbedEchoes, desktopEchoes, desktopPrompts, hookPairing, placedOwn])
+  // …and one the hook took after a subagent message at the same row is drawn
+  // below that message's row, as it came (2026-09-26).
+  const pendingInArrivalOrder = useMemo(
+    () => drawnAfterEarlierAgentMessages(pendingWithDesktopPrompts, agentMessages, folded),
+    [agentMessages, folded, pendingWithDesktopPrompts]
+  )
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void) =>
       void controller.handleNativeChatStopBackgroundTask(taskId, report),
@@ -415,7 +422,7 @@ export function MobileNativeChatOverlay({
         onEditQueue={controller.openNativeChatQueueEditor}
         onSendQueueNow={controller.sendNativeChatQueueNow}
         queueEditor={controller.nativeChatQueueEditor}
-        pending={pendingWithDesktopPrompts}
+        pending={pendingInArrivalOrder}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

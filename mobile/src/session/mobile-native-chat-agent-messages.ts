@@ -41,6 +41,10 @@ export type BeaconAgentMessage = {
   anchorId?: string
   /** Read back from the warm-start store, not heard this run. */
   restored?: true
+  /** The prompts the hook took after this message at the same row, by their
+   *  text: each is drawn below the message, in the order they came, rather
+   *  than straight after the row above it (mobile-native-chat-agent-message-rows.ts). */
+  laterAtSameRow?: string[]
 }
 
 const OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:[ \t]*\n/
@@ -103,31 +107,52 @@ function dedent(report: string): string {
   return lines.map((line) => line.slice(Math.min(HANDBACK_INDENT.length, line.length - line.trimStart().length))).join('\n')
 }
 
-/** The subagent messages among the prompt hook's beacons, in order. */
+/** The subagent messages among the prompt hook's beacons, which are in the
+ *  order they came. */
 export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | undefined): BeaconAgentMessage[] {
   const found: BeaconAgentMessage[] = []
-  for (const prompt of prompts ?? []) {
+  const list = prompts ?? []
+  list.forEach((prompt, index) => {
     const parsed = parseSubagentMessage(prompt.text, { cut: prompt.cut === true })
-    if (parsed) {
-      found.push({
-        id: `agent-message:${prompt.nonce}`,
-        from: parsed.from,
-        body: parsed.body,
-        cut: prompt.cut === true,
-        ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
-        ...(prompt.restored ? { restored: true as const } : {})
-      })
+    if (!parsed) {
+      return
     }
-  }
+    const later = prompt.anchorId === undefined
+      ? []
+      : list.slice(index + 1).filter((next) => next.anchorId === prompt.anchorId && !isSubagentMessagePrompt(next))
+    found.push({
+      id: `agent-message:${prompt.nonce}`,
+      from: parsed.from,
+      body: parsed.body,
+      cut: prompt.cut === true,
+      ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
+      ...(prompt.restored ? { restored: true as const } : {}),
+      ...(later.length > 0 ? { laterAtSameRow: later.map((next) => next.text) } : {})
+    })
+  })
   return found
 }
 
 /** The same, for the beacon of the session this tab shows: its own list of
- *  them, which outlives the last 40 prompts, else its prompts. */
+ *  them, which outlives the last 40 prompts, in the order they came with the
+ *  prompts that list still holds. Those it no longer holds came before all
+ *  of them. */
 export function agentMessagesOfBeacon(
   beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
 ): BeaconAgentMessage[] {
-  return beaconAgentMessages(beacon?.agentMessagePrompts ?? beacon?.desktopPrompts)
+  const kept = beacon?.agentMessagePrompts
+  const prompts = beacon?.desktopPrompts ?? []
+  if (!kept) {
+    return beaconAgentMessages(prompts)
+  }
+  const keptByNonce = new Map(kept.map((prompt) => [prompt.nonce, prompt]))
+  const held = new Set(prompts.map((prompt) => prompt.nonce))
+  return beaconAgentMessages([
+    ...kept.filter((prompt) => !held.has(prompt.nonce)),
+    // The kept copy, which knows whether it was restored; one the kept list
+    // shed is not drawn.
+    ...prompts.flatMap((prompt) => keptByNonce.get(prompt.nonce) ?? (isSubagentMessagePrompt(prompt) ? [] : [prompt]))
+  ])
 }
 
 export function useBeaconAgentMessages(
