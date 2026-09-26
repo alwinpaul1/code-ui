@@ -20,8 +20,9 @@ export const CODE_VIEW_TAB_WIDTH = 4
  * Up to this size a file is coloured in one pass, so a string or comment that
  * spans many lines is coloured right everywhere. The old reader stopped at
  * 48,000 characters and went plain past 3,000 spans, because it drew the file
- * as one Text; the lines are windowed now, so only the tokenizer's time on
- * the JS thread is left to bound, and the pass runs after the text is shown.
+ * as one Text; the lines are windowed now, so what is left to bound is the
+ * tokenizer's time on the JS thread (the pass runs after the text is shown)
+ * and the spans in one line (CODE_VIEW_MAX_LINE_SPANS).
  */
 export const CODE_VIEW_WHOLE_FILE_HIGHLIGHT_CHARS = 128_000
 /** Past that, a chunk of this many lines at a time, where the reader looks.
@@ -32,6 +33,13 @@ export const CODE_VIEW_HIGHLIGHT_CHUNK_LINES = 400
 export const CODE_VIEW_MAX_HIGHLIGHT_CHARS = 4_000_000
 /** One chunk this long is a minified line; it stays plain. */
 const MAX_CHUNK_HIGHLIGHT_CHARS = 128_000
+/**
+ * Coloured spans one line may mount. Windowing bounds the rows, not what is in
+ * one: a minified file is one row, and a 100 KB bundle coloured whole put
+ * 46,000 nested Texts in it. Past this the rest of the line is one plain span.
+ * The old reader's figure for one Text (it drew the whole file as one).
+ */
+export const CODE_VIEW_MAX_LINE_SPANS = 3_000
 
 /** Languages whose blocks end by dedenting (Monaco's `offSide`). */
 const OFF_SIDE_LANGUAGES = new Set(['python', 'python-repl', 'yaml', 'coffeescript'])
@@ -130,8 +138,23 @@ export function highlightCodeDocumentChunk(
     return plain()
   }
   return colorBracketPairs(splitSyntaxIntoLines(result.segments)).map((line) =>
-    expandTabsInSegments(line, doc.tabWidth)
+    expandTabsInSegments(capLineSpans(line, CODE_VIEW_MAX_LINE_SPANS), doc.tabWidth)
   )
+}
+
+/** A line held to `maxSpans` spans: the first ones keep their colours, and
+ *  everything after them is one plain span, so no character is lost. */
+export function capLineSpans(line: MobileSyntaxSegment[], maxSpans: number): MobileSyntaxSegment[] {
+  if (line.length <= maxSpans) {
+    return line
+  }
+  const kept = line.slice(0, Math.max(0, maxSpans - 1))
+  let rest = ''
+  for (let index = kept.length; index < line.length; index += 1) {
+    rest += line[index]!.text
+  }
+  kept.push({ text: rest, kind: 'plain' })
+  return kept
 }
 
 /** A line before (or without) colour. */
