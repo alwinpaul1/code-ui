@@ -103,3 +103,35 @@ describe('the update alert stays readable on its own frosted surface', () => {
     }
   })
 })
+
+// Review of c714c9bc: the run row's "+A −R" pill draws each count on its own
+// diff tint, and the diff card draws the same pair on the tint over `codeBg`
+// (rows) and plain on `bgRaised` (header). In light, "+N" read 3.97:1 on its
+// pill and 3.71:1 on a card row; "−N" 4.31:1 on a card row. Every place the
+// pair is drawn, tinted or plain, on every surface a chat row, sheet or card
+// sits on, in both schemes.
+describe('diff line counts stay readable on their tints, pills and cards', () => {
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: "+N" and "−N" clear AA tinted and plain on every surface', (_scheme, palette) => {
+    for (const surface of [palette.bg, palette.bgPanel, palette.bgRaised, palette.codeBg]) {
+      for (const [name, text, tint] of [
+        ['+N', palette.diffAddText, palette.diffAddBg],
+        ['−N', palette.diffDelText, palette.diffDelBg]
+      ] as const) {
+        const tinted = toHex(over(parseColor(tint), parseColor(surface)))
+        expect({ name, surface, ratio: contrastRatio(text, tinted) >= WCAG_AA_BODY }).toEqual({
+          name,
+          surface,
+          ratio: true
+        })
+        expect({ name, surface, plain: contrastRatio(text, surface) >= WCAG_AA_BODY }).toEqual({
+          name,
+          surface,
+          plain: true
+        })
+      }
+    }
+  })
+})
