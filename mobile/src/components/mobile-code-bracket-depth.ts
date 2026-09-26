@@ -229,23 +229,73 @@ function skipTemplate(line: string, at: number, state: BracketScanState): number
   return line.length
 }
 
-/** Whether a `/` here starts a regex rather than dividing: nothing before it
- *  on the line, or an operator, an opening bracket or a keyword that cannot
- *  end a value. The usual heuristic; a tokenizer knows better. */
+/** Characters after which a `/` cannot be division: an operator, an opening
+ *  bracket, a separator. */
+const BEFORE_REGEX = new Set('(,=:[!&|?{};+-*%<>~^'.split(''))
+/** Words after which a `/` starts a regex. */
+const REGEX_KEYWORDS = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'void', 'yield', 'await', 'delete', 'throw', 'new'])
+/** No keyword above is longer; a longer word is a value, so a `/` divides. */
+const LONGEST_REGEX_KEYWORD = 6
+/** A regex literal longer than this is not looked for: an unclosed "regex"
+ *  would otherwise send the scan to the line's end at every slash. */
+const MAX_REGEX_CHARS = 1_000
+
+/**
+ * Whether a `/` here starts a regex rather than dividing: nothing before it
+ * on the line, or an operator, an opening bracket or a keyword that cannot
+ * end a value. The usual heuristic; a tokenizer knows better. It looks back
+ * over whitespace and at one word at most, never at the line so far: that
+ * copied and tested the line at every slash, and on a 20 KB minified line
+ * Hermes spent seconds on it (review, 2026-09-27).
+ */
 function opensRegex(line: string, at: number): boolean {
-  const before = line.slice(0, at).trimEnd()
-  if (before.length === 0) {
+  let end = at - 1
+  while (end >= 0 && isSpace(line.charCodeAt(end))) {
+    end -= 1
+  }
+  if (end < 0) {
     return true
   }
-  return /[(,=:[!&|?{};+\-*%<>~^]$/.test(before) || /\b(?:return|typeof|case|do|else|in|of|void|yield|await|delete|throw|new)$/.test(before)
+  const before = line[end]!
+  if (BEFORE_REGEX.has(before)) {
+    return true
+  }
+  if (!isWordCode(line.charCodeAt(end))) {
+    return false
+  }
+  let start = end
+  while (start > 0 && end - start < LONGEST_REGEX_KEYWORD && isWordCode(line.charCodeAt(start - 1))) {
+    start -= 1
+  }
+  if (start > 0 && isWordCode(line.charCodeAt(start - 1))) {
+    return false
+  }
+  let word = ''
+  for (let index = start; index <= end; index += 1) {
+    word += line[index]
+  }
+  return REGEX_KEYWORDS.has(word)
+}
+
+function isSpace(code: number): boolean {
+  return code === 32 || code === 9 || code === 13 || code === 11 || code === 12 || code === 0xa0
+}
+
+/** A letter, digit, `_` or `$`. */
+function isWordCode(code: number): boolean {
+  return (
+    (code >= 97 && code <= 122) || (code >= 65 && code <= 90) || (code >= 48 && code <= 57) || code === 95 || code === 36
+  )
 }
 
 /** Past a regex literal: a `/` inside `[…]` or after a backslash does not
- *  end it. One the line does not close was a division after all. */
+ *  end it. One that does not close within the line (or MAX_REGEX_CHARS) was
+ *  a division after all. */
 function skipRegex(line: string, at: number): number {
   let inClass = false
   let index = at + 1
-  while (index < line.length) {
+  const limit = Math.min(line.length, at + MAX_REGEX_CHARS)
+  while (index < limit) {
     const char = line[index]!
     if (char === '\\') {
       index += 2
@@ -282,9 +332,15 @@ function skipString(line: string, at: number, quote: string): number {
 /** Past `'x'` or `'\n'`; otherwise only past the quote, which is code. */
 function skipCharacter(line: string, at: number): number {
   if (line[at + 1] === '\\') {
-    // The escaped character is at + 2, and may itself be a quote: '\''.
-    const end = line.indexOf("'", at + 3)
-    return end === -1 ? at + 1 : end + 1
+    // The escaped character is at + 2, and may itself be a quote: '\''. The
+    // longest escape, '\u{10FFFF}', closes within 12: look no further, or an
+    // unclosed one would search the rest of the line every time.
+    for (let index = at + 3; index < Math.min(line.length, at + 12); index += 1) {
+      if (line[index] === "'") {
+        return index + 1
+      }
+    }
+    return at + 1
   }
   const width = (line.codePointAt(at + 1) ?? 0) > 0xffff ? 2 : 1
   return line[at + 1 + width] === "'" ? at + 2 + width : at + 1
