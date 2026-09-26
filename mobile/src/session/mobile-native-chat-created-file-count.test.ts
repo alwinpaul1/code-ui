@@ -288,7 +288,10 @@ describe('a file touched after its create', () => {
     ['a Linux home', '/home/dev/jobs/queue.sh', '~/jobs/queue.sh'],
     ["root's home", '/root/jobs/queue.sh', '~/jobs/queue.sh'],
     ['a Windows home', 'C:\\Users\\dev\\jobs\\queue.sh', '~\\jobs\\queue.sh'],
-    ['a folder under no home', '/opt/work/jobs/queue.sh', '~/jobs/queue.sh']
+    ['a folder under no home', '/opt/work/jobs/queue.sh', '~/jobs/queue.sh'],
+    ['~ as the Edit spells it', '~/jobs/queue.sh', '~/jobs/queue.sh'],
+    ['~ with a `..` in the Edit', '~/jobs/queue.sh', '~/tmp/../jobs/queue.sh'],
+    ['the shared folder', '/Users/Shared/queue.sh', '~/queue.sh']
   ])('is touched by a later Edit from ~ of a file created under %s', (_, created, spelled) => {
     const made = write(created, `${'echo step\n'.repeat(500)}${CUT}`)
     const madeKey = cutCreateOf(
@@ -309,6 +312,24 @@ describe('a file touched after its create', () => {
       'a command runs it by a path under no home when the create spelled it from ~',
       '~/jobs/queue.sh',
       'bash /opt/work/jobs/queue.sh'
+    ],
+    // Review of 5aa0f53f: with both paths from `~`, neither named a home, and
+    // the shorter was matched as a suffix of the longer.
+    [
+      'a command runs a script of its name from the top of the home, both spelled from ~',
+      '~/jobs/queue.sh',
+      'bash ~/queue.sh'
+    ],
+    [
+      'a command runs a script of its name in a folder of the home, both spelled from ~',
+      '~/queue.sh',
+      'bash ~/jobs/queue.sh'
+    ],
+    // /Users/Shared is no one's home, so `~` is not it.
+    [
+      'a command runs a script of its name from ~ and the create is in the shared folder',
+      '/Users/Shared/queue.sh',
+      'bash ~/queue.sh'
     ]
   ])('draws no count for a create when %s', (_, created, command) => {
     const made = write(created, `${'echo step\n'.repeat(500)}${CUT}`)
@@ -327,6 +348,31 @@ describe('a file touched after its create', () => {
       made[1] as NativeChatToolResultBlock
     )!.key
     const later = call('Bash', { command: 'chmod +x ~/jobs/queue.sh && bash ~/jobs/queue.sh' })
+    expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(false)
+  })
+
+  // Review of 5aa0f53f: a relative path is matched as a suffix wherever the
+  // create's path is spelled from, and a create from ~ had stopped counting.
+  it.each([
+    ['by a relative path', 'bash jobs/queue.sh'],
+    ['spelled from ~ as the create spelled it', 'chmod +x ~/jobs/queue.sh && bash ~/jobs/queue.sh']
+  ])('counts a create spelled from ~ through a command that runs it %s', (_, command) => {
+    const made = write('~/jobs/queue.sh', `${'echo step\n'.repeat(500)}${CUT}`)
+    const madeKey = cutCreateOf(
+      made[0] as NativeChatToolCallBlock,
+      made[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Bash', { command })
+    expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(false)
+  })
+
+  it('is not touched by an Edit from ~ of a file of its name at the top of the home when the create spelled it from ~ too', () => {
+    const made = write('~/jobs/queue.sh', `${'echo step\n'.repeat(500)}${CUT}`)
+    const madeKey = cutCreateOf(
+      made[0] as NativeChatToolCallBlock,
+      made[1] as NativeChatToolResultBlock
+    )!.key
+    const later = call('Edit', { file_path: '~/queue.sh', old_string: 'a', new_string: 'b' })
     expect(cutCreateStandings(rows(made, later)).get(madeKey)?.touched).toBe(false)
   })
 

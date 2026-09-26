@@ -174,7 +174,10 @@ function normalizedPath(path: string): string {
 
 /** The path with its `.` and `..` segments resolved as far as the path
  *  itself allows. A `..` above a relative path's start is dropped, and what
- *  is left is matched as a suffix, which can only find more touches. */
+ *  is left is matched as a suffix: for a touch that finds more of them, which
+ *  refuses, and for `isTheFile`, where a match keeps a count, it lets a
+ *  relative name run from another folder pass, since the folder the shell
+ *  was in is not in the transcript. */
 function collapsedPath(path: string): string {
   const kept: string[] = []
   for (const segment of path.split('/')) {
@@ -188,8 +191,9 @@ function collapsedPath(path: string): string {
 }
 
 /** The home folder a normalised path spells out: `/users/x`, `/home/x`,
- *  `c:/users/x` or `/root`. */
-const HOME = /^(?:(?:[a-z]:)?\/users\/[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
+ *  `c:/users/x` or `/root`. macOS's /Users/Shared is no one's. */
+const HOME = /^(?:(?:[a-z]:)?\/users\/(?!shared(?:\/|$))[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/
+const ABSOLUTE = /^(?:[a-z]:)?\//
 
 function fromHome(path: string): boolean {
   return path === '~' || path.startsWith('~/')
@@ -198,7 +202,8 @@ function fromHome(path: string): boolean {
 /** A path from `~`, spelled out against the home the other path is under.
  *  When it is under none, `~/rest` is matched as the relative `rest`: for a
  *  touch that finds more of them, which refuses. `isTheFile`, where a match
- *  keeps a count, does not take that guess. */
+ *  keeps a count, takes that guess only against a relative path, which is
+ *  matched as a suffix all the same. */
 function expandedHome(path: string, other: string): string {
   if (!fromHome(path)) {
     return path
@@ -209,6 +214,11 @@ function expandedHome(path: string, other: string): string {
 }
 
 function samePath(a: string, b: string): boolean {
+  // Two paths from `~` start in the one home, so only the whole of each
+  // names the same file.
+  if (fromHome(a) && fromHome(b)) {
+    return collapsedPath(a) === collapsedPath(b)
+  }
   const x = collapsedPath(expandedHome(a, b))
   const y = collapsedPath(expandedHome(b, a))
   return x === y || x.endsWith(`/${y}`) || y.endsWith(`/${x}`)
@@ -275,12 +285,13 @@ function lastSegment(path: string): string {
 }
 
 /** Whether a command's word is the file's own path, or its name. A path
- *  from `~` is the file only when the other side names the home it is in:
- *  `bash ~/queue.sh` runs another script than /opt/work/jobs/queue.sh. */
+ *  from `~` is not the file when the other side is absolute and under no
+ *  home: `bash ~/queue.sh` runs another script than /opt/work/jobs/queue.sh
+ *  or /Users/Shared/queue.sh. */
 function isTheFile(word: string, target: string): boolean {
   const spelled = normalizedPath(word)
-  const unspelledHome = (a: string, b: string) => fromHome(a) && !fromHome(b) && !HOME.test(b)
-  if (unspelledHome(spelled, target) || unspelledHome(target, spelled)) {
+  const outsideTheHome = (a: string, b: string) => fromHome(a) && ABSOLUTE.test(b) && !HOME.test(b)
+  if (outsideTheHome(spelled, target) || outsideTheHome(target, spelled)) {
     return false
   }
   return lastSegment(spelled) === lastSegment(target) && samePath(spelled, target)
