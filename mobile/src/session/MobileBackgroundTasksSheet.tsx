@@ -7,11 +7,8 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import {
-  deriveBackgroundTasks,
-  type BackgroundTaskHostStatus,
-  type BackgroundTask
-} from './mobile-background-tasks'
+import type { BackgroundTaskHostStatus, BackgroundTask } from './mobile-background-tasks'
+import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
@@ -140,15 +137,7 @@ export function MobileBackgroundTasksSheetBody({
   const { running, finished } = useMemo(
     () =>
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
-      deriveBackgroundTasks(messages, now, agentStatus ?? null, {
-        finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
-        runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
-        runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
-        launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
-        onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null,
-        screenCompletions: backgroundTaskReport?.screenCompletions ?? [],
-        subagentRuns
-      }),
+      deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]
   )
   const ticking = running.some((task) => task.startedAt !== null)

@@ -720,8 +720,8 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   function setTranscript(status: MobileNativeChatStatus, rows = 1): void {
     sessionState.status = status
     sessionState.transcriptLoading = status === 'loading'
-    sessionState.messages =
-      status === 'ready' || status === 'error' ? Array.from({ length: rows }, () => ({})) : []
+    const row = (index: number) => ({ id: `row-${index}`, role: 'assistant', blocks: [], timestamp: null, source: 'transcript' })
+    sessionState.messages = status === 'ready' || status === 'error' ? Array.from({ length: rows }, (_row, index) => row(index)) : []
   }
 
   beforeEach(() => {

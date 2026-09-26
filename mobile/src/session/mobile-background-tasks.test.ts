@@ -783,11 +783,13 @@ describe('a tab opened after its turn ended with shells still running', () => {
     expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
   })
 
-  it('counts footer shells and live subagents together, padding only the shells', () => {
-    // Subagents are not shells: the footer's "· N shells" counts only shells,
-    // and running subagents come from the host's live roster (SubagentStop
-    // hooks), which is fresh and not bounded by the beacon's transcript tail.
-    // Both belong in the running list; the shell floor never pads an agent.
+  it('lists live subagents but pads no footer shells while they run', () => {
+    // Subagents are not shells, and the footer's "· N shells" counts no
+    // agents — but it counts every shell in Claude Code's one task registry,
+    // a subagent's too (no owner filter on the pill, 2.1.281–2.1.283). While a
+    // subagent runs, a shell the phone cannot name may be the subagent's, so
+    // the footer only caps; it pads nothing (session 967668df, 2026-09-26:
+    // footer 6, the lead's own 2, four unnamed rows padded in).
     const tasks = deriveBackgroundTasks([], NOW, {
       state: 'working',
       subagents: [
@@ -796,8 +798,8 @@ describe('a tab opened after its turn ended with shells still running', () => {
       ]
     }, { onScreenShellCount: 4 })
     expect(tasks.running.filter((task) => task.kind === 'agent')).toHaveLength(2)
-    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(4)
-    expect(tasks.running).toHaveLength(6)
+    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(0)
+    expect(tasks.running).toHaveLength(2)
   })
 
   it('does not pad shells for an idle subagent the roster excludes', () => {
@@ -812,7 +814,7 @@ describe('a tab opened after its turn ended with shells still running', () => {
     // From the phone, 2026-09-14: desktop footer "· 4 shells" while the phone
     // showed none, because this session's 301 MB transcript put the shell
     // launches beyond the beacon's 4 MB tail. The agent counts them live, so
-    // its on-screen figure is the truthful floor.
+    // with no subagent running its on-screen figure is the truthful floor.
     const tasks = deriveBackgroundTasks([], NOW, monitoring, { onScreenShellCount: 4 })
     expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(4)
     expect(tasks.running.every((task) => task.status === 'running')).toBe(true)

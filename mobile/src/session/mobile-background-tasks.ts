@@ -14,9 +14,15 @@
 // same id, which `stripNoiseMessages` hides from the conversation — so this
 // reads the UNFILTERED message list, not the folded one the list renders.
 //
-// Codex records none of these, so a Codex tab derives an empty result and the
-// running-tasks row never appears for it. Nothing here is gated on the agent
-// name. The records in the transcript are what decide.
+// What it counts is the SESSION's own work: the shells the lead started and
+// the agents the lead started, as Claude Code's agent panel lists them. A
+// reviewer one of those agents starts shares the lead's task registry, and so
+// the host's roster and the footer's shell count, but it is not the lead's
+// task (`mobile-background-task-roster.ts`).
+//
+// Codex records none of these shapes, so on a Codex tab the host's roster is
+// the whole answer. Nothing here is gated on the agent name; the records, and
+// the provenance the caller can or cannot supply, decide.
 
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { SubagentRunClock } from './mobile-subagent-runs'
@@ -38,6 +44,13 @@ import {
   type PendingCall
 } from './mobile-background-task-transcript'
 import { settleAgentLaunches } from './mobile-background-task-agent-titles'
+import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
+import {
+  createRosterOwnership,
+  liveSubagentRoster,
+  type AgentProvenance,
+  type RosterRow
+} from './mobile-background-task-roster'
 
 /**
  * What Orca's hooks know about the pane, to reconcile against the transcript.
@@ -46,11 +59,12 @@ import { settleAgentLaunches } from './mobile-background-task-agent-titles'
  * written as a user turn — Claude Code 2.1.266 stores it as an `attachment`
  * record (type `queued_command`) that Orca's transcript reader does not
  * surface. Observed 2026-09-09: five tasks shown running while two were. The
- * hooks fill the gap. SubagentStop keeps `subagents` current (absent = none
- * tracked, which is how Orca's own sidebar reads it), and Orca holds the pane
- * `working` while Claude's Stop hook still lists a running non-agent task, so
- * `done` means every background shell has reported. `null` = no host status
- * for this pane (an older host, or hooks not attached): trust the transcript.
+ * hooks fill the gap. SubagentStart/SubagentStop keep `subagents` current
+ * (absent = none tracked, which is how Orca's own sidebar reads it), and it is
+ * the authority on every agent it tracks. Orca holds the pane `working` while
+ * Claude's Stop hook still lists a running non-agent task, so `done` means
+ * every background shell has reported. `null` = no host status for this pane
+ * (an older host, or hooks not attached): trust the transcript.
  */
 export type BackgroundTaskHostStatus = Pick<AgentStatusEntry, 'state' | 'subagents'> &
   // `providerSession` is read only for its transcript path, which says where
@@ -62,19 +76,21 @@ export type BackgroundTaskDeriveOptions = {
    *  (`mobile-subagent-runs.ts`). Absent, or absent for an id, means unknown:
    *  the row shows no time. Never the roster's first-observed age. */
   subagentRuns?: SubagentRunClock
-  /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`).
+  /** Task ids the agent's own beacon reports finished (`agent-hud-beacon.ts`),
+   *  plus every id a loaded window has shown retired this session.
    *  Why: a completion that lands mid-turn is written to Claude's transcript as
    *  a queue-operation record Orca never surfaces, but the status-line script
    *  reads that transcript on every refresh and beacons the ids within seconds. */
   finishedTaskIds?: readonly string[]
-  /** What the agent itself says is still running, from its Stop hook beacon.
-   *  When present this OUTRANKS the transcript for retiring: a launch missing
-   *  from it has ended, whatever the transcript does or does not record. It
-   *  does not ADD on its own — an id here that no launch record (the loaded
-   *  window or `launchedTaskIds`) ever showed is not listed, because the Stop
-   *  payload also calls an idle teammate `running`. Null or absent means the
-   *  agent has not answered yet — mid-turn, the Stop hook has not fired — and
-   *  the transcript remains the only source. */
+  /** What the agent itself says is still running: the status line's `live=`
+   *  (shells launched minus finished, in its transcript tail) or the Stop
+   *  hook's `run=` (`background_tasks`, at a turn end). It judges SHELLS only:
+   *  `live=` never names an agent, and `run=` lasts one beacon and names every
+   *  subagent in the process, reviewers included. When present it OUTRANKS the
+   *  transcript for retiring a shell. It does not ADD on its own — an id here
+   *  that no launch record (the loaded window or `launchedTaskIds`) ever
+   *  showed is not listed, because the Stop payload also calls an idle
+   *  teammate `running`. Null or absent means the agent has not answered. */
   runningTaskIds?: readonly string[] | null
   /** When `runningTaskIds` arrived (phone clock, epoch ms). The Stop hook
    *  speaks only when a turn ends, so that list cannot name a shell launched
@@ -98,12 +114,17 @@ export type BackgroundTaskDeriveOptions = {
    *  nothing. */
   screenCompletions?: readonly ScreenTaskCompletion[]
   /** How many background shells the agent's OWN footer says are running, read
-   *  off the screen (`parseClaudeRunningShellCount`). Claude Code counts these
-   *  live and in full, so on a huge session where the beacon's transcript tail
-   *  cannot reach a shell's launch, this is the truthful floor: if fewer shells
-   *  were named than the footer counts, the rest are shown as unnamed running
-   *  shells rather than dropped. Null when no footer count is on screen. */
+   *  off the screen (`parseClaudeRunningShellCount`). It counts every shell
+   *  in the process, a subagent's too, so it caps the lead's named shells and
+   *  pads unnamed ones only while no subagent runs
+   *  (`mobile-background-task-footer.ts`). Null when no footer count is on
+   *  screen. */
   onScreenShellCount?: number | null
+  /** The last footer count, kept while the footer is off screen. */
+  heldOnScreenShellCount?: HeldShellCount | null
+  /** Which roster agents the session itself started. Null or absent: the
+   *  caller cannot tell (a Codex tab), and every working roster row counts. */
+  agentProvenance?: AgentProvenance | null
 }
 
 /** A completion row as read off the agent's screen. `status` is the word the
@@ -152,9 +173,6 @@ const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
 /** Beyond this a summary is a paragraph, not a caption; drop it rather than
  *  truncate a sentence into something that reads as a different claim. */
 const SUMMARY_MAX = 160
-/** Longer than the idle screen poll (5 s), so a launch the footer has not yet
- *  been re-read with is not retired by its count. */
-const COUNT_RETIRE_GRACE_MS = 10_000
 
 /** Split the transcript's background work into what is still running and what
  *  has reported back. Pure: `now` is the only clock, so tests set it. */
@@ -222,152 +240,109 @@ export function deriveBackgroundTasks(
       }
     }
   }
-  const tasks = splitByStatus(
+  const live = options.onScreenShellCount ?? null
+  const held = options.heldOnScreenShellCount ?? null
+  const roster = liveSubagentRoster(hostStatus)
+  // While any subagent runs, the footer holds shells the phone cannot name.
+  const agentLaunchUnsettled = [...launches.values()].some((launch) => launch.kind === 'agent' && !notifications.has(launch.id))
+  const subagentRunning = roster === null ? agentLaunchUnsettled : roster.size > 0
+  const tasks = splitByStatus({
     launches,
     notifications,
     now,
     hostStatus,
-    position + 1,
-    options.runningTaskIds ?? null,
-    options.launchedTaskIds ?? [],
-    options.runningTaskIdsAt ?? null,
-    options.subagentRuns ?? null
-  )
-  return fitToOnScreenShellCount(tasks, options.onScreenShellCount ?? null, now)
+    roster,
+    afterTranscript: position + 1,
+    reportedRunning: options.runningTaskIds ?? null,
+    reportedLaunched: options.launchedTaskIds ?? [],
+    reportedRunningAt: options.runningTaskIdsAt ?? null,
+    subagentRuns: options.subagentRuns ?? null,
+    footerSpeaksForLead: (live !== null || held !== null) && !subagentRunning,
+    ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
+  })
+  return fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning })
 }
 
-/** The agent's footer counts its background shells live and in full, and the
- *  phone's named list is fitted to it both ways.
- *
- *  Up: when it says MORE shells are running than the transcript-and-beacon
- *  walk could name — a shell launched further back than the beacon's tail can
- *  reach, on a huge session — the remainder are shown as unnamed running
- *  shells rather than dropped, so the count matches the desk (2026-09-14).
- *
- *  Down: when it says FEWER, some named shell has finished and the phone did
- *  not see it. That is every mid-turn completion on a hand-started tab: a bare
- *  `claude` typed into a terminal has no Code UI beacon (no `live=`, no
- *  `done=`), Claude Code writes a mid-turn completion as an attachment record
- *  Orca's reader never surfaces, and the pane stays `working` with its start
- *  pinned before the launch, so nothing else ever retires it (phone
- *  2026-09-20: desk "· 2 shells", phone "3 running tasks", all three named).
- *  The count is the agent's own and is taken as it stands; WHICH shell
- *  finished the phone cannot know, so the oldest launches are retired, as
- *  `finished` rather than `completed`: over, outcome unseen. Shells only, in
- *  both directions:
- *  the footer counts no subagents, and a running agent is never retired here.
- *  Does nothing when the footer count is absent or already met. */
-export function fitToOnScreenShellCount(
-  tasks: BackgroundTasks,
-  onScreenShellCount: number | null,
+type SplitContext = {
+  launches: ReadonlyMap<string, Launch>
+  notifications: ReadonlyMap<string, Notification>
   now: number
-): BackgroundTasks {
-  if (onScreenShellCount === null) {
-    return tasks
-  }
-  const namedShells = tasks.running.filter((task) => task.kind === 'shell').length
-  const missing = onScreenShellCount - namedShells
-  if (missing === 0) {
-    return tasks
-  }
-  if (missing < 0) {
-    // Running is in launch order, oldest first; the surplus is taken from the
-    // front, so the shells most recently launched keep their rows. A shell
-    // launched within the grace is never retired: the transcript is pushed
-    // and the screen polled, so its launch can be named before the footer has
-    // been re-read with it counted, and retiring it would flip the row to
-    // finished and back a second later.
-    let toRetire = -missing
-    const running: BackgroundTask[] = []
-    const retired: BackgroundTask[] = []
-    for (const task of tasks.running) {
-      const fresh = task.startedAt !== null && now - task.startedAt < COUNT_RETIRE_GRACE_MS
-      if (task.kind === 'shell' && toRetire > 0 && !fresh) {
-        toRetire -= 1
-        retired.push({ ...task, status: 'finished', elapsedMs: null })
-      } else {
-        running.push(task)
-      }
-    }
-    // Newest-first, like the rest of the finished list; these ended at an
-    // unknown time after their launch, so they go ahead of the notified ones.
-    return { running, finished: [...retired.toReversed(), ...tasks.finished] }
-  }
-  const filler: BackgroundTask[] = Array.from({ length: missing }, (_unused, index) => ({
-    id: `onscreen-shell-${index}`,
-    kind: 'shell',
-    title: 'Background shell',
-    status: 'running',
-    startedAt: null,
-    elapsedMs: null
-  }))
-  return { running: [...tasks.running, ...filler], finished: tasks.finished }
+  hostStatus: BackgroundTaskHostStatus | null
+  roster: ReadonlyMap<string, RosterRow> | null
+  afterTranscript: number
+  reportedRunning: readonly string[] | null
+  reportedLaunched: readonly string[]
+  reportedRunningAt: number | null
+  subagentRuns: SubagentRunClock | null
+  /** Whether the agent's footer count, live or held, counts the lead's
+   *  shells alone: it is on record and no subagent is running. */
+  footerSpeaksForLead: boolean
+  ownedByLead: (id: string) => boolean
 }
 
-function splitByStatus(
-  launches: ReadonlyMap<string, Launch>,
-  notifications: ReadonlyMap<string, Notification>,
-  now: number,
-  hostStatus: BackgroundTaskHostStatus | null,
-  afterTranscript: number,
-  reportedRunning: readonly string[] | null,
-  reportedLaunched: readonly string[] = [],
-  reportedRunningAt: number | null = null,
-  subagentRuns: SubagentRunClock | null = null
-): BackgroundTasks {
-  const agentSaysRunning = reportedRunning === null ? null : new Set(reportedRunning)
+function splitByStatus(context: SplitContext): BackgroundTasks {
+  const { launches, notifications, now, hostStatus, roster, afterTranscript } = context
+  const agentSaysRunning = context.reportedRunning === null ? null : new Set(context.reportedRunning)
   const running: BackgroundTask[] = []
   const finished: { task: BackgroundTask; at: number }[] = []
-  const roster = liveSubagentRoster(hostStatus)
   const paneDone = hostStatus?.state === 'done'
-  // Why: the pane only leaves `working` when Claude's Stop hook lists no live
-  // background task, so the current working run's start is the last moment at
-  // which everything launched earlier was known to have finished. Without it,
-  // a `done` that retired old launches flipped them back to running on the
-  // next prompt (eight hours-old shells shown running, 2026-09-09).
+  // Why: the pane leaves `working` for `done` only when Claude's Stop hook
+  // lists no live background task, so a working run's start is the last moment
+  // at which everything launched earlier was known to have finished — unless
+  // the run followed a `waiting` (a question, a permission prompt), which moves
+  // the start too while work runs on (session 967668df, 23:24:06). So it is a
+  // fallback for a shell nothing else can speak for. Without it, a `done` that
+  // retired old launches flipped them back to running on the next prompt
+  // (eight hours-old shells shown running, 2026-09-09).
   const runStartedAt =
     hostStatus?.state === 'working' && typeof hostStatus.stateStartedAt === 'number'
       ? hostStatus.stateStartedAt
       : null
+  const shellFallbackBoundary = agentSaysRunning === null && !context.footerSpeaksForLead
   for (const launch of launches.values()) {
     const notification = notifications.get(launch.id)
-    if (!notification) {
-      // Why: an idle teammate is alive but not working, so it is not "running".
-      const launchedBeforeRun =
-        runStartedAt !== null && launch.startedAt !== null && launch.startedAt < runStartedAt
-      // Why the time check: on 2026-09-12 two shells launched mid-turn never
-      // reached the row. The `run=` the phone held was the previous turn's
-      // answer, which could not list shells that did not exist yet, and "not
-      // on the list" was read as "finished". An answer given before a launch
-      // says nothing about it.
-      const answeredBeforeLaunch =
-        reportedRunningAt !== null && launch.startedAt !== null && launch.startedAt > reportedRunningAt
-      const hostSaysFinished =
-        paneDone ||
-        launchedBeforeRun ||
-        // The agent's own answer, when it has given one that postdates the launch.
-        (agentSaysRunning !== null && !answeredBeforeLaunch && !agentSaysRunning.has(launch.id)) ||
-        (launch.kind === 'agent' && roster !== null && !roster.has(launch.id))
-      if (hostSaysFinished) {
-        finished.push({
-          at: afterTranscript,
-          task: { ...launch, status: 'completed', elapsedMs: null }
-        })
-        continue
-      }
+    // An agent the host tracks is running exactly while its roster says so: a
+    // notification may be an earlier run's, since Claude Code notes "the same
+    // task-id may notify more than once" when the lead resumes an agent.
+    const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? roster.has(launch.id) : null
+    if (rosterSaysRunning === true) {
       running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
       continue
     }
-    const summary = captionOf(notification.summary)
-    finished.push({
-      at: notification.at,
-      task: {
-        ...launch,
-        status: isFailureStatus(notification.status) ? 'failed' : 'completed',
-        elapsedMs: null,
-        ...(summary ? { summary } : {})
-      }
-    })
+    if (notification) {
+      const summary = captionOf(notification.summary)
+      finished.push({
+        at: notification.at,
+        task: {
+          ...launch,
+          status: isFailureStatus(notification.status) ? 'failed' : 'completed',
+          elapsedMs: null,
+          ...(summary ? { summary } : {})
+        }
+      })
+      continue
+    }
+    const judgesShell = launch.kind !== 'agent'
+    const launchedBeforeRun =
+      judgesShell && shellFallbackBoundary && runStartedAt !== null && launch.startedAt !== null && launch.startedAt < runStartedAt
+    // Why the time check: on 2026-09-12 two shells launched mid-turn never
+    // reached the row. The `run=` the phone held was the previous turn's
+    // answer, which could not list shells that did not exist yet, and "not
+    // on the list" was read as "finished". An answer given before a launch
+    // says nothing about it.
+    const answeredBeforeLaunch =
+      context.reportedRunningAt !== null && launch.startedAt !== null && launch.startedAt > context.reportedRunningAt
+    const hostSaysFinished =
+      rosterSaysRunning === false ||
+      paneDone ||
+      launchedBeforeRun ||
+      // The agent's own answer, when it has given one that postdates the launch.
+      (judgesShell && agentSaysRunning !== null && !answeredBeforeLaunch && !agentSaysRunning.has(launch.id))
+    if (hostSaysFinished) {
+      finished.push({ at: afterTranscript, task: { ...launch, status: 'completed', elapsedMs: null } })
+      continue
+    }
+    running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
   }
   // A task the agent reports but the loaded transcript never showed: launched
   // before the page the phone holds, or paginated out of it — provided the
@@ -379,7 +354,7 @@ function splitByStatus(
   // The hook now skips teammates, but a tab keeps the hook it was launched
   // with, so the reader holds the line too: an id nobody saw launched is not
   // shown. Prefer refusing over guessing — a bare id was never a useful row.
-  const seenLaunched = new Set(reportedLaunched)
+  const seenLaunched = new Set(context.reportedLaunched)
   if (agentSaysRunning) {
     for (const id of agentSaysRunning) {
       if (launches.has(id) || notifications.has(id) || !seenLaunched.has(id)) {
@@ -391,7 +366,7 @@ function splitByStatus(
   // A shell the beacon saw launched in the transcript tail, above the loaded
   // window, with no notification in that tail: running until one lands.
   const listed = new Set(running.map((task) => task.id))
-  for (const id of reportedLaunched) {
+  for (const id of context.reportedLaunched) {
     if (launches.has(id) || notifications.has(id) || listed.has(id) || paneDone) {
       continue
     }
@@ -408,23 +383,25 @@ function splitByStatus(
     running.push({ id, kind: 'shell', title: id, status: 'running', startedAt: null, elapsedMs: null })
   }
   // A subagent the host is tracking but the loaded transcript window never
-  // showed (launched before the page, or its launch record paginated out).
+  // showed (launched before the page, or its launch record paginated out) —
+  // when it is the session's own. A reviewer one of the session's agents
+  // started is on the same roster and is not.
   if (roster && !paneDone) {
     for (const [id, snapshot] of roster) {
-      if (launches.has(id)) {
+      if (launches.has(id) || !context.ownedByLead(id)) {
         continue
       }
       // Not `snapshot.startedAt`: that is when the host first saw the
       // subagent, a teammate's creation hours before its current task
       // (device, 2026-09-20; see mobile-subagent-runs.ts).
-      const runStartedAt = subagentRuns?.get(id) ?? null
+      const subagentRunStartedAt = context.subagentRuns?.get(id) ?? null
       running.push({
         id,
         kind: 'agent',
         title: truncate(snapshot.description?.trim() || snapshot.agentType?.trim() || id),
         status: 'running',
-        startedAt: runStartedAt,
-        elapsedMs: elapsedSince(runStartedAt, now)
+        startedAt: subagentRunStartedAt,
+        elapsedMs: elapsedSince(subagentRunStartedAt, now)
       })
     }
   }
@@ -459,23 +436,6 @@ function splitByStatus(
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)
   return { running, finished: finished.map((entry) => entry.task) }
-}
-
-/** Subagents the host still counts as busy, by id; null when the host gave no
- *  status at all (then only the transcript can speak). */
-function liveSubagentRoster(
-  hostStatus: BackgroundTaskHostStatus | null
-): Map<string, NonNullable<AgentStatusEntry['subagents']>[number]> | null {
-  if (!hostStatus) {
-    return null
-  }
-  const roster = new Map<string, NonNullable<AgentStatusEntry['subagents']>[number]>()
-  for (const snapshot of hostStatus.subagents ?? []) {
-    if (snapshot.state !== 'idle') {
-      roster.set(snapshot.id, snapshot)
-    }
-  }
-  return roster
 }
 
 /** A notification means the task stopped. Only an explicitly bad status is

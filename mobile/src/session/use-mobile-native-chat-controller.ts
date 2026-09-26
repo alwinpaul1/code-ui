@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
@@ -35,7 +35,7 @@ import {
   resolveObservedPermission
 } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
-import { useActiveTabScreenCompletions } from './use-active-tab-screen-completions'
+import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
@@ -200,18 +200,16 @@ export function useMobileNativeChatController(
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
   const isCodexChat = activeChatResolution?.agent === 'codex'
   const isOmpChat = activeChatResolution?.agent === 'omp'
-  // The agent's footer counts its shells live; fold that into the beacon-built
-  // report so the pill and sheet can fit the named list to it: a floor when
-  // the beacon's transcript tail lags on a huge session, and a cap on a
-  // hand-started tab that has no beacon to retire a mid-turn completion.
-  const onScreenShellCount = hudObservation?.runningShellCount ?? null
-  // And the completions it has stated there, which name WHICH shell ended:
-  // the only source of that on a hand-started tab (2026-09-20).
-  const screenCompletions = useActiveTabScreenCompletions(activeHandle, activeChatSessionId, screenTaskCompletions)
-  const backgroundTaskReportWithScreen = useMemo(
-    () => ({ ...backgroundTaskReport, onScreenShellCount, screenCompletions }),
-    [backgroundTaskReport, onScreenShellCount, screenCompletions]
-  )
+  // The agent's footer counts its shells live, and the completions it has
+  // stated there name WHICH shell ended (the only source of that on a
+  // hand-started tab, 2026-09-20). Folded into the beacon-built report with
+  // what the phone has seen of this session: which agents are the lead's own,
+  // what a window showed ending, the last host status (use-active-tab-task-report.ts).
+  const backgroundTaskReportWithScreen = useActiveTabTaskReport({
+    report: backgroundTaskReport, handle: activeHandle, sessionId: activeChatSessionId, agent: activeChatResolution?.agent ?? null,
+    messages: nativeChatSession.messages, agentStatus: activeSessionTab?.agentStatus ?? null,
+    onScreenShellCount: hudObservation?.runningShellCount ?? null, screenTaskCompletions
+  })
 
   const {
     permission: reportedNativeChatPermission,

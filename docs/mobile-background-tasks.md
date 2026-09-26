@@ -81,10 +81,13 @@ watched publishing a roster to this phone. The fallback is the safe direction
      Observed 2026-09-09 on the S23: five tasks shown running while two were.
    - `agentStatus.subagents` is the live roster kept current by
      SubagentStart/SubagentStop and Claude's `background_tasks` inventory. When
-     the host reports status at all, a launched agent absent from the roster
-     (or idle in it) is finished. Absent field = none tracked, which is how
-     Orca's own sidebar reads it. Roster entries the loaded transcript window
-     never showed are listed as running.
+     the host reports status at all, it decides every agent it tracks: a
+     launched agent absent from the roster (or idle in it) is finished, and
+     one it lists is running even after a notification (a resumed agent
+     notifies again). Absent field = none tracked, which is how Orca's own
+     sidebar reads it. Roster entries the loaded transcript window never
+     showed are listed only when they are the session's own; see "The count
+     is the session's own work" below.
    - Orca holds the pane `working` while Claude's Stop hook still lists a
      running non-agent task, so `state: 'done'` means every background shell
      has reported. A shell with no notification while the pane is still
@@ -218,3 +221,87 @@ A foreground agent's result is its report followed by `agentId: …` and a
 `<usage>subagent_tokens: …` block, which is written only once the run is
 over. Such a launch is filed under Finished at once instead of waiting for a
 roster that may never come.
+
+## The count is the session's own work (2026-09-26)
+
+Reported from the phone: "Working… · N running tasks" read 5, then 8, back
+to 5, then 11, then 10, changing within seconds, on session 967668df (entrypoint
+cli; its records say Claude Code 2.1.281, the installed binary was 2.1.283).
+The lead had five agents of its own running for hours; each started reviewer
+agents of its own that came and went; background shells started and finished
+mid-turn.
+
+**What Claude Code itself holds.** One task registry for the whole process:
+every subagent's context is handed the lead's `taskRegistry` and
+`queuedNotificationsRegistry` (the same code in the 2.1.281, 2.1.282 and
+2.1.283 bundles). That shows in three places the phone reads:
+
+- The lead's transcript carries a `queue-operation` record for every
+  notification in the process. In this session 337 of the 467 enqueued ones
+  were for tasks the lead never launched (a reviewer's, a reviewer's shell's).
+- The Stop hook's `background_tasks` is every running backgrounded task in the
+  registry, reviewers included. Seen live at 00:53:36: two spawnDepth-2 rows on
+  Orca's roster gained descriptions from the lead's Stop, like the lead's own.
+- The footer's "· N shells" pill is filtered by kind only (`yX` in 2.1.281,
+  `MJ` in 2.1.283), never by owner: a reviewer's test shell is in it.
+
+What Claude Code DRAWS as the session's agents is narrower: the agent panel
+beside the prompt lists only the lead's agents at the top level, and folds a
+reviewer under its parent as "(+N)" (its row filter keeps a row whose nearest
+live parent agent is the one being viewed; none, at the top). The phone counts
+that set, plus the lead's own shells. Its Background dialog and the Claude
+app's `background_tasks_changed` feed do count everything in the registry.
+
+**The replay.** Every launch, completion (user turns, attachments and
+queue-operations alike), TaskStop and turn end of 23:50–00:34 was replayed
+against the real reader every 5 s, with the roster rebuilt from each
+subagent's own transcript and `.meta.json` (`spawnDepth`, `parentAgentId`),
+and the beacon lists rebuilt from the same 4 MiB tail the status line reads.
+The truth was 5–7 (five agents, 0–2 shells). The phone's old rule gave 4–13
+and changed 38 times; the sources, one by one:
+
+| Source | What it did | Effect |
+| --- | --- | --- |
+| Orca's roster | listed the reviewers beside the lead's agents, and the reader added any row the window had not shown launched | +1 to +3, moving as reviewers came and went |
+| The footer count | counted the reviewers' shells, and the reader padded unnamed "Background shell" rows up to it | +1 to +4, moving with every reviewer's test run |
+| The status line's `live=` | lists shells only, yet retired every agent launched before its last change | −1 to −3 each time a shell started or finished |
+| The Stop hook's `run=` | lists agents, so for the one beacon after each turn end the agents came back | +1 to +3 for a few seconds at every turn end |
+| The pane's working start | moved when the lead's question at 23:23 was answered, and "launched before the current working run" retired four agents and a shell that ran on | −1 to −5 |
+| A stopped shell | bhcfbe9vf, stopped at 00:20:27, gets no notification; `bg=` and `live=` keep naming it once the TaskStop scrolls out of the window | +1 later on |
+
+**The rule now** (`mobile-background-tasks.ts`, `-roster.ts`, `-footer.ts`,
+`-evidence.ts`, `use-active-tab-task-report.ts`):
+
+- An agent the host tracks runs exactly while the roster lists it. Neither
+  beacon list judges an agent.
+- A roster row the loaded window never showed launched counts only when the
+  lead's transcript has shown the phone its launch or a SendMessage to it this
+  session, when it is a teammate (`a<name>-<hex>`; Claude Code refuses a
+  teammate spawned from a subagent), or when it was already running the first
+  time the phone read the roster and has not stopped since. That last case is
+  the benefit of the doubt for agents launched before anything the phone has
+  read; a reviewer running at the first look is counted until it first stops.
+- The footer count caps the lead's named shells always, pads unnamed ones only
+  while no subagent runs, and a reading keeps capping the shells launched
+  before it while a dialog hides the footer.
+- "Launched before the working run" retires a shell only when no beacon list,
+  and no footer that counts the lead's shells alone, can speak for it.
+- Ids a window showed ending (a notification, a TaskStop) are remembered for
+  the session, so a slid window cannot bring them back.
+- A host status missing from one snapshot is bridged by the last one for up
+  to 60 s.
+
+Replayed again with the new rule: 5–9, ten changes, each a real event (a
+shell starting or ending, an agent launched, a first-look reviewer stopping),
+and no task of the lead's ever missing, whether the phone held a 40- or a
+150-message window, and with or without the beacon.
+
+**Codex** has none of the sources that flapped: its transcript records no
+launch the phone reads, its notify beacon carries no task ids, and the footer
+count is read for Claude only. Its count is Orca's Codex roster as it stands
+(SubagentStart/SubagentStop hooks and the parent rollout's
+`sub_agent_activity`), and it shares only the missing-status flap, now
+bridged. If Codex fires SubagentStart for a child's own child on the lead's
+pane, that row is counted: nothing the phone reads can place a Codex row. Not
+verified: none of the 12 rollouts on this machine (codex-cli 0.153.4) ever
+spawned a sub-agent.

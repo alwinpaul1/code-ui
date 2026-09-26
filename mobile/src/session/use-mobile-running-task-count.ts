@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { deriveBackgroundTasks, type BackgroundTask } from './mobile-background-tasks'
+import type { BackgroundTask } from './mobile-background-tasks'
+import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import { useSubagentRunClock } from './use-subagent-run-clock'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -41,12 +42,5 @@ function runningTasksNow(
   if (structured) {
     return structured.running
   }
-  return deriveBackgroundTasks(messages, now, agentStatus ?? null, {
-    finishedTaskIds: backgroundTaskReport?.finishedTaskIds ?? [],
-    runningTaskIds: backgroundTaskReport?.runningTaskIds ?? null,
-    runningTaskIdsAt: backgroundTaskReport?.runningTaskIdsAt ?? null,
-    launchedTaskIds: backgroundTaskReport?.launchedTaskIds ?? [],
-    onScreenShellCount: backgroundTaskReport?.onScreenShellCount ?? null,
-    screenCompletions: backgroundTaskReport?.screenCompletions ?? []
-  }).running
+  return deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport).running
 }

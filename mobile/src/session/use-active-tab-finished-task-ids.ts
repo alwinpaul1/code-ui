@@ -1,5 +1,8 @@
 import { useMemo, useRef } from 'react'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { AgentHudBeacon } from './agent-hud-beacon'
+import type { HeldShellCount } from './mobile-background-task-footer'
+import type { AgentProvenance } from './mobile-background-task-roster'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 
@@ -49,23 +52,35 @@ export function useActiveTabFinishedTaskIds(
 }
 
 export type ActiveTabBackgroundTaskReport = {
-  /** Ids the beacon has ever named finished, remembered across refreshes. */
+  /** Ids the beacon has ever named finished, remembered across refreshes;
+   *  in the report the chat reads, also every id a loaded window showed
+   *  ending this session (`use-active-tab-task-report.ts`). */
   finishedTaskIds: readonly string[]
-  /** What the agent's own Stop hook says is still running, or null before it
-   *  has answered. Null and empty differ: empty means nothing is running,
-   *  which is what clears the row on the last task. */
+  /** What the agent itself says is still running (the status line's `live=`,
+   *  or the Stop hook's `run=` for the beacon after a turn end), or null
+   *  before it has answered. It judges shells only. Null and empty differ:
+   *  empty means nothing is running, which is what clears the row on the last
+   *  shell. */
   runningTaskIds: readonly string[] | null
   /** When that answer arrived (phone clock, epoch ms); null when it has not. */
   runningTaskIdsAt: number | null
   /** Every shell the beacon saw launched in the transcript tail. */
   launchedTaskIds: readonly string[]
   /** How many shells the agent's own footer says are running, read off the
-   *  screen. The truthful floor when the beacon's transcript tail cannot reach
-   *  a shell's launch on a huge session; null when no footer count is on screen. */
+   *  screen: every shell in the process, a subagent's too, so a cap on the
+   *  lead's named shells and a floor only while no subagent runs
+   *  (`mobile-background-task-footer.ts`); null when no footer count is on screen. */
   onScreenShellCount?: number | null
   /** Completions the agent stated on its screen, remembered since this tab's
    *  session came on screen (`use-active-tab-screen-completions.ts`). */
   screenCompletions?: readonly ScreenTaskCompletion[]
+  /** The footer's last count while it is off screen; null while it is on. */
+  heldOnScreenShellCount?: HeldShellCount | null
+  /** Which roster agents this session started; null when the tab's
+   *  transcript cannot say (`use-active-tab-task-report.ts`). */
+  agentProvenance?: AgentProvenance | null
+  /** The session's last host status, for a moment the tab's is missing. */
+  heldAgentStatus?: AgentStatusEntry | null
 }
 
 /** What the agent has said about its background work, all three halves, from
