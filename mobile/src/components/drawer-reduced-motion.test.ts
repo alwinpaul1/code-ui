@@ -180,7 +180,10 @@ describe('the bottom sheet under reduced motion', () => {
     await render(
       createElement(MountedBottomDrawer, { visible: false, onClose: noop, onHidden: noop }, null)
     )
-    // Hidden: progress 0 → parked a full screen height below.
+    // Hidden: progress 0 → parked a full screen height below. That is the
+    // distance before the sheet has laid itself out, which it never does here;
+    // once measured it waits just below its own height
+    // (attach-sheet-opens-on-first-frame.test.tsx).
     expect(translateOf(sheet(), 'translateY')).toBe(956)
     expect(sheet().opacity ?? 1).toBe(1)
   })
