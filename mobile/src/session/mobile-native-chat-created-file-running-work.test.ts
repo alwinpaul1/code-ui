@@ -475,6 +475,61 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...turn, ...CREATE])).toBe(true)
   })
 
+  // Review of e53a4074: any answer in the batch that opened with `{` read as
+  // the turned-down agent's launch, with no id, so it ran for good.
+  const PACKAGE_JSON = '{\n  "name": "mobile",\n  "version": "1.0.0"\n}'
+  it.each([
+    ['a command printing a JSON file', 'Bash', { command: 'cat package.json' }, PACKAGE_JSON],
+    ['a tool answering in JSON', 'mcp__github__get_issue', { n: 1 }, '{"number":1,"title":"x"}']
+  ])(
+    'still counts a create made after a background agent the user turned down beside %s',
+    (_, name, input, output) => {
+      const turn = [
+        message('assistant', [
+          { type: 'tool-call', name: 'Agent', input: BACKGROUND_AGENT },
+          { type: 'tool-call', name, input }
+        ]),
+        answered(USER_TURNED_DOWN),
+        answered(output)
+      ]
+      expect(touched([...turn, ...CREATE])).toBe(false)
+    }
+  )
+
+  it('still counts a create made after a background agent that reported, launched beside a failed read and a command printing a JSON file', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'Agent', input: BACKGROUND_AGENT },
+        { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/missing.txt' } },
+        { type: 'tool-call', name: 'Bash', input: { command: 'cat package.json' } }
+      ]),
+      answered(MISSING_FILE),
+      answered(asyncAgentLaunchResult(AGENT_ID)),
+      answered(PACKAGE_JSON),
+      said(agentFinishedNotification(AGENT_ID, BACKGROUND_AGENT.description))
+    ]
+    expect(touched([...turn, ...CREATE])).toBe(false)
+  })
+
+  // Review of e53a4074: the diet can drop `run_in_background` from a long
+  // prompt, and the JSON launch then read as no launch of the agent.
+  it.each([
+    ['', (output: string) => output],
+    [', cut by the wire', cutByTheWire]
+  ])(
+    'draws no count for a create made after a background agent with a long prompt launched in the JSON shape after the failed read beside it%s',
+    (_, onTheWireOutput) => {
+      const onTheWire = {
+        description: BACKGROUND_AGENT.description,
+        prompt: `${'Keep the phone’s own copy of a message. '.repeat(100).slice(0, 3960)}… (truncated)`,
+        '…': 'truncated'
+      }
+      const output = `{"resultType":"task","taskId":"${AGENT_ID}","status":"working","statusMessage":${JSON.stringify(asyncAgentLaunchResult(AGENT_ID).repeat(4))}}`
+      const turn = besideAFailedRead('Agent', onTheWire, onTheWireOutput(output))
+      expect(touched([...turn, ...CREATE])).toBe(true)
+    }
+  )
+
   it('still counts a create made after a foreground agent reported after the failed read beside it', () => {
     const turn = besideAFailedRead(
       'Agent',

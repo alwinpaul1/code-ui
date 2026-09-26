@@ -10,15 +10,20 @@
 // (mobile-background-task-transcript.ts), paired the way
 // `deriveBackgroundTasks` pairs them, which in a batch, the calls waiting for
 // answers together, is a guess. The pairing hands a failure to the first call
-// waiting and anything else to the first that is no Agent call, so a quick
-// call can take another's answer. So when a batch closes:
+// waiting, an answer shaped like an Agent result to the first Agent call, and
+// anything else to the first that is no Agent call, so a quick call can take
+// another's answer. So when a batch closes (every call answered, an
+// interrupt, or the end of the transcript):
 // - a call that may launch (a shell, a monitor, an agent) and was handed an
 //   answer that launched nothing (for an agent, a failure or a report), or
 //   that is still waiting, runs under any launch of it an answer in the batch
 //   names (review of 5b257b16: a background agent beside a Read that failed
 //   first lost its launch to the Read). This holds for a call answered last
 //   and alone too: the answer it lost may have gone to a call answered
-//   before it;
+//   before it. An agent's launch there is its launch sentence or the JSON
+//   launch, `{"resultType":"task",…}`, whatever its call asked for, and no
+//   other JSON (review of e53a4074: a `cat package.json` beside a background
+//   agent the user turned down read as its launch and ran for good);
 // - a stop ends its task unless a failure landed in the batch and no answer
 //   there is TaskStop's own word that the task is no longer running: its
 //   JSON, or `Task <id> is not running (status: completed|failed|killed)`
@@ -162,14 +167,19 @@ function mayLaunch(call: Pending): boolean {
   return toolCallKind(call.name) === 'agent' || call.name === 'Bash' || call.name === 'Monitor'
 }
 
+/** The launch a server flag serves in Claude Code 2.1.283, the whole answer
+ *  JSON: `{"resultType":"task","taskId":…,"status":"working",…}`, keys in the
+ *  order its source builds them. A file a command printed, or another tool's
+ *  JSON, is not one. */
+const JSON_LAUNCH = /^\s*\{\s*"resultType"\s*:\s*"task"/
+
 /** The id an answer launches `call` under: null for a launch that names no
  *  id, undefined when the answer is no launch of it. */
 function launchIn(call: Pending, answer: string): string | null | undefined {
   if (toolCallKind(call.name) !== 'agent') {
     return readLaunch(call, answer)?.id
   }
-  const launches =
-    AGENT_LAUNCH_OPENING.test(answer) || (JSON_OPENING.test(answer) && askedForBackground(call))
+  const launches = AGENT_LAUNCH_OPENING.test(answer) || JSON_LAUNCH.test(answer)
   return launches ? (readLaunch(call, answer)?.id ?? null) : undefined
 }
 

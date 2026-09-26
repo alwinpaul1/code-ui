@@ -113,12 +113,17 @@ Nothing here is built.
   sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
   2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
   2.1.228 to 2.1.281 wrote), except where that pairing guesses. It hands a
-  failure to the first call waiting and anything else to the first that is
-  no Agent call, so among calls waiting together one can take another's
-  answer: a background agent beside a Read that failed first lost its launch
-  to the Read in review. So a shell, monitor or agent call handed no launch,
-  or still waiting when the user interrupted, is read against every answer
-  the calls waiting with it took, and runs under any launch of it one names.
+  failure to the first call waiting, an answer shaped like an Agent result to
+  the first Agent call, and anything else to the first that is no Agent call,
+  so among calls waiting together one can take another's answer: a
+  background agent beside a Read that failed first lost its launch to the
+  Read in review. So a shell, monitor or agent call handed no launch, or
+  still waiting when the user interrupted or the transcript ends, is read
+  against every answer the calls waiting with it took, and runs under any
+  launch of it one names. An agent's launch there is its launch sentence or
+  the JSON launch, `{"resultType":"task",…}`, and no other JSON: in review a
+  `cat package.json` beside a background agent the user turned down read as
+  its launch and held every later count off.
   And a stop ends its task unless a failure (a
   `<tool_use_error>`, a turn-down, a cancel, a denial, an answer Orca marks
   as an error, or an interrupt with a call still waiting) landed among the
