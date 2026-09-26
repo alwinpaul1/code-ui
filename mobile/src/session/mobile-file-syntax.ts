@@ -74,28 +74,6 @@ export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?
   return highlighter().registered(normalized) ? normalized : 'plaintext'
 }
 
-/** How much of a file is read to guess its language: each candidate
- *  language tokenizes this much once. */
-const AUTO_DETECT_SAMPLE_CHARS = 4_000
-/**
- * highlight.js's relevance alone does not tell code from prose: measured on
- * this repo (2026-09-26), its LICENSE scored 17 as SQL, CLAUDE.md 69 as SQL,
- * and its own package.json ranked Perl above JSON. So a guess is kept only
- * when it scores at least 10, at least 3 per 100 characters (prose scored
- * under 2), and half again as much as the runner-up (prose and the misreads
- * were within a few points).
- */
-const AUTO_DETECT_MIN_RELEVANCE = 10
-const AUTO_DETECT_MIN_DENSITY = 3 / 100
-const AUTO_DETECT_MIN_LEAD = 1.5
-/** What a file with no telling name usually is: a script, a config, or
- *  source with an odd extension. Apache and nginx are left out: they claimed
- *  plain log lines and CSV (360 for a log). */
-const AUTO_DETECT_SUBSET = [
-  'bash', 'python', 'javascript', 'typescript', 'ruby', 'perl', 'php', 'lua', 'r',
-  'powershell', 'groovy', 'json', 'yaml', 'ini', 'xml', 'makefile', 'dockerfile',
-  'sql', 'c', 'cpp', 'java', 'go', 'rust', 'latex', 'diff'
-]
 /** Interpreters named on a `#!` line, by the language they run. */
 const SHEBANG_LANGUAGES: Record<string, string> = {
   sh: 'bash', bash: 'bash', zsh: 'bash', dash: 'bash', ksh: 'bash', fish: 'bash',
@@ -111,10 +89,14 @@ const SHEBANG_LANGUAGES: Record<string, string> = {
 
 /**
  * A language for text whose name says nothing (`bin/deploy`, `run.xyz`, a
- * `.m` that may be Objective-C or MATLAB), read from the text itself: its
- * `#!` line, a JSON or XML shape, then highlight.js's best guess over its
- * first 4,000 characters when that guess is clear. Null otherwise, so the
- * file stays plain rather than coloured as the wrong language.
+ * `.m` that may be Objective-C or MATLAB), read from what the text itself
+ * declares: its `#!` line, JSON that parses, an XML or HTML prolog, the
+ * marks of a `.m`. Null otherwise, so the file stays plain rather than
+ * coloured as the wrong language. highlight.js's relevance is not asked:
+ * on real files it was confidently wrong (review, 2026-09-27): lcov.info
+ * scored 301 as a Makefile, 4x its runner-up, TokenizeUtil.js.flow 90 as
+ * Rust, Paper.idl 96 as ini, while a YAML workflow's right answer scored
+ * 138 at 1.8x, and 173 characters of notes came out SQL.
  */
 export function detectMobileSyntaxLanguage(content: string, filePath = ''): string | null {
   const text = content.replace(/^\uFEFF/, '')
@@ -141,7 +123,7 @@ export function detectMobileSyntaxLanguage(content: string, filePath = ''): stri
   if (/^\s*<(?:\?xml|!DOCTYPE|html|svg)\b/i.test(text)) {
     return 'xml'
   }
-  return bestGuessLanguage(text)
+  return null
 }
 
 function parsesAsJson(text: string): boolean {
@@ -153,37 +135,8 @@ function parsesAsJson(text: string): boolean {
   }
 }
 
-function bestGuessLanguage(text: string): string | null {
-  const cut = text.length > AUTO_DETECT_SAMPLE_CHARS ? text.lastIndexOf('\n', AUTO_DETECT_SAMPLE_CHARS) : -1
-  const sample = text.slice(0, cut > 0 ? cut : AUTO_DETECT_SAMPLE_CHARS)
-  if (sample.trim().length === 0) {
-    return null
-  }
-  let best = { language: '', relevance: 0 }
-  let runnerUp = 0
-  for (const language of AUTO_DETECT_SUBSET) {
-    let relevance = 0
-    try {
-      relevance = highlighter().highlight(language, sample).data?.relevance ?? 0
-    } catch {
-      continue
-    }
-    if (relevance > best.relevance) {
-      runnerUp = best.relevance
-      best = { language, relevance }
-    } else if (relevance > runnerUp) {
-      runnerUp = relevance
-    }
-  }
-  const clear =
-    best.relevance >= AUTO_DETECT_MIN_RELEVANCE &&
-    best.relevance >= sample.length * AUTO_DETECT_MIN_DENSITY &&
-    best.relevance >= runnerUp * AUTO_DETECT_MIN_LEAD
-  return clear ? best.language : null
-}
-
-/** The highlighter's language for a file, by its name, and by its first
- *  lines when the name says nothing. */
+/** The highlighter's language for a file, by its name, and by what its
+ *  text declares when the name says nothing. */
 export function resolveMobileSyntaxLanguageForContent(
   filePath: string,
   content: string,

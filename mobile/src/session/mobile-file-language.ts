@@ -154,6 +154,10 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.jsonl': 'json',
   '.json5': 'json',
   '.ipynb': 'json',
+  // `name.js.flow`: a Flow declaration file, JavaScript with types.
+  '.flow': 'javascript',
+  // Front matter, then HTML with components in it.
+  '.astro': 'xml',
   '.xaml': 'xml',
   '.plist': 'xml',
   '.csproj': 'xml',
@@ -167,7 +171,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.hcl': 'terraform',
   '.zig': 'zig',
   '.sol': 'solidity',
-  // Text: known, and plain, so its first lines are not read for a language.
+  // Text: known, and plain, so the content is not read for a language.
   '.txt': 'plaintext',
   '.text': 'plaintext',
   '.log': 'plaintext',
@@ -222,6 +226,17 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   AUTHORS: 'plaintext',
   CONTRIBUTORS: 'plaintext',
   CHANGELOG: 'plaintext',
+  CHANGES: 'plaintext',
+  HISTORY: 'plaintext',
+  NEWS: 'plaintext',
+  TODO: 'plaintext',
+  NOTES: 'plaintext',
+  INSTALL: 'plaintext',
+  THANKS: 'plaintext',
+  CREDITS: 'plaintext',
+  MAINTAINERS: 'plaintext',
+  PATENTS: 'plaintext',
+  VERSION: 'plaintext',
   README: 'plaintext'
 }
 
@@ -246,7 +261,8 @@ function fileNameOf(filePath: string): string {
 }
 
 /** Whether a file's name says nothing about its language: no known name and
- *  no known extension. Such a file's first lines are read instead. */
+ *  no known extension. Such a file's text is read for what it declares
+ *  (a `#!` line, a JSON or XML shape) instead. */
 export function isUnknownMobileFileName(filePath: string): boolean {
   return languageFromName(fileNameOf(filePath)) === undefined
 }

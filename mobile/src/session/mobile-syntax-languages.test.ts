@@ -7,6 +7,11 @@ import {
   resolveMobileSyntaxLanguage,
   resolveMobileSyntaxLanguageForContent
 } from './mobile-file-syntax'
+import {
+  RNSVG_PAPER_IDL,
+  STREAM_BUFFERS_LCOV_INFO,
+  TOKENIZE_UTIL_JS_FLOW
+} from './mobile-syntax-detect-samples.test-support'
 
 /** The kinds a file's code is drawn in, as the code viewer colours it. */
 function kindsOf(code: string, language: string): Set<string> {
@@ -201,8 +206,11 @@ describe('a file whose name says nothing is read for its language', () => {
     expect(resolveMobileSyntaxLanguageForContent('analysis/smooth_signal.m', matlab)).toBe('matlab')
   })
 
-  it('takes highlight.js\'s guess when it is clear: a CI workflow saved without an extension', () => {
-    expect(resolveMobileSyntaxLanguageForContent('ci/release-workflow', RELEASE_WORKFLOW)).toBe('yaml')
+  it('does not guess from highlight.js\'s relevance, even for a CI workflow saved without an extension', () => {
+    // Relevance was no evidence (review, 2026-09-27): it called real files
+    // the wrong language with more confidence (lcov.info: Makefile, 301 and
+    // 4x the runner-up) than this workflow's right answer (YAML, 138, 1.8x).
+    expect(resolveMobileSyntaxLanguageForContent('ci/release-workflow', RELEASE_WORKFLOW)).toBe('plaintext')
   })
 
   it('stays plain on prose and log lines, where highlight.js only guesses', () => {
@@ -224,5 +232,29 @@ describe('a file whose name says nothing is read for its language', () => {
     expect(resolveMobileSyntaxLanguageForContent('scripts/tool.py', DEPLOY_SCRIPT)).toBe('python')
     // And a language the caller names wins over the content.
     expect(resolveMobileSyntaxLanguageForContent('bin/deploy', DEPLOY_SCRIPT, 'ruby')).toBe('ruby')
+  })
+})
+
+describe('a file its name does not place stays plain unless the text itself says what it is', () => {
+  it('leaves a coverage report, an IDL file and short notes plain, which highlight.js took for code', () => {
+    expect(resolveMobileSyntaxLanguageForContent('coverage/lcov.info', STREAM_BUFFERS_LCOV_INFO)).toBe('plaintext')
+    expect(resolveMobileSyntaxLanguageForContent('windows/RNSVG/Paper.idl', RNSVG_PAPER_IDL)).toBe('plaintext')
+    // 173 characters of notes: highlight.js called them SQL, 16 against 4.
+    const notes = 'Ship list\n\n- make the explorer copy whole files\n- fold long functions like the desktop\n- check the Hermes timing on the phone\n- ask about wrap on tablets\n'
+    expect(resolveMobileSyntaxLanguageForContent('docs/ship-list', notes)).toBe('plaintext')
+  })
+
+  it('knows the plain-text files every project keeps by name', () => {
+    const prose = 'Changes since 0.5.3: the reader folds and copies; see the release notes.\n'
+    for (const name of ['TODO', 'NOTES', 'CHANGES', 'HISTORY', 'NEWS', 'INSTALL', 'THANKS', 'MAINTAINERS', 'VERSION']) {
+      expect(isUnknownMobileFileName(name), name).toBe(false)
+      expect(resolveMobileSyntaxLanguageForContent(name, prose), name).toBe('plaintext')
+    }
+  })
+
+  it('reads a Flow file as JavaScript and an Astro page as HTML, by name', () => {
+    expect(resolveMobileSyntaxLanguageForContent('fbjs/lib/TokenizeUtil.js.flow', TOKENIZE_UTIL_JS_FLOW)).toBe('javascript')
+    const astro = '---\nimport Header from "../components/Header.astro";\nconst title = "Home";\n---\n<html lang="en">\n  <body><Header title={title} /></body>\n</html>\n'
+    expect(resolveMobileSyntaxLanguageForContent('src/pages/index.astro', astro)).toBe('xml')
   })
 })
