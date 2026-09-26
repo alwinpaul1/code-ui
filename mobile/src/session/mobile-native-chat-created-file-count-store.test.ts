@@ -1,9 +1,9 @@
 // The reading behind a created file's read-back count, against a fake host
 // that answers `files.resolveTerminalPath` and `files.read` the way Orca does:
 // a real rejected send, a real `binary_file` refusal, a path outside the
-// workspace. One read per file per connection, only for rows that ask, a
-// failed read retried when the relay connects again, and never a read for a
-// file a later call touched.
+// workspace. One read per file for the host and worktree shown, only for rows
+// that ask, a failed read retried when the relay connects again, and never a
+// read for a file a later call touched.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -421,6 +421,27 @@ describe('reading back a created file the wire cut', () => {
     expect(host.reads()).toBe(1)
     expect(store.countFor(THE_CREATE.key)).toBeNull()
     expect(warn).toHaveBeenCalledWith(`[created-file-count] no count for ${PATH}: binary_file`)
+  })
+
+  // A verdict is the file's, not the connection's: a count or a refusal
+  // stands for as long as the chat shows the same host and worktree, and only
+  // a read that failed is asked again when the relay connects again.
+  it.each([
+    ['a count', CREATED_FILE_ON_DISK, 93],
+    ['a refusal', CREATED_FILE_ON_DISK.replace('step 03', 'step 3b'), null]
+  ])('keeps %s across a reconnect without reading the file again', async (_, content, count) => {
+    const host = hostWithFile(content)
+    configure(host.client, 1)
+    store.setTranscript(CLAUDE_EDIT_RUN_ROWS, true)
+    store.want(THE_CREATE)
+    await settle()
+    expect(host.reads()).toBe(1)
+    configure(host.client, 2)
+    store.setTranscript([...CLAUDE_EDIT_RUN_ROWS], true)
+    store.want(THE_CREATE)
+    await settle()
+    expect(host.reads()).toBe(1)
+    expect(store.countFor(THE_CREATE.key)).toBe(count)
   })
 
   it('forgets every count when the chat moves to another worktree', async () => {

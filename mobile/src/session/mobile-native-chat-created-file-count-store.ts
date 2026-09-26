@@ -4,11 +4,11 @@
 //
 // A file is read only while a mounted row wants it (a finished run that draws
 // a count), only once the loaded transcript holds its create untouched, at
-// most two at a time, and at most once per connection: a verdict, counted or
-// refused, is kept for as long as the chat shows the same worktree, and a
-// read that failed is retried on the next connection only (CLAUDE.md,
-// "Nothing stays stale once the relay connects"). A later call that touches
-// the file drops its count at once.
+// most two at a time, and once for the host and worktree the chat shows: a
+// verdict, counted or refused, is kept across reconnects for as long as the
+// chat shows them, and only a read that failed is asked again, once per new
+// connection (CLAUDE.md, "Nothing stays stale once the relay connects"). A
+// later call that touches the file drops its count at once.
 //
 // Reads go out only from the chat's own settled transcript, and after a new
 // connection or a move only once that connection's transcript is in: the

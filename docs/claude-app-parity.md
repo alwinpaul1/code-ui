@@ -136,12 +136,14 @@ Nothing here is built.
   chat's own settled transcript, never one held over from before it loaded:
   after a reconnect or a move to another worktree the read waits for the
   transcript that connection brings, since the one in hand may lack calls
-  made while the phone was away. Each file is read once per connection
-  (`files.resolveTerminalPath`, then `files.read`, which the host caps at
-  512 KiB), and a verdict holds only for the message it was read for, so the
-  same create run again in another session is read again. A read that
-  failed is asked again on the next connection, once its transcript is in;
-  if the chat brings none, the count stays off. A file outside the
+  made while the phone was away. Each file is read once for the host and
+  worktree the chat shows (`files.resolveTerminalPath`, then `files.read`,
+  which the host caps at 512 KiB): a verdict, counted or refused, stands
+  across reconnects until the chat moves, and holds only for the message it
+  was read for, so the same create run again in another session is read
+  again. Only a read that failed is asked again, once on each new
+  connection, once its transcript is in; if the chat brings none, the count
+  stays off. A later call that touches the file still drops its count. A file outside the
   worktree, a binary one, one over the host's cap, or one past the uncut
   Write's own 2000-row or 96,000-character bound gets no number. What this
   cannot see: a command that changed the file without naming it (a glob, a
