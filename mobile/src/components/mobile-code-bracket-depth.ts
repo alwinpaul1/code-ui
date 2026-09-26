@@ -230,8 +230,11 @@ function skipTemplate(line: string, at: number, state: BracketScanState): number
 }
 
 /** Characters after which a `/` cannot be division: an operator, an opening
- *  bracket, a separator. */
-const BEFORE_REGEX = new Set('(,=:[!&|?{};+-*%<>~^'.split(''))
+ *  bracket, a separator. Not `<`: in JSX and TSX `</Text>` is a closing tag,
+ *  and read as a regex it ran to the next `/` on the line, skipping the
+ *  brackets between (review, 2026-09-27). A regex after a less-than sign
+ *  (`a </re/.test(b)`) is rare enough to leave to the tokenizer. */
+const BEFORE_REGEX = new Set('(,=:[!&|?{};+-*%>~^'.split(''))
 /** Words after which a `/` starts a regex. */
 const REGEX_KEYWORDS = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'void', 'yield', 'await', 'delete', 'throw', 'new'])
 /** No keyword above is longer; a longer word is a value, so a `/` divides. */

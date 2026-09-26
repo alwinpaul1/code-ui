@@ -98,6 +98,27 @@ describe('bracket colours in a file coloured a chunk at a time', () => {
     expect(linesColouredApart(bigFile('export class Table {\n', body, '}\n'), 'typescript')).toEqual([])
   })
 
+  it('reads a JSX closing tag as a tag, not as the start of a regex that swallows the brackets after it', () => {
+    // `</Text>` once opened a "regex" running to the next `/` on the line,
+    // skipping the `)` between: each such line left the depth one too deep,
+    // and every chunk of a TSX file after the first a colour off (review,
+    // 2026-09-27). Eight lines under a one-line head put every chunk edge on
+    // the blank line between two functions: a chunk that starts inside JSX
+    // is the tokenizer's limit, not the depth's.
+    const body = [
+      'export function Row({ title, open }: Props) {',
+      '  return (',
+      '    <View style={styles.row}>',
+      "      {open ? (<Text style={styles.title}>{title}</Text>) : <Text>{'-'}</Text>}",
+      '    </View>',
+      '  )',
+      '}',
+      '',
+      ''
+    ].join('\n')
+    expect(linesColouredApart(bigFile("import { Text } from 'react-native'\n", body, ''), 'typescript')).toEqual([])
+  })
+
   it('reads a Rust lifetime as code, not as the start of a character', () => {
     const body = [
       "    fn name<'a>(&self, rows: &'a [Row]) -> &'a str {",
