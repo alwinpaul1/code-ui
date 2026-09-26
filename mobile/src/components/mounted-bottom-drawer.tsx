@@ -337,8 +337,16 @@ export function MountedBottomDrawer({
     // and gestures above are untouched.
     // Once laid out, the sheet travels its own height (plus a margin), so it
     // is on screen from the first frames of its open; before that, a window.
+    // The keyboard's lift counts too: a sheet closed while it is up sits that
+    // much higher, and fell short of the edge by it (review of a81dfa20).
+    // A closed sheet keeps the window as its travel: a fill sheet grows back
+    // by the keyboard inset as it closes, a frame before its new height is
+    // measured, and would show that much (review of a81dfa20).
     const measured = sheetLayoutHeight.value
-    const travel = measured > 0 ? Math.min(screenHeight, measured + ENTER_TRAVEL_MARGIN) : screenHeight
+    const travel =
+      measured > 0 && progress.value > 0
+        ? Math.min(screenHeight, measured + keyboardOffset.value + ENTER_TRAVEL_MARGIN)
+        : screenHeight
     const enterTravel = reduceMotion
       ? 0
       : interpolate(progress.value, [0, 1], [travel, 0], Extrapolation.CLAMP)
