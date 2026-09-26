@@ -28,10 +28,11 @@ export type AgentProvenance = {
    *  foreground agents an unanswered Agent call of the lead's vouched for. */
   ownAgentIds: readonly string[]
   /** Rows the phone cannot place, still running: on the first roster it
-   *  read, or first seen while the loaded window did not reach back to their
-   *  start. They keep the benefit of the doubt until they stop. A row first
-   *  seen while the window covers its start, with no launch in it, is a
-   *  subagent's (`mobile-background-task-memory.ts`). */
+   *  read, rebuilt by Orca, with no agent before them to have started them,
+   *  first seen just after the phone lost sight, or started before the loaded
+   *  window reaches back. They keep the benefit of the doubt until they stop;
+   *  any other row the lead's transcript does not name is a subagent's
+   *  (`mobile-background-task-memory.ts`). */
   preexistingAgentIds: readonly string[]
 }
 

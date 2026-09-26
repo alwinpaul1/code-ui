@@ -78,18 +78,22 @@ export function fitToOnScreenShellCount(tasks: BackgroundTasks, now: number, fit
   return eligible > held.count ? retireOldest(tasks, eligible - held.count, readBefore) : tasks
 }
 
-/** How many shells the lead can have running while a subagent runs: what it
- *  had when the footer last counted its shells alone, plus the shells it has
- *  launched since, and never more than the footer counts now. None known,
- *  none padded. */
+/** How many shells the lead can have running while a subagent runs: its
+ *  named ones, plus at most the UNNAMED ones it had when the footer last
+ *  counted its shells alone — those can only finish. That is the reading less
+ *  every named shell launched before it, running or finished since (the
+ *  footer paints nothing at 0, so a reading never learns they ended); a named
+ *  shell that had already finished by then only makes the figure smaller.
+ *  Never more than the footer counts now. None known, none padded. */
 function leadFloor(tasks: BackgroundTasks, leadOnly: HeldShellCount | null, live: number): number {
+  const named = tasks.running.filter((task) => task.kind === 'shell').length
   if (leadOnly === null) {
-    return 0
+    return named
   }
-  const launchedSince = tasks.running.filter(
-    (task) => task.kind === 'shell' && task.startedAt !== null && task.startedAt > leadOnly.at
+  const namedBefore = [...tasks.running, ...tasks.finished].filter(
+    (task) => task.kind === 'shell' && !task.id.startsWith('onscreen-shell-') && task.startedAt !== null && task.startedAt <= leadOnly.at
   ).length
-  return Math.min(live, leadOnly.count + launchedSince)
+  return Math.min(live, named + Math.max(0, leadOnly.count - namedBefore))
 }
 
 function retireOldest(tasks: BackgroundTasks, surplus: number, retirable: (task: BackgroundTask) => boolean): BackgroundTasks {

@@ -80,7 +80,7 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
           ownAgentIds.push(target)
         }
       } else if (isToolResultBlock(block)) {
-        const call = pending.shift()
+        const call = takeAnsweredCall(pending, block.output)
         const launch = call ? readLaunch(call, block.output) : null
         const launched = launch?.kind === 'agent' ? launch.id : ASYNC_AGENT_LAUNCHED.exec(block.output)?.[1]
         if (launched) {
@@ -97,8 +97,26 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
       retiredTaskIds.push(notification.id)
     }
   }
+  // A background launch's result lands within seconds and names its id, so
+  // only a foreground call waits long enough to need to vouch for its row —
+  // and a background call left pending in that gap could vouch for a reviewer
+  // whose row came up first.
   const pendingAgentCalls = pending
-    .filter((call) => call.name === 'Agent')
+    .filter((call) => call.name === 'Agent' && Reflect.get(Object(call.input), 'run_in_background') !== true)
     .map((call) => ({ key: call.key, at: call.startedAt, subagentType: readString(call.input, 'subagent_type') }))
   return { ownAgentIds, retiredTaskIds, pendingAgentCalls, oldestAt }
+}
+
+/** An Agent result: a launch, a finished run's report with its id and usage,
+ *  or the tool's own error. */
+const AGENT_RESULT = /\bagentId:\s*[A-Za-z0-9_-]+|^\s*Async agent launched successfully\.|<usage>\s*subagent_tokens:/
+
+/** The call a result answers. First in, first out, except that an Agent call
+ *  is answered only by a result shaped like one: a turn's quick call (a Read
+ *  beside a foreground Agent) can answer first, and handing its result to the
+ *  Agent call would leave the agent that is still running with no call. */
+function takeAnsweredCall(pending: Pending[], output: string): Pending | undefined {
+  const agentShaped = AGENT_RESULT.test(output)
+  const index = pending.findIndex((call) => (call.name === 'Agent') === agentShaped)
+  return index !== -1 ? pending.splice(index, 1)[0] : pending.shift()
 }

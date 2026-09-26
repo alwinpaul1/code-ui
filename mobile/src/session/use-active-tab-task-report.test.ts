@@ -123,11 +123,14 @@ describe('what the running-task count keeps when a source looks away', () => {
   })
 
   it('keeps counting the lead’s agent after its launch scrolls out, and never the reviewer it starts', () => {
-    // The first look comes before abe6's SubagentStart reached the roster.
+    // The first look comes before abe6's SubagentStart reached the roster;
+    // then abe6 alone; then, minutes later, a3a4 starts while abe6 is there
+    // to have started it and the window still reaches back past it with no
+    // launch of it: a reviewer.
     const launched = ownAgentLaunch(OWN_AGENTS.abe6)
     show({ messages: launched, agentStatus: status([]) })
-    // a3a4 starts at 23:59:37 while the window still reaches back past it and
-    // shows no launch of it: a reviewer.
+    show({ messages: launched, agentStatus: status([own(OWN_AGENTS.abe6)]) })
+    vi.setSystemTime(Date.now() + 120_000)
     const covered = show({
       messages: [...launched, leadTurn('2026-09-25T23:59:50.000Z')],
       agentStatus: status([own(OWN_AGENTS.abe6), reviewer(NESTED_REVIEWERS.a3a4)])
@@ -171,11 +174,15 @@ describe('what the running-task count keeps when a source looks away', () => {
 
   it('counts an agent the lead resumed with SendMessage, which no new launch names', () => {
     show({ messages: [], agentStatus: status([]) })
+    const window = [leadTurn('2026-09-25T23:20:00.000Z'), ...sendMessage(OWN_AGENTS.acf3.id, '2026-09-26T00:15:00.000Z')]
+    show({ messages: window, agentStatus: status([own(OWN_AGENTS.acf3)]) })
 
-    // The window reaches back past aba3's start (23:26:56) and shows no launch
-    // of it, so aba3 is a reviewer; acf3 has the lead's SendMessage.
+    // Minutes later acf3 starts aba3. The window reaches back past aba3's
+    // start (23:26:56) and shows no launch of it, so aba3 is a reviewer; acf3
+    // has the lead's SendMessage.
+    vi.setSystemTime(Date.now() + 120_000)
     const resumed = show({
-      messages: [leadTurn('2026-09-25T23:20:00.000Z'), ...sendMessage(OWN_AGENTS.acf3.id, '2026-09-26T00:15:00.000Z')],
+      messages: window,
       agentStatus: status([own(OWN_AGENTS.acf3), reviewer(NESTED_REVIEWERS.aba3)])
     })
     expect(resumed).toEqual([OWN_AGENTS.acf3.id])

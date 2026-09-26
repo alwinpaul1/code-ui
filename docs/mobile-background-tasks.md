@@ -280,28 +280,39 @@ and changed 38 times; the sources, one by one:
   after missing the SubagentStop.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
-  (`mobile-background-task-memory.ts`): the lead's own when the lead's
-  transcript launched it (any result that opens with "Async agent launched
-  successfully", whichever call it pairs with) or messaged it, or when an
-  Agent call of the lead's still waiting for its result was made at or
-  before the row started (a foreground agent has no id anywhere until it
-  ends; one row per call, earliest first); given the benefit of the doubt
-  when it was on the first roster the phone read, or started before the
-  loaded window reaches back to; otherwise a subagent's, which stays so as
-  the window slides. A teammate (`a<name>-<hex>`) always counts. A
-  doubted row that stops loses the doubt: whoever resumes it next shows it.
+  (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca
+  first saw the row, which can be hours after the agent started, so a row
+  is a reviewer only when everything that could make it the lead's is ruled
+  out. The lead's own: the lead's transcript launched it (any result that
+  opens with "Async agent launched successfully", whichever call it pairs
+  with) or messaged it; or an unanswered foreground Agent call of the lead's
+  was made up to 30 s before the row started (a foreground agent has no id
+  anywhere until it ends; one row per call, earliest first, and a call whose
+  agent was already up at the first look is used by it; an Agent call is
+  answered only by a result shaped like an Agent result, so a quick call's
+  result landing first does not use it up). The benefit of the doubt, until
+  the row stops: it was on the first roster the phone read; it arrived with
+  a description (Orca rebuilt it from the lead's own task list, or restored
+  it); no other agent was running just before it to have started it; the
+  phone had just lost sight of the session (no status, or an empty window)
+  and got it back less than a minute ago; or it started before the loaded
+  window reaches back to. Otherwise a subagent's, which stays so as the
+  window slides. A teammate or named agent (`a<name>-<hex>`) always counts.
+  A doubted row that stops loses the doubt: whoever resumes it next shows it.
 - The footer count caps the lead's named shells always. It pads unnamed ones
-  up to its count while no subagent runs, and while one does up to what it
-  counted the last time none ran (plus shells launched since), since those
-  can only finish. A reading keeps capping the shells launched before it
-  while a dialog hides the footer; a held reading never speaks for the run
-  boundary.
+  up to its count while no subagent runs. While one does, it pads at most
+  the unnamed shells the lead had when the footer last counted its shells
+  alone (that reading less every named shell launched before it), since
+  those can only finish. A reading keeps capping the shells launched before
+  it while a dialog hides the footer; a held reading never speaks for the
+  run boundary.
 - "Launched before the working run" retires a shell only when no beacon
   list can speak for it, and the run is the one that followed the last
-  `done` the phone saw: a question or permission prompt moves the pane's
-  `stateStartedAt` but not that. The first working state the phone sees
-  stands in, as before; after a `waiting` it has no start for, it retires
-  nothing.
+  `done`: a `waiting` or `blocked` the phone saw keeps the boundary it had,
+  while a new working start with nothing seen between is taken as a missed
+  `done` (a queued prompt starting the moment a turn ends, or the phone on
+  another tab). The first working state the phone sees stands in, as
+  before; after a `waiting` it has no start for, it retires nothing.
 - Ids a window showed ending (a notification, a TaskStop) are remembered for
   the session, so a slid window cannot bring them back.
 - A host status missing from one snapshot is bridged by the last one for up

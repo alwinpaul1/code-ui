@@ -92,7 +92,10 @@ export function useActiveTabTaskReport(input: {
   const heldAgentStatus =
     agentStatus === null && lastStatus && now - lastStatus.at <= HELD_AGENT_STATUS_MAX_AGE_MS ? lastStatus.status : null
   const heldOnScreenShellCount = onScreenShellCount === null ? (evidence?.lastShellCount ?? null) : null
-  const leadOnlyShellCount = evidence?.leadOnlyShellCount ?? null
+  // Only while a subagent runs, the one time the reader uses it: while none
+  // does it is re-stamped at every render, and would make the report new.
+  const subagentRunning = (agentStatus?.subagents ?? []).some((row) => row.state !== 'idle')
+  const leadOnlyShellCount = subagentRunning ? (evidence?.leadOnlyShellCount ?? null) : null
   const runBoundaryAt = evidence?.runBoundaryAt
   return useMemo(
     () => ({

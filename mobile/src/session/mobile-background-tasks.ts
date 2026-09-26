@@ -47,6 +47,7 @@ import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
+  isTeammateLifecycleId,
   liveSubagentRoster,
   type AgentProvenance,
   type RosterRow
@@ -319,11 +320,13 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
     // same task-id may notify more than once" when the lead resumes an agent,
     // and Orca re-creates the row, with a new start, at every SubagentStart.
     // A row that started before the notification is the run it ended.
+    // Not for a named agent or a teammate (`a<name>-<hex>`): Orca only idles
+    // such a row at a stop and flips the same row back on a resume, first
+    // start and all, so its start says nothing about which run ended.
     const row = launch.kind === 'agent' && roster !== null ? roster.get(launch.id) : undefined
-    const rosterSaysRunning =
-      launch.kind === 'agent' && roster !== null
-        ? row !== undefined && !(notification?.timestamp != null && row.startedAt <= notification.timestamp)
-        : null
+    const endedThisRun =
+      row !== undefined && !isTeammateLifecycleId(launch.id) && notification?.timestamp != null && row.startedAt <= notification.timestamp
+    const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? row !== undefined && !endedThisRun : null
     if (rosterSaysRunning === true) {
       running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
       continue

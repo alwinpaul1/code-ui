@@ -132,6 +132,24 @@ describe("an agent's own notification against a roster row", () => {
     expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([[OWN_AGENTS.abe6.id, 'completed']])
   })
 
+  it('keeps a named agent running that the lead resumed, whose row keeps its first start', () => {
+    // A named agent's id is `a<name>-<hex>`. Orca only idles such a row at a
+    // SubagentStop and flips the same row back to working on the resume, old
+    // `startedAt` and all (claude-subagent-roster.ts), so its start says
+    // nothing about which run a notification ended.
+    const id = 'areviewer-0123456789abcdef'
+    const turn = [
+      ...ownAgentLaunch({ id, call: '2026-09-26T09:00:00.000Z', result: '2026-09-26T09:00:02.000Z' }),
+      notified(id, '2026-09-26T09:10:00.000Z')
+    ]
+    const tasks = deriveBackgroundTasks(turn, Date.parse('2026-09-26T09:13:00.000Z'), {
+      state: 'working',
+      subagents: [rosterRow(id, Date.parse('2026-09-26T09:00:01.000Z'))]
+    })
+
+    expect(tasks.running.map((task) => task.id)).toEqual([id])
+  })
+
   it('keeps an agent running whose row started after its last notification', () => {
     const resumed: BackgroundTaskHostStatus = {
       state: 'working',
