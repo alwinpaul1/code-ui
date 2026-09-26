@@ -26,6 +26,10 @@
 //   Read took the Read's answer). A failure is a `<tool_use_error>`, a
 //   turn-down, a cancel, a denial, or an answer Orca marks as an error; a
 //   batch the user interrupted with a call still waiting counts as one.
+//   TaskStop's word is taken only from a batch that closed with every call
+//   answered and held no call that could print it (review of 5b257b16: a
+//   `grep` printed the not-running line beside a stop turned down, and a
+//   call never answered drew a later stop that worked into the batch).
 // The limits, each of which refuses:
 // - a task that ended in a way the transcript does not record (a mid-turn
 //   completion Orca does not surface) is still running here;
@@ -74,14 +78,14 @@ type Ending = { id: string; at: number }
 type Pending = PendingCall & { at: number }
 /** The calls waiting for answers together: the answers they took, the
  *  endings their TaskStops recorded, the calls that may have lost their
- *  launch to another call, whether any answer was a failure, and the ids
- *  TaskStop's own word said were no longer running. */
+ *  launch to another call, whether any answer was a failure, and whether any
+ *  call there could answer with text of its own, TaskStop's words included. */
 type Batch = {
   answers: string[]
   stops: Ending[]
   unsure: Pending[]
   failed: boolean
-  confirmed: Set<string>
+  mayQuote: boolean
 }
 /** A task running from `from` until its first ending after that, if any. A
  *  null id is a task no ending names. */
@@ -136,8 +140,21 @@ function saysStopped(output: string, id: string): boolean {
   ].some((opening) => answer.startsWith(opening))
 }
 
+/** Tools whose answers cannot open with TaskStop's words: its own, a Read's
+ *  numbered lines, a Glob or LS listing, and the edit tools' sentences. */
+const OWN_WORDS = new Set([
+  'TaskStop',
+  'Read',
+  'Glob',
+  'LS',
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'NotebookEdit'
+])
+
 function openBatch(): Batch {
-  return { answers: [], stops: [], unsure: [], failed: false, confirmed: new Set() }
+  return { answers: [], stops: [], unsure: [], failed: false, mayQuote: false }
 }
 
 /** Calls whose answer can launch work that keeps running. */
@@ -159,7 +176,8 @@ function launchIn(call: Pending, answer: string): string | null | undefined {
 /** Closes a batch. Each call that may have lost its launch to another, and
  *  each call still waiting, runs under every launch of it an answer there
  *  names. Then each stop is taken back if a failure landed in the batch,
- *  unless TaskStop said its task was no longer running. */
+ *  unless TaskStop said its task was no longer running, in a batch every
+ *  call answered and none could have said it for TaskStop. */
 function settle(batch: Batch, waiting: Pending[], endings: Ending[], spans: Span[]): void {
   for (const call of [...batch.unsure, ...waiting.filter(mayLaunch)]) {
     for (const answer of batch.answers) {
@@ -172,8 +190,9 @@ function settle(batch: Batch, waiting: Pending[], endings: Ending[], spans: Span
   if (!batch.failed) {
     return
   }
+  const vouched = waiting.length === 0 && !batch.mayQuote
   for (const stop of batch.stops) {
-    if (!batch.confirmed.has(stop.id)) {
+    if (!vouched || !batch.answers.some((answer) => saysStopped(answer, stop.id))) {
       endings.splice(endings.indexOf(stop), 1)
     }
   }
@@ -221,6 +240,7 @@ export function backgroundWorkRunningAt(
           batch.stops.push(stop)
         }
         pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at })
+        batch.mayQuote ||= !OWN_WORDS.has(block.name)
         // A message wakes an agent that had finished, or reaches a teammate.
         if (toolCallKind(block.name) === 'message') {
           spans.push({
@@ -233,11 +253,6 @@ export function backgroundWorkRunningAt(
         const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
         batch.failed ||= isFailure(block)
         batch.answers.push(block.output)
-        for (const stop of batch.stops) {
-          if (saysStopped(block.output, stop.id)) {
-            batch.confirmed.add(stop.id)
-          }
-        }
         const call = takeAnsweredCall(pending, block.output)
         if (call) {
           const launch = readLaunch(call, block.output)

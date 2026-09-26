@@ -363,6 +363,47 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...SHELL, ...stop, ...CREATE])).toBe(true)
   })
 
+  // Review of 5b257b16: TaskStop's word was taken from any answer in the
+  // batch, so a command printing the same line, or a later stop sharing the
+  // batch through a call never answered, vouched for a stop turned down.
+  it('draws no count for a create made after a stop the user turned down beside a command whose output quotes TaskStop', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } },
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: { command: 'grep -h "is not running" /tmp/notes.txt' }
+        }
+      ]),
+      answered(notRunningOutput(SHELL_ID, 'completed')),
+      answered(USER_TURNED_DOWN)
+    ]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a stop the user turned down behind a read never answered, when a later stop worked', () => {
+    const history = [
+      ...SHELL,
+      called('Read', { file_path: '/tmp/never-answered.txt' }),
+      ...launched('TaskStop', { task_id: SHELL_ID }, USER_TURNED_DOWN)
+    ]
+    const later = launched('TaskStop', { task_id: SHELL_ID }, stoppedOutput(SHELL_ID))
+    expect(touched([...history, ...CREATE, ...later])).toBe(true)
+  })
+
+  it('still counts a create made after a stop answered after the search beside it failed', () => {
+    const turn = [
+      message('assistant', [
+        { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } },
+        { type: 'tool-call', name: 'Glob', input: { pattern: '**/*.lock' } }
+      ]),
+      answered('<tool_use_error>Directory does not exist.</tool_use_error>'),
+      answered(stoppedOutput(SHELL_ID))
+    ]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(false)
+  })
+
   // Review of 5b257b16: a failure goes to the first call waiting, so a quick
   // call beside a launch that fails first takes the launch's place, and the
   // launch's own answer falls to that call, where it reads as nothing.

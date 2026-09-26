@@ -123,7 +123,10 @@ Nothing here is built.
   answers of the calls waiting with it and none of those answers is
   TaskStop's own word that the task is no longer running: its JSON, or
   `Task <id> is not running (status: completed|failed|killed)` (Claude Code
-  2.1.283). So a task that ended where the transcript does not
+  2.1.283). That word counts only when every one of those calls answered
+  and each is one that cannot print it for TaskStop (TaskStop, Read, Glob,
+  LS and the edit tools): in review a `grep` printed the not-running line
+  beside a stop turned down. So a task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
   all hold the count off. A foreground agent's report is over once it is
