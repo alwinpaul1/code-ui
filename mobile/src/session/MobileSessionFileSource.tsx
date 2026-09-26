@@ -96,7 +96,7 @@ export function MobileSessionFileSource({
               ? {
                   label: fileReaderLineCopyLabel(range),
                   onPress: () => {
-                    void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range)).then((copied) => {
+                    void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range, document.lineBreak)).then((copied) => {
                       if (copied) {
                         clear()
                       }

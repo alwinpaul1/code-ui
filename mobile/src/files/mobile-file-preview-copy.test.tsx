@@ -186,6 +186,18 @@ describe.each(['dark', 'light'] as const)('copying code out of a file opened fro
     expect(clipboard.writeText).toHaveBeenCalledWith(minified)
   })
 
+  it('copies lines from a Windows file with the file\'s own CRLF line breaks', async () => {
+    openInExplorer('def cell(em):\r\n    for r in em:\r\n        yield r\r\n')
+    act(() => {
+      ;(rowProps(0).onLongPress as () => void)()
+    })
+    act(() => {
+      ;(rowProps(1).onPress as () => void)()
+    })
+    await press('Copy lines 1–2')
+    expect(clipboard.writeText).toHaveBeenCalledWith('def cell(em):\r\n    for r in em:')
+  })
+
   it('offers nothing to copy in an empty file', () => {
     openInExplorer('')
     expect(button('Copy file')).toBeUndefined()

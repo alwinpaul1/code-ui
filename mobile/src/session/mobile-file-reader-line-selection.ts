@@ -61,7 +61,12 @@ export function fileReaderLineCopyLabel(range: FileReaderLineRange): string {
   return range.start === range.end ? `Copy line ${range.start}` : `Copy lines ${range.start}–${range.end}`
 }
 
-/** The text of the selected lines as the viewer shows them, one per line. */
-export function fileReaderSelectedLinesText(lines: readonly string[], range: FileReaderLineRange): string {
-  return lines.slice(Math.max(0, range.start - 1), range.end).join('\n')
+/** The text of the selected lines, joined by the file's own line break
+ *  (a CRLF file's lines copied with LF broke on paste into Windows tools). */
+export function fileReaderSelectedLinesText(
+  lines: readonly string[],
+  range: FileReaderLineRange,
+  lineBreak: string = '\n'
+): string {
+  return lines.slice(Math.max(0, range.start - 1), range.end).join(lineBreak)
 }

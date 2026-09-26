@@ -54,6 +54,8 @@ export type MobileCodeDocument = {
   language: string
   /** Pretty-printed from minified JSON: the line numbers are not the file's. */
   reformatted: boolean
+  /** The file's own line break, so lines copied out keep it. */
+  lineBreak: '\r\n' | '\n'
   tabWidth: number
   indentStep: number
   /** Guides per line, at columns 0, indentStep, 2×indentStep… */
@@ -77,6 +79,7 @@ export function buildMobileCodeDocument(content: string, language: string): Mobi
     lines,
     language,
     reformatted: formatted !== null,
+    lineBreak: formatted === null && content.includes('\r\n') ? '\r\n' : '\n',
     tabWidth,
     indentStep,
     guides: indentGuideCounts(lines, {

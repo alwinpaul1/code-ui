@@ -72,7 +72,7 @@ export function MobileFilePreviewSourceText({
           range={{
             label: fileReaderLineCopyLabel(range),
             onPress: () => {
-              void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range)).then((copied) => {
+              void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range, document.lineBreak)).then((copied) => {
                 if (copied) {
                   clear()
                 }
