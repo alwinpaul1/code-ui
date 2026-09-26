@@ -111,7 +111,10 @@ Nothing here is built.
   2.1.228 to 2.1.281 wrote), so a task that ended where the transcript does not
   say (a mid-turn completion Orca does not surface), a teammate, an agent a
   message woke until its next report, and an Agent call with no answer yet
-  all hold the count off. A `!` command is no tool call: Claude Code writes
+  all hold the count off. A foreground agent's report is over once it is
+  answered, even one long enough for Orca's 4000-character cut to take its
+  usage block: a cut answer to an Agent call that asked for no background,
+  and opens with no launch sentence, is read as that report. A `!` command is no tool call: Claude Code writes
   it as a user turn, `<bash-input>…</bash-input>`, and its output as the
   next one (136 of them on this machine, Claude Code 2.1.228 to 2.1.282).
   Orca does not filter these out (its Claude decoder drops only meta,

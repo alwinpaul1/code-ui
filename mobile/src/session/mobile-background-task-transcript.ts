@@ -157,12 +157,16 @@ export function readNotifications(
   return found
 }
 
-/** An Agent call's own result: a background launch or a teammate's spawn
- *  (their sentences open the result), a remote launch, or a finished run's
- *  report (its id line, then its usage block). Anchored, so a Read or a grep
- *  that merely prints `agentId: …` is not one. */
-const AGENT_RESULT =
-  /^\s*(?:Async agent launched successfully|Spawned successfully|Cloud agent launched)\.|<usage>\s*subagent_tokens:|(?:^|\n)agentId: [A-Za-z0-9_-]+ \(use SendMessage/
+/** The sentence a background launch, a teammate's spawn or a remote launch
+ *  opens its Agent result with. */
+export const AGENT_LAUNCH_OPENING =
+  /^\s*(?:Async agent launched successfully|Spawned successfully|Cloud agent launched)\./
+/** An Agent call's own result: a launch (its sentence opens the result), or
+ *  a finished run's report (its id line, then its usage block). Anchored, so
+ *  a Read or a grep that merely prints `agentId: …` is not one. */
+const AGENT_RESULT = new RegExp(
+  `${AGENT_LAUNCH_OPENING.source}|<usage>\\s*subagent_tokens:|(?:^|\\n)agentId: [A-Za-z0-9_-]+ \\(use SendMessage`
+)
 /** A failure any tool can answer with: a tool error, or the user turning the
  *  call down. It says nothing about which call it answers. */
 export const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/

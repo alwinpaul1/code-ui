@@ -15,7 +15,12 @@
 // - an agent a message woke runs until its next report;
 // - an Agent call with no answer yet, or one whose answer names no id, runs
 //   for good.
-// A task launched before the loaded window is not seen at all.
+// A task launched before the loaded window is not seen at all. A foreground
+// report long enough for the wire to cut has lost its usage block, and its
+// id line past about 3,900 characters, so a cut answer to an Agent call that
+// asked for no background, and opens with no launch sentence, is read as a
+// finished report (review of 3598d39b: such a report ran for good and held
+// every later count off).
 
 import {
   isTextBlock,
@@ -26,6 +31,7 @@ import {
 } from '../../../src/shared/native-chat-types'
 import { FINISHED_RUN_USAGE } from './mobile-background-task-agent-titles'
 import {
+  AGENT_LAUNCH_OPENING,
   ANY_TOOL_FAILURE,
   INTERRUPTED,
   readLaunch,
@@ -35,6 +41,7 @@ import {
   type Launch,
   type PendingCall
 } from './mobile-background-task-transcript'
+import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
 
 type Pending = PendingCall & { at: number }
@@ -42,19 +49,25 @@ type Pending = PendingCall & { at: number }
  *  null id is a task no ending names. */
 type Span = { from: number; id: string | null }
 
+function askedForBackground(call: Pending): boolean {
+  return Reflect.get(Object(call.input), 'run_in_background') === true
+}
+
 /** An Agent call's answer that leaves an agent running: anything but a
- *  failure, or a foreground run's report (its usage block). */
-function leftAgentRunning(output: string): boolean {
-  return !ANY_TOOL_FAILURE.test(output) && !FINISHED_RUN_USAGE.test(output)
+ *  failure, or a foreground run's report (its usage block, or the cut that
+ *  took it). */
+function leftAgentRunning(call: Pending, output: string): boolean {
+  if (ANY_TOOL_FAILURE.test(output) || FINISHED_RUN_USAGE.test(output)) {
+    return false
+  }
+  const cutReport =
+    output.endsWith(MOBILE_CUT) && !AGENT_LAUNCH_OPENING.test(output) && !askedForBackground(call)
+  return !cutReport
 }
 
 /** Whether a call left behind with no answer may still be running. */
 function mayRunOn(call: Pending): boolean {
-  return (
-    toolCallKind(call.name) === 'agent' ||
-    call.name === 'Monitor' ||
-    Reflect.get(Object(call.input), 'run_in_background') === true
-  )
+  return toolCallKind(call.name) === 'agent' || call.name === 'Monitor' || askedForBackground(call)
 }
 
 const USER_COMMAND_OUTPUT = '<bash-stdout>'
@@ -105,7 +118,7 @@ export function backgroundWorkRunningAt(
         }
         const launch = readLaunch(call, block.output)
         if (toolCallKind(call.name) === 'agent') {
-          if (leftAgentRunning(block.output)) {
+          if (leftAgentRunning(call, block.output)) {
             spans.push({ from: call.at, id: launch?.id ?? null })
           }
         } else if (launch) {

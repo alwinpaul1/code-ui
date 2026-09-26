@@ -54,6 +54,23 @@ agentId: a093e15feb44a7819 (use SendMessage with to: 'a093e15feb44a7819', summar
 tool_uses: 28
 duration_ms: 310179</usage>`
 
+// Orca cuts every tool result it sends the phone at 4000 characters and marks
+// the cut (`clip`, MOBILE_BLOCK_CHAR_CAP and TRUNCATION_MARKER in
+// src/main/runtime/rpc/methods/native-chat.ts, Orca ac675ded6e). A long
+// report loses its usage block to the cut, and its id line too once it runs
+// past it. Review of 3598d39b: such a report read as an agent still running
+// and held every later create's count off for the rest of the transcript.
+const cutByTheWire = (output: string) => `${output.slice(0, 4000)}\n… (truncated)`
+
+/** A foreground agent's report long enough that its usage block opens at
+ *  `usageAt`. */
+function reportWithUsageAt(usageAt: number): string {
+  const findings = 'The job queue drains its entries in order. '
+    .repeat(200)
+    .slice(0, usageAt - FOREGROUND_AGENT_OUTPUT.indexOf('<usage>'))
+  return `${findings}${FOREGROUND_AGENT_OUTPUT}`
+}
+
 // SendMessage's answers, verbatim in shape from this machine's transcripts
 // (Claude Code 2.1.281): waking an agent that had finished, and a message to a
 // teammate's inbox.
@@ -255,6 +272,36 @@ describe('a create made while earlier work was still running', () => {
       FOREGROUND_AGENT_OUTPUT
     )
     expect(touched([...agent, ...CREATE])).toBe(false)
+  })
+
+  it.each([
+    ['past its id line', 5000, false],
+    ['just before its usage block', 4000, true]
+  ])(
+    'still counts a create made after a foreground agent whose long report the wire cut %s',
+    (_, usageAt, keepsIdLine) => {
+      const report = cutByTheWire(reportWithUsageAt(usageAt))
+      expect(report).not.toContain('<usage>')
+      expect(report.includes('agentId: a093e15feb44a7819 (use SendMessage')).toBe(keepsIdLine)
+      const agent = launched('Agent', { description: 'Find the flag', prompt: 'Find it' }, report)
+      expect(touched([...agent, ...CREATE])).toBe(false)
+    }
+  )
+
+  it.each([
+    [
+      "a teammate's spawn",
+      { description: 'Review the jobs', prompt: 'Review', name: 'reviewer', team_name: 'review' },
+      `${TEAMMATE_SPAWN_OUTPUT}\n${'note: '.repeat(800)}`
+    ],
+    [
+      'a background launch in the JSON shape a server flag serves',
+      BACKGROUND_AGENT,
+      `{"resultType":"task","taskId":"${AGENT_ID}","status":"working","statusMessage":${JSON.stringify(asyncAgentLaunchResult(AGENT_ID).repeat(4))}}`
+    ]
+  ])('draws no count for a create made after %s the wire cut', (_, input, output) => {
+    const agent = launched('Agent', input, cutByTheWire(output))
+    expect(touched([...agent, ...CREATE])).toBe(true)
   })
 
   it('still counts a create made after an agent call the user turned down', () => {
