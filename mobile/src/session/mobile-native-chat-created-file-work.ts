@@ -53,7 +53,13 @@
 // - a launch in a batch also runs from every call there that may launch and
 //   was handed none, so a create between the two refuses even when the
 //   launch was called after it.
-// A task launched before the loaded window is not seen at all. A foreground
+// A task launched before the loaded window is seen only by its trace there:
+// a finish or stop that names it, its launch answer when the window cut off
+// the call, or a teammate's message, each of which runs from the window's
+// start (review of 8b2ef369: a background agent launched before the window
+// went on writing a 93-line create and the chip drew +125). Without a trace
+// it is not seen at all, which is why the count is read only from the whole
+// session (MobileNativeChatOverlay.tsx). A foreground
 // report long enough for the wire to cut has lost its usage block, and its
 // id line past about 3,900 characters, so a cut answer is read as a finished
 // report when it goes to an Agent call that asked for no background, opens
@@ -239,6 +245,26 @@ function mayRunOn(call: Pending): boolean {
   return toolCallKind(call.name) === 'agent' || call.name === 'Monitor' || askedForBackground(call)
 }
 
+/** The id an answer launches work under when its call is not in the window:
+ *  a shell's or a monitor's sentence, or an agent's launch (null when it
+ *  names none); undefined for any other answer. */
+function orphanLaunchId(answer: string): string | null | undefined {
+  for (const name of ['Bash', 'Monitor']) {
+    const launch = readLaunch({ name, input: null, startedAt: null }, answer)
+    if (launch) {
+      return launch.id
+    }
+  }
+  if (AGENT_LAUNCH_OPENING.test(answer) || JSON_LAUNCH.test(answer)) {
+    return readLaunch({ name: 'Agent', input: null, startedAt: null }, answer)?.id ?? null
+  }
+  return undefined
+}
+
+/** A message from another agent: one working beside this session, which
+ *  the transcript does not say has stopped. */
+const TEAMMATE_MESSAGE = /<teammate-message\b/
+
 const USER_COMMAND_OUTPUT = '<bash-stdout>'
 
 /** A command the user ran with `!` that went to the background. Its output
@@ -304,6 +330,11 @@ export function backgroundWorkRunningAt(
           } else if (mayLaunch(call)) {
             batch.unsure.push(call)
           }
+        } else {
+          const orphan = orphanLaunchId(block.output)
+          if (orphan !== undefined) {
+            spans.push({ from: 0, id: orphan })
+          }
         }
         if (pending.length === 0) {
           settle(batch, pending, endings, spans)
@@ -314,6 +345,9 @@ export function backgroundWorkRunningAt(
         const launch = userCommandLaunch(block.text)
         if (launch) {
           spans.push({ from: at, id: launch.id })
+        }
+        if (TEAMMATE_MESSAGE.test(block.text)) {
+          spans.push({ from: 0, id: null })
         }
       }
     }
@@ -331,6 +365,13 @@ export function backgroundWorkRunningAt(
   for (const call of pending) {
     if (mayRunOn(call)) {
       spans.push({ from: call.at, id: null })
+    }
+  }
+  // A task that finished or was stopped with no launch in the window was
+  // launched before it, and ran from its start.
+  for (const ending of endings) {
+    if (!spans.some((span) => span.id === ending.id)) {
+      spans.push({ from: 0, id: ending.id })
     }
   }
   const running = spans.map(({ from, id }) => ({

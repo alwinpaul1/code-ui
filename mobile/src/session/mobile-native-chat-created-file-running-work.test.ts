@@ -761,6 +761,37 @@ describe('a create made while earlier work was still running', () => {
     expect(touched([...CREATE, ...later])).toBe(false)
   })
 
+  // Review of 8b2ef369 (2026-09-26): work launched before the loaded window
+  // was not seen at all, though the window held its trace. The count is now
+  // read only from the whole session (mobile-native-chat-created-file-whole-
+  // session.test.ts); these hold even where that is wrong.
+  it.each([
+    ['a background shell finishes after it, launched where the window cannot see', () => [...CREATE, said(shellNotification(SHELL_ID))]],
+    [
+      'a background agent reports after it, launched where the window cannot see',
+      () => [...CREATE, said(agentFinishedNotification(AGENT_ID, 'Tidy the jobs'))]
+    ],
+    [
+      'a teammate’s message comes after it',
+      () => [
+        ...CREATE,
+        said(
+          'Another Claude session sent a message:\n<teammate-message teammate_id="api-security-hunter" color="purple" summary="Jobs tidied">\nTidied the queue job and appended the cleanup step.\n</teammate-message>'
+        )
+      ]
+    ],
+    [
+      'the window opens on a background launch whose call it cut off',
+      () => [message('user', [{ type: 'tool-result', output: asyncAgentLaunchResult(AGENT_ID) }]), ...CREATE]
+    ],
+    [
+      'the window opens on a background command whose call it cut off',
+      () => [message('user', [{ type: 'tool-result', output: backgroundStartOutput(SHELL_ID) }]), ...CREATE]
+    ]
+  ])('draws no count for a create when %s', (_, messages) => {
+    expect(touched(messages())).toBe(true)
+  })
+
   it('holds nothing for work with no create, and counts a create with nothing before it', () => {
     const launch = launched('Agent', BACKGROUND_AGENT, asyncAgentLaunchResult(AGENT_ID))
     expect(cutCreateStandings(launch).size).toBe(0)
