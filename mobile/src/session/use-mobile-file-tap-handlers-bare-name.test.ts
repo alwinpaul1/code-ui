@@ -601,7 +601,10 @@ describe('how many files carry the tapped name', () => {
     expect(openedPaths(desktop)).toEqual([])
   })
 
-  it('offers even a lone match when the desktop searched only part of the workspace', async () => {
+  // Reported 2026-09-26 (phone recording): a tapped `black_text_changes_bridge.md`
+  // brought up a sheet with one row to tap before the file opened. One match
+  // opens; a sheet is for a choice.
+  it('opens a lone match at once even when the desktop searched only part of the workspace', async () => {
     const desktop = fakeDesktop({
       files: ['deep/x.ts', 'z-1.ts', 'z-2.ts'],
       searchCap: 2,
@@ -612,11 +615,8 @@ describe('how many files carry the tapped name', () => {
     tap('x.ts')
     await settle()
 
-    expect(handlers!.fileTapMatchPicker.offer).toMatchObject({
-      paths: ['deep/x.ts'],
-      complete: false
-    })
-    expect(openedPaths(desktop)).toEqual([])
+    expect(handlers!.fileTapMatchPicker.offer).toBeNull()
+    expect(openedPaths(desktop)).toEqual(['deep/x.ts'])
   })
 
   it('says the search was partial when a truncated inventory holds no such name', async () => {

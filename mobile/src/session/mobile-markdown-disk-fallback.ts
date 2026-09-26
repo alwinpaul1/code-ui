@@ -15,12 +15,16 @@ export function buildMarkdownDiskFallbackDoc(args: {
   content: string
   truncated: boolean | undefined
   tabIsDirty: boolean
+  /** Why the desktop would not read its tab, when it has a window to ask. */
+  desktopRefusal?: string
 }) {
   const readOnlyReason = args.truncated
     ? 'File too large for mobile preview'
     : args.tabIsDirty
       ? 'Desktop has unsaved changes. Showing disk content.'
-      : 'Editing needs Orca desktop running.'
+      : args.desktopRefusal
+        ? `The desktop could not read this tab (${args.desktopRefusal}). Showing the file on disk.`
+        : 'Editing needs Orca desktop running.'
   return {
     status: 'ready' as const,
     content: args.content,

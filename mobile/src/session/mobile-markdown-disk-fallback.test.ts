@@ -31,7 +31,7 @@ describe('shouldReadMarkdownFromDiskAfterReadTabFailure', () => {
     ).toBe(true)
   })
 
-  it('does not hide unrelated markdown read failures behind a disk read', () => {
+  it('tells a desktop with no window from its other refusals, which still read the disk but say why', () => {
     expect(
       shouldReadMarkdownFromDiskAfterReadTabFailure(failure('runtime_error', 'tab_not_found'))
     ).toBe(false)
