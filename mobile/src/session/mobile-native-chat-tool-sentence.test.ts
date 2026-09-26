@@ -213,6 +213,33 @@ describe('toolRunSentence', () => {
       expect(toolRunSentence(blocks({ to: 'r', message: `${exact}y` }))).toBe(`Messaged @r ${exact}…`)
     })
 
+    // Review of a91c04d1: recipients the agent writes that are not a bare name.
+    it('reads a broadcast to every teammate ("*") as "Messaged everyone"', () => {
+      expect(toolRunSentence(blocks({ to: '*', message: 'Stop and report.' }))).toBe(
+        'Messaged everyone Stop and report.'
+      )
+    })
+
+    it('does not double the @ of a recipient written with one', () => {
+      expect(toolRunSentence(blocks({ to: '@team-lead', message: 'Done.' }))).toBe('Messaged @team-lead Done.')
+    })
+
+    it('names a message to another Claude Code session, not its socket path', () => {
+      expect(toolRunSentence(blocks({ to: 'uds:/tmp/cc-socks/48213.sock', message: 'Hi' }))).toBe(
+        'Messaged another session Hi'
+      )
+    })
+
+    it('cuts the preview on a character, never inside an emoji', () => {
+      const edge = `${'x'.repeat(SEND_MESSAGE_PREVIEW_MAX - 1)}😀y`
+      expect(toolRunSentence(blocks({ to: 'r', message: edge }))).toBe(
+        `Messaged @r ${'x'.repeat(SEND_MESSAGE_PREVIEW_MAX - 1)}😀…`
+      )
+      // The cap counts characters, not UTF-16 units: this many emoji is whole.
+      const emoji = '😀'.repeat(SEND_MESSAGE_PREVIEW_MAX)
+      expect(toolRunSentence(blocks({ to: 'r', message: emoji }))).toBe(`Messaged @r ${emoji}`)
+    })
+
     it('says "Messaged an agent" when there is no recipient, whatever the message', () => {
       expect(toolRunSentence(blocks({ message: 'Hello' }))).toBe('Messaged an agent')
       expect(toolRunSentence(blocks({ to: '  ', message: 'Hello' }))).toBe('Messaged an agent')

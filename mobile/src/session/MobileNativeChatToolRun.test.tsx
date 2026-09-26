@@ -132,6 +132,14 @@ function readTree(renderer: ReactTestRenderer): Rendered {
   return { members, texts }
 }
 
+// A Text's whole string, nested spans included.
+function textOf(node: ReactTestInstance | string): string {
+  if (typeof node === 'string') {
+    return node
+  }
+  return node.children.map((child) => textOf(child)).join('')
+}
+
 function flattenColor(style: unknown): string | undefined {
   const entries = Array.isArray(style) ? style : [style]
   for (const entry of entries) {
@@ -270,8 +278,9 @@ describe('a batch of tool calls in one run header', () => {
         SEND_MESSAGE_BY_ID_2026_09_26.call!,
         { type: 'tool-result', output: 'No agent named a07ea6f616a8e32a1', isError: true }
       ]
-      const { texts } = render(failedSend, scheme)
-      const sentence = texts.find((text) => text.startsWith('Messaged @'))!
+      render(failedSend, scheme)
+      const sentence = textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))
+      expect(sentence.startsWith('Messaged @a07ea6f616a8e32a1 Agreed.')).toBe(true)
       expect(sentence.indexOf('(1 failed)')).toBeGreaterThan(50)
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.children).toBe('1 failed')
@@ -298,6 +307,32 @@ describe('a batch of tool calls in one run header', () => {
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.children).toBe('1 failed')
       expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+    }
+  )
+
+  // Review of a91c04d1: "Messaged @team lead Look at the parser." has no
+  // visible boundary between a spaced name and the preview. The recipient is
+  // its own span in the row's member-name tone, the mark a batch row already
+  // uses between a name and its argument.
+  it.each(['light', 'dark'] as const)(
+    'marks where a spaced recipient ends and the message preview begins, in %s',
+    (scheme) => {
+      const palette = scheme === 'dark' ? darkColors : lightColors
+      render(
+        [
+          { type: 'tool-call', name: 'SendMessage', input: { to: 'team lead', message: 'Look at the parser.' } },
+          { type: 'tool-result', output: '{"success":true}' }
+        ],
+        scheme
+      )
+      const sentence = renderer!.root.findByProps({ testID: 'tool-run-sentence' })
+      expect(textOf(sentence)).toBe('Messaged @team lead Look at the parser.')
+      const recipient = sentence.findAll(
+        (node) => typeof node.type === 'string' && node !== sentence && node.props.children === '@team lead'
+      )
+      expect(recipient).toHaveLength(1)
+      expect(flattenColor(recipient[0]!.props.style)).toBe(palette.text)
+      expect(flattenColor(sentence.props.style)).toBe(palette.textSecondary)
     }
   )
 

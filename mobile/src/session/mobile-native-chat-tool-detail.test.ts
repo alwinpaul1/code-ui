@@ -83,6 +83,17 @@ describe('tool detail title: the row sentence, reused for one call', () => {
     expect(toolDetailTitle(withSummary)).toBe('Messaged @researcher')
   })
 
+  it('titles a broadcast, an @-written name and another session the way the row names them', () => {
+    const title = (to: string): string =>
+      toolDetailTitle({
+        call: { type: 'tool-call', name: 'SendMessage', input: { to, message: 'Hi' } },
+        result: { type: 'tool-result', output: '{"success":true}' }
+      })
+    expect(title('*')).toBe('Messaged everyone')
+    expect(title('@team-lead')).toBe('Messaged @team-lead')
+    expect(title('uds:/tmp/cc-socks/48213.sock')).toBe('Messaged another session')
+  })
+
   it('titles a SendMessage with no recipient "Messaged an agent"', () => {
     const pair: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'SendMessage', input: { message: 'Hello' } },

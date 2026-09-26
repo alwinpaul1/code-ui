@@ -23,7 +23,8 @@ import {
   ToolRowName,
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
-import { toolRunSentence, toolRunSentenceShowsFailures } from './mobile-native-chat-tool-sentence'
+import { toolRunSentenceShowsFailures, toolRunSentenceSpans } from './mobile-native-chat-tool-sentence'
+import { ToolRunSentenceText } from './MobileNativeChatToolRunSentence'
 import {
   editFilesForToolCall,
   toolRunDiffStat,
@@ -403,7 +404,7 @@ export function ToolRun({
       </View>
     )
   }
-  const sentence = focusView ? '' : toolRunSentence(blocks)
+  const sentenceSpans = focusView ? [] : toolRunSentenceSpans(blocks)
   // The sentence says "(N failed)" itself, as the Claude app's row does; a
   // second "N failed" beside it said it twice and cut the sentence
   // (2026-09-26). The label stays wherever the row might not show every
@@ -412,7 +413,7 @@ export function ToolRun({
   // alone), or one whose count sits past what a phone row shows before its
   // ellipsis (a SendMessage's preview, a command's description).
   const sentenceStatesFailures =
-    sentence !== '' && toolRunSentenceShowsFailures(blocks, failedCallCount)
+    sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -430,13 +431,12 @@ export function ToolRun({
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
         >
-          <Text
+          <ToolRunSentenceText
+            spans={sentenceSpans}
+            fallback={countLabel}
             style={[styles.toolRunLabel, styles.toolRunSentence]}
-            numberOfLines={1}
-            testID="tool-run-sentence"
-          >
-            {sentence || countLabel}
-          </Text>
+            styles={styles}
+          />
           {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}

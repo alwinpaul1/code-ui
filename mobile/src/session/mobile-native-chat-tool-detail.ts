@@ -2,7 +2,7 @@ import { isEditToolName, editFilesFromToolPair } from '../../../src/shared/nativ
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { sendMessageRecipient, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { sendMessageAddressee, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
 
 /** "Completed" / "Failed" / "Running" for ONE call, the way the Claude app's
  *  sheet states it under the title. A result settles the call regardless of
@@ -34,8 +34,8 @@ export function toolDetailStatus(pair: NativeChatToolPair): ToolDetailStatus {
  *  call is nameless or the pair is a result with no call at all. */
 export function toolDetailTitle(pair: NativeChatToolPair): string {
   if (pair.call && toolCallKind(pair.call.name) === 'message') {
-    const to = sendMessageRecipient(pair.call.input)
-    return to ? `Messaged @${to}` : 'Messaged an agent'
+    const to = sendMessageAddressee(pair.call.input)
+    return to ? `Messaged ${to}` : 'Messaged an agent'
   }
   const blocks: NativeChatBlock[] = []
   if (pair.call) {
