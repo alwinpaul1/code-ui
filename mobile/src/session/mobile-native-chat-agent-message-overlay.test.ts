@@ -518,4 +518,24 @@ describe("two messages from one subagent, each side missing a different one", ()
     const first = rowsOf().find((row) => row.id === 'peer-notice:probe:1')
     expect(first).toEqual({ id: 'peer-notice:probe:1', sender: 'probe', body: '' })
   })
+
+  // Review of 9f9aa4a0..a6857609, item 3: the text above a message taken
+  // mid-turn is usually tool output, which 159e20db did not read as evidence,
+  // so the second row was never drawn (the rule before it drew it). The
+  // second row opens to its own words: the status's copy was read with it.
+  it('draws the second row, painted under tool output, with its own words', async () => {
+    await show('12:40:30.000', { messages: [PROMPT, OPENING, ...launched], working: true, promptHook: false, peerRows: peerNoticesFromScreen(screen1) })
+    const statusCopies = status(['ok, run it', `<agent-message from="${AGENT_ID}"> ${SECOND} </agent-message>`], ['12:41:30.000', '12:42:30.000'])
+    await show('12:42:30.000', {
+      messages: [PROMPT, OPENING, ...launched, call, result],
+      working: true,
+      promptHook: false,
+      peerRows: peerNoticesFromScreen(screen2),
+      statusAgentMessages: statusCopies
+    })
+    expect(rowsOf()).toEqual([
+      { id: 'peer-notice:probe:1', sender: 'probe', body: '' },
+      { id: 'peer-notice:probe:2', sender: 'probe', body: SECOND }
+    ])
+  })
 })

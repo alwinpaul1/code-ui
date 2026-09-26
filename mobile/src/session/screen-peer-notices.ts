@@ -59,10 +59,10 @@ export function observeScreenPeerNotices(
   tailId: string | null,
   now: number,
   afterId?: string,
-  /** Whether text painted above a row belongs to a transcript row that came
-   *  after this notice's anchor: the only evidence, beside the notice's own
-   *  row, that a row is a later message (newerThanLastKnown). */
-  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean = () => false,
+  /** Whether what was painted above a row belongs to a transcript row that
+   *  came after this notice's anchor: the only evidence, beside the notice's
+   *  own row, that a row is a later message (newerThanLastKnown). */
+  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean = () => false,
   /** The phone's clock now. */
   seenAt: number = Date.now()
 ): readonly ScreenPeerNotice[] {
@@ -113,7 +113,7 @@ export function observeScreenPeerNotices(
 function newerThanLastKnown(
   known: readonly ScreenPeerNotice[],
   rows: readonly ScreenPeerRow[],
-  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean
+  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean
 ): number {
   const last = known.at(-1)
   if (last === undefined) {
@@ -126,7 +126,7 @@ function newerThanLastKnown(
       }
     }
   }
-  const first = rows.findIndex((row) => row.above !== undefined && paintedAfter(last, row.above))
+  const first = rows.findIndex((row) => paintedAfter(last, row))
   return first === -1 ? 0 : rows.length - first
 }
 

@@ -42,6 +42,24 @@ export type ScreenPeerRow = {
    *  scrolled off (screen-peer-notices.ts). Absent for a row too near the top
    *  of the screen to have that much above it. */
   above?: string
+  /** The nearest line above the row with something on it, with its spaces
+   *  and the TUI's own marks (the `⏺`, `⎿` gutter and box drawing) taken
+   *  out: the end of what was painted just before the row, often a tool's
+   *  output. Absent for a row with no such line above it on screen. */
+  lastLine?: string
+}
+
+/** The TUI's own marks: a line's gutter glyphs and box drawing. */
+const TUI_MARKS = /[\u2500-\u259F⏺⎿●✻✳✽✶✢·›❯]/g
+
+function lastLineAbove(screen: readonly string[], row: number): string | undefined {
+  for (let line = row - 1; line >= 0; line -= 1) {
+    const text = (screen[line] ?? '').replaceAll(TUI_MARKS, '').replaceAll(/\s+/g, '')
+    if (text.length > 0) {
+      return text
+    }
+  }
+  return undefined
 }
 
 /** Enough of what came before a row to tell it from another row of the same
@@ -85,7 +103,8 @@ export function peerNoticesFromScreen(screen: readonly string[]): ScreenPeerRow[
     }
     const sender = head[1]
     const above = paintedAbove(screen, index)
-    const context = above === undefined ? {} : { above }
+    const lastLine = lastLineAbove(screen, index)
+    const context = { ...(above === undefined ? {} : { above }), ...(lastLine === undefined ? {} : { lastLine }) }
     if (head[3]) {
       found.push({ sender, ...context })
       index += 1

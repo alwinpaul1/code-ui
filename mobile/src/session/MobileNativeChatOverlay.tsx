@@ -297,7 +297,8 @@ export function MobileNativeChatOverlay({
     foldedWithAgents,
     controller.nativeChatStreamScopeKey,
     controller.nativeChatPromptHook !== true,
-    screenBodies
+    screenBodies,
+    session.messages
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).

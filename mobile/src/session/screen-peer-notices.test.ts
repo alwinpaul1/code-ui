@@ -7,7 +7,7 @@ import { observeScreenPeerNotices, ROW_WORDS_WINDOW_MS, withScreenPeerNotices, t
 import { paintedAfterAnchor } from './use-screen-peer-notices'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
-import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
+import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 function row(id: string, role: NativeChatMessage['role'], text: string, presentation?: string): NativeChatMessage {
   return { id, role, timestamp: 10, source: 'transcript', blocks: [{ type: 'text', text, ...(presentation ? { presentation } : {}) }] }
@@ -338,7 +338,7 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     row('a3', 'assistant', 'The probe agent has finished and gone idle.\nNothing further to do.\n\nsession:ok')
   ]
   /** What the chat reads above a row: its own transcript after the notice's anchor. */
-  const evidence = (notice: ScreenPeerNotice, above: string) => paintedAfterAnchor(folded, notice.anchorId, above)
+  const evidence = (notice: ScreenPeerNotice, row: ScreenPeerRow) => paintedAfterAnchor(folded, notice.anchorId, row)
   const observe = (previous: readonly ScreenPeerNotice[], screen: readonly string[], tail: string, now: number) =>
     observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, now, undefined, evidence)
   const drawn = (rows: readonly NativeChatMessage[]) =>
@@ -389,8 +389,8 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     const narrow = ['⏺ Done. The two runs:', '  ┌──────────────┬──────────┐', '  │ run          │ result   │', '  └──────────────┴──────────┘', '', ROW]
     const tables = [row('a1', 'assistant', 'Done. The two runs:\n\n| run | result |\n|---|---|')]
     const seen = (previous: readonly ScreenPeerNotice[], screen: readonly string[]) =>
-      observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), 'a1', 5, undefined, (notice, above) =>
-        paintedAfterAnchor(tables, notice.anchorId, above)
+      observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), 'a1', 5, undefined, (notice, row) =>
+        paintedAfterAnchor(tables, notice.anchorId, row)
       )
     const first = seen([], wide)
     expect(seen(first, narrow)).toBe(first)
