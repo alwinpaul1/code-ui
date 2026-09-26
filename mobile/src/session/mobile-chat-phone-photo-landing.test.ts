@@ -8,11 +8,8 @@ import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { mergeImagePreviews } from './use-host-image-previews'
-import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
 import { sentPhotosFromScreen } from './mobile-terminal-sent-photos'
-import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
-import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
 import {
@@ -44,129 +41,36 @@ vi.mock('./MobileNativeChatView', async () => {
   }
 })
 
-// Reported from the phone on 2026-09-26 (build 12e411e3), Claude Code 2.1.281,
-// session 967668df. The records are the transcript's own, 1-based lines:
-//   23621 user, promptSource "typed": "[Image #67] [Image #68] [Image #69] Now I
-//         see 1 shell and 2 agents…" plus three base64 image blocks, which
-//         Orca's reader drops (they have no path or url)
-//   23624 user, isMeta, 1 ms later: three `[Image: source: …orca-paste-….png]`
-//         text blocks, which Orca 1.4.211 keeps as their own user row
-//   23679 / 23682 the same for "[Image #70] [Image #71] [Image #72] See images…"
-// The bubble showed the photos, then three "Image on Desktop" chips over the
-// same words, then the photos again after a flash. The second message was then
-// drawn with the photos AND, under it, a bubble of three chips and no words.
-const SESSION = '967668df-a7d9-40e7-964b-7812815c010d'
-const at = (clock: string) => Date.parse(`2026-09-26T${clock}Z`)
-const TEXT1 = 'Now I see 1 shell and 2 agents\n\nAlso how did this prompt you are a second reviewer got leaked in'
-const TEXT2 =
-  'See images were send from my phone, but at some point it glitching and showing its from my Images from Desktop then screen flashed and showd the images preview'
-const TEMP = '/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T'
-const source = (file: string) => `[Image: source: ${TEMP}/${file}.png]`
-const PATHS1 = [
-  'orca-paste-1790405916218-5211776c-2f4a-4164-bbdf-ed7c7adc9c20',
-  'orca-paste-1790405982176-42c80aee-6038-4de8-aa23-68dca155febb',
-  'orca-paste-1790405983769-e32af309-4eb4-4934-84cd-e16bc6599062'
-]
-const PATHS2 = [
-  'orca-paste-1790406096684-29b46d06-37a6-424d-9a46-11a4887e13da',
-  'orca-paste-1790406098133-9fa460f0-2461-4934-a1ae-c31577111f35',
-  'orca-paste-1790406099541-c7ab9697-2b10-4675-b08e-3ead2f0a7d98'
-]
-const PHOTOS1 = ['file:///phone/a1.jpg', 'file:///phone/a2.jpg', 'file:///phone/a3.jpg']
-const PHOTOS2 = ['file:///phone/b1.jpg', 'file:///phone/b2.jpg', 'file:///phone/b3.jpg']
+import {
+  SESSION,
+  at,
+  TEXT1,
+  TEXT2,
+  TEMP,
+  PATHS1,
+  PATHS2,
+  PHOTOS1,
+  PHOTOS2,
+  agentRow,
+  userRow,
+  markers,
+  promptRow,
+  companionRow,
+  before,
+  P1,
+  C1,
+  reply1,
+  P2,
+  C2,
+  hookCopy,
+  claudeScreen,
+  bubblesIn,
+  words,
+  type Tick,
+  type Drafts,
+  type Bubble
+} from './mobile-chat-phone-photo-landing.fixtures'
 
-const agentRow = (id: string, body: string, clock: string): NativeChatMessage => ({
-  id,
-  role: 'assistant',
-  blocks: [{ type: 'text', text: body }],
-  timestamp: at(clock),
-  source: 'transcript'
-})
-const userRow = (id: string, texts: readonly string[], clock: string): NativeChatMessage => ({
-  id,
-  role: 'user',
-  blocks: texts.map((text) => ({ type: 'text' as const, text })),
-  timestamp: at(clock),
-  source: 'transcript'
-})
-/** Claude Code's prompt row for a paste: one `[Image #N]` per photo, then the words. */
-const markers = (first: number, count: number) =>
-  Array.from({ length: count }, (_, index) => `[Image #${first + index}]`).join(' ')
-const promptRow = (id: string, first: number, count: number, body: string, clock: string) =>
-  userRow(id, [body ? `${markers(first, count)} ${body}` : markers(first, count)], clock)
-const companionRow = (id: string, files: readonly string[], clock: string) => userRow(id, files.map(source), clock)
-
-const before = [agentRow('94b09904', 'One shell, two agents.', '06:58:36.593')]
-const P1 = promptRow('40b55aba', 67, 3, TEXT1, '07:00:19.716')
-const C1 = companionRow('c0153c78', PATHS1, '07:00:19.716')
-const reply1 = agentRow('cb327988', 'The reviewer prompt came from the spawn.', '07:02:23.131')
-const P2 = promptRow('e96491cb', 70, 3, TEXT2, '07:02:54.344')
-const C2 = companionRow('394fac0f', PATHS2, '07:02:54.345')
-
-/** Orca's hook copy of a submission, as the tab status reports it: Claude's
- *  UserPromptSubmit prompt carries the `[Image #N]` markers. */
-function hookCopy(clock: string, body: string): DesktopPrompt[] {
-  let state = EMPTY_AGENT_STATUS_PROMPTS
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at(clock) })
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: body, updatedAt: at(clock) })
-  return [...state.prompts]
-}
-
-/** Claude Code 2.1.281's queue block above its spinner (the layout pinned in
- *  mobile-terminal-queued-messages.test.ts), holding the given rows. */
-function claudeScreen(queued: readonly string[]): string[] {
-  return [
-    '● Running 1 shell command · 14s…',
-    '',
-    ...queued.map((row) => `❯ ${row}`),
-    ...(queued.length ? ['  ctrl+x ctrl+s to send now'] : []),
-    '',
-    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
-    '',
-    '────────────────────────────────────────────────────────────────────────────────',
-    `❯ ${queued.length ? 'Press up to edit queued messages' : ''}`,
-    '────────────────────────────────────────────────────────────────────────────────'
-  ]
-}
-
-type Tick = {
-  /** The chat's transcript read has not settled: a kept transcript, or none. */
-  loading?: boolean
-  messages: NativeChatMessage[]
-  working?: boolean
-  prompts?: DesktopPrompt[]
-  queued?: string[]
-  screen?: string[]
-  agent?: 'claude' | 'codex'
-}
-type Drafts = ReturnType<typeof useMobileNativeChatDrafts>
-/** A user bubble as the list draws it: `P` a picture, `D` the "Image on
- *  Desktop" chip, then the words. */
-type Bubble = { id: string; images: string; text: string }
-
-function bubblesIn(props: Record<string, unknown>): Bubble[] {
-  const { data } = buildMobileNativeChatTransientData({
-    messages: props.messages as NativeChatMessage[],
-    folded: props.folded as NativeChatMessage[],
-    streaming: null,
-    pending: props.pending as never,
-    imagePreviewsByMessageId: props.imagePreviewsByMessageId as Record<string, string[]>
-  })
-  return data
-    .filter((message) => message.role === 'user')
-    .map((message) => ({
-      id: message.id,
-      images: message.blocks
-        .map((block) => (block.type !== 'image-ref' ? '' : isDesktopImageRef(block) ? 'D' : 'P'))
-        .join(''),
-      text: message.blocks
-        .map((block) => (block.type === 'text' ? block.text : ''))
-        .join('')
-        .replace(/\s+/g, ' ')
-        .trim()
-    }))
-}
-const words = (text: string) => text.replace(/\s+/g, ' ').trim()
 
 describe('a message the phone sent with photos, as its row lands', () => {
   let renderer: ReactTestRenderer | null = null
@@ -877,6 +781,89 @@ describe('a message the phone sent with photos, as its row lands', () => {
       await send('07:06:00.000', 'yes', [])
       await show('07:06:01.000', { messages: [...ended, userRow('yesyesye', ['yes'], '07:06:00.300')] })
       expect(lastFrame().find((bubble) => bubble.id === 'yesyesye')).toEqual({ id: 'yesyesye', images: '', text: 'yes' })
+    })
+  })
+
+  // Re-review of 4e25d63e (2026-09-26), each probe failing on it.
+  describe('what the re-review of the path rule found', () => {
+
+    // An ack-lost image send ('unknown') keeps its bubble and says "Delivery
+    // unconfirmed — check chat before retrying" (use-mobile-native-chat-message-
+    // send.ts); its paste can sit on the input line undelivered, marked stale,
+    // and the next send's leading Ctrl+U clears it. The user sends again.
+      describe('a photo message sent again after its first send was never delivered', () => {
+      const LOST = `${TEMP}/orca-paste-1790406010000-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.png`
+      const AGAIN = `${TEMP}/orca-paste-1790406070000-11111111-2222-4333-8444-555555555555.png`
+
+      it('draws the message once when the photo is attached again and sent with the same words', async () => {
+        await show('07:00:00.000', { messages: before })
+        await send('07:00:18.000', TEXT1, ['file:///phone/shot.jpg'], [LOST])
+        await show('07:01:00.000', { messages: before })
+        await send('07:01:10.000', TEXT1, ['file:///phone/shot.jpg'], [AGAIN])
+        const landed = [...before, promptRow('r1r1r1r1', 67, 1, TEXT1, '07:01:10.500'), companionRow('r1c1r1c1', [AGAIN.slice(TEMP.length + 1, -4)], '07:01:10.500')]
+        await show('07:01:11.000', { messages: landed, working: true })
+        await show('07:01:40.000', { messages: [...landed, reply1] })
+        await show('08:01:40.000', { messages: [...landed, reply1] })
+        expect(drawing(lastFrame(), TEXT1)).toEqual([{ id: 'r1r1r1r1', images: 'P', text: words(TEXT1) }])
+      })
+    })
+
+    describe('a photo that failed to attach', () => {
+      // placedByName: "A photo of the send's that no block names (one that
+      // failed to attach) still shows, after them, as the phone's." With one
+      // photo that failed, its row carries the words and no photo at all.
+      it('draws one bubble, with the phone’s photo, when the phone sent one photo with words and the row names none of it', async () => {
+        await show('07:00:00.000', { messages: before })
+        await send('07:00:18.000', TEXT1, PHOTOS1.slice(0, 1))
+        const landed = [...before, userRow('e1e2e3e4', [TEXT1], '07:00:19.716')]
+        await show('07:00:20.000', { messages: landed, working: true })
+        await show('07:00:21.000', { messages: [...landed, reply1] })
+        expect(drawing(lastFrame(), TEXT1)).toEqual([{ id: 'e1e2e3e4', images: 'P', text: words(TEXT1) }])
+      })
+    })
+
+      // Claude Code before 2.1.228 wrote a photo's companion BEFORE its prompt
+    // (normalizeImageTranscriptMessages: "before the prompt in older builds").
+    describe('the preview migration in the older order', () => {
+      it('keeps a phone photo on its prompt when the next read also holds the next photo message, in the older order', async () => {
+        await show('07:00:00.000', { messages: before })
+        await send('07:02:53.000', TEXT2, PHOTOS2)
+        const C2o = companionRow('394fac0f', PATHS2, '07:02:54.344')
+        const P2o = promptRow('e96491cb', 70, 3, TEXT2, '07:02:54.345')
+        const C3o = companionRow('deskcomp', PATHS1.slice(0, 1), '07:02:56.000')
+        const P3o = promptRow('deskdesk', 73, 1, 'pasted at the desk', '07:02:56.001')
+        // A read between the companion and its prompt: the row that names the
+        // phone's paths is the companion alone, and the send binds it.
+        await show('07:02:54.400', { messages: [...before, C2o], working: true })
+        await show('07:02:57.000', { messages: [...before, C2o, P2o, C3o, P3o], working: true })
+        expect(lastFrame()).toEqual([
+          { id: 'e96491cb', images: 'PPP', text: words(TEXT2) },
+          { id: 'deskdesk', images: 'D', text: 'pasted at the desk' }
+        ])
+      })
+    })
+
+      describe('a captioned photo sent before the read settled that Claude took mid-turn', () => {
+      it('keeps its bubble, with its photo, when the settled read holds an older row of the same words', async () => {
+        const older = [
+          agentRow('0a0a0a0a', 'Earlier answer.', '08:40:00.000'),
+          userRow('old1old1', ['what about this one'], '08:43:47.644'),
+          agentRow('0b0bbe84', 'That one is fine.', '08:44:10.000'),
+          agentRow('0c0c0c0c', 'Working on the next step.', '09:29:50.000')
+        ]
+        vi.setSystemTime(at('09:29:00.000'))
+        await show('09:29:00.000', { messages: [], loading: true, working: true })
+        await send('09:30:03.500', 'what about this one', ['file:///phone/p17.jpg'])
+        const box = queuedMessagesFromScreen(claudeScreen(['[Image #17] what about this one']))
+        await show('09:30:04.000', { messages: older, working: true, queued: box })
+        const tookIt = [...older, agentRow('33806c18', 'Took it.', '09:30:30.000')]
+        await show('09:30:31.000', { messages: tookIt, working: true, queued: [] })
+        await show('09:30:32.000', { messages: tookIt, working: true, queued: [] })
+        expect(drawing(lastFrame(), 'what about this one')).toEqual([
+          { id: 'old1old1', images: '', text: 'what about this one' },
+          expect.objectContaining({ images: 'P', text: 'what about this one' })
+        ])
+      })
     })
   })
 

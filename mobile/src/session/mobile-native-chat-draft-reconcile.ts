@@ -77,6 +77,9 @@ export type PendingImagePreviewEcho = {
   /** False for a send whose tail was never resolved against this chat's
    *  read: only the path rule binds it, since the others go by that tail. */
   baselineResolved?: boolean
+  /** When the agent took it out of its queue box (isTakenSend): it may get
+   *  no row at all. */
+  takenAt?: number
 }
 
 const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
@@ -128,12 +131,14 @@ function imagePreviewReplacementMessageId(
     nextIndex++
   }
   const prompt = messages[nextIndex]
-  // A prompt with a companion of its own right after it is another message:
-  // this run trails the prompt before the window, as the chat draws it
-  // (keepWindowStartRun), and moved here it gave that prompt the first
-  // message's photos (review of becd6af2).
+  // At the start of the window, a prompt with a companion of its own right
+  // after it is another message: this run trails the prompt before the
+  // window, as the chat draws it (keepWindowStartRun), and moved here it gave
+  // that prompt the first message's photos (review of becd6af2). Anywhere
+  // else the older order (companion before its prompt, Claude Code before
+  // 2.1.228) moves it as before (re-review of 4e25d63e).
   const after = messages[nextIndex + 1]
-  if (after?.source === source.source && isImageSourceUserTurn(after)) {
+  if (sourceIndex === 0 && after?.source === source.source && isImageSourceUserTurn(after)) {
     return null
   }
   return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
@@ -272,10 +277,12 @@ export function findLandedImagePreviewEchoes(
       if (pasted && photoNames(message).length > 0) {
         return false
       }
-      // A row with no photo in it is not a photo send's row, whatever its
-      // words (review of becd6af2: a photo Claude took mid-turn, which gets
-      // no row, went to a later "yes" sent alone).
-      if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
+      // A row with no photo in it is not the row of a photo send the agent
+      // took mid-turn, which gets none, whatever its words (review of
+      // becd6af2: it went to a later "yes" sent alone). Any other send's row
+      // can carry none: its photo failed to attach, and still shows as the
+      // phone's (re-review of 4e25d63e).
+      if (pasted && typeof entry.takenAt === 'number' && !carriesPhoto(message, rawById.get(message.id))) {
         return false
       }
       if (targetText) {
