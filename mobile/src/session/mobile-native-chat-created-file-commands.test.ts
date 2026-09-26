@@ -44,13 +44,14 @@ describe('a create followed by a command that names it', () => {
     ['makes it executable and runs it', `chmod +x ${PATH} && ${PATH}`],
     ['runs it from its folder', `cd hybrid-model/scripts/cluster/jobs && ./${NAME}`],
     ['runs it with bash', `bash ${RELATIVE}`],
-    ['runs it with sh and a setting', `DRY_RUN=1 sh ${RELATIVE}`],
+    ['runs it with sh', `sh ${RELATIVE}`],
     ['runs it with zsh', `zsh ${PATH}`],
     ['runs it with python3', `python3 ${RELATIVE} --dry-run`],
     ['runs it with node', `node ./${RELATIVE}`],
     ['runs it with its errors joined to its output', `bash ${RELATIVE} 2>&1`],
     ['runs it and throws the output away', `bash ${RELATIVE} > /dev/null 2>&1`],
     ['prints it', `cat ${PATH}`],
+    ['pages it', `less ${PATH}`],
     ['counts its lines through a pipe', `cat ${PATH} | wc -l`],
     ['reads its head, tail and size', `head -n 20 ${PATH}; tail -n 5 ${PATH}; wc -l ${PATH}`],
     ['looks at it', `ls -l ${RELATIVE} && stat ${RELATIVE} && file ${RELATIVE}`],
@@ -58,7 +59,7 @@ describe('a create followed by a command that names it', () => {
     ['shows how git sees it', `git status --short ${RELATIVE} && git diff ${RELATIVE}`],
     ['reads its history', `git log --oneline -- ${RELATIVE} && git show HEAD:${RELATIVE}`],
     ['quotes its path', `chmod +x "${PATH}" && bash '${RELATIVE}'`],
-    ['runs it over a continued line', `DRY_RUN=1 \\\n  bash ${RELATIVE}`],
+    ['runs it over a continued line', `chmod +x ${PATH} && \\\n  bash ${RELATIVE}`],
     ['ends in a separator', `chmod +x ${PATH};`]
   ])('counts a create the next command only %s', (_, command) => {
     expect(ranAfter(command)).toBe(false)
@@ -81,6 +82,14 @@ describe('a create followed by a command that names it', () => {
     ['commits it, which runs the hooks', `git add ${RELATIVE} && git commit -m sweep`],
     ['writes a diff over it', `git diff --output=${RELATIVE}`],
     ['hands it to another script', `bash /tmp/tidy.sh ${RELATIVE}`],
+    [
+      'runs it with a setting that loads another script first',
+      `BASH_ENV=./tidy.sh bash ${RELATIVE}`
+    ],
+    ['sets a variable a later run of it may load', `BASH_ENV=./tidy.sh; bash ${RELATIVE}`],
+    ['removes it behind a setting with an escaped space', `X=a\\ cat rm ${RELATIVE}`],
+    ['removes it behind a setting with quoted spaces', `X="a "cat" " rm ${RELATIVE}`],
+    ['pipes another file through less into it', `cat /tmp/queue.sh | less -O ${PATH}`],
     ['hands it to a script run by path', `./tidy.sh ${RELATIVE}`],
     ['runs it as an inline script', `bash -c "sed -i '' s/a/b/ ${RELATIVE}"`],
     ['runs a bare name the PATH may find elsewhere', `${NAME}`],

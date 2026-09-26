@@ -121,11 +121,13 @@ Nothing here is built.
   same way. The exception for commands is what lets the commonest run, the
   Claude app's "Created a file, ran a command", keep its count, and it is
   narrow (`mobile-native-chat-created-file-commands.ts`): every part of the
-  command is `chmod`, `cat`, `head`, `tail`, `wc`, `less`, `stat`, `file`,
-  `ls`, `cd`, `echo`, `pwd` or `true`, a `git add`, `diff`, `status`, `log`
-  or `show`, or the file itself run by its path or by `bash`, `sh`, `zsh`,
-  `python`, `python3` or `node`, with no redirect but `2>&1` or `/dev/null`,
-  no backticks or brackets, and no `--output`. A `tee`, a `sed -i`, a `mv`,
+  command is `chmod`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `ls`,
+  `cd`, `echo`, `pwd`, `true`, or `less` with no option, a `git add`,
+  `diff`, `status`, `log` or `show`, or the file itself run by its path or
+  by `bash`, `sh`, `zsh`, `python`, `python3` or `node`, with no redirect but
+  `2>&1` or `/dev/null`, no backticks or brackets, no `--output`, and no
+  `NAME=value` setting in front (`BASH_ENV` loads code first, and a quoted
+  space in one can hide the verb). A `tee`, a `sed -i`, a `less -O`, a `mv`,
   `cp` or `rm`, a `git commit`, and a command given as an argument list, the
   way Codex sends one, still void the count. The count
   is then the uncut Write's count of that text, through the same pipeline,

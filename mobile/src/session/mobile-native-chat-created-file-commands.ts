@@ -11,18 +11,24 @@
 //   backticks, and no bracket: a `(` opens a subshell or a substitution, a
 //   zsh glob qualifier can run code, and PowerShell runs `echo (rm f)`;
 // - no `--output`, the option `git diff`, `log` and `show` write a file with;
-// - each part of a `&&`, `||`, `;`, `|` or `&` chain, or of a line, is a verb
-//   that writes no file (`chmod`, `cat`, `head`, `tail`, `wc`, `less`,
-//   `stat`, `file`, `ls`, `cd`, `echo`, `pwd`, `true`), a `git add`, `diff`,
-//   `status`, `log` or `show`, an interpreter given the file itself (`bash`,
-//   `sh`, `zsh`, `python`, `python3`, `node`), or the file itself run by its
-//   path, after any `NAME=value` settings.
+// - each part of a `&&`, `||`, `;`, `|` or `&` chain, or of a line, opens
+//   with a verb that writes no file (`chmod`, `cat`, `head`, `tail`, `wc`,
+//   `stat`, `file`, `ls`, `cd`, `echo`, `pwd`, `true`, and `less` with no
+//   option, since its `-o` and `-O` copy a pipe into a file), a `git add`,
+//   `diff`, `status`, `log` or `show`, an interpreter given the file itself
+//   (`bash`, `sh`, `zsh`, `python`, `python3`, `node`), or the file itself run
+//   by its path;
+// - no `NAME=value` setting, which can load code before the verb runs
+//   (`BASH_ENV`, `NODE_OPTIONS`, `LD_PRELOAD`) or hide the verb behind a
+//   quoted or escaped space (`X=a\ cat rm f` runs `rm`).
 //
 // Anything else still voids the count: `tee`, `sed`, `perl`, `mv`, `cp`, `rm`
 // and `git commit` are no such verb, so an in-place flag never reaches one
 // that honours it. The words are split on whitespace alone, so a quoted
-// separator or `>` reads as one and refuses, never the other way, and a
-// heredoc's lines read as parts of their own, which its end marker refuses.
+// separator or `>` reads as one and refuses, and a heredoc's lines read as
+// parts of their own, which its end marker refuses. The verb is the first
+// word as written, so a quote or an escape in it leaves a word no list here
+// holds, and that refuses too.
 //
 // A relative name is matched as a suffix, so a script of the file's name run
 // from another folder passes: the folder the shell was left in is not in the
@@ -35,10 +41,10 @@ const HARMLESS_REDIRECT = /(?:\d*>&\d+|&>>?\s*\/dev\/null|\d*>>?\s*\/dev\/null)(
 const UNREADABLE = /[`>()]/
 const SEPARATOR = /&&|\|\||[;|&\n]/
 const WRITES_A_NAMED_FILE = /^--output/
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const QUOTED = /^(["'])(.*)\1$/
 
-/** Verbs that write no file, whatever they are given. */
+/** Verbs that write no file, whatever they are given. `less` is read
+ *  apart, since two of its options write one. */
 const READ_VERBS = new Set([
   'cat',
   'cd',
@@ -46,7 +52,6 @@ const READ_VERBS = new Set([
   'echo',
   'file',
   'head',
-  'less',
   'ls',
   'pwd',
   'stat',
@@ -72,13 +77,14 @@ function partLeavesFileAlone(part: string, isTheFile: (word: string) => boolean)
   if (words.some((word) => WRITES_A_NAMED_FILE.test(word))) {
     return false
   }
-  // An empty part, or settings alone, runs nothing.
-  const firstVerb = words.findIndex((word) => !ASSIGNMENT.test(word))
-  if (firstVerb === -1) {
+  const [verb, next] = words
+  // An empty part, such as the one after a trailing `;`, runs nothing.
+  if (verb === undefined) {
     return true
   }
-  const verb = words[firstVerb]!
-  const next = words[firstVerb + 1]
+  if (verb === 'less') {
+    return words.every((word) => !word.startsWith('-') && !word.startsWith('+'))
+  }
   if (READ_VERBS.has(verb)) {
     return true
   }
