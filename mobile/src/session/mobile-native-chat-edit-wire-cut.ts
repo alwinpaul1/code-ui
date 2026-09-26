@@ -12,7 +12,9 @@
 //   it dropped. A Claude Write keeps its lines nowhere else: a create's
 //   `structuredPatch` is empty (3658 of the 3658 creates in this machine's
 //   Claude Code transcripts, 2026-09-26), and 1421 of those creates were over
-//   the budget. No RPC the phone may call returns the uncut input.
+//   the budget. No RPC the phone may call returns the uncut input; a created
+//   file's count can still be read back from the file itself when that is
+//   provably the create's (mobile-native-chat-created-file-count.ts).
 // - Orca's Claude decoder (transcript-line-decoders-claude.ts) keeps at most
 //   40 hunks of a result's `structuredPatch`, and 400 rows of each.
 // - The structured journal bounds a patch or an input and says so; the
@@ -23,7 +25,7 @@
 // file whose rows are whole but whose patch may go on past them is marked
 // `mayContinue`. The chip and the card read either as "no count": what is
 // drawn is known, what is missing is said to be missing, and no number stands
-// in for it.
+// in for it, except the verified read-back count of a cut create.
 
 import type { NativeChatEditFile } from '../../../src/shared/native-chat-edit-model'
 import { splitMoveMarker } from '../../../src/shared/native-chat-edit-patch-files'
@@ -40,7 +42,7 @@ export type MobileEditFile = NativeChatEditFile & { mayContinue?: true }
 
 /** What the mobile diet leaves at the end of a string it cut, and in place of
  *  a value it dropped. */
-const MOBILE_CUT = '… (truncated)'
+export const MOBILE_CUT = '… (truncated)'
 /** The key the mobile diet leaves in place of keys it dropped. */
 const MOBILE_DROPPED_KEYS = '…'
 /** Orca's MAX_EDIT_PATCH_HUNKS: a patch this long may have lost the rest. */
@@ -60,7 +62,7 @@ const SCRIPT_BEGIN_PATCH = `${BEGIN_PATCH}\\n`
 const APPLY_PATCH = /apply_?patch/
 
 /** Every string in a call's input, as the provider wrote it. */
-function inputStrings(value: unknown, depth = 0): string[] {
+export function inputStrings(value: unknown, depth = 0): string[] {
   if (typeof value === 'string') {
     return [value]
   }
@@ -70,7 +72,7 @@ function inputStrings(value: unknown, depth = 0): string[] {
   return Object.values(value).flatMap((entry) => inputStrings(entry, depth + 1))
 }
 
-function carriesMobileCut(value: unknown, depth = 0): boolean {
+export function carriesMobileCut(value: unknown, depth = 0): boolean {
   if (typeof value === 'string') {
     return value.endsWith(MOBILE_CUT)
   }

@@ -1,0 +1,143 @@
+// Commands that name a created file and still leave it as the Write made it.
+//
+// A later command naming a cut create's file voids its count, since it may
+// have written the file. Most runs that name it only use it: the Claude app
+// heads "Created a file, ran a command" with the create's count when the
+// command made it executable, ran it, read it, or staged it (review of
+// 2026-09-26). So a command is let through when every part of it is one of
+// those and nothing in it can write where a word says:
+//
+// - no redirect but a descriptor copy (`2>&1`) or `/dev/null`, no
+//   backticks, and no bracket: a `(` opens a subshell or a substitution, a
+//   zsh glob qualifier can run code, and PowerShell runs `echo (rm f)`;
+// - no `--output`, the option `git diff`, `log` and `show` write a file with;
+// - each part of a `&&`, `||`, `;`, `|` or `&` chain, or of a line, opens
+//   with a verb that writes no file (`chmod`, `cat`, `head`, `tail`, `wc`,
+//   `stat`, `file`, `ls`, `cd`, `echo`, `pwd`, `true`, and `less` with no
+//   option, since its `-o` and `-O` copy a pipe into a file), a `git add`,
+//   `diff`, `status`, `log` or `show`, an interpreter given the file itself
+//   (`bash`, `sh`, `zsh`, `python`, `python3`, `node`), or the file itself run
+//   by its path;
+// - no `NAME=value` or `NAME+=value` setting, which can load code before the
+//   verb runs (`BASH_ENV`, `NODE_OPTIONS`, `LD_PRELOAD`) or hide the verb
+//   behind a quoted or escaped space (`X=a\ cat rm f` runs `rm`), and whose
+//   value can end in the file's path (review of 5b257b16: `Q=~/jobs/queue.sh
+//   node trim.js` read as the file run by its path, before the check was
+//   made; review of 0a391f01: `Q+=` read the same after it).
+//
+// Anything else still voids the count: `tee`, `sed`, `perl`, `mv`, `cp`, `rm`
+// and `git commit` are no such verb, so an in-place flag never reaches one
+// that honours it. The words are split on whitespace alone, so a quoted
+// separator or `>` reads as one and refuses, and a heredoc's lines read as
+// parts of their own, which its end marker refuses. A word wholly in one
+// pair of quotes is read without them, unless it opens with `~`, which the
+// shell then leaves unexpanded. Any other quote, an escape, a `$`, a glob or
+// a brace list may make a word something else by the time the verb sees it
+// (review of 9171bc22 and da87791b: `less \-O` and `git diff '--output'=`
+// still write), so it refuses wherever a word is judged: in the verb, in any
+// word of `less` or `git`, and in the file an interpreter is given. A Windows
+// path, with its backslashes, refuses there too.
+//
+// A relative name is matched as a suffix, so a script of the file's name run
+// from another folder passes: the folder the shell was left in is not in the
+// transcript.
+
+/** Redirects that write no file: a descriptor copied onto another, or
+ *  output thrown away. `>&2.log` and `>/dev/null.bak` name files. */
+const HARMLESS_REDIRECT = /(?:\d*>&\d+|&>>?\s*\/dev\/null|\d*>>?\s*\/dev\/null)(?=$|[\s;&|])/g
+/** A redirect left over, or a command whose words do not show what it runs:
+ *  a subshell, a substitution, or a script block, which PowerShell runs even
+ *  when a reading verb is handed it (`cat -Path {Add-Content f 'x'}`, review
+ *  of 8b2ef369). */
+const UNREADABLE = /[`>(){}]/
+/** A bare carriage return ends a PowerShell statement. */
+const SEPARATOR = /&&|\|\||[;|&\n\r]/
+const WRITES_A_NAMED_FILE = /^--output/
+const QUOTED = /^(["'])(.*)\1$/
+/** What the shell may turn a word into something else with: a quote or an
+ *  escape left in it, an expansion, a glob, or a brace list. */
+const REWRITTEN = /["'\\$*?[\]{}]/
+/** A `NAME=value` or `NAME+=value` setting in the verb's place. */
+const SETTING = /^[A-Za-z_][A-Za-z0-9_]*\+?=/
+
+/** Verbs that write no file, whatever they are given. `less` is read
+ *  apart, since two of its options write one. */
+const READ_VERBS = new Set([
+  'cat',
+  'cd',
+  'chmod',
+  'echo',
+  'file',
+  'head',
+  'ls',
+  'pwd',
+  'stat',
+  'tail',
+  'true',
+  'wc'
+])
+/** Git subcommands that leave the working tree alone. */
+const GIT_READS = new Set(['add', 'diff', 'log', 'show', 'status'])
+/** Interpreters that run the file they are given first. */
+const INTERPRETERS = new Set(['bash', 'node', 'python', 'python3', 'sh', 'zsh'])
+
+/** The words of a part, a pair of quotes round the whole of one taken off.
+ *  A quoted `~` keeps its quotes, since it names a folder called `~`. */
+function wordsOf(part: string): string[] {
+  return part
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .map((word) => {
+      const unquoted = QUOTED.exec(word)?.[2]
+      return unquoted === undefined || unquoted.startsWith('~') ? word : unquoted
+    })
+}
+
+function readsAsWritten(word: string): boolean {
+  return !REWRITTEN.test(word)
+}
+
+function partLeavesFileAlone(part: string, isTheFile: (word: string) => boolean): boolean {
+  const words = wordsOf(part)
+  if (words.some((word) => WRITES_A_NAMED_FILE.test(word))) {
+    return false
+  }
+  const [verb, next] = words
+  // An empty part, such as the one after a trailing `;`, runs nothing.
+  if (verb === undefined) {
+    return true
+  }
+  if (!readsAsWritten(verb) || SETTING.test(verb)) {
+    return false
+  }
+  if (verb === 'less') {
+    return words.every(
+      (word) => readsAsWritten(word) && !word.startsWith('-') && !word.startsWith('+')
+    )
+  }
+  if (READ_VERBS.has(verb)) {
+    return true
+  }
+  if (verb === 'git') {
+    return next !== undefined && GIT_READS.has(next) && words.every(readsAsWritten)
+  }
+  if (INTERPRETERS.has(verb)) {
+    return next !== undefined && readsAsWritten(next) && isTheFile(next)
+  }
+  // A bare name is looked up on the PATH, which may be another program.
+  return verb.includes('/') && isTheFile(verb)
+}
+
+/** Whether `command` provably leaves the file alone: `isTheFile` says
+ *  whether a word is the file's own path or name. */
+export function commandLeavesFileAlone(
+  command: string,
+  isTheFile: (word: string) => boolean
+): boolean {
+  const joined = command.replaceAll('\\\n', ' ').replace(HARMLESS_REDIRECT, ' ')
+  if (UNREADABLE.test(joined)) {
+    return false
+  }
+  return joined.split(SEPARATOR).every((part) => partLeavesFileAlone(part, isTheFile))
+}

@@ -18,6 +18,7 @@ import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
+import { createWholeSessionTracker } from './mobile-native-chat-whole-session'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -51,7 +52,14 @@ export type MobileNativeChatSession = {
    *  though live rows fold on after it. Cleared by the next real snapshot.
    *  Absent on a lane that never keeps one (the structured session). */
   baseRetained?: boolean
+  /** True only while `messages` starts at the session's first row, as the
+   *  host said (`hasMore: false` on the window or on a page it answered):
+   *  never inferred from a row count, never for a window that live appends
+   *  trimmed, a kept tail, a page stopped at the cap, or rows that came
+   *  before the snapshot. Absent on a lane that does not track it. */
+  wholeSession?: boolean
 }
+
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
@@ -167,6 +175,9 @@ export function useMobileNativeChatSession(args: {
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
   const baseRetainedRef = useRef(false)
+  // Whether the window starts at the session's first row (mobile-native-chat-whole-session.ts).
+  const [whole] = useState(() => createWholeSessionTracker(lastConnectedAt))
+  useEffect(() => whole.connected(lastConnectedAt), [whole, lastConnectedAt])
   // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
   const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
@@ -192,6 +203,7 @@ export function useMobileNativeChatSession(args: {
     limitRef.current = attemptLimit
     loadingEarlierRef.current = false
     snapshotSeenRef.current = false
+    whole.subscribed()
     let frameSeen = false
     setLoadingEarlier(false)
     setList([])
@@ -247,6 +259,9 @@ export function useMobileNativeChatSession(args: {
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
         }
+        // The client's own connection time: its replay may land before React
+        // renders the new connection. A test double may not say.
+        whole.frame(frame.type, applied, client.getLastConnectedAt?.())
         if (applied.windowReplaced) {
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.
@@ -265,6 +280,7 @@ export function useMobileNativeChatSession(args: {
             : null
         if (retained && retained.length > 0) {
           baseRetainedRef.current = true
+          whole.retained()
           setList(retained)
         } else {
           baseRetainedRef.current = baseRetainedRef.current && !applied.windowReplaced
@@ -305,7 +321,7 @@ export function useMobileNativeChatSession(args: {
       clearTimeout(watchdog)
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt, reconnectEpoch])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt, reconnectEpoch, whole])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
@@ -357,6 +373,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         limitRef.current = nextLimit
+        whole.page(result.hasMore, client?.getLastConnectedAt?.())
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
           setList(mergeNativeChatMessages(result.messages, mergerRef.current.list))
@@ -409,6 +426,7 @@ export function useMobileNativeChatSession(args: {
     hasMore,
     loadingEarlier,
     loadEarlier,
-    baseRetained: baseRetainedRef.current
+    baseRetained: baseRetainedRef.current,
+    wholeSession: whole.whole
   }
 }

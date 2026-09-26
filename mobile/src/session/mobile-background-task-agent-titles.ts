@@ -85,7 +85,7 @@ export function confirmedAgentDescriptions(
  *  …)\n<usage>subagent_tokens: 92022…"). The usage block is written only once
  *  the run is over, so an agent whose result carries one has finished. A
  *  background launch's result has none. */
-const FINISHED_RUN_USAGE = /<usage>\s*subagent_tokens:/
+export const FINISHED_RUN_USAGE = /<usage>\s*subagent_tokens:/
 
 type AgentCall = { description: string | null; title: string; startedAt: number | null }
 

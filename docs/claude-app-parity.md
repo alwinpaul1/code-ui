@@ -10,7 +10,7 @@ failing-first test and has been checked on the phone in light and dark.
 |---|---|---|---|
 | 1 | Claude's thinking text with a thin, low-contrast line down its left edge; notes between tools have none | Both drawn under a heavier line | line weight done (afc62100). The line now goes only beside a `reasoning` message, drawn as its text, and no assistant prose has one (2026-09-26). A terminal Claude tab gets no line at all until Orca marks thinking (below); the structured lane, Codex and Grok already do |
 | 2 | Tool-run labels: a single command by its description ("Ran Count K*_F changes in section3 accountings"), "Ran skill", a SendMessage as "Messaged @agent <summary>", a new file as "created a file"; a described command beside other work as "ran a command" ("Created a file, ran a command", 2026-09-26) | "Ran a command" for every single command; no skill or message wording; then a described command named by its description beside an edit too | done (7816f8c5); the mixed run's wording fixed after the 2026-09-26 screenshot |
-| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, has no chip, and only Orca could carry its count |
+| 3 | A green/red line-count chip on runs that create or edit files ("+292 −0"; "Created a file, ran a command +93 −0", "Edited a file, ran a command +14 −2", 2026-09-26) | No chip; then a chip counting only what survived the wire ("+61 −0" for the +93) | done (7816f8c5); a count the wire cut draws no chip and no card count (below). A created file the wire cut, 39% of creates on this machine, is counted from the file on the desktop when that is provably the file the Write made, and draws no count otherwise (below) |
 | 4 | Tapping a tool row opens a sheet: title, status ("Completed"), each input by name, the output with a Prettify toggle for JSON. It opens at a default height, drags up to full screen, and scrolls | The run expands inline | merged (0c89c146); a single-call row or a call inside a run opens the sheet, plan, diff and web-search rows keep their inline cards. The sheet caps each input and the output at the inline row's `MAX_TOOL_DETAIL_LENGTH`, so a huge output cannot stall text layout; the Tools toggle no longer expands a row that opens the sheet, which the user chose to keep (2026-09-24; the Claude app has no such toggle). Drag feel needs a phone check |
 | 5 | No bubble when a subagent this session launched hands its report back | Drew the peer boilerplate off the screen row | done (c9fd70c6) |
 | 6 | "Running agent ›" (moving highlight) for a run of agents, with a "Ran N agents" sheet; "✳ Cooking… · 5 running tasks" above the composer; a Background tasks sheet that opens part way and drags to full screen, with Running (name, kind, elapsed, stop, "View transcript") and "Finished N" (name, kind, Completed, chevron) | All drawn, from the phone's own reader; the highlight is a breathing label; parallel agents re-paired by description. Gaps below | built, not yet checked on the phone |
@@ -89,8 +89,142 @@ Nothing here is built.
   characters and read "+61 −0"). No RPC the phone may call returns the uncut
   input: `nativeChat.readSession` applies the same diet, `agentSession.history`
   is the structured lane's, and `files.read` gives the file as it is now, not
-  as it was written. So the chip is left off whenever a count cannot be the
-  edit's own: an input the diet cut or a key it dropped, a resolved hunk
+  as it was written. The phone reads it anyway for a cut create, and takes the
+  count only when the file is provably the one the Write made: it still
+  starts with every character the wire kept, and no later call in the loaded
+  transcript may have changed it (an edit tool naming the same path however
+  it spells it, `./`, `..`, `~` or absolute, with `~` read as the home the
+  other path is under, and two paths from `~` the same only when all of each
+  is; any other call naming the file, as the value glued to a short option
+  (`wget -Oname`) too, a command the user ran with `!` among them, except a
+  command that only makes it executable, runs it, reads it or stages it,
+  where a `~` path is not the file when the other path is absolute and under
+  no home, /Users/Shared and Windows' C:\Users\Public, Default, Default User
+  and All Users among them, and a `~alice`, `~+` or `~-` path never
+  is; a call the wire cut, whose dropped part
+  may have named it; or a subagent launched or a message sent after it,
+  since the agent's own calls are not in this transcript), and no
+  background work launched before it was still running when it landed: a
+  shell, a monitor, an agent or a teammate that has not reported by then may
+  write the file with no call here, and a background agent that did drew
+  +125 on a 93-line create in review. That reuses the
+  background-task reader's launch and finish records
+  (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
+  sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
+  2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
+  2.1.228 to 2.1.281 wrote), except where that pairing guesses. A PowerShell
+  call backgrounds like a Bash one and answers in the same sentences (one
+  function builds both in 2.1.283's source), so the count reads its launch
+  as a shell's; the Tasks row still shows none for it. The pairing hands a
+  failure to the first call waiting, an answer shaped like an Agent result to
+  the first Agent call, and anything else to the first that is no Agent call,
+  so among calls waiting together one can take another's answer: a
+  background agent beside a Read that failed first lost its launch to the
+  Read in review. So a shell, monitor or agent call handed no launch, or
+  still waiting when the user interrupted or the transcript ends, is read
+  against every answer the calls waiting with it took, and runs under any
+  launch of it one names. An agent's launch there is its launch sentence or
+  the JSON launch, `{"resultType":"task",…}`, and no other JSON: in review a
+  `cat package.json` beside a background agent the user turned down read as
+  its launch and held every later count off.
+  And a stop ends its task unless a failure (a
+  `<tool_use_error>`, a turn-down, a cancel, a denial, an answer Orca marks
+  as an error, or an interrupt with a call still waiting) landed among the
+  answers of the calls waiting with it and none of those answers is
+  TaskStop's own word that the task is no longer running: its JSON, or
+  `Task <id> is not running (status: completed|failed|killed)` (Claude Code
+  2.1.283). That word counts only when every one of those calls answered
+  and each is one that cannot print it for TaskStop (TaskStop, Read, Glob,
+  LS and the edit tools): in review a `grep` printed the not-running line
+  beside a stop turned down. The not-running line is itself no failure when
+  a stop called before it names its task, since TaskStop's own answer is
+  then that line or its JSON: in review a stop of a task already done,
+  beside an `npm test`, was taken back. Of several stops of one task among
+  those calls, only as many stand as TaskStop's words for it, the latest
+  first: in review a stop turned down and a second that worked shared the
+  one word, and the first ended the task before a create between them. So a
+  task that ended where the transcript does not
+  say (a mid-turn completion Orca does not surface), a teammate, an agent a
+  message woke until its next report, and an Agent call with no answer yet
+  all hold the count off. A foreground agent's report is over once it is
+  answered, even one long enough for Orca's 4000-character cut to take its
+  usage block: a cut answer to an Agent call that asked for no background,
+  and opens with no launch sentence and no JSON, is read as that report,
+  but only while no other kind of call is waiting for an answer, since a
+  command's long output can quote a report, id line and all. Claude Code
+  2.1.283's Agent tool answers in four text shapes only (a teammate's spawn,
+  a cloud launch, a background launch, and a finished report; any other
+  status throws), and every one but the report opens with its sentence, as
+  the JSON shape a server flag serves opens with `{`. So
+  an agent sent to the background mid-run has no fifth shape to answer in,
+  though no record of one exists here. A `!` command is no tool call: Claude Code writes
+  it as a user turn, `<bash-input>…</bash-input>`, and its output as the
+  next one (136 of them on this machine, Claude Code 2.1.228 to 2.1.282).
+  Orca does not filter these out (its Claude decoder drops only meta,
+  synthetic and compact-summary turns, at ac675ded6e); the phone hides them
+  only when drawing. So the count reads them as Bash calls, and a `!` command
+  that went to the background, whose output turn carries the Bash call's own
+  sentence (13 of them, 2.1.247 to 2.1.263), runs until its notification the
+  same way. The exception for commands is what lets the commonest run, the
+  Claude app's "Created a file, ran a command", keep its count, and it is
+  narrow (`mobile-native-chat-created-file-commands.ts`): every part of the
+  command is `chmod`, `cat`, `head`, `tail`, `wc`, `stat`, `file`, `ls`,
+  `cd`, `echo`, `pwd`, `true`, or `less` with no option, a `git add`,
+  `diff`, `status`, `log` or `show`, or the file itself run by its path or
+  by `bash`, `sh`, `zsh`, `python`, `python3` or `node`, with no redirect but
+  `2>&1` or `/dev/null`, no backticks or brackets, no `--output`, and no
+  `NAME=value` or `NAME+=value` setting in front (`BASH_ENV` loads code first, a quoted
+  space in one can hide the verb, and in review one whose value ended in
+  the file's path read as the file run by its path). The verb, every word of a `less` or a
+  `git`, and the file an interpreter runs must also read as written: a quote
+  inside a word, an escape, a `$`, a glob or a brace list refuses there,
+  since `less \-O` and `git diff '--output'=` still write, and a quoted `~`
+  is a folder called `~`. A `tee`, a `sed -i`, a `less -O`, a `mv`,
+  `cp` or `rm`, a `git commit`, and a command given as an argument list, the
+  way Codex sends one, still void the count. A call that reaches the file
+  without naming it is not seen at all: a glob (`sed -i '$d' jobs/*.sh`), a
+  folder, a variable, or another script that edits it (`python3 fix.py`).
+  Only the file's own check, that it still starts with what the wire kept,
+  stands against those, and it misses an edit past that point. The count
+  is then the uncut Write's count of that text, through the same pipeline,
+  so a small create and a large one agree
+  (`mobile-native-chat-created-file-count.ts`). A finished run on screen
+  that draws a count asks for it; a run still going, or one folded away in
+  focus view, reads nothing. Two reads go out at a time, and only from the
+  chat's own settled read of the whole session, from its first row: never
+  one held over from before it loaded, never a tail kept over a re-subscribe
+  that came back empty (`baseRetained`), and never a window that starts
+  later: the session hook's `wholeSession` is set only by the host's own
+  `hasMore: false`, on the window or on a page it answered, and cleared by a
+  live trim, a kept tail, a page stopped at the 2000-row cap and rows that
+  came before the snapshot (`holdsWholeSession`). The chat opens on the last
+  40 rows and live appends trim it at 150,
+  so a background agent launched before the window is not in it, and the
+  review of 8b2ef369 drew +125 on the 93-line create that way; the phone
+  cannot ask the desktop when the file last changed instead, since
+  `files.stat` is not on Orca's mobile allowlist. So in a long session the
+  count shows once older messages are loaded back to the start, and not
+  before. Inside the window, a finish, a stop or a launch answer naming work
+  launched before it, and a teammate's message, still hold the count off.
+  After a reconnect or a move to another worktree the read waits for the
+  transcript that connection brings, since the one in hand may lack calls
+  made while the phone was away. Each file is read once for the host and
+  worktree the chat shows (`files.resolveTerminalPath`, then `files.read`,
+  which the host caps at 512 KiB): a verdict, counted or refused, stands
+  across reconnects until the chat moves, and holds only for the message it
+  was read for, so the same create run again in another session is read
+  again. Only a read that failed is asked again, once on each new
+  connection, once its transcript is in; if the chat brings none, the count
+  stays off. A later call that touches the file still drops its count. A file outside the
+  worktree, a binary one, one over the host's cap, or one past the uncut
+  Write's own 2000-row or 96,000-character bound gets no number. What this
+  cannot see: a command that changed the file without naming it (a glob, a
+  directory-wide `sed -i`), a script with the file's name run from another
+  folder (a relative name is matched as a suffix, and the shell's working
+  folder is not in the transcript), and a change on the desktop that left
+  the kept prefix alone. The card keeps "Diff truncated" beside the count, since
+  its rows are still the cut ones. Otherwise the chip is left off whenever a
+  count cannot be the edit's own: an input the diet cut or a key it dropped, a resolved hunk
   Orca kept only 400 rows of, a patch at Orca's 40-hunk cap, a file the
   journal bounded, or an edit that landed with nothing left to count
   (`mobile-native-chat-edit-wire-cut.ts`). The diff card shows "Diff

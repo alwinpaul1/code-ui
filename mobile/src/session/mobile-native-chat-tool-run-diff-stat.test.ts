@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatBlock, NativeChatEditPatchHunk } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatEditPatchHunk,
+  NativeChatToolCallBlock
+} from '../../../src/shared/native-chat-types'
 import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { CREATED_A_FILE_RUN, EDITED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
 
@@ -484,5 +488,36 @@ describe('toolRunDiffStat', () => {
       isError: true
     }
     expect(toolRunDiffStat([call, result])).toBeNull()
+  })
+})
+
+describe('toolRunDiffStat over created files the wire cut', () => {
+  function cutCreate(path: string): NativeChatBlock[] {
+    return [
+      {
+        type: 'tool-call',
+        name: 'Write',
+        input: { file_path: path, content: `x\n${'y'.repeat(4000)}${CUT}` }
+      },
+      { type: 'tool-result', output: `File created successfully at: ${path}` }
+    ]
+  }
+  const run = [...cutCreate('/repo/a.sh'), ...cutCreate('/repo/b.sh')]
+  const pathOf = (call: NativeChatToolCallBlock) => (call.input as { file_path: string }).file_path
+
+  it('draws no chip when only one of two cut creates in the run has a verified count', () => {
+    expect(toolRunDiffStat(run, (call) => (pathOf(call) === '/repo/a.sh' ? 10 : null))).toBeNull()
+  })
+
+  it('sums both cut creates once each has a verified count', () => {
+    expect(toolRunDiffStat(run, (call) => (pathOf(call) === '/repo/a.sh' ? 10 : 12))).toEqual({
+      added: 22,
+      removed: 0
+    })
+  })
+
+  it('draws no chip for cut creates with no verified count at all', () => {
+    expect(toolRunDiffStat(run)).toBeNull()
+    expect(toolRunDiffStat(run.slice(0, 2))).toBeNull()
   })
 })

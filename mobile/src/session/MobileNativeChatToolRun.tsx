@@ -24,7 +24,12 @@ import {
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
-import { editFilesForToolCall, toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
+import {
+  editFilesForToolCall,
+  toolRunDiffStat,
+  type VerifiedCreateCount
+} from './mobile-native-chat-tool-run-diff-stat'
+import { useCreatedFileCounts } from './MobileNativeChatCreatedFileCounts'
 import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { toolPairOpensDetailSheet } from './mobile-native-chat-tool-detail'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
@@ -109,6 +114,7 @@ function ToolLine({
   onOpenDetail,
   onRevertHunk,
   revertScope,
+  createdFileCount,
   styles
 }: {
   pair: ToolPair
@@ -125,6 +131,8 @@ function ToolLine({
   onRevertHunk?: MobileNativeChatRevertHunk
   /** This line's place in its message, for the diff card's identity. */
   revertScope?: string
+  /** The run's read-back counts of the created files the wire cut. */
+  createdFileCount?: VerifiedCreateCount
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -146,6 +154,12 @@ function ToolLine({
   const editFiles =
     !taskList && expanded && call && isEditToolName(call.name) ? editFilesForPair(pair) : null
   const rendered = editFiles !== null || taskList !== null
+  // A created file the wire cut keeps its cut rows and "Diff truncated", with
+  // the count read back from the file beside them once the file proved it.
+  const verifiedAdded =
+    call && editFiles?.length === 1
+      ? (createdFileCount?.(call, result ?? null) ?? undefined)
+      : undefined
   const callDiff =
     !rendered && expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
   const resultDiff =
@@ -228,6 +242,7 @@ function ToolLine({
               onRevertHunk={onRevertHunk}
               revertScope={`${revertScope ?? ''}:${index}`}
               onOpenFile={onOpenFile}
+              verifiedAdded={verifiedAdded}
             />
           ))}
           {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
@@ -327,7 +342,15 @@ export function ToolRun({
   // docs/claude-app-parity.md item 3: the run's own "+A −R" chip. Detail
   // about what the tools did, like the sentence and the plan preview, so
   // focus view folds it away too.
-  const diffStat = focusView ? null : toolRunDiffStat(blocks)
+  // A created file the wire cut is counted from the file on the desktop, when
+  // that is provably the one the Write made (mobile-native-chat-created-file-count.ts),
+  // and only once the run is done and draws a count: on its header, or on the
+  // card inside it in focus view.
+  const createdFileCount = useCreatedFileCounts(
+    blocks,
+    activeCall === null && (open || !focusView)
+  )
+  const diffStat = focusView ? null : toolRunDiffStat(blocks, createdFileCount)
   // The call's input, not its word: Codex names a classified shell row
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
@@ -442,6 +465,7 @@ export function ToolRun({
             onOpenDetail={setDetailPair}
             onRevertHunk={onRevertHunk}
             revertScope={`${revertScope ?? ''}:${i}`}
+            createdFileCount={createdFileCount}
             styles={styles}
           />
         ))}

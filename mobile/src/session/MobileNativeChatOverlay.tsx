@@ -34,6 +34,9 @@ import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
+import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
+import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
+import { holdsWholeSession } from './mobile-native-chat-whole-session'
 const CLIPBOARD_POLL_MS = 3000
 
 const NO_PROMPTS: DesktopPrompt[] = []
@@ -51,6 +54,8 @@ type Props = {
   onOpenFile: (pathText: string) => void
   /** Puts one hunk of a landed edit back in the file (the diff card's action). */
   onRevertHunk?: MobileNativeChatRevertHunk
+  /** Reads back the created files the wire cut, for their line counts. */
+  createdFileCounts?: CreatedFileCountStore
   /** Whether THIS host lets a phone call `agentSession.rewind` at all — the
    *  mobile-scope dispatch gate's answer (host-mobile-capabilities.ts), which
    *  is separate from whether the session itself can be rewound. Both must
@@ -99,6 +104,7 @@ export function MobileNativeChatOverlay({
   hasTerminalUnderneath,
   onOpenFile,
   onRevertHunk,
+  createdFileCounts,
   hostAllowsRewind,
   images,
   onMicPress,
@@ -331,7 +337,7 @@ export function MobileNativeChatOverlay({
   if (frame === 'terminal') {
     return null
   }
-  const drawn = (
+  const chat = (
     <View style={styles.overlay}>
       <MobileNativeChatView
         messages={session.messages}
@@ -439,6 +445,21 @@ export function MobileNativeChatOverlay({
         keyStrip={keyStrip}
       />
     </View>
+  )
+  // The loaded transcript says whether a later call touched a created file,
+  // but only a settled read of the whole session can (holdsWholeSession): a
+  // kept tail lacks what was written while the chat was away, and a window
+  // that starts after the first row can hide a background agent launched
+  // before it that is still writing the file (review of 8b2ef369: +125 on a
+  // 93-line create).
+  const drawn = (
+    <CreatedFileCountProvider
+      store={createdFileCounts}
+      messages={session.messages}
+      live={holdsWholeSession(session)}
+    >
+      {chat}
+    </CreatedFileCountProvider>
   )
   remember(drawn)
   return drawn

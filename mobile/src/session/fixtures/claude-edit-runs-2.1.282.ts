@@ -38,3 +38,17 @@ const [createRun, editRun] = toolRuns(CLAUDE_EDIT_RUN_ROWS)
 export const CREATED_A_FILE_RUN: NativeChatBlock[] = createRun!
 /** Edit (resolved hunk: 14 added, 2 removed), then Bash. */
 export const EDITED_A_FILE_RUN: NativeChatBlock[] = editRun!
+
+/** A file the create above could have made, for the tests that read it back:
+ *  the lines the wire kept and the rest of its 93 lines in the same pattern.
+ *  The real file ran to 6111 characters, and the part past the cut is on no
+ *  wire, so this one is shorter; it has the same line count and starts with
+ *  every character the wire kept. */
+export const CREATED_FILE_ON_DISK = `${[
+  '#!/bin/bash',
+  ...Array.from(
+    { length: 92 },
+    (_, i) =>
+      `echo "sample step ${String(i + 2).padStart(2, '0')} of 93: prepare the neutral sweep input"`
+  )
+].join('\n')}\n`
