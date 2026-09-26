@@ -5,7 +5,7 @@ import { buildMobileCodeDocument } from '../components/mobile-code-document'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
-import { resolveMobileSyntaxLanguageForContent } from './mobile-file-syntax'
+import { useMobileSyntaxLanguage } from './use-mobile-syntax-language'
 import {
   fileReaderLineCopyLabel,
   fileReaderLineSelectionLabel,
@@ -35,11 +35,10 @@ export function MobileSessionFileSource({
   relativePath: string
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
-  // A file whose name says nothing (`bin/deploy`) is read for its language.
-  const document = useMemo(
-    () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath || title, content, language)),
-    [content, language, relativePath, title]
-  )
+  // A file whose name says nothing (`bin/deploy`) is read for its language,
+  // a tick after it is drawn.
+  const syntaxLanguage = useMobileSyntaxLanguage(relativePath || title, content, language)
+  const document = useMemo(() => buildMobileCodeDocument(content, syntaxLanguage), [content, syntaxLanguage])
   // An empty file has nothing to ask about. A pretty-printed JSON file's line
   // numbers are not the file's, so a range from it would point the agent at
   // lines that do not exist: a long-press there opens the bar for the whole

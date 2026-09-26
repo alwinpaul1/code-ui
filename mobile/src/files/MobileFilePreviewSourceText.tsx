@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
-import { resolveMobileSyntaxLanguageForContent } from '../session/mobile-file-syntax'
+import { useMobileSyntaxLanguage } from '../session/use-mobile-syntax-language'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
@@ -36,10 +36,8 @@ export function MobileFilePreviewSourceText({
   byteLength?: number
   initialLine?: number
 }) {
-  const document = useMemo(
-    () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath, content)),
-    [content, relativePath]
-  )
+  const language = useMobileSyntaxLanguage(relativePath, content)
+  const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
   const selection = useCodeLineSelection({
     canOpen: content.length > 0,
     canRange: true,

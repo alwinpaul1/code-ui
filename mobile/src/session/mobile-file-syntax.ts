@@ -74,6 +74,8 @@ export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?
   return highlighter().registered(normalized) ? normalized : 'plaintext'
 }
 
+/** JSON is recognised by parsing it whole; past this it is left plain. */
+const MAX_JSON_DETECT_CHARS = 2_000_000
 /** Interpreters named on a `#!` line, by the language they run. */
 const SHEBANG_LANGUAGES: Record<string, string> = {
   sh: 'bash', bash: 'bash', zsh: 'bash', dash: 'bash', ksh: 'bash', fish: 'bash',
@@ -110,17 +112,19 @@ export function detectMobileSyntaxLanguage(content: string, filePath = ''): stri
     const name = [interpreter.replace(/[\d.]+$/, ''), interpreter].find((key) => Object.hasOwn(SHEBANG_LANGUAGES, key))
     return name ? SHEBANG_LANGUAGES[name]! : null
   }
+  // The marks below sit at the top of a file; look no further than 4 KB.
+  const head = text.length > 4_096 ? text.slice(0, 4_096) : text
   if (/\.m$/i.test(filePath)) {
-    if (/^\s*(?:#import|#include|@interface|@implementation|@protocol)\b/m.test(text)) {
+    if (/^\s*(?:#import|#include|@interface|@implementation|@protocol)\b/m.test(head)) {
       return 'objectivec'
     }
-    return /^\s*(?:function\b|%|end\s*$)/m.test(text) ? 'matlab' : null
+    return /^\s*(?:function\b|%|end\s*$)/m.test(head) ? 'matlab' : null
   }
-  const opening = text.trimStart()[0]
-  if ((opening === '{' || opening === '[') && text.length <= 2_000_000 && parsesAsJson(text)) {
+  const opening = head.trimStart()[0]
+  if ((opening === '{' || opening === '[') && text.length <= MAX_JSON_DETECT_CHARS && parsesAsJson(text)) {
     return 'json'
   }
-  if (/^\s*<(?:\?xml|!DOCTYPE|html|svg)\b/i.test(text)) {
+  if (/^\s*<(?:\?xml|!DOCTYPE|html|svg)\b/i.test(head)) {
     return 'xml'
   }
   return null
