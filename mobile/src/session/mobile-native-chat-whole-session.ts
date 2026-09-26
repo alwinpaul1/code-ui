@@ -29,9 +29,9 @@ export function holdsWholeSession(
  * a page answered during the wait reached (fourth review of the line count:
  * read as the only way back, the subscription's 40-row tail shut the count
  * for the rest of the visit). A connection is taken from the client when a
- * frame lands, as well as from React's render of it, which may come after
- * the replay; a second connection before the replay keeps what the first
- * saved.
+ * frame lands or a page is answered, as well as from React's render of it,
+ * which may come after either; a second connection before the replay keeps
+ * what the first saved.
  */
 export type WholeSessionTracker = {
   readonly whole: boolean
@@ -43,19 +43,30 @@ export type WholeSessionTracker = {
     connectedAt?: number | null
   ): void
   retained(): void
-  page(hasMore: boolean | undefined): void
+  page(hasMore: boolean | undefined, connectedAt?: number | null): void
 }
+
+/** Enough to tell a stale render of an earlier connection from a new one. */
+const SEEN_CONNECTIONS_KEPT = 16
 
 export function createWholeSessionTracker(connectedAt: number | null): WholeSessionTracker {
   let whole = false
   let replayPending = false
   let wholeBeforeReplay = false
   let connection = connectedAt
-  // Connection times only move forward; a client that cannot say yet (null)
-  // or says an older one is not a new connection.
+  // A connection is new the first time either source names it: a client that
+  // cannot say yet (null) names none, and React rendering a value the client
+  // already reported on a frame is not a second one. Not "later than the last":
+  // a clock stepped back stamps a new connection earlier (second verification
+  // of the reconnect fix, 2026-09-26: no wait, and a page opened the count).
+  const seen = new Set<number>(connectedAt === null ? [] : [connectedAt])
   const connected = (lastConnectedAt: number | null | undefined): void => {
-    if (typeof lastConnectedAt !== 'number' || (connection !== null && lastConnectedAt <= connection)) {
+    if (typeof lastConnectedAt !== 'number' || seen.has(lastConnectedAt)) {
       return
+    }
+    seen.add(lastConnectedAt)
+    if (seen.size > SEEN_CONNECTIONS_KEPT) {
+      seen.delete(seen.values().next().value!)
     }
     connection = lastConnectedAt
     if (!replayPending) {
@@ -97,7 +108,10 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
     retained() {
       whole = false
     },
-    page(hasMore) {
+    page(hasMore, pageConnectedAt) {
+      // The host can answer a page on a new connection before React renders
+      // it, as it can the replay (+125, second verification).
+      connected(pageConnectedAt)
       if (replayPending) {
         wholeBeforeReplay = hasMore === false
         return

@@ -130,4 +130,79 @@ describe('the created-file count after a reconnect', () => {
       reads: readClient.sendRequest.mock.calls.filter(([method]) => method === 'files.read').length
     }).toEqual({ count: null, reads: 0 })
   })
+
+  // Second verification of the reconnect fix (2026-09-26): a page the host
+  // answered after the client's new connection, before React rendered it,
+  // set the gate at once (+125, also on c9480154); and a connection stamped
+  // earlier than the last (a clock stepped back) started no wait at all.
+  const OLDER = Array.from({ length: 5 }, (_unused, index) => text(`older-${index}`))
+  function pagedWindow(firstConnection: number) {
+    const conn = { at: firstConnection }
+    const client = {
+      getLastConnectedAt: () => conn.at,
+      sendRequest: vi.fn(async () => ({ ok: true, result: { messages: OLDER, hasMore: false, beforeOffset: 0 } })),
+      subscribe: vi.fn((_method, _params, onData) => {
+        onData({ type: 'snapshot', messages: CLAUDE_EDIT_RUN_ROWS, hasMore: true, beforeOffset: 10 })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    const readClient = { sendRequest: host(APPENDED) }
+    return { conn, props: { client, store: createCreatedFileCountStore(), readClient }, readClient }
+  }
+  const settle = async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+  }
+  const outcome = (store: CreatedFileCountStore, readClient: { sendRequest: ReturnType<typeof vi.fn> }) => ({
+    count: store.countFor(THE_CREATE.key),
+    reads: readClient.sendRequest.mock.calls.filter(([method]) => method === 'files.read').length
+  })
+  const NOTHING_READ = { count: null, reads: 0 }
+
+  it.each([
+    ['in its own render', false],
+    ['in the same render', true]
+  ])('draws no count from a page answered %s before React renders the new connection', async (_case, sameBatch) => {
+    const { conn, props, readClient } = pagedWindow(1)
+    await act(async () => {
+      renderer = create(createElement(Screen, { ...props, lastConnectedAt: 1 }))
+    })
+    props.store.want(THE_CREATE)
+    await settle()
+    conn.at = 2
+    await act(async () => {
+      state?.loadEarlier()
+      if (sameBatch) {
+        renderer?.update(createElement(Screen, { ...props, lastConnectedAt: 2 }))
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => {
+      renderer?.update(createElement(Screen, { ...props, lastConnectedAt: 2 }))
+    })
+    await settle()
+    expect(outcome(props.store, readClient)).toEqual(NOTHING_READ)
+  })
+
+  it('draws no count from a page answered before the replay of a connection stamped earlier than the last', async () => {
+    const { conn, props, readClient } = pagedWindow(1000)
+    await act(async () => {
+      renderer = create(createElement(Screen, { ...props, lastConnectedAt: 1000 }))
+    })
+    props.store.want(THE_CREATE)
+    await settle()
+    conn.at = 500
+    await act(async () => {
+      renderer?.update(createElement(Screen, { ...props, lastConnectedAt: 500 }))
+    })
+    await act(async () => {
+      state?.loadEarlier()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await settle()
+    expect(outcome(props.store, readClient)).toEqual(NOTHING_READ)
+  })
 })

@@ -373,7 +373,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         limitRef.current = nextLimit
-        whole.page(result.hasMore)
+        whole.page(result.hasMore, client?.getLastConnectedAt?.())
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
           setList(mergeNativeChatMessages(result.messages, mergerRef.current.list))
