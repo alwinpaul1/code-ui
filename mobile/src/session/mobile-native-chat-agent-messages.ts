@@ -101,6 +101,16 @@ export function parseSubagentMessage(text: string, options: { cut?: boolean } = 
   return { from, body: body.replace(/\s+$/, '').replace(/^\n+/, '') }
 }
 
+/** Whether a stored text is a hand-back the hook cut: the wrapper's line,
+ *  then the harness's own hand-back line. Without that second line a cut
+ *  text cannot be told from a person's prompt that quotes the wrapper's
+ *  first line. */
+export function isCutHandback(text: string): boolean {
+  const rest = text.replace(OPENER, '')
+  const open = OPEN_LINE.exec(rest)
+  return open !== null && HANDBACK_PREAMBLE.test(rest.slice(open[0].length)) && parseSubagentMessage(text, { cut: true }) !== null
+}
+
 /** Whether a hook prompt is a subagent's message rather than something a
  *  person typed: the one test the desktop prompts and the rows agree on, so a
  *  prompt is drawn as exactly one of the two. */

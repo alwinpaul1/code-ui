@@ -166,6 +166,14 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4106'])
   })
 
+  // Review of 2026-09-27: it is drawn as the user's bubble live (no closing
+  // tag, and the hook did not cut it), and the sweep took it as cut.
+  it('is restored when it quotes the wrapper\'s whole first line and goes on in its own words', () => {
+    const text = '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?'
+    const stored = [{ id: 'desk-4107', text, ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4107'])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])
