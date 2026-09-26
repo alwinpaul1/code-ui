@@ -95,10 +95,11 @@ Nothing here is built.
   transcript may have changed it (an edit tool naming the same path however
   it spells it, `./`, `..`, `~` or absolute, with `~` read as the home the
   other path is under, and two paths from `~` the same only when all of each
-  is; any other call naming the file, a command the user ran with `!` among
-  them, except a command that only makes it executable, runs it, reads it or
-  stages it, where a `~` path is not the file when the other path is absolute
-  and under no home, /Users/Shared among them; a call the wire cut, whose dropped part
+  is; any other call naming the file, as the value glued to a short option
+  (`wget -Oname`) too, a command the user ran with `!` among them, except a
+  command that only makes it executable, runs it, reads it or stages it,
+  where a `~` path is not the file when the other path is absolute and under
+  no home, /Users/Shared among them; a call the wire cut, whose dropped part
   may have named it; or a subagent launched or a message sent after it,
   since the agent's own calls are not in this transcript), and no
   background work launched before it was still running when it landed: a

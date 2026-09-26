@@ -63,7 +63,8 @@ describe('a create followed by a command that names it', () => {
     ['runs it over a continued line', `chmod +x ${PATH} && \\\n  bash ${RELATIVE}`],
     ['ends in a separator', `chmod +x ${PATH};`],
     ['runs it and prints how it exited', `bash ${RELATIVE}; echo "exit $?"`],
-    ['runs it by a path from ~', `chmod +x ${FROM_HOME} && ${FROM_HOME}`]
+    ['runs it by a path from ~', `chmod +x ${FROM_HOME} && ${FROM_HOME}`],
+    ['removes another file whose name ends in its own', `rm old-${NAME} /tmp/-x${NAME}`]
   ])('counts a create the next command only %s', (_, command) => {
     expect(ranAfter(command)).toBe(false)
   })
@@ -129,6 +130,25 @@ describe('a create followed by a command that names it', () => {
     ['writes a diff over it, the option escaped', `git diff \\--output=${RELATIVE}`],
     ['writes a diff over it, the option quoted', `git diff '--output'=${RELATIVE}`],
     ['writes a diff over it, the option in a variable', `git diff $OUT ${RELATIVE}`],
+    // Review of 2528f187: a short option takes its value glued on, and the
+    // letter before the name read as part of another file's name.
+    [
+      'downloads over it, the option glued to its name',
+      `wget -qO${NAME} https://example.com/sweep.sh`
+    ],
+    [
+      'downloads over it with curl, the option glued to its name',
+      `curl -fsSLo${NAME} https://example.com/sweep.sh`
+    ],
+    ['sorts another file into it, the option glued to its name', `sort -o${NAME} /tmp/other.sh`],
+    [
+      'sorts another file into it, the option glued to its quoted name',
+      `sort '-o${NAME}' /tmp/other.sh`
+    ],
+    [
+      'pipes another file through less into it, the option glued to its name',
+      `cat /tmp/other.sh | less -O${NAME}`
+    ],
     // A quoted `~` is not expanded, so these run a script under a folder named `~`.
     ['runs a script of its name from a quoted ~', `bash "${FROM_HOME}"`],
     ['runs a script of its name by a quoted path from ~', `'${FROM_HOME}'`]

@@ -66,6 +66,10 @@ const NAME_BEFORE = /[A-Za-z0-9._-]/
  *  name may end a sentence, or be the stem of `name.sh.new`, which a command
  *  can move over it. */
 const NAME_AFTER = /[A-Za-z0-9_-]/
+/** A word's start that is a cluster of short options, quoted or not: the
+ *  last of them may take the name glued on as its value (`wget -qOname`,
+ *  `sort -oname`). */
+const GLUED_OPTIONS = /(?:^|\s)["']?-+[A-Za-z0-9]*$/
 
 function stringField(input: unknown, key: string): string | null {
   if (typeof input !== 'object' || input === null) {
@@ -229,7 +233,8 @@ function namesFile(word: string, name: string): boolean {
   while (at !== -1) {
     const before = at === 0 ? '' : word.charAt(at - 1)
     const after = word.charAt(at + name.length)
-    if (!NAME_BEFORE.test(before) && !NAME_AFTER.test(after)) {
+    const starts = !NAME_BEFORE.test(before) || GLUED_OPTIONS.test(word.slice(0, at))
+    if (starts && !NAME_AFTER.test(after)) {
       return true
     }
     at = word.indexOf(name, at + 1)
