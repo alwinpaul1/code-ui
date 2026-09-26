@@ -31,11 +31,19 @@ const TOAST_MS = 2200
 /** How long a host is left alone after one of its rows ran before its menu asks it
  *  again: long enough for a Mac to have finished locking or sleeping its display. */
 const ACTION_SETTLE_MS = 3000
-/** The longest a menu waits on an action, counted from the tap, before it asks the
- *  host anyway. An action that never finishes (osascript held on a prompt, a relay
- *  waiting to reconnect) held the menu on "Checking" past the probe's own 12 s. The
- *  wait comes off the probe's budget, so the row still ends inside it. */
-const ACTION_GATE_MAX_MS = 5000
+/** The longest one open of the menu waits on a settling host before it asks anyway.
+ *  An action that never finishes (osascript held on a prompt, a relay waiting to
+ *  reconnect) held the menu on "Checking" past the probe's own 12 s. The wait comes
+ *  off the probe's budget, so the row still ends inside it, and the probe keeps at
+ *  least 5 s of its 12. Counted from the menu, not the tap: Unlock spends 3.3 s by
+ *  design before it types, and a 5 s cap from the tap let the probe read the login
+ *  window before it let the user in (2026-09-26 review). */
+const MENU_WAIT_MAX_MS = 7000
+/** When a gate comes down even if its run never settles, so no host is left
+ *  settling for good. Longer than any action's own timeout plus its settle; a read
+ *  the relay holds through a reconnect can outlast it, and the gate then falls
+ *  mid-action, which only means the next menu asks sooner. */
+const ACTION_GATE_SAFETY_MS = 20_000
 
 type SettleEntry = { token: number; timers: ReturnType<typeof setTimeout>[] }
 
@@ -53,6 +61,8 @@ export function useMacHostControls(args: {
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
   // Hosts whose action is running or settling; their menu waits before asking.
   const [settlingHostIds, setSettlingHostIds] = useState<ReadonlySet<string>>(() => new Set())
+  // The host whose open menu has waited MENU_WAIT_MAX_MS on its gate and asks anyway.
+  const [waitExpiredHostId, setWaitExpiredHostId] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // One entry per settling host. The token is the run that raised it: only that run's
   // timers may lower it, so an earlier run ending cannot open the gate on a later one.
@@ -137,7 +147,7 @@ export function useMacHostControls(args: {
     [setSettling]
   )
 
-  /** Raises the gate for one run, already timed to fall ACTION_GATE_MAX_MS from now. */
+  /** Raises the gate for one run, with a safety timer that lowers it whatever happens. */
   const beginSettling = useCallback(
     (hostId: string) => {
       settleTokenRef.current += 1
@@ -145,7 +155,7 @@ export function useMacHostControls(args: {
       settleRef.current.get(hostId)?.timers.forEach(clearTimeout)
       settleRef.current.set(hostId, { token, timers: [] })
       setSettling(hostId, true)
-      endSettling(hostId, token, ACTION_GATE_MAX_MS)
+      endSettling(hostId, token, ACTION_GATE_SAFETY_MS)
       return token
     },
     [endSettling, setSettling]
@@ -185,7 +195,10 @@ export function useMacHostControls(args: {
 
   const openPlatform = openHostId ? platforms[openHostId] : undefined
   const openWorktreeId = openHostId ? worktreeIdForHost(openHostId) : null
-  const openHostSettling = openHostId ? settlingHostIds.has(openHostId) : false
+  // Waiting on the host's gate, until the gate falls or this open has waited enough.
+  const openHostGated = openHostId
+    ? settlingHostIds.has(openHostId) && waitExpiredHostId !== openHostId
+    : false
 
   // Why on every open and never persisted: the Mac may have been locked or woken from
   // its own keyboard since last time, and a remembered answer would offer Lock to an
@@ -203,25 +216,29 @@ export function useMacHostControls(args: {
   //
   // A host whose action is still running or settling is not asked yet: a menu
   // reopened straight after Sleep display would read the display before it slept,
-  // and keep that answer. It says "Checking" until the host has settled.
+  // and keep that answer. It says "Checking" until the host has settled, or for
+  // MENU_WAIT_MAX_MS at most, and the probe then gets what is left of its budget.
   useEffect(() => {
     // Forget the last answer at every change, so no render shows what an earlier
     // open, or an earlier connection, said.
     setProbed(null)
     if (!openHostId || !hasHostControls(openPlatform) || openHostConnection !== 'connected') {
       gateWaitRef.current = null
+      setWaitExpiredHostId(null)
       return
     }
-    if (openHostSettling) {
+    if (openHostGated) {
       if (gateWaitRef.current?.hostId !== openHostId) {
         gateWaitRef.current = { hostId: openHostId, since: Date.now() }
       }
-      return
+      const remaining = gateWaitRef.current.since + MENU_WAIT_MAX_MS - Date.now()
+      const expire = setTimeout(() => setWaitExpiredHostId(openHostId), Math.max(0, remaining))
+      return () => clearTimeout(expire)
     }
     const gateWait = gateWaitRef.current
     gateWaitRef.current = null
     const alreadyWaitedMs =
-      gateWait?.hostId === openHostId ? Math.min(Date.now() - gateWait.since, ACTION_GATE_MAX_MS) : 0
+      gateWait?.hostId === openHostId ? Math.min(Date.now() - gateWait.since, MENU_WAIT_MAX_MS) : 0
     const client = clientsRef.current.find((entry) => entry.hostId === openHostId)?.client
     const worktreeId = openWorktreeId
     if (!client || !worktreeId) {
@@ -243,7 +260,7 @@ export function useMacHostControls(args: {
     return () => {
       stale = true
     }
-  }, [openHostId, openHostConnection, openPlatform, openWorktreeId, openHostSettling])
+  }, [openHostId, openHostConnection, openPlatform, openWorktreeId, openHostGated])
 
   const run = useCallback(
     async (hostId: string, action: MacHostAction, command: string) => {

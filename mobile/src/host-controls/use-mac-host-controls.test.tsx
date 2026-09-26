@@ -37,6 +37,7 @@ function ok(result: unknown) {
 function fakeHost(hostId: string, platform: NodeJS.Platform) {
   const created: string[] = []
   const commandByTerminal = new Map<string, string>()
+  const createdAtByTerminal = new Map<string, number>()
   const host = {
     hostId,
     answer: null as string | null,
@@ -44,6 +45,10 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
     /** 'stuck' never prints the done marker; 'throw' answers the action's tab with
      *  nothing at all, which throws inside the watch. */
     actionMode: 'done' as 'done' | 'stuck' | 'throw',
+    /** How long an action's tab takes to print its done marker, and how long after
+     *  that `afterAction` becomes the host's answer. */
+    actionDoneAfterMs: 0,
+    afterActionLagMs: 1000,
     liveWorktree: `${hostId}-wt`,
     created,
     client: {
@@ -62,6 +67,7 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           const terminal = `${hostId}-term-${created.length + 1}`
           created.push(args.command ?? '')
           commandByTerminal.set(terminal, args.command ?? '')
+          createdAtByTerminal.set(terminal, Date.now())
           return ok({ tab: { id: `${terminal}-tab`, type: 'terminal', terminal } })
         }
         if (method === 'terminal.read') {
@@ -69,7 +75,8 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           if (command === MAC_HOST_STATE_PROBE_COMMAND) {
             return ok({ terminal: { lines: host.answer ? [host.answer] : [] } })
           }
-          if (host.actionMode === 'stuck') {
+          const createdAt = createdAtByTerminal.get(args.terminal ?? '') ?? 0
+          if (host.actionMode === 'stuck' || Date.now() < createdAt + host.actionDoneAfterMs) {
             return ok({ terminal: { lines: [] } })
           }
           // The host takes a moment to settle after the command says it is done:
@@ -79,7 +86,7 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
             host.afterAction = null
             setTimeout(() => {
               host.answer = settled
-            }, 1000)
+            }, host.afterActionLagMs)
           }
           return ok({ terminal: { lines: ['CUIDONE ok'] } })
         }
@@ -273,6 +280,26 @@ describe('the host menu after one of its rows ran', () => {
     await elapse(500)
     expect(latest?.macOptions?.state).toEqual({ lock: 'unlocked', display: 'off', mute: 'unmuted' })
     expect(mac.probes()).toBe(2)
+  })
+
+  // Third review, 2026-09-26: Unlock spends 3.3 s by design before it types, and a
+  // 5 s cap on the wait let the check read the login window before it let the user in.
+  it('reads the Mac unlocked when its menu is reopened straight after a slow Unlock', async () => {
+    const mac = fakeHost('mac', 'darwin')
+    const props = { clients: clientsOf(mac), worktreeInfo: { mac: infoFor('mac') } }
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    mac.answer = LOCKED_MUTED
+    mac.afterAction = 'CUIMAC lock=0 mute=true display=on end'
+    mac.actionDoneAfterMs = 4800
+    mac.afterActionLagMs = 800
+    act(() => latest?.onPasswordSaved('mac', 'hunter2'))
+    await elapse(500)
+    render({ ...props, openHostId: 'mac' })
+    const waited = await checkingFor(20_000)
+    expect(waited).not.toBeNull()
+    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS)
+    expect(latest?.macOptions?.state).toEqual({ lock: 'unlocked', display: 'on', mute: 'muted' })
   })
 
   // Second review, 2026-09-26: the menu waited out the whole action before asking, so
