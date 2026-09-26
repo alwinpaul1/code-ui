@@ -10,8 +10,11 @@
 // - it still starts with every character the wire kept, and
 // - no later call in the loaded transcript may have changed it: an edit tool
 //   naming the same path, any other call naming the file, any call the wire
-//   cut (the part it dropped may have named it), or a subagent launched after
-//   it (its own calls are not in this transcript).
+//   cut (the part it dropped may have named it), or a subagent launched or a
+//   message sent after it (the agent's own calls are not in this transcript),
+//   and
+// - no background work launched before it was still running when it landed
+//   (mobile-native-chat-created-file-work.ts).
 //
 // Anything else is no number, as before. The count itself is the uncut
 // Write's count, taken through the same pipeline, so a small create and a
@@ -30,6 +33,7 @@ import {
   inputStrings,
   MOBILE_CUT
 } from './mobile-native-chat-edit-wire-cut'
+import { backgroundWorkRunningAt } from './mobile-native-chat-created-file-work'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
 
@@ -218,8 +222,10 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
     return false
   }
   // A subagent's own calls are in its sidechain, not this transcript, so what
-  // its prompt names says nothing about what it edited.
-  if (toolCallKind(call.name) === 'agent') {
+  // its prompt names says nothing about what it edited. A message wakes an
+  // agent or reaches a teammate, whose calls are not here either.
+  const kind = toolCallKind(call.name)
+  if (kind === 'agent' || kind === 'message') {
     return true
   }
   const target = normalizedPath(path)
@@ -241,12 +247,14 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
 export type CutCreateStanding = { messageId: string; touched: boolean }
 
 /** Every cut create in the transcript, keyed by `CutCreate.key`. The same
- *  create twice counts as touched: the second wrote the file again. */
+ *  create twice counts as touched: the second wrote the file again, and so is
+ *  one made while earlier background work was still running. */
 export function cutCreateStandings(
   messages: readonly NativeChatMessage[]
 ): Map<string, CutCreateStanding> {
   const standings = new Map<string, CutCreateStanding>()
   const open: { path: string; standing: CutCreateStanding }[] = []
+  const workRunningAt = backgroundWorkRunningAt(messages)
   for (const message of messages) {
     for (const block of message.blocks) {
       if (block.type !== 'tool-call') {
@@ -259,7 +267,7 @@ export function cutCreateStandings(
       }
       const create = cutWriteOf(block)
       if (create && !standings.has(create.key)) {
-        const standing = { messageId: message.id, touched: false }
+        const standing = { messageId: message.id, touched: workRunningAt(block) }
         standings.set(create.key, standing)
         open.push({ path: create.path, standing })
       }

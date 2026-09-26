@@ -95,7 +95,19 @@ Nothing here is built.
   transcript may have changed it (an edit tool naming the same path however
   it spells it, `./`, `..` or absolute; any other call naming the file; a
   call the wire cut, whose dropped part may have named it; or a subagent
-  launched after it, whose own calls are not in this transcript). The count
+  launched or a message sent after it, since the agent's own calls are not in
+  this transcript), and no background work launched before it was still
+  running when it landed: a shell, a monitor, an agent or a teammate that has
+  not reported by then may write the file with no call here, and a background
+  agent that did drew +125 on a 93-line create in review. That reuses the
+  background-task reader's launch and finish records
+  (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
+  sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
+  2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
+  2.1.228 to 2.1.281 wrote), so a task that ended where the transcript does not
+  say (a mid-turn completion Orca does not surface), a teammate, an agent a
+  message woke until its next report, and an Agent call with no answer yet
+  all hold the count off. The count
   is then the uncut Write's count of that text, through the same pipeline,
   so a small create and a large one agree
   (`mobile-native-chat-created-file-count.ts`). A finished run on screen

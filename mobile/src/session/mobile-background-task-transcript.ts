@@ -165,7 +165,7 @@ const AGENT_RESULT =
   /^\s*(?:Async agent launched successfully|Spawned successfully|Cloud agent launched)\.|<usage>\s*subagent_tokens:|(?:^|\n)agentId: [A-Za-z0-9_-]+ \(use SendMessage/
 /** A failure any tool can answer with: a tool error, or the user turning the
  *  call down. It says nothing about which call it answers. */
-const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
+export const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
 
 /** The call a result answers. First in, first out — transcript blocks carry
  *  no tool ids — except that an Agent call is taken only by a result shaped

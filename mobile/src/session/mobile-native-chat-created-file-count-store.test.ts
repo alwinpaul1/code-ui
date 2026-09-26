@@ -23,6 +23,7 @@ import {
   CREATED_A_FILE_RUN,
   CREATED_FILE_ON_DISK
 } from './fixtures/claude-edit-runs-2.1.282'
+import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
 
 const CUT = '… (truncated)'
 const WORKTREE_ROOT = '/Users/dev/Desktop/Project/Sample'
@@ -279,6 +280,31 @@ describe('reading back a created file the wire cut', () => {
     await settle()
     expect(host.calls).toHaveLength(0)
     expect(store.countFor(THE_CREATE.key)).toBeNull()
+  })
+
+  // Review of 2026-09-26: an agent launched in the background before the
+  // create went on writing to it, and the chip drew the file's +125 for a
+  // 93-line create. Its calls are in its own sidechain, not this transcript.
+  it('draws no +125 for a 93-line create a background agent went on writing to', async () => {
+    const grown = `${CREATED_FILE_ON_DISK}${'echo "added by the agent"\n'.repeat(32)}`
+    const host = hostWithFile(grown)
+    const agentId = 'ad17a815f19b6f5ae'
+    const launch = [
+      row('agent-call', [
+        {
+          type: 'tool-call',
+          name: 'Agent',
+          input: { description: 'Tidy the jobs', prompt: 'Tidy them', run_in_background: true }
+        }
+      ]),
+      row('agent-launched', [{ type: 'tool-result', output: asyncAgentLaunchResult(agentId) }])
+    ]
+    configure(host.client, 1)
+    store.setTranscript([...launch, ...CLAUDE_EDIT_RUN_ROWS], true)
+    store.want(THE_CREATE)
+    await settle()
+    expect(store.countFor(THE_CREATE.key)).toBeNull()
+    expect(host.reads()).toBe(0)
   })
 
   it('drops a count once a later call touches the file', async () => {
