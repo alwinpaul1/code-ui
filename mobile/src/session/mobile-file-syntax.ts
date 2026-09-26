@@ -74,6 +74,38 @@ export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?
   return highlighter().registered(normalized) ? normalized : 'plaintext'
 }
 
+/**
+ * Extensions several languages share, with the marks each leaves at the top
+ * of its files, tried in order. A file with none stays plain (review,
+ * 2026-09-27: mapping each to one language coloured a GLSL shader as F# and
+ * an Apex class as LaTeX).
+ */
+const SHARED_EXTENSIONS: Record<string, readonly (readonly [RegExp, string])[]> = {
+  '.m': [
+    [/^\s*(?:#import|#include|@interface|@implementation|@protocol)\b/m, 'objectivec'],
+    [/^\s*(?:function\b|%|end\s*$)/m, 'matlab']
+  ],
+  '.cls': [[/^\s*(?:%|\\(?:NeedsTeXFormat|ProvidesClass|LoadClass|DeclareOption|RequirePackage)\b)/m, 'latex']],
+  '.fs': [
+    [/^\s*#version\b|\bgl_(?:FragColor|Position|FragCoord)\b|^\s*precision\s+\w+p\s+float\b/m, 'glsl'],
+    [/^\s*(?:module|namespace|open)\s+[\w.]+\s*$|^\s*let\s+(?:rec\s+)?\w+[^=\n]*=/m, 'fsharp']
+  ],
+  '.v': [
+    [/^\s*(?:Theorem|Lemma|Require\s+Import|Inductive|Fixpoint|Proof\.)/m, 'coq'],
+    [/^\s*module\s+\w+\s*(?:#\s*)?\(|^\s*endmodule\b/m, 'verilog']
+  ],
+  '.d': [
+    [/^[^\s:#]+\.o\s*:/m, 'makefile'],
+    [/^\s*(?:module|import)\s+[\w.]+\s*;/m, 'd']
+  ]
+}
+
+function extensionOf(filePath: string): string {
+  const name = filePath.slice(Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1)
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot).toLowerCase() : ''
+}
+
 /** JSON is recognised by parsing it whole; past this it is left plain. */
 const MAX_JSON_DETECT_CHARS = 2_000_000
 /** Commands that run another program named after them: `npx tsx`,
@@ -141,11 +173,9 @@ export function detectMobileSyntaxLanguage(content: string, filePath = ''): stri
   }
   // The marks below sit at the top of a file; look no further than 4 KB.
   const head = text.length > 4_096 ? text.slice(0, 4_096) : text
-  if (/\.m$/i.test(filePath)) {
-    if (/^\s*(?:#import|#include|@interface|@implementation|@protocol)\b/m.test(head)) {
-      return 'objectivec'
-    }
-    return /^\s*(?:function\b|%|end\s*$)/m.test(head) ? 'matlab' : null
+  const shared = SHARED_EXTENSIONS[extensionOf(filePath)]
+  if (shared) {
+    return shared.find(([marks]) => marks.test(head))?.[1] ?? null
   }
   const opening = head.trimStart()[0]
   if ((opening === '{' || opening === '[') && text.length <= MAX_JSON_DETECT_CHARS && parsesAsJson(text)) {

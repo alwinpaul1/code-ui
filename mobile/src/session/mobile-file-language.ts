@@ -64,9 +64,11 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.mk': 'makefile',
   '.mak': 'makefile',
   // Beyond highlight.js's common set (2026-09-26: a .tex thesis drew plain).
+  // .cls, .fs, .v, .d, .m name several languages each (a LaTeX class or
+  // Apex, GLSL or F#, Verilog or Coq, a make dependency file or D, MATLAB or
+  // Objective-C): not here; mobile-file-syntax reads the file's own marks.
   '.tex': 'latex',
   '.sty': 'latex',
-  '.cls': 'latex',
   '.ltx': 'latex',
   '.dtx': 'latex',
   '.dockerfile': 'dockerfile',
@@ -91,7 +93,6 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.jl': 'julia',
   '.ml': 'ocaml',
   '.mli': 'ocaml',
-  '.fs': 'fsharp',
   '.fsi': 'fsharp',
   '.fsx': 'fsharp',
   '.clj': 'clojure',
@@ -126,7 +127,6 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.vbs': 'vbscript',
   '.ino': 'arduino',
   '.asm': 'x86asm',
-  '.v': 'verilog',
   '.sv': 'verilog',
   '.vhd': 'vhdl',
   '.vhdl': 'vhdl',
@@ -135,7 +135,6 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.el': 'lisp',
   '.scm': 'scheme',
   '.rkt': 'scheme',
-  '.d': 'd',
   '.pas': 'delphi',
   '.dpr': 'delphi',
   '.ada': 'ada',

@@ -91,7 +91,6 @@ describe('the file names and extensions the viewer knows', () => {
   it.each([
     ['thesis/chapters/intro.tex', 'latex'],
     ['thesis/uni.sty', 'latex'],
-    ['thesis/thesis.cls', 'latex'],
     ['Dockerfile', 'dockerfile'],
     ['docker/Dockerfile.dev', 'dockerfile'],
     ['Containerfile', 'dockerfile'],
@@ -107,7 +106,6 @@ describe('the file names and extensions the viewer knows', () => {
     ['flake.nix', 'nix'],
     ['src/stats.jl', 'julia'],
     ['src/parser.ml', 'ocaml'],
-    ['src/Program.fs', 'fsharp'],
     ['src/server.erl', 'erlang'],
     ['src/core.clj', 'clojure'],
     ['src/main.nim', 'nim'],
@@ -215,6 +213,28 @@ describe('a file whose name says nothing is read for its language', () => {
       'json'
     )
     expect(resolveMobileSyntaxLanguageForContent('res/layout.view', '<?xml version="1.0"?>\n<layout/>\n')).toBe('xml')
+  })
+
+  it('reads an extension several languages share from the file\'s own marks, and leaves the rest plain', () => {
+    const cases: [string, string, string][] = [
+      // A LaTeX class file (a thesis template) against an Apex class.
+      ['thesis/uni.cls', '\\NeedsTeXFormat{LaTeX2e}\n\\ProvidesClass{uni}[2026/09/27]\n\\LoadClass{report}\n', 'latex'],
+      ['classes/AccountService.cls', 'public with sharing class AccountService {\n  public static void run() {}\n}\n', 'plaintext'],
+      // A GLSL fragment shader against F#.
+      ['shaders/blur.fs', '#version 300 es\nprecision mediump float;\nout vec4 color;\nvoid main() { color = vec4(1.0); }\n', 'glsl'],
+      ['src/Program.fs', 'module Program\n\nlet main argv =\n    printfn "hi"\n    0\n', 'fsharp'],
+      // Verilog against Coq.
+      ['rtl/counter.v', 'module counter (input clk, output reg [3:0] q);\n  always @(posedge clk) q <= q + 1;\nendmodule\n', 'verilog'],
+      ['theories/Plus.v', 'Require Import Arith.\nTheorem plus_comm : forall n m : nat, n + m = m + n.\nProof. intros. lia. Qed.\n', 'coq'],
+      // A compiler's dependency file against D.
+      ['build/main.d', 'main.o: main.c util.h \\\n  config.h\n', 'makefile'],
+      ['source/app.d', 'module app;\nimport std.stdio;\nvoid main() { writeln("hi"); }\n', 'd'],
+      ['notes/today.d', 'bought milk\n', 'plaintext']
+    ]
+    for (const [path, text, language] of cases) {
+      expect(isUnknownMobileFileName(path), path).toBe(true)
+      expect(resolveMobileSyntaxLanguageForContent(path, text), path).toBe(language)
+    }
   })
 
   it('tells an Objective-C .m from a MATLAB one', () => {
