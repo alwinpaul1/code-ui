@@ -4,7 +4,7 @@ import {
   type MarkdownInlineMatch
 } from './markdown-inline-matcher'
 import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
-import { computeTableColumnWidths, tableCellChipMaxChars, tableColumnCount } from './mobile-markdown-table-layout'
+import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
@@ -27,19 +27,20 @@ import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markd
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
-import {
-  INLINE_CODE_CHIP_MAX_CHARS,
-  inlineCodeChipMaxChars,
-  splitInlineCodeChips
-} from './mobile-markdown-code-chip-split'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { markdownChipScale, markdownProseScale } from './mobile-markdown-prose-scale'
+import { markdownProseScale } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
+import {
+  markdownDocumentKey,
+  useMarkdownCodePillRuns,
+  type CodePillRun
+} from './use-markdown-code-pill-runs'
 
-/** Every inline span is a rounded, bordered View chip, as in the Claude app.
- *  Only a span with a newline in it stays a nested Text. */
+/** Every inline span is a rounded, bordered View chip, as in the Claude app,
+ *  one per line it crosses. Only a span with a newline in it stays a nested
+ *  Text. */
 export function isInlineCodeChip(code: string): boolean {
   return code.length > 0 && !code.includes('\n')
 }
@@ -155,12 +156,10 @@ function renderTextRun(
 function renderInline(
   styles: MarkdownStyles,
   text: string,
-  onOpenFile?: (pathText: string) => void,
-  /** Pill sizes at the reader's zoom; null when they have not zoomed. */
-  chipScale?: ReturnType<typeof markdownChipScale>,
-  /** How many characters fit one pill on this paragraph's line
-   *  (`inlineCodeChipMaxChars`); the fixed cap until the width is known. */
-  chipMaxChars: number = INLINE_CODE_CHIP_MAX_CHARS
+  onOpenFile: ((pathText: string) => void) | undefined,
+  /** How the Text this lands in cuts its code spans into pills, from its own
+   *  measured lines (use-markdown-code-pill-runs.ts). */
+  pills: CodePillRun
 ): ReactNode[] {
   const parts: ReactNode[] = []
   // Code spans are found by backtick run inside the matcher, not here.
@@ -222,7 +221,7 @@ function renderInline(
           : undefined
       if (isInlineCodeChip(code)) {
         // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
-        splitInlineCodeChips(code, chipMaxChars).forEach((piece, pieceIndex) => {
+        pills.cut(code).forEach((piece, pieceIndex) => {
           parts.push(
             <MobileMarkdownCodeChip
               // The paragraph's length is in the key on purpose. Android
@@ -235,11 +234,14 @@ function renderInline(
               // `match.index` alone only changes when text before the chip
               // grows; the length changes when text after it does too. A
               // changed key is a remount, and a remounted View is placed from
-              // the current layout.
-              key={`${key}c${pieceIndex}:${text.length}`}
+              // the current layout. The pill run's version is in it for the
+              // same reason: a span re-cut to its line moves every pill after
+              // it without changing the text.
+              key={`${key}c${pieceIndex}:${text.length}:${pills.version}`}
               piece={piece}
               styles={styles}
-              chipScale={chipScale}
+              chipScale={pills.chipScale}
+              table={pills.table}
               onPress={openFile}
             />
           )
@@ -259,19 +261,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale, chipMaxChars)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, chipScale, chipMaxChars)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile, chipScale, chipMaxChars)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile, pills)}
         </Text>
       )
     }
@@ -302,12 +304,8 @@ function MobileMarkdownInner({
   // why the line height is not simply `(size + 8) * scale`.
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
-  const chipScale = markdownChipScale(textScale)
-  // A span that fits the measured line is one pill (2026-09-20).
-  const chipMaxChars = inlineCodeChipMaxChars(
-    contentWidth,
-    chipScale?.fontSize ?? MARKDOWN_BASE_SIZE - 2
-  )
+  const documentKey = useMemo(() => markdownDocumentKey(text), [text])
+  const pillRuns = useMarkdownCodePillRuns(textScale, documentKey)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -328,50 +326,61 @@ function MobileMarkdownInner({
         const index = run.start
         const block = run.blocks[0]!
         if (run.prose) {
+          const pills = pillRuns(`run:${index}`, contentWidth, false)
+          const members = run.prose.map((member, memberIndex) => (
+            <Fragment key={memberIndex}>
+              {memberIndex > 0 ? '\n\n' : null}
+              {member.type === 'heading' ? (
+                <Text style={[styles.heading, headingScale(styles, member.level)]}>
+                  {renderInline(styles, member.text, onOpenFile, pills)}
+                </Text>
+              ) : member.type === 'rule' ? (
+                <Text style={styles.ruleText}>{RULE_TEXT}</Text>
+              ) : member.type === 'list' ? (
+                member.items.map((item, itemIndex) => {
+                  const marker = listMarker(item)
+                  return (
+                    <Fragment key={itemIndex}>
+                      {itemIndex > 0 ? '\n' : null}
+                      {LIST_INDENT_TEXT.repeat(item.depth)}
+                      {marker ? (
+                        <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
+                      ) : null}
+                      {renderInline(styles, item.text, onOpenFile, pills)}
+                    </Fragment>
+                  )
+                })
+              ) : member.type === 'image' ? (
+                <MobileMarkdownImage
+                  alt={member.alt}
+                  url={member.url}
+                  width={contentWidth}
+                  resolve={resolveImage}
+                  onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+                  styles={styles}
+                />
+              ) : (
+                // One inline pass over the WHOLE paragraph. Matching line by
+                // line left `**bold` on one source line and `text**` on the
+                // next as literal asterisks on the phone (reported from the
+                // device); the parser has already reflowed soft wraps, so
+                // any newline left here is a deliberate hard break.
+                renderInline(styles, member.text, onOpenFile, pills)
+              )}
+            </Fragment>
+          ))
           return (
-            <Text key={index} selectable={selectable} style={[styles.paragraph, proseScale]}>
-              {run.prose.map((member, memberIndex) => (
-                <Fragment key={memberIndex}>
-                  {memberIndex > 0 ? '\n\n' : null}
-                  {member.type === 'heading' ? (
-                    <Text style={[styles.heading, headingScale(styles, member.level)]}>
-                      {renderInline(styles, member.text, onOpenFile, chipScale, chipMaxChars)}
-                    </Text>
-                  ) : member.type === 'rule' ? (
-                    <Text style={styles.ruleText}>{RULE_TEXT}</Text>
-                  ) : member.type === 'list' ? (
-                    member.items.map((item, itemIndex) => {
-                      const marker = listMarker(item)
-                      return (
-                        <Fragment key={itemIndex}>
-                          {itemIndex > 0 ? '\n' : null}
-                          {LIST_INDENT_TEXT.repeat(item.depth)}
-                          {marker ? (
-                            <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
-                          ) : null}
-                          {renderInline(styles, item.text, onOpenFile, chipScale, chipMaxChars)}
-                        </Fragment>
-                      )
-                    })
-                  ) : member.type === 'image' ? (
-                    <MobileMarkdownImage
-                      alt={member.alt}
-                      url={member.url}
-                      width={contentWidth}
-                      resolve={resolveImage}
-                      onOpen={() => openMarkdownHref(member.url, onOpenFile)}
-                      styles={styles}
-                    />
-                  ) : (
-                    // One inline pass over the WHOLE paragraph. Matching line by
-                    // line left `**bold` on one source line and `text**` on the
-                    // next as literal asterisks on the phone (reported from the
-                    // device); the parser has already reflowed soft wraps, so
-                    // any newline left here is a deliberate hard break.
-                    renderInline(styles, member.text, onOpenFile, chipScale, chipMaxChars)
-                  )}
-                </Fragment>
-              ))}
+            // `simple` is greedy breaking, as the Claude app lays out: a line
+            // takes all that fits. The default balances lines, which could
+            // break before a pill that fits and re-break the lines above one.
+            <Text
+              key={index}
+              selectable={selectable}
+              style={[styles.paragraph, proseScale]}
+              textBreakStrategy="simple"
+              onTextLayout={pills.layoutReader()}
+            >
+              {members}
             </Text>
           )
         }
@@ -392,10 +401,18 @@ function MobileMarkdownInner({
         if (block.type === 'quote') {
           // One bar down the whole quote, text indented beside it, as the Claude
           // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
+          const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
+          const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
+          const quoted = renderInline(styles, block.text, onOpenFile, pills)
           return (
             <View key={index} style={styles.quoteBlock}>
-              <Text selectable={selectable} style={[styles.quoteText, proseScale]}>
-                {renderInline(styles, block.text, onOpenFile, chipScale, chipMaxChars)}
+              <Text
+                selectable={selectable}
+                style={[styles.quoteText, proseScale]}
+                textBreakStrategy="simple"
+                onTextLayout={pills.layoutReader()}
+              >
+                {quoted}
               </Text>
             </View>
           )
@@ -426,36 +443,34 @@ function MobileMarkdownInner({
           })
           const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)
           // A pill is cut to its own cell, as a paragraph's is to its line;
-          // the fallback cap is wider than a cell (2026-09-21).
-          const cellChipMax = columnWidths.map((width) =>
-            tableCellChipMaxChars(width, styles.tableCell.paddingHorizontal, chipScale?.fontSize ?? MARKDOWN_BASE_SIZE - 2)
-          )
+          // a paragraph's line is wider than a cell (2026-09-21).
+          const cell = (rowKey: string, cellIndex: number, source: string, header: boolean) => {
+            const width = columnWidths[cellIndex] ?? 0
+            const inner = width - 2 * styles.tableCell.paddingHorizontal - styles.tableCell.borderRightWidth
+            const pills = pillRuns(`table:${index}:${rowKey}:${cellIndex}`, inner, true)
+            const children = renderInline(styles, source, onOpenFile, pills)
+            return (
+              <Text
+                key={cellIndex}
+                selectable={selectable}
+                style={[styles.tableCell, header ? styles.tableHeader : null, { width }]}
+                textBreakStrategy="simple"
+                onTextLayout={pills.layoutReader()}
+              >
+                {children}
+              </Text>
+            )
+          }
           return (
             // A table that runs past the screen needs the same telling.
             <ScrollView key={index} horizontal showsHorizontalScrollIndicator persistentScrollbar>
               <View style={styles.table}>
                 <View style={styles.tableRow}>
-                  {columns.map((cellIndex) => (
-                    <Text
-                      key={cellIndex}
-                      selectable={selectable}
-                      style={[styles.tableCell, styles.tableHeader, { width: columnWidths[cellIndex] }]}
-                    >
-                      {renderInline(styles, block.headers[cellIndex] ?? '', onOpenFile, chipScale, cellChipMax[cellIndex])}
-                    </Text>
-                  ))}
+                  {columns.map((cellIndex) => cell('h', cellIndex, block.headers[cellIndex] ?? '', true))}
                 </View>
                 {visibleRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.tableRow}>
-                    {columns.map((cellIndex) => (
-                      <Text
-                        key={cellIndex}
-                        selectable={selectable}
-                        style={[styles.tableCell, { width: columnWidths[cellIndex] }]}
-                      >
-                        {renderInline(styles, row[cellIndex] ?? '', onOpenFile, chipScale, cellChipMax[cellIndex])}
-                      </Text>
-                    ))}
+                    {columns.map((cellIndex) => cell(String(rowIndex), cellIndex, row[cellIndex] ?? '', false))}
                   </View>
                 ))}
                 {hiddenRows > 0 || hiddenColumns > 0 ? (

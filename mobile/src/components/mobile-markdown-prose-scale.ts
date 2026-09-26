@@ -23,10 +23,45 @@ export const MARKDOWN_BASE_SIZE = 15
  * So both move together, by the same factor, keeping the same headroom.
  */
 export const MARKDOWN_PROSE_LINE_GAP = 10
-/** The pill's own line height at scale 1; `+1` clears the mono descenders. */
-export const MARKDOWN_CHIP_LINE_GAP = 1
-export const MARKDOWN_CHIP_PADDING_VERTICAL = 1
+
+/**
+ * Inline code, as the Claude app draws it (two screenshots, 2026-09-26): the
+ * paragraph's own face one step smaller, on a faint pill with a little
+ * padding, sitting on the paragraph's baseline. JetBrains Mono at 13 with 5 dp
+ * of padding read wider and bulkier than the words around it.
+ *
+ * Instrument Sans's ascent plus descent is 1.22 em (970 + 250 of 1000, hhea of
+ * the bundled TTF): 17.1 dp at 14, so a 17 dp line holds the glyphs and no
+ * air. The pill's height comes from that line and its 1 dp border alone.
+ */
+export const MARKDOWN_CHIP_FONT_SIZE = MARKDOWN_BASE_SIZE - 1
+export const MARKDOWN_CHIP_LINE_HEIGHT = 17
+/** A table cell is set at BASE - 2; its pills match the cell's own size. */
+export const MARKDOWN_TABLE_CHIP_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
+export const MARKDOWN_TABLE_CHIP_LINE_HEIGHT = 16
+export const MARKDOWN_CHIP_PADDING_VERTICAL = 0
+export const MARKDOWN_CHIP_PADDING_HORIZONTAL = 4
 export const MARKDOWN_CHIP_BORDER_WIDTH = 1
+export const MARKDOWN_CHIP_RADIUS = 7
+const INSTRUMENT_SANS_ASCENT = 0.97
+const INSTRUMENT_SANS_DESCENT = 0.25
+
+/**
+ * How far a pill is drawn below where Android lays it, so its text sits on
+ * the paragraph's baseline. Android hangs an inline view's BOTTOM on the
+ * baseline (TextLayoutManager: top = baseline - height), so the pill's own
+ * text rides above the words by its border, its padding, and the part of its
+ * line below its baseline. 4 dp for both pill sizes (4.46 and 4.32).
+ */
+export function markdownChipBaselineShift(fontSize: number, lineHeight: number): number {
+  const leading = lineHeight - (INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * fontSize
+  return (
+    MARKDOWN_CHIP_BORDER_WIDTH +
+    MARKDOWN_CHIP_PADDING_VERTICAL +
+    INSTRUMENT_SANS_DESCENT * fontSize +
+    leading / 2
+  )
+}
 
 export function markdownProseScale(
   size: number,
@@ -45,27 +80,36 @@ export function markdownProseScale(
   }
 }
 
-export function markdownChipScale(textScale: number): {
+export type MarkdownChipScale = {
+  factor: number
   fontSize: number
   lineHeight: number
   paddingVertical: number
+  paddingHorizontal: number
   borderRadius: number
-} | null {
+  baselineShift: number
+}
+
+export function markdownChipScale(textScale: number): MarkdownChipScale | null {
   if (textScale === 1) {
     return null
   }
   return {
-    fontSize: (MARKDOWN_BASE_SIZE - 2) * textScale,
-    lineHeight: (MARKDOWN_BASE_SIZE + MARKDOWN_CHIP_LINE_GAP) * textScale,
+    factor: textScale,
+    fontSize: MARKDOWN_CHIP_FONT_SIZE * textScale,
+    lineHeight: MARKDOWN_CHIP_LINE_HEIGHT * textScale,
     paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL * textScale,
-    borderRadius: 7 * textScale
+    paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL * textScale,
+    borderRadius: MARKDOWN_CHIP_RADIUS * textScale,
+    baselineShift:
+      markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * textScale
   }
 }
 
 /** What the pill actually paints, top to bottom, at a given zoom. */
 export function markdownChipFootprint(textScale: number): number {
   const chip = markdownChipScale(textScale)
-  const lineHeight = chip?.lineHeight ?? MARKDOWN_BASE_SIZE + MARKDOWN_CHIP_LINE_GAP
+  const lineHeight = chip?.lineHeight ?? MARKDOWN_CHIP_LINE_HEIGHT
   const padding = chip?.paddingVertical ?? MARKDOWN_CHIP_PADDING_VERTICAL
   return lineHeight + 2 * padding + 2 * MARKDOWN_CHIP_BORDER_WIDTH
 }

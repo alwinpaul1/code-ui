@@ -3,15 +3,29 @@ import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
-import { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
+import {
+  MARKDOWN_BASE_SIZE,
+  MARKDOWN_CHIP_BORDER_WIDTH,
+  MARKDOWN_CHIP_FONT_SIZE,
+  MARKDOWN_CHIP_LINE_HEIGHT,
+  MARKDOWN_CHIP_PADDING_HORIZONTAL,
+  MARKDOWN_CHIP_PADDING_VERTICAL,
+  MARKDOWN_CHIP_RADIUS,
+  MARKDOWN_TABLE_CHIP_FONT_SIZE,
+  MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+  markdownChipBaselineShift
+} from './mobile-markdown-prose-scale'
 export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
 
-/** How far an inline code chip is painted BELOW its layout box, to sit level
- *  with the text around it. It is a transform, so layout does not know about
- *  it: any ancestor that clips (the table, which needs `overflow: hidden` for
- *  its rounded corners) cuts the chip off unless it leaves this much room.
- *  A chip in a table cell was sliced across the middle (2026-09-14). */
-export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = 2
+/** How far an inline code chip is painted BELOW its layout box, so its text
+ *  sits on the paragraph's baseline (markdownChipBaselineShift). It is a
+ *  transform, so layout does not know about it: any ancestor that clips (the
+ *  table, which needs `overflow: hidden` for its rounded corners) cuts the
+ *  chip off unless it leaves this much room. A chip in a table cell was sliced
+ *  across the middle (2026-09-14). */
+export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = Math.round(
+  markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT)
+)
 
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
@@ -68,45 +82,50 @@ export function makeMarkdownStyles(theme: Theme) {
     },
     // Inline `code`, after the Claude app: blue text in a rounded, bordered
     // chip. Android's text engine cannot round a nested Text's background
-    // (it is a plain BackgroundColorSpan), so a SHORT span is a real inline
-    // View — rounded and bordered — while a long one stays a nested Text so
-    // it can still wrap. Chosen by the user on 2026-09-12 over square chips.
+    // (it is a plain BackgroundColorSpan), so a span is a real inline View —
+    // rounded and bordered — cut into one pill per line it crosses
+    // (mobile-markdown-code-chip-split.ts). Only a span with a newline in it
+    // stays this nested Text. Chosen by the user on 2026-09-12 over square chips.
     inlineCode: {
-      fontFamily: fonts.mono,
-      fontSize: MARKDOWN_BASE_SIZE - 2,
+      fontFamily: fonts.regular,
+      fontSize: MARKDOWN_CHIP_FONT_SIZE,
       color: colors.codeSpanText,
       // Translucent, so a selection's highlight shows through the chip; an
       // opaque one made every `code` span read as unselected (2026-09-12).
       backgroundColor: colors.codeSpanBg
     },
+    // No margins: an inline View's margins do nothing on Android. Fabric lays
+    // the View at its placeholder's origin with its border-box size
+    // (ParagraphShadowNode::layout), so the space around a pill is the
+    // paragraph's own space character, as around a word.
     inlineCodeChip: {
       backgroundColor: colors.codeSpanBg,
-      borderWidth: 1,
+      borderWidth: MARKDOWN_CHIP_BORDER_WIDTH,
       borderColor: colors.codeSpanBorder,
-      borderRadius: 7,
-      paddingHorizontal: 5,
-      paddingVertical: 1,
-      // Two pieces of one split path can land side by side on the same line
-      // ("chapters/" then "_archive…/"); at 1px their rounded borders collided
-      // and read as one broken pill (2026-09-14). This keeps a clear gap.
-      marginHorizontal: 3,
-      // Air above and below, so a span that wraps onto a second line does not
-      // touch the pill above it; the line box grows with the margin, which is
-      // what keeps the text around it evenly spaced (2026-09-13).
-      marginVertical: 3,
-      // Android hangs an inline View from the baseline, so a chip taller than
-      // the text's ascent floats above the line (2026-09-12, "peak" sat above
-      // its sentence). Half the extra height brings it level.
+      borderRadius: MARKDOWN_CHIP_RADIUS,
+      paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL,
+      paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL,
+      // Android hangs an inline View's bottom on the baseline, which left the
+      // pill's text riding above the words beside it (2026-09-12, "peak" sat
+      // above its sentence; 2026-09-26, beside the Claude app's). This moves
+      // the pill's text down onto the paragraph's baseline.
       transform: [{ translateY: MARKDOWN_INLINE_CHIP_BASELINE_SHIFT }]
     },
+    // The paragraph's own face, one step smaller, as the Claude app sets it
+    // (2026-09-26); JetBrains Mono read wider and heavier than the words
+    // around it. The line is the glyphs' own height and no more
+    // (mobile-markdown-prose-scale.ts).
     inlineCodeChipText: {
-      fontFamily: fonts.mono,
-      fontSize: MARKDOWN_BASE_SIZE - 2,
-      // +1 (16 at base 15): tall enough for the mono font's descenders, short
-      // enough that the pill's painted footprint clears the prose line height,
-      // so a wrapped pill never overlaps the pill on the line below.
-      lineHeight: MARKDOWN_BASE_SIZE + 1,
+      fontFamily: fonts.regular,
+      fontSize: MARKDOWN_CHIP_FONT_SIZE,
+      lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
       color: colors.codeSpanText
+    },
+    /** A pill in a table cell: the cell's own size, which is smaller type. */
+    inlineCodeChipTextTable: {
+      fontFamily: fonts.regular,
+      fontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE,
+      lineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT
     },
     inlineCodeLink: {
       color: colors.accentText,

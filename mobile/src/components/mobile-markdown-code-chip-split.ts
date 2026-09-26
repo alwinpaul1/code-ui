@@ -1,81 +1,176 @@
-/** A chip is an inline View, which cannot break across lines, so a span
- *  longer than one line is cut into pieces that each get their own pill.
- *  The Claude app shows the same thing: `~/Desktop/code-ui-android-v0.5.17-139.apk`
- *  renders as `~/Desktop/` on one line and the file name on the next
- *  (2026-09-12). Cuts land where a reader would break the token anyway:
- *  after a slash or a space first, then after `-`, `_`, `.`, `=`, `:` when a
- *  piece is still too wide, and only mid-word as a last resort. Pieces are
- *  packed greedily so a span that fits stays a single pill. */
-export const INLINE_CODE_CHIP_MAX_CHARS = 34
+/**
+ * Cutting an inline code span into pills that flow with the prose.
+ *
+ * A pill is an inline View (the only way Android rounds a chip), and a View
+ * cannot break across lines, so a span is cut into one pill per line it
+ * crosses. The Claude app draws the same span as text that starts right after
+ * the word before it and breaks where the line ends:
+ * `/Users/alwinpaul/Desktop/Project/Code` on the "Worktree:" line and
+ * `UI/.claude/worktrees/chat-rows` on the next (2026-09-26). Code UI cut the
+ * span to a whole line's width wherever it started, so the first pill did not
+ * fit beside "Worktree:" and jumped whole to the next line, leaving the line
+ * above mostly empty.
+ *
+ * So the first piece is cut to the room left on the line the span starts on
+ * (measured from the phone's own layout, mobile-markdown-code-pill-fit.ts) and
+ * every later piece to a whole line. Cuts land where a reader would break the
+ * token: after a slash or a space; inside a token only when it is longer than
+ * a whole line, first after `-`, `_`, `.`, `=`, `:`, then anywhere, filling
+ * the line. A token that fits a line but not the room left moves down whole,
+ * like a word.
+ */
 
-export function splitInlineCodeChips(code: string, max = INLINE_CODE_CHIP_MAX_CHARS): string[] {
-  if (code.length <= max) {
-    return code.length > 0 ? [code] : []
-  }
-  return pack(
-    splitAfter(code, /[/\s]/).flatMap((piece) =>
-      piece.length <= max ? [piece] : splitAfter(piece, /[-_.=:]/).flatMap((p) => hardCut(p, max))
-    ),
-    max
+/** Instrument Sans Regular advances for U+0020 to U+007E, per 1000 em (hmtx of
+ *  the bundled TTF, read 2026-09-26). The pill's text is the paragraph's face. */
+const ASCII_ADVANCE = [
+  200, 273, 384, 716, 608, 786, 755, 232, 406, 406, 408, 531, 255, 506, 255, 443,
+  666, 391, 545, 574, 600, 574, 599, 532, 582, 610, 255, 255, 531, 531, 531, 567,
+  853, 728, 636, 741, 752, 638, 602, 765, 736, 254, 455, 692, 588, 906, 736, 786,
+  656, 787, 656, 608, 648, 712, 728, 1089, 688, 676, 623, 406, 443, 406, 531, 426,
+  354, 533, 606, 533, 606, 564, 354, 606, 599, 240, 240, 535, 240, 922, 599, 584,
+  606, 606, 375, 473, 377, 589, 523, 767, 551, 523, 496, 406, 242, 406, 531
+]
+/** The font's Latin-1 and Latin Extended glyphs average 580. */
+const OTHER_ADVANCE = 600
+/** CJK, Hangul, full-width forms and emoji come from a fallback font at
+ *  about a full em. */
+const WIDE_ADVANCE = 1000
+
+function isWide(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x115f) ||
+    (code >= 0x2e80 && code <= 0xa4cf) ||
+    (code >= 0xac00 && code <= 0xd7a3) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xfe30 && code <= 0xfe4f) ||
+    (code >= 0xff00 && code <= 0xff60) ||
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    code >= 0x1f000
   )
 }
 
+/** The painted width of code set in the pill's face, in dp. Kerning is left
+ *  out, which only ever errs a little wide. */
+export function codeTextWidth(text: string, fontSize: number): number {
+  let units = 0
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0
+    units +=
+      code >= 0x20 && code <= 0x7e
+        ? ASCII_ADVANCE[code - 0x20]!
+        : isWide(code)
+          ? WIDE_ADVANCE
+          : OTHER_ADVANCE
+  }
+  return (units * fontSize) / 1000
+}
+
+export type CodePillFont = {
+  fontSize: number
+  /** Border and padding, both sides together. */
+  insets: number
+}
+
+/** What one pill takes on the line: its text, its padding and border. */
+export function codePillWidth(text: string, font: CodePillFont): number {
+  return codeTextWidth(text, font.fontSize) + font.insets
+}
+
+/** A pill must clear the room by this much: Android rounds an inline view up
+ *  to the next pixel, and the measured width is rounded to the dp. */
+const FIT_SLACK = 1
+/** A token cut inside puts at least this many characters at a line's end;
+ *  fewer is a stub, and the token starts on the next line instead. */
+const MIN_CUT_CHARS = 3
+
+export type CodePillCut = {
+  /** One per line the span crosses. A line-ending piece loses its trailing
+   *  space, which the line would hang anyway. */
+  pieces: string[]
+  /** Nothing fit in the first room: the first piece starts a line of its own. */
+  fresh: boolean
+}
+
+export function cutCodePills(
+  code: string,
+  firstRoom: number,
+  lineRoom: number,
+  font: CodePillFont
+): CodePillCut {
+  const pieces: string[] = []
+  let fresh = false
+  let line = ''
+  let room = firstRoom
+  const fits = (text: string, space: number) => codePillWidth(text.trimEnd(), font) <= space - FIT_SLACK
+  const wrap = () => {
+    if (line) {
+      pieces.push(line)
+    } else if (pieces.length === 0) {
+      fresh = true
+    }
+    line = ''
+    room = lineRoom
+  }
+  for (const unit of splitAfter(code, /[/\s]/)) {
+    if (fits(line + unit, room)) {
+      line += unit
+      continue
+    }
+    if (fits(unit, lineRoom)) {
+      wrap()
+      line = unit
+      continue
+    }
+    // Longer than a whole line: break inside it, filling this line first.
+    for (const part of splitAfter(unit, /[-_.=:]/)) {
+      if (fits(line + part, room)) {
+        line += part
+        continue
+      }
+      if (fits(part, lineRoom)) {
+        wrap()
+        line = part
+        continue
+      }
+      const chars = Array.from(part)
+      if (!fits(line + chars.slice(0, MIN_CUT_CHARS).join(''), room)) {
+        wrap()
+      }
+      for (const ch of chars) {
+        // A lone character wider than the line still has to go somewhere.
+        if (!line || fits(line + ch, room)) {
+          line += ch
+          continue
+        }
+        wrap()
+        line = ch
+      }
+    }
+  }
+  if (line) {
+    pieces.push(line)
+  }
+  return {
+    pieces: pieces
+      .map((piece, index) => (index < pieces.length - 1 ? piece.trimEnd() : piece))
+      .filter((piece) => piece.length > 0),
+    fresh
+  }
+}
+
+/** Pieces that end right after a boundary character, keeping it. */
 function splitAfter(text: string, boundary: RegExp): string[] {
   const out: string[] = []
   let start = 0
-  for (let i = 0; i < text.length; i++) {
-    if (boundary.test(text[i] as string) && i + 1 < text.length) {
-      out.push(text.slice(start, i + 1))
-      start = i + 1
+  const chars = Array.from(text)
+  let offset = 0
+  for (let i = 0; i < chars.length; i++) {
+    offset += chars[i]!.length
+    if (boundary.test(chars[i]!) && i + 1 < chars.length) {
+      out.push(text.slice(start, offset))
+      start = offset
     }
   }
   out.push(text.slice(start))
   return out.filter((piece) => piece.length > 0)
-}
-
-function hardCut(piece: string, max: number): string[] {
-  const out: string[] = []
-  for (let i = 0; i < piece.length; i += max) {
-    out.push(piece.slice(i, i + max))
-  }
-  return out
-}
-
-function pack(pieces: string[], max: number): string[] {
-  const out: string[] = []
-  for (const piece of pieces) {
-    const last = out[out.length - 1]
-    if (last !== undefined && last.length + piece.length <= max) {
-      out[out.length - 1] = last + piece
-    } else {
-      out.push(piece)
-    }
-  }
-  return out
-}
-
-/** JetBrains Mono's advance width, 600/1000 em (read from the bundled TTF's
- *  hmtx table, 2026-09-20). Every glyph is this wide, so a span's width in
- *  dp is its length times the font size times this. */
-const MONO_ADVANCE_EM = 0.6
-/** What a pill adds around its text: 5 dp padding, 1 dp border, 3 dp margin,
- *  each side (mobile-markdown-styles.ts `inlineCodeChip`). */
-const CHIP_INSETS = 2 * (5 + 1 + 3)
-
-/**
- * How many characters of a span fit on one line as ONE pill, from the
- * paragraph's measured width and the pill text's size.
- *
- * The fixed cap of 34 cut `.claude/worktrees/agent-a1922af126912f522` (42
- * characters) into two pills that then sat side by side on a single line,
- * with room to spare (device, 2026-09-20): a span that fits the line is one
- * pill, and only the line's width says whether it fits. Unknown width (0,
- * before the first layout) keeps the fixed cap.
- */
-export function inlineCodeChipMaxChars(contentWidth: number, fontSize: number): number {
-  if (!(contentWidth > 0) || !(fontSize > 0)) {
-    return INLINE_CODE_CHIP_MAX_CHARS
-  }
-  const chars = Math.floor((contentWidth - CHIP_INSETS) / (fontSize * MONO_ADVANCE_EM))
-  return Math.max(12, chars)
 }
