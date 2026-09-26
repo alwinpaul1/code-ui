@@ -55,6 +55,35 @@ describe('downloading a previewed PDF', () => {
     expect(d.remove).toHaveBeenCalledWith('content://downloads/42')
   })
 
+  it('says an empty PDF is left behind when the write fails and so does its removal', async () => {
+    const d = deps({
+      writeBase64: vi.fn(async () => {
+        throw new Error('EACCES')
+      }),
+      remove: vi.fn(async () => {
+        throw new Error('Unable to delete: provider refused')
+      })
+    })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe(
+      'failed-left-incomplete'
+    )
+  })
+
+  it('says the same when the cached PDF cannot be read into the document the picker made', async () => {
+    const d = deps({
+      readBase64: vi.fn(async () => {
+        throw new Error('ENOENT: cache file gone')
+      }),
+      remove: vi.fn(async () => {
+        throw new Error('Unable to delete: provider refused')
+      })
+    })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe(
+      'failed-left-incomplete'
+    )
+    expect(d.remove).toHaveBeenCalledWith('content://downloads/42')
+  })
+
   it('removes nothing when the picker itself fails', async () => {
     const d = deps({ createDocument: vi.fn(async () => { throw new Error('No Activity') }) })
     expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe('failed')

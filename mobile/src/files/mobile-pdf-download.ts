@@ -6,11 +6,14 @@ export type MobilePdfDownloadDeps = {
   readBase64: (uri: string) => Promise<string>
   writeBase64: (targetUri: string, base64: string) => Promise<void>
   /** Removes the document the picker made when the write into it failed, so no empty PDF is left
-   *  under the name the user chose. */
+   *  under the name the user chose. When it throws, the outcome says the document is still there. */
   remove: (targetUri: string) => Promise<void>
 }
 
-export type MobilePdfDownloadOutcome = 'saved' | 'cancelled' | 'failed'
+/** `failed-left-incomplete`: the download failed after the picker had made its document, and the
+ *  document could not be removed. It is still where the user chose, empty or cut short, under
+ *  the name they gave it, and would read as the PDF. */
+export type MobilePdfDownloadOutcome = 'saved' | 'cancelled' | 'failed' | 'failed-left-incomplete'
 
 const DATA_URI_PREFIX = /^data:application\/pdf;base64,/i
 
@@ -55,7 +58,11 @@ export async function downloadMobilePdf(
     return 'saved'
   } catch {
     if (target) {
-      await deps.remove(target).catch(() => undefined)
+      try {
+        await deps.remove(target)
+      } catch {
+        return 'failed-left-incomplete'
+      }
     }
     return 'failed'
   }

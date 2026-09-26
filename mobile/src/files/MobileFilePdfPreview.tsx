@@ -5,11 +5,14 @@ import { Check, Download } from 'lucide-react-native'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { filePreviewStyles } from './mobile-file-preview-styles'
 import { savePreviewedPdf } from './mobile-pdf-download-device'
-import type { MobilePdfDownloadOutcome } from './mobile-pdf-download'
+import { suggestedPdfFileName, type MobilePdfDownloadOutcome } from './mobile-pdf-download'
 import { saveReadingPosition } from '../storage/reading-positions'
 import { useRestoredReadingPosition } from './use-reading-position'
 
 const SAVE_FEEDBACK_MS = 2200
+/** Long enough to read the line that says an incomplete PDF is left, as the file save's problem
+ *  toast is (mobile-file-save.ts). */
+const LEFT_BEHIND_FEEDBACK_MS = 4500
 
 /** In-app PDF viewer for the file explorer and session file tabs. `uri` is
  *  normally a file in the app cache written by `resolveMobilePdfUri` (fast to
@@ -69,12 +72,16 @@ export function MobileFilePdfPreview({
     if (feedbackTimer.current) {
       clearTimeout(feedbackTimer.current)
     }
-    feedbackTimer.current = setTimeout(() => setSaveState('idle'), SAVE_FEEDBACK_MS)
+    feedbackTimer.current = setTimeout(
+      () => setSaveState('idle'),
+      outcome === 'failed-left-incomplete' ? LEFT_BEHIND_FEEDBACK_MS : SAVE_FEEDBACK_MS
+    )
   }
+  const saveFailed = saveState === 'failed' || saveState === 'failed-left-incomplete'
   const saveLabel =
     saveState === 'saved'
       ? 'Saved'
-      : saveState === 'failed'
+      : saveFailed
         ? "Couldn't save"
         : saveState === 'saving'
           ? 'Saving…'
@@ -122,7 +129,7 @@ export function MobileFilePdfPreview({
           {saveLabel ? (
             <Text
               style={{
-                color: saveState === 'failed' ? colors.danger : colors.textSecondary,
+                color: saveFailed ? colors.danger : colors.textSecondary,
                 fontSize: 12
               }}
             >
@@ -157,6 +164,23 @@ export function MobileFilePdfPreview({
           </Pressable>
         </View>
       </View>
+      {saveState === 'failed-left-incomplete' ? (
+        // Its own row: the sentence does not fit beside the button, and the empty PDF it names
+        // is the user's to delete.
+        <Text
+          style={{
+            color: colors.danger,
+            fontSize: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.bgPanel
+          }}
+        >
+          {`An incomplete ${suggestedPdfFileName(fileName ?? 'document.pdf')} is left where you chose to save it; delete it there`}
+        </Text>
+      ) : null}
       <Pdf
         key={uri}
         source={{ uri, cache: false }}
