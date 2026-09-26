@@ -112,7 +112,10 @@ Nothing here is built.
   (`mobile-native-chat-created-file-work.ts`, tested on that reader's recorded
   sentences: a user-backgrounded shell from Claude Code 2.1.270, agents from
   2.1.281, a teammate from 2.1.283, and SendMessage answers in the shapes
-  2.1.228 to 2.1.281 wrote), except where that pairing guesses. It hands a
+  2.1.228 to 2.1.281 wrote), except where that pairing guesses. A PowerShell
+  call backgrounds like a Bash one and answers in the same sentences (one
+  function builds both in 2.1.283's source), so the count reads its launch
+  as a shell's; the Tasks row still shows none for it. The pairing hands a
   failure to the first call waiting, an answer shaped like an Agent result to
   the first Agent call, and anything else to the first that is no Agent call,
   so among calls waiting together one can take another's answer: a

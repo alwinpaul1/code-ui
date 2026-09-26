@@ -170,9 +170,22 @@ function openBatch(): Batch {
   return { answers: [], stops: [], unsure: [], failed: false, mayQuote: false }
 }
 
+/** Claude Code's PowerShell tool backgrounds a command as Bash does, and
+ *  answers in Bash's sentences: one function builds both in 2.1.283. The
+ *  background-task reader reads Bash's only, so PowerShell's are read as
+ *  Bash's here. */
+function launchOf(call: Pending, output: string): Launch | null {
+  return readLaunch(call.name === 'PowerShell' ? { ...call, name: 'Bash' } : call, output)
+}
+
 /** Calls whose answer can launch work that keeps running. */
 function mayLaunch(call: Pending): boolean {
-  return toolCallKind(call.name) === 'agent' || call.name === 'Bash' || call.name === 'Monitor'
+  return (
+    toolCallKind(call.name) === 'agent' ||
+    call.name === 'Bash' ||
+    call.name === 'PowerShell' ||
+    call.name === 'Monitor'
+  )
 }
 
 /** The launch a server flag serves in Claude Code 2.1.283, the whole answer
@@ -185,10 +198,10 @@ const JSON_LAUNCH = /^\s*\{\s*"resultType"\s*:\s*"task"/
  *  id, undefined when the answer is no launch of it. */
 function launchIn(call: Pending, answer: string): string | null | undefined {
   if (toolCallKind(call.name) !== 'agent') {
-    return readLaunch(call, answer)?.id
+    return launchOf(call, answer)?.id
   }
   const launches = AGENT_LAUNCH_OPENING.test(answer) || JSON_LAUNCH.test(answer)
-  return launches ? (readLaunch(call, answer)?.id ?? null) : undefined
+  return launches ? (launchOf(call, answer)?.id ?? null) : undefined
 }
 
 /** Closes a batch. Each call that may have lost its launch to another, and
@@ -281,7 +294,7 @@ export function backgroundWorkRunningAt(
         batch.answers.push(block.output)
         const call = takeAnsweredCall(pending, block.output)
         if (call) {
-          const launch = readLaunch(call, block.output)
+          const launch = launchOf(call, block.output)
           const running =
             toolCallKind(call.name) === 'agent'
               ? leftAgentRunning(call, block.output, onlyAgentsWaited)

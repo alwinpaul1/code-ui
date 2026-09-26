@@ -8,7 +8,10 @@
 // fixtures, verbatim from Claude Code's transcripts on this machine (shells
 // 2026-09-09, a user-backgrounded shell 2.1.270, agents 2.1.281, a teammate
 // spawn 2.1.283, a foreground agent 2026-08-11), copied from
-// mobile-background-tasks.test.ts and the tests beside it.
+// mobile-background-tasks.test.ts and the tests beside it. PowerShell's
+// answers reuse the shell ones: Claude Code 2.1.283 builds both tools'
+// background sentences with one function (read from its source in the
+// binary), and no Windows transcript is on this machine.
 
 import { describe, expect, it } from 'vitest'
 import type {
@@ -166,6 +169,18 @@ describe('a create made while earlier work was still running', () => {
       launched('Bash', { command: 'make sweep' }, manuallyBackgroundedOutput(SHELL_ID))
     ],
     [
+      'a background PowerShell command',
+      launched(
+        'PowerShell',
+        { command: 'npm run watch', description: 'Watch the jobs', run_in_background: true },
+        backgroundStartOutput(SHELL_ID)
+      )
+    ],
+    [
+      'a PowerShell command moved to the background at its timeout',
+      launched('PowerShell', { command: 'make sweep' }, movedToBackgroundOutput(SHELL_ID))
+    ],
+    [
       'a monitor',
       launched('Monitor', { command: 'tail -f sweep.log' }, monitorStartOutput(SHELL_ID))
     ],
@@ -245,6 +260,18 @@ describe('a create made while earlier work was still running', () => {
     const history = [
       ...launched(
         'Bash',
+        { command: 'npm run watch', run_in_background: true },
+        backgroundStartOutput(SHELL_ID)
+      ),
+      said(shellNotification(SHELL_ID))
+    ]
+    expect(touched([...history, ...CREATE])).toBe(false)
+  })
+
+  it('still counts a create made after the background PowerShell command reported', () => {
+    const history = [
+      ...launched(
+        'PowerShell',
         { command: 'npm run watch', run_in_background: true },
         backgroundStartOutput(SHELL_ID)
       ),
@@ -502,6 +529,12 @@ describe('a create made while earlier work was still running', () => {
     ['a background agent', 'Agent', BACKGROUND_AGENT, asyncAgentLaunchResult(AGENT_ID)],
     ['a teammate', 'Agent', TEAMMATE, TEAMMATE_SPAWN_OUTPUT],
     ['a monitor', 'Monitor', { command: 'tail -f sweep.log' }, monitorStartOutput(SHELL_ID)],
+    [
+      'a background PowerShell command',
+      'PowerShell',
+      { command: 'npm run watch', run_in_background: true },
+      backgroundStartOutput(SHELL_ID)
+    ],
     [
       'a background agent in the JSON shape a server flag serves',
       'Agent',
