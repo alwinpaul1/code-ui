@@ -6,14 +6,19 @@ import {
   type MobilePdfDownloadDeps,
   type MobilePdfDownloadOutcome
 } from './mobile-pdf-download'
-import { createAndroidDocument } from './android-create-document'
+import {
+  createAndroidDocument,
+  deleteAndroidDocument,
+  writeAndroidDocumentBase64
+} from './android-create-document'
 
 const deviceDeps: MobilePdfDownloadDeps = {
   createDocument: async (suggestedName) =>
     Platform.OS === 'android' ? createAndroidDocument(suggestedName, 'application/pdf') : null,
+  // The cached copy is a file:// URI in the app's own cache, which the legacy module reads.
   readBase64: (uri) => FileSystem.readAsStringAsync(uri, { encoding: 'base64' }),
-  writeBase64: (targetUri, base64) =>
-    FileSystem.writeAsStringAsync(targetUri, base64, { encoding: 'base64' })
+  writeBase64: writeAndroidDocumentBase64,
+  remove: deleteAndroidDocument
 }
 
 /** iOS has no "save as" intent; the share sheet is how a file leaves an app. */

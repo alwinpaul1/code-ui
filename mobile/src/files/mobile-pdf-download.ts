@@ -5,6 +5,9 @@ export type MobilePdfDownloadDeps = {
   createDocument: (suggestedName: string) => Promise<string | null>
   readBase64: (uri: string) => Promise<string>
   writeBase64: (targetUri: string, base64: string) => Promise<void>
+  /** Removes the document the picker made when the write into it failed, so no empty PDF is left
+   *  under the name the user chose. */
+  remove: (targetUri: string) => Promise<void>
 }
 
 export type MobilePdfDownloadOutcome = 'saved' | 'cancelled' | 'failed'
@@ -29,8 +32,9 @@ export function suggestedPdfFileName(fileName: string): string {
  *
  * Why a system file picker and not a fixed Downloads path: Android 10+ gives an
  * app no direct write access to Downloads; ACTION_CREATE_DOCUMENT opens the
- * system picker (defaulting to Downloads) and hands back a content URI the
- * legacy file-system API can write through. The viewer already holds the PDF
+ * system picker (defaulting to Downloads) and hands back a content URI that
+ * expo-file-system's File writes through (android-create-document.ts says why
+ * not the legacy API). The viewer already holds the PDF
  * as a cache file (or, when the cache was unavailable, a data URI), so no
  * second round trip to the desktop is needed.
  */
@@ -38,8 +42,9 @@ export async function downloadMobilePdf(
   input: { uri: string; fileName: string },
   deps: MobilePdfDownloadDeps
 ): Promise<MobilePdfDownloadOutcome> {
+  let target: string | null = null
   try {
-    const target = await deps.createDocument(suggestedPdfFileName(input.fileName))
+    target = await deps.createDocument(suggestedPdfFileName(input.fileName))
     if (!target) {
       return 'cancelled'
     }
@@ -49,6 +54,9 @@ export async function downloadMobilePdf(
     await deps.writeBase64(target, base64)
     return 'saved'
   } catch {
+    if (target) {
+      await deps.remove(target).catch(() => undefined)
+    }
     return 'failed'
   }
 }

@@ -226,7 +226,13 @@ describe('saving a desktop file onto the phone', () => {
 
     const outcome = await saveDesktopFileToPhone(host, { source: worktree('a.txt') }, target)
 
-    expect(outcome).toMatchObject({ status: 'failed' })
+    expect(outcome).toEqual({
+      status: 'failed',
+      fileName: 'a.txt',
+      message:
+        "Couldn't save a.txt: the phone could not write it (EIO). An incomplete a.txt is left " +
+        'where you chose to save it; delete it there'
+    })
   })
 
   it('says so when the picker itself cannot open', async () => {

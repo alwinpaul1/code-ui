@@ -16,7 +16,8 @@ export type MobileFileSaveTarget = {
   /** Opens the picker; resolves the document the user named, or null when they backed out. */
   createDocument: (suggestedName: string, mimeType: string) => Promise<string | null>
   writeBase64: (uri: string, base64: string) => Promise<void>
-  /** Removes a document whose write failed, so no half-written file is left looking whole. */
+  /** Removes a document whose write failed, so no half-written file is left looking whole. When
+   *  it throws, the save's message says the incomplete copy is still there. */
   remove: (uri: string) => Promise<void>
 }
 
@@ -70,12 +71,19 @@ export async function saveDesktopFileToPhone(
   try {
     await target.writeBase64(uri, read.base64)
   } catch (error) {
-    await target.remove(uri).catch(() => undefined)
-    return {
-      status: 'failed',
-      fileName,
-      message: `Couldn't save ${fileName}: the phone could not write it (${errorText(error)})`
+    const failed = `Couldn't save ${fileName}: the phone could not write it (${errorText(error)})`
+    try {
+      await target.remove(uri)
+    } catch {
+      // The picker made the document before the write; one that stays behind is empty or cut
+      // short under the name the user chose, and would read as the file. Say so.
+      return {
+        status: 'failed',
+        fileName,
+        message: `${failed}. An incomplete ${fileName} is left where you chose to save it; delete it there`
+      }
     }
+    return { status: 'failed', fileName, message: failed }
   }
   return { status: 'saved', fileName, byteLength: read.byteLength }
 }

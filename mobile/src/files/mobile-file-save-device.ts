@@ -1,13 +1,16 @@
 import { Platform } from 'react-native'
-import * as FileSystem from 'expo-file-system/legacy'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { createAndroidDocument } from './android-create-document'
+import {
+  createAndroidDocument,
+  deleteAndroidDocument,
+  writeAndroidDocumentBase64
+} from './android-create-document'
 import { createSaveToPhoneRunner, type MobileFileSaveTarget } from './mobile-file-save'
 
 const androidSaveTarget: MobileFileSaveTarget = {
   createDocument: createAndroidDocument,
-  writeBase64: (uri, base64) => FileSystem.writeAsStringAsync(uri, base64, { encoding: 'base64' }),
-  remove: (uri) => FileSystem.deleteAsync(uri, { idempotent: true })
+  writeBase64: writeAndroidDocumentBase64,
+  remove: deleteAndroidDocument
 }
 
 /**

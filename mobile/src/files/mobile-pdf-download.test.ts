@@ -6,6 +6,7 @@ function deps(overrides: Partial<MobilePdfDownloadDeps> = {}): MobilePdfDownload
     createDocument: vi.fn(async () => 'content://downloads/42'),
     readBase64: vi.fn(async () => 'JVBERi0xLjQK'),
     writeBase64: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
     ...overrides
   }
 }
@@ -48,8 +49,15 @@ describe('downloading a previewed PDF', () => {
     expect(d.createDocument).toHaveBeenLastCalledWith('Report.PDF')
   })
 
-  it('reports failed when the write throws', async () => {
+  it('reports failed when the write throws, and removes the empty PDF the picker made', async () => {
     const d = deps({ writeBase64: vi.fn(async () => { throw new Error('EACCES') }) })
     expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe('failed')
+    expect(d.remove).toHaveBeenCalledWith('content://downloads/42')
+  })
+
+  it('removes nothing when the picker itself fails', async () => {
+    const d = deps({ createDocument: vi.fn(async () => { throw new Error('No Activity') }) })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe('failed')
+    expect(d.remove).not.toHaveBeenCalled()
   })
 })
