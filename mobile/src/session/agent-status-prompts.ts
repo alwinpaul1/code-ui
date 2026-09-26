@@ -53,9 +53,6 @@ export type AgentStatusPromptState = {
    *  events keep the field) does not become a second bubble. */
   last: string | null
   prompts: readonly DesktopPrompt[]
-  /** The prompts it held back (whyNotTimedByState). The beacon's copy of one
-   *  is held back with it: its row is not loaded either (desktop-prompt-merge.ts). */
-  heldBack: readonly string[]
   /** The line the chat logs for the last prompt it held back, or null when
    *  none was. */
   withheld: string | null
@@ -66,7 +63,6 @@ export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
   read: false,
   last: null,
   prompts: [],
-  heldBack: [],
   withheld: null
 }
 
@@ -90,7 +86,7 @@ export function observeAgentStatusPrompt(
     // posts as this pane (2026-09-19). On the way back the row carried that
     // session's text with this session's id, and a reset to null took it as a
     // new prompt of this chat.
-    state = { sessionKey, read: false, last: state.last, prompts: [], heldBack: [], withheld: null }
+    state = { sessionKey, read: false, last: state.last, prompts: [], withheld: null }
   }
   if (sessionKey === null) {
     return state
@@ -123,17 +119,27 @@ export function observeAgentStatusPrompt(
   if (isKnownHarnessInjectedUserTurnText(text)) {
     return { ...state, last: text }
   }
-  // A prompt whose time the status does not hold is not drawn: placed by a
-  // time that is not its own, it sits in another turn (session 76ba8f2f,
-  // 2026-09-26: under an answer four turns after it). Its own transcript row
-  // draws it where it belongs, when the page that holds it loads.
-  const heldBack = whyNotTimedByState(status, found)
-  if (heldBack !== null) {
+  // A prompt whose time the status does not hold is never drawn: placed by a
+  // time that is not its own, it sat in another turn (session 76ba8f2f,
+  // 2026-09-26: under an answer four turns after it). A transcript row of it
+  // draws it where it belongs, when the page that holds it loads. The copy is
+  // still kept, untimed, for the pairing: a phone send that is still pending
+  // claims its own copy, and without it claimed the desk's next one instead
+  // (review of 784531ee).
+  const why = whyNotTimedByState(status, found)
+  if (why !== null) {
+    const held: DesktopPrompt = {
+      nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
+      text,
+      ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
+      heldBack: true,
+      seenAt: Date.now()
+    }
     return {
       ...state,
       last: text,
-      heldBack: [...state.heldBack, text].slice(-PROMPT_CAP),
-      withheld: `[desk-prompt] not drawn: "${preview(text)}" was read on a ${status?.state} pane (${heldBack}); the status holds no time for it, so only its own transcript row places it`
+      prompts: [...state.prompts, held].slice(-PROMPT_CAP),
+      withheld: `[desk-prompt] not drawn: "${preview(text)}" was read on a ${status?.state} pane (${why}) and the status holds no time for it; it draws only from a transcript row, which a message sent mid-turn does not have`
     }
   }
   // `updatedAt` is the hook's clock and is the prompt's time only while the
@@ -175,12 +181,13 @@ export function observeAgentStatusPrompt(
  * short enough to reach the phone already `done` began at an idle prompt,
  * which writes the prompt as its own row.
  *
- * Found on the chat's first reading, a working run began with the prompt only
- * if the state before it did not carry it too. After `waiting` or `blocked`
- * the run resumed. After a `done` of the same prompt, something that keeps the
- * cached prompt started it — a teammate's or another session's message
- * (76ba8f2f, 14:27:03) — or the same words were sent again, which the status
- * cannot tell apart.
+ * Found on the chat's first reading, a working run began with the prompt, or
+ * the prompt came during it, unless the state before the run carried the same
+ * prompt. After `waiting` or `blocked` of it the run resumed after the prompt
+ * was taken. After a `done` of it, something that keeps the cached prompt
+ * started the run — a teammate's or another session's message (76ba8f2f,
+ * 14:27:03) — or the same words were sent again, which the status cannot
+ * tell apart.
  */
 function whyNotTimedByState(status: AgentStatusPromptSource | undefined, found: boolean): string | null {
   const state = status?.state
@@ -193,11 +200,18 @@ function whyNotTimedByState(status: AgentStatusPromptSource | undefined, found: 
   if (!found) {
     return null
   }
+  // Orca pushes history only on a state change, so the entry before a run is
+  // the state it followed however long the run has gone on. It names the
+  // prompt the pane carried then: a prompt that changed since came in this
+  // run, and the run's start is at or before it, as for any mid-run prompt.
   const before = status?.stateHistory?.at(-1)
-  if (before?.state === 'waiting' || before?.state === 'blocked') {
+  if (before === undefined || before.prompt !== status?.prompt) {
+    return null
+  }
+  if (before.state === 'waiting' || before.state === 'blocked') {
     return `the run went on after the agent was ${before.state}`
   }
-  if (before?.state === 'done' && before.prompt === status?.prompt) {
+  if (before.state === 'done') {
     return 'the run was started by something that kept the prompt of the turn before'
   }
   return null

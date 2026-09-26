@@ -248,12 +248,18 @@ describe('a prompt the tab status still carries after its turn', () => {
     stateHistory: history,
     providerSession: { id: SESSION }
   }
+  /** Held back: kept for the pairing with no time, never drawn. */
+  const HELD = [[PROMPT, undefined, true]]
+  const timing = (state: { prompts: readonly { text: string; at?: number; heldBack?: true }[] }) =>
+    state.prompts.map((prompt) => [prompt.text, prompt.at, prompt.heldBack ?? false])
 
   it('is not drawn as a message sent when the turn ended, when the chat opens after it', () => {
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, DONE)
-    expect(state.prompts).toEqual([])
+    expect(state.prompts).toEqual([
+      { nonce: `status:${SESSION}:x:0`, text: PROMPT, heldBack: true, seenAt: expect.any(Number) }
+    ])
     // Seen, so the pings that keep carrying it are not new prompts either.
-    expect(observeAgentStatusPrompt(state, SESSION, { ...DONE, updatedAt: T('21:30:00.000') }).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(state, SESSION, { ...DONE, updatedAt: T('21:30:00.000') }))).toEqual(HELD)
   })
 
   it('is not drawn at the start of a turn a teammate’s message started', () => {
@@ -265,21 +271,35 @@ describe('a prompt the tab status still carries after its turn', () => {
       stateStartedAt: T('14:27:03.037'),
       stateHistory: history.slice(0, -1)
     }
-    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, working).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, working))).toEqual(HELD)
   })
 
   it('is not drawn where the agent stopped to ask, nor where it went on after', () => {
     const asking = { ...DONE, state: 'waiting', stateStartedAt: T('13:21:30.000'), stateHistory: history.slice(0, 2) }
-    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, asking).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, asking))).toEqual(HELD)
     const blocked = { ...asking, state: 'blocked' }
-    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, blocked).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, blocked))).toEqual(HELD)
     const resumed = {
       ...DONE,
       state: 'working',
       stateStartedAt: T('13:21:40.000'),
       stateHistory: [...history.slice(0, 2), { state: 'waiting', prompt: PROMPT, startedAt: T('13:21:30.000') }]
     }
-    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed))).toEqual(HELD)
+  })
+
+  // Review of 784531ee: Orca keeps `waiting` as the entry before the run for
+  // as long as the run goes on, and a prompt that changed since came in it.
+  it('is timed by the run’s resume when it was typed after the agent stopped to ask', () => {
+    const typedAfter = {
+      ...DONE,
+      state: 'working',
+      prompt: 'also dump the row counts before and after',
+      stateStartedAt: T('13:21:40.000'),
+      stateHistory: [...history.slice(0, 2), { state: 'waiting', prompt: PROMPT, startedAt: T('13:21:30.000') }]
+    }
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, typedAfter)
+    expect(timing(state)).toEqual([['also dump the row counts before and after', T('13:21:40.000'), false]])
   })
 
   it('is still timed by the run it started when the chat opens while that run works', () => {
@@ -304,12 +324,12 @@ describe('a prompt the tab status still carries after its turn', () => {
       stateStartedAt: T('21:36:49.100'),
       stateHistory: [...history, { state: 'done', prompt: PROMPT, startedAt: T('14:27:47.470') }]
     })
-    expect(state.prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([['[Image #18]', T('21:36:49.100')]])
+    expect(timing(state)).toEqual([...HELD, ['[Image #18]', T('21:36:49.100'), false]])
   })
 
   it('is not taken from a Codex tab whose turn has ended either', () => {
     const codex = { ...DONE, agentType: 'codex', providerSession: null }
-    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, codex).prompts).toEqual([])
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, codex))).toEqual(HELD)
   })
 
   // The chat can mount before the tab's status reaches it. The prompt on the

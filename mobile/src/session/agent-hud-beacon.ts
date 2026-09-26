@@ -51,10 +51,12 @@ export type AgentHudBeaconLimit = {
  *  before it when `anchorId` names a row the phone never holds. */
 /** `atStateStart`: `at` is when the pane's working run began, read at first
  *  sight of the tab status (agent-status-prompts.ts), which can be before the
- *  prompt (one sent mid-run). One found in any other state, or in a run it
- *  did not start, is held back instead.
+ *  prompt (one sent mid-run).
+ *  `heldBack`: a status prompt whose time the status does not hold, found on a
+ *  pane whose state began after it was taken. It has no `at`, pairs like any
+ *  other copy (a phone send still claims its own), and is never drawn.
  *  `seenAt`: when the phone first read a status prompt, by the phone's clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; seenAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; seenAt?: number }
 
 export type AgentHudBeacon = {
   agent: string

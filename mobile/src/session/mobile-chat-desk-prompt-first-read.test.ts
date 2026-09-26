@@ -1,0 +1,140 @@
+// Review of 784531ee (2026-09-27). That commit holds back a desk prompt the
+// chat finds on the tab status when the status says the pane's state began
+// after the prompt. Two cases it held back wrongly, each drawn right on
+// 9f9aa4a0:
+//   - a message typed at the desk after the agent's permission prompt was
+//     granted, found later in that run. Orca keeps `waiting` as the last
+//     history entry for the rest of the run (it pushes history only on a
+//     state change), but the prompt changed after the resume, so the resume
+//     is at or before its time.
+//   - the hook copy of a phone photo Claude took mid-turn, before such a
+//     prompt, found after a relaunch. Dropped outright, it could no longer
+//     pair with the phone's send, which then claimed the desk's next photo
+//     of as many pictures and hid it.
+// The run's shape follows Orca's agent-status store and hook server
+// (stateStartedAt moves only on a state change); no status was captured.
+import { describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { resetPhotoCopyBindingsForTests } from './desktop-prompt-photo-copies'
+import {
+  TEMP,
+  agentRow,
+  userRow,
+  before,
+  hookCopy,
+  claudeScreen,
+  landingHarness,
+  SESSION,
+  at
+} from './mobile-chat-phone-photo-landing.test-support'
+import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
+
+vi.mock('expo-clipboard', () => ({
+  hasImageAsync: vi.fn(async () => false),
+  getImageAsync: vi.fn(async () => null),
+  setStringAsync: vi.fn()
+}))
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => undefined }), currentState: 'active' },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
+  View: 'View'
+}))
+const frames = vi.hoisted(() => [] as Record<string, unknown>[])
+vi.mock('./MobileNativeChatView', async () => {
+  const { createElement: h } = await import('react')
+  return {
+    MobileNativeChatView: (props: Record<string, unknown>) => {
+      frames.push(props)
+      return h('ChatView', props)
+    }
+  }
+})
+
+function rowIds(props: Record<string, unknown>): { id: string; text: string }[] {
+  const { data } = buildMobileNativeChatTransientData({
+    messages: props.messages as NativeChatMessage[],
+    folded: props.folded as NativeChatMessage[],
+    streaming: null,
+    pending: props.pending as never,
+    imagePreviewsByMessageId: props.imagePreviewsByMessageId as Record<string, string[]>
+  })
+  return data.map((message) => ({
+    id: message.id,
+    text: message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+  }))
+}
+
+describe('a message typed at the desk mid-turn after a permission was granted', () => {
+  const { show } = landingHarness(frames)
+  const P1 = 'run the migration on staging'
+  const P2 = 'also dump the row counts before and after'
+  const opening = userRow('u1', [P1], '07:00:00.000')
+  const a1 = agentRow('a1', 'Checking the schema.', '07:00:40.000')
+  const a2 = agentRow('a2', 'Migrated; counting rows.', '07:02:00.000')
+  // 07:01:00 the agent asks for permission; 07:01:30 it is granted; 07:01:45
+  // P2 is typed at the desk and queued. The chat opens at 07:03:10.
+  const status = {
+    state: 'working',
+    prompt: P2,
+    updatedAt: at('07:03:05.000'),
+    stateStartedAt: at('07:01:30.000'),
+    stateHistory: [
+      { state: 'done', prompt: 'earlier', startedAt: at('06:50:00.000') },
+      { state: 'working', prompt: P1, startedAt: at('07:00:00.000') },
+      { state: 'waiting', prompt: P1, startedAt: at('07:01:00.000') }
+    ]
+  }
+
+  it('is drawn in that run, after the rows written before the resume, when the chat opens later in it', async () => {
+    vi.setSystemTime(at('07:03:10.000'))
+    const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
+    const messages = [opening, a1, a2]
+    await show('07:03:10.000', { messages, working: true, prompts })
+    await show('07:03:11.000', { messages, working: true, prompts })
+    const rows = rowIds(frames.at(-1)!)
+    expect(rows.filter((row) => row.text === P2)).toHaveLength(1)
+    const index = rows.findIndex((row) => row.text === P2)
+    expect([rows[index - 1]?.id, rows[index + 1]?.id]).toEqual(['a1', 'a2'])
+  })
+})
+
+describe('a phone photo Claude took before a permission prompt, after a relaunch', () => {
+  const { show, send, lastFrame, unmount } = landingHarness(frames)
+  const A = 'orca-paste-1790406034000-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
+  it('leaves the desk’s next photo of as many pictures drawn as its own bubble', async () => {
+    const working = [...before, agentRow('080e05a3', 'Looking at the fold.', '07:03:19.619')]
+    await show('07:03:20.000', { messages: working, working: true })
+    await send('07:03:54.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
+    const own = hookCopy('07:03:54.573', '[Image #73]')
+    await show('07:03:55.000', { messages: working, working: true, prompts: own, queued: queuedMessagesFromScreen(claudeScreen(['[Image #73]'])) })
+    const tookIt = [...working, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916')]
+    await show('07:04:36.000', { messages: tookIt, working: true, prompts: own, queued: [] })
+    // The agent asks for permission at 07:05:00; it is granted at 07:05:20.
+    // The app is relaunched.
+    unmount()
+    resetPhotoCopyBindingsForTests()
+    const resumed = {
+      state: 'working',
+      prompt: '[Image #73]',
+      updatedAt: at('07:06:00.000'),
+      stateStartedAt: at('07:05:20.000'),
+      stateHistory: [
+        { state: 'working', prompt: 'earlier', startedAt: at('07:02:10.000') },
+        { state: 'waiting', prompt: '[Image #73]', startedAt: at('07:05:00.000') }
+      ]
+    }
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed)
+    const later = [...tookIt, agentRow('44906d18', 'Still fixing.', '07:09:00.000')]
+    await show('07:10:00.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    // A screenshot is pasted at the desk with no words while the run goes on.
+    state = observeAgentStatusPrompt(state, SESSION, { ...resumed, prompt: '[Image #74]', updatedAt: at('07:10:40.000') })
+    await show('07:11:00.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    await show('07:11:01.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    const frame = lastFrame()
+    expect(frame.filter((bubble) => bubble.images === 'P')).toHaveLength(1)
+    expect(frame.filter((bubble) => bubble.images.includes('D'))).toHaveLength(1)
+  })
+})

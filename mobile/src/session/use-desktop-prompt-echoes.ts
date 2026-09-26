@@ -135,6 +135,11 @@ export function useDesktopPromptEchoes(
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   for (const prompt of prompts) {
+    // A status copy held back for want of a time pairs with the phone's sends
+    // and is never drawn (agent-status-prompts.ts, 2026-09-26).
+    if (prompt.heldBack === true) {
+      continue
+    }
     if (
       hasEarlier &&
       rememberedAnchor(prompt.nonce) === undefined &&

@@ -60,14 +60,15 @@ describe('a desk prompt the chat holds back, that the beacon also carried', () =
   it('is not drawn from the beacon’s copy either', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const beacon = [{ nonce: '48213', text: DONE.prompt, anchorId: '8a3424c5-6eaa-4ca5-aad4-db36d49683fb' }]
-    let drawn: readonly { text: string }[] = []
+    let listed: readonly { nonce: string; at?: number; heldBack?: true }[] = []
     function Merged() {
-      drawn = useAgentStatusPrompts(SESSION, DONE, beacon)
+      listed = useAgentStatusPrompts(SESSION, DONE, beacon)
       return null
     }
     act(() => {
       renderer = create(createElement(Merged))
     })
-    expect(drawn).toEqual([])
+    // Only the status's own copy, held back: untimed, and never drawn.
+    expect(listed.map((prompt) => [prompt.nonce, prompt.at, prompt.heldBack])).toEqual([[`status:${SESSION}:x:0`, undefined, true]])
   })
 })

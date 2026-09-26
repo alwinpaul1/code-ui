@@ -23,7 +23,7 @@ export function useAgentStatusPrompts(
   // reducer is pure and idempotent for the same input, so a re-render with
   // the same status changes nothing.
   stateRef.current = observeAgentStatusPrompt(stateRef.current, sessionKey, status)
-  const { prompts, heldBack } = stateRef.current
+  const prompts = stateRef.current.prompts
   // A prompt held back leaves one line saying why; a bubble that never
   // appears is otherwise the same as one lost (2026-09-26).
   const withheld = stateRef.current.withheld
@@ -32,5 +32,5 @@ export function useAgentStatusPrompts(
       console.warn(withheld)
     }
   }, [withheld])
-  return useMemo(() => mergeDesktopPrompts(prompts, beacon ?? NO_PROMPTS, heldBack), [prompts, beacon, heldBack])
+  return useMemo(() => mergeDesktopPrompts(prompts, beacon ?? NO_PROMPTS), [prompts, beacon])
 }
