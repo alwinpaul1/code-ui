@@ -191,8 +191,18 @@ Nothing here is built.
   (`mobile-native-chat-created-file-count.ts`). A finished run on screen
   that draws a count asks for it; a run still going, or one folded away in
   focus view, reads nothing. Two reads go out at a time, and only from the
-  chat's own settled transcript, never one held over from before it loaded:
-  after a reconnect or a move to another worktree the read waits for the
+  chat's own settled read of the whole session, from its first row: never
+  one held over from before it loaded, never a tail kept over a re-subscribe
+  that came back empty (`baseRetained`), and never a window that starts
+  later. The chat opens on the last 40 rows and live appends trim it at 150,
+  so a background agent launched before the window is not in it, and the
+  review of 8b2ef369 drew +125 on the 93-line create that way; the phone
+  cannot ask the desktop when the file last changed instead, since
+  `files.stat` is not on Orca's mobile allowlist. So in a long session the
+  count shows once older messages are loaded back to the start, and not
+  before. Inside the window, a finish, a stop or a launch answer naming work
+  launched before it, and a teammate's message, still hold the count off.
+  After a reconnect or a move to another worktree the read waits for the
   transcript that connection brings, since the one in hand may lack calls
   made while the phone was away. Each file is read once for the host and
   worktree the chat shows (`files.resolveTerminalPath`, then `files.read`,

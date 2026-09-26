@@ -41,8 +41,11 @@ export type CreatedFileCountScope = {
 
 export type CreatedFileCountStore = {
   configure(scope: CreatedFileCountScope): void
-  /** The chat's loaded transcript. `live` is false while the chat still holds
-   *  one over from before its own read settled. */
+  /** The chat's loaded transcript. `live` is true only for the chat's own
+   *  settled read of the whole session, from its first row: not one held
+   *  over from before that read settled, not a tail kept over a re-subscribe
+   *  that came back empty, and not a window that starts later (the overlay
+   *  decides, MobileNativeChatOverlay.tsx). */
   setTranscript(messages: readonly NativeChatMessage[], live: boolean): void
   /** A mounted row shows this create. Returns its release. */
   want(create: CutCreate): () => void

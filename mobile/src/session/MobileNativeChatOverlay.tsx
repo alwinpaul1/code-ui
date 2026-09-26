@@ -445,12 +445,16 @@ export function MobileNativeChatOverlay({
       />
     </View>
   )
-  // The loaded transcript says whether a later call touched a created file.
+  // The loaded transcript says whether a later call touched a created file,
+  // but only a settled read of the whole session can: a kept tail lacks what
+  // was written while the chat was away, and a window that starts after the
+  // first row can hide a background agent launched before it that is still
+  // writing the file (review of 8b2ef369: +125 on a 93-line create).
   const drawn = (
     <CreatedFileCountProvider
       store={createdFileCounts}
       messages={session.messages}
-      live={session.status === 'ready'}
+      live={session.status === 'ready' && !session.baseRetained && session.hasMore === false}
     >
       {chat}
     </CreatedFileCountProvider>

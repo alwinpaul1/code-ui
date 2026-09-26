@@ -159,9 +159,11 @@ export function applyMobileNativeChatStreamFrame(args: {
     // Why: once the bounded live window drops its oldest row, the snapshot's
     // byte cursor no longer describes the oldest retained message.
     ...(cursorInvalidated ? { cursorInvalidated: true } : {}),
-    // A trimmed replay creates page-able history even if the prior window had
-    // none; otherwise only a replay sharing our oldest row owns its metadata.
-    ...(frame.type === 'snapshot' && cursorInvalidated
+    // A trim creates page-able history even if the prior window had none, a
+    // live append's as much as a replay's: the rows it dropped are still in
+    // the transcript. Otherwise only a replay sharing our oldest row owns its
+    // metadata.
+    ...(cursorInvalidated
       ? { hasMore: true }
       : replayStillStartsAtOldest
         ? {
