@@ -84,6 +84,16 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
     expect(height).toBeLessThanOrEqual(1.35 * styles.paragraph.fontSize)
   })
 
+  it("holds the font's descenders inside the pill's own line", () => {
+    // The lowest ink in the font's ASCII is g and j, 215 below the baseline
+    // per 1000 em (glyf of the bundled TTF). The pill's line gives
+    // DESCENT plus half its leading; a twentieth of a dp short is a sub-pixel.
+    for (const text of [label, styles.inlineCodeChipTextTable]) {
+      const below = DESCENT * text.fontSize + (text.lineHeight - (ASCENT + DESCENT) * text.fontSize) / 2
+      expect(below).toBeGreaterThanOrEqual(0.215 * text.fontSize - 0.1)
+    }
+  })
+
   it("sits the code on the paragraph's baseline, not above it", () => {
     // Android hangs an inline view's bottom on the line's baseline, so the
     // pill's own text sits above it by the pill's border, padding, and the

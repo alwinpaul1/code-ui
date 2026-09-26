@@ -11,6 +11,9 @@ import {
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
   MARKDOWN_CHIP_RADIUS,
+  MARKDOWN_TABLE_CELL_FONT_SIZE,
+  MARKDOWN_TABLE_CELL_LINE_HEIGHT,
+  MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
   markdownChipBaselineShift
@@ -217,19 +220,20 @@ export function makeMarkdownStyles(theme: Theme) {
       borderColor: colors.border,
       paddingHorizontal: space.sm,
       paddingTop: space.xs,
-      // The extra room below is for an inline code chip: it is painted
-      // MARKDOWN_INLINE_CHIP_BASELINE_SHIFT px lower than it is laid out, and
-      // the table clips, so without this the chip loses its bottom.
-      paddingBottom: space.xs + MARKDOWN_INLINE_CHIP_BASELINE_SHIFT,
+      // 2 dp more below than above, as since 2026-09-14, when it was room for
+      // the chip's shift under the table's clip. A pill now hangs inside its
+      // line at the reader's size; at a zoom a cell holding one takes what
+      // it hangs out (markdownTableCellPillPadding), and no other cell does.
+      paddingBottom: MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_BASE_SIZE - 2,
+      fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,
       // +10, the same headroom the paragraph carries, and for the same reason:
       // a cell is a block an inline code pill can wrap inside, and Android
       // ignores an inline View's vertical margins, so this line height is the
       // only separation there is. At +4 a Branch column that stacked two pills
       // of one split path collided and clipped them (device screenshot,
       // 2026-09-15). Pinned in mobile-markdown-chip-clipping.test.ts.
-      lineHeight: MARKDOWN_BASE_SIZE + 10,
+      lineHeight: MARKDOWN_TABLE_CELL_LINE_HEIGHT,
       color: colors.text
     },
     tableHeader: {

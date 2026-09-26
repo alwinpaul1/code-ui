@@ -30,7 +30,7 @@ import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-s
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { markdownProseScale } from './mobile-markdown-prose-scale'
+import { markdownProseScale, markdownTableCellPillPadding } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 import {
   markdownDocumentKey,
@@ -455,7 +455,12 @@ function MobileMarkdownInner({
               <Text
                 key={cellIndex}
                 selectable={selectable}
-                style={[styles.tableCell, header ? styles.tableHeader : null, { width }]}
+                style={[
+                  styles.tableCell,
+                  header ? styles.tableHeader : null,
+                  // A pill grows with the zoom and the cell's type does not.
+                  pills.holdsPills() ? { width, paddingBottom: markdownTableCellPillPadding(textScale) } : { width }
+                ]}
                 textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}
               >

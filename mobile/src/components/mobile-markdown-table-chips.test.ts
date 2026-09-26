@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 import { codePillWidth, cutCodePills } from './mobile-markdown-code-chip-split'
 import { computeTableColumnWidths } from './mobile-markdown-table-layout'
+import { markdownTableCellPillPadding } from './mobile-markdown-prose-scale'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -85,4 +86,33 @@ describe('code spans inside a table cell', () => {
       'git.generateCommitMessage'
     ])
   })
+
+  // 2026-09-27 review: at a zoom a cell's text keeps its size and its pills
+  // grow, so a pill hangs out of its line; the room for that goes to the
+  // cells that hold one, not to every cell.
+  it('gives a cell holding a pill room below it at the largest zoom, and no other cell', () => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: TABLE, textScale: 1.8 }))
+    })
+    const cells = renderer!.root.findAll(
+      (node: ReactTestInstance) =>
+        String(node.type) === 'Text' &&
+        Array.isArray(node.props.style) &&
+        node.props.style.some((s: unknown) => typeof s === 'object' && s !== null && 'width' in s)
+    )
+    const bottom = (cell: ReactTestInstance) =>
+      Object.assign({}, ...(cell.props.style as object[]).filter(Boolean)).paddingBottom as number
+    const holding = cells.filter((cell) => cell.findAll((node: ReactTestInstance) => String(node.type) === 'View').length > 0)
+    const plain = cells.filter((cell) => !holding.includes(cell))
+    expect(holding.length).toBeGreaterThan(0)
+    expect(plain.length).toBeGreaterThan(0)
+    for (const cell of holding) {
+      expect(bottom(cell)).toBe(markdownTableCellPillPadding(1.8))
+    }
+    for (const cell of plain) {
+      expect(bottom(cell)).toBe(markdownTableCellPillPadding(1))
+    }
+    expect(markdownTableCellPillPadding(1.8)).toBeGreaterThan(markdownTableCellPillPadding(1))
+  })
 })
+
