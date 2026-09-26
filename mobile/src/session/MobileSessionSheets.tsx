@@ -11,6 +11,7 @@ import { CustomKeyModal } from '../components/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
+import { saveToPhoneSheetActions } from './mobile-session-save-to-phone-action'
 import {
   getRepoIdFromMobileWorktreeId,
   isTerminalPhoneDisplayMode
@@ -254,6 +255,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               }
             }
           },
+          ...saveToPhoneSheetActions(controller, markdownActionTarget, () =>
+            setMarkdownActionTarget(null)
+          ),
           ...closeWithBulkActions(markdownActionTarget, () => setMarkdownActionTarget(null))
         ]}
         onClose={() => setMarkdownActionTarget(null)}
@@ -273,6 +277,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               }
             }
           },
+          ...saveToPhoneSheetActions(controller, fileActionTarget, () => setFileActionTarget(null)),
           ...closeWithBulkActions(fileActionTarget, () => setFileActionTarget(null))
         ]}
         onClose={() => setFileActionTarget(null)}

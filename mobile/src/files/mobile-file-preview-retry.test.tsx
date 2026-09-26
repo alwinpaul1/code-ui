@@ -26,7 +26,7 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 390, height: 844 })
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Save: 'Icon' }))
+vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Download: 'Icon', Save: 'Icon' }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
 }))
@@ -37,6 +37,12 @@ vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: (
 // expo-file-system, which do not load here.
 vi.mock('./MobileFilePdfPreview', () => ({ MobileFilePdfPreview: () => null }))
 vi.mock('./mobile-pdf-cache', () => ({ resolveMobilePdfUri: vi.fn() }))
+// Fork-only: the header's Save to phone reaches Android's picker through expo-intent-launcher and
+// expo-file-system, which do not load here either.
+vi.mock('./mobile-file-save-device', () => ({
+  isSaveToPhoneSupported: false,
+  saveDesktopFileToPhoneOnDevice: vi.fn()
+}))
 // Fork-only: the screen also refetches on a new connection (stale-after-reconnect.ts). No connection
 // has been recorded, so only the client change below can trigger the reload this suite pins.
 vi.mock('../transport/client-context-connection-metrics', () => ({

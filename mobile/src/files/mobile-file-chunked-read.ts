@@ -36,6 +36,8 @@ export async function readMobileFileBase64Chunked(
     chunkBytes?: number
     parallelism?: number
     onProgress?: (bytesSoFar: number) => void
+    /** A zero-byte file is a real file to a save; to a viewer it is nothing to show. */
+    allowEmpty?: boolean
   } = {}
 ): Promise<{ base64: string; byteLength: number }> {
   const maxBytes = options.maxBytes ?? MOBILE_CHUNKED_READ_MAX_BYTES
@@ -87,7 +89,7 @@ export async function readMobileFileBase64Chunked(
       }
     }
   }
-  if (total === 0) {
+  if (total === 0 && !options.allowEmpty) {
     throw new Error('binary_file')
   }
   return { base64: parts.join(''), byteLength: total }

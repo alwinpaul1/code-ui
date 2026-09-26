@@ -433,7 +433,13 @@ const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b20
 // 2026-09-26: the chat overlay is handed `createdFileCounts` beside
 // `onRevertHunk`, the store that reads back a created file the wire cut for its
 // line count. Same record count; only the overlay's record moved.
-const HEAD_LEAF_JSX_SHA256 = '40b98c88a46e21c1a2799febb3f8a19db97772c77783b27e8f14e79f3f3b8d64'
+// 2026-09-26 (later): MobileSessionSheets' Markdown and file tab
+// <ActionSheetModal actions={[…]} /> each gained a
+// `...saveToPhoneSheetActions(controller, target, dismiss)` spread, "Save to
+// Phone" for the tab's file. Its label, hint and toasts live in
+// mobile-session-save-to-phone-action.ts, outside this family, so the string
+// pin did not move. Same record count; only those two records moved.
+const HEAD_LEAF_JSX_SHA256 = 'fc2adec6e241a8f02263a8ee90c62177d68c334719b00200272074d79ddb0578'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`

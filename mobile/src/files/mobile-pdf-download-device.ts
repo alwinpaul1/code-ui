@@ -1,32 +1,16 @@
 import { Platform, Share } from 'react-native'
 import * as FileSystem from 'expo-file-system/legacy'
-import * as IntentLauncher from 'expo-intent-launcher'
 import {
   downloadMobilePdf,
   suggestedPdfFileName,
   type MobilePdfDownloadDeps,
   type MobilePdfDownloadOutcome
 } from './mobile-pdf-download'
-
-const ANDROID_CREATE_DOCUMENT = 'android.intent.action.CREATE_DOCUMENT'
-const ANDROID_CATEGORY_OPENABLE = 'android.intent.category.OPENABLE'
-const ANDROID_EXTRA_TITLE = 'android.intent.extra.TITLE'
+import { createAndroidDocument } from './android-create-document'
 
 const deviceDeps: MobilePdfDownloadDeps = {
-
-  createDocument: async (suggestedName) => {
-    if (Platform.OS === 'android') {
-      const result = await IntentLauncher.startActivityAsync(ANDROID_CREATE_DOCUMENT, {
-        type: 'application/pdf',
-        category: ANDROID_CATEGORY_OPENABLE,
-        extra: { [ANDROID_EXTRA_TITLE]: suggestedName }
-      })
-      return result.resultCode === IntentLauncher.ResultCode.Success && result.data
-        ? result.data
-        : null
-    }
-    return null
-  },
+  createDocument: async (suggestedName) =>
+    Platform.OS === 'android' ? createAndroidDocument(suggestedName, 'application/pdf') : null,
   readBase64: (uri) => FileSystem.readAsStringAsync(uri, { encoding: 'base64' }),
   writeBase64: (targetUri, base64) =>
     FileSystem.writeAsStringAsync(targetUri, base64, { encoding: 'base64' })

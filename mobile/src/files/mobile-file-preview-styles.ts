@@ -6,42 +6,9 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
-  header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
+  // The header (bar, Back, title, meta and its action buttons) moved to the
+  // themed mobile-file-preview-header-styles.ts on 2026-09-26, when it gained
+  // Save to phone.
   state: {
     flex: 1,
     alignItems: 'center',
@@ -72,17 +39,6 @@ export const filePreviewStyles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '600'
-  },
-  saveButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonDisabled: {
-    opacity: 0.42
   },
   scroll: {
     flex: 1,
