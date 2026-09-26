@@ -16,7 +16,7 @@ import {
   takeMobileNativeChatPending,
   type MobileNativeChatPendingMessage
 } from './mobile-native-chat-pending-echo'
-import { rememberWaitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
+import { rememberWaitingPhotoSends, withThisRunsPhotos } from './mobile-native-chat-waiting-photo-sends'
 
 const PENDING_WRITE_DEBOUNCE_MS = 250
 
@@ -107,7 +107,9 @@ export function useMobileNativeChatPendingPersistence(
       return
     }
     let cancelled = false
-    void readNativeChatPendingEchoes(sessionKey).then((stored) => {
+    void readNativeChatPendingEchoes(sessionKey).then((read) => {
+      // Storage leaves `data:` photos out; this run still has them.
+      const stored = read && withThisRunsPhotos(sessionKey, read)
       const held = [...(handedOn.get(sessionKey) ?? []), ...(heldRef.current.get(sessionKey) ?? [])]
       handedOn.delete(sessionKey)
       heldRef.current.delete(sessionKey)

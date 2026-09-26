@@ -10,6 +10,7 @@ import {
   resetNativeChatImagePreviewCacheForTests
 } from './mobile-native-chat-image-preview-cache'
 import { hydrateWaitingPhotoSends, resetWaitingPhotoSendsForTests } from './mobile-native-chat-waiting-photo-sends'
+import { MIDTURN_HANDBACK_ROW, MIDTURN_PHOTO_SEND_TEXT } from './fixtures/claude-midturn-queued-commands-2.1.283'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -492,6 +493,73 @@ describe('a message the phone sent with photos, as its row lands', () => {
         'phone',
         '2af316a2'
       ])
+    })
+
+    // Session 790eafa8, Claude Code 2.1.283, 2026-09-26 21:44:55Z
+    // (fixtures/claude-midturn-queued-commands-2.1.283.ts): a phone send taken
+    // mid-turn, written only as a queued_command whose prompt is the words
+    // with the paste's marker glued on after them, "We miss this[Image #102]",
+    // and the image as base64 Orca's reader drops. A subagent's hand-back was
+    // queued ahead of it, and the agent's queue box painted it as the TUI's
+    // own row. The phone's copy is the only picture the chat can draw, and a
+    // marked-up photo or a clipboard paste holds it as a `data:` preview,
+    // which storage leaves out. The phone drew "We miss this" with no photo.
+    describe('a photo Claude took mid-turn, when the chat comes back in the same run', () => {
+      const HOOK = MIDTURN_PHOTO_SEND_TEXT
+      const PEER_ROW = MIDTURN_HANDBACK_ROW
+      /** Claude Code 2.1.281's queue block (claudeScreen), holding these rows as painted. */
+      const queueBox = (rows: readonly string[]) =>
+        queuedMessagesFromScreen([
+          '● Running 1 shell command · 14s…',
+          '',
+          ...rows,
+          '  ctrl+x ctrl+s to send now',
+          '',
+          '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+          '',
+          '────────────────────────────────────────────────────────────────────────────────',
+          '❯ Press up to edit queued messages',
+          '────────────────────────────────────────────────────────────────────────────────'
+        ])
+      const PASTE = `${TEMP}/orca-paste-1790459095000-11111111-2222-4333-8444-555555555555.png`
+
+      it.each([
+        ['a marked-up photo (a data: preview)', 'data:image/png;base64,iVBORw0KGgo='],
+        ['a photo from the gallery (a file preview)', 'file:///phone/we-miss-this.jpg']
+      ])('keeps %s on its bubble', async (_label, photo) => {
+        vi.setSystemTime(at('07:03:20.000'))
+        await show('07:03:20.000', { messages: working, working: true, queued: queueBox([PEER_ROW]) })
+        await send('07:03:54.000', 'We miss this', [photo], [PASTE])
+        const prompts = hookCopy('07:03:54.573', HOOK)
+        await show('07:03:55.000', { messages: working, working: true, prompts, queued: queueBox([PEER_ROW, `❯ ${HOOK}`]) })
+        await show('07:04:36.000', { messages: tookIt, working: true, prompts, queued: [] })
+        expect(drawing(lastFrame(), 'We miss this')).toEqual([expect.objectContaining({ images: 'P' })])
+        // Another project, and back.
+        unmount()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        await show('07:05:13.000', { messages: ended, prompts, queued: [] })
+        expect(drawing(lastFrame(), 'We miss this')).toEqual([expect.objectContaining({ images: 'P' })])
+      })
+
+      it('keeps both photos of a send that holds a data: preview and a file one', async () => {
+        vi.setSystemTime(at('07:03:20.000'))
+        await show('07:03:20.000', { messages: working, working: true })
+        await send('07:03:54.000', 'We miss this', ['data:image/png;base64,iVBORw0KGgo=', 'file:///phone/second.jpg'], [
+          PASTE,
+          `${TEMP}/orca-paste-1790459095001-11111111-2222-4333-8444-555555555556.png`
+        ])
+        const prompts = hookCopy('07:03:54.573', 'We miss this[Image #102][Image #103]')
+        await show('07:03:55.000', { messages: working, working: true, prompts, queued: queueBox(['❯ We miss this[Image #102][Image #103]']) })
+        await show('07:04:36.000', { messages: tookIt, working: true, prompts, queued: [] })
+        unmount()
+        await act(async () => {
+          await Promise.resolve()
+        })
+        await show('07:05:13.000', { messages: ended, prompts, queued: [] })
+        expect(drawing(lastFrame(), 'We miss this')).toEqual([expect.objectContaining({ images: 'PP' })])
+      })
     })
 
     // 967668df lines 22342 to 22347: enqueued at 00:22:26.117, still queued
