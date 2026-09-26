@@ -138,3 +138,86 @@ describe('a phone photo Claude took before a permission prompt, after a relaunch
     expect(frame.filter((bubble) => bubble.images.includes('D'))).toHaveLength(1)
   })
 })
+
+// Re-review of 0d5853d3: the held copy's text stood in the list of messages
+// the queue box's own witness leaves to the hook, so a desk message Claude
+// took from the box mid-turn, whose status copy was held back, drew nowhere.
+describe('a desk message still in the queue box when the chat first reads the status', () => {
+  const { show } = landingHarness(frames)
+  const P1 = 'run the migration on staging'
+  const P2 = 'also dump the row counts before and after'
+  const opening = userRow('u1', [P1], '07:00:00.000')
+  const a1 = agentRow('a1', 'Checking the schema.', '07:00:40.000')
+  const a2 = agentRow('a2', 'Migrated; counting rows.', '07:02:00.000')
+  // 07:00:50 P2 is typed at the desk and queued; the hook takes it then.
+  // 07:01:00 the agent asks for permission; 07:01:30 it is granted.
+  const status = {
+    state: 'working',
+    prompt: P2,
+    updatedAt: at('07:01:40.000'),
+    stateStartedAt: at('07:01:30.000'),
+    stateHistory: [
+      { state: 'working', prompt: P2, startedAt: at('07:00:00.000') },
+      { state: 'waiting', prompt: P2, startedAt: at('07:01:00.000') }
+    ]
+  }
+
+  it('is drawn once after Claude takes it out of the box', async () => {
+    vi.setSystemTime(at('07:01:45.000'))
+    const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
+    const box = queuedMessagesFromScreen(claudeScreen([P2]))
+    await show('07:01:45.000', { messages: [opening, a1], working: true, prompts, queued: box })
+    await show('07:01:46.000', { messages: [opening, a1], working: true, prompts, queued: box })
+    // Claude takes it after the granted tool: the box empties, no row lands.
+    await show('07:02:05.000', { messages: [opening, a1, a2], working: true, prompts, queued: [] })
+    await show('07:02:06.000', { messages: [opening, a1, a2], working: true, prompts, queued: [] })
+    expect(rowIds(frames.at(-1)!).filter((row) => row.text === P2)).toHaveLength(1)
+  })
+})
+
+// Re-review of 0d5853d3: a phone text send Claude took mid-turn pairs by its
+// words. After a remount its own copy is held back (untimed), and a copy of
+// the same words typed at the desk later, timed, was nearer by time: the send
+// claimed the desk's and hid it.
+describe('a phone send Claude took mid-turn, when the desk later sends the same words', () => {
+  const { show, send, lastFrame, unmount } = landingHarness(frames)
+  const YES = 'yes do it'
+  const OTHER = 'and keep the old index until the counts match'
+
+  it('leaves the desk’s copy drawn beside the phone’s', async () => {
+    const working = [...before, agentRow('080e05a3', 'Looking at the fold.', '07:03:19.619')]
+    await show('07:03:20.000', { messages: working, working: true })
+    await send('07:03:54.000', YES, [])
+    const own = hookCopy('07:03:54.573', YES)
+    await show('07:03:55.000', { messages: working, working: true, prompts: own, queued: queuedMessagesFromScreen(claudeScreen([YES])) })
+    const tookIt = [...working, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916')]
+    await show('07:04:36.000', { messages: tookIt, working: true, prompts: own, queued: [] })
+    // The agent asks for permission at 07:05:00; it is granted at 07:05:20.
+    // The chat is left and opened again.
+    unmount()
+    const resumed = {
+      state: 'working',
+      prompt: YES,
+      updatedAt: at('07:06:00.000'),
+      stateStartedAt: at('07:05:20.000'),
+      stateHistory: [
+        { state: 'working', prompt: 'earlier', startedAt: at('07:02:10.000') },
+        { state: 'waiting', prompt: YES, startedAt: at('07:05:00.000') }
+      ]
+    }
+    vi.setSystemTime(at('07:06:30.000'))
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed)
+    const later = [...tookIt, agentRow('44906d18', 'Still fixing.', '07:06:10.000')]
+    await show('07:06:30.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    // At the desk, mid-turn: another message, then the same words again.
+    vi.setSystemTime(at('07:07:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { ...resumed, prompt: OTHER, updatedAt: at('07:07:00.000') })
+    await show('07:07:01.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    vi.setSystemTime(at('07:08:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { ...resumed, prompt: YES, updatedAt: at('07:08:00.000') })
+    await show('07:08:01.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    await show('07:08:02.000', { messages: later, working: true, prompts: [...state.prompts], queued: [] })
+    expect(lastFrame().filter((bubble) => bubble.text === YES)).toHaveLength(2)
+  })
+})
+

@@ -238,11 +238,13 @@ export function MobileNativeChatOverlay({
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
   // The phone's own sends waiting in the queue box before the agent's box has
   // listed them are drawn too: a box row that left may be one of them.
+  // Not a status copy held back: it is never drawn, so a message the box
+  // lets go of would then show nowhere (agent-status-prompts.ts, 2026-09-27).
   const ownPrompts = useMemo(
     () => [
       ...projectedQueue.pending.map((p) => p.text),
       ...projectedQueue.unlisted.map((p) => p.text),
-      ...desktopPrompts.map((p) => p.text)
+      ...desktopPrompts.flatMap((p) => (p.heldBack === true ? [] : [p.text]))
     ],
     [desktopPrompts, projectedQueue.pending, projectedQueue.unlisted]
   )
