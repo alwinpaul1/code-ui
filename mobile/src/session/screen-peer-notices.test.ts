@@ -57,6 +57,15 @@ describe('peer message rows read off the screen, placed into the chat', () => {
     expect(out.map((message) => message.id)).toEqual(['n', 'u1', 'a1', 'a2'])
   })
 
+  it('goes after the drawn row it was seen under only while that row sits after its anchor', () => {
+    const notice = { id: 'n', sender: 'code-ui-6f', body: 'status?', anchorId: 'a1', afterId: 'm', sightedAt: 5 }
+    const drawn = row('m', 'system', 'Message from probe')
+    const ids = (rows: NativeChatMessage[]) => withScreenPeerNotices(rows, [notice]).map((message) => message.id)
+    expect(ids([folded[0]!, folded[1]!, drawn, folded[2]!])).toEqual(['u1', 'a1', 'm', 'n', 'a2'])
+    expect(ids([folded[0]!, drawn, folded[1]!, folded[2]!])).toEqual(['u1', 'm', 'a1', 'n', 'a2'])
+    expect(ids(folded)).toEqual(['u1', 'a1', 'n', 'a2'])
+  })
+
   it('draws a notice sighted on an empty chat at the end', () => {
     const out = withScreenPeerNotices(folded, [{ id: 'n', sender: 'probe', body: 'status?', anchorId: null, sightedAt: 5 }])
     expect(out.map((message) => message.id)).toEqual(['u1', 'a1', 'a2', 'n'])

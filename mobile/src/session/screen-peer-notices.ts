@@ -30,20 +30,26 @@ export type ScreenPeerNotice = {
   sender: string
   /** The message as the screen painted it, when the row carried one. */
   body?: string
-  /** The last folded row when first seen; null on an empty chat. */
+  /** The last folded transcript row when first seen; null on an empty chat.
+   *  Never a row the phone drew itself: those come and go. */
   anchorId: string | null
+  /** A "Message from" row the phone drew after that one, when it was the
+   *  chat's last: the notice goes after it while it is still drawn. */
+  afterId?: string
   /** Transcript clock at the sighting, for the synthetic row's timestamp. */
   sightedAt: number
 }
 
 /** One poll's rows are a multiset by sender; a sender's Nth row is that
- *  sender's Nth message. New ones are appended, anchored at `tailId`; the
- *  SAME array comes back when the poll showed nothing new. */
+ *  sender's Nth message. New ones are appended, anchored at `tailId`, and
+ *  drawn after `afterId` while it is drawn; the SAME array comes back when
+ *  the poll showed nothing new. */
 export function observeScreenPeerNotices(
   previous: readonly ScreenPeerNotice[],
   rows: readonly ScreenPeerRow[],
   tailId: string | null,
-  now: number
+  now: number,
+  afterId?: string
 ): readonly ScreenPeerNotice[] {
   const seen = new Map<string, ScreenPeerRow[]>()
   for (const row of rows) {
@@ -62,6 +68,7 @@ export function observeScreenPeerNotices(
         sender,
         ...(body ? { body } : {}),
         anchorId: tailId,
+        ...(afterId !== undefined ? { afterId } : {}),
         sightedAt: now
       })
     }
@@ -99,6 +106,12 @@ export function withScreenPeerNotices(
   const atEnd: NativeChatMessage[] = []
   for (const notice of notices) {
     let anchorAt = notice.anchorId === null ? null : (index.get(notice.anchorId) ?? -1)
+    // After the drawn row it was seen under, while that row is still drawn
+    // after the anchor; once it is gone, after the anchor itself.
+    const drawnAfter = notice.afterId === undefined ? undefined : index.get(notice.afterId)
+    if (anchorAt !== null && anchorAt >= 0 && drawnAfter !== undefined && drawnAfter > anchorAt) {
+      anchorAt = drawnAfter
+    }
     // At or after the anchor: the poll that first saw the screen row may
     // have run after the transcript already carried the message, in which
     // case the anchor IS the landed row.

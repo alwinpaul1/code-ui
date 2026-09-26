@@ -163,3 +163,29 @@ describe("the lead's mid-turn follow-up in a teammate session with the prompt ho
     expect(lastFrame().filter((bubble) => bubble.text.includes('Also time the CPU path.'))).toHaveLength(1)
   })
 })
+
+// Review of 2026-09-26: the screen's peer notices were anchored on the tail of
+// the chat WITH the "Message from" rows in it, so a notice seen while such a
+// row was last took that synthetic id. Once the row was no longer drawn, the
+// anchor resolved nowhere and the other session's bubble jumped to the top.
+describe("another session's message seen while a subagent's row was the chat's last", () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const ids = () => ((frames.at(-1)!.folded as NativeChatMessage[]) ?? []).map((row) => row.id)
+  const messages = [PROMPT, OPENING]
+  const agentMessages = beaconAgentMessages([{ nonce: '4101', text: SUBAGENT_REQUEST_PROMPT, anchorId: 'a1' }])
+  const peerRows = [{ sender: 'code-ui-6f', body: 'Capture probe' }]
+
+  it('is drawn after the subagent\'s row it was seen under, while that row is drawn', async () => {
+    await show('12:40:30.000', { messages, working: true, promptHook: true, agentMessages })
+    await show('12:40:40.000', { messages, working: true, promptHook: true, agentMessages, peerRows })
+    expect(ids()).toEqual(['p1', 'a1', 'agent-message:4101', 'peer-notice:code-ui-6f:1'])
+  })
+
+  it('stays after the step it was seen under once that row is gone', async () => {
+    await show('12:40:30.000', { messages, working: true, promptHook: true, agentMessages })
+    await show('12:40:40.000', { messages, working: true, promptHook: true, agentMessages, peerRows })
+    await show('12:41:00.000', { messages, working: true, promptHook: true, agentMessages: [], peerRows })
+    expect(ids()).toEqual(['p1', 'a1', 'peer-notice:code-ui-6f:1'])
+  })
+})
