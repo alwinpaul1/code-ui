@@ -81,8 +81,10 @@ export function MobileFilePdfPreview({
           : null
 
   if (error) {
+    // On the viewer's own page like its other states. A session file tab mounts it in a frame on
+    // the static dark palette in both schemes, and the live-theme red is unreadable on that.
     return (
-      <View style={styles.state}>
+      <View style={[styles.state, { backgroundColor: colors.bg }]}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     )
