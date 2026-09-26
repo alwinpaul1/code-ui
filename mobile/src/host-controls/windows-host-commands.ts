@@ -7,7 +7,7 @@ import type { MacHostAction } from './mac-host-commands'
  * Why no Unlock: Windows takes a password only on its own sign-in screen, from the
  * keyboard or from a sign-in component an administrator installed on the PC. Nothing
  * a program on the PC runs can type into it, so there is no zero-install Unlock, and
- * the sheet says so instead of offering a row that cannot work.
+ * the sheet offers Lock PC alone, whatever state the PC is in (mac-host-sheet-actions.ts).
  */
 export type WindowsHostAction = Exclude<MacHostAction, 'unlock'>
 
@@ -68,14 +68,14 @@ export const WINDOWS_AUDIO_TYPE = [
 // PostMessage rather than SendMessage, which waits on every window and can hang on one
 // that never answers.
 const DISPLAY_TYPE =
-  'Add-Type -Namespace CodeUI -Name Display -MemberDefinition ' +
+  'Add-Type -IgnoreWarnings -Namespace CodeUI -Name Display -MemberDefinition ' +
   "'[DllImport(\"user32.dll\")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);" +
   ' [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);' +
   " [DllImport(\"user32.dll\")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e);'"
 
 const SCRIPTS: Record<WindowsHostAction, string[]> = {
   lock: [
-    'Add-Type -Namespace CodeUI -Name Session -MemberDefinition ' +
+    'Add-Type -IgnoreWarnings -Namespace CodeUI -Name Session -MemberDefinition ' +
       "'[DllImport(\"user32.dll\")] public static extern bool LockWorkStation();'",
     "if(-not [CodeUI.Session]::LockWorkStation()){throw 'LockWorkStation refused'}"
   ],
@@ -93,8 +93,8 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
     '[CodeUI.Display]::mouse_event(1,1,0,0,[UIntPtr]::Zero)',
     '[CodeUI.Display]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)'
   ],
-  mute: [`Add-Type -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($true)'],
-  unmute: [`Add-Type -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($false)']
+  mute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($true)'],
+  unmute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($false)']
 }
 
 /** The PowerShell each action runs, before encoding. Exposed for the tests that parse

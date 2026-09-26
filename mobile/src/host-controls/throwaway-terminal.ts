@@ -1,6 +1,19 @@
 import type { RpcClient } from '../transport/rpc-client'
 
-export const THROWAWAY_TERMINAL_POLL_MS = 400
+/**
+ * The pause between one screen read's answer and the next read. A read is one
+ * relay round trip and changes nothing on the desktop, so a short pause costs a
+ * few more small requests and nothing else. It is most of what sits between the
+ * answer being painted and the phone seeing it: that gap averages the round trip
+ * plus half this pause. At 400 ms (until 2026-09-26) that half was 200 ms on top
+ * of every check and every action; at 150 it is 75. Unlock keeps the old pace
+ * (THROWAWAY_TERMINAL_SECRET_POLL_MS).
+ */
+export const THROWAWAY_TERMINAL_POLL_MS = 150
+/** The pace for a command that carries a secret. Every read returns the screen, and
+ *  the unlock command's own line on it is the password, so it keeps the 400 ms it
+ *  had rather than cross the relay two and a half times as often. */
+export const THROWAWAY_TERMINAL_SECRET_POLL_MS = 400
 
 export type ThrowawayTerminalClient = Pick<RpcClient, 'sendRequest'>
 
@@ -73,10 +86,11 @@ export async function watchThrowawayTerminal<T>(
   const tabId = typeof tab?.id === 'string' ? tab.id : null
   const handle = typeof tab?.terminal === 'string' ? tab.terminal : null
   let answer: T | null = null
+  const pollMs = args.secret ? THROWAWAY_TERMINAL_SECRET_POLL_MS : THROWAWAY_TERMINAL_POLL_MS
   try {
     const deadline = Date.now() + args.timeoutMs
     while (handle && Date.now() < deadline) {
-      await delay(THROWAWAY_TERMINAL_POLL_MS)
+      await delay(pollMs)
       const response = await args.client.sendRequest('terminal.read', {
         terminal: handle,
         screen: true

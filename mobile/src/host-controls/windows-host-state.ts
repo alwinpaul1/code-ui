@@ -7,10 +7,6 @@ const MARKER = 'CUIWIN'
 /**
  * What a Windows PC says about itself, printed as one marker line.
  *
- * Lock: the sign-in screen is LogonUI.exe, and it runs in this user's session only
- * while that screen is up. Filtered to the session this shell runs in, so another
- * user's sign-in screen on a shared PC does not read as this one locked.
- *
  * Mute: Core Audio's own flag on the default output endpoint, the same interface
  * the mute action writes. `unknown` when it cannot be read (no output device).
  *
@@ -24,6 +20,10 @@ const MARKER = 'CUIWIN'
  * WINDOWS MACHINE: PowerShell 7 on macOS parses the script and compiles the
  * type, and the call itself fails there, which reads as unknown.
  *
+ * Lock is not asked (2026-09-26). The sheet offers Lock PC whatever the PC says,
+ * since Windows has no Unlock to offer instead, so reading LogonUI only held up
+ * the two rows that do depend on an answer.
+ *
  * The marker is built from parts, and the command line on the screen is base64, so
  * nothing but the script's own output can match.
  */
@@ -36,9 +36,11 @@ const MARKER = 'CUIWIN'
  *  (a struct is sequential by default, and a zero context needs no assignment),
  *  and O takes PBT_POWERSETTINGCHANGE (0x8013), whose POWERBROADCAST_SETTING
  *  is a GUID and a DWORD length, so the value sits at offset 20. The flag 2 is
- *  DEVICE_NOTIFY_CALLBACK. k keeps the delegate alive while Windows holds it. */
-export const WINDOWS_DISPLAY_TYPE = [
-  'using System;using System.Runtime.InteropServices;using System.Threading;',
+ *  DEVICE_NOTIFY_CALLBACK. k keeps the delegate alive while Windows holds it.
+ *
+ *  A namespace block with no `using` lines of its own, so the probe can compile it
+ *  in the same unit as the Core Audio type (WINDOWS_HOST_STATE_SCRIPT). */
+export const WINDOWS_DISPLAY_NAMESPACE = [
   'namespace CodeUI{public static class DisplayPower{',
   'public delegate uint C(IntPtr c,uint t,IntPtr s);struct P{public C c;public IntPtr x;}',
   '[DllImport("powrprof.dll")]static extern uint PowerSettingRegisterNotification(ref Guid g,uint f,ref P p,out IntPtr h);',
@@ -50,35 +52,65 @@ export const WINDOWS_DISPLAY_TYPE = [
   'try{e.WaitOne(ms);return v;}finally{PowerSettingUnregisterNotification(h);}}}}'
 ].join('')
 
-export const WINDOWS_HOST_STATE_SCRIPT = [
-  "$ErrorActionPreference='SilentlyContinue'",
-  '$s=(Get-Process -Id $PID).SessionId',
-  '$l=[int][bool](Get-Process -Name LogonUI | Where-Object {$_.SessionId -eq $s})',
-  "$m='unknown'",
-  `try{Add-Type -TypeDefinition '${WINDOWS_AUDIO_TYPE}';$m=if([CodeUI.Audio]::GetMute()){'true'}else{'false'}}catch{}`,
-  "$d='unknown'",
-  `try{Add-Type -TypeDefinition '${WINDOWS_DISPLAY_TYPE}';$d=@{0='off';1='on';2='dimmed'}[[CodeUI.DisplayPower]::Read(1000)];if(-not $d){$d='unknown'}}catch{}`,
-  `'${MARKER.slice(0, 3)}'+'${MARKER.slice(3)} lock='+$l+' mute='+$m+' display='+$d`
-].join('\n')
+/** The display type standing alone, as the probe compiles it when the shared unit fails. */
+export const WINDOWS_DISPLAY_TYPE =
+  'using System;using System.Runtime.InteropServices;using System.Threading;' + WINDOWS_DISPLAY_NAMESPACE
+
+/**
+ * Why one Add-Type: in Windows PowerShell 5.1 every Add-Type runs csc.exe, a
+ * process of its own, and the probe used to start it twice, once per type. One
+ * unit holding both types starts it once. If that unit fails to compile, each
+ * type is compiled alone, as before, so a display type Windows PowerShell 5.1
+ * refuses (it has never been compiled there) cannot take the mute read with it.
+ * `-IgnoreWarnings` because Add-Type fails a unit the compiler only warns about,
+ * and a warning from that older compiler would have cost a third compile.
+ *
+ * Under PowerShell 7 on macOS (2026-09-26, six runs each) the probe script went
+ * from 681 ms to 426 ms, against 186 ms for PowerShell starting and doing nothing.
+ * PowerShell 7 compiles in process, so on Windows PowerShell 5.1, where each
+ * compile is a csc.exe start, the saving is larger. Not measured on Windows.
+ */
+export function windowsHostStateScript(displayNamespace: string = WINDOWS_DISPLAY_NAMESPACE): string {
+  return [
+    "$ErrorActionPreference='SilentlyContinue'",
+    `$a='${WINDOWS_AUDIO_TYPE}'`,
+    `$p='${displayNamespace}'`,
+    "$u='using System.Threading;'",
+    "try{Add-Type -IgnoreWarnings -TypeDefinition ($u+$a+$p)}catch{try{Add-Type -IgnoreWarnings -TypeDefinition $a}catch{};try{Add-Type -IgnoreWarnings -TypeDefinition ('using System;using System.Runtime.InteropServices;'+$u+$p)}catch{}}",
+    "$m='unknown'",
+    "try{$m=if([CodeUI.Audio]::GetMute()){'true'}else{'false'}}catch{}",
+    "$d='unknown'",
+    "try{$d=@{0='off';1='on';2='dimmed'}[[CodeUI.DisplayPower]::Read(1000)];if(-not $d){$d='unknown'}}catch{}",
+    `'${MARKER.slice(0, 3)}'+'${MARKER.slice(3)} mute='+$m+' display='+$d`
+  ].join('\n')
+}
+
+export const WINDOWS_HOST_STATE_SCRIPT = windowsHostStateScript()
 
 export const WINDOWS_HOST_STATE_PROBE_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(WINDOWS_HOST_STATE_SCRIPT)}`
 
-const MARKER_PATTERN = new RegExp(
-  `${MARKER} lock=([01]) mute=(true|false|unknown)(?: display=(on|off|dimmed|unknown))?\\b`
-)
+// Both fields required: the script prints them in one string, so a line with
+// only the first is a line still being painted.
+const MARKER_PATTERN = new RegExp(`${MARKER} mute=(true|false|unknown) display=(on|off|dimmed|unknown)\\b`)
 
-/** The last marker painted on the screen, or unknown — which offers every row. */
-export function parseWindowsHostState(lines: string[]): MacHostState {
+/** The last marker painted on the screen, or null while there is none. Lock is
+ *  always unknown: the probe does not ask it. */
+export function readWindowsHostStateMarker(lines: string[]): MacHostState | null {
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const match = MARKER_PATTERN.exec(lines[index] ?? '')
     if (match) {
       return {
-        lock: match[1] === '1' ? 'locked' : 'unlocked',
+        lock: 'unknown',
         // Dimmed is on: the idle dim before sleep, where Sleep is the row that acts.
-        display: match[3] === 'off' ? 'off' : match[3] === 'on' || match[3] === 'dimmed' ? 'on' : 'unknown',
-        mute: match[2] === 'true' ? 'muted' : match[2] === 'false' ? 'unmuted' : 'unknown'
+        display: match[2] === 'off' ? 'off' : match[2] === 'on' || match[2] === 'dimmed' ? 'on' : 'unknown',
+        mute: match[1] === 'true' ? 'muted' : match[1] === 'false' ? 'unmuted' : 'unknown'
       }
     }
   }
-  return UNKNOWN_MAC_HOST_STATE
+  return null
+}
+
+/** The last marker painted on the screen, or unknown — which offers every row. */
+export function parseWindowsHostState(lines: string[]): MacHostState {
+  return readWindowsHostStateMarker(lines) ?? UNKNOWN_MAC_HOST_STATE
 }

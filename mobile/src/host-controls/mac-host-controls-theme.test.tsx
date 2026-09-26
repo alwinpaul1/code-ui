@@ -97,6 +97,28 @@ describe('the Mac controls in both themes', () => {
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
+  // 2026-09-26: a PC's sheet shows no lock status; its lock half is one Lock PC row.
+  it("draws a PC's rows from the live theme in both schemes, with Lock PC and no lock status", () => {
+    const pcRows = () =>
+      createElement(ActionSheetContent, {
+        actions: getMacHostSheetActions({
+          hostPlatform: 'win32',
+          worktreeId: 'wt-1',
+          state: { lock: 'locked', display: 'on', mute: 'muted' },
+          onAction: vi.fn()
+        })
+      })
+    const light = renderInScheme('light', pcRows())
+    const dark = renderInScheme('dark', pcRows())
+    for (const renderer of [light, dark]) {
+      const labels = renderer.root
+        .findAll((node) => String(node.type) === 'Text')
+        .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+      expect(labels).toEqual(['Windows', 'Lock PC', 'Sleep display', 'Unmute PC'])
+    }
+    expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
+  })
+
   it('holds Unlock Mac to forget the saved password, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const onForget = vi.fn()

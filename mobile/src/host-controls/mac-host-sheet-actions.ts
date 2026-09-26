@@ -38,8 +38,9 @@ type HostControlCopy = {
   checkingLabel: string
   offlineLabel: string
   connectingLabel: string
-  /** Whether Unlock exists. Windows takes a password only at its own sign-in screen,
-   *  so a locked PC gets a row that says so instead (windows-host-commands.ts). */
+  /** Whether Unlock exists, and so whether the lock state picks the row. Windows
+   *  takes a password only at its own sign-in screen (windows-host-commands.ts), so a
+   *  PC always gets Lock and its probe does not ask the lock state at all. */
   canUnlock: boolean
 }
 
@@ -64,16 +65,12 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
   }
 }
 
-const WINDOWS_LOCKED_LABEL = 'Locked · unlock at the PC'
-
 /** Only the rows that can do anything from where the Mac actually is: you cannot lock a
  *  locked Mac, wake a display that is already on, or mute a muted Mac. An unknown half offers both of its
  *  rows — a wrong row is better than a missing one when the Mac would not say. */
 function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction[] {
   const lock: MacHostAction[] = !canUnlock
-    ? state.lock === 'locked'
-      ? []
-      : ['lock']
+    ? ['lock']
     : state.lock === 'locked'
       ? ['unlock']
       : state.lock === 'unlocked'
@@ -147,19 +144,6 @@ export function getMacHostSheetActions(
     ]
   }
   const disabled = options.worktreeId === null
-  // Said, not hidden: without it a locked PC's sheet has no lock row at all, and the
-  // missing Unlock reads as a bug rather than as Windows.
-  const lockedNote: ActionSheetAction[] =
-    !copy.canUnlock && options.state.lock === 'locked'
-      ? [
-          {
-            label: WINDOWS_LOCKED_LABEL,
-            icon: MAC_ACTION_ICONS.lock,
-            disabled: true,
-            onPress: () => undefined
-          }
-        ]
-      : []
   const rows: ActionSheetAction[] = actionsForState(options.state, copy.canUnlock).map((action) => ({
     label: copy.labels[action] ?? MAC_HOST_ACTION_LABELS[action],
     icon: MAC_ACTION_ICONS[action],
@@ -180,5 +164,5 @@ export function getMacHostSheetActions(
       }
     }
   }))
-  return [...lockedNote, ...rows].map((row, index) => (index === 0 ? { ...row, group: copy.group } : row))
+  return rows.map((row, index) => (index === 0 ? { ...row, group: copy.group } : row))
 }

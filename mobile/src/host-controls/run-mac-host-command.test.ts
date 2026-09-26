@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAC_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
-import { THROWAWAY_TERMINAL_POLL_MS } from './throwaway-terminal'
+import { THROWAWAY_TERMINAL_POLL_MS, THROWAWAY_TERMINAL_SECRET_POLL_MS } from './throwaway-terminal'
 
 const SECRET = "caffeinate -u -t 2; sleep 1; osascript -e 'keystroke \"hunter2\"'; printf 'CUIDONE %s\\n' ok"
 const COMMAND = "pmset displaysleepnow; printf 'CUIDONE %s\\n' ok"
@@ -32,9 +32,10 @@ function fakeClient(screens: string[][], overrides: Record<string, unknown> = {}
   return { client, calls, methods: () => calls.map((call) => call.method) }
 }
 
-async function run(fake: ReturnType<typeof fakeClient>, command = COMMAND) {
-  const pending = runMacHostCommand({ client: fake.client, worktreeId: 'wt-1', command })
-  await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS + THROWAWAY_TERMINAL_POLL_MS)
+async function run(fake: ReturnType<typeof fakeClient>, command = COMMAND, options: { secret?: boolean } = {}) {
+  const pending = runMacHostCommand({ client: fake.client, worktreeId: 'wt-1', command, ...options })
+  // The slower of the two paces, so a watch on either has finished.
+  await vi.advanceTimersByTimeAsync(MAC_HOST_COMMAND_TIMEOUT_MS + THROWAWAY_TERMINAL_SECRET_POLL_MS)
   return pending
 }
 
@@ -93,6 +94,21 @@ describe('running a Mac control on the host', () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.ok === false && outcome.reason).toMatch(/did not finish/i)
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
+  })
+
+  // Review, 2026-09-26: every screen read returns the unlock's command line, and that
+  // line is the password. The faster poll the state check got would have sent it
+  // across the relay two and a half times as often; an unlock keeps its old pace.
+  it('reads an unlock screen, which shows the password, no more often than before', async () => {
+    const secret = fakeClient([['still typing']])
+    await run(secret, SECRET, { secret: true })
+    const plain = fakeClient([['still working']])
+    await run(plain)
+    const reads = (fake: ReturnType<typeof fakeClient>) =>
+      fake.methods().filter((method) => method === 'terminal.read').length
+    // 400 ms was the pace before 2026-09-26.
+    expect(reads(secret)).toBeLessThanOrEqual(MAC_HOST_COMMAND_TIMEOUT_MS / 400)
+    expect(reads(plain)).toBeGreaterThan(MAC_HOST_COMMAND_TIMEOUT_MS / 400)
   })
 
   it('reports a refused host without echoing the command back', async () => {

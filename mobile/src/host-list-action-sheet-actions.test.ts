@@ -218,26 +218,23 @@ describe('the Mac controls on the host sheet', () => {
       expect(actions.find((action) => action.label === 'Lock PC')?.group).toBe('Windows')
     })
 
-    it('never offers Unlock, and says why when the PC is locked', () => {
-      const labels = labelsFor({ lock: 'locked', display: 'unknown', mute: 'muted' })
-      expect(labels.some((label) => /unlock/i.test(label) && label !== 'Locked · unlock at the PC')).toBe(false)
-      expect(labels).toContain('Locked · unlock at the PC')
-      expect(labels).toContain('Unmute PC')
-      const { actions, onMacAction } = buildWithMac({
-        hostPlatform: 'win32',
-        state: { lock: 'locked', display: 'unknown', mute: 'muted' }
-      })
-      const note = actions.find((action) => action.label === 'Locked · unlock at the PC')
-      expect(note?.disabled).toBe(true)
-      expect(note?.group).toBe('Windows')
-      note?.onPress()
-      expect(onMacAction).not.toHaveBeenCalled()
+    // 2026-09-26: the user wants no lock status on a PC. The probe no longer asks
+    // (windows-host-state.ts), and whatever a state says, the lock half of the PC's
+    // sheet is one Lock PC row and nothing that reads as a status.
+    it('offers Lock PC and no lock status row, whatever the PC says about its lock', () => {
+      for (const lock of ['locked', 'unlocked', 'unknown'] as const) {
+        const { actions } = buildWithMac({ hostPlatform: 'win32', state: { lock, display: 'on', mute: 'muted' } })
+        const windows = actions.filter((action) => /PC|display/.test(action.label))
+        expect(windows.map((action) => action.label)).toEqual(['Lock PC', 'Sleep display', 'Unmute PC'])
+        expect(windows.every((action) => !action.disabled)).toBe(true)
+        expect(windows[0]?.group).toBe('Windows')
+      }
     })
 
-    it('offers Lock when the PC would not say whether it is locked', () => {
+    it('never offers Unlock', () => {
       const labels = labelsFor({ lock: 'unknown', display: 'unknown', mute: 'unknown' })
       expect(labels).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC', 'Unmute PC']))
-      expect(labels).not.toContain('Locked · unlock at the PC')
+      expect(labels.some((label) => /unlock/i.test(label))).toBe(false)
     })
 
     it('says why it cannot act when the PC has no workspace to run in', () => {
