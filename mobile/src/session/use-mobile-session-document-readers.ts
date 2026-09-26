@@ -11,6 +11,7 @@ import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
 import { markdownTabRead } from './mobile-session-read-operations'
 import {
   buildMarkdownDiskFallbackDoc,
+  refusalBarsDiskRead,
   shouldReadMarkdownFromDiskAfterReadTabFailure
 } from './mobile-markdown-disk-fallback'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -74,6 +75,9 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         const refused = response as RpcFailure
         const headless = shouldReadMarkdownFromDiskAfterReadTabFailure(refused)
         const desktopReason = refused.error.message || refused.error.code
+        if (refusalBarsDiskRead(desktopReason)) {
+          throw new Error(desktopReason)
+        }
         let fallback: ReturnType<typeof filePreviewTextRead.interpret> | null = null
         try {
           fallback = filePreviewTextRead.interpret(

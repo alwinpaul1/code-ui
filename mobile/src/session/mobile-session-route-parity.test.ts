@@ -201,7 +201,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // submitLiveInput, and the per-render submitBufferedDraft calls handleSend.
 // 2026-09-26: readMarkdownTab reads the disk on any refusal of the tab and
 // keeps the desktop's reason; readFileTab's generic copy carries the reason.
-const HEAD_CALLBACK_BODY_SHA256 = '2307d42e41843dd4cf571bf4a707bd81be12cbbc72374379cecad54154ef04f5'
+// Then: it never reads the disk for a file the desktop called binary.
+const HEAD_CALLBACK_BODY_SHA256 = 'fe4fe10a054daa25c5f76ece35f8d0d0f4b091f5bec1f1f6d7d66ba20a46aca6'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -344,8 +345,9 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 674 since 2026-09-25 (Orca #22362): the Markdown actions' 'web' check, which holds the page's
 // Back claim to the page.
 // 682 since 2026-09-26: the markdown and file readers' copy with the desktop's reason.
+// 681 since the same day: the reader's 'Read only' gives way to the reason itself.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '47c04ce3c28064b48f474b282c8b3a7435dc19ec768d80ca444dabd4a4d41a56'
+  'c561124ee6c3bb49250ca86a6380778498bbb3c78094baf426bcb9fad1504a1c'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -958,7 +960,8 @@ describe('mobile session route extraction parity', () => {
     // keyboardWill/DidShow, keyboardWill/DidHide) leave with it (Orca #22252).
     // 674 since 2026-09-25: the Markdown actions' 'web' check (Orca #22362).
     // 682 since 2026-09-26: the readers' copy with the desktop's reason.
-    expect(strings).toHaveLength(682)
+    // 681 since the same day: the reader's 'Read only' gives way to the reason.
+    expect(strings).toHaveLength(681)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

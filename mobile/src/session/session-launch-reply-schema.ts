@@ -35,7 +35,8 @@ export const fileTapOpenedSchema = z.looseObject({
  * `truncated` is why this is not the composer's `workspace-files` reader, which answers the path
  * list alone. Both methods set it when the answer is not the whole workspace: the search when its
  * limit cut the matches or the host's 20,000-file inventory was capped, the list at its 5,000.
- * Opening the one match of a cut list would be a guess. Salvaged, because a reply without it is
+ * The picker says so when it offers several; a lone match opens even from a cut list, since a
+ * one-row sheet was only a step in the way (2026-09-26). Salvaged, because a reply without it is
  * still a list; the lookup then judges a search by its length alone.
  */
 export const fileTapNameMatchesSchema = z

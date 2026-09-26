@@ -8,6 +8,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { styles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
+import { markdownReadOnlyStatus } from './mobile-markdown-disk-fallback'
 import { useScrollReadingPosition } from '../files/use-reading-position'
 import type { MarkdownImageResolver } from '../components/markdown-image-source'
 
@@ -86,7 +87,7 @@ export function MarkdownReader({
   const statusText = doc.saveError
     ? doc.saveError
     : doc.readOnlyReason
-      ? 'Read only'
+      ? markdownReadOnlyStatus(doc.readOnlyReason)
       : doc.stale
         ? 'Changed on desktop'
         : null
