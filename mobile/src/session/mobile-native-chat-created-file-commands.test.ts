@@ -194,6 +194,30 @@ describe('a create followed by a command that names it', () => {
     expect(ranAfterCreateAt('QUEUE=./jobs/queue.sh node trim.js', '~/jobs/queue.sh')).toBe(true)
   })
 
+  // Review of 0a391f01: `NAME+=value` appends to a setting, and read as the
+  // file run by its path the same way.
+  it.each([
+    [
+      'hands its relative path to another script in an appended setting',
+      'QUEUE+=./jobs/queue.sh node trim.js'
+    ],
+    [
+      'hands its relative path to python in an appended setting',
+      'QUEUE+=./jobs/queue.sh python3 fix.py'
+    ],
+    [
+      'edits it behind an appended setting that names it',
+      "F+=~/jobs/queue.sh sed -i '$d' ~/jobs/queue.sh"
+    ],
+    ['loads it first through an appended BASH_ENV', 'BASH_ENV+=./jobs/queue.sh bash other.sh']
+  ])('draws no count for a short create spelled from ~ when the next command %s', (_, command) => {
+    expect(ranAfterCreateAt(command, '~/jobs/queue.sh')).toBe(true)
+  })
+
+  it('draws no count for a create spelled from ~ when the next command hands its path to another script in an appended setting', () => {
+    expect(ranAfterCreateAt(`Q+=${FROM_HOME} node trim.js`)).toBe(true)
+  })
+
   // Review of 5b257b16: `~alice` is another user's home, and `~+` or a zsh
   // named folder is somewhere else again, yet each read as a relative name.
   it.each([
@@ -233,7 +257,15 @@ describe('a create followed by a command that names it', () => {
       'hands its path, climbing out of a folder, to another script in a setting',
       `QUEUE=x/../${RELATIVE} node trim.js`
     ],
-    ['hands its relative path to another script in a setting', `QUEUE=./${RELATIVE} node trim.js`]
+    ['hands its relative path to another script in a setting', `QUEUE=./${RELATIVE} node trim.js`],
+    [
+      'hands its path, climbing out of a folder, to another script in an appended setting',
+      `QUEUE+=x/../${RELATIVE} node trim.js`
+    ],
+    [
+      'hands its relative path to another script in an appended setting',
+      `QUEUE+=./${RELATIVE} node trim.js`
+    ]
   ])('draws no count for a create when the next command %s', (_, command) => {
     expect(ranAfter(command)).toBe(true)
   })
