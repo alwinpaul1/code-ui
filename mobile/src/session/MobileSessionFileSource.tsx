@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { View } from 'react-native'
-import { MobileCodeView, type MobileCodeLineInteraction } from '../components/MobileCodeView'
+import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
-import { resolveMobileSyntaxLanguageForContent } from './mobile-file-syntax'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
-import { useTheme } from '../theme/theme-context'
+import { useCodeLineSelection } from '../components/use-code-line-selection'
+import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
+import { resolveMobileSyntaxLanguageForContent } from './mobile-file-syntax'
 import {
-  extendFileReaderLineSelection,
+  fileReaderLineCopyLabel,
   fileReaderLineSelectionLabel,
-  fileReaderLineSelectionRange,
-  isFileReaderLineSelected,
-  startFileReaderLineSelection,
-  type FileReaderLineRange,
-  type FileReaderLineSelection
+  fileReaderSelectedLinesText,
+  type FileReaderLineRange
 } from './mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from './MobileSessionFileReaderLineActionBar'
 import { styles } from './mobile-session-styles'
@@ -20,7 +18,7 @@ import { styles } from './mobile-session-styles'
 /**
  * A file tab's source, in the code viewer, with the reader's line selection
  * (Alt+K parity: long-press a line, tap another to extend, ask the chat
- * about them).
+ * about them, or copy them).
  */
 export function MobileSessionFileSource({
   content,
@@ -37,68 +35,70 @@ export function MobileSessionFileSource({
   relativePath: string
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
-  const { syntax } = useTheme()
   // A file whose name says nothing (`bin/deploy`) is read for its language.
   const document = useMemo(
     () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath || title, content, language)),
     [content, language, relativePath, title]
   )
-  const [lineSelection, setLineSelection] = useState<FileReaderLineSelection>(null)
-  // A freshly opened file starts with nothing selected — otherwise a
-  // selection made on one file would appear to carry over onto the next.
-  useEffect(() => {
-    setLineSelection(null)
-  }, [relativePath])
-  const selectedRange = fileReaderLineSelectionRange(lineSelection)
-  // The code palette's own fill: every code colour and the selected line's
-  // number read on it at 4.5:1 in both schemes (syntax-palette.ts).
-  const highlightStyle = useMemo(() => ({ backgroundColor: syntax.selection }), [syntax.selection])
   // An empty file has nothing to ask about. A pretty-printed JSON file's line
   // numbers are not the file's, so a range from it would point the agent at
   // lines that do not exist: a long-press there opens the bar for the whole
   // file alone, with no range and nothing highlighted.
   const canAsk = onAskAboutLines != null && content.length > 0
-  const canSelectLines = canAsk && !document.reformatted
-  const lineProps = useCallback(
-    (lineNumber: number): MobileCodeLineInteraction => ({
-      selectable: canAsk ? lineSelection === null : undefined,
-      highlighted: canSelectLines && isFileReaderLineSelected(lineSelection, lineNumber),
-      highlightStyle,
-      onLongPress: canAsk ? () => setLineSelection(startFileReaderLineSelection(lineNumber)) : undefined,
-      onPress:
-        canSelectLines && lineSelection
-          ? () => setLineSelection(extendFileReaderLineSelection(lineSelection, lineNumber))
-          : undefined
-    }),
-    [canAsk, canSelectLines, highlightStyle, lineSelection]
-  )
+  const selection = useCodeLineSelection({
+    canOpen: canAsk,
+    canRange: canAsk && !document.reformatted,
+    resetKey: relativePath
+  })
+  const linesCopy = useCopyToClipboard()
+  const { range, clear } = selection
+  const notice = linesCopy.error
+    ? copyFailedNotice(linesCopy.error)
+    : document.reformatted
+      ? REFORMATTED_JSON_NOTICE
+      : null
   return (
     <View style={styles.markdownEditor}>
       <MobileCodeView
         document={document}
         accessibilityLabel={`${title} preview`}
-        notice={document.reformatted ? REFORMATTED_JSON_NOTICE : null}
-        lineProps={lineProps}
-        extraData={lineSelection}
+        notice={notice}
+        lineProps={selection.lineProps}
+        extraData={selection.extraData}
+        copyText={content}
       />
-      {canAsk && selectedRange ? (
+      {selection.open ? (
         <MobileSessionFileReaderLineActionBar
           range={
-            canSelectLines
+            range
               ? {
-                  label: fileReaderLineSelectionLabel(selectedRange),
+                  label: fileReaderLineSelectionLabel(range),
                   onPress: () => {
-                    setLineSelection(null)
-                    onAskAboutLines?.(selectedRange)
+                    clear()
+                    onAskAboutLines?.(range)
                   }
                 }
               : undefined
           }
           onAskAboutFile={() => {
-            setLineSelection(null)
+            clear()
             onAskAboutLines?.(null)
           }}
-          onDismiss={() => setLineSelection(null)}
+          copy={
+            range
+              ? {
+                  label: fileReaderLineCopyLabel(range),
+                  onPress: () => {
+                    void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range)).then((copied) => {
+                      if (copied) {
+                        clear()
+                      }
+                    })
+                  }
+                }
+              : undefined
+          }
+          onDismiss={clear}
         />
       ) : null}
     </View>

@@ -1,15 +1,28 @@
 import { useMemo } from 'react'
-import { Text, type StyleProp, type TextStyle } from 'react-native'
+import { Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
 import { resolveMobileSyntaxLanguageForContent } from '../session/mobile-file-syntax'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
+import { useCodeLineSelection } from '../components/use-code-line-selection'
+import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
+import {
+  fileReaderLineCopyLabel,
+  fileReaderSelectedLinesText
+} from '../session/mobile-file-reader-line-selection'
+import { MobileSessionFileReaderLineActionBar } from '../session/MobileSessionFileReaderLineActionBar'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 
-/** A text file opened from the explorer, in the code viewer: numbered lines,
- *  indent guides, the theme's code colours, no wrapping. It used to be one
- *  selectable Text holding the whole file (2026-09-26). */
+/**
+ * A text file opened from the explorer, in the code viewer: numbered lines,
+ * indent guides, the theme's code colours, no wrapping. It used to be one
+ * selectable Text holding the whole file, so the OS selection could run over
+ * any block; one Text per row ends a selection at the row's end
+ * (2026-09-26). So, as on the desktop, a block is selected by lines
+ * (long-press one, tap another) and copied from the bar, and the toolbar
+ * copies the whole file.
+ */
 export function MobileFilePreviewSourceText({
   relativePath,
   content,
@@ -27,18 +40,48 @@ export function MobileFilePreviewSourceText({
     () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath, content)),
     [content, relativePath]
   )
-  const notice = truncated
-    ? previewTruncatedText(byteLength ?? content.length)
-    : document.reformatted
-      ? REFORMATTED_JSON_NOTICE
-      : null
+  const selection = useCodeLineSelection({
+    canOpen: content.length > 0,
+    canRange: true,
+    resetKey: relativePath
+  })
+  const linesCopy = useCopyToClipboard()
+  const { range, clear } = selection
+  const notice = linesCopy.error
+    ? copyFailedNotice(linesCopy.error)
+    : truncated
+      ? previewTruncatedText(byteLength ?? content.length)
+      : document.reformatted
+        ? REFORMATTED_JSON_NOTICE
+        : null
   return (
-    <MobileCodeView
-      document={document}
-      accessibilityLabel="File preview"
-      initialLine={initialLine}
-      notice={notice}
-    />
+    <View style={styles.sourceArea}>
+      <MobileCodeView
+        document={document}
+        accessibilityLabel="File preview"
+        initialLine={initialLine}
+        notice={notice}
+        lineProps={selection.lineProps}
+        extraData={selection.extraData}
+        copyText={content}
+        copyLabel={truncated ? 'Copy loaded text' : 'Copy file'}
+      />
+      {range ? (
+        <MobileSessionFileReaderLineActionBar
+          range={{
+            label: fileReaderLineCopyLabel(range),
+            onPress: () => {
+              void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range)).then((copied) => {
+                if (copied) {
+                  clear()
+                }
+              })
+            }
+          }}
+          onDismiss={clear}
+        />
+      ) : null}
+    </View>
   )
 }
 

@@ -16,12 +16,15 @@ vi.mock('react-native', () => ({
   useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 })
 }))
 vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
   Copy: 'Copy',
   MessageSquare: 'MessageSquare',
   Send: 'Send',
   WrapText: 'WrapText',
   X: 'X'
 }))
+// The code viewer's Copy button writes through this; expo-clipboard cannot load here.
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: 'MobileHtmlPreview' }))
 vi.mock('../files/MobileFilePdfPreview', () => ({ MobileFilePdfPreview: 'MobileFilePdfPreview' }))
 vi.mock('../files/MobileFileMarkdownPreview', () => ({

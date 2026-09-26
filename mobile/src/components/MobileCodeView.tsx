@@ -9,7 +9,7 @@ import {
   type ListRenderItem,
   type ViewToken
 } from 'react-native'
-import { WrapText } from 'lucide-react-native'
+import { Check, Copy, WrapText } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { clipSegmentsToColumns } from './mobile-code-indent'
 import type { MobileCodeDocument } from './mobile-code-document'
@@ -22,6 +22,7 @@ import {
 import { makeCodeViewStyles } from './mobile-code-view-styles'
 import { MobileCodeViewLine, type MobileCodeLineInteraction } from './MobileCodeViewLine'
 import { useCodeDocumentHighlight } from './use-code-document-highlight'
+import { copyFailedNotice, useCopyToClipboard } from './use-copy-to-clipboard'
 
 export type { MobileCodeLineInteraction } from './MobileCodeViewLine'
 
@@ -40,7 +41,9 @@ export function MobileCodeView({
   initialLine,
   notice,
   lineProps,
-  extraData
+  extraData,
+  copyText,
+  copyLabel = 'Copy file'
 }: {
   document: MobileCodeDocument
   accessibilityLabel: string
@@ -53,6 +56,11 @@ export function MobileCodeView({
   lineProps?: (lineNumber: number) => MobileCodeLineInteraction
   /** Anything else the rows read, so they redraw when it changes. */
   extraData?: unknown
+  /** The text the toolbar's Copy button puts on the clipboard: the file as
+   *  written. No button without it, or when it is empty. */
+  copyText?: string
+  /** That button's label: "Copy loaded text" for a cut preview. */
+  copyLabel?: string
 }) {
   const theme = useTheme()
   const { fontScale } = useWindowDimensions()
@@ -165,13 +173,15 @@ export function MobileCodeView({
       viewabilityConfig={VIEWABILITY}
     />
   )
+  const fileCopy = useCopyToClipboard()
+  const shownNotice = fileCopy.error ? copyFailedNotice(fileCopy.error) : notice
   const toggleWrap = () => {
     retried.current = false
     setWrapChoice({ doc: document, wrap: !wrap, topLine: topLineRef.current })
   }
   return (
     <View style={styles.root}>
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {shownNotice ? <Text style={styles.notice}>{shownNotice}</Text> : null}
       <View style={styles.area}>
         {layout.horizontal ? (
           <ScrollView
@@ -187,16 +197,36 @@ export function MobileCodeView({
           list
         )}
         {/* After the code in the tree, so it paints over it without a z-index. */}
-        <Pressable
-          style={[styles.wrapToggle, wrap && styles.wrapToggleOn]}
-          onPress={toggleWrap}
-          accessibilityRole="button"
-          accessibilityLabel="Wrap lines"
-          accessibilityState={{ selected: wrap }}
-          hitSlop={8}
-        >
-          <WrapText size={16} color={wrap ? theme.colors.accent : theme.colors.textSecondary} strokeWidth={2.2} />
-        </Pressable>
+        <View style={styles.toolbar}>
+          {copyText ? (
+            // The whole file, as the Claude app's code blocks copy theirs; a
+            // block of lines is copied from the long-press bar (2026-09-26:
+            // one Text per row ended the OS selection at the row's end).
+            <Pressable
+              style={styles.toolButton}
+              onPress={() => fileCopy.copy(copyText)}
+              accessibilityRole="button"
+              accessibilityLabel={copyLabel}
+              hitSlop={8}
+            >
+              {fileCopy.copied ? (
+                <Check size={16} color={theme.colors.accent} strokeWidth={2.2} />
+              ) : (
+                <Copy size={16} color={theme.colors.textSecondary} strokeWidth={2.2} />
+              )}
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={[styles.toolButton, wrap && styles.toolButtonOn]}
+            onPress={toggleWrap}
+            accessibilityRole="button"
+            accessibilityLabel="Wrap lines"
+            accessibilityState={{ selected: wrap }}
+            hitSlop={8}
+          >
+            <WrapText size={16} color={wrap ? theme.colors.accent : theme.colors.textSecondary} strokeWidth={2.2} />
+          </Pressable>
+        </View>
       </View>
     </View>
   )

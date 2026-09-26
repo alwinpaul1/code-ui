@@ -75,10 +75,14 @@ export function makeCodeViewStyles(theme: Pick<Theme, 'colors' | 'syntax' | 'fon
       width: 1,
       backgroundColor: syntax.indentGuide
     },
-    wrapToggle: {
+    toolbar: {
       position: 'absolute',
       top: 8,
       right: 8,
+      flexDirection: 'row',
+      gap: 8
+    },
+    toolButton: {
       width: 34,
       height: 34,
       borderRadius: 10,
@@ -88,7 +92,7 @@ export function makeCodeViewStyles(theme: Pick<Theme, 'colors' | 'syntax' | 'fon
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border
     },
-    wrapToggleOn: {
+    toolButtonOn: {
       backgroundColor: colors.accentSoft,
       borderColor: colors.accent
     }

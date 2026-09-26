@@ -6,6 +6,12 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  /** The code viewer and its line bar, which floats over its foot. No
+   *  colour of its own: the viewer paints the theme's code surface. */
+  sourceArea: {
+    flex: 1,
+    minHeight: 0
+  },
   header: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -22,7 +22,9 @@ vi.mock('react-native', () => {
     useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 })
   }
 })
-vi.mock('lucide-react-native', () => ({ WrapText: 'WrapText' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy', WrapText: 'WrapText' }))
+// The code viewer's Copy button writes through this; expo-clipboard cannot load here.
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 
 import { darkSyntaxPalette, lightSyntaxPalette } from '../theme/syntax-palette'
 import { fontFamily } from '../theme/tokens'

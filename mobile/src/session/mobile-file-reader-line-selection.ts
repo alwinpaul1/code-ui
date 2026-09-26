@@ -55,3 +55,13 @@ export function fileReaderLineSelectionLabel(range: FileReaderLineRange): string
     ? `Ask about line ${range.start}`
     : `Ask about lines ${range.start}–${range.end}`
 }
+
+/** The copy action for the current range: "Copy line 10", "Copy lines 10–20". */
+export function fileReaderLineCopyLabel(range: FileReaderLineRange): string {
+  return range.start === range.end ? `Copy line ${range.start}` : `Copy lines ${range.start}–${range.end}`
+}
+
+/** The text of the selected lines as the viewer shows them, one per line. */
+export function fileReaderSelectedLinesText(lines: readonly string[], range: FileReaderLineRange): string {
+  return lines.slice(Math.max(0, range.start - 1), range.end).join('\n')
+}
