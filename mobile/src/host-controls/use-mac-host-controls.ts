@@ -28,8 +28,9 @@ function hasHostControls(platform: NodeJS.Platform | null | undefined): boolean 
 type HostClientEntry = { hostId: string; client: RpcClient; state: ConnectionState }
 
 const TOAST_MS = 2200
-/** Long enough for the Mac to have finished locking or sleeping before we ask again. */
-const REPROBE_DELAY_MS = 3000
+/** How long a host is left alone after one of its rows ran before its menu asks it
+ *  again: long enough for a Mac to have finished locking or sleeping its display. */
+const ACTION_SETTLE_MS = 3000
 
 export function useMacHostControls(args: {
   clients: HostClientEntry[]
@@ -38,11 +39,15 @@ export function useMacHostControls(args: {
   openHostId: string | null
 }) {
   const [platforms, setPlatforms] = useState<Record<string, NodeJS.Platform | null>>({})
-  const [macState, setMacState] = useState<MacHostState | 'checking'>('checking')
+  // Tagged with the host it came from: the one answer slot is shared by every
+  // host's sheet, and an untagged answer could be drawn under another host.
+  const [probed, setProbed] = useState<{ hostId: string; state: MacHostState } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
+  // Hosts whose action is running or settling; their menu waits before asking.
+  const [settlingHostIds, setSettlingHostIds] = useState<ReadonlySet<string>>(() => new Set())
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const reprobeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const settleTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const clientsRef = useRef(args.clients)
   clientsRef.current = args.clients
   const { openHostId } = args
@@ -68,12 +73,32 @@ export function useMacHostControls(args: {
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current)
       }
-      if (reprobeTimerRef.current) {
-        clearTimeout(reprobeTimerRef.current)
+      for (const timer of settleTimersRef.current.values()) {
+        clearTimeout(timer)
       }
     },
     []
   )
+
+  const markSettling = useCallback((hostId: string, settling: boolean) => {
+    const timer = settleTimersRef.current.get(hostId)
+    if (timer) {
+      clearTimeout(timer)
+      settleTimersRef.current.delete(hostId)
+    }
+    setSettlingHostIds((previous) => {
+      if (previous.has(hostId) === settling) {
+        return previous
+      }
+      const next = new Set(previous)
+      if (settling) {
+        next.add(hostId)
+      } else {
+        next.delete(hostId)
+      }
+      return next
+    })
+  }, [])
 
   // Why ask at all: the host card must know darwin from win32 before the sheet opens,
   // so a Windows user never sees a Mac row appear a moment late. One ask per connect.
@@ -107,43 +132,56 @@ export function useMacHostControls(args: {
     [args.worktreeInfo]
   )
 
-  const probe = useCallback(
-    async (hostId: string) => {
-      const client = clientsRef.current.find((entry) => entry.hostId === hostId)?.client
-      const worktreeId = worktreeIdForHost(hostId)
-      if (!client || !worktreeId) {
-        // Nothing to run the probe in; the rows say so themselves.
-        return null
-      }
-      return probeMacHostState({ client, worktreeId, platform: platforms[hostId] ?? undefined })
-    },
-    [platforms, worktreeIdForHost]
-  )
+  const openPlatform = openHostId ? platforms[openHostId] : undefined
+  const openWorktreeId = openHostId ? worktreeIdForHost(openHostId) : null
+  const openHostSettling = openHostId ? settlingHostIds.has(openHostId) : false
 
   // Why on every open and never persisted: the Mac may have been locked or woken from
   // its own keyboard since last time, and a remembered answer would offer Lock to an
   // already-locked Mac.
+  //
+  // Why keyed on these values and not on the home screen's objects: the home
+  // screen replaces its worktree info whenever it fetches a host's workspaces
+  // (every return to it, every reconnect), and the platform map whenever any host
+  // names its platform. An effect keyed on those threw the running probe away and
+  // opened a second tab on the desktop, so the sheet sat on "Checking" for two
+  // probes, not one (2026-09-26). The same workspace fetched again is the same id,
+  // so it no longer restarts anything; a different one does, because a workspace
+  // remembered from the last launch may be gone from the desktop, and the probe
+  // could not open its tab there.
+  //
+  // A host whose action is still running or settling is not asked yet: a menu
+  // reopened straight after Sleep display would read the display before it slept,
+  // and keep that answer. It says "Checking" until the host has settled.
   useEffect(() => {
-    if (!openHostId || !hasHostControls(platforms[openHostId])) {
+    // Forget the last answer at every change, so no render shows what an earlier
+    // open, or an earlier connection, said.
+    setProbed(null)
+    if (
+      !openHostId ||
+      !hasHostControls(openPlatform) ||
+      openHostConnection !== 'connected' ||
+      openHostSettling
+    ) {
       return
     }
-    if (openHostConnection !== 'connected') {
-      // Forget the last answer now, so the render where the host comes back
-      // shows "checking" and not what an earlier probe said.
-      setMacState('checking')
+    const client = clientsRef.current.find((entry) => entry.hostId === openHostId)?.client
+    const worktreeId = openWorktreeId
+    if (!client || !worktreeId) {
+      // Nothing to run the probe in; the rows say so themselves.
+      setProbed({ hostId: openHostId, state: UNKNOWN_MAC_HOST_STATE })
       return
     }
     let stale = false
-    setMacState('checking')
-    void probe(openHostId).then((state) => {
+    void probeMacHostState({ client, worktreeId, platform: openPlatform ?? undefined }).then((state) => {
       if (!stale) {
-        setMacState(state ?? UNKNOWN_MAC_HOST_STATE)
+        setProbed({ hostId: openHostId, state })
       }
     })
     return () => {
       stale = true
     }
-  }, [openHostId, openHostConnection, platforms, probe])
+  }, [openHostId, openHostConnection, openPlatform, openWorktreeId, openHostSettling])
 
   const run = useCallback(
     async (hostId: string, action: MacHostAction, command: string) => {
@@ -164,6 +202,7 @@ export function useMacHostControls(args: {
       showToast(
         windows && action !== 'unlock' ? WINDOWS_HOST_ACTION_PROGRESS[action] : MAC_HOST_ACTION_PROGRESS[action]
       )
+      markSettling(hostId, true)
       const outcome = await runMacHostCommand({
         client,
         worktreeId,
@@ -176,18 +215,17 @@ export function useMacHostControls(args: {
       if (!outcome.ok) {
         // The reason comes from the host's own error text, never from the command.
         showToast(outcome.reason)
-        return
       }
-      // Let the Mac settle, then ask it again so the rows flip for the next open.
-      if (reprobeTimerRef.current) {
-        clearTimeout(reprobeTimerRef.current)
-      }
-      reprobeTimerRef.current = setTimeout(() => {
-        reprobeTimerRef.current = null
-        void probe(hostId).then((state) => setMacState(state ?? 'checking'))
-      }, REPROBE_DELAY_MS)
+      // No second probe here. The sheet has closed, and the next open asks the host
+      // itself once it has settled; a probe three seconds after every action opened
+      // another tab on the desktop that nobody read unless the menu was open, and
+      // its answer could land in another host's menu (2026-09-26).
+      settleTimersRef.current.set(
+        hostId,
+        setTimeout(() => markSettling(hostId, false), ACTION_SETTLE_MS)
+      )
     },
-    [platforms, probe, showToast, worktreeIdForHost]
+    [markSettling, platforms, showToast, worktreeIdForHost]
   )
 
   const onAction = useCallback(
@@ -220,7 +258,10 @@ export function useMacHostControls(args: {
     ? {
         hostPlatform: platforms[openHostId] ?? null,
         worktreeId: worktreeIdForHost(openHostId),
-        state: macHostSheetState(openHostConnection, macState),
+        state: macHostSheetState(
+          openHostConnection,
+          probed && probed.hostId === openHostId ? probed.state : 'checking'
+        ),
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)
