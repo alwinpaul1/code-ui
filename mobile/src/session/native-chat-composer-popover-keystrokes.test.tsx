@@ -149,6 +149,32 @@ function formsStackingContext(props: Record<string, unknown>): boolean {
   )
 }
 
+const BORDER_WIDTH_STYLE = /^border(Top|Right|Bottom|Left|Start|End|Horizontal|Vertical|Block|BlockStart|BlockEnd|Inline|InlineStart|InlineEnd)?Width$/
+
+/** `formsView` from the same function: whether the View exists natively at
+ *  all. One that does not is flattened away and its children hoisted. */
+function formsView(props: Record<string, unknown>): boolean {
+  const style = flattenStyle(props.style)
+  const hasItems = (value: unknown) => (Array.isArray(value) ? value.length > 0 : Boolean(value))
+  return (
+    formsStackingContext(props) ||
+    (style.backgroundColor !== undefined && style.backgroundColor !== 'transparent') ||
+    Object.keys(style).some((key) => BORDER_WIDTH_STYLE.test(key) && style[key] !== undefined) ||
+    Boolean(props.testID) ||
+    hasItems(style.boxShadow) ||
+    hasItems(style.experimental_backgroundImage ?? style.backgroundImage) ||
+    (typeof style.outlineWidth === 'number' && style.outlineWidth > 0) ||
+    // Android's host traits.
+    props.nativeBackgroundAndroid !== undefined ||
+    props.nativeForegroundAndroid !== undefined ||
+    props.focusable === true ||
+    props.hasTVPreferredFocus === true ||
+    props.needsOffscreenAlphaCompositing === true ||
+    props.renderToHardwareTextureAndroid === true ||
+    props.screenReaderFocusable === true
+  )
+}
+
 /** The mocked host tags are plain strings React's element types do not list. */
 function isHost(node: { type: unknown }, tag: string): boolean {
   return node.type === tag
@@ -171,31 +197,71 @@ function pathTo(node: HostNode, type: string): HostNode[] | null {
   return null
 }
 
-/** Which element Android mounts the EditText under: the nearest ancestor View
- *  that keeps its children (or any non-View host, which always does). */
-function nativeParentOfInput(renderer: ReactTestRenderer): string {
+function labelOf(node: HostNode, depth: number): string {
+  const testID = node.props.testID
+  return typeof testID === 'string' ? testID : `${node.type} at depth ${depth}`
+}
+
+/** For every view from the composer's root down to the EditText that exists
+ *  natively, the element Android mounts it under: the nearest ancestor that
+ *  keeps its children (any non-View host always does). Moving any of them
+ *  moves the EditText with it, so the whole chain has to hold still, not
+ *  just the input's own parent. */
+function nativeParentsDownToInput(renderer: ReactTestRenderer): Record<string, string> {
   const tree = renderer.toJSON()
   const roots = tree === null ? [] : Array.isArray(tree) ? tree : [tree]
   const path = roots.map((root) => pathTo(root, 'TextInput')).find((found) => found !== null)
   if (!path) {
     throw new Error('The composer rendered no TextInput')
   }
-  for (let index = path.length - 2; index >= 0; index -= 1) {
-    const ancestor = path[index]!
-    const parent = index > 0 ? path[index - 1] : undefined
-    const keepsChildren =
-      ancestor.type !== 'View' ||
-      formsStackingContext(ancestor.props) ||
-      parent?.props.collapsableChildren === false
-    if (keepsChildren) {
-      const testID = ancestor.props.testID
-      return typeof testID === 'string' ? testID : `${ancestor.type} at depth ${index}`
+  const isView = (index: number) => path[index]!.type === 'View'
+  const parentMakesChildrenFormStackingContexts = (index: number) =>
+    index > 0 && path[index - 1]!.props.collapsableChildren === false
+  const keepsChildren = (index: number) =>
+    !isView(index) ||
+    formsStackingContext(path[index]!.props) ||
+    parentMakesChildrenFormStackingContexts(index)
+  const isConcrete = (index: number) =>
+    !isView(index) || formsView(path[index]!.props) || parentMakesChildrenFormStackingContexts(index)
+
+  const parents: Record<string, string> = {}
+  path.forEach((node, index) => {
+    if (!isConcrete(index)) {
+      return
     }
-  }
-  return 'outside the composer'
+    let parent = 'above the composer'
+    for (let ancestor = index - 1; ancestor >= 0; ancestor -= 1) {
+      if (keepsChildren(ancestor)) {
+        parent = labelOf(path[ancestor]!, ancestor)
+        break
+      }
+    }
+    parents[labelOf(node, index)] = parent
+  })
+  return parents
 }
 
-type Step = { type: string } | { files: readonly string[] }
+function expectStableNativeParents(
+  before: Record<string, string>,
+  now: Record<string, string>,
+  when: string
+): void {
+  expect(Object.keys(now), `the set of native views changed ${when}`).toEqual(Object.keys(before))
+  for (const [view, parent] of Object.entries(before)) {
+    expect(
+      now[view],
+      `${view} moved to a new native parent ${when}; the EditText under it loses focus and the keyboard connection on that move`
+    ).toBe(parent)
+  }
+}
+
+/** A keystroke (the whole text after it), a file search answering, a tap on
+ *  the menu's first row, or more keys typed after whatever is in the field. */
+type Step =
+  | { type: string }
+  | { files: readonly string[] }
+  | { pick: 'first row' }
+  | { append: string }
 
 // Paths the recording's @ menu listed (host workspace, 2026-09-26).
 const WORKSPACE_ROOT_FILES = [
@@ -222,6 +288,18 @@ const AT_MENU_STEPS: Step[] = [
   { type: '@' },
   { type: '' }
 ]
+
+/** Picking a row closes the menu; the next key must land after the pick.
+ *  Each starts with the menu already up (`setup`), so the check that bites
+ *  first is the one after the pick, not the first open. */
+const AT_PICK = {
+  setup: [{ type: '@' }, { files: WORKSPACE_ROOT_FILES }] as Step[],
+  steps: [{ type: '@s' }, { pick: 'first row' }, { append: 'x' }] as Step[]
+}
+const SLASH_PICK = {
+  setup: [{ type: '/' }] as Step[],
+  steps: [{ type: '/c' }, { pick: 'first row' }, { append: 'x' }] as Step[]
+}
 
 /** The / half: `/` opens the menu, `n` and `d` filter it, and the second `n`
  *  leaves nothing to match. Then the keys the recording lost. */
@@ -292,23 +370,35 @@ async function mountComposer(scheme: Scheme, initialFiles: readonly string[] = [
   const renderer = mounted!
   const input = () => renderer.root.find((node) => isHost(node, 'TextInput'))
 
-  const run = async (step: Step): Promise<void> => {
-    if ('files' in step) {
-      await act(async () => setFiles(step.files))
-      return
-    }
-    lastTyped = step.type
+  const type = async (text: string): Promise<void> => {
+    lastTyped = text
     const props = input().props as {
       onChangeText: (text: string) => void
       onSelectionChange: (e: { nativeEvent: { selection: { start: number; end: number } } }) => void
     }
     // Android reports the text first, then the caret after it.
-    await act(async () => props.onChangeText(step.type))
+    await act(async () => props.onChangeText(text))
     await act(async () =>
-      props.onSelectionChange({
-        nativeEvent: { selection: { start: step.type.length, end: step.type.length } }
-      })
+      props.onSelectionChange({ nativeEvent: { selection: { start: text.length, end: text.length } } })
     )
+  }
+
+  const run = async (step: Step): Promise<void> => {
+    if ('files' in step) {
+      await act(async () => setFiles(step.files))
+    } else if ('pick' in step) {
+      const menu = renderer.root.find((node) => node.props.testID === 'composer-suggestions')
+      const row = menu.findAll((node) => isHost(node, 'Pressable'))[0]
+      if (!row) {
+        throw new Error('The menu had no row to pick')
+      }
+      await act(async () => (row.props.onPress as () => void)())
+      lastTyped = String(input().props.value)
+    } else if ('append' in step) {
+      await type(`${String(input().props.value)}${step.append}`)
+    } else {
+      await type(step.type)
+    }
   }
 
   return {
@@ -331,37 +421,87 @@ describe('the flattening model these tests stand on', () => {
     )
     const read = (relative: string) =>
       readFileSync(path.join(reactNative, 'ReactCommon/react/renderer', relative), 'utf8')
+    // One statement, from its declaration to its semicolon, whitespace folded:
+    // the rule itself, not a comment or another expression that mentions it.
+    const statement = (source: string, start: string): string => {
+      const from = source.indexOf(start)
+      expect(from, `"${start}" is gone from React Native`).toBeGreaterThanOrEqual(0)
+      return source.slice(from, source.indexOf(';', from)).replace(/\s+/g, ' ')
+    }
     const viewTraits = read('components/view/ViewShadowNode.cpp')
-    expect(viewTraits).toContain('bool formsStackingContext = !viewProps.collapsable ||')
-    expect(viewTraits).toContain('viewProps.getClipsContentToBounds() ||')
-    expect(viewTraits).toContain('!viewProps.testId.empty()')
+    const stacking = statement(viewTraits, 'bool formsStackingContext =')
+    expect(stacking).toMatch(/^bool formsStackingContext = !viewProps\.collapsable \|\|/)
+    expect(stacking).toContain('viewProps.getClipsContentToBounds() ||')
+    expect(stacking).toContain('viewProps.opacity != 1.0 ||')
+    const concrete = statement(viewTraits, 'bool formsView =')
+    expect(concrete).toMatch(/^bool formsView = formsStackingContext \|\|/)
+    expect(concrete).toContain('isColorMeaningful(viewProps.backgroundColor) ||')
+    expect(concrete).toContain('hasBorder() ||')
+    expect(concrete).toContain('!viewProps.testId.empty() ||')
     const slicing = read('mounting/internal/sliceChildShadowNodeViewPairs.cpp')
-    expect(slicing.replace(/\s+/g, ' ')).toContain(
-      'bool areChildrenFlattened = (!childShadowNode.getTraits().check( ShadowNodeTraits::Trait::FormsStackingContext) && !childrenFormStackingContexts)'
+    expect(statement(slicing, 'bool areChildrenFlattened =')).toBe(
+      'bool areChildrenFlattened = (!childShadowNode.getTraits().check( ShadowNodeTraits::Trait::FormsStackingContext) && !childrenFormStackingContexts) || childShadowNode.getTraits().check( ShadowNodeTraits::Trait::ForceFlattenView)'
     )
+    expect(statement(slicing, 'bool isConcreteView =')).toContain(
+      'childShadowNode.getTraits().check( ShadowNodeTraits::Trait::FormsView) || childrenFormStackingContexts'
+    )
+    const android = read(
+      'components/view/platform/android/react/renderer/components/view/HostPlatformViewTraitsInitializer.h'
+    )
+    expect(statement(android, 'inline bool formsStackingContext(')).toContain(
+      'return viewProps.elevation != 0'
+    )
+    expect(statement(android, 'inline bool formsView(')).toContain('viewProps.focusable ||')
   })
 })
 
 describe.each(['light', 'dark'] as const)('typing through the @ and / menus (%s)', (scheme) => {
+  /** Runs `setup`, takes the native parents as they are then, and checks
+   *  they hold after every step in `steps`. */
+  async function walk(steps: readonly Step[], setup: readonly Step[] = []): Promise<Harness> {
+    const harness = await mountComposer(scheme)
+    for (const step of setup) {
+      await harness.run(step)
+    }
+    if (setup.length > 0) {
+      expect(harness.menuOpen(), 'the setup leaves the menu up').toBe(true)
+    }
+    const before = nativeParentsDownToInput(harness.renderer)
+    const menuStates = new Set<boolean>([harness.menuOpen()])
+    for (const step of steps) {
+      await harness.run(step)
+      menuStates.add(harness.menuOpen())
+      expectStableNativeParents(
+        before,
+        nativeParentsDownToInput(harness.renderer),
+        `after ${JSON.stringify(step)} -> ${JSON.stringify(harness.typed())}, menu ${harness.menuOpen() ? 'open' : 'closed'}`
+      )
+    }
+    // Not vacuous: the walk crossed both an open and a closed menu.
+    expect([...menuStates].sort()).toEqual([false, true])
+    return harness
+  }
+
   it.each([
     ['@', AT_MENU_STEPS],
     ['/', SLASH_MENU_STEPS]
   ] as const)(
     'keeps the keyboard attached to the input while the %s menu opens, filters, empties and closes',
     async (_trigger, steps) => {
-      const harness = await mountComposer(scheme)
-      const before = nativeParentOfInput(harness.renderer)
-      const menuStates = new Set<boolean>([harness.menuOpen()])
-      for (const step of steps) {
-        await harness.run(step)
-        menuStates.add(harness.menuOpen())
-        expect(
-          nativeParentOfInput(harness.renderer),
-          `the input moved to a new native parent after ${JSON.stringify(step)}, menu ${harness.menuOpen() ? 'open' : 'closed'}; Android drops its focus and keyboard connection on that move`
-        ).toBe(before)
-      }
-      // Not vacuous: the walk crossed both an open and a closed menu.
-      expect([...menuStates].sort()).toEqual([false, true])
+      await walk(steps)
+    }
+  )
+
+  it.each([
+    ['@', AT_PICK],
+    ['/', SLASH_PICK]
+  ] as const)(
+    'keeps the keyboard attached to the input when a %s row is picked and typing goes on',
+    async (trigger, { setup, steps }) => {
+      const harness = await walk(steps, setup)
+      const text = harness.typed()
+      expect(text.startsWith(trigger) && text.endsWith(' x'), `picked, then x: ${JSON.stringify(text)}`).toBe(true)
+      expect(harness.menuOpen()).toBe(false)
     }
   )
 })
