@@ -36,6 +36,8 @@ vi.mock('react-native', async () => {
     },
     Image: 'Image',
     Pressable: 'Pressable',
+    ScrollView: ({ children, ...props }: { children?: unknown }) =>
+      React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
@@ -61,6 +63,7 @@ vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
+import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 function userMessage(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'u1', role: 'user', blocks, timestamp: null, source: 'transcript' }
@@ -383,6 +386,62 @@ describe('MobileNativeChatMessage', () => {
         .filter((node) => node.props.onPress && node.props.accessibilityLabel !== 'Sent prompt')
     ).toHaveLength(0)
     expect(onOpenFile).not.toHaveBeenCalled()
+  })
+
+  // 2026-09-26, Claude Code 2.1.281 (session 967668df, lines 23621 and
+  // 23624): a message the phone sent with three photos lands as its prompt
+  // row, `[Image #N]` markers and words, and a companion row of three
+  // `[Image: source: …orca-paste-….png]` paths. Drawn with the phone's own
+  // previews it is three pictures in both themes; a desk paste of as many,
+  // with none on the phone, is three chips, each row with its own photos.
+  it.each(['light', 'dark'] as const)('draws the phone’s own photos on their landed row as pictures, and a desk paste as Image on Desktop, in %s', (preference) => {
+    const temp = '/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T'
+    const row = (id: string, texts: string[]): NativeChatMessage => ({
+      id,
+      role: 'user',
+      blocks: texts.map((text) => ({ type: 'text' as const, text })),
+      timestamp: null,
+      source: 'transcript'
+    })
+    const messages = [
+      row('40b55aba', ['[Image #67] [Image #68] [Image #69] Now I see 1 shell and 2 agents']),
+      row('c0153c78', [
+        `[Image: source: ${temp}/orca-paste-1790405916218-5211776c-2f4a-4164-bbdf-ed7c7adc9c20.png]`,
+        `[Image: source: ${temp}/orca-paste-1790405982176-42c80aee-6038-4de8-aa23-68dca155febb.png]`,
+        `[Image: source: ${temp}/orca-paste-1790405983769-e32af309-4eb4-4934-84cd-e16bc6599062.png]`
+      ]),
+      { id: 'cb327988', role: 'assistant', blocks: [{ type: 'text', text: 'Seen all three.' }], timestamp: null, source: 'transcript' },
+      row('f1f2f3f4', ['[Image #5] [Image #6] [Image #7] pasted at the desk']),
+      row('f5f6f7f8', [
+        `[Image: source: ${temp}/orca-paste-1790406096684-29b46d06-37a6-424d-9a46-11a4887e13da.png]`,
+        `[Image: source: ${temp}/orca-paste-1790406098133-9fa460f0-2461-4934-a1ae-c31577111f35.png]`,
+        `[Image: source: ${temp}/orca-paste-1790406099541-c7ab9697-2b10-4675-b08e-3ead2f0a7d98.png]`
+      ])
+    ]
+    const previews = ['file:///phone/a1.jpg', 'file:///phone/a2.jpg', 'file:///phone/a3.jpg']
+    const folded = foldMobileNativeChatMessages(messages)
+    const { data } = buildMobileNativeChatTransientData({
+      messages,
+      folded,
+      streaming: null,
+      pending: [],
+      imagePreviewsByMessageId: { '40b55aba': previews }
+    })
+    expect(data.map((message) => message.id)).toEqual(['40b55aba', 'cb327988', 'f1f2f3f4'])
+    const drawIn = (message: NativeChatMessage) => {
+      act(() => renderer?.unmount())
+      act(() => {
+        renderer = create(createElement(ThemeProvider, { initialPreference: preference }, createElement(MobileNativeChatMessage, { message })))
+      })
+      return renderer!.root
+    }
+    const phone = drawIn(data[0]!)
+    expect(phone.findAllByType('Image' as never).map((node) => node.props.source)).toEqual(previews.map((uri) => ({ uri })))
+    expect(textIn(phone)).not.toContain('Image on Desktop')
+    expect(textIn(phone).join(' ')).toContain('Now I see 1 shell and 2 agents')
+    const desk = drawIn(data[2]!)
+    expect(desk.findAllByType('Image' as never)).toHaveLength(0)
+    expect(textIn(desk).filter((text) => text === 'Image on Desktop')).toHaveLength(3)
   })
 
   // 2026-09-25, device: a subagent's transcript showed the lead's task with
