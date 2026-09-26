@@ -1,7 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { PHONE_CLOCK_MARGIN_MS, phoneClockAllowanceMs } from './mid-turn-written-before'
 import {
-  SEND_ROW_CLOCK_SLACK_MS,
   findLandedImagePreviewEchoes,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
@@ -15,11 +13,6 @@ const NO_PREVIEWS: LandedImagePreviewEcho[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
 const NO_STORED_PREVIEWS: Record<string, string[]> = {}
 
-/** How far ahead of the desktop's the phone's clock may run, by what the rows
- *  it holds show (mid-turn-written-before.ts), and never less than a minute. */
-function clockSlack(messages: readonly NativeChatMessage[]): number {
-  return Math.max(SEND_ROW_CLOCK_SLACK_MS, phoneClockAllowanceMs(messages) + PHONE_CLOCK_MARGIN_MS)
-}
 
 /** The phone's own sends after one transcript read is taken in. */
 export type LandedOwnSends = {
@@ -70,8 +63,7 @@ export function settleLandedOwnSends(
   const landedImagePreviews = findLandedImagePreviewEchoes(
     messages,
     rebased.filter((item) => item.baselineResolved),
-    stored,
-    clockSlack(messages)
+    stored
   )
   const landedImagePendingIds = landedImagePreviews.length
     ? new Set(landedImagePreviews.map((preview) => preview.pendingId))
@@ -127,7 +119,7 @@ export function previewsAsDrawn(
   const notReadBack = (written ?? []).filter((item) => item.baselineResolved && !held.has(item.id))
   const landed = [
     ...(settled?.landedImagePreviews ?? NO_PREVIEWS),
-    ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack, kept, clockSlack(messages)) : NO_PREVIEWS)
+    ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack, kept) : NO_PREVIEWS)
   ]
   const drawn = landed.length > 0 ? mergeLandedImagePreviewEchoes(migrated, sessionKey, landed) : migrated
   return drawn[sessionKey] ?? kept

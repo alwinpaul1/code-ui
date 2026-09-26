@@ -366,7 +366,8 @@ export function useMobileNativeChatDrafts(args: {
       return { ...previous, [pendingKey]: next }
     })
   }, [landed, messages, pending, pendingKey])
-  const written = pendingKey ? waitingPhotoSends(pendingKey) : undefined
+  // Only until the store has the session's sends: after that it binds its own.
+  const written = pendingKey && !pendingBySession[pendingKey] ? waitingPhotoSends(pendingKey) : undefined
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
   const removePending = useCallback((id: string) => {

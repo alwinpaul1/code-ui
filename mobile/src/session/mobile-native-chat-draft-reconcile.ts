@@ -72,13 +72,10 @@ export type PendingImagePreviewEcho = {
   sentBeforeReadSettled?: boolean
 }
 
-/**
- * How far before a send, by the phone's clock, a row may be stamped by the
- * desktop's and still be that send's. A send's row is written after its
- * photos are pasted, so it trails the send; this only allows for a phone
- * clock that runs ahead. A photo row older than that is another message's.
- */
-export const SEND_ROW_CLOCK_SLACK_MS = 60_000
+/** How much older than the newest row a row written after the send may look
+ *  beyond the time since the send: stamps are taken when a record is made, and
+ *  records can be written a little out of order. */
+const SEND_ROW_ORDER_SLACK_MS = 5_000
 const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 
@@ -171,8 +168,7 @@ export function findLandedImagePreviewEchoes(
   entries: readonly PendingImagePreviewEcho[],
   /** The phone's photos rows already draw, from sends that retired. */
   bound: Readonly<Record<string, readonly string[]>> = NO_BOUND,
-  /** How far ahead of the desktop's the phone's clock may run. */
-  clockSlackMs = SEND_ROW_CLOCK_SLACK_MS
+  now = Date.now()
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
@@ -211,27 +207,28 @@ export function findLandedImagePreviewEchoes(
   // row with as many as it has photos is another send's; one with room left
   // is a row two sends were glued into, and the next one's photos go after
   // the first's (review, 2026-09-26: refusing it left the second send's
-  // bubble standing for good).
+  // bubble standing for good). Glue is told by the words, so a photo with no
+  // words takes only a row that draws none yet: one with room left because
+  // its own send had fewer photos than it names is still that send's.
   const drawn = new Map<string, readonly string[]>()
   const drawnOn = (id: string) => drawn.get(id) ?? bound[id] ?? []
-  const full = (message: NativeChatMessage) =>
-    drawnOn(message.id).length >= photoSlots(message, rawById.get(message.id))
+  const newestStamp = messages.reduce<number | null>(
+    (newest, message) => (message.timestamp !== null && (newest === null || message.timestamp > newest) ? message.timestamp : newest),
+    null
+  )
   const landed: LandedImagePreviewEcho[] = []
 
   for (const entry of entries) {
     if (!entry.images?.length) {
       continue
     }
-    // Already drawn on a row: that row is this send's, and nothing is added
-    // twice (a send still held while the store's write catches up).
-    const own = normalized.find((message) => entry.images!.every((uri) => drawnOn(message.id).includes(uri)))
-    if (own) {
-      landed.push({ pendingId: entry.id, messageId: own.id, images: [...drawnOn(own.id)] })
-      continue
-    }
     const targetText = normalizeNativeChatUserText(entry.text)
+    const full = (message: NativeChatMessage) =>
+      targetText
+        ? drawnOn(message.id).length >= photoSlots(message, rawById.get(message.id))
+        : drawnOn(message.id).length > 0
     const candidates = normalized.filter((message) => {
-      if (message.role !== 'user' || writtenBefore(message, entry, clockSlackMs)) {
+      if (message.role !== 'user' || writtenBefore(message, entry, newestStamp, now)) {
         return false
       }
       if (targetText) {
@@ -293,22 +290,34 @@ function photoSlots(message: NativeChatMessage, raw: NativeChatMessage | undefin
 }
 
 /**
- * A row the desktop stamped well before the phone sent this is another
- * message's. For a send made before the chat's read settled the tail cannot
- * say so: it is whatever the phone had, an earlier visit's transcript or
- * nothing, and a photo sent with no words took the first photo row after it,
- * an older message's, which then drew the new photo while the new row drew
- * "Image on Desktop" (2026-09-26, Claude Code 2.1.283). Asked only of such a
- * send: one made against a settled read has a real tail, and a phone clock
- * running ahead of the desktop's must not cost it its photos.
+ * A row written before the phone sent this is another message's. For a send
+ * made before the chat's read settled the tail cannot say so: it is whatever
+ * the phone had, an earlier visit's transcript or nothing, and a photo sent
+ * with no words took the first photo row after it, an older message's, which
+ * then drew the new photo while the new row drew "Image on Desktop"
+ * (2026-09-26, Claude Code 2.1.283).
+ *
+ * Told without setting the phone's clock against the desktop's: a row
+ * written after the send is older than the newest row by at most the time
+ * since the send, and each of those two spans is read off one clock. The
+ * first version compared the send's time with the row's stamp, and a phone
+ * running a minute ahead refused the send's own row, which a photo with no
+ * words cannot retire without (review, 2026-09-26). A photo with words is
+ * asked too: its words can be an older row's as well.
  */
-function writtenBefore(message: NativeChatMessage, entry: PendingImagePreviewEcho, slackMs: number): boolean {
+function writtenBefore(
+  message: NativeChatMessage,
+  entry: PendingImagePreviewEcho,
+  newestStamp: number | null,
+  now: number
+): boolean {
   return (
     entry.sentBeforeReadSettled === true &&
     typeof entry.sentAt === 'number' &&
     Number.isFinite(entry.sentAt) &&
     message.timestamp !== null &&
-    message.timestamp < entry.sentAt - slackMs
+    newestStamp !== null &&
+    newestStamp - message.timestamp > now - entry.sentAt + SEND_ROW_ORDER_SLACK_MS
   )
 }
 
