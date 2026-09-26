@@ -127,16 +127,30 @@ const HOOK_CUT_BYTES = 2000
  *  backslash of an escape it split, which the beacon drops. */
 const HOOK_CUT_SLACK_BYTES = 8
 
-/** Whether a stored text is a subagent message the hook cut: the wrapper's
- *  line, no closing tag, and as long as the hook's cut once written back as
- *  the JSON body it was sent as. A person's prompt that quotes the wrapper's
- *  line is short; the build that stored these kept no cut flag. */
+/**
+ * Whether a stored text is a subagent message the hook cut: the wrapper's
+ * line, no closing tag, and as long as the hook's cut once written back as
+ * the JSON body it was sent as. The build that stored these kept no cut flag.
+ *
+ * Written back, it comes out short when its lines ended in CRLF: the beacon's
+ * unescape drops the `\r` of each `\r\n` (unescapeJsonStringBody), two bytes a
+ * line (re-review of 2026-09-27). So it is also a cut when it reaches the cut
+ * with every line end counted as a CRLF one, and not past it: a text that
+ * was cut cannot be longer. It still comes out short by a byte for each `\b`
+ * or `\f` escape, which the unescape turns into letters.
+ *
+ * That a person's prompt quoting the wrapper's first line stays short of
+ * this is an assumption: one within the few bytes under the cut is swept too,
+ * an accepted ambiguity.
+ */
 export function isCutAtHookLength(text: string): boolean {
   if (parseSubagentMessage(text, { cut: true }) === null || parseSubagentMessage(text) !== null) {
     return false
   }
   const sent = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
-  return sent >= HOOK_CUT_BYTES - HOOK_CUT_SLACK_BYTES
+  const asCrlf = sent + 2 * (text.match(/\n/g)?.length ?? 0)
+  const reaches = (bytes: number) => bytes >= HOOK_CUT_BYTES - HOOK_CUT_SLACK_BYTES
+  return reaches(sent) || (reaches(asCrlf) && asCrlf <= HOOK_CUT_BYTES + HOOK_CUT_SLACK_BYTES)
 }
 
 /** Whether a hook prompt is a subagent's message rather than something a
