@@ -7,6 +7,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
+import { teammateTask } from './mobile-native-chat-peer-messages'
 
 
 /**
@@ -340,7 +341,11 @@ function markersOf(text: string): string {
 
 /** The key a hook prompt is retired on. Painted, because `alsoShown` can hold
  *  a restored screen reading (no backticks); short-token, because the surfaced
- *  row of a plugin skill is `/name`, not `/plugin:name`. */
+ *  row of a plugin skill is `/name`, not `/plugin:name`; a lead's message in a
+ *  teammate session by its words, because its row is surfaced as them and
+ *  the hook's copy kept the wrapper, so the copy never retired and the
+ *  follow-up drew twice (teammateTask; review of 2026-09-27). */
 function landedKey(text: string): string {
-  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(text))))
+  const words = teammateTask(text)?.text ?? text
+  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(words))))
 }

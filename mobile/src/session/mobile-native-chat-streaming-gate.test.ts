@@ -322,3 +322,29 @@ describe('deriveMobileNativeChatStreaming', () => {
     expect(results).toEqual([null, 'Hello', null])
   })
 })
+
+// Review of 2026-09-27: the gate took the chat's last row as its baseline,
+// and that can be a row the phone drew (a subagent's "Message from" row, a
+// screen notice), which can go away. With its baseline gone the gate searched
+// the whole chat for the landed reply, and an older reply with the same
+// opening hid the live one.
+describe('the live reply after a row the phone drew', () => {
+  const drawnByThePhone: NativeChatMessage[] = [
+    { id: 'agent-message:100', role: 'system', timestamp: 1, source: 'transcript', blocks: [{ type: 'text', text: 'hi', presentation: 'agent-message:probe' }] },
+    { id: 'peer-notice:code-ui-6f:1', role: 'system', timestamp: 1, source: 'transcript', blocks: [{ type: 'text', text: 'Another Claude session sent a message.' }] }
+  ]
+
+  it.each(drawnByThePhone.map((row) => [row.id, row] as const))('shows when %s was last and then goes away', (_id, row) => {
+    const older = assistant('old', 'Done. Tests pass.')
+    let gate = createMobileNativeChatStreamingGate('s')
+    gate = deriveMobileNativeChatStreaming(gate, [older, row], undefined, { scopeKey: 's', streamLive: false }).gate
+    expect(gate.baselineTailId).toBe('old')
+    const step = deriveMobileNativeChatStreaming(gate, [older], 'Done. Tests pass. Now the lint', { scopeKey: 's', streamLive: true })
+    expect(step.streaming).toBe('Done. Tests pass. Now the lint')
+  })
+
+  it('has no baseline on a chat of nothing but rows the phone drew', () => {
+    const gate = deriveMobileNativeChatStreaming(createMobileNativeChatStreamingGate('s'), drawnByThePhone, undefined, { scopeKey: 's' }).gate
+    expect(gate.baselineTailId).toBeNull()
+  })
+})

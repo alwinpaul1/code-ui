@@ -13,8 +13,10 @@ import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
  * with the rest of the beacon (agent-hud-beacon-warm-start.ts).
  */
 
-/** `restored`: read back from the warm-start store, not heard this run. */
-export type AgentMessagePrompt = DesktopPrompt & { restored?: true }
+/** `restored`: read back from the warm-start store, not heard this run.
+ *  `drawnAfter`: the transcript row the chat drew it after, this run or the
+ *  one it was stored in (mobile-native-chat-agent-message-rows.ts). */
+export type AgentMessagePrompt = DesktopPrompt & { restored?: true; drawnAfter?: string }
 
 /** A session's subagent messages the chat keeps drawing; oldest shed first.
  *  Each is up to the hook's 2,000 characters, and the whole beacon goes to
@@ -44,10 +46,86 @@ export function withAgentMessagePrompt(beacon: AgentHudBeacon, next: DesktopProm
  *  chat has no anchor for them in memory, and draws each only once the row
  *  the hook named is loaded (mobile-native-chat-agent-message-rows.ts). A
  *  record from before this list has them among its desktop prompts. */
-export function withRestoredAgentMessages(beacon: AgentHudBeacon): AgentHudBeacon {
-  let kept = beacon.agentMessagePrompts
-  for (const prompt of beacon.desktopPrompts ?? []) {
-    kept = keepAgentMessagePrompt(kept, prompt)
+export function withRestoredAgentMessages(beacon: AgentHudBeacon, handle?: string): AgentHudBeacon {
+  let list = Array.isArray(beacon.agentMessagePrompts) ? beacon.agentMessagePrompts : undefined
+  for (const prompt of Array.isArray(beacon.desktopPrompts) ? beacon.desktopPrompts : []) {
+    list = keepAgentMessagePrompt(list, prompt)
   }
-  return kept ? { ...beacon, agentMessagePrompts: kept.map((prompt) => ({ ...prompt, restored: true })) } : beacon
+  const restored = list ? { ...beacon, agentMessagePrompts: list.map((prompt) => ({ ...prompt, restored: true as const })) } : beacon
+  if (handle !== undefined) {
+    keepAgentMessages(handle, restored)
+  }
+  return restored
+}
+
+/** What the warm-start write compares of a beacon's subagent messages. */
+export function agentMessagesIdentity(prompts: readonly AgentMessagePrompt[] | undefined): string {
+  return (prompts ?? []).map((prompt) => `${prompt.nonce}@${prompt.drawnAfter ?? ''}`).join(',')
+}
+
+/** The beacon with the row its message `nonce` was drawn after recorded;
+ *  the same object when it holds no such message or already says so. */
+export function withAgentMessagePlaced(handle: string, beacon: AgentHudBeacon, nonce: string, rowId: string): AgentHudBeacon {
+  const prompts = beacon.agentMessagePrompts
+  if (!prompts?.some((prompt) => prompt.nonce === nonce && prompt.drawnAfter !== rowId)) {
+    return beacon
+  }
+  const placed = { ...beacon, agentMessagePrompts: prompts.map((prompt) => (prompt.nonce === nonce ? { ...prompt, drawnAfter: rowId } : prompt)) }
+  keepAgentMessages(handle, placed)
+  return placed
+}
+
+/**
+ * Each terminal's subagent messages, kept past the drop of its beacon.
+ *
+ * The terminal cache is dropped on every worktree switch (resetAgentHudBeacons
+ * from clearTerminalCache), beacons included, and the next beacon of the same
+ * session started the list over. Its write then replaced the stored record,
+ * list and all, so the rows were gone after the next relaunch too (review of
+ * 2026-09-27). The list comes back with the session's next beacon. Bounded
+ * like the warm start, oldest terminal shed first.
+ */
+const kept = new Map<string, { sessionId: string | null; prompts: AgentMessagePrompt[] }>()
+const KEPT_TERMINALS = 24
+
+export function keepAgentMessages(handle: string, beacon: AgentHudBeacon): void {
+  if (!beacon.agentMessagePrompts?.length) {
+    return
+  }
+  kept.delete(handle)
+  kept.set(handle, { sessionId: beacon.sessionId, prompts: beacon.agentMessagePrompts })
+  for (const oldest of kept.keys()) {
+    if (kept.size <= KEPT_TERMINALS) {
+      break
+    }
+    kept.delete(oldest)
+  }
+}
+
+/** A new beacon of the session a dropped one spoke for, with its list back. */
+function withKeptAgentMessages(handle: string, beacon: AgentHudBeacon): AgentHudBeacon {
+  const held = kept.get(handle)
+  if (!held || beacon.agentMessagePrompts?.length || (beacon.sessionId !== null && beacon.sessionId !== held.sessionId)) {
+    return beacon
+  }
+  return { ...beacon, agentMessagePrompts: held.prompts }
+}
+
+/** The merged beacon of a terminal with its subagent messages: those a
+ *  dropped beacon of the same session held when this one is the first since
+ *  (`fresh`), and the prompt it just carried when that is one. Kept for the
+ *  next drop. */
+export function withAgentMessagesOf(
+  handle: string,
+  beacon: AgentHudBeacon,
+  fresh: boolean,
+  next: DesktopPrompt | null
+): AgentHudBeacon {
+  const merged = withAgentMessagePrompt(fresh ? withKeptAgentMessages(handle, beacon) : beacon, next)
+  keepAgentMessages(handle, merged)
+  return merged
+}
+
+export function resetKeptAgentMessagesForTests(): void {
+  kept.clear()
 }

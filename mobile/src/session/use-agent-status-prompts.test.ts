@@ -62,7 +62,7 @@ describe('a desk prompt the chat holds back, that the beacon also carried', () =
     const beacon = [{ nonce: '48213', text: DONE.prompt, anchorId: '8a3424c5-6eaa-4ca5-aad4-db36d49683fb' }]
     let listed: readonly { nonce: string; at?: number; heldBack?: true }[] = []
     function Merged() {
-      listed = useAgentStatusPrompts(SESSION, DONE, beacon)
+      listed = useAgentStatusPrompts(SESSION, DONE, beacon).prompts
       return null
     }
     act(() => {

@@ -1,4 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import { SCREEN_NOTICE_ID_PREFIX } from './screen-peer-notices'
 
 /** Decides whether the live streaming preview should render as a synthetic
  *  bubble. Text alone can't tell "the transcript caught up with this stream"
@@ -110,7 +112,11 @@ export function deriveMobileNativeChatStreaming(
   const scopeKey = options.scopeKey === undefined ? gate.scopeKey : options.scopeKey
   const scopedGate =
     gate.scopeKey === scopeKey ? gate : createMobileNativeChatStreamingGate(scopeKey)
-  const tail = folded.at(-1)
+  // The last row the transcript wrote, never one the phone drew: a subagent's
+  // "Message from" row or a screen notice can go away, and a baseline that is
+  // gone searched the whole chat for the reply, so an older reply with the
+  // same opening hid the live one (review of 2026-09-27).
+  const tail = folded.findLast((message) => agentMessageOf(message) === null && !message.id.startsWith(SCREEN_NOTICE_ID_PREFIX))
   const tailId = tail?.id ?? null
   // A live status gap is not a deletion. Keep the prose until its transcript
   // arrives; tearing down the bubble here flashes the entire list's layout.

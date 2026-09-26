@@ -59,6 +59,40 @@ function withoutDataPreviews(
   })
 }
 
+/**
+ * The stored sends with the photos this run still holds for them put back.
+ *
+ * Storage leaves a `data:` preview out (a marked-up photo, a clipboard paste
+ * with no file), and the store reads its sends back from storage every time a
+ * chat comes back. A send whose row lands keeps its photo on the row, from
+ * the previews this run holds; one Claude took mid-turn gets no row, so its
+ * bubble is the only place the photo can be, and it came back without it
+ * (session 790eafa8, 2026-09-26: "We miss this" drawn with no photo, Claude
+ * Code 2.1.283). This run's copy is the one written last, so it wins by id.
+ * After a relaunch there is none, and the stored copy stands as it is.
+ */
+export function withThisRunsPhotos(
+  sessionKey: string,
+  stored: readonly MobileNativeChatPendingMessage[]
+): MobileNativeChatPendingMessage[] {
+  const held = waiting.get(sessionKey)
+  if (!held?.length) {
+    return [...stored]
+  }
+  const byId = new Map(held.map((item) => [item.id, item]))
+  return stored.map((item) => {
+    const kept = byId.get(item.id)
+    if (!kept?.images || kept.images.length <= (item.images?.length ?? 0)) {
+      return item
+    }
+    return {
+      ...item,
+      images: [...kept.images],
+      ...(kept.imagePaths ? { imagePaths: [...kept.imagePaths] } : {})
+    }
+  })
+}
+
 /** The session's photo sends as last written, in this run or the one before. */
 export function waitingPhotoSends(sessionKey: string): readonly MobileNativeChatPendingMessage[] | undefined {
   return waiting.get(sessionKey) ?? recent.get(sessionKey)

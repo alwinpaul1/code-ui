@@ -1,12 +1,15 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { pendingPlacementAnchorId } from './mobile-native-chat-render-data'
+import { rememberAgentMessagePlacement } from './agent-hud-beacon'
 import {
   agentMessageRow,
   subagentNames,
-  type BeaconAgentMessage
+  type BeaconAgentMessage,
+  type SameRowPrompt
 } from './mobile-native-chat-agent-messages'
+import { deskEchoId } from './use-desktop-prompt-echoes'
 
 /**
  * Where each subagent message the prompt hook carried is drawn: after the row
@@ -50,8 +53,12 @@ export function resetAgentMessageAnchorsForTests(): void {
  *  an hour-old message under the newest reply after every relaunch (review of
  *  2026-09-26). It is drawn after the row the hook named once that row is
  *  loaded, and held back until paging brings it in, the way a remembered echo
- *  is (mobile-native-chat-render-data.ts, 2026-09-13). One the hook named no
- *  row for (an older hook) has nowhere to go and stays held back. */
+ *  is (mobile-native-chat-render-data.ts, 2026-09-13). The row it was drawn
+ *  after before it was stored (`drawnAfter`) stands in when the named row is
+ *  not held: the hook can name a row Orca never publishes (another agent's
+ *  delivery, an `isMeta` row), and such a message, drawn at the tail live,
+ *  vanished after a relaunch (review of 2026-09-27). With neither loaded it
+ *  stays held back. */
 function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly NativeChatMessage[]): string | undefined {
   const key = `${scope}\0${message.id}`
   const known = anchorByKey.get(key)
@@ -63,6 +70,10 @@ function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly Nat
     provisionalByKey.delete(key)
     remember(anchorByKey, key, message.anchorId)
     return message.anchorId
+  }
+  if (message.restored && message.drawnAfter && raw.some((row) => row.id === message.drawnAfter)) {
+    remember(anchorByKey, key, message.drawnAfter)
+    return message.drawnAfter
   }
   if (!tail || message.restored) {
     return undefined
@@ -123,6 +134,7 @@ export function withAgentMessageRows(
       sender: names.get(message.from) ?? message.from,
       // The hook cut the prompt mid-word; say the message goes on.
       body: message.cut && message.body && !message.body.endsWith('…') ? `${message.body}…` : message.body,
+      cut: message.cut,
       timestamp: held?.timestamp ?? null
     })
     if (holder === null) {
@@ -153,23 +165,33 @@ export function withAgentMessageRows(
 export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPendingMessage>(
   pending: readonly T[],
   messages: readonly BeaconAgentMessage[],
-  folded: readonly NativeChatMessage[]
+  folded: readonly NativeChatMessage[],
+  raw: readonly NativeChatMessage[] = folded
 ): T[] {
   if (!messages.some((message) => message.laterAtSameRow)) {
     return pending as T[]
   }
   const position = new Map(folded.map((row, index) => [row.id, index]))
+  const foldedIds = new Set(position.keys())
+  // Compared by the row each is drawn after, not by the raw id each names: a
+  // tab status copy of the prompt is placed by the last row written before it
+  // (lastRowBefore), often a tool row the named row's step folded in, and on
+  // any host that publishes a status that copy is the one drawn (review of
+  // 2026-09-27: the order came out reversed there).
+  const holderOf = (id: string | null | undefined) =>
+    !id ? null : foldedIds.has(id) ? id : foldedHolder(id, raw, foldedIds)
   let moved = false
   const out = pending.map((item) => {
-    const row = pendingPlacementAnchorId(item)
+    const row = holderOf(pendingPlacementAnchorId(item))
     let after: string | undefined
     for (const message of messages) {
       const at = position.get(message.id)
       if (
         at !== undefined &&
+        row !== null &&
         (after === undefined || at > position.get(after)!) &&
-        message.anchorId === row &&
-        message.laterAtSameRow?.includes(item.text)
+        holderOf(message.anchorId) === row &&
+        cameAfter(message, item)
       ) {
         after = message.id
       }
@@ -183,15 +205,61 @@ export function drawnAfterEarlierAgentMessages<T extends MobileNativeChatPending
   return moved ? out : (pending as T[])
 }
 
-/** The folded chat with the prompt hook's subagent messages drawn in. */
+/** Where each message is drawn now, by the row it follows, when that is not
+ *  the row it was stored with. */
+export function agentMessagePlacements(
+  scope: string,
+  messages: readonly BeaconAgentMessage[]
+): { nonce: string; rowId: string; terminal?: string }[] {
+  return messages.flatMap((message) => {
+    const key = `${scope}\0${message.id}`
+    const rowId = anchorByKey.get(key) ?? provisionalByKey.get(key)
+    const nonce = message.id.slice(message.id.indexOf(':') + 1)
+    return rowId !== undefined && rowId !== message.drawnAfter ? [{ nonce, rowId, terminal: message.terminal }] : []
+  })
+}
+
+/**
+ * Whether a pending bubble is a prompt the hook took after this message. The
+ * beacon's own copy says so by its nonce (`desk-<nonce>`). Another copy, the
+ * tab status's or a phone send, only by its text, and only when no prompt of
+ * that text came before the message at the same row: matched by text alone,
+ * an "ok" typed before the message moved below it with the one typed after
+ * (review of 2026-09-27).
+ */
+function cameAfter(message: BeaconAgentMessage, item: { id: string; text: string }): boolean {
+  const later = message.laterAtSameRow ?? []
+  const earlier = message.earlierAtSameRow ?? []
+  const byNonce = (prompts: readonly SameRowPrompt[]) => prompts.some((prompt) => deskEchoId(prompt.nonce) === item.id)
+  if (byNonce(later)) {
+    return true
+  }
+  if (byNonce(earlier)) {
+    return false
+  }
+  return later.some((prompt) => prompt.text === item.text) && !earlier.some((prompt) => prompt.text === item.text)
+}
+
+/** The folded chat with the prompt hook's subagent messages drawn in. Where
+ *  each was drawn is stored with the beacon (rememberAgentMessagePlacement). */
 export function useAgentMessageRows(
   messages: readonly BeaconAgentMessage[],
   folded: readonly NativeChatMessage[],
   raw: readonly NativeChatMessage[],
   scope: string | null
 ): NativeChatMessage[] {
-  return useMemo(
+  const rows = useMemo(
     () => (scope === null ? (folded as NativeChatMessage[]) : withAgentMessageRows(folded, raw, messages, scope)),
     [folded, messages, raw, scope]
   )
+  useEffect(() => {
+    if (scope !== null) {
+      for (const { nonce, rowId, terminal } of agentMessagePlacements(scope, messages)) {
+        if (terminal) {
+          rememberAgentMessagePlacement(terminal, nonce, rowId)
+        }
+      }
+    }
+  }, [messages, rows, scope])
+  return rows
 }

@@ -25,6 +25,9 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * is honest, 2026-09-20).
  */
 
+/** Every row this module draws has an id that starts so. */
+export const SCREEN_NOTICE_ID_PREFIX = 'peer-notice:'
+
 export type ScreenPeerNotice = {
   id: string
   sender: string
@@ -40,6 +43,9 @@ export type ScreenPeerNotice = {
   afterId?: string
   /** Transcript clock at the sighting, for the synthetic row's timestamp. */
   sightedAt: number
+  /** The phone's clock at the sighting: what pairs the row with another
+   *  source's copy of its message (bodyOf). */
+  seenAt?: number
 }
 
 /** One poll's rows are a multiset by sender; a sender's Nth row is that
@@ -52,7 +58,13 @@ export function observeScreenPeerNotices(
   rows: readonly ScreenPeerRow[],
   tailId: string | null,
   now: number,
-  afterId?: string
+  afterId?: string,
+  /** Whether what was painted above a row belongs to a transcript row that
+   *  came after this notice's anchor: the only evidence, beside the notice's
+   *  own row, that a row is a later message (newerThanLastKnown). */
+  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean = () => false,
+  /** The phone's clock now. */
+  seenAt: number = Date.now()
 ): readonly ScreenPeerNotice[] {
   const seen = new Map<string, ScreenPeerRow[]>()
   for (const row of rows) {
@@ -63,18 +75,19 @@ export function observeScreenPeerNotices(
   let next: ScreenPeerNotice[] | null = null
   for (const [sender, list] of seen) {
     const known = previous.filter((notice) => notice.sender === sender)
-    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list))
+    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list, paintedAfter))
     for (let taken = 1; taken <= fresh; taken += 1) {
       next ??= [...previous]
       const { body, above } = list[list.length - fresh + taken - 1]!
       next.push({
-        id: `peer-notice:${sender}:${known.length + taken}`,
+        id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${known.length + taken}`,
         sender,
         ...(body ? { body } : {}),
         ...(above !== undefined ? { above } : {}),
         anchorId: tailId,
         ...(afterId !== undefined ? { afterId } : {}),
-        sightedAt: now
+        sightedAt: now,
+        seenAt
       })
     }
   }
@@ -83,30 +96,38 @@ export function observeScreenPeerNotices(
 
 /**
  * How many of one sender's rows on the screen came after the last message of
- * theirs already known, going by what was painted above each row.
+ * theirs already known, on positive evidence only.
  *
  * The count alone cannot see a second message once the first has scrolled
  * off: a subagent's row names only its sender, so one row on screen and one
- * message known read as nothing new (review of 2026-09-26). The rows below
- * the last known one on screen are newer. When it is not on screen, every row
- * is newer, but only if each can be told from every message known: a row too
- * near the top to read what is above it, or one painted like an older
- * message (the desk scrolled back), could be one already drawn, so nothing is
- * taken from this and the count stands.
+ * message known read as nothing new (review of 2026-09-26). Two things say a
+ * row is later. The last known row is still on screen, painted under the same
+ * text as when it was seen, and the rows below it are later. Or the text
+ * painted above a row belongs to a transcript row that came after the last
+ * known message's anchor (a reply the chat received since); that row and the
+ * ones below it are later. Text above a known row that merely changed is not
+ * evidence: a table repainted narrower after a resize made every row of the
+ * sender count as new, one more on each repaint (review of 2026-09-27). With
+ * no evidence the count stands.
  */
-function newerThanLastKnown(known: readonly ScreenPeerNotice[], rows: readonly ScreenPeerRow[]): number {
+function newerThanLastKnown(
+  known: readonly ScreenPeerNotice[],
+  rows: readonly ScreenPeerRow[],
+  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean
+): number {
   const last = known.at(-1)
-  if (last?.above === undefined) {
+  if (last === undefined) {
     return 0
   }
-  const same = (row: ScreenPeerRow, notice: ScreenPeerNotice) => row.above === notice.above && row.body === notice.body
-  for (let index = rows.length - 1; index >= 0; index -= 1) {
-    if (same(rows[index]!, last)) {
-      return rows.length - 1 - index
+  if (last.above !== undefined) {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (rows[index]!.above === last.above && rows[index]!.body === last.body) {
+        return rows.length - 1 - index
+      }
     }
   }
-  const told = rows.every((row) => row.above !== undefined && !known.some((notice) => same(row, notice)))
-  return told ? rows.length : 0
+  const first = rows.findIndex((row) => paintedAfter(last, row))
+  return first === -1 ? 0 : rows.length - first
 }
 
 /** The folded chat with each notice drawn after its anchor, minus the ones a
@@ -120,7 +141,7 @@ function newerThanLastKnown(known: readonly ScreenPeerNotice[], rows: readonly S
 export function withScreenPeerNotices(
   folded: readonly NativeChatMessage[],
   allNotices: readonly ScreenPeerNotice[],
-  options: { subagentRows?: boolean } = {}
+  options: { subagentRows?: boolean; bodies?: readonly ScreenRowBody[] } = {}
 ): NativeChatMessage[] {
   if (allNotices.length === 0) {
     return folded as NativeChatMessage[]
@@ -185,9 +206,16 @@ export function withScreenPeerNotices(
         anchorAt = position
       }
     }
+    const words = drawsPeerBubble(notice) ? undefined : bodyOf(notice, allNotices, options.bodies)
     const drawn = drawsPeerBubble(notice)
       ? peerBoilerplateRow(notice.id, notice.sightedAt)
-      : agentMessageRow({ id: notice.id, sender: notice.sender, body: '', timestamp: notice.sightedAt })
+      : agentMessageRow({
+          id: notice.id,
+          sender: notice.sender,
+          body: words ? (words.cut && words.body && !words.body.endsWith('…') ? `${words.body}…` : words.body) : '',
+          cut: words?.cut,
+          timestamp: notice.sightedAt
+        })
     if (anchorAt === null) {
       atEnd.push(drawn)
     } else if (anchorAt < 0) {
@@ -213,6 +241,40 @@ export function withScreenPeerNotices(
   })
   out.push(...atEnd)
   return out
+}
+
+/** Words another source carried for a sender-only row: the tab status's copy
+ *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
+ *  the name the row shows, with when the phone first read it. */
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt: number }
+
+/** How far apart the phone may first read a row and the status's copy of its
+ *  message and still take them for one message. The hook that puts a message
+ *  on the status fires as Claude takes it, which is when it paints the row;
+ *  the screen is read once a second. */
+export const ROW_WORDS_WINDOW_MS = 10_000
+
+/**
+ * The words of a sender-only row: the one copy from that sender the phone
+ * first read within ROW_WORDS_WINDOW_MS of first seeing the row, and no other
+ * row of the sender so close to that copy. The row names only its sender, and
+ * each side can miss a message the other saw: one copy on each side did not
+ * make them one message, and a row opened to another message's words (review
+ * of 2026-09-27). With no such evidence, no words.
+ */
+function bodyOf(
+  notice: ScreenPeerNotice,
+  notices: readonly ScreenPeerNotice[],
+  bodies: readonly ScreenRowBody[] | undefined
+): ScreenRowBody | undefined {
+  const near = (seenAt: number | undefined, body: ScreenRowBody) =>
+    seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
+  const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender) && near(notice.seenAt, body))
+  const body = theirs.length === 1 ? theirs[0]! : undefined
+  const rivals = notices.filter(
+    (other) => other !== notice && other.sender === notice.sender && !drawsPeerBubble(other) && body !== undefined && near(other.seenAt, body)
+  )
+  return rivals.length === 0 ? body : undefined
 }
 
 /**

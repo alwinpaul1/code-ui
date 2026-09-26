@@ -123,12 +123,12 @@ export function useMobileNativeChatController(
   // or the Claude app, mid-turn or not — Orca's own hooks put on the tab
   // status as `agentStatus.prompt`, and the phone reads it there
   // (agent-status-prompts.ts, 2026-09-19).
-  const tailPrompts = useAgentStatusPrompts(
+  const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
     showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
     nativeChatStatus,
     hudBeacon?.desktopPrompts
   )
-  const agentMessages = useBeaconAgentMessages(hudBeacon)
+  const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -577,7 +577,7 @@ export function useMobileNativeChatController(
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
-    nativeChatDesktopPrompts: tailPrompts, nativeChatAgentMessages: agentMessages,
+    nativeChatDesktopPrompts: tailPrompts, nativeChatAgentMessages: agentMessages, nativeChatStatusAgentMessages: statusAgentMessages,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,

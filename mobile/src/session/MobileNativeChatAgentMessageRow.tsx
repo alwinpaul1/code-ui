@@ -11,6 +11,11 @@ import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 export const AGENT_MESSAGE_UNREAD_NOTE =
   'Only the sender reached the phone. To read the message, expand this row in the desktop terminal (ctrl+o).'
 
+/** What an opened row says under words that are only the start of the message
+ *  (the hook's 2,000 characters, the tab status's 200). */
+export const AGENT_MESSAGE_CUT_NOTE =
+  'Only the start of this message reached the phone. The rest is in the desktop terminal (ctrl+o).'
+
 /**
  * A message a subagent sent this session, folded like the desktop TUI folds
  * it ("› Message from @general-purpose (ctrl+o to expand)") and drawn like a
@@ -21,12 +26,15 @@ export const AGENT_MESSAGE_UNREAD_NOTE =
 export function MobileNativeChatAgentMessageRow({
   sender,
   body,
+  cut,
   fontScale,
   onOpenFile,
   styles
 }: {
   sender: string
   body: string
+  /** Only the start of the message reached the phone. */
+  cut?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
@@ -56,7 +64,14 @@ export function MobileNativeChatAgentMessageRow({
       {open ? (
         <View style={styles.toolRunBody} testID="native-chat-agent-message-body">
           {body.trim().length > 0 ? (
-            <MobileMarkdown content={body} textScale={fontScale} onOpenFile={onOpenFile} />
+            <>
+              <MobileMarkdown content={body} textScale={fontScale} onOpenFile={onOpenFile} />
+              {cut ? (
+                <Txt variant="caption" tone="muted" scale={fontScale} testID="native-chat-agent-message-cut">
+                  {AGENT_MESSAGE_CUT_NOTE}
+                </Txt>
+              ) : null}
+            </>
           ) : (
             <Txt variant="caption" tone="muted" scale={fontScale}>
               {AGENT_MESSAGE_UNREAD_NOTE}

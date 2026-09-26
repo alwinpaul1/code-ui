@@ -8,6 +8,7 @@ import {
 } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
+import { unescapeJsonStringBody } from './agent-hud-beacon'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -155,6 +156,62 @@ describe('a message the person typed, remembered as a witness, on the next launc
   it('is restored from the queue box when it starts "No response requested."', () => {
     const stored = [{ id: 'absorbed-abc', text: 'No response requested. Just note that the API moved to v3.', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-abc'])
+  })
+
+  it('is swept when it is another session\'s delivery the old build stored, and kept when it only quotes the opener', () => {
+    const delivery = 'Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="code-ui-6f">\n<agent-message from="a379d31745861b502">\nCapture probe\n</agent-message>\n</cross-session-message>'
+    const stored = [
+      { id: 'desk-4105', text: delivery, ...base },
+      { id: 'desk-4106', text: 'Another Claude session sent a message: what does that mean?', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4106'])
+  })
+
+  // Review of 2026-09-27: it is drawn as the user's bubble live (no closing
+  // tag, and the hook did not cut it), and the sweep took it as cut.
+  it('is restored when it quotes the wrapper\'s whole first line and goes on in its own words', () => {
+    const text = '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?'
+    const stored = [{ id: 'desk-4107', text, ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4107'])
+  })
+
+  it('is restored from the queue box when it only reads like a peer row, and the TUI\'s own row stored as one is swept', () => {
+    const stored = [
+      { id: 'absorbed-peer', text: 'Message from @a9d5c2f85e94ca47f (ctrl+o to expand)', ...base },
+      { id: 'absorbed-typed', text: 'Message from me: please look at the queue', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, item 4: a person's queued message that
+  // opens "Message from @name:" was swept, and for a mid-turn send with no
+  // desk copy that witness is the only record of it.
+  it('is restored from the queue box when it opens "Message from @name:" in the person\'s own words', () => {
+    const stored = [
+      { id: 'absorbed-typed', text: 'Message from @sarah: the deploy failed, can you look?', ...base },
+      { id: 'absorbed-peer', text: 'Message from @code-ui-6f: Capture probe from the Code UI session (ctrl+o to expand)', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, nit 7: since 417983a5 a cut subagent
+  // request (no hand-back line, and no closing tag after the hook's cut) that
+  // an old build stored as a desk witness came back as a raw XML bubble. The
+  // stored text is what the hook sent: the prompt's JSON string body cut at
+  // 2,000 bytes (agent-hud-launch-args.ts), decoded by the beacon.
+  it('is swept when it is a subagent request the hook cut, as the old build stored it', () => {
+    const body = Array.from({ length: 40 }, (_, index) => `${index + 1}. Please run the probe step ${index + 1} and report what the screen shows.`).join('\n')
+    const prompt = `<agent-message from="a7a46867b4f497c96">\nRequest for device probes:\n${body}\n</agent-message>`
+    const sent = unescapeJsonStringBody(JSON.stringify(prompt).slice(1, -1).slice(0, 2000))
+    expect(sent).not.toContain('</agent-message>')
+    // A person's prompt that quotes the line and goes on at length, short of the cut.
+    const quoting = `<agent-message from="a7a46867b4f497c96">\n${'why does this line show up in my log? '.repeat(40)}`
+    const stored = [
+      { id: 'desk-4108', text: sent, ...base },
+      { id: 'desk-4109', text: '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?', ...base },
+      { id: 'desk-4110', text: quoting, ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4109', 'desk-4110'])
   })
 
   it('is restored when it opens by quoting an <agent-message> tag', () => {

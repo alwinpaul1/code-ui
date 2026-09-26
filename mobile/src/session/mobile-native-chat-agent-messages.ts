@@ -3,6 +3,7 @@ import { isToolCallBlock, isToolResultBlock, isTextBlock, type NativeChatMessage
 import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
 import type { AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { readLaunch, readString, takeAnsweredCall, type PendingCall } from './mobile-background-task-transcript'
+import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
 
 /**
  * A message a subagent sent its lead, drawn the way the desktop TUI draws it:
@@ -30,6 +31,9 @@ export const AGENT_MESSAGE_PRESENTATION = 'agent-message'
 
 export type SubagentMessage = { from: string; body: string }
 
+/** A prompt the hook took at the row a subagent message names. */
+export type SameRowPrompt = { nonce: string; text: string }
+
 /** A subagent message the prompt hook carried, not yet placed. */
 export type BeaconAgentMessage = {
   id: string
@@ -41,10 +45,18 @@ export type BeaconAgentMessage = {
   anchorId?: string
   /** Read back from the warm-start store, not heard this run. */
   restored?: true
-  /** The prompts the hook took after this message at the same row, by their
-   *  text: each is drawn below the message, in the order they came, rather
-   *  than straight after the row above it (mobile-native-chat-agent-message-rows.ts). */
-  laterAtSameRow?: string[]
+  /** The row the chat drew it after before it was stored. */
+  drawnAfter?: string
+  /** The terminal whose beacon carried it, where that row is stored: a
+   *  nonce is the hook's process id, and another terminal can hold the same
+   *  one (review of 2026-09-27). */
+  terminal?: string
+  /** The prompts the hook took after this message at the same row: each is
+   *  drawn below the message, in the order they came, rather than straight
+   *  after the row above it (mobile-native-chat-agent-message-rows.ts). */
+  laterAtSameRow?: SameRowPrompt[]
+  /** And those it took before the message at that row, which stay above it. */
+  earlierAtSameRow?: SameRowPrompt[]
 }
 
 const OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:[ \t]*\n/
@@ -63,7 +75,9 @@ const HANDBACK_INDENT = '  '
  *
  * Only Claude Code's own wrapper counts, as the whole prompt: its first line
  * is `<agent-message from="…">` and nothing else, and `</agent-message>` ends
- * it. A prompt that merely starts with the tag, or quotes the first line and
+ * it, or one of the harness's own framing paragraphs follows that tag (a
+ * delivery while the lead is idle, 2026-09-27 review: drawn as the user's
+ * bubble again). A prompt that merely starts with the tag, or quotes the first line and
  * goes on in someone's words, is a person's prompt (review of 2026-09-26: the
  * shared harness classifier matched by the leading tag, and a desk prompt that
  * quoted one was drawn nowhere). `cut`: the hook shortened the prompt, so the
@@ -77,12 +91,16 @@ export function parseSubagentMessage(text: string, options: { cut?: boolean } = 
     return null
   }
   let body = rest.slice(open[0].length)
-  // The wrapper's own closing tag is the one that ends the prompt. A report
-  // may quote the tag, and cutting at the first one dropped everything after
-  // the quote.
+  // The wrapper's own closing tag is the last one. A report may quote the tag,
+  // and cutting at the first one dropped everything after the quote. After it
+  // comes nothing, or one of the paragraphs Claude Code frames a delivery with
+  // (a short message delivered while the lead is idle ends with one); the
+  // same test its own display function makes (claude-peer-message-frames.ts).
   const whole = body.trimEnd()
-  if (whole.endsWith(CLOSE_TAG)) {
-    body = whole.slice(0, whole.length - CLOSE_TAG.length)
+  const close = whole.lastIndexOf(CLOSE_TAG)
+  const after = close === -1 ? null : whole.slice(close + CLOSE_TAG.length)
+  if (after !== null && (after === '' || PEER_TRAILING_FRAMES.includes(after))) {
+    body = whole.slice(0, close)
   } else if (options.cut !== true) {
     return null
   }
@@ -90,6 +108,35 @@ export function parseSubagentMessage(text: string, options: { cut?: boolean } = 
     body = dedent(body.replace(HANDBACK_PREAMBLE, ''))
   }
   return { from, body: body.replace(/\s+$/, '').replace(/^\n+/, '') }
+}
+
+/** Whether a stored text is a hand-back the hook cut: the wrapper's line,
+ *  then the harness's own hand-back line. Without that second line a cut
+ *  text cannot be told from a person's prompt that quotes the wrapper's
+ *  first line. */
+export function isCutHandback(text: string): boolean {
+  const rest = text.replace(OPENER, '')
+  const open = OPEN_LINE.exec(rest)
+  return open !== null && HANDBACK_PREAMBLE.test(rest.slice(open[0].length)) && parseSubagentMessage(text, { cut: true }) !== null
+}
+
+/** The prompt hook sends a prompt's JSON string body cut at this many bytes
+ *  (CLAUDE_HUD_PROMPT_HOOK_SCRIPT in agent-hud-launch-args.ts). */
+const HOOK_CUT_BYTES = 2000
+/** Short of the cut by a character the byte cut split, or the lone trailing
+ *  backslash of an escape it split, which the beacon drops. */
+const HOOK_CUT_SLACK_BYTES = 8
+
+/** Whether a stored text is a subagent message the hook cut: the wrapper's
+ *  line, no closing tag, and as long as the hook's cut once written back as
+ *  the JSON body it was sent as. A person's prompt that quotes the wrapper's
+ *  line is short; the build that stored these kept no cut flag. */
+export function isCutAtHookLength(text: string): boolean {
+  if (parseSubagentMessage(text, { cut: true }) === null || parseSubagentMessage(text) !== null) {
+    return false
+  }
+  const sent = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
+  return sent >= HOOK_CUT_BYTES - HOOK_CUT_SLACK_BYTES
 }
 
 /** Whether a hook prompt is a subagent's message rather than something a
@@ -117,9 +164,11 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
     if (!parsed) {
       return
     }
-    const later = prompt.anchorId === undefined
-      ? []
-      : list.slice(index + 1).filter((next) => next.anchorId === prompt.anchorId && !isSubagentMessagePrompt(next))
+    const atSameRow = (other: AgentMessagePrompt) =>
+      prompt.anchorId !== undefined && other.anchorId === prompt.anchorId && !isSubagentMessagePrompt(other)
+    const sameRow = (others: readonly AgentMessagePrompt[]) => others.filter(atSameRow).map(({ nonce, text }) => ({ nonce, text }))
+    const later = sameRow(list.slice(index + 1))
+    const earlier = sameRow(list.slice(0, index))
     found.push({
       id: `agent-message:${prompt.nonce}`,
       from: parsed.from,
@@ -127,7 +176,9 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
       cut: prompt.cut === true,
       ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
       ...(prompt.restored ? { restored: true as const } : {}),
-      ...(later.length > 0 ? { laterAtSameRow: later.map((next) => next.text) } : {})
+      ...(prompt.drawnAfter ? { drawnAfter: prompt.drawnAfter } : {}),
+      ...(later.length > 0 ? { laterAtSameRow: later } : {}),
+      ...(later.length > 0 && earlier.length > 0 ? { earlierAtSameRow: earlier } : {})
     })
   })
   return found
@@ -138,29 +189,35 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
  *  prompts that list still holds. Those it no longer holds came before all
  *  of them. */
 export function agentMessagesOfBeacon(
-  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined,
+  /** The terminal the beacon is of: where each message's placement is stored. */
+  terminal?: string | null
 ): BeaconAgentMessage[] {
   const kept = beacon?.agentMessagePrompts
   const prompts = beacon?.desktopPrompts ?? []
-  if (!kept) {
-    return beaconAgentMessages(prompts)
-  }
-  const keptByNonce = new Map(kept.map((prompt) => [prompt.nonce, prompt]))
+  const keptByNonce = new Map((kept ?? []).map((prompt) => [prompt.nonce, prompt]))
   const held = new Set(prompts.map((prompt) => prompt.nonce))
-  return beaconAgentMessages([
-    ...kept.filter((prompt) => !held.has(prompt.nonce)),
-    // The kept copy, which knows whether it was restored; one the kept list
-    // shed is not drawn.
-    ...prompts.flatMap((prompt) => keptByNonce.get(prompt.nonce) ?? (isSubagentMessagePrompt(prompt) ? [] : [prompt]))
-  ])
+  const messages = kept
+    ? beaconAgentMessages([
+        ...kept.filter((prompt) => !held.has(prompt.nonce)),
+        // The kept copy, which knows whether it was restored; one the kept
+        // list shed is not drawn.
+        ...prompts.flatMap((prompt) => keptByNonce.get(prompt.nonce) ?? (isSubagentMessagePrompt(prompt) ? [] : [prompt]))
+      ])
+    : beaconAgentMessages(prompts)
+  return terminal ? messages.map((message) => ({ ...message, terminal })) : messages
 }
 
 export function useBeaconAgentMessages(
-  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined
+  beacon: Pick<AgentHudBeacon, 'desktopPrompts' | 'agentMessagePrompts'> | null | undefined,
+  terminal?: string | null
 ): BeaconAgentMessage[] {
   const kept = beacon?.agentMessagePrompts
   const prompts = beacon?.desktopPrompts
-  return useMemo(() => agentMessagesOfBeacon({ desktopPrompts: prompts ?? [], agentMessagePrompts: kept }), [kept, prompts])
+  return useMemo(
+    () => agentMessagesOfBeacon({ desktopPrompts: prompts ?? [], agentMessagePrompts: kept }, terminal),
+    [kept, prompts, terminal]
+  )
 }
 
 /**
@@ -189,29 +246,99 @@ export function subagentNames(messages: readonly NativeChatMessage[]): Map<strin
   return names
 }
 
+/** The hint of a row whose message the phone has only the start of. */
+const CUT_AGENT_MESSAGE_PRESENTATION = 'agent-message-cut'
+
 export function agentMessageRow(args: {
   id: string
   sender: string
   body: string
+  /** Only the start of the message reached the phone. */
+  cut?: boolean
   timestamp: number | null
 }): NativeChatMessage {
+  const hint = args.cut === true && args.body.length > 0 ? CUT_AGENT_MESSAGE_PRESENTATION : AGENT_MESSAGE_PRESENTATION
   return {
     id: args.id,
     role: 'system',
     timestamp: args.timestamp,
     source: 'transcript',
-    blocks: [{ type: 'text', text: args.body, presentation: `${AGENT_MESSAGE_PRESENTATION}:${args.sender}` }]
+    blocks: [{ type: 'text', text: args.body, presentation: `${hint}:${args.sender}` }]
   }
 }
 
-/** The sender and message of a row this module drew, or null for any other. */
-export function agentMessageOf(message: NativeChatMessage): { sender: string; body: string } | null {
+/** The sender and message of a row this module drew, or null for any other;
+ *  `cut` when the phone has only the start of the message. */
+export function agentMessageOf(message: NativeChatMessage): { sender: string; body: string; cut?: true } | null {
   const block = message.blocks[0]
-  const prefix = `${AGENT_MESSAGE_PRESENTATION}:`
   if (message.role !== 'system' || message.blocks.length !== 1 || !block || !isTextBlock(block)) {
     return null
   }
-  return block.presentation?.startsWith(prefix)
-    ? { sender: block.presentation.slice(prefix.length), body: block.text }
-    : null
+  const presentation = block.presentation ?? ''
+  const cutPrefix = `${CUT_AGENT_MESSAGE_PRESENTATION}:`
+  if (presentation.startsWith(cutPrefix)) {
+    return { sender: presentation.slice(cutPrefix.length), body: block.text, cut: true }
+  }
+  const prefix = `${AGENT_MESSAGE_PRESENTATION}:`
+  return presentation.startsWith(prefix) ? { sender: presentation.slice(prefix.length), body: block.text } : null
+}
+
+/** The status's copies as words for the screen's sender-only rows, each
+ *  under the agent's id and the name its launch gave it (the row shows one or
+ *  the other: "@a9d5c2f85e94ca47f" for a hand-back, "@general-purpose"). */
+export function screenRowBodies(
+  messages: readonly StatusSubagentMessage[],
+  raw: readonly NativeChatMessage[]
+): { senders: string[]; body: string; cut: boolean; seenAt: number }[] {
+  if (messages.length === 0) {
+    return []
+  }
+  const names = subagentNames(raw)
+  return messages.map((message) => {
+    const name = names.get(message.from)
+    return { senders: name ? [message.from, name] : [message.from], body: message.body, cut: message.cut, seenAt: message.seenAt }
+  })
+}
+
+/** What the tab status carried of a subagent message: who sent it, and as
+ *  much of its words as fit (parseStatusSubagentPreview). */
+export type StatusSubagentPreview = { from: string; body: string; cut: boolean }
+/** The same, with when the phone first read it (its clock). */
+export type StatusSubagentMessage = StatusSubagentPreview & { seenAt: number }
+
+const STATUS_OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:\s+/
+const STATUS_TAG = /^<agent-message\b([^>]*)>\s*/
+const HANDBACK_LINE = '[Subagent hand-back]'
+const REPORT_FOLLOWS = 'The report follows:'
+
+/**
+ * A subagent message as the tab status carries it, or null for anything else.
+ *
+ * Orca's hook puts every prompt on the tab status folded to one line and cut
+ * at 200 characters (normalizePromptField in
+ * src/shared/agent-status-field-normalization.ts), subagent messages
+ * included. So it holds the first words of a short message, and none of a
+ * hand-back's report: the harness's line before it is longer than that. A
+ * text of fewer characters than the cap with no closing tag was not cut, and
+ * is not the wrapper (a person's prompt that opens with the tag).
+ */
+export function parseStatusSubagentPreview(text: string, cut: boolean): StatusSubagentPreview | null {
+  const rest = text.replace(STATUS_OPENER, '')
+  const open = STATUS_TAG.exec(rest)
+  const from = open ? FROM.exec(open[1] ?? '')?.[1]?.trim() : undefined
+  if (!open || !from) {
+    return null
+  }
+  let body = rest.slice(open[0].length)
+  const close = body.lastIndexOf(CLOSE_TAG)
+  if (close !== -1) {
+    body = body.slice(0, close)
+  } else if (!cut) {
+    return null
+  }
+  if (body.startsWith(HANDBACK_LINE)) {
+    const report = body.indexOf(REPORT_FOLLOWS)
+    body = report === -1 ? '' : body.slice(report + REPORT_FOLLOWS.length)
+  }
+  return { from, body: body.trim(), cut: close === -1 }
 }

@@ -46,7 +46,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { AGENT_MESSAGE_UNREAD_NOTE } from './MobileNativeChatAgentMessageRow'
+import { AGENT_MESSAGE_CUT_NOTE, AGENT_MESSAGE_UNREAD_NOTE } from './MobileNativeChatAgentMessageRow'
 import { agentMessageRow, parseSubagentMessage } from './mobile-native-chat-agent-messages'
 import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 
@@ -55,7 +55,7 @@ import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-im
 // message under "Message from general-purpose").
 
 const BODY = parseSubagentMessage(SUBAGENT_REQUEST_PROMPT)!.body
-const row = (body: string) => agentMessageRow({ id: 'agent-message:1', sender: 'general-purpose', body, timestamp: 1 })
+const row = (body: string, cut = false) => agentMessageRow({ id: 'agent-message:1', sender: 'general-purpose', body, cut, timestamp: 1 })
 
 function texts(node: ReactTestInstance): string[] {
   return node.findAll((entry) => (entry.type as unknown) === 'Text').map((entry) => [entry.props.children].flat().join(''))
@@ -75,11 +75,11 @@ describe("a subagent's message in the chat", () => {
     act(() => renderer?.unmount())
     renderer = null
   })
-  const render = (body: string, scheme: 'light' | 'dark' = 'light') => {
+  const render = (body: string, scheme: 'light' | 'dark' = 'light', cut = false) => {
     act(() => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
-          {createElement(MobileNativeChatMessage, { message: row(body) })}
+          {createElement(MobileNativeChatMessage, { message: row(body, cut) })}
         </ThemeProvider>
       )
     })
@@ -107,6 +107,34 @@ describe("a subagent's message in the chat", () => {
     const root = render('')
     act(() => toggle(root).props.onPress())
     expect(texts(root)).toEqual(['Message from general-purpose', AGENT_MESSAGE_UNREAD_NOTE])
+  })
+
+  // Bug B review, 2026-09-27: words that are only the start of the message
+  // (the hook's 2,000 characters, the tab status's 200) must never read as
+  // the whole of it.
+  it('says so under the words when only the start of the message reached the phone', () => {
+    const root = render('Request for one read-only device probe…', 'light', true)
+    act(() => toggle(root).props.onPress())
+    expect(root.findAll((node) => (node.type as unknown) === 'MobileMarkdown').map((node) => node.props.content)).toEqual([
+      'Request for one read-only device probe…'
+    ])
+    expect(texts(root)).toEqual(['Message from general-purpose', AGENT_MESSAGE_CUT_NOTE])
+  })
+
+  it('says nothing more under words that are the whole message', () => {
+    const root = render(BODY)
+    act(() => toggle(root).props.onPress())
+    expect(texts(root)).toEqual(['Message from general-purpose'])
+  })
+
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('paints the note under a cut message from the %s theme', (scheme, palette) => {
+    const root = render('Request for one read-only device probe…', scheme, true)
+    act(() => toggle(root).props.onPress())
+    const note = root.find((node) => (node.type as unknown) === 'Text' && [node.props.children].flat().join('') === AGENT_MESSAGE_CUT_NOTE)
+    expect(colorOf(note.props.style)).toBe(palette.textMuted)
   })
 
   it('is never a bubble: no copy control and nothing to rewind', () => {

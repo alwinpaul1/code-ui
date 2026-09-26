@@ -1,6 +1,7 @@
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import { parseStatusSubagentPreview, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 
 /**
  * A desktop prompt read off the tab's `agentStatus.prompt`.
@@ -53,6 +54,10 @@ export type AgentStatusPromptState = {
    *  events keep the field) does not become a second bubble. */
   last: string | null
   prompts: readonly DesktopPrompt[]
+  /** The subagent messages the status carried, in the order it did: never
+   *  desktop prompts, but the only words of one a tab without the prompt
+   *  hook gets (parseStatusSubagentPreview). */
+  agentMessages?: readonly StatusSubagentMessage[]
   /** The line the chat logs for the last prompt it held back, or null when
    *  none was. */
   withheld: string | null
@@ -86,7 +91,7 @@ export function observeAgentStatusPrompt(
     // posts as this pane (2026-09-19). On the way back the row carried that
     // session's text with this session's id, and a reset to null took it as a
     // new prompt of this chat.
-    state = { sessionKey, read: false, last: state.last, prompts: [], withheld: null }
+    state = { sessionKey, read: false, last: state.last, prompts: [], agentMessages: [], withheld: null }
   }
   if (sessionKey === null) {
     return state
@@ -117,7 +122,13 @@ export function observeAgentStatusPrompt(
   // an XML tag. The transcript row is drawn as a peer notice; an echo here
   // would be the wrapper, drawn twice (2026-09-20). Seen, not echoed.
   if (isKnownHarnessInjectedUserTurnText(text)) {
-    return { ...state, last: text }
+    const message = parseStatusSubagentPreview(text, text.length >= AGENT_STATUS_MAX_FIELD_LENGTH)
+    // When the phone first read it, which is what pairs it with the screen's
+    // row of the same message (screen-peer-notices.ts).
+    const seen = message ? { ...message, seenAt: Date.now() } : null
+    return seen
+      ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), seen].slice(-PROMPT_CAP) }
+      : { ...state, last: text }
   }
   // A prompt whose time the status does not hold is never drawn: placed by a
   // time that is not its own, it sat in another turn (session 76ba8f2f,
@@ -166,6 +177,9 @@ export function observeAgentStatusPrompt(
     seenAt: Date.now()
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
+  // The subagent messages stay (`...state`): dropping them here took the
+  // words off a "Message from" row the moment the person replied (review of
+  // 2026-09-27).
   return { ...state, last: text, prompts }
 }
 
