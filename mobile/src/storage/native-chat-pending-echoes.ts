@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { MobileNativeChatPendingMessage } from '../session/mobile-native-chat-pending-echo'
+import { withPhotosWhere, type MobileNativeChatPendingMessage } from '../session/mobile-native-chat-pending-echo'
 
 const PREFIX = 'orca:chatPendingEchoes:'
 /** A queued echo older than this is dropped on hydrate: whatever it was, the
@@ -83,11 +83,7 @@ export async function readNativeChatPendingEchoes(
     }
     rememberCreatedAt(sessionKey, fresh, born)
     // `data:` previews are not kept (see native-chat-image-previews.ts).
-    return fresh.map((item) => {
-      const images = item.images?.filter((uri) => !uri.startsWith('data:'))
-      const { images: _dropped, ...rest } = item
-      return images?.length ? { ...rest, images } : rest
-    })
+    return fresh.map((item) => withPhotosWhere(item, (uri) => !uri.startsWith('data:')))
   } catch {
     return null
   }
@@ -132,11 +128,7 @@ export function writeNativeChatPendingEchoes(
   // JS thread and can blow AsyncStorage's row cap, which silently loses the
   // whole entry — exactly for the paste this feature exists to keep. Strip at
   // write, as the sibling preview store does.
-  const persistable = pending.map((item) => {
-    const images = item.images?.filter((uri) => !uri.startsWith('data:'))
-    const { images: _dropped, ...rest } = item
-    return images?.length ? { ...rest, images } : rest
-  })
+  const persistable = pending.map((item) => withPhotosWhere(item, (uri) => !uri.startsWith('data:')))
   rememberCreatedAt(sessionKey, persistable, () => now)
   const seen = createdAtBySession.get(sessionKey)
   const createdAt: Record<string, number> = {}

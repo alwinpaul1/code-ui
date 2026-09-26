@@ -1,6 +1,6 @@
 import { stripMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
 import { clearDraftAtSendStartWith } from './mobile-native-chat-draft-send-start'
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
 import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-pending-persistence'
@@ -8,15 +8,16 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
 import { parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
 import {
-  draftWasSent, findLandedImagePreviewEchoes,
+  draftWasSent,
   findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
   normalizeReconcileText,
   type UnconfirmedSend
 } from './mobile-native-chat-draft-reconcile'
-import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
-import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
+import { previewsAsDrawn, settleLandedOwnSends, storedAfterLanding } from './mobile-native-chat-landed-own-sends'
+import { knownNativeChatImagePreviews } from './mobile-native-chat-image-preview-cache'
+import { waitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 import { acceptOwnSendInPending } from './mobile-native-chat-remember-echo'
 import {
   dropMobileNativeChatPending,
@@ -36,7 +37,6 @@ import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-ap
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
-const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 // Route remounts must not reuse the keys of bubbles restored from disk.
 let pendingCounter = 0
 
@@ -79,6 +79,9 @@ export function useMobileNativeChatDrafts(args: {
   appendComposerMention: (tabId: string, mention: string) => void
   getComposerEditGeneration: () => number
   pending: MobileNativeChatPendingMessage[]
+  /** Photo sends the store has not read back yet for this chat, as last
+   *  written (waitingPhotoSends); none once it has. */
+  waitingPhotoSends: readonly MobileNativeChatPendingMessage[] | undefined
   /** Phone-local previews rebound to the transcript message that replaced the
    *  optimistic echo, keyed by authoritative message id. */
   imagePreviewsByMessageId: Record<string, string[]>
@@ -93,9 +96,9 @@ export function useMobileNativeChatDrafts(args: {
   /** Put the text back after a definite rejection, unless newer edits exist. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Clear the composer at send start; `images` also echoes at once — see clearDraftAtSendStartWith. */
-  clearDraftAtSendStart: (text: string, images?: string[]) => (() => void) | null
+  clearDraftAtSendStart: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
   /** Returns the new pending echo's id (for a later removePending), or null if none was added. */
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => string | null
+  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]) => string | null
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
@@ -220,7 +223,7 @@ export function useMobileNativeChatDrafts(args: {
   }, [])
 
   const acceptSend = useCallback(
-    (origin: MobileNativeChatSendOrigin, text: string, images?: string[]): string | null => {
+    (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]): string | null => {
       if (!origin.pendingKey && !images?.length) {
         return null
       }
@@ -229,11 +232,11 @@ export function useMobileNativeChatDrafts(args: {
       const key = origin.pendingKey
       if (key) {
         setPendingBySession((previous) =>
-          acceptOwnSendInPending(previous, key, id, origin, text, images)
+          acceptOwnSendInPending(previous, key, id, origin, text, images, imagePaths)
         )
       } else {
         setPendingWaitingForSession((previous) =>
-          acceptOwnSendInPending(previous, origin.draftKey, id, origin, text, images)
+          acceptOwnSendInPending(previous, origin.draftKey, id, origin, text, images, imagePaths)
         )
       }
       return id
@@ -328,6 +331,16 @@ export function useMobileNativeChatDrafts(args: {
     ? (pendingBySession[pendingKey] ?? NO_PENDING_MESSAGES)
     : NO_PENDING_MESSAGES
   const pending = combineMobileNativeChatPending(sessionPending, waitingForSession)
+  // Decided while rendering, so the render that first draws a landed row also
+  // draws its photos and no echo beside it; the effect then stores the same
+  // result (mobile-native-chat-landed-own-sends.ts, 2026-09-26).
+  // Until the store has read the session's previews back, what this process
+  // last knew of them, so a chat that comes back draws its photos at once.
+  const storedPreviews = pendingKey ? (imagePreviewsBySession[pendingKey] ?? knownNativeChatImagePreviews(pendingKey)) : undefined
+  const landed = useMemo(
+    () => (pendingKey ? settleLandedOwnSends(messages, pending, transcriptSettled, storedPreviews) : null),
+    [messages, pending, pendingKey, storedPreviews, transcriptSettled]
+  )
   useEffect(() => {
     if (!pendingKey) {
       return
@@ -335,35 +348,19 @@ export function useMobileNativeChatDrafts(args: {
     setImagePreviewsBySession((previous) =>
       migrateImagePreviewMessageIds(previous, pendingKey, messages)
     )
-    if (pending.length === 0) {
+    if (pending.length === 0 || !landed) {
       return
     }
-    // Only judge a send against a read known to be this session's. Note this
-    // does NOT give an image echo a boundary — the rebase deliberately leaves
-    // those on whatever they captured — so a caption-less photo sent before any
-    // read settled can still claim an older photo turn, exactly as it does on
-    // main. Fixing that needs a tail that excludes older image turns without
-    // excluding the send's own echo, which is a separate change.
-    // Rebase FIRST so the binder sees the list retirement will: rebasing inside
-    // the updater left a photo sent before the transcript settled invisible to
-    // the binder yet retirable in that same pass (2026-09-14 review).
-    const rebased = transcriptSettled ? rebaseMobileNativeChatPendingBaselines(messages, pending) : pending
-    const landedImagePreviews = findLandedImagePreviewEchoes(
-      messages,
-      rebased.filter((item) => item.baselineResolved)
-    )
-    const landedImagePendingIds = new Set(landedImagePreviews.map((preview) => preview.pendingId))
-    if (landedImagePreviews.length > 0) {
+    if (landed.landedImagePreviews.length > 0) {
       setImagePreviewsBySession((previous) =>
-        mergeLandedImagePreviewEchoes(previous, pendingKey, landedImagePreviews)
+        mergeLandedImagePreviewEchoes(previous, pendingKey, landed.landedImagePreviews)
       )
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
       // The same rebased list the binder saw, so a photo cannot be retired in a
       // pass where the binder never had the chance to claim its thumbnail.
-      const list = current === pending ? rebased : rebaseMobileNativeChatPendingBaselines(messages, current)
-      const next = retireLandedMobileNativeChatPending(messages, list, landedImagePendingIds)
+      const next = storedAfterLanding(messages, current, pending, landed)
       if (next === current) {
         return previous
       }
@@ -371,24 +368,26 @@ export function useMobileNativeChatDrafts(args: {
       // Deleting the key made the storage hook skip the write and replay them.
       return { ...previous, [pendingKey]: next }
     })
-  }, [messages, pending, pendingKey, transcriptSettled])
+  }, [landed, messages, pending, pendingKey])
+  // Only until the store has the session's sends: after that it binds its own.
+  const written = pendingKey && !pendingBySession[pendingKey] ? waitingPhotoSends(pendingKey) : undefined
+  const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
   const removePending = useCallback((id: string) => {
     setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
     setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
   }, [])
 
-  const clearDraftAtSendStart = useCallback((text: string, images?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
+  const clearDraftAtSendStart = useCallback((text: string, images?: string[], imagePaths?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images, imagePaths), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
     appendComposerMention,
     getComposerEditGeneration: draftEditGenerationsRef.current.readComposer,
-    pending,
-    imagePreviewsByMessageId: pendingKey
-      ? (imagePreviewsBySession[pendingKey] ?? NO_IMAGE_PREVIEWS)
-      : NO_IMAGE_PREVIEWS,
+    pending: landed?.pending ?? pending,
+    waitingPhotoSends: written,
+    imagePreviewsByMessageId: drawnPreviews,
     captureSendOrigin,
     readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho, takeSends,
     clearDraftForSend,

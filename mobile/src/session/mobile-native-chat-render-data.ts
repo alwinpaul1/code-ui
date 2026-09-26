@@ -16,7 +16,7 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
-import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
+import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 
 /** An optimistic user echo: the text and/or the local preview URIs of any images
  *  ridden along on the send, shown until the transcript catches up. */
@@ -53,9 +53,10 @@ export function foldMobileNativeChatMessages(
   messages: NativeChatMessage[],
   splitAfterIds?: ReadonlySet<string>
 ): NativeChatMessage[] {
-  // A queued message records its images when composed but delivers its prompt
-  // later, so the agent's turns sit between them; pull those images back next
-  // to their prompt before normalizing, or they render above the bubble.
+  // A photo's companion is written right after its prompt; one stranded with
+  // agent turns between it and the prompt it names is pulled back next to that
+  // prompt before normalizing, or it renders above the bubble
+  // (mobile-native-chat-queued-image-fold.ts).
   // Normalize (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
   // A slash command's envelope row is the user's turn; surfaced before the
@@ -256,7 +257,7 @@ export function buildMobileNativeChatTransientData({
   if (missingBaselineIds.size > 0) {
     let lastVisibleId: string | null = null
     const forwardImageBaselineIds: string[] = []
-    for (const message of messages) {
+    for (const [index, message] of messages.entries()) {
       if (foldedIds.has(message.id)) {
         for (const baselineId of forwardImageBaselineIds) {
           foldedAnchorByRawId.set(baselineId, message.id)
@@ -267,7 +268,15 @@ export function buildMobileNativeChatTransientData({
       if (!missingBaselineIds.has(message.id)) {
         continue
       }
-      if (isImageSourceUserTurn(message)) {
+      // A photo's companion folds into the prompt written right before it
+      // (Claude Code 2.1.228 on), so a send made just after a photo message,
+      // before the agent wrote anything, sits under that message. Sent
+      // forward, it waited for a row that had not come yet and was drawn at
+      // the top of the chat, then under the reply once it came (2026-09-26).
+      const owner = isImageSourceUserTurn(message) ? trailingCompanionOwner(messages, index, message) : null
+      if (owner && foldedIds.has(owner.id)) {
+        foldedAnchorByRawId.set(message.id, owner.id)
+      } else if (isImageSourceUserTurn(message)) {
         forwardImageBaselineIds.push(message.id)
       } else if (lastVisibleId) {
         foldedAnchorByRawId.set(message.id, lastVisibleId)
@@ -294,7 +303,8 @@ export function buildMobileNativeChatTransientData({
       timestamp: null,
       source: 'transcript'
     }
-    // Tool/noise rows fold backward; image-source rows fold into their following prompt.
+    // Tool/noise rows fold backward; an image companion folds into the prompt
+    // it trails, or else the one after it (the mapping above).
     const baselineId = pendingPlacementAnchorId(item)
     if (baselineId && leadingBaselineIds.has(baselineId)) {
       leadingPending.push(bubble)

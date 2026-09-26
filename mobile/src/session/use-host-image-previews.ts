@@ -17,6 +17,7 @@ import {
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
+import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 
 const IMAGE_FILE = /\.(png|jpe?g|gif|webp|bmp)$/i
 
@@ -53,7 +54,9 @@ export function collectHostImagePaths(
   localPreviews: Record<string, string[]> | undefined
 ): Record<string, string[]> {
   const paths: Record<string, string[]> = {}
-  for (const message of normalizeImageTranscriptMessages([...messages])) {
+  // Folded as the chat draws them, so each path is asked for on the row that
+  // draws it (mobile-native-chat-queued-image-fold.ts).
+  for (const message of normalizeImageTranscriptMessages(foldQueuedImageTurns([...messages]))) {
     const read = readImagePaths(message)
     if (read.length > 0) {
       paths[message.id] = read

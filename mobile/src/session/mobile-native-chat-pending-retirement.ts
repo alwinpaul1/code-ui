@@ -5,6 +5,7 @@ import {
   normalizedUserText
 } from './mobile-native-chat-draft-reconcile'
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { rowWillNamePastedPhotos } from './mobile-native-chat-photo-rows'
 
 const SPACE = ' '
 /** How long before, and after, the phone saw a taken send leave the queue box
@@ -313,7 +314,27 @@ export function retireLandedMobileNativeChatPending(
     if (item.images?.length && !captioned) {
       continue
     }
+    // A photo send made before the read settled, whose own row will name the
+    // paths it pasted, retires when that row binds it: its ordinal was counted
+    // against another read, so an older row of the same words could retire it
+    // first, its photo bound nowhere and its row drawing "Image on Desktop"
+    // (review of becd6af2). A send made against a settled read counts its
+    // rows as before, which retires one whose row names another path, a resend
+    // after "Delivery unconfirmed" (re-review of 4e25d63e).
+    // Held until another send of its words has bound its own row: the send
+    // was never delivered and sent again (third review, 2026-09-26: the lost
+    // send stood beside the resend's row for a day). Not by the rows' time,
+    // which could not tell an older row answered within seconds from the
+    // send's (fourth review).
     const key = normalizeReconcileText(item.text)
+    if (
+      item.images?.length &&
+      item.sentBeforeReadSettled === true &&
+      rowWillNamePastedPhotos(item) &&
+      !current.some((other) => other.id !== item.id && landedImagePendingIds.has(other.id) && normalizeReconcileText(other.text) === key)
+    ) {
+      continue
+    }
     // A row of its text stamped as a taken send ahead of it left the box is
     // that send's own, dequeued at the end of the turn after all, and the pass
     // below gives it there. Taken by this copy instead, the taken one waited
@@ -379,7 +400,12 @@ export function retireLandedMobileNativeChatPending(
     }
   }
   for (const index of taken) {
-    if (claims(index)) {
+    // The same hold as below for a photo send made before the read settled:
+    // an older row of its words would take its only copy away (re-review of
+    // 4e25d63e). Its dequeued row, if it gets one, names its paths.
+    const item = current[index]!
+    const held = item.images?.length && item.sentBeforeReadSettled === true && rowWillNamePastedPhotos(item)
+    if (!held && claims(index)) {
       claim(index)
     }
   }

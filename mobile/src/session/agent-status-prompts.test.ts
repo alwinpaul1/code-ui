@@ -24,7 +24,9 @@ describe('desktop prompts read off the tab status', () => {
       {
         nonce: expect.stringMatching(/^status:sess-1:1789823300000:0$/),
         text: LIVE.prompt,
-        at: 1789823300000
+        at: 1789823300000,
+        atStateStart: true,
+        seenAt: expect.any(Number)
       }
     ])
   })

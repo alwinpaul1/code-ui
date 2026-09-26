@@ -1,6 +1,7 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { SEND_ROW_ORDER_SLACK_MS } from './mobile-native-chat-photo-rows'
 
 /**
  * Give the sends that never saw a transcript the boundary they lack, on the
@@ -53,6 +54,32 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  * the send below it (review, 2026-09-25). A row with no time goes with the
  * rows before it. A send with no time keeps the tail as before.
  */
+/**
+ * The last row of a read the desk wrote before a send, by the desk's clock
+ * alone: a row older than the read's newest by more than the time since the
+ * send, read at the moment the read settles, when that time is short. Null
+ * when none is, or the send has no time. One clock against itself, so a phone
+ * running behind or ahead cannot move it (seventh review of the photo binder,
+ * 2026-09-26).
+ */
+function writtenBeforeSend(messages: readonly NativeChatMessage[], sentAt: number | undefined): string | null {
+  if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+    return null
+  }
+  const newest = messages.reduce<number | null>(
+    (latest, message) => (message.timestamp !== null && (latest === null || message.timestamp > latest) ? message.timestamp : latest),
+    null
+  )
+  const sinceSend = Date.now() - sentAt
+  let before: string | null = null
+  for (const message of messages) {
+    if (newest !== null && message.timestamp !== null && newest - message.timestamp > sinceSend + SEND_ROW_ORDER_SLACK_MS) {
+      before = message.id
+    }
+  }
+  return before
+}
+
 export function rebaseMobileNativeChatPendingBaselines(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[]
@@ -78,7 +105,15 @@ export function rebaseMobileNativeChatPendingBaselines(
     if (item.baselineResolved) {
       return item
     }
-    const resolved = { ...item, baselineResolved: true }
+    // A photo send remembers the read it settled on: a row after it arrived
+    // after the send, and a row that read held can be its own only past the
+    // last one the desk's own clock says was written before it
+    // (mobile-native-chat-draft-reconcile.ts).
+    const resolved = {
+      ...item,
+      baselineResolved: true,
+      ...(item.images?.length ? { settledTailId: tail, settledWrittenBeforeId: writtenBeforeSend(messages, item.sentAt) } : {})
+    }
     // A send that captured its own tail is already drawn after it.
     if (item.baselineTailMessageId !== null) {
       return resolved

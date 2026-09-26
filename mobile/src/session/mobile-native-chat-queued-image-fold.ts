@@ -1,5 +1,8 @@
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
+import {
+  imageSourcePathsFromMessage,
+  isImageSourceUserTurn
+} from '../../../src/shared/native-chat-image-transcript-markers'
 
 const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/g
 const IMAGE_SOURCE_MARKER = /^\s*\[Image:\s*source:/m
@@ -28,17 +31,115 @@ function imageSourceCount(message: NativeChatMessage): number {
 }
 
 /**
+ * The prompt an image companion placed at `end` in `rows` belongs to because
+ * it was written right after it: the vendored normalizer's trailing fold, for
+ * a prompt that names images and has no companions of its own in front of it.
+ * Null when there is none, and the companion then belongs to what follows.
+ *
+ * Claude Code writes a pasted photo's companion AFTER its prompt, a
+ * millisecond later. Of the 617 companions on this machine from Claude Code
+ * 2.1.228 to 2.1.283 (counted 2026-09-26), 609 sit right after their prompt,
+ * 7 after a skill's preamble, a row Orca drops so the two are adjacent on the
+ * phone too, and 1 after the rows of a `/goal` command sent with photos. None
+ * comes before a prompt written later. Pulling such a companion forward
+ * stole one message's photos for the next one that named as many: two
+ * three-photo messages from the phone drew the second with the first one's
+ * photos, and its own under it as a bubble of three "Image on Desktop" chips
+ * with no words (2026-09-26, Claude Code 2.1.281, session 967668df).
+ */
+export function trailingCompanionOwner(
+  rows: readonly NativeChatMessage[],
+  end: number,
+  companion: NativeChatMessage
+): NativeChatMessage | null {
+  const source = companion.source
+  const ownerAt = rowBehindCompanions(rows, end, source)
+  const owner = rows[ownerAt]
+  if (!isPhotoPrompt(owner, source)) {
+    return null
+  }
+  // Companions in front of a prompt are its own in the older order, and then
+  // the run after it is not; unless they trail an earlier photo message,
+  // which is what two photo messages written back to back look like (review,
+  // 2026-09-26: the second message's photo went to a third that named as
+  // many). So walk back through prompt and companion pairs to the first
+  // prompt with none in front of it.
+  let at = ownerAt
+  for (;;) {
+    const behind = rowBehindCompanions(rows, at, source)
+    if (behind === at - 1) {
+      return owner!
+    }
+    // The loaded window starts with that run: it trails a prompt on the page
+    // before, as foldQueuedImageTurns reads it, not the prompt after it.
+    if (behind < 0) {
+      return owner!
+    }
+    if (!isPhotoPrompt(rows[behind], source)) {
+      return null
+    }
+    at = behind
+  }
+}
+
+/**
+ * A run of companions the loaded window starts with trails a prompt on the
+ * page before it, so it is never moved to the next photo message (review,
+ * 2026-09-26). Nor may the vendored normalizer fold it forward into a prompt
+ * right after it when that prompt has a companion of its own after it: a
+ * prompt has one, and two photo messages written back to back, cut by the
+ * page between the first and its companion, drew the second with the first
+ * one's photo. Such a run is handed on as its own photos, already folded. A
+ * run followed by a prompt with no companion after it is left to the
+ * normalizer, the older order. Returns the index after the run.
+ */
+function keepWindowStartRun(messages: readonly NativeChatMessage[], out: NativeChatMessage[]): number {
+  const source = messages[0]!.source
+  let end = 0
+  while (end < messages.length && messages[end]!.source === source && isImageSourceUserTurn(messages[end]!)) {
+    end += 1
+  }
+  const next = messages[end]
+  const nextHasOwn =
+    isPhotoPrompt(next, source) && !!messages[end + 1] && messages[end + 1]!.source === source && isImageSourceUserTurn(messages[end + 1]!)
+  for (const row of messages.slice(0, end)) {
+    out.push(
+      nextHasOwn
+        ? { ...row, blocks: imageSourcePathsFromMessage(row).map((path) => ({ type: 'image-ref' as const, path })) }
+        : row
+    )
+  }
+  return end
+}
+
+/** The index of the row before the run of companions that ends at `end`. */
+function rowBehindCompanions(rows: readonly NativeChatMessage[], end: number, source: NativeChatMessage['source']): number {
+  let at = end - 1
+  while (at >= 0 && rows[at]!.source === source && isImageSourceUserTurn(rows[at]!)) {
+    at -= 1
+  }
+  return at
+}
+
+function isPhotoPrompt(row: NativeChatMessage | undefined, source: NativeChatMessage['source']): boolean {
+  return !!row && row.role === 'user' && row.source === source && promptMarkerCount(row) > 0
+}
+
+/**
  * Moves a QUEUED message's image companions down next to the prompt they
  * belong to, so the vendored `normalizeImageTranscriptMessages` — which only
  * pairs an image companion with an IMMEDIATELY-adjacent prompt — can then fold
- * them into the bubble.
+ * them into the bubble. A run the prompt right before it owns stays put
+ * (trailingCompanionOwner).
  *
- * Claude records the images of a queued message when it is composed, then
- * delivers the prompt text later, when the queue drains, so the agent's own
- * turns sit between the two. Without this the images stay stranded as their own
- * turns and render ABOVE the message bubble (reported from the phone
- * 2026-09-14). This pass runs BEFORE the normalizer, on the raw transcript, so
- * the `[Image #N]` markers it matches on are still present.
+ * Written for a queued message whose images were recorded when it was
+ * composed and its prompt text later, when the queue drained, so the agent's
+ * own turns sat between the two and the images rendered ABOVE the message
+ * bubble (reported from the phone 2026-09-14). No transcript on this machine
+ * still shows that order: from Claude Code 2.1.228 to 2.1.283 a queued row's
+ * companion comes right after it, like any other prompt's (2026-09-26). This
+ * pass runs BEFORE the normalizer, on the raw transcript, so the `[Image #N]`
+ * markers it matches on are still present.
  *
  * It only reorders — the images are placed immediately before their prompt, and
  * the agent's turns keep their order. Every guard fails closed: the run folds
@@ -54,7 +155,11 @@ export function foldQueuedImageTurns(messages: NativeChatMessage[]): NativeChatM
       continue
     }
     const message = messages[index]!
-    if (!isImageSourceUserTurn(message)) {
+    if (isImageSourceUserTurn(message) && out.length === 0) {
+      index = keepWindowStartRun(messages, out) - 1
+      continue
+    }
+    if (!isImageSourceUserTurn(message) || trailingCompanionOwner(out, out.length, message)) {
       out.push(message)
       continue
     }

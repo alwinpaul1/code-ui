@@ -71,9 +71,25 @@ export function ImagePreviewModal(): React.JSX.Element | null {
               accessibilityLabel="Close image preview"
               style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
             />
+            <Pressable
+              onPress={closeImagePreview}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
+              })}
+            >
+              <X size={20} color="#fff" strokeWidth={2.2} />
+            </Pressable>
             {/* The composer's own attachment: opens the markup editor on
                 this exact photo, the one way into it (the Claude app's
-                pencil, 2026-09-24; a tap on the chip opens this preview
+                pencil, 2026-09-24, on the right since 2026-09-26; a tap on the chip opens this preview
                 first, 2026-09-26). Absent
                 for a sent bubble or a markdown figure, which have no editor
                 behind them. */}
@@ -101,22 +117,6 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             ) : (
               <View />
             )}
-            <Pressable
-              onPress={closeImagePreview}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              style={({ pressed }) => ({
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
-              })}
-            >
-              <X size={20} color="#fff" strokeWidth={2.2} />
-            </Pressable>
           </View>
           {/* Why a paged ScrollView: the Claude app's viewer swipes through the
               message's images and counts them ("5 of 6", 2026-09-12). Paging

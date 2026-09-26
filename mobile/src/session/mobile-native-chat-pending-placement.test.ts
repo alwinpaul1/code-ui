@@ -115,6 +115,45 @@ describe('a photo sent before the transcript had loaded', () => {
   })
 })
 
+// Claude Code 2.1.281 writes a pasted photo's companion right AFTER its
+// prompt (session 967668df, lines 23621 and 23624, 1 ms apart), and the next
+// row is the agent's, seconds later. A message sent in that gap has the
+// companion as its last row.
+describe('a message sent right after a photo message, before the agent wrote anything', () => {
+  const photoMessage = [
+    ...settledRead,
+    row('p', 'user', '[Image #67] see this'),
+    imageTurn('c', '/var/folders/0y/x/T/orca-paste-1790405916218-5211776c-2f4a-4164-bbdf-ed7c7adc9c20.png')
+  ]
+  const sentAfterIt: MobileNativeChatPendingMessage = {
+    id: 'q',
+    text: 'and one more thing',
+    expectedOccurrence: 1,
+    baselineTailMessageId: 'c',
+    baselineResolved: true
+  }
+
+  it('stays under the photo message, not at the top of the chat, before and after the reply lands', () => {
+    expect(render(photoMessage, [sentAfterIt])).toEqual(['m1', 'm2', 'm3', 'p', 'q'])
+    const replied = [...photoMessage, row('r', 'assistant', 'looking at both')]
+    expect(render(replied, [sentAfterIt])).toEqual(['m1', 'm2', 'm3', 'p', 'q', 'r'])
+  })
+
+  it('stays under the second of two photo messages written back to back', () => {
+    const backToBack = [
+      ...photoMessage,
+      row('p2', 'user', '[Image #68] and this one'),
+      imageTurn('c2', '/var/folders/0y/x/T/orca-paste-1790405982176-42c80aee-6038-4de8-aa23-68dca155febb.png')
+    ]
+    expect(render(backToBack, [{ ...sentAfterIt, baselineTailMessageId: 'c2' }])).toEqual(['m1', 'm2', 'm3', 'p', 'p2', 'q'])
+  })
+
+  it('still goes under the prompt a photo was written BEFORE, when the photo was the last row', () => {
+    const photoFirst = [...settledRead, imageTurn('c', '/var/tmp/photo.png'), row('p', 'user', '[Image #1] see this')]
+    expect(render(photoFirst, [sentAfterIt])).toEqual(['m1', 'm2', 'm3', 'p', 'q'])
+  })
+})
+
 describe('a message sent into a conversation that really was empty', () => {
   it('stays above the reply it asked for instead of below it', () => {
     // Captured against a SETTLED empty read: nothing came before it, so

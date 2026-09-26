@@ -1,9 +1,11 @@
 import { useDebouncedPersist } from './use-debounced-persist'
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 import {
-  readNativeChatImagePreviews,
-  writeNativeChatImagePreviews
-} from '../storage/native-chat-image-previews'
+  knownNativeChatImagePreviews,
+  loadNativeChatImagePreviews,
+  nativeChatImagePreviewsSettledThisRun,
+  saveNativeChatImagePreviews
+} from './mobile-native-chat-image-preview-cache'
 
 const PREVIEW_WRITE_DEBOUNCE_MS = 250
 
@@ -26,26 +28,42 @@ export function useMobileNativeChatImagePreviewPersistence(
     if (!sessionKey || known) {
       return
     }
-    let cancelled = false
-    void readNativeChatImagePreviews(sessionKey).then((stored) => {
-      if (cancelled || !stored || Object.keys(stored).length === 0) {
+    // Previews that landed meanwhile win per message; stored ones fill the
+    // rest, and win over a previous run's copy for a message both name: the
+    // stored entry is the record, and the copy can be a change behind it.
+    const fill = (stored: Record<string, string[]> | null | undefined, over?: Record<string, string[]>) => {
+      if (!stored || Object.keys(stored).length === 0) {
         return
       }
-      // Previews that landed meanwhile win per message; stored ones fill the rest.
-      setPreviewsBySession((previous) => ({
-        ...previous,
-        [sessionKey]: { ...stored, ...previous[sessionKey] }
-      }))
-    })
-    return () => {
-      cancelled = true
+      setPreviewsBySession((previous) => {
+        const mine = previous[sessionKey] ?? {}
+        const next = { ...stored, ...mine }
+        for (const [messageId, uris] of Object.entries(over ?? {})) {
+          if (mine[messageId] === uris && stored[messageId]) {
+            next[messageId] = stored[messageId]
+          }
+        }
+        return { ...previous, [sessionKey]: next }
+      })
     }
+    // What the chat already drew from the cache (use-mobile-native-chat-drafts.ts).
+    const copy = knownNativeChatImagePreviews(sessionKey)
+    fill(copy)
+    // Written or read in this run, storage holds nothing newer; a previous
+    // run's copy is only the start, and the read below completes it.
+    if (nativeChatImagePreviewsSettledThisRun(sessionKey)) {
+      return
+    }
+    // Not cancelled by a change of session: the state is kept per session,
+    // and a read dropped then left the session's older photos out of the
+    // next write, which replaced the stored entry (review, 2026-09-26).
+    void loadNativeChatImagePreviews(sessionKey).then((stored) => fill(stored, copy))
   }, [known, sessionKey, setPreviewsBySession])
 
   useDebouncedPersist(
     sessionKey,
     sessionKey ? previewsBySession[sessionKey] : undefined,
     PREVIEW_WRITE_DEBOUNCE_MS,
-    writeNativeChatImagePreviews
+    saveNativeChatImagePreviews
   )
 }

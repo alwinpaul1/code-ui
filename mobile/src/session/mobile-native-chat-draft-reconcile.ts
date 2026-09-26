@@ -1,4 +1,6 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, canBeEarlySendRow, writtenBefore } from './mobile-native-chat-photo-rows'
+import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
@@ -66,7 +68,23 @@ export type PendingImagePreviewEcho = {
   images?: string[]
   expectedOccurrence: number
   baselineTailMessageId: string | null
+  /** When the phone sent it, by the phone's clock (absent from older builds). */
+  sentAt?: number
+  /** Sent before the chat's read settled, so its tail is not to be trusted. */
+  sentBeforeReadSettled?: boolean
+  settledTailId?: string | null
+  settledWrittenBeforeId?: string | null
+  /** The desktop paths the send pasted, one per preview in `images`. */
+  imagePaths?: string[]
+  /** False for a send whose tail was never resolved against this chat's
+   *  read: only the path rule binds it, since the others go by that tail. */
+  baselineResolved?: boolean
+  /** When the agent took it out of its queue box (isTakenSend): it may get
+   *  no row at all. */
+  takenAt?: number
 }
+
+const NO_BOUND: Readonly<Record<string, readonly string[]>> = {}
 
 export type LandedImagePreviewEcho = {
   pendingId: string
@@ -107,6 +125,14 @@ function imagePreviewReplacementMessageId(
   if (!source || !isImageSourceUserTurn(source)) {
     return null
   }
+  // From Claude Code 2.1.228 a companion follows its prompt: the prompt right
+  // before the run owns it, as the chat draws it (trailingCompanionOwner).
+  // A run bound on its own at the window's start went forward to the next
+  // message once the page above it loaded (third review, 2026-09-26).
+  const owner = trailingCompanionOwner(messages, sourceIndex, source)
+  if (owner) {
+    return owner.id
+  }
   let nextIndex = sourceIndex + 1
   while (
     messages[nextIndex]?.source === source.source &&
@@ -115,6 +141,16 @@ function imagePreviewReplacementMessageId(
     nextIndex++
   }
   const prompt = messages[nextIndex]
+  // At the start of the window, a prompt with a companion of its own right
+  // after it is another message: this run trails the prompt before the
+  // window, as the chat draws it (keepWindowStartRun), and moved here it gave
+  // that prompt the first message's photos (review of becd6af2). Anywhere
+  // else the older order (companion before its prompt, Claude Code before
+  // 2.1.228) moves it as before (re-review of 4e25d63e).
+  const after = messages[nextIndex + 1]
+  if (sourceIndex === 0 && after?.source === source.source && isImageSourceUserTurn(after)) {
+    return null
+  }
   return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
     ? prompt.id
     : null
@@ -154,10 +190,14 @@ export function migrateImagePreviewMessageIds(
  *  the phone-local photo without this handoff. */
 export function findLandedImagePreviewEchoes(
   messages: readonly NativeChatMessage[],
-  entries: readonly PendingImagePreviewEcho[]
+  entries: readonly PendingImagePreviewEcho[],
+  /** The phone's photos rows already draw, from sends that retired. */
+  bound: Readonly<Record<string, readonly string[]>> = NO_BOUND,
+  now = Date.now()
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
+  const rawById = new Map(messages.map((message) => [message.id, message]))
   // Keep provenance from the raw transcript: normalization removes image markers,
   // so a plain text row must not become a candidate merely because it shares a
   // caption prefix with a glued image send.
@@ -188,17 +228,81 @@ export function findLandedImagePreviewEchoes(
     }
     resolvedTailIndexByRawId.set(message.id, lastSurviving)
   }
-  const claimedMessageIds = new Set<string>()
+  const indexOf = (id: string) => messageIndexById.get(id) ?? resolvedTailIndexByRawId.get(id)
+  // The phone's photos each row draws, from earlier sends and this pass. A
+  // row with as many as it has photos is another send's; one with room left
+  // is a row two sends were glued into, and the next one's photos go after
+  // the first's (review, 2026-09-26: refusing it left the second send's
+  // bubble standing for good). Glue is told by the words, so a photo with no
+  // words takes only a row that draws none yet: one with room left because
+  // its own send had fewer photos than it names is still that send's.
+  const drawn = new Map<string, readonly string[]>()
+  const drawnOn = (id: string) => drawn.get(id) ?? bound[id] ?? []
+  const newestStamp = messages.reduce<number | null>(
+    (newest, message) => (message.timestamp !== null && (newest === null || message.timestamp > newest) ? message.timestamp : newest),
+    null
+  )
   const landed: LandedImagePreviewEcho[] = []
+  // Claude Code and Codex name each photo a row carries by the path that was
+  // pasted, and the phone knows the paths it pasted: a row naming one of them
+  // is that send's, wherever it sits and whatever its stamp, and a row naming
+  // only others is not. The rules below guess only among rows that name no
+  // photo yet: a prompt row whose companion has not landed, or a host whose
+  // rows never name one. The path rule reads the rows as the chat draws them:
+  // a companion the loaded window starts with stays on its own there
+  // (foldQueuedImageTurns), and folded into the next prompt it gave that
+  // prompt the first message's photos (review of becd6af2).
+  const drawnRows = normalizeImageTranscriptMessages(foldQueuedImageTurns([...messages]))
 
   for (const entry of entries) {
     if (!entry.images?.length) {
       continue
     }
+    const pasted = pastedPhotos(entry)
+    if (pasted) {
+      const own = drawnRows.find(
+        (message) => message.role === 'user' && photoNames(message).some((name) => pasted.has(name))
+      )
+      if (own) {
+        const images = placedByName(own, pasted, drawnOn(own.id))
+        drawn.set(own.id, images)
+        landed.push({ pendingId: entry.id, messageId: own.id, images })
+        continue
+      }
+    }
+    if (entry.baselineResolved === false) {
+      continue
+    }
     const targetText = normalizeNativeChatUserText(entry.text)
+    const full = (message: NativeChatMessage) =>
+      targetText
+        ? drawnOn(message.id).length >= photoSlots(message, rawById.get(message.id))
+        : drawnOn(message.id).length > 0
     const candidates = normalized.filter((message) => {
-      if (message.role !== 'user') {
+      if (message.role !== 'user' || writtenBefore(message, entry, newestStamp, now)) {
         return false
+      }
+      // It names photos and none of this send's: another message's row
+      // (2026-09-26, Claude Code 2.1.283: an older photo row took a photo
+      // sent with no words, and the send's own row drew "Image on Desktop").
+      if (pasted && photoNames(message).length > 0) {
+        return false
+      }
+      // A row with no photo in it is not the row of a photo send the agent
+      // took mid-turn, which gets none, whatever its words (review of
+      // becd6af2: it went to a later "yes" sent alone). Nor is it the row of
+      // one sent before the read settled whose row will name its paths when
+      // that read already held the row: an older row of its words took it
+      // after a quiet minute (fourth review). A send's own row can carry
+      // none, its photo failed to attach, and still shows as the phone's
+      // (re-review of 4e25d63e; fifth review for an early send). Told by the
+      // read, not a clock: the phone's against the desk's let an older row
+      // take the photo (sixth review).
+      const heldForItsRow = entry.sentBeforeReadSettled === true && rowWillNamePastedPhotos(entry)
+      if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
+        if (typeof entry.takenAt === 'number' || (heldForItsRow && !canBeEarlySendRow(message, messageIndexById.get(message.id), entry, indexOf))) {
+          return false
+        }
       }
       if (targetText) {
         const text = normalizedUserText(message)
@@ -224,54 +328,29 @@ export function findLandedImagePreviewEchoes(
       ? (messageIndexById.get(entry.baselineTailMessageId) ??
         resolvedTailIndexByRawId.get(entry.baselineTailMessageId))
       : -1
+    const afterTail = (message: NativeChatMessage) =>
+      tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
     const occurrenceIndex = Math.max(0, entry.expectedOccurrence - 1)
-    const candidate = targetText
-      ? tailIndex !== undefined && tailIndex >= 0
+    // A photo with no words has only the order of photo rows to go by: the
+    // first after its tail that does not already draw another send's photos.
+    // Counting photo rows by the send's ordinal counted the rows of sends that
+    // had retired meanwhile too, so skipping the drawn ones could not use it.
+    const candidate =
+      !targetText || (tailIndex !== undefined && tailIndex >= 0)
         ? // The saved ordinal counted a larger transcript. A retained baseline
           // is stronger evidence: use the next unclaimed echo after that send.
-          candidates.find(
-            (message) =>
-              !claimedMessageIds.has(message.id) &&
-              (messageIndexById.get(message.id) ?? -1) > tailIndex
-          )
+          candidates.find((message) => afterTail(message) && !full(message))
         : candidates[occurrenceIndex]
-      : candidates.filter(
-          (message) =>
-            tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex
-        )[occurrenceIndex]
-    if (
-      !candidate ||
-      claimedMessageIds.has(candidate.id) ||
-      (tailIndex !== undefined && (messageIndexById.get(candidate.id) ?? -1) <= tailIndex)
-    ) {
+    if (!candidate || full(candidate) || !afterTail(candidate)) {
       continue
     }
-    claimedMessageIds.add(candidate.id)
-    landed.push({ pendingId: entry.id, messageId: candidate.id, images: entry.images })
+    const images = [...drawnOn(candidate.id), ...entry.images]
+    drawn.set(candidate.id, images)
+    landed.push({ pendingId: entry.id, messageId: candidate.id, images })
   }
   return landed
 }
 
-/** `segment` appears in `text` as a run of whole words (the glue joins sends
- *  with a space), so "does it" matches "… does [gap] … does it" at its end
- *  but "it" alone does not match "edit". */
-function containsGluedSegment(text: string, segment: string): boolean {
-  let from = 0
-  while (from <= text.length - segment.length) {
-    const at = text.indexOf(segment, from)
-    if (at === -1) {
-      return false
-    }
-    const end = at + segment.length
-    const startsWord = at === 0 || text[at - 1] === ' '
-    const endsWord = end === text.length || text[end] === ' '
-    if (startsWord && endsWord) {
-      return true
-    }
-    from = at + 1
-  }
-  return false
-}
 
 export function findLandedUnconfirmedSends(
   messages: readonly NativeChatMessage[],

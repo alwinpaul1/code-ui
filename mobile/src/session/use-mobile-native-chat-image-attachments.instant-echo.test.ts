@@ -173,8 +173,11 @@ describe('the optimistic bubble and the chips leave the composer together', () =
   // The terminal-paste branch already cleared the chips at send start
   // (2026-09-13); it must also hand the preview URIs to beginImageSend so the
   // bubble it adds carries the thumbnail from the first tick, not just an
-  // empty text echo.
-  it('hands the preview URIs to beginImageSend for a terminal-paste send', async () => {
+  // empty text echo. And the desktop path it pastes for each: the agent's row
+  // names that path, which is how the photo finds its own row (2026-09-26: a
+  // photo with no words drew on an older photo row, and "Image on Desktop" on
+  // its own).
+  it('hands the preview URIs and the pasted paths to beginImageSend for a terminal-paste send', async () => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -191,7 +194,7 @@ describe('the optimistic bubble and the chips leave the composer together', () =
     await act(async () => {
       await hook!.sendNativeChat('caption')
     })
-    expect(beginImageSend).toHaveBeenCalledWith('caption', ['file:///a.jpg'])
+    expect(beginImageSend).toHaveBeenCalledWith('caption', ['file:///a.jpg'], ['/tmp/a.png'])
   })
 
   it("retracts the bubble via beginImageSend's undo when a pasted image submit is rejected", async () => {

@@ -93,12 +93,13 @@ export function acceptOwnSendInPending(
   id: string,
   origin: MobileNativeChatSendOrigin,
   text: string,
-  images?: string[]
+  images?: string[],
+  imagePaths?: string[]
 ): PendingByKey {
   const current = previous[key] ?? []
   const kept = withoutWitnessesOfSends(current, [{ text, sentAt: origin.sentAt }])
   const base = kept === current ? previous : { ...previous, [key]: kept }
-  return appendMobileNativeChatPending(base, key, id, origin, text, images)
+  return appendMobileNativeChatPending(base, key, id, origin, text, images, imagePaths)
 }
 
 /**

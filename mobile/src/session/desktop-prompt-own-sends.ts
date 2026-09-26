@@ -1,5 +1,7 @@
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { reportsPhotoCopy } from './desktop-prompt-photo-copies'
+import { imageMarkerNumbers } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
@@ -43,13 +45,16 @@ import { phoneClockAllowanceMs } from './mid-turn-written-before'
 const key = (text: string) =>
   withShortSkillToken(normalizeNativeChatUserText(asPaintedPrompt(withoutPasteWrappers(text))))
 
-type PendingCopy = { id: string; text: string; images?: string[]; sentAt?: number }
+type PendingCopy = { id: string; text: string; images?: string[]; sentAt?: number; markersBefore?: number }
 
 export type HookPairing = {
   /** Pending copies that give way to the hook's timed copy of them. */
   steppedAside: ReadonlySet<string>
   /** Hook prompts a drawn pending copy stands for: not drawn a second time. */
   standIns: ReadonlySet<string>
+  /** The markers-only copy each photo send of no words paired with here, by
+   *  pending id, for rememberPhotoCopies. */
+  photoCopies: ReadonlyMap<string, DesktopPrompt>
 }
 
 export function isTranscriptWitnessed(prompt: DesktopPrompt): boolean {
@@ -63,14 +68,22 @@ function holdsItsOwnPlace(item: PendingCopy): boolean {
   return Boolean(item.images?.length) || Number.isFinite(item.sentAt)
 }
 
-/** Whether a prompt reports this text: the same key, or a prompt the hook
+/** Whether a prompt reports this copy: the same key, or a prompt the hook
  *  had to cut, as a prefix of it (the tab status caps the field at 200
- *  characters and says when it cut one). */
-function reports(prompt: DesktopPrompt, promptKey: string, copyKey: string): boolean {
-  return (
-    promptKey.length > 0 &&
-    (promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey)))
-  )
+ *  characters and says when it cut one). A photo sent with no words has no
+ *  key: desktop-prompt-photo-copies.ts says which markers-only prompt is its. */
+function reports(
+  prompt: DesktopPrompt,
+  promptKey: string,
+  copyKey: string,
+  item: PendingCopy,
+  marginMs: number,
+  bound: string | undefined
+): boolean {
+  if (promptKey.length === 0) {
+    return copyKey.length === 0 && reportsPhotoCopy(prompt, item.images?.length ?? 0, item.sentAt, marginMs, bound, item.markersBefore)
+  }
+  return promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey))
 }
 
 /** The prompt of one source timed nearest the send (an untimed one only when
@@ -114,7 +127,11 @@ export function pairPendingWithHookPrompts(
   prompts: readonly DesktopPrompt[],
   /** The transcript rows the phone holds, which say when the session took a
    *  newer prompt (promptTakenBetween). */
-  messages: readonly NativeChatMessage[] = []
+  messages: readonly NativeChatMessage[] = [],
+  /** The markers-only copy a photo send of no words paired with before. */
+  boundCopy: (pendingId: string) => string | undefined = () => undefined,
+  /** A status copy a phone photo send already claimed, before it retired. */
+  ownPhotoCopy: (prompt: DesktopPrompt) => boolean = () => false
 ): HookPairing {
   const margin = phoneClockAllowanceMs(messages)
   const keys = prompts.map((prompt) => key(prompt.text))
@@ -122,11 +139,25 @@ export function pairPendingWithHookPrompts(
   const taken = new Set<number>()
   const standIns = new Set<string>()
   const steppedAside = new Set<string>()
-  const open = (text: string, include: (prompt: DesktopPrompt) => boolean): number[] => {
-    const copyKey = key(text)
+  const photoCopies = new Map<string, DesktopPrompt>()
+  // The photos a send could see numbered before it left: the transcript's
+  // (`markersBefore`) and every status prompt the phone had already read.
+  const markersSeenBefore = (item: PendingCopy): number | undefined => {
+    const sentAt = item.sentAt
+    const seen =
+      typeof sentAt === 'number'
+        ? prompts.flatMap((prompt) => (prompt.seenAt !== undefined && prompt.seenAt < sentAt ? imageMarkerNumbers(prompt.text) : []))
+        : []
+    const highest = Math.max(item.markersBefore ?? 0, ...seen)
+    return highest > 0 ? highest : undefined
+  }
+  const open = (item: PendingCopy, include: (prompt: DesktopPrompt) => boolean): number[] => {
+    const copyKey = key(item.text)
+    const bound = boundCopy(item.id)
+    const withThreshold = copyKey === '' && item.images?.length ? { ...item, markersBefore: markersSeenBefore(item) } : item
     return keys.flatMap((promptKey, index) => {
       const prompt = prompts[index]!
-      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey) ? [index] : []
+      return !taken.has(index) && include(prompt) && reports(prompt, promptKey, copyKey, withThreshold, margin, bound) ? [index] : []
     })
   }
   const notSomeoneElses = (prompt: DesktopPrompt) => !remembered.has(deskEchoId(prompt.nonce))
@@ -142,14 +173,27 @@ export function pairPendingWithHookPrompts(
         sourceOf(prompt) === source &&
         notSomeoneElses(prompt) &&
         !promptTakenBetween(messages, item, prompt.at, margin)
-      const copy = nearestCopy(item.sentAt, open(item.text, ofSource), prompts)
+      const copy = nearestCopy(item.sentAt, open(item, ofSource), prompts)
       if (copy !== undefined) {
         claim(copy, true)
+        if (key(item.text) === '' && !photoCopies.has(item.id)) {
+          photoCopies.set(item.id, prompts[copy]!)
+        }
       }
     }
   }
   for (const item of pending.filter((candidate) => !holdsItsOwnPlace(candidate))) {
-    const candidates = open(item.text, () => true)
+    // A witness is its own prompt's, by id, even when its text has no key: a
+    // desk photo of no words is its markers alone, which no key names, and it
+    // drew twice, as the witness and as its prompt (seventh review, 2026-09-26).
+    // Its text too: a status nonce is `status:<session>:<state start>:0` at
+    // every first sight in one working run, so a later first sight reuses the
+    // id for another prompt (eighth review: the photo's witness took the desk's
+    // later text, and the photo vanished).
+    const itsPrompt = prompts.findIndex(
+      (prompt, index) => !taken.has(index) && deskEchoId(prompt.nonce) === item.id && prompt.text === item.text
+    )
+    const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, () => true)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
     if (timed.length > 0) {
@@ -159,7 +203,13 @@ export function pairPendingWithHookPrompts(
       claim(candidates[0], true)
     }
   }
-  return { steppedAside, standIns }
+  // A copy a phone photo already claimed stays its own after it retires.
+  prompts.forEach((prompt, index) => {
+    if (!taken.has(index) && ownPhotoCopy(prompt)) {
+      claim(index, true)
+    }
+  })
+  return { steppedAside, standIns, photoCopies }
 }
 
 /** How long after a send the hook's copy of it can be timed: twice the 15 s

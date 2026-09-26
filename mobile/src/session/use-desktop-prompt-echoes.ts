@@ -6,6 +6,7 @@ import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-ima
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
+import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 
 
 /**
@@ -287,8 +288,22 @@ export function lastRowBefore(
 export function withoutLandedDesktopPrompts(
   prompts: readonly DesktopPrompt[],
   folded: readonly NativeChatMessage[],
-  alsoShown: readonly string[] = []
+  alsoShown: readonly string[] = [],
+  /** The transcript as read, `[Image #N]` markers and all: a photo sent with
+   *  no words has no key, and lands as the row of exactly its markers
+   *  (Claude Code numbers photos through a session). */
+  raw: readonly NativeChatMessage[] = []
 ): DesktopPrompt[] {
+  // The rows as read, and what the agent's queue box lists (fourth review: a
+  // desk photo of no words drew in the box and as a bubble above it).
+  const landedMarkers = new Set(
+    [
+      ...raw.map((message) =>
+        message.role === 'user' ? message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' ') : ''
+      ),
+      ...alsoShown
+    ].flatMap((text) => (photosOnlyPrompt(text) > 0 ? [markersOf(text)] : []))
+  )
   const seen = [
     ...folded
       .filter((message) => message.role === 'user')
@@ -300,6 +315,9 @@ export function withoutLandedDesktopPrompts(
     .map(landedKey)
     .filter((text) => text.length > 0)
   return prompts.filter((prompt) => {
+    if (photosOnlyPrompt(prompt.text) > 0) {
+      return !landedMarkers.has(markersOf(prompt.text))
+    }
     const key = landedKey(prompt.text)
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
@@ -309,6 +327,10 @@ export function withoutLandedDesktopPrompts(
       (other) => other === key || (prompt.cut === true && key.length > 0 && other.startsWith(key))
     )
   })
+}
+
+function markersOf(text: string): string {
+  return (text.match(/\[Image #\d+\]/g) ?? []).join(' ')
 }
 
 /** The key a hook prompt is retired on. Painted, because `alsoShown` can hold
