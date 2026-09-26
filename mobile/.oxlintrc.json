@@ -415,7 +415,10 @@
             // Later the same day: the slash menu puts the caret back in the field.
             // 2026-09-24: +2 for onEditAttachment, threaded to the attachment
             // chips for the markup editor's pencil.
-            "max": 423,
+            // 2026-09-26: -4. The caret put-back went: the input no longer
+            // changes native parent when the menu opens or closes, so its
+            // caret stays in the field on its own.
+            "max": 419,
             "skipBlankLines": true,
             "skipComments": true
           }
