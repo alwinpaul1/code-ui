@@ -42,6 +42,10 @@ export type EngineTake = {
   absorbsError: (error: string, message: string) => boolean
   /** Start options for the retry a failed engine owes, or null. Consumes it. */
   takeRetry: () => ExpoSpeechRecognitionOptions | null
+  /** True for an `end` the failed attempt still owes after its retry began:
+   *  the library posts one per error it reports (review of 5c7643bd: the
+   *  second ended the retry's take and left its mic open, unstoppable). */
+  swallowsStaleEnd: () => boolean
 }
 
 /**
@@ -51,11 +55,13 @@ export type EngineTake = {
  */
 export function createEngineTake(recognizer: ServiceLister): EngineTake {
   const failed = new Set<string>()
-  let take: PinnedTake & { retryPending: boolean; defaultPackage: string; lang: string } = {
+  let take: PinnedTake & { retryPending: boolean; absorbed: number; staleEnds: number; defaultPackage: string; lang: string } = {
     servicePackage: null,
     heardWords: false,
     stopping: false,
     retryPending: false,
+    absorbed: 0,
+    staleEnds: 0,
     defaultPackage: '',
     lang: ''
   }
@@ -69,6 +75,8 @@ export function createEngineTake(recognizer: ServiceLister): EngineTake {
         heardWords: false,
         stopping: false,
         retryPending: false,
+        absorbed: 0,
+        staleEnds: 0,
         defaultPackage: listing.defaultPackage,
         lang
       }
@@ -87,11 +95,17 @@ export function createEngineTake(recognizer: ServiceLister): EngineTake {
       take.retryPending = false
     },
     absorbsError(error, message) {
-      if (take.servicePackage === null || !shouldRetryOnSystemDefault(take, error)) {
+      if (take.retryPending) {
+        // The same failed attempt reporting again: it will post another end.
+        take.absorbed += 1
+        return true
+      }
+      if (take.servicePackage === null || !shouldRetryOnSystemDefault(take, error, message)) {
         return false
       }
       failed.add(take.servicePackage)
       take.retryPending = true
+      take.absorbed = 1
       logDictation(
         `${take.servicePackage} failed before it heard a word (${error}: ${message}); ` +
           `retrying on the phone default ${phoneDefault()}`
@@ -104,7 +118,16 @@ export function createEngineTake(recognizer: ServiceLister): EngineTake {
       }
       take.retryPending = false
       take.servicePackage = null
+      take.staleEnds = take.absorbed - 1
+      take.absorbed = 0
       return liveTranscriptionStartOptions(take.lang, null)
+    },
+    swallowsStaleEnd() {
+      if (take.staleEnds <= 0) {
+        return false
+      }
+      take.staleEnds -= 1
+      return true
     }
   }
 }

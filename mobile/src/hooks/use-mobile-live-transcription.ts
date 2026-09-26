@@ -130,7 +130,9 @@ export function useMobileLiveTranscription(
 
   useEffect(() => {
     const started = recognizer.addListener('start', () => {
-      setStatus('recording')
+      if (activeRef.current) {
+        setStatus('recording')
+      }
     })
     // The recognizer reports -2..10; below 0 is silence. Map to 0..1, learn the
     // ambient level while nobody speaks, and show only what rises above it.
@@ -144,6 +146,9 @@ export function useMobileLiveTranscription(
       setLevel(speechLevel(raw, noiseFloorRef.current))
     })
     const speechStarted = recognizer.addListener('speechstart', () => {
+      // Speech heard is speech a retry would drop, transcribed or not
+      // (review of 5c7643bd): the take no longer retries on the default.
+      engine.heardWords()
       markSpeaking()
       armSilence()
     })
@@ -169,7 +174,7 @@ export function useMobileLiveTranscription(
       publish(false)
     })
     const ended = recognizer.addListener('end', () => {
-      if (!activeRef.current) {
+      if (!activeRef.current || engine.swallowsStaleEnd()) {
         return
       }
       // A pinned engine failed before it heard a word: this take goes on on the default.

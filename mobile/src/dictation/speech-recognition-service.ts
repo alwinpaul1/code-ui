@@ -78,8 +78,15 @@ export type PinnedTake = {
  * refuses the audio. Once words were heard a retry would drop or repeat them,
  * so the error is shown as it always was.
  */
-export function shouldRetryOnSystemDefault(take: PinnedTake, error: string): boolean {
-  return take.servicePackage !== null && !take.heardWords && !take.stopping && !NOT_THE_ENGINES_FAULT.has(error)
+export function shouldRetryOnSystemDefault(take: PinnedTake, error: string, message = ''): boolean {
+  if (take.servicePackage === null || take.heardWords || take.stopping || NOT_THE_ENGINES_FAULT.has(error)) {
+    return false
+  }
+  // Android reports a mic another app or a call took as `audio-capture` too,
+  // which is not the engine's fault; the library's own "no service" case says
+  // so in its message (review of 5c7643bd: a call reopened the mic on the
+  // default and dropped Google for the screen).
+  return error !== 'audio-capture' || message.startsWith('No service found')
 }
 
 type ServiceLister = {
@@ -87,13 +94,15 @@ type ServiceLister = {
   getDefaultRecognitionService?: () => { packageName: string }
 }
 
-/** Reads the installed engines. Fails open: a listing that throws or is not
- *  there (iOS, web, a test stub) reads as none, which keeps the default. */
+/** Reads the installed engines. Fails open: a listing that throws, is not
+ *  there (iOS, web, a test stub) or is not a list of names reads as none,
+ *  which keeps the default. */
 export function readSpeechServices(recognizer: ServiceLister): SpeechServiceListing {
   let listed: readonly string[] = []
   let defaultPackage = ''
   try {
-    listed = recognizer.getSpeechRecognitionServices?.() ?? []
+    const services: unknown = recognizer.getSpeechRecognitionServices?.()
+    listed = Array.isArray(services) ? services.filter((entry): entry is string => typeof entry === 'string') : []
   } catch {
     listed = []
   }

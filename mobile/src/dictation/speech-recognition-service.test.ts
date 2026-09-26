@@ -70,9 +70,17 @@ describe("when Google's engine fails to start", () => {
   it("retries on the phone's default engine when it fails before hearing a word", () => {
     // ERROR_CLIENT (bind failed), the library's own "no service found" (sent as
     // audio-capture), a crashed service, a language it will not take.
-    for (const error of ['client', 'audio-capture', 'network', 'language-not-supported', 'busy', 'unknown']) {
+    for (const error of ['client', 'network', 'language-not-supported', 'busy', 'unknown']) {
       expect(shouldRetryOnSystemDefault(pinnedTake, error)).toBe(true)
     }
+    expect(shouldRetryOnSystemDefault(pinnedTake, 'audio-capture', 'No service found for package com.google.android.googlequicksearchbox')).toBe(true)
+  })
+
+  // Review of 5c7643bd: Android sends a mic taken by a call or another app as
+  // audio-capture too ("Audio recording error.", code 3); it is not the
+  // engine's fault, so it neither retries nor bars Google.
+  it('does not retry when a call or another app took the mic', () => {
+    expect(shouldRetryOnSystemDefault(pinnedTake, 'audio-capture', 'Audio recording error.')).toBe(false)
   })
 
   it('does not retry the default engine, which has nothing left to fall back to', () => {
