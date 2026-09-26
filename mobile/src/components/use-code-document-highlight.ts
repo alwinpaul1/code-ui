@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import {
+  advanceCodeDocumentChunkStartDepth,
+  CODE_VIEW_DEPTH_SCAN_CHUNKS_PER_TICK,
   codeDocumentChunkCount,
   codeDocumentChunkOf,
   codeDocumentChunkRange,
@@ -55,7 +57,13 @@ export function useCodeDocumentHighlight(
         continue
       }
       requested.current.chunks.add(chunk)
-      const timer = setTimeout(() => {
+      const colour = () => {
+        // A chunk far down the file needs the bracket depth above it: scan a
+        // few chunks a tick until it is known, then colour it.
+        if (!advanceCodeDocumentChunkStartDepth(doc, chunk, CODE_VIEW_DEPTH_SCAN_CHUNKS_PER_TICK)) {
+          pending.current.set(chunk, setTimeout(colour, 0))
+          return
+        }
         pending.current.delete(chunk)
         const lines = highlightCodeDocumentChunk(doc, chunk)
         setState((previous) => {
@@ -63,8 +71,8 @@ export function useCodeDocumentHighlight(
           next.set(chunk, lines)
           return { doc, chunks: next }
         })
-      }, 0)
-      pending.current.set(chunk, timer)
+      }
+      pending.current.set(chunk, setTimeout(colour, 0))
     }
   }, [])
 

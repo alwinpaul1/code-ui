@@ -159,17 +159,33 @@ export function codeDocumentChunkStartDepth(doc: MobileCodeDocument, chunk: numb
   if (doc.highlight !== 'chunked' || chunk <= 0) {
     return 0
   }
+  advanceCodeDocumentChunkStartDepth(doc, chunk, Infinity)
+  return chunkStartDepths.get(doc)!.starts[chunk]!
+}
+
+/** Chunks the depth scan reads in one timer before it yields: a jump to the
+ *  end of a 3.9 MB file scanned all of it in one tick, 309 ms on Hermes
+ *  (review, 2026-09-27). Four chunks are a few milliseconds. */
+export const CODE_VIEW_DEPTH_SCAN_CHUNKS_PER_TICK = 4
+
+/** Scans on towards `chunk`'s start depth, at most `budget` chunks, and says
+ *  whether it is known now: the colouring timer yields and comes back until
+ *  it is. */
+export function advanceCodeDocumentChunkStartDepth(doc: MobileCodeDocument, chunk: number, budget: number): boolean {
+  if (doc.highlight !== 'chunked' || chunk <= 0) {
+    return true
+  }
   let memo = chunkStartDepths.get(doc)
   if (!memo) {
     memo = { starts: [0], scan: startBracketScan() }
     chunkStartDepths.set(doc, memo)
   }
-  while (memo.starts.length <= chunk) {
+  for (let scanned = 0; memo.starts.length <= chunk && scanned < budget; scanned += 1) {
     const { start, end } = codeDocumentChunkRange(doc, memo.starts.length - 1)
     memo.scan = scanBracketDepth(doc.lines, start, end, doc.language, memo.scan)
     memo.starts.push(memo.scan.depth)
   }
-  return memo.starts[chunk]!
+  return memo.starts.length > chunk
 }
 
 /** A line held to `maxSpans` spans: the first ones keep their colours, and
