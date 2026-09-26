@@ -240,12 +240,14 @@
             // tail of an empty re-subscribe, which the running-task reader
             // must not read as a whole window: the ref, its two writes, the
             // returned field and its type line. Fork-only, like the kept tail.
-            // Later that day: 318. `wholeSession` says the list starts at the
-            // session's first row, which the created-file count needs: the
-            // ref, its reset, its four writes, the returned field and its
-            // type line. `hasMore` could not say it (the paging cap, rows
-            // before the snapshot, a host that omits it). Fork-only.
-            "max": 318,
+            // Later that day: 319. `wholeSession` says the list starts at the
+            // session's first row, which the created-file count needs; its
+            // rules live in mobile-native-chat-whole-session.ts, and the hook
+            // keeps the import, the tracker, its connection effect, four
+            // calls, the returned field and its type line. `hasMore` could
+            // not say it (the paging cap, rows before the snapshot, a host
+            // that omits it, a reconnect's replay). Fork-only.
+            "max": 319,
             "skipBlankLines": true,
             "skipComments": true
           }

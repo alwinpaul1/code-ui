@@ -18,6 +18,7 @@ import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
+import { createWholeSessionTracker } from './mobile-native-chat-whole-session'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -174,7 +175,9 @@ export function useMobileNativeChatSession(args: {
   // snapshots on the same subscription are reconnect replays, not fresh bases.
   const snapshotSeenRef = useRef(false)
   const baseRetainedRef = useRef(false)
-  const wholeSessionRef = useRef(false)
+  // Whether the window starts at the session's first row (mobile-native-chat-whole-session.ts).
+  const [whole] = useState(() => createWholeSessionTracker(lastConnectedAt))
+  useEffect(() => whole.connected(lastConnectedAt), [whole, lastConnectedAt])
   // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
   const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
@@ -200,7 +203,7 @@ export function useMobileNativeChatSession(args: {
     limitRef.current = attemptLimit
     loadingEarlierRef.current = false
     snapshotSeenRef.current = false
-    wholeSessionRef.current = false
+    whole.subscribed()
     let frameSeen = false
     setLoadingEarlier(false)
     setList([])
@@ -256,9 +259,8 @@ export function useMobileNativeChatSession(args: {
           loadingEarlierRef.current = false
           setLoadingEarlier(false)
         }
+        whole.frame(frame.type, applied)
         if (applied.windowReplaced) {
-          // Only the host's own word makes a window the whole session.
-          wholeSessionRef.current = applied.hasMore === false && !applied.pending
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.
           limitRef.current = INITIAL_LIMIT
@@ -276,7 +278,7 @@ export function useMobileNativeChatSession(args: {
             : null
         if (retained && retained.length > 0) {
           baseRetainedRef.current = true
-          wholeSessionRef.current = false
+          whole.retained()
           setList(retained)
         } else {
           baseRetainedRef.current = baseRetainedRef.current && !applied.windowReplaced
@@ -289,8 +291,6 @@ export function useMobileNativeChatSession(args: {
           beforeOffsetRef.current = applied.beforeOffset
         }
         if (applied.cursorInvalidated) {
-          // The window no longer reaches the session's first row.
-          wholeSessionRef.current = false
           // Fall back to a growing-tail read so history trimmed by live appends
           // cannot leave a gap between the retained window and the old cursor.
           streamGenerationRef.current += 1
@@ -319,7 +319,7 @@ export function useMobileNativeChatSession(args: {
       clearTimeout(watchdog)
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt, reconnectEpoch])
+  }, [client, agent, sessionId, transcriptPath, identity, setList, subscribeAttempt, reconnectEpoch, whole])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
@@ -371,9 +371,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         limitRef.current = nextLimit
-        // A page that reached the first row says so; one stopped at the cap,
-        // or that says nothing, does not.
-        wholeSessionRef.current = result.hasMore === false
+        whole.page(result.hasMore)
         if (beforeOffset !== null && result.beforeOffset != null) {
           beforeOffsetRef.current = result.beforeOffset
           setList(mergeNativeChatMessages(result.messages, mergerRef.current.list))
@@ -427,6 +425,6 @@ export function useMobileNativeChatSession(args: {
     loadingEarlier,
     loadEarlier,
     baseRetained: baseRetainedRef.current,
-    wholeSession: wholeSessionRef.current
+    wholeSession: whole.whole
   }
 }

@@ -792,6 +792,35 @@ describe('a create made while earlier work was still running', () => {
     expect(touched(messages())).toBe(true)
   })
 
+  // Review of c6d8394a (2026-09-26): Claude Code 2.1.283 behind the
+  // tengu_violin_rosin flag answers a background launch as JSON, the
+  // shell's sentence in its statusMessage (mobile-background-task-
+  // transcript.ts), and the shell went unseen; so did any answer to a
+  // background call the phone does not know.
+  const jsonLaunch = (id: string) =>
+    `{"resultType":"task","taskId":"${id}","status":"working","statusMessage":${JSON.stringify(backgroundStartOutput(id))}}`
+
+  it.each(['Bash', 'PowerShell'])(
+    'draws no count for a create made while a background %s command launched in the JSON shape was still running',
+    (name) => {
+      const before = launched(name, { command: 'npm run watch', run_in_background: true }, jsonLaunch(SHELL_ID))
+      expect(touched([...before, ...CREATE])).toBe(true)
+    }
+  )
+
+  it('still counts a create made after a background command launched in the JSON shape reported', () => {
+    const history = [
+      ...launched('Bash', { command: 'npm run watch', run_in_background: true }, jsonLaunch(SHELL_ID)),
+      said(shellNotification(SHELL_ID))
+    ]
+    expect(touched([...history, ...CREATE])).toBe(false)
+  })
+
+  it('draws no count for a create made while a background command answered in words the phone does not know', () => {
+    const before = launched('Bash', { command: 'npm run watch', run_in_background: true }, 'Started job 7 in the background.')
+    expect(touched([...before, ...CREATE])).toBe(true)
+  })
+
   it('holds nothing for work with no create, and counts a create with nothing before it', () => {
     const launch = launched('Agent', BACKGROUND_AGENT, asyncAgentLaunchResult(AGENT_ID))
     expect(cutCreateStandings(launch).size).toBe(0)

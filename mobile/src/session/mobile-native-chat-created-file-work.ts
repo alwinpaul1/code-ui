@@ -181,8 +181,18 @@ function openBatch(): Batch {
  *  background-task reader reads Bash's only, so PowerShell's are read as
  *  Bash's here. */
 function launchOf(call: Pending, output: string): Launch | null {
-  return readLaunch(call.name === 'PowerShell' ? { ...call, name: 'Bash' } : call, output)
+  const sentence = readLaunch(call.name === 'PowerShell' ? { ...call, name: 'Bash' } : call, output)
+  if (sentence || toolCallKind(call.name) === 'agent' || !JSON_LAUNCH.test(output)) {
+    return sentence
+  }
+  // Claude Code 2.1.283 behind the tengu_violin_rosin flag answers a
+  // background shell as JSON, its sentence in statusMessage (review of
+  // c6d8394a: the shell went unseen).
+  const id = JSON_TASK_ID.exec(output)?.[1]
+  return id ? { id, kind: 'shell', title: '', startedAt: call.startedAt, label: null } : null
 }
+
+const JSON_TASK_ID = /"taskId"\s*:\s*"([^"]+)"/
 
 /** Calls whose answer can launch work that keeps running. */
 function mayLaunch(call: Pending): boolean {
@@ -321,10 +331,12 @@ export function backgroundWorkRunningAt(
         const call = takeAnsweredCall(pending, block.output)
         if (call) {
           const launch = launchOf(call, block.output)
+          // A background call answered in words the phone does not know may
+          // still be running, and refuses (review of c6d8394a).
           const running =
             toolCallKind(call.name) === 'agent'
               ? leftAgentRunning(call, block.output, onlyAgentsWaited)
-              : launch !== null
+              : launch !== null || (askedForBackground(call) && !isFailure(block))
           if (running) {
             spans.push({ from: call.at, id: launch?.id ?? null })
           } else if (mayLaunch(call)) {

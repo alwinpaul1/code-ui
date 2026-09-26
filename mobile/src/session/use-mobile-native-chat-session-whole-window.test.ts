@@ -45,13 +45,14 @@ describe('when the chat holds the whole session', () => {
     vi.useRealTimers()
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({ client, lastConnectedAt = 1 }: { client: RpcClient | null; lastConnectedAt?: number }): null {
     state = useMobileNativeChatSession({
       client,
       sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath: null,
+      lastConnectedAt
     })
     return null
   }
@@ -204,5 +205,40 @@ describe('when the chat holds the whole session', () => {
     expect(countGateOpen(state)).toBe(false)
     await loadEarlier()
     expect(countGateOpen(state)).toBe(true)
+  })
+
+  // Review of c6d8394a (2026-09-26): a healthy reconnect replays the
+  // transcript on the same subscription, and a "Load earlier" page answered
+  // before that replay said the window reached the first row: the count was
+  // read from a transcript still missing the edit made while the phone was
+  // away (+94 on the 93-line create).
+  it('does not count from a page answered after a reconnect, before its replay lands', async () => {
+    const client = {
+      sendRequest: vi.fn(async () => ({
+        ok: true,
+        result: { messages: [message('older')], hasMore: false, beforeOffset: 0 }
+      })),
+      subscribe: vi.fn((_method, _params, onData) => {
+        emit = onData
+        onData({ type: 'snapshot', messages: [message('tail')], hasMore: true, beforeOffset: 10 })
+        return () => {}
+      })
+    } as unknown as RpcClient
+    await mount(client)
+    await act(async () => {
+      renderer?.update(createElement(Harness, { client, lastConnectedAt: 2 }))
+    })
+    await loadEarlier()
+    expect({ rows: state?.messages.map((entry) => entry.id), gateOpen: countGateOpen(state) }).toEqual({
+      rows: ['older', 'tail'],
+      gateOpen: false
+    })
+    await act(async () =>
+      emit({ type: 'snapshot', messages: [message('older'), message('tail'), message('away')], hasMore: false, beforeOffset: 0 })
+    )
+    expect({ rows: state?.messages.map((entry) => entry.id), gateOpen: countGateOpen(state) }).toEqual({
+      rows: ['older', 'tail', 'away'],
+      gateOpen: true
+    })
   })
 })

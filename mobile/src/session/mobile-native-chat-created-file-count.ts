@@ -255,6 +255,11 @@ function samePath(a: string, b: string): boolean {
 }
 
 function namesFile(word: string, name: string): boolean {
+  // An empty name (a file named only in quotes, squashed) names nothing, and
+  // searching for it never ends (review of c6d8394a: the app froze).
+  if (name === '') {
+    return false
+  }
   let at = word.indexOf(name)
   while (at !== -1) {
     const before = at === 0 ? '' : word.charAt(at - 1)
