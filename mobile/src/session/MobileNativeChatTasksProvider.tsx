@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -8,7 +8,7 @@ import { confirmedAgentDescriptions } from './mobile-background-task-agent-title
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import { NativeChatAgentRunsContext, NativeChatTasksContext } from './native-chat-tasks-context'
-import { openSubagentTranscript } from './subagent-transcript-store'
+import { followSubagentTranscriptRunning, openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
 
@@ -70,6 +70,9 @@ export function MobileNativeChatTasksProvider({
     }),
     [agent, agentWorking, messages, openTranscript, running, subagents]
   )
+  // The open subagent viewer sits outside this tree; its header said "Running"
+  // for as long as it stayed open, because it only ever read the tap.
+  useEffect(() => followSubagentTranscriptRunning(agentRuns.runningIds), [agentRuns.runningIds])
   const openSheet = useCallback(() => setSheetOpen(true), [])
   // Re-read while open, so a row that finishes while its sheet is up says so.
   const openRun = openRunBlocks ? agentRunState(openRunBlocks, agentRuns) : null

@@ -6,8 +6,9 @@
 import { useSyncExternalStore } from 'react'
 import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
 
-/** The target plus whether the roster still lists it as running, which the
- *  header names; the transcript itself is read the same way either way. */
+/** The target plus whether the roster lists it as running, which the header
+ *  names; the transcript itself is read the same way either way. Kept current
+ *  by the tab's roster while the viewer is open (`followSubagentTranscriptRunning`). */
 export type SubagentTranscriptRequest = {
   target: SubagentTranscriptTarget
   running: boolean
@@ -24,6 +25,21 @@ function emit(): void {
 
 export function openSubagentTranscript(target: SubagentTranscriptTarget, running: boolean): void {
   state = { target, running }
+  emit()
+}
+
+/** The roster's current running set, from the one reader that owns it. The
+ *  open viewer's header follows it both ways; the target is kept as it is, so
+ *  the viewer's subscription is not torn down for a word in its header. */
+export function followSubagentTranscriptRunning(runningAgentIds: ReadonlySet<string>): void {
+  if (state === null) {
+    return
+  }
+  const running = runningAgentIds.has(state.target.agentId)
+  if (running === state.running) {
+    return
+  }
+  state = { ...state, running }
   emit()
 }
 
