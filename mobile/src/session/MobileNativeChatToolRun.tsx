@@ -23,7 +23,8 @@ import {
   ToolRowName,
   ToolSearchResults
 } from './MobileNativeChatToolAnnotations'
-import { toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { toolRunSentenceShowsFailures, toolRunSentenceSpans } from './mobile-native-chat-tool-sentence'
+import { ToolRunSentenceText } from './MobileNativeChatToolRunSentence'
 import {
   editFilesForToolCall,
   toolRunDiffStat,
@@ -329,11 +330,12 @@ export function ToolRun({
   }
   callCount ||= pairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
-  // A collapsed run that contained failures says so (Orca #21151): a quiet
-  // `N failed` in the header's muted type, counted over every call, not the
-  // latest. Text only — a tool error is routine work, so no danger tint. This
-  // fork's header never drew a completion mark, so there was no false one to
-  // withhold; the count is the half of the fix the phone can show.
+  // A collapsed run that contained failures says so (Orca #21151), counted
+  // over every call, not the latest: in the sentence's "(N failed)", and a
+  // quiet `N failed` in the header's muted type wherever the sentence might
+  // not show it all (below). Text only — a tool error is routine work, so no danger tint.
+  // This fork's header never drew a completion mark, so there was no false
+  // one to withhold; the count is the half of the fix the phone can show.
   const { failedCallCount } = nativeChatToolRunOutcome(blocks, {
     activeTurnIsWorking: activeCall !== null
   })
@@ -398,6 +400,16 @@ export function ToolRun({
       </View>
     )
   }
+  const sentenceSpans = focusView ? [] : toolRunSentenceSpans(blocks)
+  // The sentence says "(N failed)" itself, as the Claude app's row does; a
+  // second "N failed" beside it said it twice and cut the sentence
+  // (2026-09-26). The label stays wherever the row might not show every
+  // failure: focus view's bare count, an empty sentence, a sentence that
+  // counts fewer failures than the run had (a call failed by its own state
+  // alone), or one whose count sits past what a phone row shows before its
+  // ellipsis (a SendMessage's preview, a command's description).
+  const sentenceStatesFailures =
+    sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -415,15 +427,18 @@ export function ToolRun({
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
         >
-          <Text style={styles.toolRunLabel} numberOfLines={1} testID="tool-run-sentence">
-            {focusView ? countLabel : toolRunSentence(blocks) || countLabel}
-          </Text>
+          <ToolRunSentenceText
+            spans={sentenceSpans}
+            fallback={countLabel}
+            style={[styles.toolRunLabel, styles.toolRunSentence]}
+            styles={styles}
+          />
           {planPreview && !focusView ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>
           ) : null}
-          {failedCallCount > 0 ? (
+          {failedCallCount > 0 && !sentenceStatesFailures ? (
             <Text
               testID="tool-run-failed-count"
               accessibilityLabel={`Failed tool calls: ${failedCallCount}`}

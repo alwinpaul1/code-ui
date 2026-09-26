@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import { DraggableDetailSheet } from '../components/DraggableDetailSheet'
@@ -65,16 +66,19 @@ export function MobileNativeChatToolDetailSheet({
 
 /** Exported so a render test can mount the header/body directly, the way
  *  `MobileBackgroundTasksSheetBody` is tested apart from `BottomDrawer` — the
- *  drawer shell pulls in gesture-handler/reanimated, which the content itself
- *  never touches. */
+ *  drawer shell pulls in reanimated and the sheet's pans, which the content
+ *  itself never touches (the body's only gesture is the output text's own). */
 export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
   const status = toolDetailStatus(pair)
+  // The Claude app's layout (2026-09-26): title centred on one line, status
+  // centred under it, close cross on the left. Equal room on both sides keeps
+  // the title centred on the sheet and clear of the cross.
   return (
-    <View style={{ gap: 4, paddingRight: 32 }}>
-      <Txt variant="heading" weight="semibold" testID="tool-detail-title">
+    <View style={{ gap: 4, paddingHorizontal: 32 }}>
+      <Txt variant="heading" weight="semibold" align="center" numberOfLines={1} testID="tool-detail-title">
         {toolDetailTitle(pair)}
       </Txt>
-      <Txt variant="label" tone={STATUS_TONE[status]} testID="tool-detail-status">
+      <Txt variant="label" tone={STATUS_TONE[status]} align="center" testID="tool-detail-status">
         {status}
       </Txt>
     </View>
@@ -140,9 +144,41 @@ function OutputSection({ output, isError }: { output: string; isError: boolean }
           </Pressable>
         ) : null}
       </View>
-      <Txt variant="mono" tone={isError ? 'danger' : 'primary'} testID="tool-detail-output" selectable>
+      <SelectableSheetText tone={isError ? 'danger' : 'primary'} testID="tool-detail-output">
         {text}
-      </Txt>
+      </SelectableSheetText>
     </View>
+  )
+}
+
+/**
+ * Selectable mono text that lets go when the sheet's pan takes the touch.
+ *
+ * Why the gesture: the sheet scrolls and drags under gesture-handler, and once
+ * a pan activates, its root stops passing the touch to the Android views below
+ * without sending them a cancel. A selectable TextView arms its long-press on
+ * touch-down, never hears the finger move or lift, and selects the word under
+ * it mid-scroll (Copy / Translate / Select all, reported 2026-09-26). With a
+ * Native gesture of its own, the pan's activation cancels that gesture, and
+ * gesture-handler hands the TextView an ACTION_CANCEL, which drops the
+ * pending long-press. A long-press that does not move still selects.
+ */
+function SelectableSheetText({
+  tone,
+  testID,
+  children
+}: {
+  tone: 'danger' | 'primary'
+  testID: string
+  children: string
+}) {
+  const gesture = useMemo(() => Gesture.Native(), [])
+  // The detector sets user-select: none on web unless told otherwise.
+  return (
+    <GestureDetector gesture={gesture} userSelect="text">
+      <Txt variant="mono" tone={tone} testID={testID} selectable>
+        {children}
+      </Txt>
+    </GestureDetector>
   )
 }

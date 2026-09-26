@@ -137,8 +137,10 @@ export function makeChatMessageStyles(theme: Theme) {
       gap: space.sm,
       paddingVertical: 3
     },
+    // Hugs its words like the settled sentence, so the chevron sits after
+    // it in both states and does not jump when the run settles.
     toolRunActiveLabel: {
-      flex: 1,
+      flexShrink: 1,
       color: colors.textSecondary,
       fontFamily: fonts.regular,
       fontSize: 13
@@ -262,6 +264,13 @@ export function makeChatMessageStyles(theme: Theme) {
     },
     toolMetaFailed: {
       color: colors.danger
+    },
+    // A finished run's sentence hugs its words so the "+A −R" pill follows
+    // them, and it is the one that shrinks and ellipsizes on a narrow row,
+    // never the pill or the chevron (2026-09-26 screenshot).
+    toolRunSentence: {
+      flex: 0,
+      flexShrink: 1
     },
     toolSearchResults: {
       gap: 2
