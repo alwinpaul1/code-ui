@@ -144,12 +144,19 @@ export function MobileCodeView({
   }).current
 
   // Wrapped rows have no fixed height, so the list cannot open at a line; it
-  // scrolls there once mounted. Unwrapped, `initialScrollIndex` does it.
+  // scrolls there once mounted. Unwrapped, `initialScrollIndex` does it. The
+  // scroll is keyed on the file line and the document, not on its row: a
+  // fold above the line moves its row, and keyed on the row the list jumped
+  // after every fold (review, 2026-09-27).
   useEffect(() => {
-    if (wrap && startIndex !== undefined && startIndex > 0) {
-      listRef.current?.scrollToIndex({ index: startIndex, animated: false })
+    if (!wrap || startLine === undefined) {
+      return
     }
-  }, [wrap, startIndex])
+    const index = listIndexOfLine(visibleRef.current, startLine)
+    if (index > 0) {
+      listRef.current?.scrollToIndex({ index, animated: false })
+    }
+  }, [document, wrap, startLine])
   const retried = useRef(false)
   const onScrollToIndexFailed = useCallback(
     (info: { index: number; averageItemLength: number }) => {
