@@ -8,6 +8,7 @@ import {
 } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
+import { unescapeJsonStringBody } from './agent-hud-beacon'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -191,6 +192,26 @@ describe('a message the person typed, remembered as a witness, on the next launc
       { id: 'absorbed-peer', text: 'Message from @code-ui-6f: Capture probe from the Code UI session (ctrl+o to expand)', ...base }
     ]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, nit 7: since 417983a5 a cut subagent
+  // request (no hand-back line, and no closing tag after the hook's cut) that
+  // an old build stored as a desk witness came back as a raw XML bubble. The
+  // stored text is what the hook sent: the prompt's JSON string body cut at
+  // 2,000 bytes (agent-hud-launch-args.ts), decoded by the beacon.
+  it('is swept when it is a subagent request the hook cut, as the old build stored it', () => {
+    const body = Array.from({ length: 40 }, (_, index) => `${index + 1}. Please run the probe step ${index + 1} and report what the screen shows.`).join('\n')
+    const prompt = `<agent-message from="a7a46867b4f497c96">\nRequest for device probes:\n${body}\n</agent-message>`
+    const sent = unescapeJsonStringBody(JSON.stringify(prompt).slice(1, -1).slice(0, 2000))
+    expect(sent).not.toContain('</agent-message>')
+    // A person's prompt that quotes the line and goes on at length, short of the cut.
+    const quoting = `<agent-message from="a7a46867b4f497c96">\n${'why does this line show up in my log? '.repeat(40)}`
+    const stored = [
+      { id: 'desk-4108', text: sent, ...base },
+      { id: 'desk-4109', text: '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?', ...base },
+      { id: 'desk-4110', text: quoting, ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4109', 'desk-4110'])
   })
 
   it('is restored when it opens by quoting an <agent-message> tag', () => {

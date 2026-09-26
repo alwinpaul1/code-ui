@@ -1,6 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
-import { isCutHandback, parseSubagentMessage } from './mobile-native-chat-agent-messages'
+import { isCutAtHookLength, isCutHandback, parseSubagentMessage } from './mobile-native-chat-agent-messages'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { isPeerRowHead } from './mobile-terminal-peer-notices'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
@@ -206,8 +206,9 @@ function isWitnessed(id: string): boolean {
  *  messages that start with "A message arrived from" or "No response
  *  requested." (review of 2026-09-26). The store kept no cut flag, so a text
  *  with no closing tag counts only when it goes on with the harness's own
- *  hand-back line: taken as cut on its first line alone, it swept a person's
- *  prompt that quotes that line (review of 2026-09-27). Another session's
+ *  hand-back line, or is as long as the hook's cut: taken as cut on its
+ *  first line alone, it swept a person's prompt that quotes that line, and
+ *  on the hand-back line alone it left a cut request (reviews of 2026-09-27). Another session's
  *  delivery too, told by the harness's opener line and envelope, which the
  *  same build stored the same way. And a queued peer message the queue box
  *  painted as the TUI's row, "Message from @a9d5c2f85e94ca47f (ctrl+o to
@@ -225,6 +226,7 @@ export function sweepWitnessedEchoes(
     isWitnessed(item.id) &&
     (parseSubagentMessage(item.text) !== null ||
       isCutHandback(item.text) ||
+      isCutAtHookLength(item.text) ||
       isCrossSessionMessagePrompt(item.text) ||
       (item.id.startsWith('absorbed-') && isPeerRowHead(`› ${item.text}`) && PEER_ROW_TAIL.test(item.text)))
   // Phone sends first so they win against witnessed readings of themselves.

@@ -120,6 +120,25 @@ export function isCutHandback(text: string): boolean {
   return open !== null && HANDBACK_PREAMBLE.test(rest.slice(open[0].length)) && parseSubagentMessage(text, { cut: true }) !== null
 }
 
+/** The prompt hook sends a prompt's JSON string body cut at this many bytes
+ *  (CLAUDE_HUD_PROMPT_HOOK_SCRIPT in agent-hud-launch-args.ts). */
+const HOOK_CUT_BYTES = 2000
+/** Short of the cut by a character the byte cut split, or the lone trailing
+ *  backslash of an escape it split, which the beacon drops. */
+const HOOK_CUT_SLACK_BYTES = 8
+
+/** Whether a stored text is a subagent message the hook cut: the wrapper's
+ *  line, no closing tag, and as long as the hook's cut once written back as
+ *  the JSON body it was sent as. A person's prompt that quotes the wrapper's
+ *  line is short; the build that stored these kept no cut flag. */
+export function isCutAtHookLength(text: string): boolean {
+  if (parseSubagentMessage(text, { cut: true }) === null || parseSubagentMessage(text) !== null) {
+    return false
+  }
+  const sent = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
+  return sent >= HOOK_CUT_BYTES - HOOK_CUT_SLACK_BYTES
+}
+
 /** Whether a hook prompt is a subagent's message rather than something a
  *  person typed: the one test the desktop prompts and the rows agree on, so a
  *  prompt is drawn as exactly one of the two. */
