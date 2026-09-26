@@ -1,4 +1,4 @@
-import { leadingIndentColumns } from './mobile-code-indent'
+import { lineIndents } from './mobile-code-indent'
 import type { FileReaderLineRange } from '../session/mobile-file-reader-line-selection'
 
 /**
@@ -25,16 +25,18 @@ export const CODE_VIEW_MAX_FOLD_REGIONS = 5_000
  */
 export function computeFoldRegions(
   lines: readonly string[],
-  options: { tabWidth: number; offSide: boolean; limit?: number }
+  options: { tabWidth: number; offSide: boolean; limit?: number; indents?: Int32Array }
 ): CodeFoldRegion[] {
   const { tabWidth, offSide, limit = CODE_VIEW_MAX_FOLD_REGIONS } = options
+  // The document's indents, read once (mobile-code-indent's lineIndents).
+  const indents = options.indents ?? lineIndents(lines, tabWidth)
   // Monaco's lines are 1-based; `endAbove` is the line below a block's end.
   const found: CodeFoldRegion[] = []
   const previousRegions: { indent: number; endAbove: number }[] = [{ indent: -1, endAbove: lines.length + 1 }]
   for (let line = lines.length; line > 0; line -= 1) {
-    const indent = leadingIndentColumns(lines[line - 1] ?? '', tabWidth)
+    const indent = indents[line - 1]!
     let previous = previousRegions[previousRegions.length - 1]!
-    if (indent === null) {
+    if (indent < 0) {
       if (offSide) {
         previous.endAbove = line
       }

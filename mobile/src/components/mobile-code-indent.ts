@@ -4,39 +4,67 @@ import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 export const CODE_VIEW_MAX_INDENT_GUIDES = 24
 
 /** Leading whitespace of a line, in columns, with a tab reaching the next tab
- *  stop. Null for a blank line: it has no indentation of its own, and borrows
- *  one from its neighbours in `indentGuideCounts`. */
-export function leadingIndentColumns(line: string, tabWidth: number): number | null {
+ *  stop; -1 for a blank line. Read with charCodeAt: a string iterator is a
+ *  call per character on Hermes. */
+function indentOf(line: string, tabWidth: number): number {
   let column = 0
-  for (const char of line) {
-    if (char === ' ') {
+  for (let index = 0; index < line.length; index += 1) {
+    const code = line.charCodeAt(index)
+    if (code === 32) {
       column += 1
-    } else if (char === '\t') {
+    } else if (code === 9) {
       column += tabWidth - (column % tabWidth)
     } else {
       return column
     }
   }
-  return null
+  return -1
+}
+
+/** Leading whitespace of a line, in columns, with a tab reaching the next tab
+ *  stop. Null for a blank line: it has no indentation of its own, and borrows
+ *  one from its neighbours in `indentGuideCounts`. */
+export function leadingIndentColumns(line: string, tabWidth: number): number | null {
+  const indent = indentOf(line, tabWidth)
+  return indent < 0 ? null : indent
+}
+
+/**
+ * Every line's indent, -1 for a blank line, read once per document and
+ * shared by the indent step, the guides and the folds. Each of them walked
+ * every line itself, three passes with a string iterator: 170 ms of a
+ * 3.9 MB file's build on Hermes (review, 2026-09-27).
+ */
+export function lineIndents(lines: readonly string[], tabWidth: number): Int32Array {
+  const indents = new Int32Array(lines.length)
+  for (let index = 0; index < lines.length; index += 1) {
+    indents[index] = indentOf(lines[index]!, tabWidth)
+  }
+  return indents
 }
 
 /** The file's own indent step. Tab-indented files step by the tab width;
  *  otherwise the most common increase from one indented line to the next,
  *  between 2 and 8 columns (a hanging indent under a bracket is a larger jump
  *  and is ignored). The tab width when there is no evidence, as Monaco does. */
-export function detectIndentStep(lines: readonly string[], tabWidth: number): number {
+export function detectIndentStep(
+  lines: readonly string[],
+  tabWidth: number,
+  indents: Int32Array = lineIndents(lines, tabWidth)
+): number {
   let tabbed = 0
   let spaced = 0
   const increases = new Map<number, number>()
   let previous = 0
-  for (const line of lines) {
-    const indent = leadingIndentColumns(line, tabWidth)
-    if (indent === null) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const indent = indents[index]!
+    if (indent < 0) {
       continue
     }
-    if (line.startsWith('\t')) {
+    const first = lines[index]!.charCodeAt(0)
+    if (first === 9) {
       tabbed += 1
-    } else if (line.startsWith(' ')) {
+    } else if (first === 32) {
       spaced += 1
     }
     const delta = indent - previous
@@ -70,30 +98,33 @@ export function detectIndentStep(lines: readonly string[], tabWidth: number): nu
  */
 export function indentGuideCounts(
   lines: readonly string[],
-  options: { tabWidth: number; indentStep: number; offSide: boolean }
+  options: { tabWidth: number; indentStep: number; offSide: boolean; indents?: Int32Array }
 ): number[] {
   const { tabWidth, indentStep, offSide } = options
-  const indents = lines.map((line) => leadingIndentColumns(line, tabWidth))
-  const above: number[] = []
+  const indents = options.indents ?? lineIndents(lines, tabWidth)
+  const count = lines.length
+  const above = new Int32Array(count)
   let last = -1
-  for (const indent of indents) {
-    above.push(last)
-    if (indent !== null) {
-      last = indent
+  for (let index = 0; index < count; index += 1) {
+    above[index] = last
+    if (indents[index]! >= 0) {
+      last = indents[index]!
     }
   }
-  const counts = Array.from<number>({ length: lines.length }).fill(0)
+  // Filled first: Hermes stores an empty array of n slots written from its
+  // end slowly, 7.8 s for 100,000 lines against 4 ms filled.
+  const counts = Array.from<number>({ length: count }).fill(0)
   let below = -1
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const indent = indents[index]
-    if (indent !== null && indent !== undefined) {
-      counts[index] = Math.ceil(indent / indentStep)
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const indent = indents[index]!
+    const guides =
+      indent >= 0 ? Math.ceil(indent / indentStep) : blankLineGuides(above[index]!, below, indentStep, offSide)
+    if (indent >= 0) {
       below = indent
-      continue
     }
-    counts[index] = blankLineGuides(above[index] ?? -1, below, indentStep, offSide)
+    counts[index] = Math.min(guides, CODE_VIEW_MAX_INDENT_GUIDES)
   }
-  return counts.map((count) => Math.min(count, CODE_VIEW_MAX_INDENT_GUIDES))
+  return counts
 }
 
 function blankLineGuides(above: number, below: number, step: number, offSide: boolean): number {

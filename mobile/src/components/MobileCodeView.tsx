@@ -70,8 +70,9 @@ export function MobileCodeView({
   folding?: CodeFolding
 }) {
   const theme = useTheme()
-  const ownFolding = useCodeFolding(document)
-  const folding = givenFolding?.document === document ? givenFolding : ownFolding
+  const useGiven = givenFolding?.document === document
+  const ownFolding = useCodeFolding(document, !useGiven)
+  const folding = useGiven ? givenFolding : ownFolding
   const { visible } = folding
   const { fontScale } = useWindowDimensions()
   const metrics = useMemo(

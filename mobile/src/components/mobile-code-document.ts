@@ -7,7 +7,8 @@ import {
   detectIndentStep,
   displayColumns,
   expandTabsInSegments,
-  indentGuideCounts
+  indentGuideCounts,
+  lineIndents
 } from './mobile-code-indent'
 import { formatMinifiedJsonForReading } from './mobile-code-json-format'
 import { computeFoldRegions, type CodeFoldRegion } from './mobile-code-folding'
@@ -74,7 +75,9 @@ export function buildMobileCodeDocument(content: string, language: string): Mobi
   const text = (formatted ?? content).replaceAll('\r\n', '\n')
   const lines = text.split('\n')
   const tabWidth = CODE_VIEW_TAB_WIDTH
-  const indentStep = detectIndentStep(lines, tabWidth)
+  // Each line's indent, read once for the step, the guides and the folds.
+  const indents = lineIndents(lines, tabWidth)
+  const indentStep = detectIndentStep(lines, tabWidth, indents)
   let maxColumns = 0
   for (const line of lines) {
     maxColumns = Math.max(maxColumns, displayColumns(line, tabWidth))
@@ -87,15 +90,16 @@ export function buildMobileCodeDocument(content: string, language: string): Mobi
     lineBreak: formatted === null && content.includes('\r\n') ? '\r\n' : '\n',
     tabWidth,
     indentStep,
-    guides: indentGuideCounts(lines, { tabWidth, indentStep, offSide }),
+    guides: indentGuideCounts(lines, { tabWidth, indentStep, offSide, indents }),
     maxColumns,
     highlight: highlightModeFor(text, language),
-    folds: computeFoldRegions(lines, { tabWidth, offSide })
+    folds: computeFoldRegions(lines, { tabWidth, offSide, indents })
   }
 }
 
 function highlightModeFor(text: string, language: string): MobileCodeHighlightMode {
-  if (text.trim().length === 0 || text.length > CODE_VIEW_MAX_HIGHLIGHT_CHARS) {
+  // `\S` stops at the first character; `trim()` copied the whole file.
+  if (!/\S/.test(text) || text.length > CODE_VIEW_MAX_HIGHLIGHT_CHARS) {
     return 'none'
   }
   if (!canHighlightMobileLanguage(language)) {

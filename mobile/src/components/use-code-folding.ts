@@ -16,22 +16,29 @@ export type CodeFolding = {
 }
 
 const NOTHING_FOLDED: ReadonlySet<number> = new Set()
+const NO_REGIONS: ReadonlyMap<number, CodeFoldRegion> = new Map()
+const NO_LINES: number[] = []
 
 /**
  * Which blocks of a document are folded. Kept per document: a new document
  * (the file's content changed, or another file) starts with nothing folded,
  * as the desktop does when a file is replaced under it.
  */
-export function useCodeFolding(document: MobileCodeDocument): CodeFolding {
+export function useCodeFolding(document: MobileCodeDocument, active = true): CodeFolding {
   const [state, setState] = useState<{ doc: MobileCodeDocument; folded: ReadonlySet<number> }>({
     doc: document,
     folded: NOTHING_FOLDED
   })
   const folded = state.doc === document ? state.folded : NOTHING_FOLDED
-  const byStart = useMemo(() => new Map(document.folds.map((region) => [region.start, region])), [document])
+  // A view handed its caller's folds keeps none of its own: no map, and no
+  // index of every visible line (22 ms at 208k lines on Hermes).
+  const byStart = useMemo(
+    () => (active ? new Map(document.folds.map((region) => [region.start, region])) : NO_REGIONS),
+    [active, document]
+  )
   const visible = useMemo(
-    () => visibleLineIndices(document.lines.length, document.folds, folded),
-    [document, folded]
+    () => (active ? visibleLineIndices(document.lines.length, document.folds, folded) : NO_LINES),
+    [active, document, folded]
   )
   const toggle = useCallback(
     (lineIndex: number) => {
