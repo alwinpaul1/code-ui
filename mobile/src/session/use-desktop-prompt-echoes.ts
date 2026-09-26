@@ -141,6 +141,9 @@ export function useDesktopPromptEchoes(
     if (prompt.heldBack === true) {
       continue
     }
+    if (foundWithoutItsRow(prompt, rawMessages)) {
+      continue
+    }
     if (
       hasEarlier &&
       rememberedAnchor(prompt.nonce) === undefined &&
@@ -253,6 +256,32 @@ export function useDesktopPromptEchoes(
     })
   }
   return useStableEchoes(echoes)
+}
+
+/**
+ * Whether a beacon copy is one the chat found long after it arrived, with the
+ * row it was typed after not held. The beacon names that row and gives no
+ * time, so while the row is on a page not loaded there is nowhere to draw it:
+ * waiting for it drew the copy at the tail, and after the wait it stayed there
+ * for good (2026-09-27, the beacon's side of session 76ba8f2f's 13:20 prompt;
+ * a relaunch restores 40 such copies). It is drawn once the row loads.
+ *
+ * Only a copy no chat has placed or waited on this run, and that arrived more
+ * than TIMED_ANCHOR_OPEN_MS before this reading. One that arrived just before
+ * the chat opened (the tab showed its terminal) is the live case the wait is
+ * for, and still waits at the tail.
+ */
+function foundWithoutItsRow(prompt: DesktopPrompt, rawMessages: readonly NativeChatMessage[]): boolean {
+  return (
+    prompt.anchorId !== undefined &&
+    prompt.at === undefined &&
+    typeof prompt.seenAt === 'number' &&
+    Date.now() - prompt.seenAt > TIMED_ANCHOR_OPEN_MS &&
+    !anchorByNonce.has(prompt.nonce) &&
+    !provisionalByNonce.has(prompt.nonce) &&
+    !waitsByNonce.has(prompt.nonce) &&
+    !rawMessages.some((message) => message.id === prompt.anchorId)
+  )
 }
 
 /** The bubble id of a hook prompt's echo. */

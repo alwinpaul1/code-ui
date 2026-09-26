@@ -49,6 +49,8 @@ export type AgentHudBeaconLimit = {
 /** `at`: epoch ms of the submission, when the source knows it (the transcript
  *  does; the beacon does not) — places the echo after the last row written
  *  before it when `anchorId` names a row the phone never holds. */
+/** `seenAt` on a beacon copy: when the phone received it (a restored one from
+ *  an older build: its record's last beacon, agent-hud-beacon-warm-start.ts). */
 /** `atStateStart`: `at` is when the pane's working run began, read at first
  *  sight of the tab status (agent-status-prompts.ts), which can be before the
  *  prompt (one sent mid-run).
@@ -287,12 +289,14 @@ function publish(handle: string, payload: string): void {
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
         // Prompts accumulate: each submission is its own beacon and the phone
         // must keep the ones that came before it.
-        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt),
+        // Each stamped with its arrival, which tells a copy the chat saw
+        // arrive from one it found long after (use-desktop-prompt-echoes.ts).
+        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }),
         desktopPrompt: beacon.desktopPrompt ?? previous.desktopPrompt,
         promptHook: beacon.promptHook || previous.promptHook,
         receivedAt: beacon.receivedAt
       }
-    : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
+    : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }) }
   const merged = withAgentMessagesOf(handle, joined, previous === undefined, beacon.desktopPrompt)
   // A repeat says nothing new: keep the object readers already hold.
   if (previous && unchangedBeacon(previous, merged)) {

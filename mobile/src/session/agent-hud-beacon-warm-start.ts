@@ -60,7 +60,13 @@ function wellFormedPrompt(prompt: unknown): prompt is DesktopPrompt {
  *  on it too. */
 function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
   const { agentMessagePrompts, ...rest } = record
-  const prompts = Array.isArray(record.desktopPrompts) ? record.desktopPrompts.filter(wellFormedPrompt) : []
+  // Each desk prompt with when it arrived, which tells the chat it found the
+  // copy long after (use-desktop-prompt-echoes.ts). One an older build stored
+  // without it arrived no later than the record's last beacon.
+  const arrivedBy = typeof record.receivedAt === 'number' ? record.receivedAt : 0
+  const prompts = Array.isArray(record.desktopPrompts)
+    ? record.desktopPrompts.filter(wellFormedPrompt).map((prompt) => (typeof prompt.seenAt === 'number' ? prompt : { ...prompt, seenAt: arrivedBy }))
+    : []
   // A list that is not one is left out, not kept: the restore maps over it.
   const kept = Array.isArray(agentMessagePrompts) ? agentMessagePrompts.filter(wellFormedPrompt) : undefined
   return { ...rest, desktopPrompts: prompts, ...(kept ? { agentMessagePrompts: kept } : {}) }

@@ -168,8 +168,10 @@ describe('a malformed record in the store', () => {
     const bad = { ...beacon('fable'), desktopPrompts: [{ nonce: '2' }, { nonce: '3', text: 'kept' }], agentMessagePrompts: [{ text: 'no nonce' }] }
     store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-bad': bad, 'terminal-good': good }))
     const restored = await readWarmStartBeacons()
-    expect(restored['terminal-good']?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed' }])
-    expect(restored['terminal-bad']?.desktopPrompts).toEqual([{ nonce: '3', text: 'kept' }])
+    // With its arrival, the record's last beacon (receivedAt 1): an older
+    // build stored none.
+    expect(restored['terminal-good']?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed', seenAt: 1 }])
+    expect(restored['terminal-bad']?.desktopPrompts).toEqual([{ nonce: '3', text: 'kept', seenAt: 1 }])
     expect(restored['terminal-bad']?.agentMessagePrompts).toEqual([])
   })
 
@@ -180,7 +182,8 @@ describe('a malformed record in the store', () => {
     const bad = { ...beacon('fable'), desktopPrompts: [{ nonce: '2' }] }
     store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-bad': bad, 'terminal-good': good }))
     await expect(beaconStore.hydrateAgentHudBeacons()).resolves.toBeUndefined()
-    expect(beaconStore.getAgentHudBeacon('terminal-good')?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed' }])
+    // Restored with its arrival, the record's last beacon (receivedAt 1).
+    expect(beaconStore.getAgentHudBeacon('terminal-good')?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed', seenAt: 1 }])
     expect(beaconStore.getAgentHudBeacon('terminal-bad')?.modelId).toBe('fable')
     beaconStore.resetAgentHudBeacons()
   })
@@ -195,7 +198,8 @@ describe('a malformed record in the store', () => {
     store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-bad': bad, 'terminal-good': good }))
     expect((await readWarmStartBeacons())['terminal-bad']).not.toHaveProperty('agentMessagePrompts')
     await expect(beaconStore.hydrateAgentHudBeacons()).resolves.toBeUndefined()
-    expect(beaconStore.getAgentHudBeacon('terminal-good')?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed' }])
+    // Restored with its arrival, the record's last beacon (receivedAt 1).
+    expect(beaconStore.getAgentHudBeacon('terminal-good')?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed', seenAt: 1 }])
     expect(beaconStore.getAgentHudBeacon('terminal-bad')?.modelId).toBe('fable')
     beaconStore.resetAgentHudBeacons()
   })
