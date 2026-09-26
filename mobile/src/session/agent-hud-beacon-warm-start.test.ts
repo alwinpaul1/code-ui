@@ -185,6 +185,21 @@ describe('a malformed record in the store', () => {
     beaconStore.resetAgentHudBeacons()
   })
 
+  // Review of 9f9aa4a0..a6857609, nit 6: a subagent list that is not a list
+  // was kept, and the restore called `.map` on it.
+  it('drops a subagent list that is not a list, and still restores every terminal', async () => {
+    const beaconStore = await import('./agent-hud-beacon')
+    beaconStore.resetAgentHudBeacons()
+    const good = { ...beacon('opus'), desktopPrompts: [{ nonce: '1', text: 'typed' }] }
+    const bad = { ...beacon('fable'), desktopPrompts: [], agentMessagePrompts: {} }
+    store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-bad': bad, 'terminal-good': good }))
+    expect((await readWarmStartBeacons())['terminal-bad']).not.toHaveProperty('agentMessagePrompts')
+    await expect(beaconStore.hydrateAgentHudBeacons()).resolves.toBeUndefined()
+    expect(beaconStore.getAgentHudBeacon('terminal-good')?.desktopPrompts).toEqual([{ nonce: '1', text: 'typed' }])
+    expect(beaconStore.getAgentHudBeacon('terminal-bad')?.modelId).toBe('fable')
+    beaconStore.resetAgentHudBeacons()
+  })
+
   it('reads a record with no prompt list as one with none', async () => {
     store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-1': beacon('opus') }))
     expect((await readWarmStartBeacons())['terminal-1']?.desktopPrompts).toEqual([])

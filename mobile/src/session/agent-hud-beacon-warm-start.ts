@@ -59,9 +59,11 @@ function wellFormedPrompt(prompt: unknown): prompt is DesktopPrompt {
  *  lost its warm start (review of 2026-09-27); a reader would have thrown
  *  on it too. */
 function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
+  const { agentMessagePrompts, ...rest } = record
   const prompts = Array.isArray(record.desktopPrompts) ? record.desktopPrompts.filter(wellFormedPrompt) : []
-  const kept = Array.isArray(record.agentMessagePrompts) ? record.agentMessagePrompts.filter(wellFormedPrompt) : undefined
-  return { ...record, desktopPrompts: prompts, ...(kept ? { agentMessagePrompts: kept } : {}) }
+  // A list that is not one is left out, not kept: the restore maps over it.
+  const kept = Array.isArray(agentMessagePrompts) ? agentMessagePrompts.filter(wellFormedPrompt) : undefined
+  return { ...rest, desktopPrompts: prompts, ...(kept ? { agentMessagePrompts: kept } : {}) }
 }
 
 /** Never throws: an unreadable store simply means no warm start. */

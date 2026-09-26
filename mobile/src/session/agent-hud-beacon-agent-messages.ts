@@ -47,8 +47,8 @@ export function withAgentMessagePrompt(beacon: AgentHudBeacon, next: DesktopProm
  *  the hook named is loaded (mobile-native-chat-agent-message-rows.ts). A
  *  record from before this list has them among its desktop prompts. */
 export function withRestoredAgentMessages(beacon: AgentHudBeacon, handle?: string): AgentHudBeacon {
-  let list = beacon.agentMessagePrompts
-  for (const prompt of beacon.desktopPrompts ?? []) {
+  let list = Array.isArray(beacon.agentMessagePrompts) ? beacon.agentMessagePrompts : undefined
+  for (const prompt of Array.isArray(beacon.desktopPrompts) ? beacon.desktopPrompts : []) {
     list = keepAgentMessagePrompt(list, prompt)
   }
   const restored = list ? { ...beacon, agentMessagePrompts: list.map((prompt) => ({ ...prompt, restored: true as const })) } : beacon
