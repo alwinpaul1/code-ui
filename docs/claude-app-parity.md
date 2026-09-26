@@ -23,6 +23,30 @@ failing-first test and has been checked on the phone in light and dark.
 | 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
 | 14 | Where a mid-turn message sits among the rows around it: its own sends where it sent them, a message sent elsewhere where the agent took it (below) | A phone text send gave way to the hook's copy and drew under rows written after it | phone sends fixed, not yet checked on the phone; a Claude app send reaches the phone as the hook's text only (below); a Claude app or desktop send keeps rows written just after it below it (f2b2a5ca). A phone send Claude took mid-turn drew as the last row, under the reply that ended the turn, when the chat's read settled late or the chat came back after the turn, and a later send of its text drew twice (fixed 2026-09-25, not yet checked on the phone; records below) |
 
+## New in Claude Code 2.1.283, not yet compared with the Claude app
+
+These come from the 2.1.283 release notes and its binary (2026-09-26), not from
+a screenshot, so none is a parity item until the Claude app is seen showing it.
+Nothing here is built.
+
+- **Compaction progress.** 2.1.283 times "Compacting conversation…" from the
+  start of the compaction and counts the summary's tokens on that line; 2.1.282
+  drew a bar under it. Code UI's spinner reader takes a one-word verb only, so
+  it reads nothing off that line on either build. The phone never shows the
+  compaction, its time or its tokens; what its status line says meanwhile
+  follows the pane status Orca reports, which has not been checked.
+- **Images from MCP tools.** 2.1.283 also saves each one to a file and puts a
+  line after it in the tool result: `[Image: source: <path>]`, the same with
+  ", original WxH, displayed at wxh. …" before the `]` when it resized the
+  picture, or `[Image source: <path>]` when it knows no size (none when the
+  save fails). Orca's reader keeps
+  an image only with a path or URL (item 9), so on the phone that line would
+  be the tool output's only trace of the picture, drawn as text. Neither that
+  nor whether the phone may read the saved file has been checked.
+- **Cut messages from other sessions.** In fullscreen mode 2.1.283 opens a
+  truncated one with a click. The row itself is unchanged ("(ctrl+o to
+  expand)"); Code UI has no way to open a row it only saw cut.
+
 ## Evidence notes
 
 - **Thinking (1).** The Claude app draws only `thinking` blocks with the side
