@@ -141,7 +141,11 @@ Nothing here is built.
   by `bash`, `sh`, `zsh`, `python`, `python3` or `node`, with no redirect but
   `2>&1` or `/dev/null`, no backticks or brackets, no `--output`, and no
   `NAME=value` setting in front (`BASH_ENV` loads code first, and a quoted
-  space in one can hide the verb). A `tee`, a `sed -i`, a `less -O`, a `mv`,
+  space in one can hide the verb). The verb, every word of a `less` or a
+  `git`, and the file an interpreter runs must also read as written: a quote
+  inside a word, an escape, a `$`, a glob or a brace list refuses there,
+  since `less \-O` and `git diff '--output'=` still write, and a quoted `~`
+  is a folder called `~`. A `tee`, a `sed -i`, a `less -O`, a `mv`,
   `cp` or `rm`, a `git commit`, and a command given as an argument list, the
   way Codex sends one, still void the count. The count
   is then the uncut Write's count of that text, through the same pipeline,

@@ -26,9 +26,14 @@
 // and `git commit` are no such verb, so an in-place flag never reaches one
 // that honours it. The words are split on whitespace alone, so a quoted
 // separator or `>` reads as one and refuses, and a heredoc's lines read as
-// parts of their own, which its end marker refuses. The verb is the first
-// word as written, so a quote or an escape in it leaves a word no list here
-// holds, and that refuses too.
+// parts of their own, which its end marker refuses. A word wholly in one
+// pair of quotes is read without them, unless it opens with `~`, which the
+// shell then leaves unexpanded. Any other quote, an escape, a `$`, a glob or
+// a brace list may make a word something else by the time the verb sees it
+// (review of 9171bc22 and da87791b: `less \-O` and `git diff '--output'=`
+// still write), so it refuses wherever a word is judged: in the verb, in any
+// word of `less` or `git`, and in the file an interpreter is given. A Windows
+// path, with its backslashes, refuses there too.
 //
 // A relative name is matched as a suffix, so a script of the file's name run
 // from another folder passes: the folder the shell was left in is not in the
@@ -42,6 +47,9 @@ const UNREADABLE = /[`>()]/
 const SEPARATOR = /&&|\|\||[;|&\n]/
 const WRITES_A_NAMED_FILE = /^--output/
 const QUOTED = /^(["'])(.*)\1$/
+/** What the shell may turn a word into something else with: a quote or an
+ *  escape left in it, an expansion, a glob, or a brace list. */
+const REWRITTEN = /["'\\$*?[\]{}]/
 
 /** Verbs that write no file, whatever they are given. `less` is read
  *  apart, since two of its options write one. */
@@ -64,12 +72,21 @@ const GIT_READS = new Set(['add', 'diff', 'log', 'show', 'status'])
 /** Interpreters that run the file they are given first. */
 const INTERPRETERS = new Set(['bash', 'node', 'python', 'python3', 'sh', 'zsh'])
 
+/** The words of a part, a pair of quotes round the whole of one taken off.
+ *  A quoted `~` keeps its quotes, since it names a folder called `~`. */
 function wordsOf(part: string): string[] {
   return part
     .trim()
     .split(/\s+/)
     .filter((word) => word !== '')
-    .map((word) => QUOTED.exec(word)?.[2] ?? word)
+    .map((word) => {
+      const unquoted = QUOTED.exec(word)?.[2]
+      return unquoted === undefined || unquoted.startsWith('~') ? word : unquoted
+    })
+}
+
+function readsAsWritten(word: string): boolean {
+  return !REWRITTEN.test(word)
 }
 
 function partLeavesFileAlone(part: string, isTheFile: (word: string) => boolean): boolean {
@@ -82,17 +99,22 @@ function partLeavesFileAlone(part: string, isTheFile: (word: string) => boolean)
   if (verb === undefined) {
     return true
   }
+  if (!readsAsWritten(verb)) {
+    return false
+  }
   if (verb === 'less') {
-    return words.every((word) => !word.startsWith('-') && !word.startsWith('+'))
+    return words.every(
+      (word) => readsAsWritten(word) && !word.startsWith('-') && !word.startsWith('+')
+    )
   }
   if (READ_VERBS.has(verb)) {
     return true
   }
   if (verb === 'git') {
-    return next !== undefined && GIT_READS.has(next)
+    return next !== undefined && GIT_READS.has(next) && words.every(readsAsWritten)
   }
   if (INTERPRETERS.has(verb)) {
-    return next !== undefined && isTheFile(next)
+    return next !== undefined && readsAsWritten(next) && isTheFile(next)
   }
   // A bare name is looked up on the PATH, which may be another program.
   return verb.includes('/') && isTheFile(verb)
