@@ -7,6 +7,7 @@ import {
   sweepWitnessedEchoes
 } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -124,13 +125,40 @@ describe('a phone send acknowledged after a witness of it was stored', () => {
 // a desktop prompt (desktop-prompt-merge.ts); one already on disk must not
 // come back as the user's bubble on the next launch.
 describe('a subagent message remembered as a desktop prompt before that was fixed', () => {
-  it('is swept from what the phone restores, and a phone send is not', async () => {
-    const { SUBAGENT_REQUEST_PROMPT } = await import('./fixtures/claude-agent-message-read-image-2.1.283')
+  it('is swept from what the phone restores, and a phone send is not', () => {
     const stored = [
       { id: 'desk-4101', text: SUBAGENT_REQUEST_PROMPT, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
       { id: 'pending-1', text: 'a phone send', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
       { id: 'desk-4102', text: 'typed at the desk', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
     ]
     expect(sweepWitnessedEchoes(stored).map((i) => i.id)).toEqual(['pending-1', 'desk-4102'])
+  })
+
+  it('is swept when the hook cut it, with no closing tag, as the store kept it', () => {
+    const stored = [{ id: 'desk-4103', text: SUBAGENT_HANDBACK_PROMPT, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }]
+    expect(sweepWitnessedEchoes(stored)).toEqual([])
+  })
+})
+
+// Review of 2026-09-26: the sweep used the shared harness classifier, which
+// matches by a leading word or tag, so it deleted real messages the person
+// typed from what the phone restores. Only the wrapper shape the old build
+// stored is swept.
+describe('a message the person typed, remembered as a witness, on the next launch', () => {
+  const base = { expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
+
+  it('is restored when it starts "A message arrived from"', () => {
+    const stored = [{ id: 'desk-4101', text: 'A message arrived from the backend team: the deploy failed, check the logs', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4101'])
+  })
+
+  it('is restored from the queue box when it starts "No response requested."', () => {
+    const stored = [{ id: 'absorbed-abc', text: 'No response requested. Just note that the API moved to v3.', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-abc'])
+  })
+
+  it('is restored when it opens by quoting an <agent-message> tag', () => {
+    const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])
   })
 })

@@ -35,13 +35,14 @@ describe("reading a subagent's message out of its delivery", () => {
     expect(parsed?.body).not.toContain('agent-message')
   })
 
-  it("reads a hand-back as the report: the harness's line gone and its indent undone", () => {
-    expect(parseSubagentMessage(SUBAGENT_HANDBACK_PROMPT)).toEqual({
+  it("reads a hand-back the hook cut as the report: the harness's line gone and its indent undone", () => {
+    // Both fixtures end at a cut, with no closing tag, as a hook cuts a long one.
+    expect(parseSubagentMessage(SUBAGENT_HANDBACK_PROMPT, { cut: true })).toEqual({
       from: 'a7a46867b4f497c96',
       body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…'
     })
     // The user-row shape, behind the opener: a Markdown heading survives as one.
-    expect(parseSubagentMessage(SUBAGENT_HANDBACK_USER_ROW)).toEqual({
+    expect(parseSubagentMessage(SUBAGENT_HANDBACK_USER_ROW, { cut: true })).toEqual({
       from: 'aaf323ee8cc2166b5',
       body: '## 1. Verdict\n\nThe branch has defects: …'
     })
@@ -51,6 +52,11 @@ describe("reading a subagent's message out of its delivery", () => {
     expect(parseSubagentMessage(CROSS_SESSION)).toBeNull()
     expect(parseSubagentMessage('<teammate-message teammate_id="team-lead">go</teammate-message>')).toBeNull()
     expect(parseSubagentMessage('why does <agent-message from="x"> show up?')).toBeNull()
+    // Starts with the tag, or quotes its whole first line, and goes on in a
+    // person's words with nothing closing it: a prompt, not the wrapper.
+    expect(parseSubagentMessage('<agent-message from="x"> keeps showing in my log, why?')).toBeNull()
+    expect(parseSubagentMessage('<agent-message from="x">\nwhat is this line in my log?')).toBeNull()
+    expect(parseSubagentMessage('<agent-message from="x">\nhi\n</agent-message> is what I saw, why?')).toBeNull()
     expect(parseSubagentMessage('<agent-message>no sender</agent-message>')).toBeNull()
     expect(parseSubagentMessage('')).toBeNull()
   })

@@ -29,7 +29,7 @@ vi.mock('./MobileNativeChatView', async () => {
   }
 })
 
-import { agentRow, at, landingHarness, userRow } from './mobile-chat-phone-photo-landing.test-support'
+import { agentRow, at, landingHarness, userRow, words } from './mobile-chat-phone-photo-landing.test-support'
 
 // A subagent's message to its lead, Claude Code 2.1.283 (2026-09-26): the
 // desktop TUI folds it in the turn as "› Message from @general-purpose (ctrl+o
@@ -99,5 +99,67 @@ describe("a subagent's message to this session", () => {
     expect(agentRows()).toEqual([
       { sender: 'general-purpose', body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…' }
     ])
+  })
+})
+
+// Review of 2026-09-26: the beacon dropped every prompt the shared harness
+// classifier matched, and it matches by a leading word or tag. A prompt the
+// person typed mid-turn reaches the phone only by the beacon (Orca drops the
+// queued_command record), so one that merely starts that way was drawn nowhere.
+describe('a prompt the person typed at the desk, mid-turn, that starts with harness-like words', () => {
+  const { show, lastFrame } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const shows = async (text: string) => {
+    await show('12:40:30.000', {
+      messages: [PROMPT, OPENING],
+      working: true,
+      promptHook: true,
+      ...fromBeacon([{ nonce: '5001', text, anchorId: 'a1' }])
+    })
+    return lastFrame().map((bubble) => bubble.text)
+  }
+
+  it('"A message arrived from …" is still drawn as the user bubble', async () => {
+    const text = 'A message arrived from the backend team: the deploy failed, please check the logs'
+    expect(await shows(text)).toEqual(['Why is the copy flickering?', text])
+  })
+
+  it('a prompt that opens by quoting an <agent-message> tag is still the user bubble, and no "Message from" row', async () => {
+    const text = '<agent-message from="a1b2c3"> keeps showing in my log. Where does that tag come from?'
+    expect(await shows(text)).toEqual(['Why is the copy flickering?', text])
+    expect(agentRows()).toEqual([])
+  })
+
+  it('a prompt that quotes the whole opening line of one, and no closing tag, is still the user bubble', async () => {
+    const text = '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?'
+    expect(await shows(text)).toEqual(['Why is the copy flickering?', words(text)])
+    expect(agentRows()).toEqual([])
+  })
+
+  const lastFolded = () => (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+  const agentRows = () => lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!] : []))
+})
+
+// Review of 2026-09-26: in a teammate session on a tab with the prompt hook,
+// the lead's mid-turn follow-up (dropped by Orca as a queued_command) was
+// filtered off the beacon as harness machinery, and with the hook on the
+// screen's "› Message from @team-lead" row is not drawn either. The follow-up
+// is the user's bubble, as main drew it and as a landed follow-up is drawn
+// (teammateTask in mobile-native-chat-peer-messages.ts).
+describe("the lead's mid-turn follow-up in a teammate session with the prompt hook", () => {
+  const { show, lastFrame } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+
+  it('is drawn once, as the bubble the lead\'s messages get', async () => {
+    const task = userRow('task', ['<teammate-message teammate_id="team-lead">Build the job.</teammate-message>'], '12:40:00.000')
+    const followUp = '<teammate-message teammate_id="team-lead">Also time the CPU path.</teammate-message>'
+    await show('12:40:30.000', {
+      messages: [task, agentRow('a1', 'Reading the code.', '12:40:10.000')],
+      working: true,
+      promptHook: true,
+      peerRows: [{ sender: 'team-lead' }, { sender: 'team-lead' }],
+      ...fromBeacon([{ nonce: '7001', text: followUp, anchorId: 'a1' }])
+    })
+    expect(lastFrame().filter((bubble) => bubble.text.includes('Also time the CPU path.'))).toHaveLength(1)
   })
 })

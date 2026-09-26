@@ -1,5 +1,5 @@
-import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
 
 /**
  * The tab status's prompts and the beacon's, as one list for the chat.
@@ -11,12 +11,16 @@ import type { DesktopPrompt } from './agent-hud-beacon'
  * is dropped when its text matches one. A beacon prompt with no status twin
  * (a host that publishes no status) still shows.
  *
- * A turn the harness injected is dropped from the beacon as the status path
- * drops it (agent-status-prompts.ts): Claude Code fires the same hook for a
- * subagent's `<agent-message …>`, another session's message and the rest, and
- * each desktop prompt is drawn as the user's own bubble. A subagent's message
- * is drawn from the beacon as its own row instead
- * (mobile-native-chat-agent-messages.ts).
+ * A subagent's message is dropped from the beacon: Claude Code fires the same
+ * hook for its `<agent-message …>`, each desktop prompt is drawn as the user's
+ * own bubble, and the message is drawn from the beacon as its own row instead
+ * (mobile-native-chat-agent-messages.ts). Only that exact wrapper, never the
+ * shared harness classifier: this is the one path a prompt typed mid-turn
+ * reaches the phone by, and that classifier matches by a leading word or tag
+ * ("A message arrived from …", a quoted `<system-reminder>`), so a person's
+ * prompt that starts that way was drawn nowhere (review of 2026-09-26). A
+ * lead's `<teammate-message>` in a teammate session stays a desktop prompt,
+ * the user's bubble a landed one gets (teammateTask).
  */
 export function mergeDesktopPrompts(
   status: readonly DesktopPrompt[],
@@ -25,7 +29,7 @@ export function mergeDesktopPrompts(
   const merged: DesktopPrompt[] = [...status]
   const seen = new Set(status.map((prompt) => prompt.text))
   for (const prompt of beacon) {
-    if (!seen.has(prompt.text) && !isKnownHarnessInjectedUserTurnText(prompt.text)) {
+    if (!seen.has(prompt.text) && !isSubagentMessagePrompt(prompt)) {
       merged.push(prompt)
     }
   }

@@ -41,7 +41,8 @@ export type BeaconAgentMessage = {
 }
 
 const OPENER = /^\s*Another Claude session sent a message(?: while you were working)?:[ \t]*\n/
-const OPEN_TAG = /^\s*<agent-message\b([^>]*)>[ \t]*\n?/
+/** The wrapper's first line: the tag, and nothing after it on that line. */
+const OPEN_LINE = /^\s*<agent-message\b([^>\n]*)>[ \t]*(?:\n|$)/
 const FROM = /\bfrom="([^"]+)"/
 const CLOSE_TAG = '</agent-message>'
 /** The harness's own line ahead of a report (2.1.283 wording, one line). */
@@ -49,11 +50,21 @@ const HANDBACK_PREAMBLE = /^\[Subagent hand-back\][^\n]*(?:\n|$)/
 /** The harness indents every line of a hand-back report by two spaces. */
 const HANDBACK_INDENT = '  '
 
-/** The sender id and message of a subagent's delivery, or null for anything
- *  else: a person's prompt, another session's message, a bare opener. */
-export function parseSubagentMessage(text: string): SubagentMessage | null {
+/**
+ * The sender id and message of a subagent's delivery, or null for anything
+ * else: a person's prompt, another session's message, a bare opener.
+ *
+ * Only Claude Code's own wrapper counts, as the whole prompt: its first line
+ * is `<agent-message from="…">` and nothing else, and `</agent-message>` ends
+ * it. A prompt that merely starts with the tag, or quotes the first line and
+ * goes on in someone's words, is a person's prompt (review of 2026-09-26: the
+ * shared harness classifier matched by the leading tag, and a desk prompt that
+ * quoted one was drawn nowhere). `cut`: the hook shortened the prompt, so the
+ * closing tag is missing and what came is the start.
+ */
+export function parseSubagentMessage(text: string, options: { cut?: boolean } = {}): SubagentMessage | null {
   const rest = text.replace(OPENER, '')
-  const open = OPEN_TAG.exec(rest)
+  const open = OPEN_LINE.exec(rest)
   const from = open ? FROM.exec(open[1] ?? '')?.[1]?.trim() : undefined
   if (!open || !from) {
     return null
@@ -61,16 +72,24 @@ export function parseSubagentMessage(text: string): SubagentMessage | null {
   let body = rest.slice(open[0].length)
   // The wrapper's own closing tag is the one that ends the prompt. A report
   // may quote the tag, and cutting at the first one dropped everything after
-  // the quote. A hook cut the prompt when it does not end with one; what came
-  // is the start.
+  // the quote.
   const whole = body.trimEnd()
   if (whole.endsWith(CLOSE_TAG)) {
     body = whole.slice(0, whole.length - CLOSE_TAG.length)
+  } else if (options.cut !== true) {
+    return null
   }
   if (HANDBACK_PREAMBLE.test(body)) {
     body = dedent(body.replace(HANDBACK_PREAMBLE, ''))
   }
   return { from, body: body.replace(/\s+$/, '').replace(/^\n+/, '') }
+}
+
+/** Whether a hook prompt is a subagent's message rather than something a
+ *  person typed: the one test the desktop prompts and the rows agree on, so a
+ *  prompt is drawn as exactly one of the two. */
+export function isSubagentMessagePrompt(prompt: Pick<DesktopPrompt, 'text' | 'cut'>): boolean {
+  return parseSubagentMessage(prompt.text, { cut: prompt.cut === true }) !== null
 }
 
 function dedent(report: string): string {
@@ -85,7 +104,7 @@ function dedent(report: string): string {
 export function beaconAgentMessages(prompts: readonly DesktopPrompt[] | undefined): BeaconAgentMessage[] {
   const found: BeaconAgentMessage[] = []
   for (const prompt of prompts ?? []) {
-    const parsed = parseSubagentMessage(prompt.text)
+    const parsed = parseSubagentMessage(prompt.text, { cut: prompt.cut === true })
     if (parsed) {
       found.push({
         id: `agent-message:${prompt.nonce}`,
