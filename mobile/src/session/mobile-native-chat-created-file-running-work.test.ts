@@ -83,6 +83,23 @@ const INBOX_OUTPUT =
 const USER_TURNED_DOWN =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
 
+// TaskStop's answers, in the shapes Claude Code 2.1.283's TaskStop builds
+// them (read from its source in the binary): its data as JSON when it stopped
+// the task, with a note instead when a loop outlived it; its input check's
+// message when the task is not running; the sentence a cancel answers with;
+// and a denial.
+const stoppedOutput = (id: string) =>
+  `{"message":"Successfully stopped task: ${id} (npm run watch)","task_id":"${id}","task_type":"local_bash","command":"npm run watch"}`
+const loopOutlivedOutput = (id: string) =>
+  `{"message":"Task ${id} had already ended (completed) but its loop had not exited; re-signalled it and killed 1 process group(s). The record remains listed while the loop is still live.","task_id":"${id}","task_type":"local_bash","command":"npm run watch"}`
+const notRunningOutput = (id: string, status: string) =>
+  `<tool_use_error>Task ${id} is not running (status: ${status})</tool_use_error>`
+const CANCELLED =
+  "The user doesn't want to take this action right now. STOP what you are doing and wait for the user to tell you how to proceed."
+const DENIED =
+  'Permission for this action was denied by the Claude Code auto mode classifier. Reason: Stopping a task the user started.'
+const MISSING_FILE = '<tool_use_error>File does not exist.</tool_use_error>'
+
 const shellNotification = (id: string) =>
   `<task-notification>
 <task-id>${id}</task-id>
@@ -268,6 +285,82 @@ describe('a create made while earlier work was still running', () => {
       ...launched('TaskStop', { task_id: SHELL_ID }, USER_TURNED_DOWN)
     ]
     expect(touched([...history, ...CREATE])).toBe(true)
+  })
+
+  // Review of 311f41ad: the pairing hands a failure to the first call
+  // waiting and anything else to the first that is no Agent call, so a stop
+  // answered beside another call can be handed that call's answer.
+  const SHELL = launched(
+    'Bash',
+    { command: 'npm run watch', run_in_background: true },
+    backgroundStartOutput(SHELL_ID)
+  )
+  const STOP_BESIDE = (path: string) =>
+    message('assistant', [
+      { type: 'tool-call', name: 'TaskStop', input: { task_id: SHELL_ID } },
+      { type: 'tool-call', name: 'Read', input: { file_path: path } }
+    ])
+
+  it('draws no count for a create made after a stop the user turned down, answered after the read beside it', () => {
+    const turn = [STOP_BESIDE('/tmp/a.txt'), answered('     1\tjobs'), answered(USER_TURNED_DOWN)]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(true)
+  })
+
+  it('still counts a create made after a stop answered after the read beside it failed', () => {
+    const turn = [
+      STOP_BESIDE('/tmp/missing.txt'),
+      answered(MISSING_FILE),
+      answered(stoppedOutput(SHELL_ID))
+    ]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(false)
+  })
+
+  it('still counts a create made after a stop that found the task outlived by its loop, answered after the read beside it failed', () => {
+    const turn = [
+      STOP_BESIDE('/tmp/missing.txt'),
+      answered(MISSING_FILE),
+      answered(loopOutlivedOutput(SHELL_ID))
+    ]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(false)
+  })
+
+  it.each(['completed', 'failed', 'killed'])(
+    'still counts a create made after a stop that found the task already %s',
+    (status) => {
+      const stop = launched('TaskStop', { task_id: SHELL_ID }, notRunningOutput(SHELL_ID, status))
+      expect(touched([...SHELL, ...stop, ...CREATE])).toBe(false)
+    }
+  )
+
+  it.each([
+    ['found the task not running yet', notRunningOutput(SHELL_ID, 'pending')],
+    ['found another task not running', notRunningOutput('b0therid1', 'completed')],
+    ['the user cancelled', CANCELLED],
+    ['was denied', DENIED]
+  ])('draws no count for a create made after a stop that %s', (_, output) => {
+    const stop = launched('TaskStop', { task_id: SHELL_ID }, output)
+    expect(touched([...SHELL, ...stop, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a stop answered as an error in words the phone does not know', () => {
+    const stop = [
+      called('TaskStop', { task_id: SHELL_ID }),
+      message('user', [{ type: 'tool-result', output: 'Stopping was blocked.', isError: true }])
+    ]
+    expect(touched([...SHELL, ...stop, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a stop the user turned down beside a read whose answer the transcript does not hold', () => {
+    const turn = [STOP_BESIDE('/tmp/a.txt'), answered(USER_TURNED_DOWN)]
+    expect(touched([...SHELL, ...turn, ...CREATE])).toBe(true)
+  })
+
+  it('draws no count for a create made after a stop the user interrupted before it answered', () => {
+    const stop = [
+      called('TaskStop', { task_id: SHELL_ID }),
+      said('[Request interrupted by user for tool use]')
+    ]
+    expect(touched([...SHELL, ...stop, ...CREATE])).toBe(true)
   })
 
   it('draws no count when the only report came after the create', () => {

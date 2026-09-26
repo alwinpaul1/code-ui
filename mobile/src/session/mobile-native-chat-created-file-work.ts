@@ -8,9 +8,17 @@
 //
 // The launch and finish records are the background-task reader's own
 // (mobile-background-task-transcript.ts), paired the way
-// `deriveBackgroundTasks` pairs them, except that a TaskStop answered with a
-// failure (the user turned it down) ends nothing. The limits, each of which
-// refuses:
+// `deriveBackgroundTasks` pairs them, except for a TaskStop. The pairing
+// hands a failure to the first call waiting and anything else to the first
+// that is no Agent call, so a stop's own answer can go to the call beside it
+// (review of 311f41ad). A stop therefore ends its task unless a failure
+// landed among the answers of its batch, the calls waiting together, and no
+// answer there is TaskStop's own word that the task is no longer running:
+// its JSON, or `Task <id> is not running (status: completed|failed|killed)`
+// (Claude Code 2.1.283). A failure is a `<tool_use_error>`, a turn-down, a
+// cancel, a denial, or an answer Orca marks as an error; a batch the user
+// interrupted with a call still waiting counts as one. The limits, each of
+// which refuses:
 // - a task that ended in a way the transcript does not record (a mid-turn
 //   completion Orca does not surface) is still running here;
 // - a teammate never reports, so it runs for the rest of the transcript;
@@ -33,7 +41,8 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatMessage,
-  type NativeChatToolCallBlock
+  type NativeChatToolCallBlock,
+  type NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
 import { FINISHED_RUN_USAGE } from './mobile-background-task-agent-titles'
 import {
@@ -51,9 +60,11 @@ import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
 
 type Ending = { id: string; at: number }
-/** `stops` is the ending a TaskStop call recorded, taken back if its answer
- *  is a failure. */
-type Pending = PendingCall & { at: number; stops: Ending | null }
+type Pending = PendingCall & { at: number }
+/** The calls waiting for answers together: the endings their TaskStops
+ *  recorded, whether any answer was a failure, and the ids TaskStop's own
+ *  word said were no longer running. */
+type Batch = { stops: Ending[]; failed: boolean; confirmed: Set<string> }
 /** A task running from `from` until its first ending after that, if any. A
  *  null id is a task no ending names. */
 type Span = { from: number; id: string | null }
@@ -79,6 +90,49 @@ function leftAgentRunning(call: Pending, output: string, onlyAgentsWaited: boole
     !JSON_OPENING.test(output) &&
     !askedForBackground(call)
   return !cutReport
+}
+
+const CANCELLED = /^\s*The user doesn't want to take this action right now/
+const DENIED = /^\s*Permission (?:for this |to use )[\s\S]*?(?:was|has been) denied/
+const ENDED = ['completed', 'failed', 'killed']
+
+/** An answer saying its call did not do what it was asked. */
+function isFailure(block: NativeChatToolResultBlock): boolean {
+  return (
+    block.isError === true ||
+    ANY_TOOL_FAILURE.test(block.output) ||
+    CANCELLED.test(block.output) ||
+    DENIED.test(block.output)
+  )
+}
+
+/** Whether an answer is TaskStop's own word that `id` is no longer running:
+ *  its data as JSON, stopped or outlived by a loop, or its input check on a
+ *  task that had ended (Claude Code 2.1.283). */
+function saysStopped(output: string, id: string): boolean {
+  const answer = output.trimStart()
+  return [
+    `{"message":"Successfully stopped task: ${id} (`,
+    `{"message":"Task ${id} `,
+    ...ENDED.map((status) => `<tool_use_error>Task ${id} is not running (status: ${status})`)
+  ].some((opening) => answer.startsWith(opening))
+}
+
+function openBatch(): Batch {
+  return { stops: [], failed: false, confirmed: new Set() }
+}
+
+/** Takes back each stop of a batch a failure landed in, unless TaskStop said
+ *  its task was no longer running. */
+function settle(batch: Batch, endings: Ending[]): void {
+  if (!batch.failed) {
+    return
+  }
+  for (const stop of batch.stops) {
+    if (!batch.confirmed.has(stop.id)) {
+      endings.splice(endings.indexOf(stop), 1)
+    }
+  }
 }
 
 /** Whether a call left behind with no answer may still be running. */
@@ -108,6 +162,7 @@ export function backgroundWorkRunningAt(
   const pending: Pending[] = []
   const spans: Span[] = []
   const endings: Ending[] = []
+  let batch = openBatch()
   let at = 0
   for (const message of messages) {
     let text = ''
@@ -116,17 +171,12 @@ export function backgroundWorkRunningAt(
       if (isToolCallBlock(block)) {
         places.set(block, at)
         const stopped = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
-        const stops = stopped ? { id: stopped, at } : null
-        if (stops) {
-          endings.push(stops)
+        if (stopped) {
+          const stop = { id: stopped, at }
+          endings.push(stop)
+          batch.stops.push(stop)
         }
-        pending.push({
-          name: block.name,
-          input: block.input,
-          startedAt: message.timestamp,
-          at,
-          stops
-        })
+        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at })
         // A message wakes an agent that had finished, or reaches a teammate.
         if (toolCallKind(block.name) === 'message') {
           spans.push({
@@ -137,12 +187,19 @@ export function backgroundWorkRunningAt(
       } else if (isToolResultBlock(block)) {
         // Named as the pairing names it: `takeAnsweredCall` holds only an Agent call apart.
         const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
+        batch.failed ||= isFailure(block)
+        for (const stop of batch.stops) {
+          if (saysStopped(block.output, stop.id)) {
+            batch.confirmed.add(stop.id)
+          }
+        }
         const call = takeAnsweredCall(pending, block.output)
+        if (pending.length === 0) {
+          settle(batch, endings)
+          batch = openBatch()
+        }
         if (!call) {
           continue
-        }
-        if (call.stops && ANY_TOOL_FAILURE.test(block.output)) {
-          endings.splice(endings.indexOf(call.stops), 1)
         }
         const launch = readLaunch(call, block.output)
         if (toolCallKind(call.name) === 'agent') {
@@ -161,12 +218,16 @@ export function backgroundWorkRunningAt(
       }
     }
     if (INTERRUPTED.test(text)) {
+      batch.failed ||= pending.length > 0
+      settle(batch, endings)
+      batch = openBatch()
       pending.length = 0
     }
     for (const notification of readNotifications(text, at)) {
       endings.push({ id: notification.id, at })
     }
   }
+  settle(batch, endings)
   for (const call of pending) {
     if (mayRunOn(call)) {
       spans.push({ from: call.at, id: null })
