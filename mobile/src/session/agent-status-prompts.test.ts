@@ -224,19 +224,26 @@ describe("a subagent message's copy on the tab status", () => {
     const state = observe(onStatus)
     expect(state.prompts).toEqual([])
     expect(state.agentMessages).toEqual([
-      { from: 'a7a46867b4f497c96', body: onStatus.slice('<agent-message from="a7a46867b4f497c96"> '.length).trim(), cut: true }
+      {
+        from: 'a7a46867b4f497c96',
+        body: onStatus.slice('<agent-message from="a7a46867b4f497c96"> '.length).trim(),
+        cut: true,
+        seenAt: expect.any(Number)
+      }
     ])
     expect(state.agentMessages?.[0]?.body.startsWith('Request for one read-only device probe (copy-flicker agent)')).toBe(true)
   })
 
   it('keeps nothing of a hand-back but who sent it: the harness line fills all 200 characters', () => {
     expect(MIDTURN_HANDBACK_STATUS_PROMPT).toHaveLength(200)
-    expect(observe(MIDTURN_HANDBACK_STATUS_PROMPT).agentMessages).toEqual([{ from: 'a9d5c2f85e94ca47f', body: '', cut: true }])
+    expect(observe(MIDTURN_HANDBACK_STATUS_PROMPT).agentMessages).toEqual([
+      { from: 'a9d5c2f85e94ca47f', body: '', cut: true, seenAt: expect.any(Number) }
+    ])
   })
 
   it('keeps a message that fit whole, and not a person\'s short prompt that opens with the tag', () => {
     expect(observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>').agentMessages).toEqual([
-      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false }
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false, seenAt: expect.any(Number) }
     ])
     expect(observe('<agent-message from="x"> keeps showing in my log, why?').agentMessages ?? []).toEqual([])
   })

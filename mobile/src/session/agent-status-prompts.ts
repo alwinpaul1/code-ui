@@ -96,8 +96,11 @@ export function observeAgentStatusPrompt(
   // would be the wrapper, drawn twice (2026-09-20). Seen, not echoed.
   if (isKnownHarnessInjectedUserTurnText(text)) {
     const message = parseStatusSubagentPreview(text, text.length >= AGENT_STATUS_MAX_FIELD_LENGTH)
-    return message
-      ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), message].slice(-PROMPT_CAP) }
+    // When the phone first read it, which is what pairs it with the screen's
+    // row of the same message (screen-peer-notices.ts).
+    const seen = message ? { ...message, seenAt: Date.now() } : null
+    return seen
+      ? { ...state, last: text, agentMessages: [...(state.agentMessages ?? []), seen].slice(-PROMPT_CAP) }
       : { ...state, last: text }
   }
   // `updatedAt` is the hook's clock and is the prompt's time only while the

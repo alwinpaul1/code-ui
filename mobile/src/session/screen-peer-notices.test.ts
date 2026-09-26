@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
-import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
+import { observeScreenPeerNotices, ROW_WORDS_WINDOW_MS, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
 import { paintedAfterAnchor } from './use-screen-peer-notices'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
@@ -20,8 +20,8 @@ describe('peer message rows read off the screen, placed into the chat', () => {
   const folded = [row('u1', 'user', 'start'), row('a1', 'assistant', 'working'), row('a2', 'assistant', 'done')]
 
   it('records a sighting once, anchored at the tail of that moment, and keeps it across polls', () => {
-    const first = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
-    expect(first).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5 }])
+    const first = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5, undefined, undefined, 1000)
+    expect(first).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5, seenAt: 1000 }])
     expect(observeScreenPeerNotices(first, [{ sender: 'probe' }], 'a2', 6)).toBe(first)
     expect(observeScreenPeerNotices(first, [], 'a2', 6)).toBe(first)
   })
@@ -404,21 +404,32 @@ describe('a second message from the same subagent on a tab with no prompt hook',
 describe("the words of a subagent's sender-only row", () => {
   const folded = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two')]
   const words = (rows: readonly NativeChatMessage[]) => rows.flatMap((message) => (agentMessageOf(message) ? [agentMessageOf(message)!] : []))
-  const probe = { senders: ['a7a46867b4f497c96', 'probe'], body: 'hello from probe', cut: false }
+  /** The status's copy, first read by the phone at `seenAt` (its clock). */
+  const probe = { senders: ['a7a46867b4f497c96', 'probe'], body: 'hello from probe', cut: false, seenAt: 100_000 }
+  /** Rows first seen on the screen at `seenAt`. */
+  const seen = (senders: readonly string[], seenAt: number) =>
+    observeScreenPeerNotices([], senders.map((sender) => ({ sender })), 'a1', 5, undefined, undefined, seenAt)
 
-  it('are the one message the status carried from that sender, by its id or its name', () => {
-    const byName = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+  it('are the copy from that sender the phone first read within seconds of the row, by its id or its name', () => {
+    const byName = seen(['probe'], 102_000)
     expect(words(withScreenPeerNotices(folded, byName, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: 'hello from probe' }])
-    const byId = observeScreenPeerNotices([], [{ sender: 'a7a46867b4f497c96' }], 'a1', 5)
+    const byId = seen(['a7a46867b4f497c96'], 99_000)
     expect(words(withScreenPeerNotices(folded, byId, { subagentRows: true, bodies: [{ ...probe, cut: true }] }))).toEqual([
       { sender: 'a7a46867b4f497c96', body: 'hello from probe…', cut: true }
     ])
   })
 
-  it('are none when two rows or two messages of that sender are known, or none at all', () => {
-    const two = observeScreenPeerNotices([], [{ sender: 'probe' }, { sender: 'probe' }], 'a1', 5)
+  it('are none when the copy came long before or after the row, however few of each there are', () => {
+    const late = seen(['probe'], 100_000 + ROW_WORDS_WINDOW_MS + 1)
+    expect(words(withScreenPeerNotices(folded, late, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: '' }])
+    const early = seen(['probe'], 100_000 - ROW_WORDS_WINDOW_MS - 1)
+    expect(words(withScreenPeerNotices(folded, early, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: '' }])
+  })
+
+  it('are none when two rows or two copies of that sender fit, or none at all, or another sender\'s', () => {
+    const two = seen(['probe', 'probe'], 101_000)
     expect(words(withScreenPeerNotices(folded, two, { subagentRows: true, bodies: [probe] })).map((row) => row.body)).toEqual(['', ''])
-    const one = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+    const one = seen(['probe'], 101_000)
     expect(words(withScreenPeerNotices(folded, one, { subagentRows: true, bodies: [probe, { ...probe, body: 'again' }] }))).toEqual([
       { sender: 'probe', body: '' }
     ])
@@ -426,5 +437,10 @@ describe("the words of a subagent's sender-only row", () => {
     expect(words(withScreenPeerNotices(folded, one, { subagentRows: true, bodies: [{ ...probe, senders: ['general-purpose'] }] }))).toEqual([
       { sender: 'probe', body: '' }
     ])
+  })
+
+  it('are none for a row seen before the phone kept first-seen times', () => {
+    const old = [{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5 }]
+    expect(words(withScreenPeerNotices(folded, old, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: '' }])
   })
 })

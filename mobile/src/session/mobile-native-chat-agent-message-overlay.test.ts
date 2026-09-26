@@ -418,7 +418,9 @@ describe("a subagent's message on a tab with no prompt hook, with the tab status
   afterEach(() => resetAgentMessageAnchorsForTests())
   const lastFolded = () => (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
   const agentRows = () => lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!] : []))
+  /** The status's copy, read by the phone a second before the row is. */
   const statusOf = (prompt: string) => {
+    vi.setSystemTime(at('12:40:29.000'))
     let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:20.000') })
     state = observeAgentStatusPrompt(state, SESSION, { prompt, updatedAt: at('12:40:21.000') })
     return state.agentMessages ?? []
@@ -448,5 +450,72 @@ describe("a subagent's message on a tab with no prompt hook, with the tab status
       statusAgentMessages: statusOf(MIDTURN_HANDBACK_STATUS_PROMPT)
     })
     expect(agentRows()).toEqual([{ sender: MIDTURN_HANDBACK_FROM, body: '' }])
+  })
+})
+
+// Review of 9f9aa4a0..a6857609, probe P3c: the words of the one message the
+// status holds went on the one row the screen showed, and the two sides can
+// each have missed a different message. M1's row is seen with no words; it
+// scrolls off; M2 is painted under tool output; the status now holds M2
+// alone. M1's row opened to M2's words.
+describe("two messages from one subagent, each side missing a different one", () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const ROW = '› Message from @probe (ctrl+o to expand)'
+  const SECOND = 'second: probe finished, 3 failures'
+  const screen1 = ['⏺ The probe agent is running. I will reply once its message', '  arrives.', '', ROW]
+  const screen2 = [
+    '⏺ Bash(pnpm vitest run src/session/some-long-test-file-name.test.ts)',
+    '  ⎿  Test Files  12 passed (12)',
+    '     Tests  340 passed (340)',
+    '',
+    ROW
+  ]
+  const call: NativeChatMessage = {
+    id: 'b1',
+    role: 'assistant',
+    timestamp: at('12:42:00.000'),
+    source: 'transcript',
+    blocks: [{ type: 'tool-call', name: 'Bash', input: { command: 'pnpm vitest run src/session/some-long-test-file-name.test.ts' } }]
+  }
+  const result: NativeChatMessage = {
+    id: 'b2',
+    role: 'tool',
+    timestamp: at('12:42:10.000'),
+    source: 'transcript',
+    blocks: [{ type: 'tool-result', output: ' Test Files  12 passed (12)\n      Tests  340 passed (340)' }]
+  }
+  const status = (texts: readonly string[], clocks: readonly string[]) => {
+    let state = EMPTY_AGENT_STATUS_PROMPTS
+    texts.forEach((prompt, index) => {
+      vi.setSystemTime(at(clocks[index]!))
+      state = observeAgentStatusPrompt(state, SESSION, { prompt, updatedAt: at(clocks[index]!) })
+    })
+    return state.agentMessages ?? []
+  }
+  const rowsOf = () =>
+    ((frames.at(-1)!.folded as NativeChatMessage[]) ?? []).flatMap((row) =>
+      agentMessageOf(row) ? [{ id: row.id, ...agentMessageOf(row)! }] : []
+    )
+
+  // The agent was launched with the name the rows show.
+  const launched: NativeChatMessage[] = [
+    { ...LAUNCH[0]!, blocks: [{ type: 'tool-call', name: 'Agent', input: { description: 'Probe', subagent_type: 'general-purpose', name: 'probe', prompt: '…' } }] },
+    LAUNCH[1]!
+  ]
+
+  it("never opens the first message's row to the second message's words", async () => {
+    await show('12:40:30.000', { messages: [PROMPT, OPENING, ...launched], working: true, promptHook: false, peerRows: peerNoticesFromScreen(screen1) })
+    const later = [PROMPT, OPENING, ...launched, call, result]
+    const statusCopies = status(['ok, run it', `<agent-message from="${AGENT_ID}"> ${SECOND} </agent-message>`], ['12:41:30.000', '12:42:30.000'])
+    await show('12:42:30.000', {
+      messages: later,
+      working: true,
+      promptHook: false,
+      peerRows: peerNoticesFromScreen(screen2),
+      statusAgentMessages: statusCopies
+    })
+    const first = rowsOf().find((row) => row.id === 'peer-notice:probe:1')
+    expect(first).toEqual({ id: 'peer-notice:probe:1', sender: 'probe', body: '' })
   })
 })

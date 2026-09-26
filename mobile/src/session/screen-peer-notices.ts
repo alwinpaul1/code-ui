@@ -43,6 +43,9 @@ export type ScreenPeerNotice = {
   afterId?: string
   /** Transcript clock at the sighting, for the synthetic row's timestamp. */
   sightedAt: number
+  /** The phone's clock at the sighting: what pairs the row with another
+   *  source's copy of its message (bodyOf). */
+  seenAt?: number
 }
 
 /** One poll's rows are a multiset by sender; a sender's Nth row is that
@@ -59,7 +62,9 @@ export function observeScreenPeerNotices(
   /** Whether text painted above a row belongs to a transcript row that came
    *  after this notice's anchor: the only evidence, beside the notice's own
    *  row, that a row is a later message (newerThanLastKnown). */
-  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean = () => false
+  paintedAfter: (notice: ScreenPeerNotice, above: string) => boolean = () => false,
+  /** The phone's clock now. */
+  seenAt: number = Date.now()
 ): readonly ScreenPeerNotice[] {
   const seen = new Map<string, ScreenPeerRow[]>()
   for (const row of rows) {
@@ -81,7 +86,8 @@ export function observeScreenPeerNotices(
         ...(above !== undefined ? { above } : {}),
         anchorId: tailId,
         ...(afterId !== undefined ? { afterId } : {}),
-        sightedAt: now
+        sightedAt: now,
+        seenAt
       })
     }
   }
@@ -239,23 +245,36 @@ export function withScreenPeerNotices(
 
 /** Words another source carried for a sender-only row: the tab status's copy
  *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
- *  the name the row shows. */
-export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean }
+ *  the name the row shows, with when the phone first read it. */
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt: number }
+
+/** How far apart the phone may first read a row and the status's copy of its
+ *  message and still take them for one message. The hook that puts a message
+ *  on the status fires as Claude takes it, which is when it paints the row;
+ *  the screen is read once a second. */
+export const ROW_WORDS_WINDOW_MS = 10_000
 
 /**
- * The words of a sender-only row, when exactly one message from that sender
- * is known on each side: the row names only its sender, and with two of
- * either no one can say which words are whose, so none are drawn rather than
- * another message's.
+ * The words of a sender-only row: the one copy from that sender the phone
+ * first read within ROW_WORDS_WINDOW_MS of first seeing the row, and no other
+ * row of the sender so close to that copy. The row names only its sender, and
+ * each side can miss a message the other saw: one copy on each side did not
+ * make them one message, and a row opened to another message's words (review
+ * of 2026-09-27). With no such evidence, no words.
  */
 function bodyOf(
   notice: ScreenPeerNotice,
   notices: readonly ScreenPeerNotice[],
   bodies: readonly ScreenRowBody[] | undefined
 ): ScreenRowBody | undefined {
-  const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender))
-  const rows = notices.filter((other) => other.sender === notice.sender && !drawsPeerBubble(other))
-  return theirs.length === 1 && rows.length === 1 ? theirs[0] : undefined
+  const near = (seenAt: number | undefined, body: ScreenRowBody) =>
+    seenAt !== undefined && Math.abs(body.seenAt - seenAt) <= ROW_WORDS_WINDOW_MS
+  const theirs = (bodies ?? []).filter((body) => body.senders.includes(notice.sender) && near(notice.seenAt, body))
+  const body = theirs.length === 1 ? theirs[0]! : undefined
+  const rivals = notices.filter(
+    (other) => other !== notice && other.sender === notice.sender && !drawsPeerBubble(other) && body !== undefined && near(other.seenAt, body)
+  )
+  return rivals.length === 0 ? body : undefined
 }
 
 /**
