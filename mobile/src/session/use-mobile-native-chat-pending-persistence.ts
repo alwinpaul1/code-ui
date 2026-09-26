@@ -16,6 +16,7 @@ import {
   takeMobileNativeChatPending,
   type MobileNativeChatPendingMessage
 } from './mobile-native-chat-pending-echo'
+import { rememberWaitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 
 const PENDING_WRITE_DEBOUNCE_MS = 250
 
@@ -29,6 +30,13 @@ const handedOn = new Map<string, HeldWitness[]>()
 /** Test-only: the map outlives a single test's hooks. */
 export function resetHandedOnWitnessesForTests(): void {
   handedOn.clear()
+}
+
+/** The write, and the photo sends in it kept for a chat that comes back
+ *  before its read does (mobile-native-chat-waiting-photo-sends.ts). */
+function writePendingAndRemember(sessionKey: string, pending: MobileNativeChatPendingMessage[]): Promise<void> {
+  rememberWaitingPhotoSends(sessionKey, pending)
+  return writeNativeChatPendingEchoes(sessionKey, pending)
 }
 
 type PendingBySession = Record<string, MobileNativeChatPendingMessage[]>
@@ -155,7 +163,7 @@ export function useMobileNativeChatPendingPersistence(
     sessionKey,
     current,
     current?.length === 0 ? 0 : PENDING_WRITE_DEBOUNCE_MS,
-    writeNativeChatPendingEchoes
+    writePendingAndRemember
   )
   return { rememberEcho, takeSends }
 }

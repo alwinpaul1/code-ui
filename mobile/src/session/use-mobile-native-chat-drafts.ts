@@ -17,6 +17,7 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import { previewsAsDrawn, settleLandedOwnSends, storedAfterLanding } from './mobile-native-chat-landed-own-sends'
 import { knownNativeChatImagePreviews } from './mobile-native-chat-image-preview-cache'
+import { waitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 import { acceptOwnSendInPending } from './mobile-native-chat-remember-echo'
 import {
   dropMobileNativeChatPending,
@@ -365,7 +366,8 @@ export function useMobileNativeChatDrafts(args: {
   // Until the store has read the session's previews back, what this process
   // last knew of them, so a chat that comes back draws its photos at once.
   const storedPreviews = pendingKey ? (imagePreviewsBySession[pendingKey] ?? knownNativeChatImagePreviews(pendingKey)) : undefined
-  const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed), [landed, messages, pendingKey, storedPreviews])
+  const written = pendingKey ? waitingPhotoSends(pendingKey) : undefined
+  const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
   const removePending = useCallback((id: string) => {
     setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))

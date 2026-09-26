@@ -414,6 +414,27 @@ describe('a message the phone sent with photos, as its row lands', () => {
       }
     })
 
+    // Review, 2026-09-26: the store reads its sends back in an effect after
+    // the chat comes back, so a row that landed while the chat was away (a
+    // photo queued mid-turn and dequeued at the turn's end while the user was
+    // in another project) was drawn from the row alone until then.
+    it('keeps the phone’s photos in the first frame of a chat that comes back after their row landed while it was away', async () => {
+      await show('07:00:00.000', { messages: before })
+      await send('07:00:18.000', TEXT1, PHOTOS1)
+      await show('07:00:19.000', { messages: before })
+      act(() => renderer?.unmount())
+      renderer = null
+      await act(async () => {
+        await Promise.resolve()
+      })
+      const back = frames.length
+      await show('07:02:30.000', { messages: [...before, P1, C1, reply1] })
+      expect(frames.length).toBeGreaterThan(back)
+      for (const frame of framesFrom(back)) {
+        expect(frame).toEqual([{ id: '40b55aba', images: 'PPP', text: words(TEXT1) }])
+      }
+    })
+
     // A marked-up photo, or a clipboard paste with no file, is a `data:`
     // preview, which storage leaves out for its size cap (review, 2026-09-26).
     it('keeps a marked-up photo a picture in the first frame after the chat comes back in the same run', async () => {

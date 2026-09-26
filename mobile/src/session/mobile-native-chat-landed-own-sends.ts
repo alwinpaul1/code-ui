@@ -94,20 +94,28 @@ export function storedAfterLanding(
 
 /** The phone's previews as the chat draws them for this read: the stored ones,
  *  moved to the prompt a photo-only frame folded into, and the ones rows that
- *  landed in this read take from their sends. The same object when neither
+ *  landed in this read take from their sends. Also bound: the photo sends this
+ *  run last wrote for the session and the store has not read back yet (a row
+ *  that landed while the chat was away). The same object when none of that
  *  moves anything. No session, no previews. */
 export function previewsAsDrawn(
   stored: Record<string, string[]> | undefined,
   sessionKey: string | null,
   messages: readonly NativeChatMessage[],
-  settled: LandedOwnSends | null
+  settled: LandedOwnSends | null,
+  written?: readonly MobileNativeChatPendingMessage[]
 ): Record<string, string[]> {
   if (!sessionKey) {
     return NO_STORED_PREVIEWS
   }
   const kept = stored ?? NO_STORED_PREVIEWS
   const migrated = migrateImagePreviewMessageIds({ [sessionKey]: kept }, sessionKey, messages)
-  const landed = settled?.landedImagePreviews ?? NO_PREVIEWS
+  const held = new Set((settled?.rebased ?? []).map((item) => item.id))
+  const notReadBack = (written ?? []).filter((item) => item.baselineResolved && !held.has(item.id))
+  const landed = [
+    ...(settled?.landedImagePreviews ?? NO_PREVIEWS),
+    ...(notReadBack.length > 0 ? findLandedImagePreviewEchoes(messages, notReadBack) : NO_PREVIEWS)
+  ]
   const drawn = landed.length > 0 ? mergeLandedImagePreviewEchoes(migrated, sessionKey, landed) : migrated
   return drawn[sessionKey] ?? kept
 }
