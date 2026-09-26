@@ -50,6 +50,7 @@ describe('an older markers-only copy whose row is above the loaded window', () =
     // The last 40 rows of the turn: the desk's `[Image #72]` row is older.
     const running = steps('r', '07:02')
     let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: '[Image #72]',
       updatedAt: at('07:03:10.000'),
       stateStartedAt: at('07:01:00.100')
@@ -57,7 +58,7 @@ describe('an older markers-only copy whose row is above the loaded window', () =
     await show('07:03:20.000', { messages: running, working: true, prompts: [...state.prompts] })
     await send('07:03:54.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
     const sent = frames.length
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '[Image #73]', updatedAt: at('07:03:54.573') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #73]', updatedAt: at('07:03:54.573') })
     await show('07:03:55.000', { messages: running, working: true, prompts: [...state.prompts], queued: queuedMessagesFromScreen(claudeScreen(['[Image #73]'])) })
     const tookIt = [...running, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916')]
     await show('07:04:36.000', { messages: tookIt, working: true, prompts: [...state.prompts], queued: [] })

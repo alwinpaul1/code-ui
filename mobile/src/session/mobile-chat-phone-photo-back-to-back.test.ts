@@ -44,7 +44,7 @@ vi.mock('./MobileNativeChatView', async () => {
 const A = 'orca-paste-1790406034000-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const B = 'orca-paste-1790406134000-bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const live = (state: AgentStatusPromptState, prompt: string, clock: string) =>
-  observeAgentStatusPrompt(state, SESSION, { prompt, updatedAt: at(clock) })
+  observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt, updatedAt: at(clock) })
 
 describe('two phone photos of no words close together', () => {
   const { show, send, framesFrom, lastFrame, unmount } = landingHarness(frames)
@@ -90,6 +90,7 @@ describe('two phone photos of no words close together', () => {
     // A tab switch and back, mid-turn.
     unmount()
     const back = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: 'and what breed is it?',
       updatedAt: at('07:01:40.000'),
       stateStartedAt: at('07:01:00.400')

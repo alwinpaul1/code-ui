@@ -134,8 +134,8 @@ const codexBox = (queued: readonly string[]) =>
 /** Orca's hook copy of a submission, read off the tab status. */
 function hookCopy(clock: string, body = TEXT): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at(clock) })
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: body, updatedAt: at(clock) })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: body, updatedAt: at(clock) })
   return [...state.prompts]
 }
 
@@ -394,12 +394,15 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     const atEnter = hookCopy('17:04:15.110')
     await sendAndLetClaudeTakeIt({ prompts: atEnter })
     expect(drawn()).toEqual(['fa161a56', 'phone', '19e57746', '398d2cdc', 'cf22b103'])
-    // Back after the turn: the tab status is read afresh, and a prompt first
-    // seen then is timed by the pane's current state, which began at the end.
-    // The stored echoes come back a moment after the first render, and the
-    // hook's copy was remembered in that moment as someone else's message.
+    // Back after the turn: the tab status is read afresh on the `done` pane,
+    // and with no history to place it the prompt first seen then is held back,
+    // untimed (agent-status-prompts.ts). Before that it was timed by the
+    // state's start, the end of the turn. The stored echoes come back a moment
+    // after the first render, and the hook's copy was remembered in that
+    // moment as someone else's message.
     const firstSight = [
       ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+        state: 'done',
         prompt: TEXT,
         updatedAt: at('17:08:21.900'),
         stateStartedAt: at('17:08:21.800')
@@ -526,7 +529,14 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       expect(drafts!.pending).toEqual([])
     })
 
-    it('still draws a message typed at the desk in a later turn that repeats a stored phone send, when the chat comes back', async () => {
+    // Changed on 2026-09-27 (fix/prompt-leak). With the status's real state,
+    // this is a prompt read on a `done` pane whose history carried the same
+    // words past the end of the first turn: the status cannot tell a repeat
+    // typed in the later turn from the send carried over, and it gives no
+    // time. 9f9aa4a0 drew it under "All tests pass.", below the answer of the
+    // turn it was typed in, the shape of session 76ba8f2f's report. It is now
+    // held back (agent-status-prompts.ts, runItCameIn).
+    it('does not draw the desk\u2019s repeat of a phone send under the later turn\u2019s answer when the chat comes back after that turn', async () => {
       await sendAndLetClaudeTakeIt({ prompts: hookCopy('17:04:15.110') })
       act(() => renderer?.unmount())
       renderer = null
@@ -541,14 +551,22 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       ]
       const firstSight = [
         ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+          state: 'done',
           prompt: TEXT,
           updatedAt: at('17:13:00.100'),
-          stateStartedAt: at('17:13:00.050')
+          stateStartedAt: at('17:13:00.050'),
+          // One entry per state change, each with the prompt the pane carried
+          // when it ended: the send's words ended the first turn and the second.
+          stateHistory: [
+            { state: 'working', prompt: TEXT, startedAt: at('17:03:00.000') },
+            { state: 'done', prompt: TEXT, startedAt: at('17:08:21.800') },
+            { state: 'working', prompt: TEXT, startedAt: at('17:11:00.000') }
+          ]
         }).prompts
       ]
       await show('17:14:00.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
       await show('17:14:01.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
-      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone'])
     })
 
     // Second round of the same review.
@@ -572,7 +590,9 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       expect(drawn()).toEqual(['fa161a56', '398d2cdc', 'cf22b103', 'phone', 'row', '0741e6f4', '0741e6f6'])
     })
 
-    it('draws a message typed at the desk in a later turn once the rows that show that turn load, after the chat came back', async () => {
+    // Changed on 2026-09-27, as the case above: held back, never drawn under
+    // the later turn's answer, before or after the rows of that turn load.
+    it('does not draw the desk\u2019s repeat of a phone send when the rows of its turn load after the chat came back', async () => {
       await sendAndLetClaudeTakeIt({ prompts: hookCopy('17:04:15.110') })
       act(() => renderer?.unmount())
       renderer = null
@@ -585,9 +605,15 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       ]
       const firstSight = [
         ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+          state: 'done',
           prompt: TEXT,
           updatedAt: at('17:13:10.100'),
-          stateStartedAt: at('17:13:10.050')
+          stateStartedAt: at('17:13:10.050'),
+          stateHistory: [
+            { state: 'working', prompt: TEXT, startedAt: at('17:03:00.000') },
+            { state: 'done', prompt: TEXT, startedAt: at('17:08:21.800') },
+            { state: 'working', prompt: TEXT, startedAt: at('17:11:00.000') }
+          ]
         }).prompts
       ]
       // Back while the read is still in flight, over the rows kept from before.
@@ -595,7 +621,7 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       await show('17:14:01.000', { messages: turnEnded, loading: true, queued: [], working: false, prompts: firstSight })
       await show('17:14:05.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
       await show('17:14:06.000', { messages: secondTurn, queued: [], working: false, prompts: firstSight })
-      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone', 'hook'])
+      expect(drawn().filter((entry) => entry === 'phone' || entry === 'hook')).toEqual(['phone'])
     })
 
     // Third round of the same review.
@@ -631,10 +657,10 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       const origin = await tap('17:09:00.000')
       const deskTurn = [...turnEnded, user('x0000001', 'run the migration', '17:09:01.500'), call('x0000002', '17:09:02.000')]
       let state = EMPTY_AGENT_STATUS_PROMPTS
-      state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at('17:08:30.000') })
-      state = observeAgentStatusPrompt(state, SESSION, { prompt: 'run the migration', updatedAt: at('17:09:01.500') })
+      state = observeAgentStatusPrompt(state, SESSION, { state: 'done', prompt: '', updatedAt: at('17:08:30.000') })
+      state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: 'run the migration', updatedAt: at('17:09:01.500') })
       await show('17:09:02.000', { messages: deskTurn, prompts: [...state.prompts] })
-      state = observeAgentStatusPrompt(state, SESSION, { prompt: TEXT, updatedAt: at('17:09:03.000') })
+      state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: TEXT, updatedAt: at('17:09:03.000') })
       await ack('17:09:03.200', origin)
       await show('17:09:03.500', { messages: deskTurn, queued: claudeBox([TEXT]), prompts: [...state.prompts] })
       const absorbed = [...deskTurn, result('x0000003', '17:09:30.000'), text('x0000004', 'Migrated.', '17:10:00.000')]
