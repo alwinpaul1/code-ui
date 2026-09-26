@@ -1,0 +1,60 @@
+/*
+ * Vendored from highlightjs-vue 1.0.0 (dist/highlightjs-vue.esm.js),
+ * https://github.com/highlightjs/highlightjs-vue
+ * Licence: CC0-1.0 (package.json; the package ships no LICENSE file).
+ *
+ * Language: Vue.js
+ * Requires: xml.js, javascript.js, typescript.js, css.js, stylus.js, scss.js
+ * Author: Sara Lissette Luis Ibáñez <lissette.ibnz@gmail.com>
+ * Description: Single-File Components of Vue.js Framework
+ *
+ * Changed here: TypeScript, and the definition exported alone (lowlight
+ * registers it); the grammar itself is as published.
+ */
+import type { HLJSApi, Language } from './hljs-types'
+
+export function hljsDefineVue(hljs: HLJSApi): Language {
+  return {
+    subLanguage: 'xml',
+    contains: [
+      hljs.COMMENT('<!--', '-->', {
+        relevance: 10
+      }),
+      {
+        begin: /^(\s*)(<script>)/gm,
+        end: /^(\s*)(<\/script>)/gm,
+        subLanguage: 'javascript',
+        excludeBegin: true,
+        excludeEnd: true
+      },
+      {
+        begin: /^(\s*)(<script lang=["']ts["']>)/gm,
+        end: /^(\s*)(<\/script>)/gm,
+        subLanguage: 'typescript',
+        excludeBegin: true,
+        excludeEnd: true
+      },
+      {
+        begin: /^(\s*)(<style(\sscoped)?>)/gm,
+        end: /^(\s*)(<\/style>)/gm,
+        subLanguage: 'css',
+        excludeBegin: true,
+        excludeEnd: true
+      },
+      {
+        begin: /^(\s*)(<style lang=["'](scss|sass)["'](\sscoped)?>)/gm,
+        end: /^(\s*)(<\/style>)/gm,
+        subLanguage: 'scss',
+        excludeBegin: true,
+        excludeEnd: true
+      },
+      {
+        begin: /^(\s*)(<style lang=["']stylus["'](\sscoped)?>)/gm,
+        end: /^(\s*)(<\/style>)/gm,
+        subLanguage: 'stylus',
+        excludeBegin: true,
+        excludeEnd: true
+      }
+    ]
+  }
+}

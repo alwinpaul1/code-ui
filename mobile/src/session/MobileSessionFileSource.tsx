@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { View } from 'react-native'
 import { MobileCodeView, type MobileCodeLineInteraction } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
+import { resolveMobileSyntaxLanguageForContent } from './mobile-file-syntax'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { useTheme } from '../theme/theme-context'
 import {
@@ -29,14 +30,19 @@ export function MobileSessionFileSource({
   onAskAboutLines
 }: {
   content: string
-  /** The highlighter's language (resolveMobileSyntaxLanguage). */
+  /** The highlighter's language by name (resolveMobileSyntaxLanguage); a
+   *  plaintext one is checked against the content when the name is unknown. */
   language: string
   title: string
   relativePath: string
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
   const { syntax } = useTheme()
-  const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
+  // A file whose name says nothing (`bin/deploy`) is read for its language.
+  const document = useMemo(
+    () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath || title, content, language)),
+    [content, language, relativePath, title]
+  )
   const [lineSelection, setLineSelection] = useState<FileReaderLineSelection>(null)
   // A freshly opened file starts with nothing selected — otherwise a
   // selection made on one file would appear to carry over onto the next.

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Text, type StyleProp, type TextStyle } from 'react-native'
 import { MobileCodeView } from '../components/MobileCodeView'
 import { buildMobileCodeDocument } from '../components/mobile-code-document'
-import { resolveMobileSyntaxLanguage } from '../session/mobile-file-syntax'
+import { resolveMobileSyntaxLanguageForContent } from '../session/mobile-file-syntax'
 import { REFORMATTED_JSON_NOTICE } from '../components/mobile-code-notices'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
@@ -24,7 +24,7 @@ export function MobileFilePreviewSourceText({
   initialLine?: number
 }) {
   const document = useMemo(
-    () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguage(relativePath)),
+    () => buildMobileCodeDocument(content, resolveMobileSyntaxLanguageForContent(relativePath, content)),
     [content, relativePath]
   )
   const notice = truncated

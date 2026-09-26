@@ -39,7 +39,8 @@ vi.mock('./mobile-file-syntax', () => ({
   canHighlightMobileLanguage: () => false,
   highlightMobileCode: () => ({ segments: [] }),
   highlightMobileDiffLines: () => [],
-  resolveMobileSyntaxLanguage: () => 'plaintext'
+  resolveMobileSyntaxLanguage: () => 'plaintext',
+  resolveMobileSyntaxLanguageForContent: () => 'plaintext'
 }))
 vi.mock('../files/MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
