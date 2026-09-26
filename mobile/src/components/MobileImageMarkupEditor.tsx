@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
-  Image,
   Modal,
   Pressable,
   StatusBar,
@@ -13,6 +12,7 @@ import { runOnJS } from 'react-native-reanimated'
 import Svg, { Image as SvgImage, Path } from 'react-native-svg'
 import { Check, Redo2, Undo2, X } from 'lucide-react-native'
 import { closeImageMarkup, useImageMarkup } from '../session/image-markup-store'
+import { loadMarkupImageSize } from './markup-image-size'
 import {
   canRedoMarkupStroke,
   canUndoMarkupStroke,
@@ -81,7 +81,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       return
     }
     let cancelled = false
-    Image.getSize(
+    // Not Image.getSize alone: Android refuses a `data:` URL there, and a
+    // marked-up photo's preview is one (markup-image-size.ts).
+    loadMarkupImageSize(
       session.uri,
       (w, h) => {
         if (!cancelled && w > 0 && h > 0) {
