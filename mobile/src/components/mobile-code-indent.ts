@@ -109,18 +109,29 @@ function blankLineGuides(above: number, below: number, step: number, offSide: bo
   return 1 + Math.floor(below / step)
 }
 
+/** Characters that draw as a colour emoji with no selector after them.
+ *  Most sit at U+1F300 and up, but ✅ ❌ ⭐ ⚡ ⏳ are below it, and they
+ *  drew two cells wide on a grid that counted one. Hermes knows the property
+ *  (hermesc 250829098.0.17 compiles it and rejects a property it does not
+ *  know); the first of them is U+231A. */
+const EMOJI_PRESENTATION = /\p{Emoji_Presentation}/u
+const FIRST_EMOJI_PRESENTATION = 0x231a
+
 /** Columns a character takes on a monospace grid: two for East Asian wide
  *  and fullwidth characters and emoji, one otherwise. */
 export function codePointColumns(codePoint: number): 1 | 2 {
-  return (codePoint >= 0x1100 && codePoint <= 0x115f) ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
+  if (codePoint < FIRST_EMOJI_PRESENTATION) {
+    return codePoint >= 0x1100 && codePoint <= 0x115f ? 2 : 1
+  }
+  return (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
     (codePoint >= 0xac00 && codePoint <= 0xd7a3) ||
     (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
     (codePoint >= 0xfe30 && codePoint <= 0xfe4f) ||
     (codePoint >= 0xff00 && codePoint <= 0xff60) ||
     (codePoint >= 0xffe0 && codePoint <= 0xffe6) ||
     (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
-    (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+    (codePoint >= 0x20000 && codePoint <= 0x3fffd) ||
+    EMOJI_PRESENTATION.test(String.fromCodePoint(codePoint))
     ? 2
     : 1
 }
