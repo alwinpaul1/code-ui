@@ -35,6 +35,9 @@ export type MobileNativeChatPendingMessage = {
    *  settled on. A row after it arrived after the send; one at or before it
    *  was already written (mobile-native-chat-draft-reconcile.ts). */
   settledTailId?: string | null
+  /** The same send: the last row of that read the desk wrote before the
+   *  send, by the desk's own clock, or null. */
+  settledWrittenBeforeId?: string | null
   /** A photo send only: the highest `[Image #N]` the transcript named when it
    *  left the phone. Its own photos are numbered above that, so a hook copy
    *  numbered at or below it is an older photo's (desktop-prompt-photo-copies.ts). */

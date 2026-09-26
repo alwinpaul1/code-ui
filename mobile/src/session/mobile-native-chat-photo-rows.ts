@@ -68,7 +68,7 @@ export function placedByName(
 /** How much older than the newest row a row written after the send may look
  *  beyond the time since the send: stamps are taken when a record is made, and
  *  records can be written a little out of order. */
-const SEND_ROW_ORDER_SLACK_MS = 5_000
+export const SEND_ROW_ORDER_SLACK_MS = 5_000
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
 
 /** How many photos a row has room for: its image blocks, or the `[Image #N]`
@@ -161,4 +161,36 @@ export function containsGluedSegment(text: string, segment: string): boolean {
     from = at + 1
   }
   return false
+}
+
+/**
+ * Whether a row can be the own row of a photo send made before the read
+ * settled: it came after the last row of the read the send settled on (none,
+ * when that read was empty), or that read already held it and it was written
+ * after the send both by the desk's own clock, read when the read settled
+ * (`settledWrittenBeforeId`), and by the desk's stamp against the phone's
+ * send time with no allowance. Either alone let an older row of the send's
+ * words in: the phone's clock 40 s behind, or an idle session whose newest
+ * row is that older row (sixth review). Both together still give a send whose
+ * row Claude wrote before the read came back its row (seventh review). A send
+ * from an older build says nothing, and the row is taken as already written.
+ */
+export function canBeEarlySendRow(
+  message: NativeChatMessage,
+  index: number | undefined,
+  entry: Pick<PendingImagePreviewEcho, 'sentAt' | 'settledTailId' | 'settledWrittenBeforeId'>,
+  indexOf: (id: string) => number | undefined
+): boolean {
+  if (entry.settledTailId === undefined || index === undefined) {
+    return false
+  }
+  if (entry.settledTailId === null) {
+    return true
+  }
+  const settledIndex = indexOf(entry.settledTailId)
+  if (settledIndex !== undefined && index > settledIndex) {
+    return true
+  }
+  const beforeIndex = entry.settledWrittenBeforeId ? (indexOf(entry.settledWrittenBeforeId) ?? -1) : -1
+  return index > beforeIndex && typeof entry.sentAt === 'number' && message.timestamp !== null && message.timestamp > entry.sentAt
 }

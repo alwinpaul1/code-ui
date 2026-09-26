@@ -109,7 +109,10 @@ export function observeAgentStatusPrompt(
     ...(at !== null ? { at } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).
-    ...(byStateStart ? { atStateStart: true as const } : {})
+    ...(byStateStart ? { atStateStart: true as const } : {}),
+    // A photo send's own hook copy is never one the phone read before the
+    // send (desktop-prompt-photo-copies.ts).
+    seenAt: Date.now()
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
   return { sessionKey, last: text, prompts }

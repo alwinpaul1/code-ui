@@ -12,7 +12,7 @@ import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './Mo
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { witnessesToRemember } from './mobile-native-chat-witness-memory'
-import { boundPhotoCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
+import { boundPhotoCopy, isOwnPhotoStatusCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
 import {
   inSendOrder,
   pairPendingWithHookPrompts,
@@ -209,7 +209,7 @@ export function MobileNativeChatOverlay({
     [controller.chatPending, waitingPhotoSends]
   )
   const hookPairing = useMemo(
-    () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages, boundPhotoCopy),
+    () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages, boundPhotoCopy, isOwnPhotoStatusCopy),
     [pairingPending, desktopPrompts, session.messages]
   )
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])

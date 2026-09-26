@@ -1,5 +1,5 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, writtenBefore } from './mobile-native-chat-photo-rows'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, canBeEarlySendRow, writtenBefore } from './mobile-native-chat-photo-rows'
 import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
@@ -73,6 +73,7 @@ export type PendingImagePreviewEcho = {
   /** Sent before the chat's read settled, so its tail is not to be trusted. */
   sentBeforeReadSettled?: boolean
   settledTailId?: string | null
+  settledWrittenBeforeId?: string | null
   /** The desktop paths the send pasted, one per preview in `images`. */
   imagePaths?: string[]
   /** False for a send whose tail was never resolved against this chat's
@@ -227,18 +228,7 @@ export function findLandedImagePreviewEchoes(
     }
     resolvedTailIndexByRawId.set(message.id, lastSurviving)
   }
-  // Whether a row came after the read a send made before it settled on. A
-  // send from an older build, or a settled tail no longer in the window, says
-  // nothing, and the row is taken as already written.
-  const arrivedAfterSettle = (message: NativeChatMessage, entry: PendingImagePreviewEcho): boolean => {
-    if (!entry.settledTailId) {
-      return false
-    }
-    const settledIndex =
-      messageIndexById.get(entry.settledTailId) ?? resolvedTailIndexByRawId.get(entry.settledTailId)
-    const index = messageIndexById.get(message.id)
-    return settledIndex !== undefined && index !== undefined && index > settledIndex
-  }
+  const indexOf = (id: string) => messageIndexById.get(id) ?? resolvedTailIndexByRawId.get(id)
   // The phone's photos each row draws, from earlier sends and this pass. A
   // row with as many as it has photos is another send's; one with room left
   // is a row two sends were glued into, and the next one's photos go after
@@ -310,7 +300,7 @@ export function findLandedImagePreviewEchoes(
       // take the photo (sixth review).
       const heldForItsRow = entry.sentBeforeReadSettled === true && rowWillNamePastedPhotos(entry)
       if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
-        if (typeof entry.takenAt === 'number' || (heldForItsRow && !arrivedAfterSettle(message, entry))) {
+        if (typeof entry.takenAt === 'number' || (heldForItsRow && !canBeEarlySendRow(message, messageIndexById.get(message.id), entry, indexOf))) {
           return false
         }
       }

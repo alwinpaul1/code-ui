@@ -1,6 +1,7 @@
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { imageMarkerNumbers, photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
+import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 
 /**
  * A photo sent from the phone with no words, and Orca's hook copy of it.
@@ -43,11 +44,39 @@ export function boundPhotoCopy(pendingId: string): string | undefined {
   return bindings.get(pendingId)
 }
 
+/** The status copies a phone photo send claimed, by session and markers:
+ *  still its own after the send retires. A return to the chat reads the tab
+ *  status afresh, and when a long turn has pushed the photo's row above the
+ *  loaded window nothing else says the copy has landed (seventh review: it
+ *  drew as "Image on Desktop"). Claude numbers photos per session, so the
+ *  session is part of the key. */
+const ownStatusCopies = new Set<string>()
+
+function statusCopyKey(prompt: DesktopPrompt): string | null {
+  if (!prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX)) {
+    return null
+  }
+  // `status:<session>:<time>:<index>`
+  const rest = prompt.nonce.slice(STATUS_PROMPT_NONCE_PREFIX.length)
+  const session = rest.slice(0, rest.lastIndexOf(':', rest.lastIndexOf(':') - 1))
+  return session ? `${session}\0${photoCopyText(prompt)}` : null
+}
+
+/** Whether a status copy is one a phone photo send already claimed. */
+export function isOwnPhotoStatusCopy(prompt: DesktopPrompt): boolean {
+  const key = statusCopyKey(prompt)
+  return key !== null && ownStatusCopies.has(key)
+}
+
 /** Keeps each send's first pairing; a later one never replaces it. */
-export function rememberPhotoCopies(claimed: ReadonlyMap<string, string>): void {
-  for (const [pendingId, text] of claimed) {
+export function rememberPhotoCopies(claimed: ReadonlyMap<string, DesktopPrompt>): void {
+  for (const [pendingId, prompt] of claimed) {
     if (!bindings.has(pendingId)) {
-      bindings.set(pendingId, text)
+      bindings.set(pendingId, photoCopyText(prompt))
+    }
+    const key = statusCopyKey(prompt)
+    if (key !== null) {
+      ownStatusCopies.add(key)
     }
   }
   for (const oldest of bindings.keys()) {
@@ -56,10 +85,17 @@ export function rememberPhotoCopies(claimed: ReadonlyMap<string, string>): void 
     }
     bindings.delete(oldest)
   }
+  for (const oldest of ownStatusCopies) {
+    if (ownStatusCopies.size <= BINDINGS_KEPT) {
+      break
+    }
+    ownStatusCopies.delete(oldest)
+  }
 }
 
 export function resetPhotoCopyBindingsForTests(): void {
   bindings.clear()
+  ownStatusCopies.clear()
 }
 
 /** Whether a markers-only hook prompt can be the copy of a phone send of
