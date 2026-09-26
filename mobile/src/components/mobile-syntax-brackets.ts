@@ -12,8 +12,13 @@ const BRACKET = /[()[\]{}]/
  * text, and keeps that span's colour. A stray closer does not take the depth
  * below zero, so one bad line cannot shift every pair after it.
  */
-export function colorBracketPairs(lines: readonly MobileSyntaxSegment[][]): MobileSyntaxSegment[][] {
-  let depth = 0
+export function colorBracketPairs(
+  lines: readonly MobileSyntaxSegment[][],
+  /** The depth the first line opens at: a chunk below the first carries the
+   *  depth of the lines above it (mobile-code-bracket-depth.ts). */
+  startDepth = 0
+): MobileSyntaxSegment[][] {
+  let depth = Math.max(0, startDepth)
   return lines.map((line) => {
     if (!line.some((segment) => isCode(segment) && BRACKET.test(segment.text))) {
       // The depth still has to run on through a line with no brackets in code.

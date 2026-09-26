@@ -10,6 +10,7 @@ import {
   indentGuideCounts
 } from './mobile-code-indent'
 import { formatMinifiedJsonForReading } from './mobile-code-json-format'
+import { scanBracketDepth, startBracketScan, type BracketScanState } from './mobile-code-bracket-depth'
 import { colorBracketPairs } from './mobile-syntax-brackets'
 import { splitSyntaxIntoLines } from './mobile-syntax-lines'
 
@@ -137,9 +138,35 @@ export function highlightCodeDocumentChunk(
   if (!result.highlighted) {
     return plain()
   }
-  return colorBracketPairs(splitSyntaxIntoLines(result.segments)).map((line) =>
-    expandTabsInSegments(capLineSpans(line, CODE_VIEW_MAX_LINE_SPANS), doc.tabWidth)
-  )
+  return colorBracketPairs(
+    splitSyntaxIntoLines(result.segments),
+    codeDocumentChunkStartDepth(doc, chunk)
+  ).map((line) => expandTabsInSegments(capLineSpans(line, CODE_VIEW_MAX_LINE_SPANS), doc.tabWidth))
+}
+
+/** Each document's bracket depth at the start of every chunk scanned so far,
+ *  and where the scan stopped, so a later chunk only scans the gap. */
+const chunkStartDepths = new WeakMap<MobileCodeDocument, { starts: number[]; scan: BracketScanState }>()
+
+/** How deeply brackets nest where a chunk starts: zero for the first, and for
+ *  the rest what the lines above it leave open, so a chunk's brackets take the
+ *  colours one pass over the whole file gives them, as nearly as a lexical
+ *  scan can (mobile-code-bracket-depth.ts). */
+export function codeDocumentChunkStartDepth(doc: MobileCodeDocument, chunk: number): number {
+  if (doc.highlight !== 'chunked' || chunk <= 0) {
+    return 0
+  }
+  let memo = chunkStartDepths.get(doc)
+  if (!memo) {
+    memo = { starts: [0], scan: startBracketScan() }
+    chunkStartDepths.set(doc, memo)
+  }
+  while (memo.starts.length <= chunk) {
+    const { start, end } = codeDocumentChunkRange(doc, memo.starts.length - 1)
+    memo.scan = scanBracketDepth(doc.lines, start, end, doc.language, memo.scan)
+    memo.starts.push(memo.scan.depth)
+  }
+  return memo.starts[chunk]!
 }
 
 /** A line held to `maxSpans` spans: the first ones keep their colours, and
