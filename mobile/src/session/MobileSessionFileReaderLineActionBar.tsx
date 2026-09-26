@@ -8,16 +8,19 @@ import { Txt } from '../ui/Txt'
  * Code's Alt+K parity): reference just the selected lines, or the whole file
  * instead, without leaving the reader. Themed through `useTheme()` so it
  * reads correctly in both light and dark — see theme-context.ts.
+ *
+ * With no range (a pretty-printed JSON file, whose line numbers are not the
+ * file's) it offers the whole file alone: that file was otherwise left with
+ * no way to be asked about (2026-09-26).
  */
 export function MobileSessionFileReaderLineActionBar({
-  label,
-  onAskAboutLines,
+  range,
   onAskAboutFile,
   onDismiss
 }: {
-  /** "Ask about line 10" or "Ask about lines 10–20" (fileReaderLineSelectionLabel). */
-  label: string
-  onAskAboutLines: () => void
+  /** "Ask about line 10" or "Ask about lines 10–20" (fileReaderLineSelectionLabel),
+   *  and what it does; absent where the lines cannot be referenced. */
+  range?: { label: string; onPress: () => void }
   onAskAboutFile: () => void
   onDismiss: () => void
 }) {
@@ -56,28 +59,32 @@ export function MobileSessionFileReaderLineActionBar({
           elevation: 6
         }}
       >
-        <Pressable
-          onPress={onAskAboutLines}
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          hitSlop={6}
-          style={{ paddingVertical: space.sm, flexShrink: 1 }}
-        >
-          <Txt variant="label" weight="semibold" numberOfLines={1}>
-            {label}
-          </Txt>
-        </Pressable>
-        <View
-          style={{ width: 1, alignSelf: 'stretch', backgroundColor: colors.border, marginVertical: space.xs }}
-        />
+        {range ? (
+          <>
+            <Pressable
+              onPress={range.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={range.label}
+              hitSlop={6}
+              style={{ paddingVertical: space.sm, flexShrink: 1 }}
+            >
+              <Txt variant="label" weight="semibold" numberOfLines={1}>
+                {range.label}
+              </Txt>
+            </Pressable>
+            <View
+              style={{ width: 1, alignSelf: 'stretch', backgroundColor: colors.border, marginVertical: space.xs }}
+            />
+          </>
+        ) : null}
         <Pressable
           onPress={onAskAboutFile}
           accessibilityRole="button"
           accessibilityLabel="Ask about file"
           hitSlop={6}
-          style={{ paddingVertical: space.sm, paddingHorizontal: space.sm }}
+          style={{ paddingVertical: space.sm, paddingHorizontal: range ? space.sm : 0 }}
         >
-          <Txt variant="label" tone="secondary" numberOfLines={1}>
+          <Txt variant="label" tone={range ? 'secondary' : undefined} weight={range ? undefined : 'semibold'} numberOfLines={1}>
             Ask about file
           </Txt>
         </Pressable>

@@ -175,11 +175,19 @@ describe('reading a code file on the phone', () => {
     }
   )
 
-  it('opens a minified JSON file pretty-printed, and turns line selection off since its lines are not the file’s', () => {
+  it('opens a minified JSON file pretty-printed, and turns line ranges off since its lines are not the file’s', () => {
     const r = renderFile('{"name":"orca","tags":["a","b"],"nested":{"on":true}}', 'config/settings.json')
     const lines = list(r).props.data as unknown[]
     expect(lines.length).toBeGreaterThan(5)
-    expect(list(r).props.renderItem({ item: lines[1], index: 1 }).props.onLongPress).toBeUndefined()
+    // A long-press still opens the bar, for the whole file alone
+    // (mobile-session-file-reader-json-ask-about-file.test): no line is
+    // highlighted and a tap extends nothing.
+    const row = () => list(r).props.renderItem({ item: lines[1], index: 1 })
+    act(() => {
+      row().props.onLongPress()
+    })
+    expect(row().props.highlighted).toBe(false)
+    expect(row().props.onPress).toBeUndefined()
     const notice = r.root
       .findAllByType('Text' as never)
       .map((node) => node.children.join(''))

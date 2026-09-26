@@ -55,22 +55,22 @@ export function MobileSessionFileSource({
   const highlightStyle = useMemo(() => ({ backgroundColor: syntax.selection }), [syntax.selection])
   // An empty file has nothing to ask about. A pretty-printed JSON file's line
   // numbers are not the file's, so a range from it would point the agent at
-  // lines that do not exist: no selection there either.
-  const canSelectLines = onAskAboutLines != null && content.length > 0 && !document.reformatted
+  // lines that do not exist: a long-press there opens the bar for the whole
+  // file alone, with no range and nothing highlighted.
+  const canAsk = onAskAboutLines != null && content.length > 0
+  const canSelectLines = canAsk && !document.reformatted
   const lineProps = useCallback(
     (lineNumber: number): MobileCodeLineInteraction => ({
-      selectable: canSelectLines ? lineSelection === null : undefined,
-      highlighted: isFileReaderLineSelected(lineSelection, lineNumber),
+      selectable: canAsk ? lineSelection === null : undefined,
+      highlighted: canSelectLines && isFileReaderLineSelected(lineSelection, lineNumber),
       highlightStyle,
-      onLongPress: canSelectLines
-        ? () => setLineSelection(startFileReaderLineSelection(lineNumber))
-        : undefined,
+      onLongPress: canAsk ? () => setLineSelection(startFileReaderLineSelection(lineNumber)) : undefined,
       onPress:
         canSelectLines && lineSelection
           ? () => setLineSelection(extendFileReaderLineSelection(lineSelection, lineNumber))
           : undefined
     }),
-    [canSelectLines, highlightStyle, lineSelection]
+    [canAsk, canSelectLines, highlightStyle, lineSelection]
   )
   return (
     <View style={styles.markdownEditor}>
@@ -81,13 +81,19 @@ export function MobileSessionFileSource({
         lineProps={lineProps}
         extraData={lineSelection}
       />
-      {canSelectLines && selectedRange ? (
+      {canAsk && selectedRange ? (
         <MobileSessionFileReaderLineActionBar
-          label={fileReaderLineSelectionLabel(selectedRange)}
-          onAskAboutLines={() => {
-            setLineSelection(null)
-            onAskAboutLines?.(selectedRange)
-          }}
+          range={
+            canSelectLines
+              ? {
+                  label: fileReaderLineSelectionLabel(selectedRange),
+                  onPress: () => {
+                    setLineSelection(null)
+                    onAskAboutLines?.(selectedRange)
+                  }
+                }
+              : undefined
+          }
           onAskAboutFile={() => {
             setLineSelection(null)
             onAskAboutLines?.(null)
