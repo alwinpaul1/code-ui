@@ -89,10 +89,12 @@ function reports(
 /** The prompt of one source timed nearest the send (an untimed one only when
  *  no timed one reports it). No lower bound: after a relaunch the status copy
  *  is timed by when the pane's state began, which can be well before the send.
- *  A status copy held back for want of a time (`heldBack`) that the phone first
- *  read after the send comes first: the pane still carried those words when the
- *  chat looked, so it is the send's own copy, and a timed copy of the same words
- *  watched since is a later message (re-review of 0d5853d3). */
+ *  A status copy held back for want of a time (`heldBack`) is taken first when
+ *  it is the first copy of the send's words the phone read after the send: the
+ *  pane still carried them when the chat looked, so it is the send's own, and a
+ *  timed copy of the same words watched since is a later message (re-review of
+ *  0d5853d3). Read after a copy the chat watched arrive, it is that copy read
+ *  again, and the watched one is the send's (third review, 280868b3). */
 function nearestCopy(
   sentAt: number | undefined,
   open: readonly number[],
@@ -101,13 +103,19 @@ function nearestCopy(
   if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
     return open[0]
   }
+  const readSince = open.filter((index) => (prompts[index]!.seenAt ?? Number.NEGATIVE_INFINITY) >= sentAt)
+  const firstRead = readSince.reduce<number | undefined>(
+    (first, index) => (first === undefined || prompts[index]!.seenAt! < prompts[first]!.seenAt! ? index : first),
+    undefined
+  )
+  if (firstRead !== undefined && prompts[firstRead]!.heldBack === true) {
+    return firstRead
+  }
   let best: number | undefined
   let bestDistance = Number.POSITIVE_INFINITY
   for (const index of open) {
-    const prompt = prompts[index]!
-    const at = prompt.at
-    const heldSince = prompt.heldBack === true && typeof prompt.seenAt === 'number' && prompt.seenAt >= sentAt
-    const distance = heldSince ? -1 : at === undefined ? Number.MAX_VALUE : Math.abs(at - sentAt)
+    const at = prompts[index]!.at
+    const distance = at === undefined ? Number.MAX_VALUE : Math.abs(at - sentAt)
     if (distance < bestDistance) {
       best = index
       bestDistance = distance

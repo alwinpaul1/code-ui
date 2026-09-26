@@ -221,3 +221,46 @@ describe('a phone send Claude took mid-turn, when the desk later sends the same 
   })
 })
 
+// Third review, of 280868b3: in one mount, a phone send's own copy watched
+// arrive, and the same words read again later on the ended turn's pane, held.
+// Preferring any held copy read after the send took that one, and the send's
+// own watched copy drew as a second bubble.
+describe('a phone send whose own copy the chat watched, read again after the turn', () => {
+  const { show, send, lastFrame } = landingHarness(frames)
+  const YES = 'yes do it'
+
+  async function sendTakeAndEnd(): Promise<{ state: ReturnType<typeof observeAgentStatusPrompt>; ended: NativeChatMessage[] }> {
+    const working = [...before, agentRow('080e05a3', 'Looking at the fold.', '07:03:19.619')]
+    await show('07:03:20.000', { messages: working, working: true })
+    await send('07:03:54.000', YES, [])
+    vi.setSystemTime(at('07:03:54.700'))
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:03:50.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: YES, updatedAt: at('07:03:54.573') })
+    await show('07:03:55.000', { messages: working, working: true, prompts: [...state.prompts], queued: queuedMessagesFromScreen(claudeScreen([YES])) })
+    const ended = [...working, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916'), agentRow('55906d18', 'Fixed.', '07:06:00.000')]
+    await show('07:04:36.000', { messages: ended, working: true, prompts: [...state.prompts], queued: [] })
+    return { state, ended }
+  }
+
+  it('is drawn once after a reading with no status', async () => {
+    let { state, ended } = await sendTakeAndEnd()
+    state = observeAgentStatusPrompt(state, SESSION, null)
+    vi.setSystemTime(at('07:07:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'done', prompt: YES, updatedAt: at('07:06:00.100'), stateStartedAt: at('07:06:00.050') })
+    await show('07:07:00.000', { messages: ended, prompts: [...state.prompts], queued: [] })
+    await show('07:07:01.000', { messages: ended, prompts: [...state.prompts], queued: [] })
+    expect(lastFrame().filter((bubble) => bubble.text === YES)).toHaveLength(1)
+  })
+
+  it('is drawn once after another desk message in between', async () => {
+    let { state, ended } = await sendTakeAndEnd()
+    vi.setSystemTime(at('07:05:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: 'and keep the old table around', updatedAt: at('07:05:00.000') })
+    vi.setSystemTime(at('07:07:00.000'))
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'done', prompt: YES, updatedAt: at('07:06:00.100'), stateStartedAt: at('07:06:00.050') })
+    await show('07:07:00.000', { messages: ended, prompts: [...state.prompts], queued: [] })
+    await show('07:07:01.000', { messages: ended, prompts: [...state.prompts], queued: [] })
+    expect(lastFrame().filter((bubble) => bubble.text === YES)).toHaveLength(1)
+  })
+})
+
