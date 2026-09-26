@@ -3,7 +3,7 @@
   "family": "session.markdown-disk-fallback",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "f9e2faf4703ac32fddec2546d14bb71bb1232239",
+  "baseline": "d4d749a04142f7cd48152d508b6899e33a638044",
   "lockfileSha256": "fc17f4cc6e9b73532dda8f68ccb31bccb82ecd1bf386c2198328989e1970146e",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "64e570554490b2fe5fa00f7fdfb293a4685b2fa5c64358ab8a3b8891f9f5fba6",
@@ -84,21 +84,6 @@
           },
           "id": "frame-1",
           "ok": false
-        }
-      }
-    },
-    "26accaca5208": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "The desktop could not read this tab (refused). Showing the file on disk.",
-          "stale": false,
-          "status": "ready"
         }
       }
     },
@@ -258,6 +243,36 @@
           },
           "id": "frame-1",
           "ok": false
+        }
+      }
+    },
+    "59bb9652e4a4": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Desktop couldn't open this tab (refused). Showing the file on disk.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
+    "5dac1d81d10e": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Desktop couldn't open this tab (Unknown method). Showing the file on disk.",
+          "stale": false,
+          "status": "ready"
         }
       }
     },
@@ -430,6 +445,21 @@
         }
       }
     },
+    "cda07202ab71": {
+      "file": {},
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "",
+          "content": "# disk",
+          "editable": false,
+          "isDirty": false,
+          "localContent": "# disk",
+          "readOnlyReason": "Desktop couldn't open this tab (outer refused). Showing the file on disk.",
+          "stale": false,
+          "status": "ready"
+        }
+      }
+    },
     "d4be01606497": {
       "name": "files.read#1",
       "ordinal": 4,
@@ -469,21 +499,6 @@
             "content": "# disk",
             "truncated": false
           }
-        }
-      }
-    },
-    "db89fc7ba275": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "The desktop could not read this tab (Unknown method). Showing the file on disk.",
-          "stale": false,
-          "status": "ready"
         }
       }
     },
@@ -528,21 +543,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "f54397ef786f": {
-      "file": {},
-      "markdown": {
-        "tab-md": {
-          "baseVersion": "",
-          "content": "# disk",
-          "editable": false,
-          "isDirty": false,
-          "localContent": "# disk",
-          "readOnlyReason": "The desktop could not read this tab (outer refused). Showing the file on disk.",
-          "stale": false,
-          "status": "ready"
-        }
       }
     }
   },
@@ -629,7 +629,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "f54397ef786f",
+          "state": "cda07202ab71",
           "effects": []
         }
       },
@@ -641,7 +641,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "26accaca5208",
+          "state": "59bb9652e4a4",
           "effects": []
         }
       },
@@ -653,7 +653,7 @@
           "settlements": {
             "markdown": "eb79a9b3682a"
           },
-          "state": "db89fc7ba275",
+          "state": "5dac1d81d10e",
           "effects": []
         }
       },
