@@ -12,7 +12,7 @@ export const AGENT_MESSAGE_UNREAD_NOTE =
   'Only the sender reached the phone. To read the message, expand this row in the desktop terminal (ctrl+o).'
 
 /** What an opened row says under words that are only the start of the message
- *  (the hook's 2,000 characters, the tab status's 200). */
+ *  (the hook's 2,000 bytes, the tab status's 200 characters). */
 export const AGENT_MESSAGE_CUT_NOTE =
   'Only the start of this message reached the phone. The rest is in the desktop terminal (ctrl+o).'
 
