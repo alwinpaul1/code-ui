@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { isPeerBoilerplateRow, peerBoilerplateRow, teammateTaskSender } from './mobile-native-chat-peer-messages'
+import { agentMessageRow } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 /**
@@ -12,9 +13,10 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * drawn after that row as the same bubble a transcript turn gets: the
  * harness's boilerplate, the way the Claude app shows a peer message, and
  * nothing of the message or the sender (the user's call, 2026-09-21; the
- * earlier card and one-liner are gone). A subagent's row draws nothing, as in
- * the Claude app (drawsPeerBubble). The body is still remembered for what
- * follows. When the transcript
+ * earlier card and one-liner are gone). A subagent's row gets no bubble
+ * (drawsPeerBubble); where no prompt hook carries the message, it is drawn as
+ * the folded "Message from <sender>" row the desktop TUI shows (2026-09-26).
+ * The body is still remembered for what follows. When the transcript
  * later carries the turn itself (a row Orca did publish, surfaced by
  * mobile-native-chat-peer-messages.ts) at or after that anchor, the notice
  * steps aside for it, one notice per landed bubble in order; every bubble
@@ -68,15 +70,22 @@ export function observeScreenPeerNotices(
 }
 
 /** The folded chat with each notice drawn after its anchor, minus the ones a
- *  landed transcript row has taken over. Same array when there are none. */
+ *  landed transcript row has taken over. Same array when there are none.
+ *
+ *  `subagentRows`: draw a subagent's sender-only row as the folded "Message
+ *  from <sender>" row (MobileNativeChatAgentMessageRow), the way the desktop
+ *  TUI draws it (the user's call, 2026-09-26). Off on a tab launched with the
+ *  prompt hook, which carries the same message with its words
+ *  (mobile-native-chat-agent-message-rows.ts), so it is drawn once. */
 export function withScreenPeerNotices(
   folded: readonly NativeChatMessage[],
-  allNotices: readonly ScreenPeerNotice[]
+  allNotices: readonly ScreenPeerNotice[],
+  options: { subagentRows?: boolean } = {}
 ): NativeChatMessage[] {
   if (allNotices.length === 0) {
     return folded as NativeChatMessage[]
   }
-  const notices = allNotices.filter(drawsPeerBubble)
+  const notices = allNotices.filter((notice) => drawsPeerBubble(notice) || options.subagentRows === true)
   if (notices.length === 0) {
     return folded as NativeChatMessage[]
   }
@@ -97,11 +106,15 @@ export function withScreenPeerNotices(
     // rather than the boilerplate one. It is the same message only when the
     // sender matches: every boilerplate bubble reads the same, a task does not.
     const isOwnTask = (message: NativeChatMessage) => teammateTaskSender(message) === notice.sender
+    // A sender-only row steps aside only for its own lead's task: no
+    // transcript row stands for a subagent's message (Orca drops them), and a
+    // boilerplate bubble belongs to another session's message.
+    const standsFor = drawsPeerBubble(notice)
+      ? (message: NativeChatMessage) => isPeerBoilerplateRow(message) || isOwnTask(message)
+      : isOwnTask
     let landed = folded.findIndex(
       (message, position) =>
-        !claimed.has(position) &&
-        (anchorAt === null || position >= anchorAt) &&
-        (isPeerBoilerplateRow(message) || isOwnTask(message))
+        !claimed.has(position) && (anchorAt === null || position >= anchorAt) && standsFor(message)
     )
     if (landed === -1 && anchorAt !== null && anchorAt > 0) {
       // The screen may be read first after the transcript already moved past
@@ -126,7 +139,9 @@ export function withScreenPeerNotices(
         anchorAt = position
       }
     }
-    const drawn = peerBoilerplateRow(notice.id, notice.sightedAt)
+    const drawn = drawsPeerBubble(notice)
+      ? peerBoilerplateRow(notice.id, notice.sightedAt)
+      : agentMessageRow({ id: notice.id, sender: notice.sender, body: '', timestamp: notice.sightedAt })
     if (anchorAt === null) {
       atEnd.push(drawn)
     } else if (anchorAt < 0) {
@@ -164,7 +179,9 @@ export function withScreenPeerNotices(
  * those since 2.1.272 as a queued_command with origin.kind "peer" and handback
  * true (22 of 22 on this machine), and the Claude app draws no bubble for it,
  * only this session's own "Messaged @agent" call (2026-09-24, from the phone,
- * reversing 2026-09-21's bubble before every subagent reply).
+ * reversing 2026-09-21's bubble before every subagent reply). Such a row is
+ * drawn instead as the folded row the desktop TUI shows, when the caller asks
+ * (`subagentRows`, 2026-09-26): never as a bubble.
  */
 function drawsPeerBubble(notice: ScreenPeerNotice): boolean {
   return notice.body !== undefined

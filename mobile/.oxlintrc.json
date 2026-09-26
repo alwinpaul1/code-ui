@@ -216,7 +216,11 @@
             // 2026-09-20: +1 for the screen's peer-message rows handed to the
             // contract (read in use-mobile-terminal-hud-observation.ts, placed
             // by use-screen-peer-notices.ts).
-            "max": 503,
+            // 2026-09-26: +2 for the subagent messages off the prompt beacon
+            // (an import and the memoized read, useBeaconAgentMessages); the
+            // parsing and placing live in mobile-native-chat-agent-messages.ts
+            // and mobile-native-chat-agent-message-rows.ts.
+            "max": 505,
             "skipBlankLines": true,
             "skipComments": true
           }

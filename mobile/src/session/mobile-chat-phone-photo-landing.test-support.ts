@@ -13,6 +13,8 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 // The rows, photos and helpers of mobile-chat-phone-photo-landing.test.ts,
 // kept here so the file of cases stays readable.
@@ -111,6 +113,13 @@ export type Tick = {
   queued?: string[]
   screen?: string[]
   agent?: 'claude' | 'codex'
+  /** The subagent messages the prompt beacon carried (the controller's
+   *  `nativeChatAgentMessages`). */
+  agentMessages?: BeaconAgentMessage[]
+  /** The peer-message rows the agent's screen showed. */
+  peerRows?: ScreenPeerRow[]
+  /** Whether the tab was launched with the prompt hook. */
+  promptHook?: boolean
 }
 export type Drafts = ReturnType<typeof useMobileNativeChatDrafts>
 /** A user bubble as the list draws it: `P` a picture, `D` the "Image on
@@ -202,6 +211,9 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatDesktopPrompts: tick.prompts,
       nativeChatQueuedMessages: tick.queued ?? [],
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
+      nativeChatAgentMessages: tick.agentMessages ?? [],
+      nativeChatScreenPeerNotices: tick.peerRows ?? [],
+      nativeChatPromptHook: tick.promptHook ?? null,
       chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),
       chatComposerText: '',
       setChatComposerText: vi.fn()

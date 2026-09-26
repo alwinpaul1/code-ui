@@ -3,6 +3,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
 import { observeScreenPeerNotices, withScreenPeerNotices } from './screen-peer-notices'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 
 function row(id: string, role: NativeChatMessage['role'], text: string, presentation?: string): NativeChatMessage {
   return { id, role, timestamp: 10, source: 'transcript', blocks: [{ type: 'text', text, ...(presentation ? { presentation } : {}) }] }
@@ -161,6 +163,26 @@ describe("a lead's message the screen and the transcript both carry", () => {
     ])
   })
 
+  // The lead's rows name only their sender on a teammate's screen. Drawn as
+  // subagent rows (a tab with no prompt hook), they would stand beside the
+  // task bubble that is the same message.
+  it('draws the task and a follow-up once on a tab with no prompt hook, never also as "Message from team-lead"', () => {
+    const folded = foldMobileNativeChatMessages([
+      row('task', 'user', lead('Build the job.')),
+      row('a1', 'assistant', 'Reading the code.'),
+      row('more', 'user', lead('Also time the CPU path.')),
+      row('a2', 'assistant', 'Timing it.')
+    ])
+    const first = observeScreenPeerNotices([], [{ sender: 'team-lead' }], null, 5)
+    const both = observeScreenPeerNotices(first, [{ sender: 'team-lead' }, { sender: 'team-lead' }], 'a2', 6)
+    expect(withScreenPeerNotices(folded, both, { subagentRows: true }).map((message) => message.id)).toEqual([
+      'task',
+      'a1',
+      'more',
+      'a2'
+    ])
+  })
+
   it('draws a follow-up once, when the screen saw it before the transcript landed it', () => {
     const before = foldMobileNativeChatMessages([row('task', 'user', lead('Build the job.')), row('a1', 'assistant', 'Built.')])
     const first = observeScreenPeerNotices([], [{ sender: 'team-lead' }], null, 5)
@@ -227,3 +249,49 @@ describe("a report handed back by this session's own subagent", () => {
   })
 })
 
+
+// 2026-09-26, the user's screenshots of Claude Code 2.1.283's TUI: a subagent's
+// message is a folded row in the turn, "› Message from @general-purpose (ctrl+o
+// to expand)". Where no prompt hook carries it, that row is all the phone has.
+describe("a subagent's row on a tab with no prompt hook", () => {
+  const SCREEN = ['  Read 1 file, ran 2 shell commands', '', '› Message from @general-purpose (ctrl+o to expand)', '', '  Read 1 file']
+  const drawn = (rows: readonly NativeChatMessage[]) =>
+    rows.map((message) => {
+      const agent = agentMessageOf(message)
+      return agent ? `Message from ${agent.sender}${agent.body ? `: ${agent.body}` : ''}` : message.id
+    })
+
+  it('is drawn as "Message from general-purpose" after the row it was seen under, with no words it never had', () => {
+    const folded = [row('u1', 'user', 'start'), row('a1', 'assistant', 'working'), row('a2', 'assistant', 'done')]
+    const seen = observeScreenPeerNotices([], peerNoticesFromScreen(SCREEN), 'a1', 5)
+    expect(drawn(withScreenPeerNotices(folded, seen, { subagentRows: true }))).toEqual([
+      'u1',
+      'a1',
+      'Message from general-purpose',
+      'a2'
+    ])
+  })
+
+  it('never takes over a peer bubble the transcript landed after it, and that bubble still retires its own notice', () => {
+    const folded = [row('a1', 'assistant', 'working'), peerRow('t1', 'code-ui-6f')]
+    const seen = observeScreenPeerNotices(
+      [],
+      [{ sender: 'general-purpose' }, { sender: 'code-ui-6f', body: 'Capture probe' }],
+      'a1',
+      5
+    )
+    expect(drawn(withScreenPeerNotices(folded, seen, { subagentRows: true }))).toEqual([
+      'a1',
+      'Message from general-purpose',
+      't1'
+    ])
+  })
+
+  it('is drawn on a chat of one row, and at the end of an empty one', () => {
+    const one = [row('a1', 'assistant', 'only')]
+    const seen = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5)
+    expect(drawn(withScreenPeerNotices(one, seen, { subagentRows: true }))).toEqual(['a1', 'Message from probe'])
+    const empty = observeScreenPeerNotices([], [{ sender: 'probe' }], null, 5)
+    expect(drawn(withScreenPeerNotices([], empty, { subagentRows: true }))).toEqual(['Message from probe'])
+  })
+})

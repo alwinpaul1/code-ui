@@ -13,7 +13,9 @@ const NONE: readonly ScreenPeerNotice[] = []
 export function useScreenPeerNotices(
   rows: readonly ScreenPeerRow[],
   folded: readonly NativeChatMessage[],
-  scopeKey: string | null
+  scopeKey: string | null,
+  /** Draw a subagent's sender-only row (see `withScreenPeerNotices`). */
+  subagentRows = false
 ): NativeChatMessage[] {
   const memory = useRef<{ scopeKey: string | null; notices: readonly ScreenPeerNotice[] }>({ scopeKey, notices: NONE })
   if (memory.current.scopeKey !== scopeKey) {
@@ -25,5 +27,5 @@ export function useScreenPeerNotices(
     notices: observeScreenPeerNotices(memory.current.notices, rows, tail?.id ?? null, tail?.timestamp ?? 0)
   }
   const notices = memory.current.notices
-  return useMemo(() => withScreenPeerNotices(folded, notices), [folded, notices])
+  return useMemo(() => withScreenPeerNotices(folded, notices, { subagentRows }), [folded, notices, subagentRows])
 }

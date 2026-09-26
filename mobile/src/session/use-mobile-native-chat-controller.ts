@@ -38,6 +38,7 @@ import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task
 import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { useAgentStatusPrompts } from './use-agent-status-prompts'
+import { useBeaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
 
@@ -127,6 +128,7 @@ export function useMobileNativeChatController(
     nativeChatStatus,
     hudBeacon?.desktopPrompts
   )
+  const agentMessages = useBeaconAgentMessages(hudBeacon?.desktopPrompts)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -575,7 +577,7 @@ export function useMobileNativeChatController(
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
-    nativeChatDesktopPrompts: tailPrompts,
+    nativeChatDesktopPrompts: tailPrompts, nativeChatAgentMessages: agentMessages,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,

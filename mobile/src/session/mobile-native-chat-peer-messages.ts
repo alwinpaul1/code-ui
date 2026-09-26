@@ -24,8 +24,9 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  * apps side by side and asked for exactly that (2026-09-21), and no "From
  * <sender>" card with the message (which is what the 2026-09-20 version drew).
  * A subagent's report back to its own session is not such a turn: it arrives
- * as a hand-back the Claude app draws nothing for (screen-peer-notices.ts,
- * 2026-09-24). The one exception is a lead's
+ * as a hand-back that gets no bubble (screen-peer-notices.ts, 2026-09-24), and
+ * is drawn as the TUI's folded "Message from <agent>" row instead
+ * (mobile-native-chat-agent-messages.ts, 2026-09-26). The one exception is a lead's
  * message in a teammate session, the task and any follow-up, which has no
  * opener and IS the prompt: that is drawn as the user's bubble with the
  * message (teammateTask).

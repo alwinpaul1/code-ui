@@ -24,6 +24,8 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
+import { useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
+import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
 import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -43,6 +45,7 @@ const CLIPBOARD_POLL_MS = 3000
 const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
+const NO_AGENT_MESSAGES: BeaconAgentMessage[] = []
 const NO_SENT_PHOTOS: ScreenSentPhotos[] = []
 
 type Props = {
@@ -272,13 +275,23 @@ export function MobileNativeChatOverlay({
         : baseFolded,
     [absorbedEchoes, baseFolded, desktopEchoes, placedOwn, session.messages]
   )
+  // A subagent's message never reaches the transcript the phone reads; the
+  // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
+  const foldedWithAgents = useAgentMessageRows(
+    controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES,
+    foldedWithoutPeers,
+    session.messages,
+    controller.nativeChatStreamScopeKey
+  )
   // A message from a subagent or another session mostly never reaches the
   // transcript the phone reads; the agent's screen says one arrived, and
-  // from whom, so that is drawn where it was seen (2026-09-20).
+  // from whom, so that is drawn where it was seen (2026-09-20). A subagent's
+  // is drawn off the screen only where no prompt hook carries it.
   const foldedWithoutPhotos = useScreenPeerNotices(
     controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
-    foldedWithoutPeers,
-    controller.nativeChatStreamScopeKey
+    foldedWithAgents,
+    controller.nativeChatStreamScopeKey,
+    controller.nativeChatPromptHook !== true
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).

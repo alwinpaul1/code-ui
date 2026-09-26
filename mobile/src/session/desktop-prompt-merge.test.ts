@@ -24,3 +24,32 @@ describe('one list of desktop prompts from the tab status and the beacon', () =>
     expect(mergeDesktopPrompts([], [])).toEqual([])
   })
 })
+
+// Claude Code fires UserPromptSubmit for a message a subagent sends its lead
+// (2.1.283: the prompt is the `<agent-message …>` wrapper), so the phone's own
+// prompt hook beacons it like a typed prompt. The status copy of such a
+// message has been seen-not-echoed since 2026-09-20; the beacon copy went
+// straight into the desktop prompts, and every desktop prompt is drawn as the
+// user's own bubble.
+describe("a subagent's message the prompt hook beaconed", () => {
+  it('never reaches the desktop prompts, so it is never drawn as the user bubble', async () => {
+    const { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_HANDBACK_USER_ROW, SUBAGENT_REQUEST_PROMPT } = await import(
+      './fixtures/claude-agent-message-read-image-2.1.283'
+    )
+    const merged = mergeDesktopPrompts(
+      [],
+      [
+        { nonce: '4101', text: SUBAGENT_REQUEST_PROMPT },
+        { nonce: '4102', text: SUBAGENT_HANDBACK_PROMPT, cut: true },
+        { nonce: '4103', text: SUBAGENT_HANDBACK_USER_ROW, cut: true },
+        { nonce: '4104', text: 'and the pill' }
+      ]
+    )
+    expect(merged).toEqual([{ nonce: '4104', text: 'and the pill' }])
+  })
+
+  it("keeps a person's prompt that merely quotes the wrapper mid-sentence", () => {
+    const text = 'why does <agent-message from="x"> show up in the log?'
+    expect(mergeDesktopPrompts([], [{ nonce: '1', text }])).toEqual([{ nonce: '1', text }])
+  })
+})

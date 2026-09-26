@@ -2,6 +2,7 @@ import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import type { BeaconAgentMessage } from './mobile-native-chat-agent-messages'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -190,6 +191,9 @@ export type MobileNativeChatController = {
    *  tab status (`agentStatus.prompt`) first, the HUD beacon's hook second.
    *  `at` is the hook's clock. */
   nativeChatDesktopPrompts: DesktopPrompt[]
+  /** Messages the session's subagents sent it, off the same beacon; never in
+   *  the desktop prompts (mobile-native-chat-agent-messages.ts). */
+  nativeChatAgentMessages?: BeaconAgentMessage[]
   /** Prompts the agent has already accepted, read off its own screen. */
   nativeChatScreenPrompts: string[]
   /** The peer-message rows on the agent's screen, one per row

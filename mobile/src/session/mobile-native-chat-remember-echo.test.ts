@@ -117,3 +117,20 @@ describe('a phone send acknowledged after a witness of it was stored', () => {
     expect(accept([earlierSend]).map((item) => item.id)).toEqual(['pending-0', 'pending-1'])
   })
 })
+
+// 2026-09-26: the prompt hook's copy of a subagent's message (Claude Code
+// 2.1.283's `<agent-message …>`) was drawn as a desktop prompt, the user's own
+// bubble, and remembered with the phone's sends. The hook's copy is no longer
+// a desktop prompt (desktop-prompt-merge.ts); one already on disk must not
+// come back as the user's bubble on the next launch.
+describe('a subagent message remembered as a desktop prompt before that was fixed', () => {
+  it('is swept from what the phone restores, and a phone send is not', async () => {
+    const { SUBAGENT_REQUEST_PROMPT } = await import('./fixtures/claude-agent-message-read-image-2.1.283')
+    const stored = [
+      { id: 'desk-4101', text: SUBAGENT_REQUEST_PROMPT, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
+      { id: 'pending-1', text: 'a phone send', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
+      { id: 'desk-4102', text: 'typed at the desk', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((i) => i.id)).toEqual(['pending-1', 'desk-4102'])
+  })
+})
