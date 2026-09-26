@@ -120,21 +120,6 @@ export function writtenBefore(
   )
 }
 
-/** How far a phone's clock may run ahead of the desk's before a row the
- *  desk stamped just after a send reads as written before it. */
-export const SEND_STAMP_CLOCK_ALLOWANCE_MS = 5_000
-
-/** Whether a row's desk stamp can be from after a send, by the phone's clock
- *  and `SEND_STAMP_CLOCK_ALLOWANCE_MS`; a row or a send with no time cannot. */
-export function stampedAfterSend(message: NativeChatMessage, entry: { sentAt?: number }): boolean {
-  return (
-    typeof entry.sentAt === 'number' &&
-    Number.isFinite(entry.sentAt) &&
-    message.timestamp !== null &&
-    message.timestamp > entry.sentAt - SEND_STAMP_CLOCK_ALLOWANCE_MS
-  )
-}
-
 /** Whether a row carries a photo at all: an image block, or an `[Image #N]`
  *  marker its words carried before its companion landed. */
 export function carriesPhoto(message: NativeChatMessage, raw: NativeChatMessage | undefined): boolean {

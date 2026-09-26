@@ -1,5 +1,5 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, stampedAfterSend, writtenBefore } from './mobile-native-chat-photo-rows'
+import { carriesPhoto, containsGluedSegment, pastedPhotos, photoNames, photoSlots, placedByName, rowWillNamePastedPhotos, writtenBefore } from './mobile-native-chat-photo-rows'
 import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
 import {
   hasImagePromptMarker,
@@ -72,6 +72,7 @@ export type PendingImagePreviewEcho = {
   sentAt?: number
   /** Sent before the chat's read settled, so its tail is not to be trusted. */
   sentBeforeReadSettled?: boolean
+  settledTailId?: string | null
   /** The desktop paths the send pasted, one per preview in `images`. */
   imagePaths?: string[]
   /** False for a send whose tail was never resolved against this chat's
@@ -226,6 +227,18 @@ export function findLandedImagePreviewEchoes(
     }
     resolvedTailIndexByRawId.set(message.id, lastSurviving)
   }
+  // Whether a row came after the read a send made before it settled on. A
+  // send from an older build, or a settled tail no longer in the window, says
+  // nothing, and the row is taken as already written.
+  const arrivedAfterSettle = (message: NativeChatMessage, entry: PendingImagePreviewEcho): boolean => {
+    if (!entry.settledTailId) {
+      return false
+    }
+    const settledIndex =
+      messageIndexById.get(entry.settledTailId) ?? resolvedTailIndexByRawId.get(entry.settledTailId)
+    const index = messageIndexById.get(message.id)
+    return settledIndex !== undefined && index !== undefined && index > settledIndex
+  }
   // The phone's photos each row draws, from earlier sends and this pass. A
   // row with as many as it has photos is another send's; one with room left
   // is a row two sends were glued into, and the next one's photos go after
@@ -289,13 +302,15 @@ export function findLandedImagePreviewEchoes(
       // took mid-turn, which gets none, whatever its words (review of
       // becd6af2: it went to a later "yes" sent alone). Nor is it the row of
       // one sent before the read settled whose row will name its paths when
-      // the row is stamped well before the send: an older row of its words
-      // took it after a quiet minute (fourth review). A send's own row can
-      // carry none, its photo failed to attach, and still shows as the
-      // phone's (re-review of 4e25d63e; fifth review for an early send).
+      // that read already held the row: an older row of its words took it
+      // after a quiet minute (fourth review). A send's own row can carry
+      // none, its photo failed to attach, and still shows as the phone's
+      // (re-review of 4e25d63e; fifth review for an early send). Told by the
+      // read, not a clock: the phone's against the desk's let an older row
+      // take the photo (sixth review).
       const heldForItsRow = entry.sentBeforeReadSettled === true && rowWillNamePastedPhotos(entry)
       if (pasted && !carriesPhoto(message, rawById.get(message.id))) {
-        if (typeof entry.takenAt === 'number' || (heldForItsRow && !stampedAfterSend(message, entry))) {
+        if (typeof entry.takenAt === 'number' || (heldForItsRow && !arrivedAfterSettle(message, entry))) {
           return false
         }
       }

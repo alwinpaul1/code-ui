@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
+import { highestImageMarker } from './mobile-native-chat-image-transcript-markers'
 
 export type MobileNativeChatPendingMessage = {
   id: string
@@ -30,6 +31,14 @@ export type MobileNativeChatPendingMessage = {
   /** When the phone sent it, by the phone's clock. Absent on sends restored
    *  from an older build. */
   sentAt?: number
+  /** A send made before the read settled: the last row of the read it
+   *  settled on. A row after it arrived after the send; one at or before it
+   *  was already written (mobile-native-chat-draft-reconcile.ts). */
+  settledTailId?: string | null
+  /** A photo send only: the highest `[Image #N]` the transcript named when it
+   *  left the phone. Its own photos are numbered above that, so a hook copy
+   *  numbered at or below it is an older photo's (desktop-prompt-photo-copies.ts). */
+  markersBefore?: number
   /** A witnessed message only (`desk-`/`absorbed-`): when the phone stored
    *  it, by the phone's clock, so a send whose ack came after it can tell its
    *  own witness from an older message (acceptOwnSendInPending). Absent on
@@ -118,6 +127,8 @@ export type MobileNativeChatSendOrigin = {
   baselineResolved: boolean
   /** When the send left the phone, by the phone's clock. */
   sentAt?: number
+  /** The highest `[Image #N]` the transcript named then. */
+  markersBefore?: number
   /** Prompt-receipt nonces already reported when this send left the phone, so a
    *  receipt older than the send cannot later be read as its confirmation. */
   knownReceiptNonces?: ReadonlySet<string>
@@ -128,11 +139,12 @@ export type MobileNativeChatSendOrigin = {
 export function captureSendBoundary(
   messages: readonly NativeChatMessage[],
   normalizedText: string
-): Pick<MobileNativeChatSendOrigin, 'baselineOccurrences' | 'baselineTailMessageId' | 'sentAt'> {
+): Pick<MobileNativeChatSendOrigin, 'baselineOccurrences' | 'baselineTailMessageId' | 'sentAt' | 'markersBefore'> {
   return {
     baselineOccurrences: countUserTextOccurrences(messages, normalizedText),
     baselineTailMessageId: messages.at(-1)?.id ?? null,
-    sentAt: Date.now()
+    sentAt: Date.now(),
+    markersBefore: highestImageMarker(messages)
   }
 }
 
@@ -189,7 +201,8 @@ export function appendMobileNativeChatPending(
         ...(origin.baselineResolved ? {} : { sentBeforeReadSettled: true }),
         ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {}),
         ...(images?.length ? { images } : {}),
-        ...(images?.length && paths ? { imagePaths: paths } : {})
+        ...(images?.length && paths ? { imagePaths: paths } : {}),
+        ...(images?.length && origin.markersBefore ? { markersBefore: origin.markersBefore } : {})
       }
     ]
   }

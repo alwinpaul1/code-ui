@@ -44,7 +44,7 @@ import { phoneClockAllowanceMs } from './mid-turn-written-before'
 const key = (text: string) =>
   withShortSkillToken(normalizeNativeChatUserText(asPaintedPrompt(withoutPasteWrappers(text))))
 
-type PendingCopy = { id: string; text: string; images?: string[]; sentAt?: number }
+type PendingCopy = { id: string; text: string; images?: string[]; sentAt?: number; markersBefore?: number }
 
 export type HookPairing = {
   /** Pending copies that give way to the hook's timed copy of them. */
@@ -80,7 +80,7 @@ function reports(
   bound: string | undefined
 ): boolean {
   if (promptKey.length === 0) {
-    return copyKey.length === 0 && reportsPhotoCopy(prompt, item.images?.length ?? 0, item.sentAt, marginMs, bound)
+    return copyKey.length === 0 && reportsPhotoCopy(prompt, item.images?.length ?? 0, item.sentAt, marginMs, bound, item.markersBefore)
   }
   return promptKey === copyKey || (prompt.cut === true && copyKey.startsWith(promptKey))
 }

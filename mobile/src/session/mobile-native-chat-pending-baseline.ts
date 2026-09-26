@@ -78,7 +78,9 @@ export function rebaseMobileNativeChatPendingBaselines(
     if (item.baselineResolved) {
       return item
     }
-    const resolved = { ...item, baselineResolved: true }
+    // A photo send remembers the read it settled on: a row after it arrived
+    // after the send (mobile-native-chat-draft-reconcile.ts).
+    const resolved = { ...item, baselineResolved: true, ...(item.images?.length ? { settledTailId: tail } : {}) }
     // A send that captured its own tail is already drawn after it.
     if (item.baselineTailMessageId !== null) {
       return resolved

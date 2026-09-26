@@ -1,7 +1,6 @@
 import type { DesktopPrompt } from './agent-hud-beacon'
-import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
+import { imageMarkerNumbers, photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
-import { SEND_STAMP_CLOCK_ALLOWANCE_MS } from './mobile-native-chat-photo-rows'
 
 /**
  * A photo sent from the phone with no words, and Orca's hook copy of it.
@@ -17,13 +16,19 @@ import { SEND_STAMP_CLOCK_ALLOWANCE_MS } from './mobile-native-chat-photo-rows'
  * watched arrive before the send is ruled out by time, since the row that
  * carries a prompt is never timed before the prompt was taken.
  *
- * So a send keeps the first copy it pairs with, by its marker text: Claude
- * numbers photos through the session, so a desk paste later in the same turn
- * is `[Image #74]` and no longer reads as the send's (fourth review: a phone
+ * Claude numbers photos through the session, so a send's own copy is
+ * numbered above every photo the transcript named when it left the phone
+ * (`markersBefore`): a copy at or below that is an older photo's. And a send
+ * keeps the first copy it pairs with, by its marker text, so a desk paste
+ * later in the same turn is `[Image #74]` and no longer reads as the send's (fourth review: a phone
  * photo Claude took mid-turn, which never retires, hid a desk paste of as
  * many photos). RAM only: after a relaunch, a send whose own copy the phone
  * never sees again pairs with the first copy of its count it does see.
  */
+
+/** How far a phone's clock may run ahead of the desk's before a copy the
+ *  phone watched arrive just after a send reads as arriving before it. */
+const SEND_CLOCK_ALLOWANCE_MS = 5_000
 
 const bindings = new Map<string, string>()
 const BINDINGS_KEPT = 256
@@ -64,9 +69,16 @@ export function reportsPhotoCopy(
   photos: number,
   sentAt: number | undefined,
   marginMs: number,
-  bound: string | undefined
+  bound: string | undefined,
+  markersBefore?: number
 ): boolean {
   if (photos === 0 || typeof sentAt !== 'number' || photosOnlyPrompt(withoutPasteWrappers(prompt.text)) !== photos) {
+    return false
+  }
+  // Numbered at or below a photo the transcript already named when the send
+  // left: an older photo's copy, which the send met before its own arrived
+  // (sixth review: it bound to it and drew its own as "Image on Desktop").
+  if (typeof markersBefore === 'number' && imageMarkerNumbers(prompt.text).some((number) => number <= markersBefore)) {
     return false
   }
   if (bound !== undefined && bound !== photoCopyText(prompt)) {
@@ -75,6 +87,6 @@ export function reportsPhotoCopy(
   const watchedBefore =
     prompt.at !== undefined &&
     prompt.atStateStart !== true &&
-    prompt.at < sentAt - Math.max(marginMs, SEND_STAMP_CLOCK_ALLOWANCE_MS)
+    prompt.at < sentAt - Math.max(marginMs, SEND_CLOCK_ALLOWANCE_MS)
   return !watchedBefore
 }
