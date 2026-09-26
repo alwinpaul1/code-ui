@@ -7,6 +7,7 @@ import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
+import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 
 const mocks = vi.hoisted(() => ({
   reduced: false,
@@ -257,6 +258,68 @@ describe('a batch of tool calls in one run header', () => {
     }
   )
 
+  // Review of c714c9bc: "(N failed)" ends the one-line sentence, and a phone
+  // row shows about 50 characters of it. A failed SendMessage's sentence
+  // carries its message preview before the count; a described command its
+  // description. With the label withheld the row read as a clean run behind
+  // its ellipsis, the silence #21151 was ported to end.
+  it.each(['light', 'dark'] as const)(
+    'still says a SendMessage failed when its preview pushes "(1 failed)" past the ellipsis, in %s',
+    (scheme) => {
+      const failedSend: NativeChatBlock[] = [
+        SEND_MESSAGE_BY_ID_2026_09_26.call!,
+        { type: 'tool-result', output: 'No agent named a07ea6f616a8e32a1', isError: true }
+      ]
+      const { texts } = render(failedSend, scheme)
+      const sentence = texts.find((text) => text.startsWith('Messaged @'))!
+      expect(sentence.indexOf('(1 failed)')).toBeGreaterThan(50)
+      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(mark.props.children).toBe('1 failed')
+      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+    }
+  )
+
+  it.each(['light', 'dark'] as const)(
+    'still says a described command failed when its description pushes "(1 failed)" past the ellipsis, in %s',
+    (scheme) => {
+      const failedBash: NativeChatBlock[] = [
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: {
+            command: 'cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint',
+            description: 'Run the mobile regression gate: typecheck, vitest, oxlint, ratchet'
+          }
+        },
+        { type: 'tool-result', output: 'exit 1', isError: true }
+      ]
+      const { texts } = render(failedBash, scheme)
+      expect(texts).toContain('Ran Run the mobile regression gate: typecheck, vitest, oxlint, ratchet (1 failed)')
+      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(mark.props.children).toBe('1 failed')
+      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+    }
+  )
+
+  // Review of c714c9bc: one call `failed` with its error result, another
+  // `failed` with no result. The run failed twice; the sentence, counting
+  // error results, says "(1 failed)", and the label was withheld.
+  it.each(['light', 'dark'] as const)(
+    'says 2 failed when the sentence can only count 1 of them, in %s',
+    (scheme) => {
+      const mixed: NativeChatBlock[] = [
+        { type: 'tool-call', name: 'shell', input: { command: 'a' }, state: 'failed' },
+        { type: 'tool-result', output: 'exit 1', isError: true },
+        { type: 'tool-call', name: 'shell', input: { command: 'b' }, state: 'failed' }
+      ]
+      const { texts } = render(mixed, scheme)
+      expect(texts).toContain('Ran 2 commands (1 failed)')
+      const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(mark.props.children).toBe('2 failed')
+      expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 2')
+    }
+  )
+
   it('says nothing about failures on a clean run', () => {
     expect(render(LONG_RUN).texts.some((text) => text.endsWith(' failed'))).toBe(false)
     expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
@@ -447,7 +510,16 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
       expect(style.flexShrink).toBe(1)
       expect(style.flex ?? 0).toBe(0)
       expect(style.flexGrow ?? 0).toBe(0)
-      expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
+      // Its "(1 failed)" sits past the long name, behind the ellipsis, so the
+      // row says it again where it cannot be cut.
+      expect(headerOrder(tree)).toEqual([
+        'tool-run-sentence',
+        'tool-run-failed-count',
+        'tool-run-diff-chip',
+        'ChevronRight'
+      ])
+      const label = tree.root.findByProps({ testID: 'tool-run-failed-count' })
+      expect(flat(label.props.style).flexShrink ?? 0).toBe(0)
       expectPill(tree, scheme, '+15', '−0')
     }
   )

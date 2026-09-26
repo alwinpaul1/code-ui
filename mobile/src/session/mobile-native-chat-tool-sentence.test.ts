@@ -3,8 +3,10 @@ import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import {
   SEND_MESSAGE_PREVIEW_MAX,
   toolCallKind,
+  SENTENCE_FAILURE_VISIBLE_CHARS,
   toolRunSentence,
-  toolRunSentenceFailures
+  toolRunSentenceFailures,
+  toolRunSentenceShowsFailures
 } from './mobile-native-chat-tool-sentence'
 import { CREATED_A_FILE_RUN, EDITED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
 import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
@@ -288,5 +290,51 @@ describe('toolRunSentenceFailures', () => {
     const failedState: NativeChatBlock = { ...call('shell'), state: 'failed' } as NativeChatBlock
     expect(toolRunSentence([failedState])).toBe('Ran a command')
     expect(toolRunSentenceFailures([failedState])).toBe(0)
+  })
+})
+
+describe('toolRunSentenceShowsFailures', () => {
+  it('takes the Claude app\'s own row as said: every failure, early in the line', () => {
+    const blocks = [call('Bash'), result(), call('Bash'), result(true)]
+    expect(toolRunSentence(blocks)).toBe('Ran 2 commands (1 failed)')
+    expect(toolRunSentenceShowsFailures(blocks, 1)).toBe(true)
+  })
+
+  it('does not take a count that ends past the visible reach as said', () => {
+    const described: NativeChatBlock = {
+      type: 'tool-call',
+      id: 'c-desc',
+      name: 'Bash',
+      input: { command: 'x', description: 'Run the mobile regression gate: typecheck, vitest, oxlint, ratchet' }
+    }
+    const sentence = toolRunSentence([described, result(true)])
+    expect(sentence.indexOf('(1 failed)')).toBeGreaterThan(SENTENCE_FAILURE_VISIBLE_CHARS)
+    expect(toolRunSentenceShowsFailures([described, result(true)], 1)).toBe(false)
+  })
+
+  it('draws the line exactly at the reach: a count ending on it is said, one character more is not', () => {
+    // "Ran a command (1 failed)" is 24 long; a file name of the right length
+    // puts the end of the count at the reach, then one past it.
+    const read = (name: string): NativeChatBlock => ({
+      type: 'tool-call',
+      id: `c-read-${name}`,
+      name: 'Read',
+      input: { file_path: `/r/${name}` }
+    })
+    const suffix = ' (1 failed)'
+    const atReach = 'x'.repeat(SENTENCE_FAILURE_VISIBLE_CHARS - 'Read '.length - suffix.length)
+    expect(toolRunSentence([read(atReach), result(true)])).toHaveLength(SENTENCE_FAILURE_VISIBLE_CHARS)
+    expect(toolRunSentenceShowsFailures([read(atReach), result(true)], 1)).toBe(true)
+    expect(toolRunSentenceShowsFailures([read(`${atReach}y`), result(true)], 1)).toBe(false)
+  })
+
+  it('does not take a sentence that counts fewer failures than the run had as said', () => {
+    const blocks = [call('Bash'), result(true)]
+    expect(toolRunSentenceShowsFailures(blocks, 2)).toBe(false)
+  })
+
+  it('says nothing is said when the sentence states no failure at all', () => {
+    expect(toolRunSentenceShowsFailures([call('Bash'), result()], 0)).toBe(false)
+    expect(toolRunSentenceShowsFailures([], 1)).toBe(false)
   })
 })

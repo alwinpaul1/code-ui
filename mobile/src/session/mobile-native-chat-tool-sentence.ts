@@ -223,26 +223,67 @@ function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
 }
 
 /** How many failed calls `toolRunSentence` states, its "(N failed)" summed
- *  over every group. A run header uses it to leave out a second "N failed"
- *  label when the sentence already says it (2026-09-26 screenshot). */
+ *  over every group. */
 export function toolRunSentenceFailures(blocks: readonly NativeChatBlock[]): number {
-  let failed = 0
-  for (const entry of runGroups(blocks)) {
-    failed += entry.failed
-  }
-  return failed
+  return buildSentence(blocks).failed
+}
+
+/** How far into a run's one-line sentence a "(N failed)" is taken to be seen.
+ *  The Claude app's own row, "Ran 2 commands (1 failed), created a file",
+ *  ends its count at 25; "Ran 12 commands (2 failed)" at 26. 28 characters
+ *  of the row's 13 dp type is about 200 dp, which a phone row keeps beside a
+ *  "+A −R" pill and the chevron. Anything later can sit behind the ellipsis:
+ *  a SendMessage's preview or a command's description comes before its count
+ *  (review of c714c9bc: counts at 230 and 69). */
+export const SENTENCE_FAILURE_VISIBLE_CHARS = 28
+
+/** Whether the run's sentence says every failure where the row surely shows
+ *  it: it states at least `failedCallCount` failures, and its last
+ *  "(N failed)" ends within SENTENCE_FAILURE_VISIBLE_CHARS. When not, the run
+ *  header draws its own "N failed" label, or a failed run would read as a
+ *  clean one. The sentence counts error results; a call known to have failed
+ *  only from its own `failed` state is in `failedCallCount` and not in the
+ *  sentence, so a mixed run is not taken as said (review of c714c9bc). */
+export function toolRunSentenceShowsFailures(
+  blocks: readonly NativeChatBlock[],
+  failedCallCount: number
+): boolean {
+  const { failed, lastFailureEnd } = buildSentence(blocks)
+  return failed > 0 && failed >= failedCallCount && lastFailureEnd <= SENTENCE_FAILURE_VISIBLE_CHARS
 }
 
 export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
+  return buildSentence(blocks).text
+}
+
+function buildSentence(blocks: readonly NativeChatBlock[]): {
+  text: string
+  /** Failures the sentence states, summed over its groups. */
+  failed: number
+  /** Where the last "(N failed)" ends in `text`; 0 when there is none. */
+  lastFailureEnd: number
+} {
   const groups = runGroups(blocks)
   const parts: string[] = []
+  let failedTotal = 0
+  let lastFailureEnd = 0
+  let offset = 0
+  const push = (part: string, failed: number): void => {
+    offset += parts.length > 0 ? 2 : 0
+    parts.push(part)
+    offset += part.length
+    if (failed > 0) {
+      failedTotal += failed
+      lastFailureEnd = offset
+    }
+  }
   for (const entry of groups) {
     const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''
     if (entry.kind === 'message' && entry.total === 1 && entry.soleCall) {
       const detail = sendMessageDetail(entry.soleCall)
       if (detail) {
         const preview = detail.preview ? ` ${detail.preview}` : ''
-        parts.push(`messaged @${detail.to}${preview}${failed}`)
+        push(`messaged @${detail.to}${preview}${failed}`, entry.failed)
         continue
       }
     }
@@ -252,7 +293,7 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
       entry.soleCall &&
       soleCallCreatedFile(entry.soleCall, entry.soleResult)
     ) {
-      parts.push(`created a file${failed}`)
+      push(`created a file${failed}`, entry.failed)
       continue
     }
     const noun = NOUN[entry.kind]
@@ -261,11 +302,15 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
     // ran a command", 2026-09-26), described or not.
     const label = entry.kind === 'command' && groups.length > 1 ? null : entry.label
     const amount = entry.total === 1 ? (label ?? noun.one) : `${entry.total} ${noun.many}`
-    parts.push(`${noun.verb} ${amount}${failed}`)
+    push(`${noun.verb} ${amount}${failed}`, entry.failed)
   }
   if (parts.length === 0) {
-    return ''
+    return { text: '', failed: 0, lastFailureEnd: 0 }
   }
   const sentence = parts.join(', ')
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+  return {
+    text: sentence.charAt(0).toUpperCase() + sentence.slice(1),
+    failed: failedTotal,
+    lastFailureEnd
+  }
 }
