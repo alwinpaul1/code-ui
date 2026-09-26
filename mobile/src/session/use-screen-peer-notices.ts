@@ -1,14 +1,24 @@
 import { useMemo, useRef } from 'react'
 import { isTextBlock, isToolCallBlock, isToolResultBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice, type ScreenRowBody } from './screen-peer-notices'
+import {
+  LAST_LINE_EVIDENCE,
+  observeScreenPeerNotices,
+  withScreenPeerNotices,
+  type ScreenPeerNotice,
+  type ScreenRowBody
+} from './screen-peer-notices'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 const NONE: readonly ScreenPeerNotice[] = []
 
-/** A line above a row this long, read on its own, is taken as evidence: a
- *  shorter one ("session:ok", "Done.") ends many replies. */
-const LAST_LINE_EVIDENCE = 16
+type Memory = {
+  scopeKey: string | null
+  notices: readonly ScreenPeerNotice[]
+  arrivals: Arrivals
+  /** The arrival count when each notice was first seen. */
+  sighted: Map<string, number>
+}
 
 /** The words a transcript row painted: its text, a tool call's input and a
  *  tool's output, with the spaces taken out as ScreenPeerRow takes them. */
@@ -29,28 +39,47 @@ function paintedWords(message: NativeChatMessage): string[] {
 }
 
 /**
- * Whether what was painted above a screen row belongs to a row the chat
- * holds after `anchorId`: the 48 characters above it, or the line right
- * above it when that is long enough to tell. Tool calls and their output
- * count: the text above a message Claude takes mid-turn is usually a tool's
- * output, and without them a later row of the same sender was never drawn
- * (review of 2026-09-27). Read in the transcript as read (`raw`), where tool
- * rows are their own.
+ * Whether what was painted above a screen row is in one of `records`: the 48
+ * characters above it, or the line right above it when that is long enough
+ * to tell. Tool calls and their output count: the text above a message Claude
+ * takes mid-turn is usually a tool's output (review of 2026-09-27). The
+ * caller passes only records that reached the phone after the known message
+ * was first seen (arrivedAfterSighting); which records those are is the
+ * whole of the evidence.
  */
-export function paintedAfterAnchor(raw: readonly NativeChatMessage[], anchorId: string | null, row: ScreenPeerRow): boolean {
-  const anchorAt = anchorId === null ? -1 : raw.findIndex((message) => message.id === anchorId)
-  if (anchorId !== null && anchorAt === -1) {
-    return false
-  }
+export function paintedIn(records: readonly NativeChatMessage[], row: ScreenPeerRow): boolean {
   const lastLine = row.lastLine !== undefined && row.lastLine.length >= LAST_LINE_EVIDENCE ? row.lastLine : undefined
   if (row.above === undefined && lastLine === undefined) {
     return false
   }
-  return raw
-    .slice(anchorAt + 1)
-    .some((message) =>
-      paintedWords(message).some((words) => (row.above !== undefined && words.includes(row.above)) || (lastLine !== undefined && words.includes(lastLine)))
-    )
+  return records.some((message) =>
+    paintedWords(message).some((words) => (row.above !== undefined && words.includes(row.above)) || (lastLine !== undefined && words.includes(lastLine)))
+  )
+}
+
+/**
+ * When each record reached the phone, as an order: records a read appends
+ * after the ones held count up from the last; those a page of older history
+ * puts in front of them are older than everything, and so are the ones the
+ * first read held. Not the transcript's position after the notice's anchor:
+ * the anchor is the folded tail, whose id is the first record of a run the
+ * fold merged later tool records into, so tool output painted ABOVE the row
+ * before it was seen counted as painted after it, and one row drew as a new
+ * one on every read (re-review of 2026-09-27).
+ */
+type Arrivals = { order: Map<string, number>; count: number }
+
+function withArrivals(arrivals: Arrivals, raw: readonly NativeChatMessage[]): Arrivals {
+  const known = raw.reduce((last, message, index) => (arrivals.order.has(message.id) ? index : last), -1)
+  let order: Map<string, number> | null = null
+  let count = arrivals.count
+  raw.forEach((message, index) => {
+    if (!arrivals.order.has(message.id)) {
+      order ??= new Map(arrivals.order)
+      order.set(message.id, arrivals.order.size > 0 && index > known ? ++count : -1)
+    }
+  })
+  return order ? { order, count } : arrivals
 }
 
 /** The peer-message rows this chat's screen has shown, remembered for as long
@@ -73,26 +102,37 @@ export function useScreenPeerNotices(
   /** Words other sources carried for those rows. */
   bodies?: readonly ScreenRowBody[],
   /** The transcript as read, tool rows included: what the text above a row
-   *  is looked up in (paintedAfterAnchor). */
+   *  is looked up in (paintedIn), and whose arrival order says which records
+   *  came after a row was first seen. */
   raw: readonly NativeChatMessage[] = folded
 ): NativeChatMessage[] {
-  const memory = useRef<{ scopeKey: string | null; notices: readonly ScreenPeerNotice[] }>({ scopeKey, notices: NONE })
+  const empty = (): Memory => ({ scopeKey, notices: NONE, arrivals: { order: new Map(), count: 0 }, sighted: new Map() })
+  const memory = useRef<Memory>(empty())
   if (memory.current.scopeKey !== scopeKey) {
-    memory.current = { scopeKey, notices: NONE }
+    memory.current = empty()
   }
   const tail = folded.findLast((message) => agentMessageOf(message) === null)
   const drawnTail = folded[folded.length - 1]
-  memory.current = {
-    scopeKey,
-    notices: observeScreenPeerNotices(
-      memory.current.notices,
-      rows,
-      tail?.id ?? null,
-      tail?.timestamp ?? 0,
-      drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined,
-      (notice, row) => paintedAfterAnchor(raw, notice.anchorId, row)
-    )
+  const arrivals = withArrivals(memory.current.arrivals, raw)
+  const sighted = memory.current.sighted
+  /** The records that reached the phone after this notice was first seen. */
+  const arrivedAfterSighting = (notice: ScreenPeerNotice) => {
+    const mark = sighted.get(notice.id)
+    return mark === undefined ? [] : raw.filter((message) => (arrivals.order.get(message.id) ?? -1) > mark)
   }
-  const notices = memory.current.notices
+  const notices = observeScreenPeerNotices(
+    memory.current.notices,
+    rows,
+    tail?.id ?? null,
+    tail?.timestamp ?? 0,
+    drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined,
+    (notice, row) => paintedIn(arrivedAfterSighting(notice), row)
+  )
+  for (const notice of notices) {
+    if (!sighted.has(notice.id)) {
+      sighted.set(notice.id, arrivals.count)
+    }
+  }
+  memory.current = { scopeKey, notices, arrivals, sighted }
   return useMemo(() => withScreenPeerNotices(folded, notices, { subagentRows, bodies }), [bodies, folded, notices, subagentRows])
 }
