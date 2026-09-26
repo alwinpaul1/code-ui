@@ -1,4 +1,4 @@
-import { createElement, Fragment } from 'react'
+import { createElement, Fragment, useImperativeHandle, type Ref } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -12,7 +12,9 @@ const fakes = vi.hoisted(() => ({
   client: null as RpcClient | null,
   lastConnectedAt: 1000 as number | null,
   /** The blur half of the screen's focus effect, captured so a test can blur. */
-  blur: null as (() => void) | null
+  blur: null as (() => void) | null,
+  /** Where the viewer tells its list to sit. */
+  scrollToOffset: vi.fn()
 }))
 
 vi.mock('expo-router', () => ({
@@ -24,6 +26,8 @@ vi.mock('expo-router', () => ({
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  // The list's scroll owner listens for the app losing its touch (use-app-interruptions).
+  AppState: { addEventListener: () => ({ remove: () => {} }) },
   Modal: 'Modal',
   Pressable: 'Pressable',
   StatusBar: 'StatusBar',
@@ -43,28 +47,35 @@ vi.mock('react-native-reanimated', () => ({
   withSpring: (to: number) => to
 }))
 vi.mock('lucide-react-native', () => ({
+  ArrowDown: 'ArrowDown',
   ChevronLeft: 'ChevronLeft',
   Diamond: 'Diamond'
 }))
 // The list is a plain map here: what is under test is what the viewer asks
 // the host for and what it says about the answer, not FlashList's windowing.
+// Every other prop is kept on the element, so a test can read how the viewer
+// configured the list, and the ref answers the one command the viewer gives.
 vi.mock('@shopify/flash-list', () => ({
   FlashList: ({
     data,
     renderItem,
     ListHeaderComponent,
     ListFooterComponent,
-    ListEmptyComponent
+    ListEmptyComponent,
+    ref,
+    ...rest
   }: {
     data: NativeChatMessage[]
     renderItem: (args: { item: NativeChatMessage; index: number }) => unknown
     ListHeaderComponent?: unknown
     ListFooterComponent?: unknown
     ListEmptyComponent?: unknown
-  }) =>
-    createElement(
+    ref?: Ref<unknown>
+  }) => {
+    useImperativeHandle(ref, () => ({ scrollToOffset: fakes.scrollToOffset }))
+    return createElement(
       'FlashList',
-      null,
+      rest,
       ListHeaderComponent as never,
       data.length === 0
         ? (ListEmptyComponent as never)
@@ -73,6 +84,7 @@ vi.mock('@shopify/flash-list', () => ({
           ),
       ListFooterComponent as never
     )
+  }
 }))
 // The row itself is the parent chat's; here it only has to prove it was
 // handed the subagent's turn.
@@ -91,6 +103,7 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
 
 import { MobileSubagentTranscriptModal, MobileSubagentTranscriptScreen } from './MobileSubagentTranscriptModal'
 import {
+  followSubagentTranscriptRunning,
   openSubagentTranscript,
   peekSubagentTranscript,
   resetSubagentTranscriptForTests
@@ -172,12 +185,29 @@ describe('the subagent transcript viewer', () => {
     sendRequest = vi.fn(async () => ({ ok: true, result: { messages: [], hasMore: false } }))
     fakes.client = { subscribe, sendRequest, getState: () => 'connected' } as unknown as RpcClient
     fakes.lastConnectedAt = 1000
+    fakes.scrollToOffset.mockReset()
+    frames = []
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => frames.push(callback))
+    vi.stubGlobal('cancelAnimationFrame', (handle: number) => {
+      frames[handle - 1] = () => {}
+    })
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.unstubAllGlobals()
   })
+
+  let frames: (() => void)[] = []
+
+  function list(): { props: Record<string, (...args: unknown[]) => void> & Record<string, unknown> } {
+    return renderer!.root.findByType('FlashList' as never)
+  }
+
+  function rows(): string[] {
+    return readTree(renderer!).texts.filter((text) => text.startsWith('row:'))
+  }
 
   async function mount(scheme: 'light' | 'dark' = 'light', req = request()): Promise<void> {
     await act(async () => {
@@ -238,6 +268,73 @@ describe('the subagent transcript viewer', () => {
     ])
     expect(types).not.toContain('TextInput')
     expect(texts).not.toContain('Nothing written yet')
+  })
+
+  // 2026-09-26, the user, two running subagents (Claude Code 2.1.283): "Subagents
+  // not showing full transcript and not even live." Each viewer stopped at the
+  // turns it opened on while the agent kept writing. The rows did arrive; the
+  // list hid them. FlashList holds the rows in view in place by default
+  // (`maintainVisibleContentPosition`, "enabled by default" in FlashListProps),
+  // and in this inverted list the newest row is index 0, so every row the agent
+  // wrote after the first paint was placed below the bottom edge while the
+  // screen kept showing the old last row.
+  it("keeps a running subagent's newest turns in view as it writes them", async () => {
+    await mount()
+    act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message('a1')], hasMore: false }))
+    // At the live edge nothing may hold the old rows in place.
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+
+    act(() => emit({ type: 'appended', messages: [message('a2')] }))
+    expect(rows()).toEqual(['row:a2:assistant', 'row:a1:assistant', 'row:u1:user'])
+    act(() => list().props.onContentSizeChange(400, 900))
+    expect(fakes.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false })
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+  })
+
+  it("holds the reader's place in history while the agent writes, and takes them back on request", async () => {
+    await mount()
+    act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message('a1')], hasMore: false }))
+    act(() => list().props.onScrollBeginDrag())
+    // Up in history, the rows the reader is on must stay put as new ones land.
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
+
+    act(() => emit({ type: 'appended', messages: [message('a2')] }))
+    act(() => list().props.onContentSizeChange(400, 900))
+    expect(fakes.scrollToOffset).not.toHaveBeenCalled()
+
+    await press(renderer!, 'Scroll to latest')
+    expect(fakes.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: true })
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+  })
+
+  it('pages older turns in at the top of a short transcript without leaving the live edge', async () => {
+    await mount()
+    act(() => emit({ type: 'snapshot', messages: [message('a1')], hasMore: true, beforeOffset: 500 }))
+    // Every loaded row fits on one screen, so FlashList reports the far end at once.
+    act(() => list().props.onEndReached())
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
+  })
+
+  it('draws the way back to the newest turn from whichever theme is on', async () => {
+    const jumpColors = async (scheme: 'light' | 'dark'): Promise<unknown[]> => {
+      await mount(scheme)
+      act(() => emit({ type: 'snapshot', messages: [message('a1')], hasMore: false }))
+      act(() => list().props.onScrollBeginDrag())
+      const icon = renderer!.root.findByType('ArrowDown' as never)
+      const fab = renderer!.root
+        .findAllByType('Pressable' as never)
+        .find((node) => node.props.accessibilityLabel === 'Scroll to latest')!
+      const drawn = [
+        icon.props.color,
+        [fab.props.style].flat(3).find((entry) => entry?.backgroundColor)?.backgroundColor
+      ]
+      act(() => renderer?.unmount())
+      renderer = null
+      return drawn
+    }
+    expect(await jumpColors('light')).toEqual([lightColors.text, lightColors.bgPanel])
+    expect(await jumpColors('dark')).toEqual([darkColors.text, darkColors.bgPanel])
   })
 
   it('names a finished agent as finished in the header', async () => {
@@ -327,6 +424,34 @@ describe('the subagent transcript viewer', () => {
     })
     expect(peekSubagentTranscript()).toBeNull()
     expect(renderer!.root.findAllByType('Modal')).toHaveLength(0)
+  })
+
+  it('turns its header to Finished when the roster does, keeping the one subscription', async () => {
+    resetSubagentTranscriptForTests()
+    openSubagentTranscript(request().target, true)
+    await act(async () => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileSubagentTranscriptModal, { hostId: 'host-a', worktreeId: 'wt-a' })
+        )
+      )
+    })
+    expect(readTree(renderer!).texts).toContain('Subagent · Running')
+    // Another agent's news is not this one's.
+    act(() => followSubagentTranscriptRunning(new Set(['a68211cb9358e29c3', 'someone-else'])))
+    expect(readTree(renderer!).texts).toContain('Subagent · Running')
+    act(() => followSubagentTranscriptRunning(new Set(['someone-else'])))
+    expect(readTree(renderer!).texts).toContain('Subagent · Finished')
+    expect(subscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves nothing open when the roster moves with no viewer up', () => {
+    resetSubagentTranscriptForTests()
+    followSubagentTranscriptRunning(new Set())
+    followSubagentTranscriptRunning(new Set(['a68211cb9358e29c3']))
+    expect(peekSubagentTranscript()).toBeNull()
   })
 
   it('does not reopen on the next screen after the one it was opened on unmounts', async () => {

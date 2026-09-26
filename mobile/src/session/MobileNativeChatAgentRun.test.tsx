@@ -198,6 +198,34 @@ describe('the conversation row for five agents launched at once', () => {
     })
   })
 
+  // 2026-09-26: the viewer's header said "Subagent · Running" from the moment it
+  // opened, whatever the agent did next; the roster's word was read once, at
+  // the tap. The tab's roster is the one reader of what runs, so it tells the
+  // open viewer when its agent leaves (or rejoins) the running set.
+  it('tells an open transcript its agent finished once the roster no longer runs it', async () => {
+    const [keep, ...others] = PARALLEL_AGENTS
+    const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true })
+    await press(tree, /Show the agents/)
+    await press(tree, `Ran agent ${keep.description}`)
+    const opened = peekSubagentTranscript()
+    expect(opened?.running).toBe(true)
+
+    const withRoster = (status: AgentStatusEntry) => (
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatTasksProvider messages={parallelAgentMessages()} agent="claude" agentWorking agentStatus={status}>
+          <MobileNativeChatMessage message={turn()} />
+        </MobileNativeChatTasksProvider>
+      </ThemeProvider>
+    )
+    await act(async () => tree.update(withRoster(statusWith(others))))
+    expect(peekSubagentTranscript()?.running).toBe(false)
+    // The same target, so the open viewer keeps its subscription.
+    expect(peekSubagentTranscript()?.target).toBe(opened?.target)
+
+    await act(async () => tree.update(withRoster(statusWith(PARALLEL_AGENTS))))
+    expect(peekSubagentTranscript()?.running).toBe(true)
+  })
+
   it('paints from the theme in light and dark', async () => {
     const light = colorsOf(await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, scheme: 'light' }))
     act(() => renderer?.unmount())
