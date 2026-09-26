@@ -20,11 +20,24 @@ import type { DesktopPrompt } from './agent-hud-beacon'
  * AGENT_STATUS_MAX_FIELD_LENGTH characters (a longer prompt arrives cut,
  * and is drawn as cut), and the queue itself is not in the status, so the
  * queue box reads the screen alone.
+ *
+ * Nor is the prompt always this turn's. It is the last one a PERSON sent:
+ * Orca keeps it through a turn that a message from another session or a
+ * teammate starts (`resolvePrompt` keeps the cached prompt for a
+ * harness-injected turn, src/shared/agent-hook-listener/prompt-fields.ts) and
+ * through the `done` that ends a turn. Session 76ba8f2f's tab still carried
+ * a prompt from 13:20 at 23:36, four turns later (2026-09-26).
  */
 export type AgentStatusPromptSource = {
   prompt?: string | null
   updatedAt?: number | null
   stateStartedAt?: number | null
+  /** The pane's state (`working`, `waiting`, `blocked`, `done`), and the
+   *  states before it, one entry per change (Orca's agent-status store): what
+   *  says whether the state began with `prompt`. Every status a host sends
+   *  has a state; only a fixture leaves it out. */
+  state?: string | null
+  stateHistory?: readonly { state: string; prompt?: string }[] | null
   /** The session the row's last hook event came from (Claude `session_id`). */
   providerSession?: { id: string } | null
 } | null
@@ -32,16 +45,29 @@ export type AgentStatusPromptSource = {
 export type AgentStatusPromptState = {
   /** The session the prompts belong to; a new session starts over. */
   sessionKey: string | null
+  /** Whether a status of this session has been read. The prompt on the first
+   *  one was there before the chat looked; one that changes after it arrived
+   *  while the chat watched. A missing status is not a reading. */
+  read: boolean
   /** The last prompt text seen, so a status ping that repeats it (tool
    *  events keep the field) does not become a second bubble. */
   last: string | null
   prompts: readonly DesktopPrompt[]
+  /** The prompts it held back (whyNotTimedByState). The beacon's copy of one
+   *  is held back with it: its row is not loaded either (desktop-prompt-merge.ts). */
+  heldBack: readonly string[]
+  /** The line the chat logs for the last prompt it held back, or null when
+   *  none was. */
+  withheld: string | null
 }
 
 export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
   sessionKey: null,
+  read: false,
   last: null,
-  prompts: []
+  prompts: [],
+  heldBack: [],
+  withheld: null
 }
 
 /** Bounded: what the chat can still anchor; older ones are in the transcript. */
@@ -56,8 +82,7 @@ export function observeAgentStatusPrompt(
   sessionKey: string | null,
   status: AgentStatusPromptSource | undefined
 ): AgentStatusPromptState {
-  const firstSight = sessionKey !== state.sessionKey
-  if (firstSight) {
+  if (sessionKey !== state.sessionKey) {
     // The prompts start over; the last TEXT seen does not. The pane caches
     // `prompt` across events, and a hook from another session on the same
     // pane flips `providerSession` there and back — a nested `claude` started
@@ -65,10 +90,16 @@ export function observeAgentStatusPrompt(
     // posts as this pane (2026-09-19). On the way back the row carried that
     // session's text with this session's id, and a reset to null took it as a
     // new prompt of this chat.
-    state = { sessionKey, last: state.last, prompts: [] }
+    state = { sessionKey, read: false, last: state.last, prompts: [], heldBack: [], withheld: null }
   }
   if (sessionKey === null) {
     return state
+  }
+  // The chat can mount before the tab's status reaches it; the prompt on the
+  // first status it does read was already there all the same.
+  const found = !state.read && status != null
+  if (found) {
+    state = { ...state, read: true }
   }
   const text = typeof status?.prompt === 'string' ? status.prompt : ''
   if (text.trim().length === 0) {
@@ -92,14 +123,28 @@ export function observeAgentStatusPrompt(
   if (isKnownHarnessInjectedUserTurnText(text)) {
     return { ...state, last: text }
   }
+  // A prompt whose time the status does not hold is not drawn: placed by a
+  // time that is not its own, it sits in another turn (session 76ba8f2f,
+  // 2026-09-26: under an answer four turns after it). Its own transcript row
+  // draws it where it belongs, when the page that holds it loads.
+  const heldBack = whyNotTimedByState(status, found)
+  if (heldBack !== null) {
+    return {
+      ...state,
+      last: text,
+      heldBack: [...state.heldBack, text].slice(-PROMPT_CAP),
+      withheld: `[desk-prompt] not drawn: "${preview(text)}" was read on a ${status?.state} pane (${heldBack}); the status holds no time for it, so only its own transcript row places it`
+    }
+  }
   // `updatedAt` is the hook's clock and is the prompt's time only while the
   // phone is watching as the prompt arrives. For the first status a session
   // shows the phone — a tab opened an hour into its turn — it is the last tool
   // ping, and a prompt timed by it anchored at the tail under the tool fold
-  // (device, 2026-09-20). The pane's current state began when its prompt was
-  // taken, so that is the prompt's time at first sight.
+  // (device, 2026-09-20). A working run the prompt started began when it was
+  // taken, so that run's start is its time at first sight; any other state
+  // began after it (whyNotTimedByState).
   const byStateStart =
-    firstSight && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt)
+    found && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt)
   const clock = byStateStart ? status.stateStartedAt : status?.updatedAt
   const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
   const prompt: DesktopPrompt = {
@@ -115,5 +160,50 @@ export function observeAgentStatusPrompt(
     seenAt: Date.now()
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
-  return { sessionKey, last: text, prompts }
+  return { ...state, last: text, prompts }
+}
+
+/**
+ * Why the pane's current state did not begin when its prompt was taken, or
+ * null when nothing on the status says so.
+ *
+ * A person's prompt starts a `working` run, and Orca moves `stateStartedAt`
+ * on every state change (its agent-status store), so any other state began
+ * after the prompt: `done` when the turn ended, `waiting` or `blocked` when
+ * the agent stopped to ask. The same holds for a prompt the chat watches
+ * change on such a pane: a submission makes the pane `working`, and a turn
+ * short enough to reach the phone already `done` began at an idle prompt,
+ * which writes the prompt as its own row.
+ *
+ * Found on the chat's first reading, a working run began with the prompt only
+ * if the state before it did not carry it too. After `waiting` or `blocked`
+ * the run resumed. After a `done` of the same prompt, something that keeps the
+ * cached prompt started it — a teammate's or another session's message
+ * (76ba8f2f, 14:27:03) — or the same words were sent again, which the status
+ * cannot tell apart.
+ */
+function whyNotTimedByState(status: AgentStatusPromptSource | undefined, found: boolean): string | null {
+  const state = status?.state
+  if (typeof state !== 'string') {
+    return null
+  }
+  if (state !== 'working') {
+    return state === 'done' ? 'its turn has ended' : 'the agent has stopped to ask'
+  }
+  if (!found) {
+    return null
+  }
+  const before = status?.stateHistory?.at(-1)
+  if (before?.state === 'waiting' || before?.state === 'blocked') {
+    return `the run went on after the agent was ${before.state}`
+  }
+  if (before?.state === 'done' && before.prompt === status?.prompt) {
+    return 'the run was started by something that kept the prompt of the turn before'
+  }
+  return null
+}
+
+/** The start of a prompt, for the log line. */
+function preview(text: string): string {
+  return text.length > 32 ? `${text.slice(0, 32)}…` : text
 }

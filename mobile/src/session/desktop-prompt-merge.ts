@@ -24,10 +24,15 @@ import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
  */
 export function mergeDesktopPrompts(
   status: readonly DesktopPrompt[],
-  beacon: readonly DesktopPrompt[]
+  beacon: readonly DesktopPrompt[],
+  /** Prompts the status read and held back, their time unknown
+   *  (agent-status-prompts.ts). The beacon's copy of one goes too: it has
+   *  only the row it was typed after, and while that row is on a page not
+   *  loaded it waits for it at the tail (2026-09-26). */
+  heldBack: readonly string[] = []
 ): DesktopPrompt[] {
   const merged: DesktopPrompt[] = [...status]
-  const seen = new Set(status.map((prompt) => prompt.text))
+  const seen = new Set([...status.map((prompt) => prompt.text), ...heldBack])
   for (const prompt of beacon) {
     if (!seen.has(prompt.text) && !isSubagentMessagePrompt(prompt)) {
       merged.push(prompt)

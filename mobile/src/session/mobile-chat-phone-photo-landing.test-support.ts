@@ -120,6 +120,9 @@ export type Tick = {
   peerRows?: ScreenPeerRow[]
   /** Whether the tab was launched with the prompt hook. */
   promptHook?: boolean
+  /** Rows older than `messages` exist and are not loaded (the session's
+   *  `hasMore`): the chat holds a tail page. */
+  hasMore?: boolean
 }
 export type Drafts = ReturnType<typeof useMobileNativeChatDrafts>
 /** A user bubble as the list draws it: `P` a picture, `D` the "Image on
@@ -196,7 +199,8 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatSession: {
         messages: tick.messages,
         status: tick.loading ? 'loading' : 'ready',
-        transcriptLoading: tick.loading ?? false
+        transcriptLoading: tick.loading ?? false,
+        hasMore: tick.hasMore ?? false
       },
       nativeChatAgent: tick.agent ?? 'claude',
       nativeChatStructured: false,

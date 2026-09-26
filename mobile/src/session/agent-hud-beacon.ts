@@ -49,8 +49,10 @@ export type AgentHudBeaconLimit = {
 /** `at`: epoch ms of the submission, when the source knows it (the transcript
  *  does; the beacon does not) — places the echo after the last row written
  *  before it when `anchorId` names a row the phone never holds. */
-/** `atStateStart`: `at` is when the pane's state began, read at first sight of
- *  the tab status (agent-status-prompts.ts), which can be before the prompt.
+/** `atStateStart`: `at` is when the pane's working run began, read at first
+ *  sight of the tab status (agent-status-prompts.ts), which can be before the
+ *  prompt (one sent mid-run). One found in any other state, or in a run it
+ *  did not start, is held back instead.
  *  `seenAt`: when the phone first read a status prompt, by the phone's clock. */
 export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; seenAt?: number }
 
