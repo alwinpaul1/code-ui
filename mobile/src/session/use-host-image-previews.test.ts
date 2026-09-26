@@ -62,6 +62,32 @@ describe('collectHostImagePaths', () => {
   })
 })
 
+// Review, 2026-09-26: the chat draws each photo on the row its own companion
+// trails, and the host is asked for each path on that same row. The two used
+// to fold differently at a window that starts on the previous message's
+// companion, so a desk message's thumbnail was the message before's.
+describe('collectHostImagePaths, folded as the chat draws', () => {
+  const row = (id: string, text: string): NativeChatMessage => ({
+    id,
+    role: 'user',
+    blocks: [{ type: 'text', text }],
+    timestamp: null,
+    source: 'transcript'
+  })
+  const source = (id: string, file: string) => row(id, `[Image: source: /var/folders/0y/x/T/${file}.png]`)
+
+  it('asks for each loaded message’s own photo when the window starts on the previous message’s companion', () => {
+    const paths = collectHostImagePaths(
+      [source('c0', 'zero'), row('p1', '[Image #1] second of two'), source('c1', 'one')],
+      undefined
+    )
+    expect(paths).toEqual({
+      c0: ['/var/folders/0y/x/T/zero.png'],
+      p1: ['/var/folders/0y/x/T/one.png']
+    })
+  })
+})
+
 describe('mergeImagePreviews', () => {
   it('keeps local previews over host thumbnails for the same message', () => {
     expect(

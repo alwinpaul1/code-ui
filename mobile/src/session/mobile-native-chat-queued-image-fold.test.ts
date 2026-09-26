@@ -163,6 +163,7 @@ describe('queued-message images fold into their prompt', () => {
 
   it('still moves a stranded run past a prompt that already has its own photos in front of it', () => {
     const out = pipeline([
+      assistant('ran'),
       user('img0', '[Image: source: /t/1.png]'),
       user('p0', '[Image #1] mine'),
       user('img1', '[Image: source: /t/2.png]'),
@@ -170,9 +171,46 @@ describe('queued-message images fold into their prompt', () => {
       user('queued', '[Image #2] queued')
     ])
     expect(summary(out)).toEqual([
+      { id: 'ran', role: 'assistant', types: ['tool-call'] },
       { id: 'p0', role: 'user', types: ['image-ref', 'text'] },
       { id: 'work', role: 'assistant', types: ['tool-call'] },
       { id: 'queued', role: 'user', types: ['image-ref', 'text'] }
+    ])
+  })
+
+  // Review, 2026-09-26: the page between two photo messages written back to
+  // back can fall between the first prompt and its companion. The window then
+  // starts with that companion, and the second prompt, which has its own
+  // companion after it, drew the first message's photo.
+  it('keeps each loaded message’s own photo when the window starts on the previous message’s companion', () => {
+    const out = pipeline([
+      user('c0', '[Image: source: /t/zero.png]'),
+      user('p1', '[Image #1] second of two back to back'),
+      user('c1', '[Image: source: /t/one.png]'),
+      assistant('reply'),
+      user('p2', '[Image #2] a later photo message'),
+      user('c2', '[Image: source: /t/two.png]')
+    ])
+    const paths = (id: string) =>
+      out.find((message) => message.id === id)!.blocks.flatMap((block) => (block.type === 'image-ref' ? [block.path] : []))
+    expect(out.map((message) => message.id)).toEqual(['c0', 'p1', 'reply', 'p2'])
+    expect([paths('c0'), paths('p1'), paths('p2')]).toEqual([['/t/zero.png'], ['/t/one.png'], ['/t/two.png']])
+  })
+
+  // The price of the rule above, taken knowingly: in the older order a queued
+  // message's companion came first, and when the window starts on it, it is
+  // now left where it is. 616 of the 617 companion runs on this machine trail
+  // a prompt, and none is in the older order (review, 2026-09-26).
+  it('leaves a photo the window starts with where it is, rather than pull it down to a later prompt', () => {
+    const out = pipeline([
+      user('cq', '[Image: source: /t/queued.png]'),
+      assistant('work'),
+      user('q1', '[Image #9] queued with a photo')
+    ])
+    expect(summary(out)).toEqual([
+      { id: 'cq', role: 'user', types: ['image-ref'] },
+      { id: 'work', role: 'assistant', types: ['tool-call'] },
+      { id: 'q1', role: 'user', types: ['text'] }
     ])
   })
 

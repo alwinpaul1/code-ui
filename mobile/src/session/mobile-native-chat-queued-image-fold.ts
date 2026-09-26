@@ -1,5 +1,8 @@
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { isImageSourceUserTurn } from '../../../src/shared/native-chat-image-transcript-markers'
+import {
+  imageSourcePathsFromMessage,
+  isImageSourceUserTurn
+} from '../../../src/shared/native-chat-image-transcript-markers'
 
 const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/g
 const IMAGE_SOURCE_MARKER = /^\s*\[Image:\s*source:/m
@@ -67,11 +70,46 @@ export function trailingCompanionOwner(
     if (behind === at - 1) {
       return owner!
     }
+    // The loaded window starts with that run: it trails a prompt on the page
+    // before, as foldQueuedImageTurns reads it, not the prompt after it.
+    if (behind < 0) {
+      return owner!
+    }
     if (!isPhotoPrompt(rows[behind], source)) {
       return null
     }
     at = behind
   }
+}
+
+/**
+ * A run of companions the loaded window starts with trails a prompt on the
+ * page before it, so it is never moved to the next photo message (review,
+ * 2026-09-26). Nor may the vendored normalizer fold it forward into a prompt
+ * right after it when that prompt has a companion of its own after it: a
+ * prompt has one, and two photo messages written back to back, cut by the
+ * page between the first and its companion, drew the second with the first
+ * one's photo. Such a run is handed on as its own photos, already folded. A
+ * run followed by a prompt with no companion after it is left to the
+ * normalizer, the older order. Returns the index after the run.
+ */
+function keepWindowStartRun(messages: readonly NativeChatMessage[], out: NativeChatMessage[]): number {
+  const source = messages[0]!.source
+  let end = 0
+  while (end < messages.length && messages[end]!.source === source && isImageSourceUserTurn(messages[end]!)) {
+    end += 1
+  }
+  const next = messages[end]
+  const nextHasOwn =
+    isPhotoPrompt(next, source) && !!messages[end + 1] && messages[end + 1]!.source === source && isImageSourceUserTurn(messages[end + 1]!)
+  for (const row of messages.slice(0, end)) {
+    out.push(
+      nextHasOwn
+        ? { ...row, blocks: imageSourcePathsFromMessage(row).map((path) => ({ type: 'image-ref' as const, path })) }
+        : row
+    )
+  }
+  return end
 }
 
 /** The index of the row before the run of companions that ends at `end`. */
@@ -117,9 +155,11 @@ export function foldQueuedImageTurns(messages: NativeChatMessage[]): NativeChatM
       continue
     }
     const message = messages[index]!
-    // A run the loaded window starts with trails a prompt on the page before
-    // it, and is not the next photo message's (review, 2026-09-26).
-    if (!isImageSourceUserTurn(message) || out.length === 0 || trailingCompanionOwner(out, out.length, message)) {
+    if (isImageSourceUserTurn(message) && out.length === 0) {
+      index = keepWindowStartRun(messages, out) - 1
+      continue
+    }
+    if (!isImageSourceUserTurn(message) || trailingCompanionOwner(out, out.length, message)) {
       out.push(message)
       continue
     }
