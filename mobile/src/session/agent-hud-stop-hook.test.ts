@@ -105,8 +105,10 @@ describe('what the agent itself says is still running', () => {
     // each titled by a bare id and called a Shell. The Stop payload lists a
     // teammate with `status: running` for as long as it exists (the four ids
     // below are the ones the beacon carried; `TaskOutput` named their type
-    // `in_process_teammate`). A teammate is a peer to talk to, not a task
-    // that finishes; the row is for work that will report back.
+    // `in_process_teammate`, the internal name — the payload itself writes
+    // `teammate`, see agent-hud-task-shapes.test.ts). A teammate is a peer to
+    // talk to, not a task that finishes; the row is for work that will report
+    // back.
     const tty = join(process.env.TMPDIR ?? '/tmp', `cuihud-stop-teammates-${process.pid}.txt`)
     execFileSync('sh', ['-c', `: > ${tty}`])
 

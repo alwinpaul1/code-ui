@@ -100,6 +100,49 @@ describe("an agent's run is judged by the roster, not by a list of shells", () =
   })
 })
 
+describe("an agent's own notification against a roster row", () => {
+  // Orca re-creates a one-shot agent's row on every SubagentStart, so a
+  // resumed agent's row starts after the notification of its previous run. A
+  // row that started before the notification is the run the notification
+  // ended: a phantom Orca kept because it missed the SubagentStop (it was down
+  // when the agent finished, and restored the row from its snapshot).
+  const notified = (id: string, iso: string) => ({
+    id: `note-${id}`,
+    role: 'user' as const,
+    timestamp: Date.parse(iso),
+    source: 'transcript' as const,
+    blocks: [
+      {
+        type: 'text' as const,
+        text: `<task-notification>\n<task-id>${id}</task-id>\n<status>completed</status>\n<summary>Agent "[description of ${id}]" finished</summary>\n</task-notification>`
+      }
+    ]
+  })
+  const launched = ownAgentLaunch(OWN_AGENTS.abe6)
+  const later = Date.parse('2026-09-26T00:40:00.000Z')
+
+  it('retires an agent whose notification came after its roster row started', () => {
+    const phantom: BackgroundTaskHostStatus = {
+      state: 'working',
+      subagents: [rosterRow(OWN_AGENTS.abe6.id, Date.parse(OWN_AGENTS.abe6.result))]
+    }
+    const tasks = deriveBackgroundTasks([...launched, notified(OWN_AGENTS.abe6.id, '2026-09-26T00:30:00.000Z')], later, phantom)
+
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([[OWN_AGENTS.abe6.id, 'completed']])
+  })
+
+  it('keeps an agent running whose row started after its last notification', () => {
+    const resumed: BackgroundTaskHostStatus = {
+      state: 'working',
+      subagents: [rosterRow(OWN_AGENTS.abe6.id, Date.parse('2026-09-26T00:35:00.000Z'))]
+    }
+    const tasks = deriveBackgroundTasks([...launched, notified(OWN_AGENTS.abe6.id, '2026-09-26T00:30:00.000Z')], later, resumed)
+
+    expect(tasks.running.map((task) => task.id)).toEqual([OWN_AGENTS.abe6.id])
+  })
+})
+
 describe('a question the lead asked does not end the work it launched before', () => {
   // The pane's working start moves whenever its state changes, `waiting`
   // included: the lead's question at 23:23:06 and its answer at 23:24:06
@@ -127,13 +170,13 @@ describe('a question the lead asked does not end the work it launched before', (
     expect(tasks.running.map((task) => task.id)).toEqual([OWN_AGENTS.a776.id, 'bhll6so5h'])
   })
 
-  it("keeps a shell the agent's own footer still counts on a tab with no beacon", () => {
-    // With no subagent running every shell in the footer is the lead's, so
-    // its count speaks for bhll6so5h.
-    const shellOnly = backgroundShellLaunch('bhll6so5h', '2026-09-25T23:14:47.900Z', '2026-09-25T23:14:48.431Z')
-    const tasks = deriveBackgroundTasks(shellOnly, atAnswer, { ...answered, subagents: [] }, { onScreenShellCount: 1 })
+  it('keeps a shell launched before the question running on a tab with no beacon, when the phone saw the run begin', () => {
+    // The phone watched the pane go working at 21:00, waiting at 23:23:06 and
+    // working again at 23:24:06, so the run everything since 21:00 belongs to
+    // did not end at the question (use-active-tab-task-report.ts).
+    const tasks = deriveBackgroundTasks(beforeQuestion, atAnswer, answered, { runBoundaryAt: Date.parse('2026-09-25T21:00:00.000Z') })
 
-    expect(tasks.running.map((task) => task.id)).toEqual(['bhll6so5h'])
+    expect(tasks.running.map((task) => task.id)).toEqual([OWN_AGENTS.a776.id, 'bhll6so5h'])
   })
 
   it("does not keep a finished shell running on a footer its subagents' shells fill", () => {

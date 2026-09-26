@@ -124,12 +124,20 @@ describe('what the running-task count keeps when a source looks away', () => {
 
   it('keeps counting the lead’s agent after its launch scrolls out, and never the reviewer it starts', () => {
     // The first look comes before abe6's SubagentStart reached the roster.
-    show({ messages: ownAgentLaunch(OWN_AGENTS.abe6), agentStatus: status([]) })
+    const launched = ownAgentLaunch(OWN_AGENTS.abe6)
+    show({ messages: launched, agentStatus: status([]) })
+    // a3a4 starts at 23:59:37 while the window still reaches back past it and
+    // shows no launch of it: a reviewer.
+    const covered = show({
+      messages: [...launched, leadTurn('2026-09-25T23:59:50.000Z')],
+      agentStatus: status([own(OWN_AGENTS.abe6), reviewer(NESTED_REVIEWERS.a3a4)])
+    })
 
     const later = show({
       messages: filler(3, '2026-09-26T00:10:00.000Z'),
       agentStatus: status([own(OWN_AGENTS.abe6), reviewer(NESTED_REVIEWERS.a3a4)])
     })
+    expect(covered).toEqual([OWN_AGENTS.abe6.id])
     expect(later).toEqual([OWN_AGENTS.abe6.id])
   })
 
@@ -164,8 +172,10 @@ describe('what the running-task count keeps when a source looks away', () => {
   it('counts an agent the lead resumed with SendMessage, which no new launch names', () => {
     show({ messages: [], agentStatus: status([]) })
 
+    // The window reaches back past aba3's start (23:26:56) and shows no launch
+    // of it, so aba3 is a reviewer; acf3 has the lead's SendMessage.
     const resumed = show({
-      messages: sendMessage(OWN_AGENTS.acf3.id, '2026-09-26T00:15:00.000Z'),
+      messages: [leadTurn('2026-09-25T23:20:00.000Z'), ...sendMessage(OWN_AGENTS.acf3.id, '2026-09-26T00:15:00.000Z')],
       agentStatus: status([own(OWN_AGENTS.acf3), reviewer(NESTED_REVIEWERS.aba3)])
     })
     expect(resumed).toEqual([OWN_AGENTS.acf3.id])

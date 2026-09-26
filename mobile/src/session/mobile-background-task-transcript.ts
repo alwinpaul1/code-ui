@@ -26,6 +26,10 @@ const SHELL_MOVED = /^\s*Command did not complete[^\n]{0,120}?moved to the backg
 // ctrl+b on a running command (Claude Code 2.1.270, 2026-09-13): a third
 // shape, which left the desk at 4 shells and the phone at 2.
 const SHELL_BACKGROUNDED = /^\s*Command was manually backgrounded by user with ID:\s*([A-Za-z0-9_-]+)/
+// A command moved aside so a message queued while it ran (a phone send
+// mid-turn) can reach Claude: the fourth sentence of `qMn`, in the 2.1.280 to
+// 2.1.283 bundles. No transcript on this machine holds one yet.
+const SHELL_DELIVERED = /^\s*Command was moved to the background \(ID:\s*([A-Za-z0-9_-]+)\) so that a message/
 // `Monitor started (task biifjm40h, timeout 3000000ms). You will be notified…`
 const MONITOR_STARTED = /Monitor started \(task\s+([A-Za-z0-9_-]+)/
 const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
@@ -51,7 +55,10 @@ export type Launch = {
    *  says something else (agents, monitors). */
   label: string | null
 }
-export type Notification = { status: string; summary: string | null; at: number }
+/** `at` orders the finished list (the notification's place in the window);
+ *  `timestamp` is when Claude wrote it, null when the ending came from
+ *  somewhere with no time (a beacon id, a screen row). */
+export type Notification = { status: string; summary: string | null; at: number; timestamp: number | null }
 
 
 /** Long enough to read a real description, short enough for one phone row. */
@@ -64,7 +71,8 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
     const id =
       SHELL_STARTED.exec(output)?.[1] ??
       SHELL_MOVED.exec(output)?.[1] ??
-      SHELL_BACKGROUNDED.exec(output)?.[1]
+      SHELL_BACKGROUNDED.exec(output)?.[1] ??
+      SHELL_DELIVERED.exec(output)?.[1]
     return id
       ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: shellLabel(call.input) }
       : null
@@ -127,7 +135,8 @@ export function readString(input: unknown, key: string): string | null {
 
 export function readNotifications(
   text: string,
-  position: number
+  position: number,
+  timestamp: number | null = null
 ): { id: string; value: Notification }[] {
   if (!text.includes('<task-notification')) {
     return []
@@ -142,7 +151,7 @@ export function readNotifications(
     }
     found.push({
       id,
-      value: { status, summary: NOTIFICATION_SUMMARY.exec(body)?.[1] ?? null, at: position }
+      value: { status, summary: NOTIFICATION_SUMMARY.exec(body)?.[1] ?? null, at: position, timestamp }
     })
   }
   return found

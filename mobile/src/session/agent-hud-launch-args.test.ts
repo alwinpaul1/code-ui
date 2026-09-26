@@ -946,7 +946,8 @@ describe('the Claude Stop hook for Windows under a real PowerShell', () => {
         background_tasks: [
           { id: 'tma4w24hz', type: 'in_process_teammate', status: 'running', description: 'fable-advisor' },
           { id: 'b0q56d8gf', type: 'shell', status: 'running', description: 'Sleep for 120 seconds' },
-          { id: 'tcwll1evo', type: 'in_process_teammate', status: 'running', description: 'council-sonnet' }
+          // The type the payload really carries (the alias table, 2.1.281–2.1.283).
+          { id: 'tcwll1evo', type: 'teammate', status: 'running', description: 'council-sonnet' }
         ]
       })
     )

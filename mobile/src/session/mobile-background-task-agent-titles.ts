@@ -112,7 +112,7 @@ export function settleAgentLaunches(
       } else if (isToolResultBlock(block) && FINISHED_RUN_USAGE.test(block.output)) {
         for (const launch of launches.values()) {
           if (launch.kind === 'agent' && block.output.includes(`agentId: ${launch.id}`) && !notifications.has(launch.id)) {
-            notifications.set(launch.id, { status: 'completed', summary: null, at: position })
+            notifications.set(launch.id, { status: 'completed', summary: null, at: position, timestamp: message.timestamp })
           }
         }
       }

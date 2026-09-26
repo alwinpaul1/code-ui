@@ -115,13 +115,22 @@ export type BackgroundTaskDeriveOptions = {
   screenCompletions?: readonly ScreenTaskCompletion[]
   /** How many background shells the agent's OWN footer says are running, read
    *  off the screen (`parseClaudeRunningShellCount`). It counts every shell
-   *  in the process, a subagent's too, so it caps the lead's named shells and
-   *  pads unnamed ones only while no subagent runs
+   *  in the process, a subagent's too, so it caps the lead's named shells
+   *  and pads unnamed ones only up to what the lead can have
    *  (`mobile-background-task-footer.ts`). Null when no footer count is on
    *  screen. */
   onScreenShellCount?: number | null
   /** The last footer count, kept while the footer is off screen. */
   heldOnScreenShellCount?: HeldShellCount | null
+  /** The last footer count read while no subagent ran: then every shell in
+   *  it was the lead's, and those can only finish. */
+  leadOnlyShellCount?: HeldShellCount | null
+  /** The start of the working run that followed the pane's last `done`, as
+   *  the phone watched it (`mobile-background-task-memory.ts`). A question
+   *  or a permission prompt moves `stateStartedAt` without ending the work
+   *  launched before it; this does not move then. Null: no such start is
+   *  known, so nothing is retired by it. Absent: `stateStartedAt` stands in. */
+  runBoundaryAt?: number | null
   /** Which roster agents the session itself started. Null or absent: the
    *  caller cannot tell (a Codex tab), and every working roster row counts. */
   agentProvenance?: AgentProvenance | null
@@ -196,7 +205,7 @@ export function deriveBackgroundTasks(
         // even mid-turn — the model asked for it, so the call itself is there.
         const stoppedId = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
         if (stoppedId) {
-          notifications.set(stoppedId, { status: 'stopped', summary: null, at: position })
+          notifications.set(stoppedId, { status: 'stopped', summary: null, at: position, timestamp: message.timestamp })
         }
       } else if (isToolResultBlock(block)) {
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
@@ -216,7 +225,7 @@ export function deriveBackgroundTasks(
     if (INTERRUPTED.test(text)) {
       pending.length = 0
     }
-    for (const notification of readNotifications(text, position)) {
+    for (const notification of readNotifications(text, position, message.timestamp)) {
       notifications.set(notification.id, notification.value)
     }
   }
@@ -225,7 +234,7 @@ export function deriveBackgroundTasks(
   settleAgentLaunches(launches, notifications, messages, hostStatus?.subagents, position + 1)
   for (const id of options.finishedTaskIds ?? []) {
     if (!notifications.has(id)) {
-      notifications.set(id, { status: 'completed', summary: null, at: position + 1 })
+      notifications.set(id, { status: 'completed', summary: null, at: position + 1, timestamp: null })
     }
   }
   // Launch order is insertion order, so the first unsettled match is the
@@ -235,7 +244,7 @@ export function deriveBackgroundTasks(
     const label = foldWhitespace(completion.label)
     for (const launch of launches.values()) {
       if (launch.kind === 'shell' && launch.label === label && !notifications.has(launch.id)) {
-        notifications.set(launch.id, { status: completion.status, summary: null, at: position + 1 })
+        notifications.set(launch.id, { status: completion.status, summary: null, at: position + 1, timestamp: null })
         break
       }
     }
@@ -246,6 +255,8 @@ export function deriveBackgroundTasks(
   // While any subagent runs, the footer holds shells the phone cannot name.
   const agentLaunchUnsettled = [...launches.values()].some((launch) => launch.kind === 'agent' && !notifications.has(launch.id))
   const subagentRunning = roster === null ? agentLaunchUnsettled : roster.size > 0
+  const working = hostStatus?.state === 'working'
+  const stateStart = working && typeof hostStatus.stateStartedAt === 'number' ? hostStatus.stateStartedAt : null
   const tasks = splitByStatus({
     launches,
     notifications,
@@ -257,10 +268,11 @@ export function deriveBackgroundTasks(
     reportedLaunched: options.launchedTaskIds ?? [],
     reportedRunningAt: options.runningTaskIdsAt ?? null,
     subagentRuns: options.subagentRuns ?? null,
-    footerSpeaksForLead: (live !== null || held !== null) && !subagentRunning,
+    stateStart,
+    runBoundary: options.runBoundaryAt === undefined ? stateStart : working ? options.runBoundaryAt : null,
     ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
   })
-  return fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning })
+  return fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
 }
 
 type SplitContext = {
@@ -274,9 +286,12 @@ type SplitContext = {
   reportedLaunched: readonly string[]
   reportedRunningAt: number | null
   subagentRuns: SubagentRunClock | null
-  /** Whether the agent's footer count, live or held, counts the lead's
-   *  shells alone: it is on record and no subagent is running. */
-  footerSpeaksForLead: boolean
+  /** When the pane's current `working` state began; null when it is not
+   *  working. What the desk's `monitoring` placeholder is aged by. */
+  stateStart: number | null
+  /** Launches before this are known to have finished, when nothing else can
+   *  speak for them; null retires nothing. */
+  runBoundary: number | null
   ownedByLead: (id: string) => boolean
 }
 
@@ -287,24 +302,28 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
   const finished: { task: BackgroundTask; at: number }[] = []
   const paneDone = hostStatus?.state === 'done'
   // Why: the pane leaves `working` for `done` only when Claude's Stop hook
-  // lists no live background task, so a working run's start is the last moment
-  // at which everything launched earlier was known to have finished — unless
-  // the run followed a `waiting` (a question, a permission prompt), which moves
-  // the start too while work runs on (session 967668df, 23:24:06). So it is a
-  // fallback for a shell nothing else can speak for. Without it, a `done` that
-  // retired old launches flipped them back to running on the next prompt
-  // (eight hours-old shells shown running, 2026-09-09).
-  const runStartedAt =
-    hostStatus?.state === 'working' && typeof hostStatus.stateStartedAt === 'number'
-      ? hostStatus.stateStartedAt
-      : null
-  const shellFallbackBoundary = agentSaysRunning === null && !context.footerSpeaksForLead
+  // lists no live background task, so the start of the run after a `done` is
+  // the last moment at which everything launched earlier was known to have
+  // finished. A `waiting` (a question, a permission prompt) moves the pane's
+  // start too while work runs on (session 967668df, 23:24:06), which is why
+  // the boundary is the phone's own record of the run after the last `done`
+  // when it has one. It speaks for a shell only when no beacon list does.
+  // Without it, a `done` that retired old launches flipped them back to
+  // running on the next prompt (eight hours-old shells shown running,
+  // 2026-09-09).
+  const runBoundary = agentSaysRunning === null ? context.runBoundary : null
   for (const launch of launches.values()) {
     const notification = notifications.get(launch.id)
-    // An agent the host tracks is running exactly while its roster says so: a
-    // notification may be an earlier run's, since Claude Code notes "the same
-    // task-id may notify more than once" when the lead resumes an agent.
-    const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? roster.has(launch.id) : null
+    // An agent the host tracks is running exactly while its roster says so:
+    // a notification may be an earlier run's, since Claude Code notes "the
+    // same task-id may notify more than once" when the lead resumes an agent,
+    // and Orca re-creates the row, with a new start, at every SubagentStart.
+    // A row that started before the notification is the run it ended.
+    const row = launch.kind === 'agent' && roster !== null ? roster.get(launch.id) : undefined
+    const rosterSaysRunning =
+      launch.kind === 'agent' && roster !== null
+        ? row !== undefined && !(notification?.timestamp != null && row.startedAt <= notification.timestamp)
+        : null
     if (rosterSaysRunning === true) {
       running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
       continue
@@ -324,7 +343,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
     }
     const judgesShell = launch.kind !== 'agent'
     const launchedBeforeRun =
-      judgesShell && shellFallbackBoundary && runStartedAt !== null && launch.startedAt !== null && launch.startedAt < runStartedAt
+      judgesShell && runBoundary !== null && launch.startedAt !== null && launch.startedAt < runBoundary
     // Why the time check: on 2026-09-12 two shells launched mid-turn never
     // reached the row. The `run=` the phone held was the previous turn's
     // answer, which could not list shells that did not exist yet, and "not
@@ -414,7 +433,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
   // Age-capped: a `monitoring` state hours old with no beacon is a pane whose
   // Stop hook never finished (2026-09-11: a turn died on an expired OAuth
   // token and the phone read "1 running task" for a day), not a shell.
-  const monitoringAgeMs = runStartedAt === null ? null : now - runStartedAt
+  const monitoringAgeMs = context.stateStart === null ? null : now - context.stateStart
   if (
     running.length === 0 &&
     agentSaysRunning === null &&
@@ -428,8 +447,8 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       kind: 'shell',
       title: 'Background shell the desk is still tracking',
       status: 'running',
-      startedAt: runStartedAt,
-      elapsedMs: elapsedSince(runStartedAt, now)
+      startedAt: context.stateStart,
+      elapsedMs: elapsedSince(context.stateStart, now)
     })
   }
   // Running stays in launch order (the oldest job is the one people look for);

@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { readTaskEvidence } from './mobile-background-task-evidence'
 import {
   EMPTY_SESSION_TASK_EVIDENCE,
-  readTaskEvidence,
   rememberTaskEvidence,
   type SessionTaskEvidence
-} from './mobile-background-task-evidence'
+} from './mobile-background-task-memory'
 import type { AgentProvenance } from './mobile-background-task-roster'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -73,9 +73,10 @@ export function useActiveTabTaskReport(input: {
   const screenCompletions = useActiveTabScreenCompletions(input.handle, sessionId, input.screenTaskCompletions)
   const window = useMemo(() => readTaskEvidence(input.messages), [input.messages])
   const { evidence, now } = observeSession(sessionId, { window, agentStatus, onScreenShellCount })
-  // Claude's transcript records every launch the lead makes; a Codex one
-  // records none the phone reads, so its roster is taken as it stands.
-  const placeable = input.agent === 'claude' && evidence !== null
+  // Claude's transcript records every launch the lead makes (OpenClaude
+  // writes the same one); a Codex one records none the phone reads, so its
+  // roster is taken as it stands.
+  const placeable = (input.agent === 'claude' || input.agent === 'openclaude') && evidence !== null
   const own = evidence?.ownAgentIds
   const preexisting = evidence?.preexistingAgentIds
   const agentProvenance = useMemo<AgentProvenance | null>(
@@ -91,16 +92,20 @@ export function useActiveTabTaskReport(input: {
   const heldAgentStatus =
     agentStatus === null && lastStatus && now - lastStatus.at <= HELD_AGENT_STATUS_MAX_AGE_MS ? lastStatus.status : null
   const heldOnScreenShellCount = onScreenShellCount === null ? (evidence?.lastShellCount ?? null) : null
+  const leadOnlyShellCount = evidence?.leadOnlyShellCount ?? null
+  const runBoundaryAt = evidence?.runBoundaryAt
   return useMemo(
     () => ({
       ...report,
       finishedTaskIds,
       onScreenShellCount,
       heldOnScreenShellCount,
+      leadOnlyShellCount,
       screenCompletions,
       agentProvenance,
-      heldAgentStatus
+      heldAgentStatus,
+      ...(runBoundaryAt === undefined ? {} : { runBoundaryAt })
     }),
-    [agentProvenance, finishedTaskIds, heldAgentStatus, heldOnScreenShellCount, onScreenShellCount, report, screenCompletions]
+    [agentProvenance, finishedTaskIds, heldAgentStatus, heldOnScreenShellCount, leadOnlyShellCount, onScreenShellCount, report, runBoundaryAt, screenCompletions]
   )
 }

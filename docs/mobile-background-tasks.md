@@ -270,31 +270,63 @@ and changed 38 times; the sources, one by one:
 | A stopped shell | bhcfbe9vf, stopped at 00:20:27, gets no notification; `bg=` and `live=` keep naming it once the TaskStop scrolls out of the window | +1 later on |
 
 **The rule now** (`mobile-background-tasks.ts`, `-roster.ts`, `-footer.ts`,
-`-evidence.ts`, `use-active-tab-task-report.ts`):
+`-evidence.ts`, `-memory.ts`, `use-active-tab-task-report.ts`):
 
-- An agent the host tracks runs exactly while the roster lists it. Neither
-  beacon list judges an agent.
-- A roster row the loaded window never showed launched counts only when the
-  lead's transcript has shown the phone its launch or a SendMessage to it this
-  session, when it is a teammate (`a<name>-<hex>`; Claude Code refuses a
-  teammate spawned from a subagent), or when it was already running the first
-  time the phone read the roster and has not stopped since. That last case is
-  the benefit of the doubt for agents launched before anything the phone has
-  read; a reviewer running at the first look is counted until it first stops.
-- The footer count caps the lead's named shells always, pads unnamed ones only
-  while no subagent runs, and a reading keeps capping the shells launched
-  before it while a dialog hides the footer.
-- "Launched before the working run" retires a shell only when no beacon list,
-  and no footer that counts the lead's shells alone, can speak for it.
+- An agent the host tracks runs while the roster lists it. Neither beacon
+  list judges an agent. A notification outranks the row only when it was
+  written after the row started: Orca re-creates a row at every
+  SubagentStart, so a resumed agent's row starts after its last
+  notification, and a row that started before it is a phantom Orca kept
+  after missing the SubagentStop.
+- Each roster row the loaded window never showed launched is placed once,
+  the first time the phone sees it with a window loaded
+  (`mobile-background-task-memory.ts`): the lead's own when the lead's
+  transcript launched it (any result that opens with "Async agent launched
+  successfully", whichever call it pairs with) or messaged it, or when an
+  Agent call of the lead's still waiting for its result was made at or
+  before the row started (a foreground agent has no id anywhere until it
+  ends; one row per call, earliest first); given the benefit of the doubt
+  when it was on the first roster the phone read, or started before the
+  loaded window reaches back to; otherwise a subagent's, which stays so as
+  the window slides. A teammate (`a<name>-<hex>`) always counts. A
+  doubted row that stops loses the doubt: whoever resumes it next shows it.
+- The footer count caps the lead's named shells always. It pads unnamed ones
+  up to its count while no subagent runs, and while one does up to what it
+  counted the last time none ran (plus shells launched since), since those
+  can only finish. A reading keeps capping the shells launched before it
+  while a dialog hides the footer; a held reading never speaks for the run
+  boundary.
+- "Launched before the working run" retires a shell only when no beacon
+  list can speak for it, and the run is the one that followed the last
+  `done` the phone saw: a question or permission prompt moves the pane's
+  `stateStartedAt` but not that. The first working state the phone sees
+  stands in, as before; after a `waiting` it has no start for, it retires
+  nothing.
 - Ids a window showed ending (a notification, a TaskStop) are remembered for
   the session, so a slid window cannot bring them back.
 - A host status missing from one snapshot is bridged by the last one for up
   to 60 s.
 
-Replayed again with the new rule: 5–9, ten changes, each a real event (a
-shell starting or ending, an agent launched, a first-look reviewer stopping),
-and no task of the lead's ever missing, whether the phone held a 40- or a
-150-message window, and with or without the beacon.
+**Two shapes the beacon scripts and the reader did not know** (2.1.280 to
+2.1.283 bundles, 2026-09-26): the Stop hook's `background_tasks` writes each
+type through an alias table, so a teammate arrives as `teammate`, never
+`in_process_teammate`, and the hook now drops both; and `qMn` has a fourth
+background sentence, "Command was moved to the background (ID: …) so that a
+message that arrived while it was running can reach you", which the reader,
+`bg=` and `live=` now read. No transcript on this machine holds one yet. The
+sentence could in principle follow captured output (the result is
+`[stdout, stderr, sentence].join`), which the start anchor would miss, but
+every real background result here from 2.1.212 to 2.1.282 opens with it; the
+only later matches are quotes (greps, code, JSON dumps), which is what the
+anchor is for.
+
+Replayed again with the new rule, through the real session memory: 5–9, ten
+changes, each a real event (a shell starting or ending, an agent launched, a
+first-look reviewer stopping), and no task of the lead's ever missing with a
+40- or a 150-message window, with or without the beacon. The one exception
+is a tab with no beacon, no footer on screen and a 40-message window: two
+shells whose launches had already left the window are named by nothing, for
+the old rule as for the new.
 
 **Codex** has none of the sources that flapped: its transcript records no
 launch the phone reads, its notify beacon carries no task ids, and the footer

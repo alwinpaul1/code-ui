@@ -24,12 +24,14 @@ export type RosterRow = NonNullable<AgentStatusEntry['subagents']>[number]
  *  of its transcript it has read this run (`use-active-tab-task-evidence.ts`). */
 export type AgentProvenance = {
   /** Agents the lead's transcript showed launched (`agentId:` in an Agent
-   *  result) or messaged (SendMessage `to`, which resumes a finished one). */
+   *  result) or messaged (SendMessage `to`, which resumes a finished one), and
+   *  foreground agents an unanswered Agent call of the lead's vouched for. */
   ownAgentIds: readonly string[]
-  /** Rows already running the first time the phone read this session's
-   *  roster. Launched before anything the phone has read, so it cannot place
-   *  them; they keep the benefit of the doubt. A row that APPEARS later
-   *  without a launch in the lead's transcript is a subagent's. */
+  /** Rows the phone cannot place, still running: on the first roster it
+   *  read, or first seen while the loaded window did not reach back to their
+   *  start. They keep the benefit of the doubt until they stop. A row first
+   *  seen while the window covers its start, with no launch in it, is a
+   *  subagent's (`mobile-background-task-memory.ts`). */
   preexistingAgentIds: readonly string[]
 }
 

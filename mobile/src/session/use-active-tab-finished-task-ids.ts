@@ -68,7 +68,7 @@ export type ActiveTabBackgroundTaskReport = {
   launchedTaskIds: readonly string[]
   /** How many shells the agent's own footer says are running, read off the
    *  screen: every shell in the process, a subagent's too, so a cap on the
-   *  lead's named shells and a floor only while no subagent runs
+   *  lead's named shells and a floor only up to what the lead can have
    *  (`mobile-background-task-footer.ts`); null when no footer count is on screen. */
   onScreenShellCount?: number | null
   /** Completions the agent stated on its screen, remembered since this tab's
@@ -81,6 +81,11 @@ export type ActiveTabBackgroundTaskReport = {
   agentProvenance?: AgentProvenance | null
   /** The session's last host status, for a moment the tab's is missing. */
   heldAgentStatus?: AgentStatusEntry | null
+  /** The last footer count read while no subagent ran. */
+  leadOnlyShellCount?: HeldShellCount | null
+  /** The start of the working run after the pane's last `done`, as the phone
+   *  watched it; absent until it has seen the pane working. */
+  runBoundaryAt?: number | null
 }
 
 /** What the agent has said about its background work, all three halves, from

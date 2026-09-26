@@ -207,7 +207,9 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
     // Every shell Claude has started, from its own tool results: a tool_result
   // whose content STARTS with "Command running in background with ID: <id>"
   // or "Command did not complete … moved to the background (ID: <id>)", or
-  // "Command was manually backgrounded by user with ID: <id>" (ctrl+b).
+  // "Command was manually backgrounded by user with ID: <id>" (ctrl+b), or
+  // "Command was moved to the background (ID: <id>) so that a message …"
+  // (a message queued while it ran; `qMn` in 2.1.280–2.1.283).
   // Anchored to the start of the content and skipping assistant records,
   // because the transcript also holds every command and every line of prose
   // that merely QUOTES those strings — a grep for them, a test fixture — and
@@ -231,7 +233,7 @@ export const CLAUDE_HUD_STATUSLINE_SCRIPT = [
   // covers what changed this turn; the Stop hook's whole-file `run=` is the
   // authoritative list at turn end, so a shell launched far back is corrected
   // there rather than carried on every keystroke.
-  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 4194304 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && ba=$(tail -c 4194304 "$tp" 2>/dev/null | grep -F "\\"content\\":\\"Command " 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o -e "\\"content\\":\\"Command running in background with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command did not complete[^\\"]*moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was manually backgrounded by user with ID: [A-Za-z0-9_-]\\{3,\\}" -e "\\"content\\":\\"Command was moved to the background (ID: [A-Za-z0-9_-]\\{3,\\}" 2>/dev/null | sed -e "s/.*ID: //" | awk "!s[\\$0]++")',
   '[ -n "$ba" ] && bg=$(printf "%s\\n" "$ba" | tail -n 64 | tr "\\n" ",")',
   '[ -n "$tp" ] && [ -r "$tp" ] && da=$(tail -c 4194304 "$tp" 2>/dev/null | grep -F "<status>" 2>/dev/null | grep -v "\\"type\\":\\"assistant\\"" 2>/dev/null | grep -o "<task-id>[A-Za-z0-9_-]\\{3,\\}</task-id>" 2>/dev/null | sed -e "s/<task-id>//" -e "s#</task-id>##" | awk "!s[\\$0]++")',
   'dc=","',
@@ -523,7 +525,7 @@ export const CLAUDE_HUD_STATUSLINE_POWERSHELL = [
   // Claude's launch text is a shell. Assistant records are skipped.
   '$tp=[string]$j.transcript_path',
   '$q=[char]34; $pa=$q+"type"+$q+":"+$q+"assistant"+$q',
-  'if($tp -and (Test-Path -LiteralPath $tp)){$tl=@(Get-Content -LiteralPath $tp -Tail 8000 | Where-Object {$_ -notmatch $pa}); $ids=@($tl | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]{3,})</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}; $bg=@($tl | Select-String -Pattern ($q+"content"+$q+":"+$q+"Command (?:running in background with ID: |did not complete[^"+$q+"]*moved to the background \\(ID: |was manually backgrounded by user with ID: )([A-Za-z0-9_-]{3,})") -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($bg.Count -gt 0){$o=$o+" bg="+($bg -join ",")}}',
+  'if($tp -and (Test-Path -LiteralPath $tp)){$tl=@(Get-Content -LiteralPath $tp -Tail 8000 | Where-Object {$_ -notmatch $pa}); $ids=@($tl | Where-Object {$_ -match "<status>"} | Select-String -Pattern "<task-id>([A-Za-z0-9_-]{3,})</task-id>" -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($ids.Count -gt 0){$o=$o+" done="+($ids -join ",")}; $bg=@($tl | Select-String -Pattern ($q+"content"+$q+":"+$q+"Command (?:running in background with ID: |did not complete[^"+$q+"]*moved to the background \\(ID: |was manually backgrounded by user with ID: |was moved to the background \\(ID: )([A-Za-z0-9_-]{3,})") -AllMatches | ForEach-Object {$_.Matches} | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique | Select-Object -Last 32); if($bg.Count -gt 0){$o=$o+" bg="+($bg -join ",")}}',
   // Delegation: the user keeps their own bar. Their command runs under Git
   // Bash when it exists (what Claude Code itself would have used), else under
   // this same PowerShell. Its stdout is ours, which Claude Code draws.
@@ -572,7 +574,11 @@ export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive
  * an empty one means "nothing is running", and the phone needs the difference
  * to clear the row on the last task.
  *
- * Teammates (`type: in_process_teammate`) are left off. The payload calls one
+ * Teammates are left off. The payload names one `type: teammate` — Claude
+ * Code writes each task's type through an alias table (`in_process_teammate`
+ * → `teammate`, `local_bash` → `shell`, `local_agent` → `subagent`; 2.1.281
+ * to 2.1.283), so a filter on the internal name never matched (2026-09-26);
+ * both names are dropped. The payload calls one
  * `running` for as long as it exists, idle included — on 2026-09-12 four
  * council reviewers a day idle put "4 running tasks" on the phone while the
  * desk's /tasks showed none. A teammate is a peer to message, not work that
@@ -580,7 +586,7 @@ export const CLAUDE_HUD_WINDOWS_COMMAND = `powershell -NoProfile -NonInteractive
  */
 export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   'i=$(cat 2>/dev/null || true)',
-  'rn=$(printf %s "$i" | tr "{" "\\n" | grep -v "\\"type\\"[[:space:]]*:[[:space:]]*\\"in_process_teammate\\"" 2>/dev/null | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
+  'rn=$(printf %s "$i" | tr "{" "\\n" | grep -v -E "\\"type\\"[[:space:]]*:[[:space:]]*\\"(in_process_)?teammate\\"" 2>/dev/null | grep "\\"status\\"[[:space:]]*:[[:space:]]*\\"running\\"" 2>/dev/null | sed -nE "s/.*\\"id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9_-]+)\\".*/\\\\1/p" | awk "!s[\\$0]++" | tail -n 64 | tr "\\n" ",")',
   // `sid`: the session this list belongs to; see the status line. Only an id's
   // own characters, so a stray quote or space can never break the grammar.
   'si=$(printf %s "$i" | sed -nE "s/.*\\"session_id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9._-]+)\\".*/\\\\1/p" | head -n 1)',
@@ -700,7 +706,7 @@ export const CLAUDE_HUD_STOP_HOOK_POWERSHELL = [
   '$j=$null',
   'try{$j=$i | ConvertFrom-Json}catch{}',
   '$ids=@()',
-  'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" -and $_.type -ne "in_process_teammate" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
+  'if($j -and $j.background_tasks){ $ids=@($j.background_tasks | Where-Object { $_.status -eq "running" -and $_.type -ne "teammate" -and $_.type -ne "in_process_teammate" } | ForEach-Object { [string]$_.id } | Where-Object { $_ } | Select-Object -Unique | Select-Object -First 64) }',
   '$sid=""; if($j.session_id){$sid=" sid="+$j.session_id}',
   '$o="CUIHUD1 agent=claude" + $sid + " run=" + ($ids -join ",")',
   ...POWERSHELL_CONSOLE_WRITER.map((line) => line.replace(/\n/g, ' ')),

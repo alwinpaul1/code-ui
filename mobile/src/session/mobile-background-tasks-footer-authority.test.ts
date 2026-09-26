@@ -50,6 +50,19 @@ describe("the agent's footer count of shells", () => {
     expect(hidden.running.map((task) => task.id)).toEqual(['bbgtz4rfz'])
   })
 
+  it("keeps the lead's unnamed shells in the count while an agent starts and finishes", () => {
+    // 2026-09-14: "· 4 shells" on the desk, none of them within the beacon's
+    // tail. Read with no subagent running, those 4 are the lead's; they can
+    // only finish, so while an agent runs they stay up to what the footer
+    // still counts, instead of dropping out of the count and coming back.
+    const readAlone = { count: 4, at: NOW - 60_000 }
+    const alone = deriveBackgroundTasks([], NOW, { state: 'working', subagents: [] }, { onScreenShellCount: 4 })
+    const agentRuns = deriveBackgroundTasks([], NOW + 5_000, withAgent, { onScreenShellCount: 5, leadOnlyShellCount: readAlone })
+    const agentGone = deriveBackgroundTasks([], NOW + 10_000, { state: 'working', subagents: [] }, { onScreenShellCount: 4 })
+
+    expect([alone, agentRuns, agentGone].map((tasks) => tasks.running.filter((task) => task.kind === 'shell').length)).toEqual([4, 4, 4])
+  })
+
   it('does not let a held count retire a shell launched after it was read', () => {
     const readAt = Date.parse('2026-09-26T00:19:40.000Z')
     const newer = backgroundShellLaunch('b1q85ypx9', '2026-09-26T00:24:47.897Z', '2026-09-26T00:24:49.471Z')

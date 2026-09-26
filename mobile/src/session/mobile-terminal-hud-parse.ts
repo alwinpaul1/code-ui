@@ -31,8 +31,8 @@ export type TerminalHudObservation = {
   /** How many background shells Claude Code's own footer says are running
    *  ("… · 4 shells · ← for agents"). The agent counts these live — every
    *  shell in its process, a subagent's too (2.1.281–2.1.283) — so it caps the
-   *  lead's named shells, and is the floor for them only while no subagent
-   *  runs (`mobile-background-task-footer.ts`). Null when the footer states none. */
+   *  lead's named shells, and is their floor only up to what the lead can
+   *  have (`mobile-background-task-footer.ts`). Null when the footer states none. */
   runningShellCount?: number | null
 }
 
