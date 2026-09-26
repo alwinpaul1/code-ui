@@ -1,4 +1,6 @@
 import { ScrollView, Text, View } from 'react-native'
+import { useTheme } from '../theme/theme-context'
+import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MobileSyntaxLine } from './MobileSyntaxSegments'
 import { gutterWidthForLines } from './mobile-syntax-lines'
@@ -58,20 +60,12 @@ export function renderMarkdownCodeBlock({
                   time, nothing said so. Android only draws the bar when the
                   content actually overflows, so a short fence gets none. */}
               <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
-                <View>
-                  {code.lines.map((segments, lineIndex) => (
-                    <MobileSyntaxLine
-                      key={lineIndex}
-                      number={lineIndex + 1}
-                      segments={segments}
-                      gutterWidth={gutterWidth}
-                      gutterDigits={String(code.lines.length).length}
-                      lineStyle={styles.codeText}
-                      gutterStyle={styles.codeGutter}
-                      selectable={selectable}
-                    />
-                  ))}
-                </View>
+                <MarkdownCodeLines
+                  lines={code.lines}
+                  gutterWidth={gutterWidth}
+                  styles={styles}
+                  selectable={selectable}
+                />
               </ScrollView>
               {code.hidden > 0 ? (
                 <Text style={styles.codeTruncated}>{`${code.hidden} more lines`}</Text>
@@ -79,4 +73,39 @@ export function renderMarkdownCodeBlock({
             </View>
           )
 
+}
+
+/** A fence's lines in the theme's code colours. A component of its own so it
+ *  can read the theme: the fence sits on the themed code fill, and the
+ *  dark-only default drew plain code near-white on cream in light mode
+ *  (2026-09-26). */
+function MarkdownCodeLines({
+  lines,
+  gutterWidth,
+  styles,
+  selectable
+}: {
+  lines: MobileSyntaxSegment[][]
+  gutterWidth: number
+  styles: MarkdownStyles
+  selectable: boolean
+}) {
+  const { syntax } = useTheme()
+  return (
+    <View>
+      {lines.map((segments, lineIndex) => (
+        <MobileSyntaxLine
+          key={lineIndex}
+          number={lineIndex + 1}
+          segments={segments}
+          gutterWidth={gutterWidth}
+          gutterDigits={String(lines.length).length}
+          lineStyle={styles.codeText}
+          gutterStyle={styles.codeGutter}
+          selectable={selectable}
+          palette={syntax}
+        />
+      ))}
+    </View>
+  )
 }

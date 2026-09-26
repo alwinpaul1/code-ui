@@ -90,7 +90,15 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
 // stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
 const PROVIDER_RPC_STATEMENTS = '1a4b59ae77b80dfea9e39844fb514e3c90751a0f2d8bda97e612d57fecc91c12'
-const PRESS_FEEDBACK_DECLARATIONS = 'f8464f6f6335d926853910de3afe7af6441b21d9c11cddc88af52af14bd7d05e'
+// 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
+// inside the monospace code line, and with no face of its own the app's Instrument Sans default
+// drew it proportional, so the code after it shifted row to row. It now takes
+// `styles.diffLinePrefix` (the code face). Three pins move with that and nothing else:
+// GitHubPrFileDiff's declaration (the one JSX attribute, 194 declarations still), `semantics`
+// (that `jsx:Text:` host signature becomes `jsx:Text:style`, 3,271 lines still) and the
+// StyleSheets (the one `diffLinePrefix` key). Hooks, statements and the render tree hold;
+// diff-line-prefix-face.test.tsx guards the face.
+const PRESS_FEEDBACK_DECLARATIONS = 'a5328ba9b4ac87ec1cf56f3b7e31f0fdc7afe014d56a5c6550aca37f10dd7ba7'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -100,8 +108,10 @@ const PRESS_FEEDBACK_DECLARATIONS = 'f8464f6f6335d926853910de3afe7af6441b21d9c11
 // only: `semantics` 3,269 -> 3,271 (the host signature widens and the two strings "button" and "Back"
 // arrive); the render-token stream gains the eight tokens the two attributes are, 35,291 -> 35,299.
 // Hooks, statements, declarations and styles do not move.
-const A11Y_BACK_SEMANTICS = '880bc90e83fd6a85b59852abf624c525909dd9caa73b31af102aa4909139faec'
-const PRE_REFACTOR_STYLES = 'b73e6defde3651f586eda5d9833e5de70b250aa8fbdb453cc40751844e8f5250'
+// 2026-09-26: the PR diff prefix's style attribute; see the declarations pin above.
+const A11Y_BACK_SEMANTICS = '9513e373cecf94e9b7d77e1e8ca3946490e4819f313dbbf43c46360fb0cabf93'
+// 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
+const PRE_REFACTOR_STYLES = '3e7b8b7caf018e9442c52c60b73317fe61c984fee249a07b3ac7a2f4f0777f40'
 const A11Y_BACK_RENDER_TREE = '71d021c1f5be406513850a3a32f8487dc352edbc017a2e7c37b5c1a5da131369'
 
 describe('Mobile Tasks refactor parity', () => {

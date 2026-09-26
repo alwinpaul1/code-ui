@@ -1,16 +1,13 @@
 import { common, createLowlight } from 'lowlight'
 import { detectMobileFileLanguage } from './mobile-file-language'
+import {
+  kindsForText,
+  scopeForClasses,
+  type MobileSyntaxScope,
+  type MobileSyntaxTokenKind
+} from './mobile-syntax-token-kinds'
 
-export type MobileSyntaxTokenKind =
-  | 'plain'
-  | 'comment'
-  | 'keyword'
-  | 'string'
-  | 'number'
-  | 'type'
-  | 'function'
-  | 'variable'
-  | 'meta'
+export type { MobileSyntaxTokenKind } from './mobile-syntax-token-kinds'
 
 export type MobileSyntaxSegment = {
   text: string
@@ -55,6 +52,12 @@ export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?
   const detected = detectMobileFileLanguage(filePath, preferredLanguage)
   const normalized = LANGUAGE_ALIASES[detected] ?? detected
   return lowlight.registered(normalized) ? normalized : 'plaintext'
+}
+
+/** Whether `language` is one the highlighter colours. */
+export function canHighlightMobileLanguage(language: string): boolean {
+  const normalized = LANGUAGE_ALIASES[language] ?? language
+  return normalized !== 'plaintext' && lowlight.registered(normalized)
 }
 
 export function highlightMobileCode(
@@ -148,62 +151,25 @@ function getHighlightBoundary(code: string, maxHighlightChars: number): number {
 
 function flattenLowlightNodes(
   nodes: LowlightNode[],
-  inheritedKind: MobileSyntaxTokenKind
+  inheritedScope: MobileSyntaxScope
 ): MobileSyntaxSegment[] {
   const segments: MobileSyntaxSegment[] = []
   for (const node of nodes) {
     if (node.type === 'text') {
-      appendSegment(segments, { text: node.value ?? '', kind: inheritedKind })
+      for (const piece of kindsForText(node.value ?? '', inheritedScope)) {
+        appendSegment(segments, piece)
+      }
       continue
     }
     if (node.type !== 'element') {
       continue
     }
-    const kind = tokenKindForClasses(node.properties?.className) ?? inheritedKind
-    for (const segment of flattenLowlightNodes(node.children ?? [], kind)) {
+    const scope = scopeForClasses(node.properties?.className, inheritedScope) ?? inheritedScope
+    for (const segment of flattenLowlightNodes(node.children ?? [], scope)) {
       appendSegment(segments, segment)
     }
   }
   return segments
-}
-
-function tokenKindForClasses(className: unknown): MobileSyntaxTokenKind | null {
-  const classes = Array.isArray(className)
-    ? className.filter((value): value is string => typeof value === 'string')
-    : typeof className === 'string'
-      ? className.split(/\s+/)
-      : []
-
-  const tokens = new Set(classes.map((value) => value.replace(/^hljs-/, '')))
-  if (hasAny(tokens, ['comment', 'quote'])) {
-    return 'comment'
-  }
-  if (hasAny(tokens, ['keyword', 'selector-tag', 'tag', 'name'])) {
-    return 'keyword'
-  }
-  if (hasAny(tokens, ['string', 'regexp', 'symbol', 'bullet'])) {
-    return 'string'
-  }
-  if (hasAny(tokens, ['number', 'literal'])) {
-    return 'number'
-  }
-  if (hasAny(tokens, ['type', 'built_in', 'class', 'title.class'])) {
-    return 'type'
-  }
-  if (hasAny(tokens, ['title.function', 'function', 'title'])) {
-    return 'function'
-  }
-  if (hasAny(tokens, ['attr', 'attribute', 'property', 'variable', 'params'])) {
-    return 'variable'
-  }
-  if (hasAny(tokens, ['meta', 'doctag', 'subst', 'section'])) {
-    return 'meta'
-  }
-  return null
-}
-
-function hasAny(values: Set<string>, candidates: string[]): boolean {
-  return candidates.some((candidate) => values.has(candidate))
 }
 
 function mergeAdjacentSegments(segments: MobileSyntaxSegment[]): MobileSyntaxSegment[] {
