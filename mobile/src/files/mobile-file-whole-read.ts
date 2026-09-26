@@ -221,16 +221,12 @@ function textRead(outcome: Settled): WholeDesktopFileRead {
   if (!outcome.accepted) {
     return refusalRead(outcome.refusal, HOST_TEXT_CAP)
   }
-  const text = outcome.value as { content: string; truncated?: unknown; byteLength?: unknown }
+  const text = outcome.value as { content: string; truncated?: unknown }
   if (text.truncated === true) {
-    const size =
-      typeof text.byteLength === 'number'
-        ? ` (the file is ${formatPreviewByteLength(text.byteLength)})`
-        : ''
-    return {
-      status: 'refused',
-      reason: `the desktop sends only the first ${HOST_TEXT_CAP} of it${size}`
-    }
+    // No size here: the host's `byteLength` on a cut read is the length of what it READ (512 KiB
+    // and a byte, truncateMobileFilePreview), not of the file, so "(the file is 512 KB)" was said
+    // of every file over the cap. The desktop never tells the phone the real size on this path.
+    return { status: 'refused', reason: `the desktop sends only the first ${HOST_TEXT_CAP} of it` }
   }
   // Text is decoded on the desktop; a replacement character or a NUL means the bytes it came from
   // were not UTF-8 text, and they cannot be rebuilt from what arrived.

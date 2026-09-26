@@ -277,7 +277,8 @@ describe('a host with no chunked read (an SSH worktree)', () => {
       {},
       {
         'files.readChunk': SSH_CHUNK_REFUSAL,
-        'files.read': () => ok({ content: 'x'.repeat(64), truncated: true, byteLength: 2_400_000 })
+        // The host's byteLength on a cut read is what it read (512 KiB and a byte), not the file.
+        'files.read': () => ok({ content: 'x'.repeat(64), truncated: true, byteLength: 524_289 })
       }
     )
     const { target } = phone()
@@ -287,8 +288,7 @@ describe('a host with no chunked read (an SSH worktree)', () => {
     expect(outcome).toEqual({
       status: 'refused',
       fileName: 'server.log',
-      message:
-        "Can't save server.log: the desktop sends only the first 512 KB of it (the file is 2.3 MB)"
+      message: "Can't save server.log: the desktop sends only the first 512 KB of it"
     })
     expect(target.createDocument).not.toHaveBeenCalled()
   })
