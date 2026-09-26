@@ -19,6 +19,7 @@ const openURL = vi.fn(async () => true)
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('react-native', () => ({
   Animated: {
+    View: 'View',
     Text: 'Text',
     Value: class {
       constructor(private value: number) {}

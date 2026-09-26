@@ -19,6 +19,7 @@ import { ToolRun } from './MobileNativeChatToolRun'
 
 vi.mock('react-native', () => ({
   Animated: {
+    View: 'View',
     Text: 'AnimatedText',
     Value: class {
       constructor(private value: number) {}

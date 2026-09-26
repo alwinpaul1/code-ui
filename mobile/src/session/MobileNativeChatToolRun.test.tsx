@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   Animated: {
+    View: 'View',
     Text: 'Text',
     Value: class {
       constructor(private value: number) {}
@@ -319,6 +320,23 @@ describe('a tool run while the turn is still working', () => {
   it('breathes the Running label while a call is live', () => {
     mocks.loop.mockClear()
     render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    expect(mocks.loop).toHaveBeenCalledOnce()
+  })
+
+  // 2026-09-26, the user: the running row's icon stood still while its text
+  // breathed. One breath for both, so they never drift apart.
+  it('breathes the running tool icon with its label, on one shared breath', () => {
+    mocks.loop.mockClear()
+    const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
+    const opacityOf = (style: unknown) =>
+      [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
+    const icon = tree.root.find((node) => node.props?.testID === 'tool-run-active-icon')
+    // The drawn Text, not the PulsingText element that hands it the testID.
+    const label = tree.root.find(
+      (node) => node.props?.testID === 'tool-run-active-label' && String(node.type) === 'Text'
+    )
+    expect(opacityOf(icon.props.style)).toBeDefined()
+    expect(opacityOf(icon.props.style)).toBe(opacityOf(label.props.style))
     expect(mocks.loop).toHaveBeenCalledOnce()
   })
 

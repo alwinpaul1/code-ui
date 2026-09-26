@@ -74,7 +74,9 @@ export function MobileNativeChatAgentRun({
           accessibilityLabel={`${label}. Show the agents`}
           accessibilityLiveRegion="polite"
         >
-          <AgentRunGlyph color={colors.textMuted} />
+          <Animated.View testID="agent-run-glyph" style={{ opacity: breath }}>
+            <AgentRunGlyph color={colors.textMuted} />
+          </Animated.View>
           <Animated.Text style={[styles.toolRunLabel, { flex: 0, opacity: breath }]} numberOfLines={1} testID="agent-run-label">
             {label}
           </Animated.Text>

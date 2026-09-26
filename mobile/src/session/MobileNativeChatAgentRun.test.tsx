@@ -150,6 +150,19 @@ describe('the conversation row for five agents launched at once', () => {
     expect(texts(tree)).not.toContain('Ran 5 agents')
   })
 
+  // 2026-09-26, the user: "make this running agent icon also animate, now the
+  // text only animated". The glyph beside "Running agent" stood still while its
+  // label breathed.
+  it('breathes the agent icon with its label while an agent runs', async () => {
+    const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
+    const glyph = tree.root.find((node) => node.props.testID === 'agent-run-glyph')
+    const label = tree.root.find((node) => node.props.testID === 'agent-run-label')
+    const opacityOf = (style: unknown) =>
+      [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
+    expect(opacityOf(glyph.props.style)).toBeDefined()
+    expect(opacityOf(glyph.props.style)).toBe(opacityOf(label.props.style))
+  })
+
   it('settles to "Ran 5 agents" once the roster holds none of them', async () => {
     const tree = await render({ status: statusWith([]), agentWorking: true })
     expect(texts(tree)).toContain('Ran 5 agents')

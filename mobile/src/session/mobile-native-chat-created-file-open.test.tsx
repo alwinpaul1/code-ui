@@ -24,6 +24,7 @@ vi.mock('../components/DraggableDetailSheet', async () => {
 })
 vi.mock('react-native', () => ({
   Animated: {
+    View: 'View',
     Text: 'Text',
     Value: class {
       constructor(private value: number) {}
