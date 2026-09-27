@@ -17,7 +17,8 @@ describe('mobile file syntax highlighting', () => {
     expect(detectMobileFileLanguage('Dockerfile')).toBe('dockerfile')
     expect(resolveMobileSyntaxLanguage('src/App.tsx')).toBe('typescript')
     expect(resolveMobileSyntaxLanguage('worktrees/feature/build.cts')).toBe('typescript')
-    expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
+    // Registered since the viewer took highlight.js's full set (2026-09-26).
+    expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('dockerfile')
   })
 
   it('emits semantic syntax segments for highlighted code', () => {

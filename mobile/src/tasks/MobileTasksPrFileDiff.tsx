@@ -101,7 +101,7 @@ export function GitHubPrFileDiff({
                       : null
                 ]}
               >
-                <Text>{diffLinePrefix(line.kind)} </Text>
+                <Text style={styles.diffLinePrefix}>{diffLinePrefix(line.kind)} </Text>
                 <MobileSyntaxSegments segments={line.segments} />
                 {line.text ? null : ' '}
               </Text>

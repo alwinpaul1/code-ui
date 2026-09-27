@@ -4,7 +4,8 @@ import {
   fileReaderLineSelectionLabel,
   fileReaderLineSelectionRange,
   isFileReaderLineSelected,
-  startFileReaderLineSelection
+  startFileReaderLineSelection,
+  fileLinesText
 } from './mobile-file-reader-line-selection'
 
 describe('starting a line selection with a long-press', () => {
@@ -76,5 +77,27 @@ describe('the action-bar label', () => {
 
   it('reads as a span for a range, low to high', () => {
     expect(fileReaderLineSelectionLabel({ start: 10, end: 20 })).toBe('Ask about lines 10–20')
+  })
+})
+
+describe('copying selected lines as the file holds them', () => {
+  it('keeps each line\'s own break in a file that mixes CRLF and LF', () => {
+    expect(fileLinesText('a\r\nb\nc\r\nd', { start: 1, end: 3 })).toBe('a\r\nb\nc')
+    expect(fileLinesText('a\r\nb\nc\r\nd', { start: 2, end: 4 })).toBe('b\nc\r\nd')
+  })
+
+  it('handles the one line of a file, the last line with and without a break, and an empty file', () => {
+    expect(fileLinesText('only', { start: 1, end: 1 })).toBe('only')
+    expect(fileLinesText('a\nlast', { start: 2, end: 2 })).toBe('last')
+    expect(fileLinesText('a\nlast\n', { start: 2, end: 2 })).toBe('last')
+    expect(fileLinesText('a\r\nlast\r\n', { start: 2, end: 2 })).toBe('last')
+    expect(fileLinesText('a\n\n', { start: 3, end: 3 })).toBe('')
+    expect(fileLinesText('', { start: 1, end: 1 })).toBe('')
+    expect(fileLinesText('a\nb', { start: 5, end: 6 })).toBe('')
+  })
+
+  it('keeps a blank CRLF line blank', () => {
+    expect(fileLinesText('a\r\n\r\nb', { start: 2, end: 2 })).toBe('')
+    expect(fileLinesText('a\r\n\r\nb', { start: 1, end: 3 })).toBe('a\r\n\r\nb')
   })
 })

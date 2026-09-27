@@ -5,7 +5,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { MobileDiffLine } from './mobile-diff-lines'
-import type { MobileHighlightedDiffLine, MobileSyntaxSegment } from './mobile-file-syntax'
+import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
 import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
@@ -127,12 +127,6 @@ export type DiffNotesDelivery = {
 }
 
 export type ReadyFileDocState = Extract<FileDocState, { status: 'ready' }>
-
-export type FileSyntaxState = {
-  doc: ReadyFileDocState
-  language: string
-  segments: MobileSyntaxSegment[]
-}
 
 export type DiffSyntaxState = {
   doc: ReadyFileDocState

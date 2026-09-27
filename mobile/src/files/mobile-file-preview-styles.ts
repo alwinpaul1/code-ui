@@ -6,6 +6,12 @@ export const filePreviewStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bgBase
   },
+  /** The code viewer and its line bar, which floats over its foot. No
+   *  colour of its own: the viewer paints the theme's code surface. */
+  sourceArea: {
+    flex: 1,
+    minHeight: 0
+  },
   header: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -84,20 +90,8 @@ export const filePreviewStyles = StyleSheet.create({
   saveButtonDisabled: {
     opacity: 0.42
   },
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  textContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl
-  },
-  textPreview: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19
-  },
+  // The source view's scroller and its one-Text body (scroll, textContent,
+  // textPreview) went with that view: text files draw in MobileCodeView.
   // The markdown preview's own chrome — container, toolbar, the two mode
   // toggles, the content padding — used to live here, on the static dark
   // palette. It moved into MobileFileMarkdownPreview.tsx as a themed factory so

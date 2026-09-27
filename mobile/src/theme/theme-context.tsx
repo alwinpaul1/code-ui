@@ -19,6 +19,7 @@ import {
   type ThemePreference,
   type ThemeScheme
 } from './tokens'
+import { syntaxPaletteForScheme, type SyntaxPalette } from './syntax-palette'
 
 export const THEME_PREFERENCE_STORAGE_KEY = 'codeui:theme-preference'
 
@@ -27,6 +28,8 @@ export type Theme = {
   preference: ThemePreference
   setPreference: (preference: ThemePreference) => void
   colors: ThemeColors
+  /** Code colours for the same scheme (Dark+ / Light+). */
+  syntax: SyntaxPalette
   space: typeof space
   radius: typeof radius
   type: typeof type
@@ -60,6 +63,7 @@ function buildTheme(
     preference,
     setPreference,
     colors: colorsForScheme(scheme),
+    syntax: syntaxPaletteForScheme(scheme),
     space,
     radius,
     type,

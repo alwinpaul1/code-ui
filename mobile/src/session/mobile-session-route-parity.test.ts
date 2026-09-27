@@ -227,7 +227,12 @@ const HEAD_EFFECT_SHA256 = '45fd88101543aa8e804103aafbb6bd7c1cedffbcfc9f3676e087
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
 // four new bindings on top of the prior 17.
 // 2026-09-19: MarkdownReader binds useScrollReadingPosition (22 bindings).
-const HEAD_CONTENT_HOOK_SHA256 = '03c60655d60165722dc215c8b2fe61c3ae169142f8db9d4281cc3ee5a3581aab'
+// 17 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
+// (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
+// Five FileReader bindings left with it: useTheme, the lineSelection pair, its
+// reset effect, the highlight-style memo, and the fileSyntax pair (the viewer
+// colours itself now). Nothing else in the family moved.
+const HEAD_CONTENT_HOOK_SHA256 = '15a1b1e35ee4c3fb901188f61194c2dee6b310e81098b45dec54858807fed6a9'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -283,8 +288,10 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
   '40a1ad5717c027fcf93188541ede2dbc82d6dee40e948e9c5c8bb4b7fb15da20'
 // 2026-09-24: the gesture flush's re-poll while the output window holds its
 // rows on the phone (8 setTimeout creations, from 7).
+// 2026-09-26: FileReader's deferred-highlight timer lost its file/html branch;
+// the source views colour themselves in the code viewer. Same count (10).
 const HEAD_TIMER_CREATION_SHA256 =
-  'e9fae480365fdd5acf3191b2c5e45a56a1770a23250d9212deb459e25e93ddc2'
+  '5dbfb8cc5d46d019de4443f154f43a4add15ef6484a59b0e1bfcfe0ff23cf068'
 const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1eaa0f9e1f00ee36a7fa0'
 // 656 since 2026-09-18: askAboutFileLines's "No chat is open to ask about
 // this file" refusal toast, plus the 'terminal' literal in its
@@ -347,8 +354,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // Back claim to the page.
 // 682 since 2026-09-26: the markdown and file readers' copy with the desktop's reason.
 // 681 since the same day: the reader's 'Read only' gives way to the reason itself.
+// 676 since 2026-09-26 (later): the file tab's source view moved out of FileReader into MobileSessionFileSource
+// (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
+// Five literals left with it: 'file' and 'html' (the effect's source branch),
+// 'plain' (the unhighlighted segment), and the two quasis of `${title} preview`.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'c561124ee6c3bb49250ca86a6380778498bbb3c78094baf426bcb9fad1504a1c'
+  '4ca44053948f55f9ceb458b98a2e691bedda15e886f4f504280606b974b06969'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -380,7 +391,10 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // re-dial exists, because the page's provider hands out none. Same host record
 // COUNT (99); that one Pressable's captured onPress moved. Nothing a phone
 // renders or does changed.
-const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b203a8e228be3df57'
+// 97 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
+// (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
+// Its View and FlatList left with it.
+const HEAD_HOST_JSX_SHA256 = 'ff5cde7d96e6e239172814c5770f2e3cd4dee6dd446137901ff580203bf2241c'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -433,9 +447,21 @@ const HEAD_HOST_JSX_SHA256 = 'c373c8cce653ce46888824807c792ebf4e7119bf73769d5b20
 // 2026-09-26: the chat overlay is handed `createdFileCounts` beside
 // `onRevertHunk`, the store that reads back a created file the wire cut for its
 // line count. Same record count; only the overlay's record moved.
-const HEAD_LEAF_JSX_SHA256 = '40b98c88a46e21c1a2799febb3f8a19db97772c77783b27e8f14e79f3f3b8d64'
+// 73 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
+// (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
+// MobileSyntaxLine and the line action bar left; MobileSessionFileSource came in.
+// 2026-09-27: the file tab tells its source view the file was truncated
+// (review should-fix: it copied partial text as "Copy file", with no notice).
+// Same record count; two records moved, checked by dumping the facts before
+// and after: MobileSessionFileSource gains `truncated` and `byteLength`, and
+// the markdown preview's renderSource passes doc.truncated and
+// doc.byteLength. Every other fact set is unchanged.
+const HEAD_LEAF_JSX_SHA256 = 'f86aa7b9d0410f8b26fca25f7025a27116c4d348cb4d0c46cfc98b973b593d11'
+// 85 since 2026-09-26: the same move takes the old reader's seven style
+// references (markdownEditor, filePreviewScroll/Content, filePreviewText and
+// filePreviewGutter twice each).
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '9cca82fa17ffc5585c6953662cd2f271021ec6fe22641eb85bc5af2ee3a9a45a'
+  '859461aa348d6ff8a768020862054aaa3fde7a6d6f60e990648f4c2eb5d2684e'
 // 2026-09-18: handleForkClaudeSession's own `deviceToken: deviceTokenRef.current`
 // read joins the same-shaped reads terminal.send already made elsewhere in the
 // family — one more occurrence of an existing identity-field pattern, not a
@@ -874,7 +900,8 @@ describe('mobile session route extraction parity', () => {
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
-    expect(contentBindings).toHaveLength(22)
+    // 17 since 2026-09-26: FileReader's source view moved to MobileSessionFileSource.
+    expect(contentBindings).toHaveLength(17)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
     expect(nestedFunctions).toHaveLength(13)
@@ -965,13 +992,15 @@ describe('mobile session route extraction parity', () => {
     // 674 since 2026-09-25: the Markdown actions' 'web' check (Orca #22362).
     // 682 since 2026-09-26: the readers' copy with the desktop's reason.
     // 681 since the same day: the reader's 'Read only' gives way to the reason.
-    expect(strings).toHaveLength(681)
+    // 676 since 2026-09-26 (later): FileReader's source view moved out of the family.
+    expect(strings).toHaveLength(676)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
     // 99 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — its bar,
     // the two pressables it maps, and the preview's own scroller.
-    expect(jsx.host).toHaveLength(99)
+    // 97 since 2026-09-26: the old reader's View and FlatList moved out with it.
+    expect(jsx.host).toHaveLength(97)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     // 69 since 2026-09-15: the markdown preview's own leaf element.
     // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
@@ -981,10 +1010,12 @@ describe('mobile session route extraction parity', () => {
     // session content.
     // 74 since 2026-09-25: the surface mounts MobileFileTapMatchPicker, the
     // drawer a bare chat file name found in several folders is offered in.
-    expect(jsx.leaf).toHaveLength(74)
+    // 73 since 2026-09-26: its row and action bar out, MobileSessionFileSource in.
+    expect(jsx.leaf).toHaveLength(73)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
-    expect(jsx.styleReferences).toHaveLength(92)
+    // 85 since 2026-09-26: its seven style references moved out with it.
+    expect(jsx.styleReferences).toHaveLength(85)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })
