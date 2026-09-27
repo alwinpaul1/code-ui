@@ -3,7 +3,7 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "bba7b66e38e9bd451a3543365d2c7c983f3657b4",
+  "baseline": "d72efb9bf8e62a16f69ce6b3f06c2238427a59dc",
   "lockfileSha256": "7bcf54f462c0b85dbb203cdd77a77c4de3efbc65865e91ae931b6516a82e0c70",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
@@ -113,20 +113,18 @@
         }
       }
     },
-    "b914541ed9b0": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Workspace is locked",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "bc47263d2197": {
       "name": "worktree.set#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
     }
   },
   "recording": {
@@ -138,7 +136,7 @@
           "sender": ["ac014f21aa55"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "b914541ed9b0"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "6bdf0d77510f",
           "effects": []

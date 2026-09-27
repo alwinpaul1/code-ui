@@ -3,7 +3,7 @@
   "family": "session.review-git-mutations",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "bba7b66e38e9bd451a3543365d2c7c983f3657b4",
+  "baseline": "d72efb9bf8e62a16f69ce6b3f06c2238427a59dc",
   "lockfileSha256": "7bcf54f462c0b85dbb203cdd77a77c4de3efbc65865e91ae931b6516a82e0c70",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
@@ -157,39 +157,6 @@
       "ordinal": 3,
       "value": {}
     },
-    "57802f530f4e": {
-      "actionError": {
-        "$rpc": "null"
-      },
-      "busyAction": "stage-reviewed",
-      "screenState": {
-        "branchCompare": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "needs a test",
-            "createdAt": 0,
-            "filePath": "src/app.ts",
-            "id": "note-1",
-            "lineNumber": 4,
-            "side": "modified",
-            "worktreeId": "workspace-1"
-          }
-        ],
-        "kind": "ready",
-        "reviewState": {
-          "files": {},
-          "version": 1
-        },
-        "status": {
-          "entries": []
-        }
-      },
-      "sendSheet": {
-        "$rpc": "null"
-      }
-    },
     "5f6bfd36288e": {
       "name": "load-review-data",
       "ordinal": 9,
@@ -204,16 +171,6 @@
       "name": "load-review-data",
       "ordinal": 6,
       "value": {}
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
     },
     "aa50219ebe9a": {
       "name": "git.discard#1",
@@ -357,16 +314,6 @@
       },
       "sendSheet": {
         "$rpc": "null"
-      }
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
       }
     },
     "d1de63d44a74": {
@@ -552,6 +499,39 @@
         }
       }
     },
+    "f155cde5cbdb": {
+      "actionError": "Couldn't stage the reviewed files",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
     "f39122ee30fc": {
       "name": "git.stage#1",
       "ordinal": 2,
@@ -623,6 +603,39 @@
           "message": "",
           "isRpcDeliveryUnknown": true
         }
+      }
+    },
+    "fa4af2435d85": {
+      "actionError": "transport failure",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
       }
     },
     "fd1322e39fc5": {
@@ -823,9 +836,9 @@
           "settlements": {
             "stage": "eb79a9b3682a",
             "discard": "eb79a9b3682a",
-            "stage-reviewed": "a947768bc0ed"
+            "stage-reviewed": "eb79a9b3682a"
           },
-          "state": "57802f530f4e",
+          "state": "fa4af2435d85",
           "effects": ["53b792409cec", "a0c4d58800db"]
         }
       },
@@ -837,9 +850,9 @@
           "settlements": {
             "stage": "eb79a9b3682a",
             "discard": "eb79a9b3682a",
-            "stage-reviewed": "c7584e82c72f"
+            "stage-reviewed": "eb79a9b3682a"
           },
-          "state": "57802f530f4e",
+          "state": "f155cde5cbdb",
           "effects": ["53b792409cec", "a0c4d58800db"]
         }
       }
