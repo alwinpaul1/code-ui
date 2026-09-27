@@ -82,7 +82,7 @@ async function tapDownload(scheme: 'light' | 'dark'): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
   const download = tree!.root.findAll(
-    (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Download PDF'
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Download PDF'
   )[0]!
   await act(async () => {
     download.props.onPress()
@@ -97,7 +97,7 @@ function styleOf(node: ReactTestInstance): Record<string, unknown> {
 }
 
 function textNodes(): ReactTestInstance[] {
-  return tree!.root.findAll((node) => node.type === 'Text')
+  return tree!.root.findAll((node) => String(node.type) === 'Text')
 }
 
 function textOf(node: ReactTestInstance): string {

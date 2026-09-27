@@ -92,7 +92,7 @@ async function renderIn(scheme: ThemeScheme, content: ReactNode): Promise<void> 
 /** The message, its colour, and the surface it is drawn on: the nearest ancestor that paints one. */
 function errorOnSurface(): { ink: string; surface: string } {
   const message = tree!.root.findAll(
-    (node) => node.type === 'Text' && node.props.children === "Couldn't open this PDF"
+    (node) => String(node.type) === 'Text' && node.props.children === "Couldn't open this PDF"
   )[0]!
   let surface: string | null = null
   for (let node = message.parent; node && !surface; node = node.parent) {

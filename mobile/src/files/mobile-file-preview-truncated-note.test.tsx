@@ -113,7 +113,7 @@ function surfaceBehind(node: ReactTestInstance): string {
 
 function truncatedNote(): ReactTestInstance {
   const notes = tree!.root.findAll(
-    (node) => node.type === 'Text' && textOf(node).startsWith('Preview truncated')
+    (node) => String(node.type) === 'Text' && textOf(node).startsWith('Preview truncated')
   )
   expect(notes).toHaveLength(1)
   return notes[0]!
