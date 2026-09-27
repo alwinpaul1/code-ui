@@ -511,3 +511,139 @@ describe('useMobileNativeChatImageUpload — video-frame extraction', () => {
     })
   })
 })
+
+/** A picked video frame, ready to feed a picker mock directly — bypasses
+ *  pickVideoFrames entirely, the same way every other test in this file
+ *  mocks pickMobileDocuments at the top. Each frame's base64 must itself be
+ *  valid base64 (length a multiple of 4, no non-base64 characters) or
+ *  saveMobileClipboardImageAsTempFile throws "Clipboard image content must
+ *  be base64" before ever reaching the mocked client — a real failure this
+ *  suite chased down once already. */
+function frameItem(index: number, total: number, groupId = 'g1') {
+  const base64 = String.fromCharCode(64 + index).repeat(4) // 'AAAA', 'BBBB', 'CCCC', …
+  return {
+    base64,
+    uri: `data:image/jpeg;base64,${base64}`,
+    videoFrame: {
+      groupId,
+      index,
+      total,
+      sourceName: 'clip.mp4',
+      durationLabel: '4 s',
+      intervalLabel: 'every 1 s',
+      intervalMs: 1000,
+      sourceSizeLabel: '30 MB',
+      stoppedEarly: false
+    }
+  }
+}
+
+// Final-review fixes 1 and 2 (2026-09-27): stoppedEarly used to be set only
+// for VideoFrameExtractionCancelledError/VideoFrameExtractionError (missing
+// a plain upload error entirely — item 1), and looped over every uploaded
+// frame in the WHOLE PICK rather than per group (so one video's complete
+// read got wrongly flagged by a different video's failure in the same pick
+// — item 2). Both are fixed by the same change: flag per group, gated on
+// that group's own uploaded count against its own planned total, whatever
+// kind of error (if any) stopped the pick.
+describe('useMobileNativeChatImageUpload — stoppedEarly is per group, whatever the error', () => {
+  let renderer: ReactTestRenderer | null = null
+  let hook: Hook | null = null
+
+  function Harness({ args }: { args: Args }): null {
+    hook = useMobileNativeChatImageUpload(args)
+    return null
+  }
+
+  function mount(args: Args): void {
+    act(() => {
+      renderer = create(createElement(Harness, { args }))
+    })
+  }
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    hook = null
+    pickDocumentsMock.mockReset()
+    useNativeChatImageAttachmentsStore.getState().reset()
+  })
+
+  it('flags stoppedEarly on the survivors when a plain upload error (not an extraction error) cuts a group short', async () => {
+    pickDocumentsMock.mockImplementation(async function* (
+      _launch: unknown,
+      _createFile: unknown,
+      deps: { onStart?: () => boolean }
+    ) {
+      deps.onStart?.()
+      // A 4-frame plan; the pick never gets past frame 3 — its own upload
+      // (not its reading) is what fails.
+      yield frameItem(1, 4)
+      yield frameItem(2, 4)
+      yield frameItem(3, 4)
+    })
+    let saveCalls = 0
+    const client = makeClient((method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return methodNotFound('start')
+      }
+      saveCalls += 1
+      if (saveCalls === 3) {
+        return { id: 'save', ok: false, error: { code: 'failed', message: 'disk full' }, _meta: { runtimeId: 'r' } }
+      }
+      return ok('save', `/tmp/frame-${saveCalls}.png`)
+    })
+    const onImagesUploaded = vi.fn()
+    mount(baseArgs({ client: client as unknown as RpcClient, showToast: vi.fn(), onImagesUploaded }))
+
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+
+    expect(onImagesUploaded).toHaveBeenCalledOnce()
+    const uploaded = onImagesUploaded.mock.calls[0]![1] as {
+      videoFrame?: { index: number; stoppedEarly: boolean }
+    }[]
+    // Frame 3's own upload is what failed — it never reached onImageUploaded
+    // at all, and frame 4 was never even attempted.
+    expect(uploaded.map((image) => image.videoFrame?.index)).toEqual([1, 2])
+    expect(uploaded.every((image) => image.videoFrame?.stoppedEarly)).toBe(true)
+  })
+
+  it('does not flag a video that read and uploaded completely, when a LATER video in the same pick fails to extract', async () => {
+    pickDocumentsMock.mockImplementation(async function* (
+      _launch: unknown,
+      _createFile: unknown,
+      deps: { onStart?: () => boolean }
+    ) {
+      deps.onStart?.()
+      // The first video (2 s, 2 frames) reads and uploads completely.
+      yield frameItem(1, 2, 'gA')
+      yield frameItem(2, 2, 'gA')
+      // The second video in the SAME pick never even starts reading a frame.
+      throw new VideoFrameExtractionError('Unsupported codec')
+    })
+    const onImagesUploaded = vi.fn()
+    mount(
+      baseArgs({
+        client: documentClient() as unknown as RpcClient,
+        showToast: vi.fn(),
+        onImagesUploaded
+      })
+    )
+
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+
+    expect(onImagesUploaded).toHaveBeenCalledOnce()
+    const uploaded = onImagesUploaded.mock.calls[0]![1] as {
+      videoFrame?: { groupId: string; stoppedEarly: boolean }
+    }[]
+    expect(uploaded).toHaveLength(2)
+    expect(uploaded.every((image) => image.videoFrame?.groupId === 'gA')).toBe(true)
+    // The first video's own read reached its own total (2 of 2) — a
+    // different video's later, unrelated failure must not taint it.
+    expect(uploaded.every((image) => image.videoFrame?.stoppedEarly === false)).toBe(true)
+  })
+})

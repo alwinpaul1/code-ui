@@ -167,17 +167,36 @@ export function useMobileNativeChatImageUpload(args: {
           onVideoFrameExtractionProgress?.(scope, null)
         }
       }
-      if (uploadError instanceof VideoFrameExtractionCancelledError || uploadError instanceof VideoFrameExtractionError) {
-        // Reading did not finish normally — record that on every frame this
-        // pick DID manage to upload, so the sent note can say reading
-        // stopped early instead of silently understating the video
-        // (mobile-native-chat-video-frames-attachment.ts). A group short of
-        // its plan for an unrelated reason (the user removed a chip after a
-        // complete read) never touches this and must not say so.
+      if (uploadError !== null) {
+        // Something cut this pick off before it finished naturally — an
+        // extraction failure, a cancel, or (2026-09-27 review: the actual
+        // regression here) a plain Error from saveMobileClipboardImageAsTempFile
+        // on a frame that itself read and encoded fine. Whatever the error's
+        // TYPE, flag stoppedEarly PER GROUP, not for the whole pick: a group
+        // whose own uploaded count already reached its own planned total is
+        // a complete read, whatever else in the SAME pick failed afterward
+        // (a later video's bad codec, say) — only a group genuinely short of
+        // its own plan is a stopped-early one. This is what the sent note
+        // reads to say "reading stopped early" instead of silently
+        // understating the video, or wrongly claiming a complete read was
+        // cut short (mobile-native-chat-video-frames-attachment.ts). A group
+        // short of its plan for an unrelated reason (the user removed a chip
+        // after an otherwise complete, error-free read) never reaches this
+        // block at all and must not say so either.
+        const uploadedCountByGroup = new Map<string, number>()
+        for (const image of uploadedImages) {
+          if (image.videoFrame) {
+            uploadedCountByGroup.set(
+              image.videoFrame.groupId,
+              (uploadedCountByGroup.get(image.videoFrame.groupId) ?? 0) + 1
+            )
+          }
+        }
         for (let i = 0; i < uploadedImages.length; i += 1) {
           const image = uploadedImages[i]!
-          if (image.videoFrame && !image.videoFrame.stoppedEarly) {
-            uploadedImages[i] = { ...image, videoFrame: { ...image.videoFrame, stoppedEarly: true } }
+          const meta = image.videoFrame
+          if (meta && !meta.stoppedEarly && (uploadedCountByGroup.get(meta.groupId) ?? 0) < meta.total) {
+            uploadedImages[i] = { ...image, videoFrame: { ...meta, stoppedEarly: true } }
           }
         }
       }

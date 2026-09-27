@@ -27,12 +27,16 @@ export function isPendingNativeChatVideoFrame(attachment: PendingNativeChatImage
  *  (2026-09-27 review: the note used to repeat the plan regardless). A group
  *  can also be short of its plan for a reason that has nothing to do with
  *  reading stopping early: every frame arrived, and the user removed one
- *  chip before sending. Only `meta.stoppedEarly` (true on the frames that DID
- *  survive a cancel or a failed upload, set in
+ *  chip before sending. Only `meta.stoppedEarly` (true on the frames a group
+ *  DID manage to upload before ANY error cut that group's own read short —
+ *  extraction failing, a cancel, or a plain upload error on a frame that
+ *  itself read fine, checked PER GROUP so one video's complete read is never
+ *  tainted by a different video's failure in the same pick; set in
  *  `use-mobile-native-chat-image-upload.ts`) says which happened — a bare
- *  frame-count shortfall is not proof by itself (2026-09-27 review: the note
- *  used to say "reading stopped early" whenever the count was short, even
- *  after a complete read). When it genuinely did stop early, the note states
+ *  frame-count shortfall is not proof by itself (2026-09-27 reviews: the
+ *  note used to say "reading stopped early" whenever the count was short,
+ *  even after a complete read; then only for two of the three ways a group
+ *  can actually be cut short). When it genuinely did stop early, the note states
  *  the span the survivors actually cover ("3 frames from the first 14 s of a
  *  2 min 14 s video") rather than the cadence and duration a complete read
  *  would state — those describe an even sampling of the WHOLE video, which a

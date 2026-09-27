@@ -41,14 +41,22 @@ export type VideoFrameAttachmentMeta = {
    *  duration over however few frames survived. */
   readonly intervalMs: number | null
   readonly sourceSizeLabel: string
-  /** True once the group's own read was actually cut short (cancelled, or a
-   *  frame failed) — false for every frame yielded while reading itself is
-   *  still healthy, patched to true on the frames already uploaded once a
-   *  cancel or failure is caught (`use-mobile-native-chat-image-upload.ts`).
-   *  A group can be short of its plan for a DIFFERENT reason entirely — every
-   *  frame arrived, and the user removed one chip before sending — and that
-   *  is not "reading stopped early" at all (2026-09-27 review: the note used
-   *  to say so unconditionally whenever the survivor count was short). */
+  /** True once THIS GROUP'S own read was actually cut short — false for
+   *  every frame yielded while reading itself is still healthy, patched to
+   *  true (`use-mobile-native-chat-image-upload.ts`) on the frames a group
+   *  DID manage to upload once ANY error stops the pick, whatever kind:
+   *  extraction failing outright, a cancel, or a plain upload error on a
+   *  frame that itself read and encoded fine. Checked per group, by whether
+   *  that group's own uploaded count reached its own planned total — not
+   *  per pick or per error type — so a video that read and uploaded
+   *  completely is never flagged just because something else in the SAME
+   *  pick failed afterward (a later video's bad codec, say). A group can
+   *  also be short of its plan for a reason that has NOTHING to do with any
+   *  error at all — every frame arrived, and the user removed one chip
+   *  before sending — and that is not "reading stopped early" either
+   *  (2026-09-27 reviews: the note used to say so unconditionally whenever
+   *  the survivor count was short, then only for two of the three ways a
+   *  group actually can be cut short). */
   readonly stoppedEarly: boolean
 }
 
