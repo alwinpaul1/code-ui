@@ -19,6 +19,7 @@ import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { draggableDetailSheetStyles as styles } from './draggable-detail-sheet-styles'
 import { DRAWER_SPRING } from './drawer-spring'
+import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 import {
   resolveDraggableSheetHeights,
   resolveDraggableSheetSnap,
@@ -68,6 +69,9 @@ export function DraggableDetailSheet({
   const [mounted, setMounted] = useState(visible)
   const onAfterCloseRef = useRef(onAfterClose)
   const hiddenHandledRef = useRef(false)
+  // A tool row tapped with the composer's keyboard up: without this the
+  // sheet sat under the keyboard until its window took focus.
+  useKeyboardDismissedOnOpen(visible)
 
   useEffect(() => {
     onAfterCloseRef.current = onAfterClose

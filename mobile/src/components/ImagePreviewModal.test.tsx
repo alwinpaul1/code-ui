@@ -9,6 +9,8 @@ import {
 import { ImagePreviewModal } from './ImagePreviewModal'
 
 vi.mock('react-native', () => ({
+  // DraggableDetailSheet and the image viewers send the keyboard away as they open.
+  Keyboard: { dismiss: () => {} },
   Image: { getSize: vi.fn() },
   Modal: 'Modal',
   Pressable: 'Pressable',

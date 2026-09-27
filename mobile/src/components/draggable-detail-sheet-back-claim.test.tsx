@@ -21,6 +21,8 @@ vi.mock('../navigation/use-back-claim', () => ({
 }))
 
 vi.mock('react-native', () => ({
+  // DraggableDetailSheet and the image viewers send the keyboard away as they open.
+  Keyboard: { dismiss: () => {} },
   BackHandler: { addEventListener: seam.addEventListener },
   Modal: 'Modal',
   get Platform() {
