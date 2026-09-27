@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mergeDesktopPrompts } from './desktop-prompt-merge'
+import type { DesktopPrompt } from './agent-hud-beacon'
 
 describe('one list of desktop prompts from the tab status and the beacon', () => {
   it('lets the status copy win over the beacon copy of the same message, and keeps the rest', () => {
