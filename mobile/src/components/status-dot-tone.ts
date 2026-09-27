@@ -1,4 +1,4 @@
-import { colors as legacyColors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/tokens'
 import type { ConnectionState } from '../transport/types'
 import type { ConnectionVerdict } from '../transport/connection-health'
 
@@ -28,19 +28,24 @@ export function statusTone(state: ConnectionState, verdict?: ConnectionVerdict):
   return CONNECTION_STATE_TONES[state] ?? 'muted'
 }
 
-/** Legacy hex resolver kept for callers that compare against the static
- *  palette. Themed code should use `useStatusColor` from StatusDot instead. */
-export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdict): string {
+/** Hex resolver for callers that need a colour outside a component (so they can't call
+ *  `useStatusColor` from StatusDot themselves). Takes the live theme's colours rather than
+ *  importing the legacy static palette, per the theme-settings sweep. */
+export function statusDotColor(
+  colors: ThemeColors,
+  state: ConnectionState,
+  verdict?: ConnectionVerdict
+): string {
   const tone = statusTone(state, verdict)
   switch (tone) {
     case 'success':
-      return legacyColors.statusGreen
+      return colors.success
     case 'warning':
-      return legacyColors.statusAmber
+      return colors.warning
     case 'danger':
-      return legacyColors.statusRed
+      return colors.danger
     case 'muted':
-      return legacyColors.textMuted
+      return colors.textMuted
     default: {
       const exhaustive: never = tone
       return exhaustive
