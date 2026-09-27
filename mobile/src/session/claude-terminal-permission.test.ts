@@ -173,6 +173,21 @@ describe("the auto-deny countdown under a classifier's reason", () => {
     expect(reason).not.toMatch(/automatically deny|unattended/)
   })
 
+  it('keeps a reason under a countdown that wrapped between "unattended" and "session"', () => {
+    const at = SUBAGENT_PROMPT.indexOf(' Do you want to proceed?')
+    const lines = [
+      ...SUBAGENT_PROMPT.slice(0, at - 1),
+      '',
+      ' ⚠ Claude Code will automatically deny this request in 4:59, to avoid blocking progress on an unattended',
+      ' session',
+      ' Permission rule Bash(git *) requires confirmation for this command.',
+      ...SUBAGENT_PROMPT.slice(at - 1)
+    ]
+    const reason = claudePermissionFromScreen(lines)?.decisionReason
+    expect(reason).toContain('Permission rule Bash(git *) requires confirmation for this command.')
+    expect(reason).not.toMatch(/automatically deny|unattended|^session$/m)
+  })
+
   it('keeps the card the same prompt from one second to the next', () => {
     const first = claudePermissionFromScreen(counting('4:59'))
     expect(first).not.toBeNull()

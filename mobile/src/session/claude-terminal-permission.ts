@@ -84,7 +84,8 @@ function splitDialogBody(
   const box = rows.findIndex((row) => row.trim().length > 0 && indentOf(row) > margin)
   const body: string[] = []
   const notes: string[] = []
-  let countdownOpen = false
+  // The countdown's sentence so far while it is still open, else null.
+  let countdown: string | null = null
   rows.forEach((row, index) => {
     const blank = row.trim().length === 0
     const note =
@@ -94,12 +95,13 @@ function splitDialogBody(
       indentOf(row) === margin &&
       !/^\s*Do you want to proceed\?\s*$/.test(row)
     // Only the countdown's own sentence goes: its row, and a wrapped tail up
-    // to the words it ends on. A reason drawn right under it stays (an
-    // independent review, 2026-09-27, found every later note row dropped).
-    const countdown =
-      note && (COUNTDOWN.test(row) || (countdownOpen && !/^\s*│/.test(row)))
-    countdownOpen = countdown && !COUNTDOWN_END.test(row)
-    if (countdown) {
+    // to the words it ends on, which can themselves wrap apart. A reason drawn
+    // right under it stays (an independent review, 2026-09-27, found every
+    // later note row dropped).
+    const inCountdown = note && (COUNTDOWN.test(row) || (countdown !== null && !/^\s*│/.test(row)))
+    const sentence = inCountdown ? `${countdown ?? ''} ${row.trim()}` : null
+    countdown = sentence !== null && !COUNTDOWN_END.test(sentence) ? sentence : null
+    if (inCountdown) {
       return
     }
     if (!note) {
