@@ -25,10 +25,6 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * is honest, 2026-09-20).
  */
 
-/** A line above a row this long, read on its own, can tell rows apart: a
- *  shorter one ("session:ok", "Done.") ends many replies. */
-export const LAST_LINE_EVIDENCE = 16
-
 /** Every row this module draws has an id that starts so. */
 export const SCREEN_NOTICE_ID_PREFIX = 'peer-notice:'
 
@@ -37,10 +33,6 @@ export type ScreenPeerNotice = {
   sender: string
   /** The message as the screen painted it, when the row carried one. */
   body?: string
-  /** What the screen painted above the row at the sighting (ScreenPeerRow). */
-  above?: string
-  /** The line right above it at the sighting (ScreenPeerRow). */
-  lastLine?: string
   /** The last folded transcript row when first seen; null on an empty chat.
    *  Never a row the phone drew itself: those come and go. */
   anchorId: string | null
@@ -54,21 +46,33 @@ export type ScreenPeerNotice = {
   seenAt?: number
 }
 
-/** One poll's rows are a multiset by sender; a sender's Nth row is that
- *  sender's Nth message, unless what was painted above the rows says the
- *  earlier ones have scrolled off (newerThanLastKnown). New ones are
- *  appended, anchored at `tailId`, and drawn after `afterId` while it is
- *  drawn; the SAME array comes back when the poll showed nothing new. */
+/**
+ * One poll's rows are a multiset by sender; a sender's Nth row is that
+ * sender's Nth message, and the count of a sender's messages is the most of
+ * its rows the screen has shown at once. New ones are appended, anchored at
+ * `tailId`, and drawn after `afterId` while it is drawn; the SAME array comes
+ * back when the poll showed nothing new.
+ *
+ * The count alone cannot see a second message from a sender once the first
+ * has scrolled off: one row on screen and one message known read as nothing
+ * new. That is the trade, and it is taken on purpose. Four rules that tried to
+ * tell a later row by what was painted above it (the text above it, the line
+ * right above it, transcript records that arrived after the first sighting)
+ * each drew one message twice: after a resize repainted a table, near the top
+ * of the screen, under output printed again, and for a peer message that
+ * waited alone in the queue box and was repainted in the turn when Claude
+ * took it (reviews of 2026-09-26 and 2026-09-27). Position on the screen
+ * cannot tell a repaint from a new message, and a missing row beats a
+ * duplicate. A tab launched with the prompt hook draws each subagent message
+ * from the hook's own list (mobile-native-chat-agent-message-rows.ts), so the
+ * cost falls on tabs without it.
+ */
 export function observeScreenPeerNotices(
   previous: readonly ScreenPeerNotice[],
   rows: readonly ScreenPeerRow[],
   tailId: string | null,
   now: number,
   afterId?: string,
-  /** Whether what was painted above a row belongs to a transcript row that
-   *  came after this notice's anchor: the only evidence, beside the notice's
-   *  own row, that a row is a later message (newerThanLastKnown). */
-  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean = () => false,
   /** The phone's clock now. */
   seenAt: number = Date.now()
 ): readonly ScreenPeerNotice[] {
@@ -80,17 +84,14 @@ export function observeScreenPeerNotices(
   }
   let next: ScreenPeerNotice[] | null = null
   for (const [sender, list] of seen) {
-    const known = previous.filter((notice) => notice.sender === sender)
-    const fresh = Math.max(list.length - known.length, newerThanLastKnown(known, list, paintedAfter))
-    for (let taken = 1; taken <= fresh; taken += 1) {
+    const known = previous.filter((notice) => notice.sender === sender).length
+    for (let ordinal = known + 1; ordinal <= list.length; ordinal += 1) {
       next ??= [...previous]
-      const { body, above, lastLine } = list[list.length - fresh + taken - 1]!
+      const body = list[ordinal - 1]?.body
       next.push({
-        id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${known.length + taken}`,
+        id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${ordinal}`,
         sender,
         ...(body ? { body } : {}),
-        ...(above !== undefined ? { above } : {}),
-        ...(lastLine !== undefined ? { lastLine } : {}),
         anchorId: tailId,
         ...(afterId !== undefined ? { afterId } : {}),
         sightedAt: now,
@@ -99,54 +100,6 @@ export function observeScreenPeerNotices(
     }
   }
   return next ?? previous
-}
-
-/**
- * How many of one sender's rows on the screen came after the last message of
- * theirs already known, on positive evidence only. `paintedAfter` looks only
- * in records that reached the phone after that message was first seen
- * (use-screen-peer-notices.ts).
- *
- * The count alone cannot see a second message once the first has scrolled
- * off: a subagent's row names only its sender, so one row on screen and one
- * message known read as nothing new (review of 2026-09-26). Two things say a
- * row is later. The last known row is still on screen, painted under the same
- * text as when it was seen, and the rows below it are later. Or the text
- * painted above a row belongs to a transcript row that came after the last
- * known message's anchor (a reply the chat received since); that row and the
- * ones below it are later. Text above a known row that merely changed is not
- * evidence: a table repainted narrower after a resize made every row of the
- * sender count as new, one more on each repaint (review of 2026-09-27). With
- * no evidence the count stands.
- */
-function newerThanLastKnown(
-  known: readonly ScreenPeerNotice[],
-  rows: readonly ScreenPeerRow[],
-  paintedAfter: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean
-): number {
-  const last = known.at(-1)
-  if (last === undefined) {
-    return 0
-  }
-  if (last.above !== undefined) {
-    for (let index = rows.length - 1; index >= 0; index -= 1) {
-      if (rows[index]!.above === last.above && rows[index]!.body === last.body) {
-        return rows.length - 1 - index
-      }
-    }
-  }
-  // Refused where the row cannot be told from a known one: too near the top
-  // of the screen to read what was painted above it, or under the same line
-  // as a known row, output printed again. Either let one row draw as a new
-  // one on every read (re-review of 2026-09-27). A line too short to be
-  // evidence ("session:ok" ends every reply here) says nothing either way.
-  const first = rows.findIndex(
-    (row) =>
-      row.above !== undefined &&
-      !known.some((notice) => row.lastLine !== undefined && row.lastLine.length >= LAST_LINE_EVIDENCE && notice.lastLine === row.lastLine) &&
-      paintedAfter(last, row)
-  )
-  return first === -1 ? 0 : rows.length - first
 }
 
 /** The folded chat with each notice drawn after its anchor, minus the ones a

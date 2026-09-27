@@ -65,25 +65,40 @@ export function queueFooterIndex(lines: readonly string[]): number {
 }
 
 /**
- * The screen lines the agent's queue box takes up, by index, whether or not
- * its entries can be read. Anything painted there is waiting, not yet in the
- * turn: a peer message's row in the box read as a message the turn had taken,
- * and once Claude took it and painted it in the turn it read as a second one
- * (combined review of fix/prompt-leak, 2026-09-27).
+ * The screen lines the agent's queue box takes up, by index: the rows the
+ * queue reader reads as its entries, no more. Anything painted there is
+ * waiting, not yet in the turn, and the peer-row reader leaves it out
+ * (mobile-terminal-peer-notices.ts), so a peer message is first seen where
+ * Claude paints it in the turn when it takes it: its row is anchored there,
+ * and the status's copy of it, read as Claude takes it, can pair with it.
+ * Sighted in the box it was anchored where it waited, and a minute later its
+ * copy was too far off to pair.
  *
- * The block from 2.1.277 on runs from the send-now row up to the first line
- * that cannot be a queued message's (a blank line, the spinner, a tool row);
- * the older one is the indented block over its footer.
+ * The block from 2.1.277 on is the marked rows over the send-now row, with
+ * their wrapped lines; the older one is the indented block over its footer.
+ * A peer message queued alone gets neither (Claude Code 2.1.283 draws them
+ * only for a queued command a person could edit), and its row is read where
+ * it waits; the count rule keeps it one message (screen-peer-notices.ts).
  */
 export function queueBlockLineIndices(screen: readonly string[], draft?: unknown): ReadonlySet<number> {
   const lines = withComposerText(screen, draft)
   const block = new Set<number>()
   const sendNow = lines.findLastIndex((line) => SEND_NOW_HINT.test(line))
   if (sendNow !== -1) {
-    for (let index = sendNow - 1; index >= Math.max(0, sendNow - 60) && !isQueueBound(lines[index]!); index -= 1) {
-      block.add(index)
+    // As columnZeroQueueEntries collects them: marked rows at column zero and
+    // indented wrapped lines, from the first marked row down.
+    const rows: number[] = []
+    for (let index = sendNow - 1; index >= Math.max(0, sendNow - 60); index -= 1) {
+      const line = lines[index]!
+      if (!/^[❯›>]\s+\S/.test(line) && !/^\s{2,}\S/.test(line)) {
+        break
+      }
+      rows.unshift(index)
     }
-    return block
+    while (rows.length > 0 && !/^[❯›>]\s+\S/.test(lines[rows[0]!]!)) {
+      rows.shift()
+    }
+    return new Set(rows)
   }
   const footer = queueFooterIndex(lines)
   let seenEntry = false

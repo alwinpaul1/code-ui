@@ -38,21 +38,15 @@ const crossSession = readFileSync(
 ).split('\n')
 
 describe('peer message rows Claude Code paints when a subagent or session writes to it', () => {
-  it('reads the sender off the real screen, and what was painted above the row', () => {
-    // The reply's last lines above it, spaces and line breaks out: the same at
-    // any width the terminal rewraps them to.
-    expect(peerNoticesFromScreen(screen)).toEqual([
-      { sender: 'probe', above: "unning.I'llreplyonceitsmessagearrives.session:ok", lastLine: 'session:ok' }
-    ])
+  it('reads the sender off the real screen', () => {
+    expect(peerNoticesFromScreen(screen)).toEqual([{ sender: 'probe' }])
   })
 
   it('reads the sender AND the message off the real cross-session screen, unwrapped', () => {
     expect(peerNoticesFromScreen(crossSession)).toEqual([
       {
         sender: 'code-ui-6f',
-        body: 'Capture probe from the Code UI session: reply with the single word received and nothing else.',
-        above: "ss-sessionmessagetoClaude'squeue(youapprovedit).",
-        lastLine: 'approvedit).'
+        body: 'Capture probe from the Code UI session: reply with the single word received and nothing else.'
       }
     ])
   })
@@ -60,30 +54,6 @@ describe('peer message rows Claude Code paints when a subagent or session writes
   it('keeps one entry per row, so five replies from one agent are five', () => {
     const rows = Array.from({ length: 5 }, () => '› Message from @probe (ctrl+o to expand)')
     expect(peerNoticesFromScreen(rows).map((row) => row.sender)).toEqual(Array.from({ length: 5 }, () => 'probe'))
-  })
-
-  it('reads the same above a row whatever width the lines above it were wrapped to', () => {
-    const row = '› Message from @probe (ctrl+o to expand)'
-    const narrow = ['⏺ The probe agent is running. I\'ll reply once', '  its message arrives.', '', '  session:ok', '', '', row]
-    const wide = ["⏺ The probe agent is running. I'll reply once its message arrives.", '', '  session:ok', '', '', row]
-    expect(peerNoticesFromScreen(wide)[0]?.above).toBe(peerNoticesFromScreen(narrow)[0]?.above)
-  })
-
-  it('reads the line right above a row without the TUI\'s marks, a tool\'s output included', () => {
-    const screen = [
-      '⏺ Bash(pnpm vitest run src/session/some-long-test-file-name.test.ts)',
-      '  ⎿  Test Files  12 passed (12)',
-      '     Tests  340 passed (340)',
-      '',
-      '› Message from @probe (ctrl+o to expand)'
-    ]
-    expect(peerNoticesFromScreen(screen)[0]?.lastLine).toBe('Tests340passed(340)')
-    expect(peerNoticesFromScreen(['  └──────────────┴──────────┘', '› Message from @probe (ctrl+o to expand)'])[0]?.lastLine).toBeUndefined()
-    expect(peerNoticesFromScreen(['› Message from @probe (ctrl+o to expand)'])[0]?.lastLine).toBeUndefined()
-  })
-
-  it('reads nothing above a row too near the top of the screen to tell it apart', () => {
-    expect(peerNoticesFromScreen(['  session:ok', '› Message from @probe (ctrl+o to expand)'])).toEqual([{ sender: 'probe', lastLine: 'session:ok' }])
   })
 
   it('reads a bodied row that fits on one line, and one whose tail wraps alone', () => {
@@ -94,7 +64,7 @@ describe('peer message rows Claude Code paints when a subagent or session writes
   it('refuses a bodied row whose tail never closes, and still reads the next row', () => {
     expect(
       peerNoticesFromScreen(['› Message from @a: the screen cut this row', '', '› Message from @b (ctrl+o to expand)'])
-    ).toEqual([{ sender: 'b', lastLine: 'Messagefrom@a:thescreencutthisrow' }])
+    ).toEqual([{ sender: 'b' }])
   })
 
   it('does not read a finished-teammate row, a prompt, or prose that mentions a message', () => {
