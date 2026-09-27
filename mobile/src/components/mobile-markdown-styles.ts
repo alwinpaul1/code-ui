@@ -21,13 +21,16 @@ import {
 export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
 
 /** How far an inline code chip is painted BELOW its layout box, so its text
- *  sits on the paragraph's baseline (markdownChipBaselineShift). It is a
+ *  sits on the paragraph's baseline, or half a dp above it
+ *  (markdownChipBaselineShift). It is a
  *  transform, so layout does not know about it: any ancestor that clips (the
  *  table, which needs `overflow: hidden` for its rounded corners) cuts the
  *  chip off unless it leaves this much room. A chip in a table cell was sliced
- *  across the middle (2026-09-14). */
-export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = Math.round(
-  markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT)
+ *  across the middle (2026-09-14). Not rounded: a transform takes a fraction
+ *  of a dp, and the zoomed chip uses the same value scaled. */
+export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = markdownChipBaselineShift(
+  MARKDOWN_CHIP_FONT_SIZE,
+  MARKDOWN_CHIP_LINE_HEIGHT
 )
 
 export function makeMarkdownStyles(theme: Theme) {
@@ -111,7 +114,8 @@ export function makeMarkdownStyles(theme: Theme) {
       // Android hangs an inline View's bottom on the baseline, which left the
       // pill's text riding above the words beside it (2026-09-12, "peak" sat
       // above its sentence; 2026-09-26, beside the Claude app's). This moves
-      // the pill's text down onto the paragraph's baseline.
+      // the pill's text down to half a dp above the paragraph's baseline
+      // (MARKDOWN_CHIP_LIFT).
       transform: [{ translateY: MARKDOWN_INLINE_CHIP_BASELINE_SHIFT }]
     },
     // The paragraph's own face, one step smaller, as the Claude app sets it

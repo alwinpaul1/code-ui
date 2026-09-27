@@ -84,26 +84,37 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
     expect(height).toBeLessThanOrEqual(1.35 * styles.paragraph.fontSize)
   })
 
-  it("holds the font's descenders inside the pill's own line", () => {
-    // The lowest ink in the font's ASCII is g and j, 215 below the baseline
-    // per 1000 em (glyf of the bundled TTF). The pill's line gives
-    // DESCENT plus half its leading; a twentieth of a dp short is a sub-pixel.
+  // Review of f8c968a1: a 16 dp line clipped g and j by up to 0.9 px. Android
+  // rounds font metrics to whole pixels (Paint.getFontMetricsInt),
+  // CustomLineHeightSpan (RN 0.86) takes the odd pixel of a negative leading
+  // off the descent, and TextView.onDraw clips at the view's height.
+  it.each([2.625, 2.75, 2.8125, 3, 3.5])("keeps g and j whole at density %s, as Android rounds the pill's line", (density) => {
+    const skRound = (x: number) => Math.floor(x + 0.5)
+    // The lowest ink in the font's ASCII: g and j, 215 below the baseline per
+    // 1000 em (glyf of the bundled TTF).
     for (const text of [label, styles.inlineCodeChipTextTable]) {
-      const below = DESCENT * text.fontSize + (text.lineHeight - (ASCENT + DESCENT) * text.fontSize) / 2
-      expect(below).toBeGreaterThanOrEqual(0.215 * text.fontSize - 0.1)
+      const px = text.fontSize * density
+      const ascent = skRound(ASCENT * px)
+      const descent = skRound(DESCENT * px)
+      const leading = Math.ceil(text.lineHeight * density) - (ascent + descent)
+      const underBaseline = descent + Math.floor(leading / 2)
+      expect(0.215 * px, `${text.fontSize} sp`).toBeLessThanOrEqual(underBaseline)
     }
   })
 
-  it("sits the code on the paragraph's baseline, not above it", () => {
-    // Android hangs an inline view's bottom on the line's baseline, so the
-    // pill's own text sits above it by the pill's border, padding, and the
-    // part of its line below its baseline. The pill is moved down by that.
+  it("sits the code on the paragraph's baseline, or half a dp above it, never below", () => {
+    // Android hangs an inline view's bottom on the baseline, so the pill's
+    // own text sits above it by the pill's border, padding, and the part of
+    // its line below its baseline. The pill is moved down by that, less half
+    // a dp that keeps a dp of the line below every pill (mobile-markdown-
+    // prose-scale.ts, and the collision test).
     const shift = chip.transform?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0
-    const belowBaseline =
+    const onBaseline =
       (chip.borderWidth ?? 0) +
       (chip.paddingVertical ?? 0) +
       DESCENT * label.fontSize +
       (label.lineHeight - (ASCENT + DESCENT) * label.fontSize) / 2
-    expect(Math.abs(shift - belowBaseline)).toBeLessThanOrEqual(0.5)
+    expect(shift).toBeLessThanOrEqual(onBaseline)
+    expect(onBaseline - shift).toBeLessThanOrEqual(0.5)
   })
 })

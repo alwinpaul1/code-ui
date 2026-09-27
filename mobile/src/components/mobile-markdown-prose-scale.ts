@@ -30,19 +30,29 @@ export const MARKDOWN_PROSE_LINE_GAP = 10
  * padding, sitting on the paragraph's baseline. JetBrains Mono at 13 with 5 dp
  * of padding read wider and bulkier than the words around it.
  *
- * The pill's line is its text's ink and no more. Instrument Sans's ascent plus
- * descent is 1.22 em (970 + 250 of 1000, hhea of the bundled TTF), but its
- * ASCII ink runs from 215 below the baseline (g, j) to 830 above ($), so a
- * 16 dp line at 14 holds every glyph (a twentieth of a dp short at g's tail).
- * A 17 dp line left the pill's bottom 0.04 dp inside an h4 heading's line
- * (2026-09-27 review); at 16 every block keeps a dp, with the pill's text on
- * the paragraph's baseline. The pill's height is that line and its border.
+ * The pill's line holds its text's ink and little more. Instrument Sans's
+ * ascent plus descent is 1.22 em (970 + 250 of 1000, hhea of the bundled
+ * TTF); its ASCII ink runs from 215 below the baseline (g, j) to 830 above
+ * ($). Android rounds the metrics to whole pixels and takes the odd pixel of
+ * a negative leading off the descent (CustomLineHeightSpan), and the pill's
+ * Text clips at its height: at 16 dp that cut up to 0.9 px off g and j
+ * (2026-09-27 review, densities 2.625 to 3.5). 16.5 clears them at all five,
+ * with a tenth of a pixel to spare at the tightest.
+ *
+ * The pill's height is that line and its border, and it has to sit a dp
+ * inside the line it is drawn in: 17 left an h4 heading's pill 0.04 dp
+ * inside (2026-09-27 review). At 16.5 the pill's text sits half a dp above
+ * the paragraph's baseline to keep that dp (MARKDOWN_CHIP_LIFT): the trade
+ * is half a dp of baseline for whole descenders and the margin.
  */
 export const MARKDOWN_CHIP_FONT_SIZE = MARKDOWN_BASE_SIZE - 1
-export const MARKDOWN_CHIP_LINE_HEIGHT = 16
+export const MARKDOWN_CHIP_LINE_HEIGHT = 16.5
 /** A table cell is set at BASE - 2; its pills match the cell's own size. */
 export const MARKDOWN_TABLE_CHIP_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
-export const MARKDOWN_TABLE_CHIP_LINE_HEIGHT = 15
+export const MARKDOWN_TABLE_CHIP_LINE_HEIGHT = 15.5
+/** How far above the paragraph's baseline a pill's text sits: half a dp,
+ *  which keeps a dp of every line below the pill in it. */
+export const MARKDOWN_CHIP_LIFT = 0.5
 /** A table cell's own type, which keeps its size at a zoom. */
 export const MARKDOWN_TABLE_CELL_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
 export const MARKDOWN_TABLE_CELL_LINE_HEIGHT = MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP
@@ -57,10 +67,10 @@ const INSTRUMENT_SANS_DESCENT = 0.25
 
 /**
  * How far a pill is drawn below where Android lays it, so its text sits on
- * the paragraph's baseline. Android hangs an inline view's BOTTOM on the
- * baseline (TextLayoutManager: top = baseline - height), so the pill's own
- * text rides above the words by its border, its padding, and the part of its
- * line below its baseline. 4 dp for both pill sizes (3.96 and 3.82).
+ * the paragraph's baseline, less MARKDOWN_CHIP_LIFT. Android hangs an inline
+ * view's BOTTOM on the baseline (TextLayoutManager: top = baseline - height),
+ * so the pill's own text rides above the words by its border, its padding,
+ * and the part of its line below its baseline. 3.71 dp for a prose pill.
  */
 export function markdownChipBaselineShift(fontSize: number, lineHeight: number): number {
   const leading = lineHeight - (INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * fontSize
@@ -68,7 +78,8 @@ export function markdownChipBaselineShift(fontSize: number, lineHeight: number):
     MARKDOWN_CHIP_BORDER_WIDTH +
     MARKDOWN_CHIP_PADDING_VERTICAL +
     INSTRUMENT_SANS_DESCENT * fontSize +
-    leading / 2
+    leading / 2 -
+    MARKDOWN_CHIP_LIFT
   )
 }
 
@@ -127,10 +138,7 @@ export function markdownTableCellPillPadding(textScale: number): number {
     MARKDOWN_TABLE_CHIP_LINE_HEIGHT * textScale +
     2 * MARKDOWN_CHIP_PADDING_VERTICAL * textScale +
     2 * MARKDOWN_CHIP_BORDER_WIDTH
-  const shift =
-    textScale === 1
-      ? Math.round(markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT))
-      : markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * textScale
+  const shift = markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * textScale
   const ascent = Math.max(INSTRUMENT_SANS_ASCENT * MARKDOWN_TABLE_CELL_FONT_SIZE, pill)
   const descent = INSTRUMENT_SANS_DESCENT * MARKDOWN_TABLE_CELL_FONT_SIZE
   const underBaseline = descent + (MARKDOWN_TABLE_CELL_LINE_HEIGHT - ascent - descent) / 2
