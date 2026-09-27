@@ -19,6 +19,8 @@ import {
   videoAssetSizeBytes,
   type PickVideoFramesDeps
 } from './mobile-video-frame-picker'
+// Android's file (photo-library-permission.android.ts) asks nothing before the picker.
+import { requestPhotoLibraryPermission, type PhotoLibraryPermissionRequest } from './photo-library-permission'
 
 export { ImageLibraryPermissionError }
 export type { MobileImageSource, PickedMobileImage }
@@ -115,14 +117,16 @@ async function* pickFromCamera(
 
 async function* pickFromLibrary(
   multiple: boolean,
-  requestPermission: typeof ImagePicker.requestMediaLibraryPermissionsAsync = ImagePicker.requestMediaLibraryPermissionsAsync,
+  requestPermission: PhotoLibraryPermissionRequest = requestPhotoLibraryPermission,
   launch: typeof ImagePicker.launchImageLibraryAsync = ImagePicker.launchImageLibraryAsync,
   createFile: MobileImageFileFactory = defaultMobileImageFileFactory,
   resizeImage: MobileImageResizer = noResize
 ): AsyncGenerator<PickedMobileImage> {
-  const permission = await requestPermission()
+  // Nothing is awaited when there is nothing to ask: the launch goes out in
+  // the same turn as the tap.
+  const permission = requestPermission ? await requestPermission() : null
   // Why: `granted` covers full + limited iOS access; only a hard denial blocks us.
-  if (!permission.granted) {
+  if (permission && !permission.granted) {
     throw new ImageLibraryPermissionError()
   }
   const result = await launch({
@@ -304,7 +308,8 @@ type MobileImagePickerDeps = {
   readonly resizeImage?: MobileImageResizer
   readonly requestCameraPermission?: typeof ImagePicker.requestCameraPermissionsAsync
   readonly launchCamera?: typeof ImagePicker.launchCameraAsync
-  readonly requestLibraryPermission?: typeof ImagePicker.requestMediaLibraryPermissionsAsync
+  /** Undefined takes the platform's own step; null opens the picker unasked. */
+  readonly requestLibraryPermission?: PhotoLibraryPermissionRequest
   readonly launchLibrary?: typeof ImagePicker.launchImageLibraryAsync
   readonly launchFiles?: typeof DocumentPicker.getDocumentAsync
   readonly createFile?: MobileImageFileFactory

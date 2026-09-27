@@ -23,6 +23,9 @@ import {
   type PickedMobileImage
 } from './mobile-image-source-picker'
 import { resetVideoFrameGroupCounterForTests } from './mobile-video-frame-picker'
+import * as ImagePicker from 'expo-image-picker'
+import { requestPhotoLibraryPermission as askedByDefault } from './photo-library-permission'
+import { requestPhotoLibraryPermission as askedOnAndroid } from './photo-library-permission.android'
 import type { VideoFrameExtractionEvent } from './mobile-video-frame-extractor'
 
 const granted = { granted: true } as Awaited<
@@ -178,6 +181,31 @@ describe('pickMobileImage', () => {
         launchLibrary: vi.fn()
       })
     ).rejects.toBeInstanceOf(ImageLibraryPermissionError)
+  })
+
+  it('keeps asking first where the platform needs it, and still refuses on a denial', async () => {
+    // This runner loads photo-library-permission.ts, the file iOS gets: the
+    // library pick asks before it opens, as it always has there. Android's
+    // own file opens it unasked (photos-open-without-a-permission-round-trip.test.ts).
+    const request = vi.mocked(ImagePicker.requestMediaLibraryPermissionsAsync)
+    const launch = vi.mocked(ImagePicker.launchImageLibraryAsync)
+    request.mockResolvedValue(denied)
+    try {
+      await expect(pickMobileImage('library')).rejects.toBeInstanceOf(ImageLibraryPermissionError)
+      expect(request).toHaveBeenCalledTimes(1)
+      expect(launch).not.toHaveBeenCalled()
+    } finally {
+      request.mockReset()
+      launch.mockReset()
+    }
+  })
+
+  it('opens the library unasked on Android only: the file Metro picks there says so', () => {
+    // A `.android.ts` beside the default is what Metro resolves on Android and
+    // nowhere else. If the two ever say the same thing, one platform quietly
+    // gets the other's behaviour.
+    expect(askedOnAndroid).toBeNull()
+    expect(askedByDefault).toBe(ImagePicker.requestMediaLibraryPermissionsAsync)
   })
 
   it('returns null when the library picker is cancelled', async () => {
