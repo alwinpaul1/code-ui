@@ -1,18 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { downloadMobilePdf, type MobilePdfDownloadDeps } from './mobile-pdf-download'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { createSaveToPhoneRunner, type MobileFileSaveTarget } from './mobile-file-save'
+import { configurePickerGateStaleEscape, resetPickerGateForTests } from './mobile-picker-gate'
 
 // expo-intent-launcher (57.0.1) keeps one pending Activity result at a time
-// (IntentLauncherModule.kt): a second startActivityAsync while the first is still open throws
-// ActivityAlreadyStartedException, synchronously, rather than queuing. The runner gives each FILE
-// its own slot (mobile-file-save.ts), so nothing stopped two DIFFERENT files' saves -- or a save
-// and the PDF viewer's Download (mobile-pdf-download.ts) -- from each reaching their own picker
-// call at once. Reported symptom: Save to Phone on a big file, then on a small file; the small
-// file's picker opens first, and while the user is still choosing a folder the big file's read
-// finishes and its own picker call collides, failing with "Couldn't save a.pdf: the phone's save
-// picker did not open (IntentLauncher activity is already started...)".
+// (IntentLauncherModule.kt): a second startActivityAsync while the first is still open rejects at
+// once with its own ActivityAlreadyStartedException, rather than queuing. The runner gives each
+// FILE its own slot (mobile-file-save.ts), so nothing stopped two DIFFERENT files' saves -- or a
+// save and the PDF viewer's Download (mobile-pdf-download.ts) -- from each reaching their own
+// picker call at once. Reported symptom: Save to Phone on a big file, then on a small file; the
+// small file's picker opens first, and while the user is still choosing a folder the big file's
+// read finishes and its own picker call collides, failing with "Couldn't save a.pdf: the phone's
+// save picker did not open (IntentLauncher activity is already started...)".
+
+beforeEach(() => {
+  resetPickerGateForTests()
+})
 
 /** expo-intent-launcher's own collision text (ActivityAlreadyStartedException.kt, 57.0.1). */
 const ACTIVITY_ALREADY_STARTED =
@@ -153,8 +158,8 @@ describe('the save picker gate', () => {
     expect(target.createDocument).toHaveBeenCalledTimes(1)
 
     // The big file's read finishes while the small file's picker is still open. On the bug this
-    // collides right here, synchronously, with the small file's still-open picker -- nobody has
-    // closed anything yet.
+    // collides right here with the small file's still-open picker and fails -- nobody has closed
+    // anything yet.
     slowBig.release()
     await flushPendingMicrotasks()
     expect(target.createDocument).toHaveBeenCalledTimes(1)
@@ -323,5 +328,133 @@ describe('the save picker gate', () => {
 
     picker.finishPicker()
     await expect(third).resolves.toMatchObject({ status: 'saved', fileName: 'third.pdf' })
+  })
+})
+
+// A picker's own Activity result can, rarely, never come back at all (Android never delivers
+// OnActivityResult for that request code). Before this queue existed, a lost result still left
+// `pendingPromise` set, so the NEXT save's own picker call failed fast with the launcher's own
+// collision message -- at least telling the user something. Queued behind the stuck call instead,
+// nothing would tell it anything, ever: "Getting X…", a disabled Save button, a PDF Download stuck
+// on "Saving…", forever. mobile-picker-gate.ts's stale escape, and a waiter's signal settling the
+// moment it aborts rather than waiting out whatever is ahead of it, are what fix that; these three
+// are the regression review's own probe scenarios.
+describe('the picker gate does not hang forever', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    configurePickerGateStaleEscape(null)
+  })
+
+  it('a save of another file behind a picker that never returns still ends, saying why', async () => {
+    vi.useFakeTimers()
+    configurePickerGateStaleEscape({ isActive: () => true, activeMs: 4000, pollMs: 500 })
+    const picker = androidPicker()
+    const target = pickerSaveTarget(picker)
+    const run = createSaveToPhoneRunner(target)
+    const session = new AbortController()
+
+    // The big file's own picker opens and then its result is simply never delivered -- nobody
+    // ever calls finishPicker for it.
+    const stuck = run({
+      client: readyDesktop(PDF),
+      source: bigFile,
+      notify: () => {},
+      signal: session.signal,
+      onScreen: () => true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(picker.pickerOpen()).toBe(true)
+
+    const waiting = run({
+      client: readyDesktop(PDF),
+      source: smallFile,
+      notify: () => {},
+      signal: session.signal,
+      onScreen: () => true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(target.createDocument).toHaveBeenCalledTimes(1) // still queued behind the stuck one
+
+    // The app stays in the foreground long enough for the stale escape to give up on it.
+    await vi.advanceTimersByTimeAsync(4500)
+    const outcome = await waiting
+
+    // Its own attempt hits the SAME still-open (never-closed) picker the stuck save left behind --
+    // the same answer a second save got on main before this queue existed.
+    expect(outcome).toMatchObject({ status: 'failed', fileName: 'small.pdf' })
+    expect((outcome as { message: string }).message).toContain(
+      'IntentLauncher activity is already started'
+    )
+    void stuck // deliberately never settles, same as it would with no queue at all
+  })
+
+  it('the PDF Download behind a picker that never returns does not sit on Saving… forever', async () => {
+    vi.useFakeTimers()
+    configurePickerGateStaleEscape({ isActive: () => true, activeMs: 4000, pollMs: 500 })
+    const picker = androidPicker()
+    const saveTarget = pickerSaveTarget(picker)
+    const run = createSaveToPhoneRunner(saveTarget)
+    const session = new AbortController()
+
+    const stuckSave = run({
+      client: readyDesktop(PDF),
+      source: smallFile,
+      notify: () => {},
+      signal: session.signal,
+      onScreen: () => true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(picker.pickerOpen()).toBe(true)
+
+    const deps = pickerPdfDeps(picker)
+    const download = downloadMobilePdf(
+      { uri: 'file:///cache/orca-pdf-1.pdf', fileName: 'big.pdf' },
+      deps
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    expect(deps.createDocument).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(4500)
+    const outcome = await download
+
+    // Its own attempt hits the SAME still-open picker; it ends, rather than sitting on "Saving…"
+    // for as long as the stuck save's picker is never closed.
+    expect(outcome).toEqual({ status: 'failed' })
+    void stuckSave
+  })
+
+  it('a queued save whose session is gone lets go at once instead of waiting on the picker ahead', async () => {
+    const picker = androidPicker()
+    const target = pickerSaveTarget(picker)
+    const run = createSaveToPhoneRunner(target)
+
+    // Its picker opens and, for the purpose of this test, simply never closes.
+    const stuck = run({
+      client: readyDesktop(PDF),
+      source: bigFile,
+      notify: () => {},
+      signal: new AbortController().signal,
+      onScreen: () => true
+    })
+    await flushPendingMicrotasks()
+    expect(picker.pickerOpen()).toBe(true)
+
+    const waiterSession = new AbortController()
+    const waiting = run({
+      client: readyDesktop(PDF),
+      source: smallFile,
+      notify: () => {},
+      signal: waiterSession.signal,
+      onScreen: () => true
+    })
+    await flushPendingMicrotasks()
+    expect(target.createDocument).toHaveBeenCalledTimes(1) // still just the stuck one
+
+    waiterSession.abort() // the screen it was asked from is gone
+    const outcome = await waiting // must not wait for the never-closing picker ahead of it
+
+    expect(outcome).toEqual({ status: 'abandoned', fileName: 'small.pdf' })
+    expect(target.createDocument).toHaveBeenCalledTimes(1) // never opened a second picker
+    void stuck
   })
 })

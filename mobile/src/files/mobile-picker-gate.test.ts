@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
-import { PickerGateAbandonedError, withPickerGate } from './mobile-picker-gate'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  configurePickerGateStaleEscape,
+  PickerGateAbandonedError,
+  resetPickerGateForTests,
+  withPickerGate
+} from './mobile-picker-gate'
 
 /** A picker call that stays open until `close()`, like Android's create-document picker while the
  *  user is still choosing a folder. */
@@ -10,6 +15,16 @@ function pendingOpen<T>(value: T) {
   })
   return { open: vi.fn(() => promise), close: () => close(value) }
 }
+
+/** A picker call whose result never comes back at all -- the shape of the real, if rare,
+ *  Android fault the stale escape exists for (`OnActivityResult` never delivered). */
+function lostPicker<T = string>() {
+  return vi.fn(() => new Promise<T>(() => {}))
+}
+
+beforeEach(() => {
+  resetPickerGateForTests()
+})
 
 describe('the shared picker gate', () => {
   it('holds a second request until the first picker closes', async () => {
@@ -72,6 +87,21 @@ describe('the shared picker gate', () => {
     expect(second).not.toHaveBeenCalled()
   })
 
+  it('settles at once when its signal aborts, even though the picker ahead of it never returns', async () => {
+    const stuck = lostPicker()
+    const controller = new AbortController()
+    const second = vi.fn(() => Promise.resolve('uri-2'))
+
+    const a = withPickerGate(stuck)
+    const b = withPickerGate(second, { signal: controller.signal })
+    controller.abort()
+
+    // `a`'s own picker never comes back; `b` must not wait on it to learn it dropped out.
+    await expect(b).rejects.toBeInstanceOf(PickerGateAbandonedError)
+    expect(second).not.toHaveBeenCalled()
+    void a // deliberately never settles
+  })
+
   it('does not hold up a third request just because the second one dropped out', async () => {
     const held = pendingOpen('uri-1')
     const controller = new AbortController()
@@ -118,5 +148,77 @@ describe('the shared picker gate', () => {
 
     third.close()
     await expect(c).resolves.toBe('uri-3')
+  })
+})
+
+describe('the stale-picker escape', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    configurePickerGateStaleEscape(null)
+  })
+
+  it('lets the next request through once the app has been active for the threshold, without touching the stuck one', async () => {
+    vi.useFakeTimers()
+    configurePickerGateStaleEscape({ isActive: () => true, activeMs: 4000, pollMs: 500 })
+    const stuck = lostPicker()
+    const second = vi.fn(() => Promise.resolve('uri-2'))
+
+    const a = withPickerGate(stuck)
+    const b = withPickerGate(second)
+    await vi.advanceTimersByTimeAsync(0)
+
+    await vi.advanceTimersByTimeAsync(3500)
+    expect(second).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(await b).toBe('uri-2')
+
+    // `a`'s own picker is still exactly as unsettled as it was -- the escape only frees the queue
+    // behind it, matching main, where the FIRST (lost) save also never resolved on its own.
+    void a
+  })
+
+  it('does not let the next request through while the app has not come back to the foreground', async () => {
+    vi.useFakeTimers()
+    configurePickerGateStaleEscape({ isActive: () => false, activeMs: 4000, pollMs: 500 })
+    const stuck = lostPicker()
+    const second = vi.fn(() => Promise.resolve('uri-2'))
+
+    const a = withPickerGate(stuck)
+    const b = withPickerGate(second)
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(20_000)
+
+    expect(second).not.toHaveBeenCalled()
+    void a
+    void b
+  })
+
+  it('restarts the active timer if the app leaves the foreground before the threshold', async () => {
+    vi.useFakeTimers()
+    let active = true
+    configurePickerGateStaleEscape({ isActive: () => active, activeMs: 4000, pollMs: 500 })
+    const stuck = lostPicker()
+    const second = vi.fn(() => Promise.resolve('uri-2'))
+
+    const a = withPickerGate(stuck)
+    const b = withPickerGate(second)
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Within the first active streak, short of the threshold.
+    await vi.advanceTimersByTimeAsync(3500)
+    // A real picker opens over the app again before the threshold; the old streak's remaining
+    // 500ms would otherwise have crossed it here.
+    active = false
+    await vi.advanceTimersByTimeAsync(3500)
+    expect(second).not.toHaveBeenCalled()
+
+    // Back to the foreground: a full fresh streak, plus a poll's worth of margin either side.
+    active = true
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(await b).toBe('uri-2')
+    void a
   })
 })
