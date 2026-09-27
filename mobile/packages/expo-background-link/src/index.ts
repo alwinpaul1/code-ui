@@ -20,7 +20,9 @@ const native: NativeBackgroundLink | null =
 
 export const isBackgroundLinkSupported = native !== null
 
-/** Start (or refresh) the foreground service. Call only while the app is in the foreground. */
+/** Start (or refresh) the foreground service. Call while the app is in the foreground:
+ *  from the background Android 12+ throws unless the app is exempt from battery
+ *  optimisation (the pause handler relies on that exemption and catches the refusal). */
 export function startBackgroundLink(title: string, text: string): void {
   native?.start(title, text)
 }

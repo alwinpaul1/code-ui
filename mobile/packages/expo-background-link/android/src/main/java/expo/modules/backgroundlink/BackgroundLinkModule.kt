@@ -13,9 +13,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 /**
  * JS-facing control of [BackgroundLinkService].
  *
- * `start` must be called while the app is in the foreground: Android 12+
- * refuses foreground-service starts from the background, so the JS side
- * starts the service on launch / on toggle and leaves it running.
+ * `start` belongs in the foreground: Android 12+ refuses (throws on) a
+ * foreground-service start from the background unless the app is exempt from
+ * battery optimisation. So the JS side starts the service on launch / on
+ * toggle and leaves it running; only the pause handler tries a background
+ * start, relying on that exemption and catching the refusal.
  */
 class BackgroundLinkModule : Module() {
   private fun requireContext(): Context =

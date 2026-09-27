@@ -27,7 +27,7 @@ import { openHostLogicalClient } from '../transport/host-logical-client'
 import { loadHosts } from '../transport/host-store'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
 import type { RpcClient } from '../transport/rpc-client'
-import type { HostProfile } from '../transport/types'
+import type { ConnectionLogEntry, HostProfile } from '../transport/types'
 import { loadBackgroundDeliveryEnabled } from './background-link-preference'
 import { forwardBackgroundClientRevival } from './background-client-revival'
 import {
@@ -35,7 +35,8 @@ import {
   type BackgroundNotificationWatcher
 } from './background-notification-watcher'
 import { releaseBackgroundLinkTask } from './background-link-task-hold'
-import { AppPauseDetector, appPauseLogEntry } from './app-pause-detector'
+import { AppPauseDetector } from './app-pause-detector'
+import { handleAppPause } from './app-pause-handler'
 import { promptAfterPause } from './background-power-after-pause'
 import {
   describeBackgroundServiceStop,
@@ -56,26 +57,35 @@ const pauseDetector = new AppPauseDetector({
   setTimer: defaultScheduleTimer,
   clearTimer: defaultCancelTimer,
   onPause: (pause) => {
-    const background = backgroundDeliveryState()
-    const stop = background.serviceRunning ? null : readBackgroundServiceStop()
-    const entry = appPauseLogEntry(pause, background, stop)
     // Say so now, while the cost is concrete; shown when the screen is up.
-    if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: background.unrestricted })) {
+    if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: isBackgroundDeliveryUnrestricted() })) {
       openBackgroundPowerPrompt('paused', pause.to - pause.from)
     }
-    log(entry.message, entry.detail)
-    void loadHosts()
-      .then((hosts) => {
-        for (const host of hosts) {
-          connectionLogStore.append(host.id, entry)
-        }
-      })
-      .catch(() => undefined)
+    void handleAppPause(pause, {
+      now: Date.now,
+      backgroundState: backgroundDeliveryState,
+      lastServiceStop: readBackgroundServiceStop,
+      loadDeliveryOn: loadBackgroundDeliveryOn,
+      startService: () => applyBackgroundDelivery(true),
+      record: recordOnEveryHost
+    }).catch(() => undefined)
   }
 })
 
 function log(message: string, detail = ''): void {
   console.log(`[background-link] ${message}`, detail)
+}
+
+/** A line that is not about one host's connection, so every host's log gets it. */
+function recordOnEveryHost(entry: ConnectionLogEntry): void {
+  log(entry.message, entry.detail)
+  void loadHosts()
+    .then((hosts) => {
+      for (const host of hosts) {
+        connectionLogStore.append(host.id, entry)
+      }
+    })
+    .catch(() => undefined)
 }
 
 function openBackgroundClient(host: HostProfile): RpcClient {
@@ -181,9 +191,12 @@ export function requestBackgroundDeliveryUnrestricted(): boolean {
 
 /**
  * Apply the user's choice: run (or stop) the foreground service and the
- * watcher behind it. Must be called from the foreground — Android refuses to
- * start a foreground service from the background — which is why it runs on
- * launch and on the toggle, never from a background transition.
+ * watcher behind it. Call it from the foreground — Android 12+ refuses to
+ * start a foreground service from the background, by throwing — which is why
+ * it runs on launch and on the toggle, never from a background transition.
+ * The one deliberate exception is the pause handler (app-pause-handler.ts): an
+ * app exempt from battery optimisation IS allowed a background start, so it
+ * tries, and logs the refusal when there is one.
  *
  * "On launch" was this comment's claim long before it was true: the toggle was
  * the ONLY caller, so a killed service stayed dead until somebody found
@@ -206,13 +219,18 @@ export function applyBackgroundDelivery(enabled: boolean): void {
 
 /** Re-derive the running state from stored preferences (launch, headless start). */
 export async function syncBackgroundLinkFromPreferences(): Promise<boolean> {
+  const on = await loadBackgroundDeliveryOn()
+  applyBackgroundDelivery(on)
+  return on
+}
+
+/** Whether the user wants the service running: background delivery and notifications both on. */
+export async function loadBackgroundDeliveryOn(): Promise<boolean> {
   const [delivery, push] = await Promise.all([
     loadBackgroundDeliveryEnabled(),
     loadPushNotificationsEnabled()
   ])
-  const on = delivery && push
-  applyBackgroundDelivery(on)
-  return on
+  return delivery && push
 }
 
 /**
