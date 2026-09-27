@@ -1,9 +1,27 @@
+import { AppState } from 'react-native'
 import { File } from 'expo-file-system'
 import * as IntentLauncher from 'expo-intent-launcher'
+import { configurePickerGateStaleEscape } from './mobile-picker-gate'
 
 const ANDROID_CREATE_DOCUMENT = 'android.intent.action.CREATE_DOCUMENT'
 const ANDROID_CATEGORY_OPENABLE = 'android.intent.category.OPENABLE'
 const ANDROID_EXTRA_TITLE = 'android.intent.extra.TITLE'
+
+// A picker's own Activity result can, rarely, never come back to IntentLauncherModule.kt's
+// `pendingPromise` (OnActivityResult not delivered for that request code -- the hosting Activity
+// recreated under the picker, say). Before mobile-picker-gate.ts's queue existed, that only ever
+// stuck the ONE save that opened it; queued behind it instead, every save and PDF Download after
+// it would wait forever too. AppState is how the gate tells "still genuinely open" (a real picker
+// takes the foreground, so the app itself reads as backgrounded) from "lost" (the app is back in
+// front, but nothing ever settled the call that opened it): STALE_ACTIVE_MS is comfortably longer
+// than the near-instant resolve a normal return gets.
+const STALE_ACTIVE_MS = 4000
+const STALE_POLL_MS = 500
+configurePickerGateStaleEscape({
+  isActive: () => AppState.currentState === 'active',
+  activeMs: STALE_ACTIVE_MS,
+  pollMs: STALE_POLL_MS
+})
 
 /**
  * Android's system "Save to" picker (ACTION_CREATE_DOCUMENT, the Storage Access Framework). It

@@ -52,7 +52,13 @@ function providerWrite(uri: string, bytes: Buffer): void {
   device.documents.set(uri, bytes)
 }
 
-vi.mock('react-native', () => ({ Platform: { OS: 'android' }, Share: { share: vi.fn() } }))
+vi.mock('react-native', () => ({
+  // android-create-document.ts polls this for the picker gate's stale-result escape
+  // (mobile-picker-gate.ts); 'active' throughout keeps that escape out of these tests' way.
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Platform: { OS: 'android' },
+  Share: { share: vi.fn() }
+}))
 vi.mock('expo-haptics', () => ({
   AndroidHaptics: {},
   NotificationFeedbackType: {},
