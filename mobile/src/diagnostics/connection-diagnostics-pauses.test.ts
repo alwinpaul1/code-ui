@@ -13,7 +13,8 @@ const NOW = DAY + 14 * HOUR + 21 * MINUTE + 1_000
 function pause(fromMs: number, toMs: number): ConnectionLogEntry {
   return appPauseLogEntry(
     { from: DAY + fromMs, to: DAY + toMs },
-    { serviceRunning: false, unrestricted: true }
+    { serviceRunning: false, unrestricted: true },
+    null
   )
 }
 
@@ -119,5 +120,16 @@ describe('the copied report while connected', () => {
     })
 
     expect(report).not.toContain('paused by Android')
+  })
+})
+
+describe('a pause line that names why the background service stopped', () => {
+  it('is still counted as a pause, with its length read from the line', () => {
+    const entry = appPauseLogEntry(
+      { from: DAY + 12 * HOUR, to: DAY + 13 * HOUR },
+      { serviceRunning: false, unrestricted: true },
+      { at: DAY + 12 * HOUR + 53 * MINUTE, cause: 'task-ended' }
+    )
+    expect(describeAppPauses([entry], NOW)).toMatch(/1h/)
   })
 })
