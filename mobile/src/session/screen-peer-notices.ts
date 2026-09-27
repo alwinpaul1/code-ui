@@ -57,11 +57,35 @@ export type ScreenPeerNotice = {
    *  and never drawn. `why` says what was missing, for the log. */
   held?: true
   why?: string
+  /** Found while the transcript was not yet the host's as of now: counted,
+   *  not drawn, and placed once it is (placePendingNotices). */
+  pending?: true
 }
 
 /** Where a row found on the chat's first read of the screen goes: after the
- *  last row the chat held when it last read the screen, or nowhere, and why. */
-export type FoundPlacement = { id: string; at: number } | { why: string }
+ *  last row the chat held when it last read the screen, or nowhere, and why;
+ *  or, while the transcript is not settled, not decided yet. */
+export type FoundPlacement = { id: string; at: number } | { why: string } | { pending: true }
+
+/** The notices with each pending one placed, or held, as `placement` says.
+ *  Same array when none is pending. */
+export function placePendingNotices(
+  notices: readonly ScreenPeerNotice[],
+  placement: Exclude<FoundPlacement, { pending: true }>
+): readonly ScreenPeerNotice[] {
+  if (!notices.some((notice) => notice.pending === true)) {
+    return notices
+  }
+  return notices.map((notice) => {
+    if (notice.pending !== true) {
+      return notice
+    }
+    const { pending: _pending, ...rest } = notice
+    return 'why' in placement
+      ? { ...rest, anchorId: null, held: true as const, why: placement.why }
+      : { ...rest, anchorId: placement.id, sightedAt: placement.at }
+  })
+}
 
 /**
  * One poll's rows are a multiset by sender; a sender's Nth row is that
@@ -115,9 +139,11 @@ export function observeScreenPeerNotices(
         // and a row the lead answered before the chat looked sat under the
         // answer (device, 2026-09-27, session 790eafa8).
         next.push(
-          'why' in found
-            ? { id, sender, ...(body ? { body } : {}), anchorId: null, sightedAt: now, found: true, held: true, why: found.why }
-            : { id, sender, ...(body ? { body } : {}), anchorId: found.id, sightedAt: found.at, found: true }
+          'pending' in found
+            ? { id, sender, ...(body ? { body } : {}), anchorId: null, sightedAt: now, found: true, pending: true }
+            : 'why' in found
+              ? { id, sender, ...(body ? { body } : {}), anchorId: null, sightedAt: now, found: true, held: true, why: found.why }
+              : { id, sender, ...(body ? { body } : {}), anchorId: found.id, sightedAt: found.at, found: true }
         )
         continue
       }
@@ -152,7 +178,8 @@ export function withScreenPeerNotices(
     return folded as NativeChatMessage[]
   }
   const notices = allNotices.filter(
-    (notice) => notice.held !== true && (drawsPeerBubble(notice) || options.subagentRows === true)
+    (notice) =>
+      notice.held !== true && notice.pending !== true && (drawsPeerBubble(notice) || options.subagentRows === true)
   )
   if (notices.length === 0) {
     return folded as NativeChatMessage[]

@@ -58,6 +58,11 @@ export type MobileNativeChatSession = {
    *  trimmed, a kept tail, a page stopped at the cap, or rows that came
    *  before the snapshot. Absent on a lane that does not track it. */
   wholeSession?: boolean
+  /** True from a new connection until its replay lands: the read stays
+   *  'ready' through a reconnect, and until then `messages` lacks what was
+   *  written while the phone was away. Absent on a lane that does not track
+   *  it. */
+  awaitingReplay?: boolean
 }
 
 
@@ -427,6 +432,6 @@ export function useMobileNativeChatSession(args: {
     loadingEarlier,
     loadEarlier,
     baseRetained: baseRetainedRef.current,
-    wholeSession: whole.whole
+    wholeSession: whole.whole, awaitingReplay: whole.awaitingReplay(lastConnectedAt)
   }
 }

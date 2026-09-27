@@ -32,6 +32,10 @@ import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 import { landingHarness } from './mobile-chat-phone-photo-landing.test-support'
 import { resetScreenPeerNoticesForTests, useScreenPeerNotices } from './use-screen-peer-notices'
+import type { RpcClient } from '../transport/rpc-client'
+import { resetNativeChatTranscriptCacheForTests } from './mobile-native-chat-transcript-cache'
+import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { transcriptSettled } from './mobile-native-chat-whole-session'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -419,5 +423,133 @@ describe('rows found on the first screen read, after the review of the first fix
     view.show({ rows: [...R, ...R], folded: [U1, A1, A1B], scope: 'A' })
     expect(view.ids().filter((id) => id === 'row:general-purpose')).toHaveLength(2)
     expect(peerLines(info)).toHaveLength(2)
+  })
+})
+
+// Third review (of 7270b321), both reproduced with the real transcript hook:
+// - The client outlives a reconnect and replays the transcript on the same
+//   subscription, so the chat's read stays 'ready' through the drop, and the
+//   first screen read after it came before the replay: a row found then was
+//   placed against the transcript from before the drop, turns early.
+// - While the transcript is a base kept over an empty re-subscribe, which can
+//   last the whole visit, the first read never came, so rows the chat watched
+//   arrive were never drawn.
+describe('rows on the screen, read beside the real transcript hook', () => {
+  const text = (id: string, role: NativeChatMessage['role'], body: string, timestamp: number): NativeChatMessage => ({
+    id,
+    role,
+    timestamp,
+    source: 'transcript',
+    blocks: [{ type: 'text', text: body }]
+  })
+  const U1 = text('u1', 'user', 'start the agents', 1)
+  const A1 = text('a1', 'assistant', 'Launched two agents.', 2)
+  const U2 = text('u2', 'user', 'now fix the header', 3)
+  const A2 = text('a2', 'assistant', 'Header fixed.', 4)
+  const A3 = text('a3', 'assistant', 'Still on the header.', 5)
+  const U4 = text('u4', 'user', 'run the suite', 7)
+  const A4 = text('a4', 'assistant', 'Running the suite now.', 8)
+  const R = [{ sender: 'general-purpose' }]
+
+  type Props = { agent: string | null; rows: ReturnType<typeof peerNoticesFromScreen> | null; lastConnectedAt: number }
+  /** The transcript hook and the row reader wired as the overlay wires them. */
+  function wired() {
+    let out: NativeChatMessage[] = []
+    let renderer: ReactTestRenderer | null = null
+    let emit: (frame: unknown) => void = () => undefined
+    const client = {
+      sendRequest: vi.fn(),
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        emit = onData
+        return () => undefined
+      })
+    } as unknown as RpcClient
+    function Chat(props: Props) {
+      const session = useMobileNativeChatSession({
+        client,
+        sourceIdentity: 'host-a\0workspace-a',
+        agent: props.agent,
+        sessionId: 'session',
+        transcriptPath: null,
+        lastConnectedAt: props.lastConnectedAt
+      })
+      out = useScreenPeerNotices(props.rows, session.messages, 'scope-A', true, undefined, transcriptSettled(session))
+      return null
+    }
+    return {
+      async show(props: Props) {
+        await act(async () => {
+          if (renderer) {
+            renderer.update(createElement(Chat, props))
+          } else {
+            renderer = create(createElement(Chat, props))
+          }
+        })
+      },
+      async emit(frame: unknown) {
+        await act(async () => emit(frame))
+      },
+      unmount() {
+        act(() => renderer?.unmount())
+        renderer = null
+      },
+      ids: () => out.map((message) => (agentMessageOf(message) ? `row:${agentMessageOf(message)!.sender}` : message.id))
+    }
+  }
+
+  beforeEach(() => {
+    resetScreenPeerNoticesForTests()
+    resetNativeChatTranscriptCacheForTests()
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('does not draw a row found before a reconnect’s replay turns before where it came', async () => {
+    const view = wired()
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.emit({ type: 'snapshot', messages: [U1, A1], hasMore: false })
+    await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
+    // The link drops while the person works at the desk; it comes back, and
+    // the screen is read before the replay lands.
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 2 })
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
+    await view.emit({ type: 'snapshot', messages: [U1, A1, U2, A2, U4, A4], hasMore: false })
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'u4', 'a4'])
+  })
+
+  it('still places the reported row above the answer when the replay lands after the screen read', async () => {
+    const COMMIT = text('commit', 'assistant', 'Committing it.', 10)
+    const FINAL = text('final', 'assistant', 'Committed on a branch.', 20)
+    const view = wired()
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.emit({ type: 'snapshot', messages: [U1, COMMIT], hasMore: false })
+    await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 2 })
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
+    await view.emit({ type: 'snapshot', messages: [U1, COMMIT, FINAL], hasMore: false })
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
+    expect(view.ids()).toEqual(['u1', 'commit', 'row:general-purpose', 'final'])
+  })
+
+  it('draws a row the chat watches arrive while the transcript is a base kept over an empty re-subscribe', async () => {
+    const view = wired()
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.emit({ type: 'snapshot', messages: [U1, A1], hasMore: false })
+    await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
+    // Chat, file tab, chat: the lane subscribes again and the host sends an
+    // empty base (a Windows host that failed to read the file).
+    await view.show({ agent: null, rows: null, lastConnectedAt: 1 })
+    await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
+    await view.emit({ type: 'snapshot', messages: [], hasMore: false })
+    await view.emit({ type: 'appended', messages: [U2, A2] })
+    await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
+    // Watching: a subagent's row arrives, and the lead writes on.
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 1 })
+    await view.emit({ type: 'appended', messages: [A3] })
+    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 1 })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:general-purpose', 'a3'])
   })
 })

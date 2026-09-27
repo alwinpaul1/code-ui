@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   observeScreenPeerNotices,
+  placePendingNotices,
   withScreenPeerNotices,
   type FoundPlacement,
   type ScreenPeerNotice,
@@ -71,7 +72,10 @@ const loggedFound = new Set<string>()
  * ce17bce5). Nor when that row is not loaded, which drew it above the whole
  * page. Refused then: not drawn, and the log says why.
  */
-function foundPlacement(lastRead: Memory['lastRead'], folded: readonly NativeChatMessage[]): FoundPlacement {
+function foundPlacement(
+  lastRead: Memory['lastRead'],
+  folded: readonly NativeChatMessage[]
+): Exclude<FoundPlacement, { pending: true }> {
   if (lastRead === undefined) {
     return { why: 'the chat holds no earlier reading of this session to place it by' }
   }
@@ -117,11 +121,13 @@ export function useScreenPeerNotices(
   subagentRows = false,
   /** Words other sources carried for those rows. */
   bodies?: readonly ScreenRowBody[],
-  /** Whether `folded` is the host's transcript, read and settled. Until it
-   *  is, the chat shows the copy the last visit cached, or nothing, and a
-   *  first read placed against that was placed for good: turns early, or
-   *  refused for a row that had not loaded yet (re-review of 1045e43b). The
-   *  first read waits for it. */
+  /** Whether `folded` is the host's transcript as of now (transcriptSettled).
+   *  Until it is, the chat shows the copy the last visit cached, nothing, a
+   *  base kept over an empty re-subscribe, or the window from before a
+   *  reconnect, and a row found then and placed against it was placed for
+   *  good: turns early, or refused for a row not loaded yet (re-reviews of
+   *  1045e43b and 7270b321). A found row waits for it; the screen is still
+   *  read, so a row the chat watches arrive is drawn meanwhile. */
   settled = true
 ): NativeChatMessage[] {
   // Whether the screen has been read since the rows were last null. True to
@@ -134,12 +140,13 @@ export function useScreenPeerNotices(
   let next = memory
   if (rows === null) {
     reading.current = false
-  } else if (!reading.current && !settled) {
-    // The first read waits for the transcript; the rows stay on the screen.
+    if (settled && memory.notices.some((notice) => notice.pending === true)) {
+      next = { ...memory, notices: placePendingNotices(memory.notices, foundPlacement(memory.lastRead, folded)) }
+    }
   } else {
     const first = !reading.current
     reading.current = true
-    const notices = observeScreenPeerNotices(
+    let notices = observeScreenPeerNotices(
       memory.notices,
       rows,
       tail?.id ?? null,
@@ -147,8 +154,13 @@ export function useScreenPeerNotices(
       drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined,
       // The phone's clock, as before (the parameter's default).
       undefined,
-      first ? foundPlacement(memory.lastRead, folded) : undefined
+      first ? { pending: true } : undefined
     )
+    // Placed against the reading from before this watch, which does not move
+    // while the transcript is unsettled.
+    if (settled) {
+      notices = placePendingNotices(notices, foundPlacement(memory.lastRead, folded))
+    }
     const lastRead = settled && tail ? { id: tail.id, at: tail.timestamp ?? 0 } : memory.lastRead
     next = { notices, ...(lastRead ? { lastRead } : {}) }
   }

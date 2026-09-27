@@ -264,7 +264,10 @@
             // calls, the returned field and its type line. `hasMore` could
             // not say it (the paging cap, rows before the snapshot, a host
             // that omits it, a reconnect's replay). Fork-only.
-            "max": 319,
+            // 2026-09-27: 320. `awaitingReplay`, the wait for a new
+            // connection's replay, which a row found on the screen is placed
+            // after (transcriptSettled).
+            "max": 320,
             "skipBlankLines": true,
             "skipComments": true
           }

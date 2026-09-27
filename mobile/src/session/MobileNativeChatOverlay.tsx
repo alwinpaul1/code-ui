@@ -39,7 +39,7 @@ import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-reque
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
 import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
-import { holdsWholeSession } from './mobile-native-chat-whole-session'
+import { holdsWholeSession, transcriptSettled } from './mobile-native-chat-whole-session'
 import { placedByHarnessTurns } from './desk-prompt-harness-turns'
 const CLIPBOARD_POLL_MS = 3000
 
@@ -301,9 +301,9 @@ export function MobileNativeChatOverlay({
     controller.nativeChatStreamScopeKey,
     controller.nativeChatPromptHook !== true,
     screenBodies,
-    // The first read of the screen waits for the host's transcript: placed
-    // against the cached copy, a found row was placed for good.
-    session.status === 'ready' && session.baseRetained !== true
+    // A row found on the screen is placed against the host's transcript as
+    // of now, never the cached copy or the one from before a reconnect.
+    transcriptSettled(session)
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).
