@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
-import {
-  VideoFrameExtractionCancelledError,
-  VideoFrameExtractionError,
-  type VideoFrameExtractionResult
-} from './mobile-video-frame-extractor'
+import { VideoFrameExtractionCancelledError, VideoFrameExtractionError, type VideoFrameExtractionEvent } from './mobile-video-frame-extractor'
 // `pickVideoFrames`'s real default wiring (`mobile-video-frame-player.ts`,
 // which reaches expo-video / expo-image-manipulator) is behind a dynamic
 // `import()`, reached only if a test's own `extract` were omitted — every
@@ -50,8 +46,13 @@ describe('isVideoOverUploadCap', () => {
     expect(isVideoOverUploadCap(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)).toBe(true)
   })
 
-  it('treats an unknown size as over the cap rather than risk reading it to find out', () => {
-    expect(isVideoOverUploadCap(null)).toBe(true)
+  it('is NOT treated as over the cap when the size is unknown (2026-09-27 review)', () => {
+    // Routing an unknown size to frame extraction used to be the defensive
+    // choice; the review pointed out the ordinary whole-file path already
+    // refuses a video that turns out too large, by its own bounded, chunked
+    // size check — never by loading the whole file — so there was no
+    // memory-safety reason to treat "unknown" as "assume the worst" here.
+    expect(isVideoOverUploadCap(null)).toBe(false)
   })
 })
 
@@ -87,16 +88,24 @@ describe('pickVideoFrames', () => {
     vi.restoreAllMocks()
   })
 
-  function extractionResult(frameCount: number): VideoFrameExtractionResult {
-    return {
-      frames: Array.from({ length: frameCount }, (_, i) => ({ base64: `f${i + 1}`, index: i + 1 })),
-      durationMs: 134_000,
-      intervalMs: 6700
-    }
+  /** A fake `extract`: meta first (134 s / 20 frames, the worked example),
+   *  then `frameCount` frames — the shape `pickVideoFrames` actually consumes. */
+  function fakeExtract(frameCount: number, overrides?: Partial<{ durationMs: number; intervalMs: number | null }>) {
+    return vi.fn(async function* (): AsyncGenerator<VideoFrameExtractionEvent> {
+      yield {
+        kind: 'meta',
+        total: frameCount,
+        durationMs: overrides?.durationMs ?? 134_000,
+        intervalMs: 'intervalMs' in (overrides ?? {}) ? (overrides!.intervalMs as number | null) : 6700
+      }
+      for (let i = 0; i < frameCount; i += 1) {
+        yield { kind: 'frame', frame: { base64: `f${i + 1}`, previewBase64: `p${i + 1}`, index: i + 1 } }
+      }
+    })
   }
 
-  async function collect(iterable: AsyncGenerator<{ base64: string; videoFrame?: unknown }>) {
-    const out: { base64: string; videoFrame?: unknown }[] = []
+  async function collect(iterable: AsyncGenerator<{ base64: string; uri?: string; videoFrame?: unknown }>) {
+    const out: { base64: string; uri?: string; videoFrame?: unknown }[] = []
     for await (const item of iterable) {
       out.push(item)
     }
@@ -104,7 +113,7 @@ describe('pickVideoFrames', () => {
   }
 
   it('yields one picked image per frame, each carrying the group\'s metadata', async () => {
-    const extract = vi.fn(async () => extractionResult(3))
+    const extract = fakeExtract(3)
     const items = await collect(
       pickVideoFrames(
         { uri: 'file:///Screen_Recording.mp4', name: 'Screen_Recording.mp4' },
@@ -127,23 +136,57 @@ describe('pickVideoFrames', () => {
     expect(groupIds.size).toBe(1)
   })
 
+  it('carries the small preview, not the full upload-quality bytes, as the picked image\'s uri', () => {
+    return collect(pickVideoFrames({ uri: 'file:///clip.mp4' }, 1000, { extract: fakeExtract(1) })).then(
+      (items) => {
+        expect(items[0]!.uri).toBe('data:image/jpeg;base64,p1')
+        expect(items[0]!.base64).toBe('f1')
+      }
+    )
+  })
+
+  it('yields a frame the instant it arrives — a slow later frame does not hold up an earlier one', async () => {
+    const seen: string[] = []
+    const secondFrame = Promise.withResolvers<void>()
+    const extract = vi.fn(async function* (): AsyncGenerator<VideoFrameExtractionEvent> {
+      yield { kind: 'meta', total: 2, durationMs: 2000, intervalMs: 1000 }
+      yield { kind: 'frame', frame: { base64: 'f1', previewBase64: 'p1', index: 1 } }
+      await secondFrame.promise
+      yield { kind: 'frame', frame: { base64: 'f2', previewBase64: 'p2', index: 2 } }
+    })
+    const generator = pickVideoFrames({ uri: 'file:///clip.mp4' }, 1000, { extract })
+    const first = await generator.next()
+    seen.push((first.value as { base64: string }).base64)
+    expect(seen).toEqual(['f1'])
+    secondFrame.resolve()
+    const second = await generator.next()
+    seen.push((second.value as { base64: string }).base64)
+    expect(seen).toEqual(['f1', 'f2'])
+  })
+
   it('names the source from the URI when the picker gave no name', async () => {
-    const extract = vi.fn(async () => extractionResult(1))
-    const items = await collect(pickVideoFrames({ uri: 'file:///cache/clip-42.mov' }, 1000, { extract }))
+    const items = await collect(pickVideoFrames({ uri: 'file:///cache/clip-42.mov' }, 1000, { extract: fakeExtract(1) }))
     expect(items[0]!.videoFrame).toMatchObject({ sourceName: 'clip-42.mov' })
   })
 
+  it('omits the cadence clause for a single-frame group rather than saying "every null s"', async () => {
+    const items = await collect(
+      pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract: fakeExtract(1, { intervalMs: null }) })
+    )
+    expect(items[0]!.videoFrame).toMatchObject({ intervalLabel: null })
+  })
+
   it('gives two different picks two different group ids', async () => {
-    const extract = vi.fn(async () => extractionResult(1))
-    const first = await collect(pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract }))
-    const second = await collect(pickVideoFrames({ uri: 'file:///b.mp4' }, 1000, { extract }))
+    const first = await collect(pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract: fakeExtract(1) }))
+    const second = await collect(pickVideoFrames({ uri: 'file:///b.mp4' }, 1000, { extract: fakeExtract(1) }))
     expect((first[0]!.videoFrame as { groupId: string }).groupId).not.toBe(
       (second[0]!.videoFrame as { groupId: string }).groupId
     )
   })
 
   it('propagates a cancellation as-is, without relabeling it a generic failure', async () => {
-    const extract = vi.fn(async () => {
+    const extract = vi.fn(async function* (): AsyncGenerator<VideoFrameExtractionEvent> {
+      yield { kind: 'meta', total: 1, durationMs: 1000, intervalMs: null }
       throw new VideoFrameExtractionCancelledError()
     })
     await expect(collect(pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract }))).rejects.toBeInstanceOf(
@@ -152,14 +195,25 @@ describe('pickVideoFrames', () => {
   })
 
   it('wraps any other extraction failure as VideoFrameExtractionError, reason intact', async () => {
-    const extract = vi.fn(async () => {
+    const extract = vi.fn(async function* (): AsyncGenerator<VideoFrameExtractionEvent> {
+      yield { kind: 'meta', total: 1, durationMs: 1000, intervalMs: null }
       throw new Error('Unsupported codec')
     })
     await expect(collect(pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract }))).rejects.toThrow(
       'Unsupported codec'
     )
-    await expect(collect(pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract }))).rejects.toBeInstanceOf(
-      VideoFrameExtractionError
-    )
+  })
+
+  it('keeps already-yielded frames intact when a later one fails — a partial read is not a total loss', async () => {
+    const extract = vi.fn(async function* (): AsyncGenerator<VideoFrameExtractionEvent> {
+      yield { kind: 'meta', total: 3, durationMs: 3000, intervalMs: 1000 }
+      yield { kind: 'frame', frame: { base64: 'f1', previewBase64: 'p1', index: 1 } }
+      throw new Error('device ran out of memory')
+    })
+    const generator = pickVideoFrames({ uri: 'file:///a.mp4' }, 1000, { extract })
+    const first = await generator.next()
+    expect(first.done).toBe(false)
+    expect((first.value as { base64: string }).base64).toBe('f1')
+    await expect(generator.next()).rejects.toBeInstanceOf(VideoFrameExtractionError)
   })
 })

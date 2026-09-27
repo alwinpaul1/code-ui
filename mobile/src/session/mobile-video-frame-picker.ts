@@ -7,8 +7,9 @@ import {
   formatVideoFrameSizeLabel,
   VideoFrameExtractionCancelledError,
   VideoFrameExtractionError,
-  type VideoFrameExtractionProgress,
-  type VideoFrameExtractionResult
+  type VideoFrameExtractionEvent,
+  type VideoFrameExtractionMeta,
+  type VideoFrameExtractionProgress
 } from './mobile-video-frame-extractor'
 import type { MobileImageFileFactory } from './mobile-image-source-picker'
 
@@ -42,11 +43,18 @@ export function videoAssetSizeBytes(
   }
 }
 
-/** Over the desktop's phone-upload cap, or not provably at or under it.
- *  Unknown size stays on the frame-extraction path rather than risk reading
- *  an unproven-small video's whole bytes into JS memory. */
+/**
+ * Over the desktop's phone-upload cap, and PROVABLY so.
+ *
+ * An unknown size does NOT route here (2026-09-27 review: it used to, on the
+ * theory that reading an unproven-small video's whole bytes was the greater
+ * risk). It routes to the ordinary whole-file path instead, which already
+ * refuses a video that turns out to be too large — via its own bounded,
+ * chunked size check (`readUriAsBase64`), never by loading the whole file —
+ * so an unknown-size video keeps today's behavior exactly, large or small.
+ */
 export function isVideoOverUploadCap(sizeBytes: number | null): boolean {
-  return sizeBytes === null || sizeBytes > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+  return sizeBytes !== null && sizeBytes > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
 }
 
 let videoFrameGroupCounter = 0
@@ -59,25 +67,36 @@ export type PickVideoFramesRuntimeOptions = {
 export type PickVideoFramesDeps = PickVideoFramesRuntimeOptions & {
   /** Overridable so a test drives frame selection without a real video file
    *  or the native player/encoder; production leaves this at its default. */
-  readonly extract?: (uri: string, options: PickVideoFramesRuntimeOptions) => Promise<VideoFrameExtractionResult>
+  readonly extract?: (
+    uri: string,
+    options: PickVideoFramesRuntimeOptions
+  ) => AsyncIterable<VideoFrameExtractionEvent>
 }
 
 /** Wires the real native player and encoder in, lazily: a static import of
  *  `mobile-video-frame-player.ts` here would pull `expo-video` in for every
  *  caller of this module, including one that never picks a video at all —
  *  and that chain carries react-native's Flow-typed entry, which breaks
- *  vitest's transform in a test that has no reason to touch it. Reached only
- *  once a video actually needs its frames read. */
-async function defaultExtract(
+ *  vitest's transform in a test that has no reason to touch it. The import
+ *  runs only once a consumer actually asks this generator for its first
+ *  value. */
+async function* defaultExtract(
   uri: string,
   options: PickVideoFramesRuntimeOptions
-): Promise<VideoFrameExtractionResult> {
+): AsyncGenerator<VideoFrameExtractionEvent> {
   const { createNativeVideoFramePlayer, encodeNativeVideoFrame } = await import('./mobile-video-frame-player')
-  return extractVideoFrames(uri, {
+  yield* extractVideoFrames(uri, {
     ...options,
     createPlayer: createNativeVideoFramePlayer,
     encodeFrame: encodeNativeVideoFrame
   })
+}
+
+function asVideoFrameExtractionError(error: unknown): VideoFrameExtractionError | VideoFrameExtractionCancelledError {
+  if (error instanceof VideoFrameExtractionCancelledError || error instanceof VideoFrameExtractionError) {
+    return error
+  }
+  return new VideoFrameExtractionError(error instanceof Error ? error.message : String(error))
 }
 
 /**
@@ -85,6 +104,12 @@ async function defaultExtract(
  * carrying `videoFrame` metadata, so the chip strip draws it like any other
  * photo and the sent note groups them back together
  * (`mobile-native-chat-video-frames-attachment.ts`).
+ *
+ * Yields a frame the moment it is encoded — never after the whole video has
+ * been read — so the caller can start that frame's upload immediately and
+ * a cancel between frames takes effect before the next one is even pulled.
+ * `previewBase64` (not the full upload-quality `base64`) is what the picked
+ * image's `uri` carries: the chip strip never needs more than a small copy.
  *
  * Never reads the video's own bytes into JS: duration and frames come from
  * `expo-video`'s headless player and `expo-image-manipulator`
@@ -97,39 +122,37 @@ export async function* pickVideoFrames(
 ): AsyncGenerator<PickedMobileImage> {
   const extract = deps?.extract ?? defaultExtract
   const sourceName = asset.name || asset.uri.split('/').pop() || 'video'
-  let result: VideoFrameExtractionResult
-  try {
-    result = await extract(asset.uri, { onProgress: deps?.onProgress, signal: deps?.signal })
-  } catch (error) {
-    if (error instanceof VideoFrameExtractionCancelledError) {
-      throw error
-    }
-    if (error instanceof VideoFrameExtractionError) {
-      throw error
-    }
-    throw new VideoFrameExtractionError(error instanceof Error ? error.message : String(error))
-  }
   videoFrameGroupCounter += 1
   const groupId = `video-frames-${videoFrameGroupCounter}`
-  const total = result.frames.length
-  const durationLabel = formatVideoFrameDurationLabel(result.durationMs)
-  const intervalLabel = formatVideoFrameIntervalLabel(result.intervalMs)
-  const sourceSizeLabel = formatVideoFrameSizeLabel(sourceSizeBytes)
-  for (const frame of result.frames) {
-    const videoFrame: VideoFrameAttachmentMeta = {
-      groupId,
-      index: frame.index,
-      total,
-      sourceName,
-      durationLabel,
-      intervalLabel,
-      sourceSizeLabel
+  let meta: VideoFrameExtractionMeta | null = null
+  try {
+    for await (const event of extract(asset.uri, { onProgress: deps?.onProgress, signal: deps?.signal })) {
+      if (event.kind === 'meta') {
+        meta = event
+        continue
+      }
+      // A conforming `extract` always yields `meta` first; this only guards
+      // an injected test double or a future implementation that forgets to.
+      if (!meta) {
+        throw new VideoFrameExtractionError('This video reported a frame before its metadata')
+      }
+      const videoFrame: VideoFrameAttachmentMeta = {
+        groupId,
+        index: event.frame.index,
+        total: meta.total,
+        sourceName,
+        durationLabel: formatVideoFrameDurationLabel(meta.durationMs),
+        intervalLabel: formatVideoFrameIntervalLabel(meta.intervalMs),
+        sourceSizeLabel: formatVideoFrameSizeLabel(sourceSizeBytes)
+      }
+      yield {
+        base64: event.frame.base64,
+        uri: `data:image/jpeg;base64,${event.frame.previewBase64}`,
+        videoFrame
+      }
     }
-    yield {
-      base64: frame.base64,
-      uri: `data:image/jpeg;base64,${frame.base64}`,
-      videoFrame
-    }
+  } catch (error) {
+    throw asVideoFrameExtractionError(error)
   }
 }
 
