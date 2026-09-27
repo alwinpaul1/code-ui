@@ -21,6 +21,22 @@
  */
 export type MobileImageSource = 'camera' | 'library' | 'files' | 'clipboard'
 
+/**
+ * What a still frame pulled from an over-the-cap video carries, so the chip
+ * strip can group it and the sent message can tell the agent it is looking at
+ * frames, not the video (`mobile-native-chat-video-frames-attachment.ts`).
+ * Every frame from the same pick shares `groupId`; `index` is 1-based.
+ */
+export type VideoFrameAttachmentMeta = {
+  readonly groupId: string
+  readonly index: number
+  readonly total: number
+  readonly sourceName: string
+  readonly durationLabel: string
+  readonly intervalLabel: string
+  readonly sourceSizeLabel: string
+}
+
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
   // Empty when the bytes come on demand through `load`: a photo from the
@@ -37,6 +53,10 @@ export type PickedMobileImage = {
   // name, and the sent message tells the agent what the upload actually is.
   readonly name?: string
   readonly mimeType?: string
+  // Set for a still frame pulled from an over-the-cap video instead of `name`:
+  // this rides as an ordinary image chip (not a file chip), and the group's
+  // note takes the place a file note would otherwise hold.
+  readonly videoFrame?: VideoFrameAttachmentMeta
 }
 
 export class ImageLibraryPermissionError extends Error {

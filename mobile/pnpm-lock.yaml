@@ -147,6 +147,9 @@ importers:
       expo-task-manager:
         specifier: 57.0.16
         version: 57.0.16(expo@57.0.20)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))
+      expo-video:
+        specifier: 57.0.4
+        version: 57.0.4(expo@57.0.20)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       fflate:
         specifier: 0.8.2
         version: 0.8.2
@@ -4608,6 +4611,13 @@ packages:
     resolution: {integrity: sha512-+LUWwJ0gf/TEKMVdQAw/Gjih4dvrk+URgy24X9qEGKuuMDZqjBRm9T4yQyBVALGL5TTdPUaB6ILxx3lshm3pwQ==}
     peerDependencies:
       expo: '*'
+
+  expo-video@57.0.4:
+    resolution: {integrity: sha512-4YCWG1IJzUNpLX0xoussK0VOG524qgUiMbwJzrgpDuPUzOgR3ZqXSZxKsy3HlYLiuWdzIQzwfpbtSNim9F9D3Q==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo@57.0.20:
     resolution: {integrity: sha512-H57GWLLpNPrltsrjvx6ROsMecoFQza7h9OzujUjBsaY+aDL+bj3GsZaH3T5v5B96R7txuidUwjUh5q5hi3qttg==}
@@ -12323,6 +12333,12 @@ snapshots:
   expo-updates-interface@57.0.1(expo@57.0.20):
     dependencies:
       expo: 57.0.20(8aec7bdd0adb44f4aab257f359a690d2)
+
+  expo-video@57.0.4(expo@57.0.20)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+    dependencies:
+      expo: 57.0.20(8aec7bdd0adb44f4aab257f359a690d2)
+      react: 19.2.8
+      react-native: 0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
 
   expo@57.0.20(8aec7bdd0adb44f4aab257f359a690d2):
     dependencies:

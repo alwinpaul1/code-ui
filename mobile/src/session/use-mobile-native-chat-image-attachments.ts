@@ -32,12 +32,11 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
-import {
-  isPendingNativeChatFile,
-  withMobileNativeChatFileNotes
-} from './mobile-native-chat-file-attachment'
+import { isPendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
+import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -104,6 +103,11 @@ export type MobileNativeChatImageAttachments = {
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
   readonly sendNativeChat: (text: string) => Promise<boolean>
+  /** A document attach is reading an over-the-cap video's frames, for the
+   *  active scope only — null once it settles, extracted or not. */
+  readonly videoFrameExtraction: VideoFrameExtractionProgress | null
+  /** Stops that extraction; a no-op once it has already settled. */
+  readonly cancelVideoFrameExtraction: () => void
 }
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -130,13 +134,17 @@ export function useMobileNativeChatImageAttachments({
   sleep = defaultSleep
 }: Args): MobileNativeChatImageAttachments {
   const attachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.byScope)
+  const videoFrameExtractionByScope = useNativeChatImageAttachmentsStore(
+    (state) => state.videoFrameExtractionByScope
+  )
   const {
     setAttachmentsByScope,
     addUploadedImages,
     addUploadingImage,
     settleUploads,
     markAttachmentReuploading,
-    replaceAttachmentImage
+    replaceAttachmentImage,
+    setVideoFrameExtractionProgress
   } = useNativeChatAttachmentScopeWriters()
   const replaceAttachment = useMobileNativeChatImageMarkup({
     client, getActiveWorktreeConnectionId, scopeKey, markAttachmentReuploading,
@@ -157,7 +165,13 @@ export function useMobileNativeChatImageAttachments({
     scopeKey, activeHandleRef, structuredNativeChat, client, sendGate, onError, onSendError
   })
 
-  const { attachImage, attachImageFile, attachDocument, isAttaching } = useMobileNativeChatImageUpload({
+  const {
+    attachImage,
+    attachImageFile,
+    attachDocument,
+    cancelVideoFrameExtraction,
+    isAttaching
+  } = useMobileNativeChatImageUpload({
     client,
     activeHandleRef,
     getActiveWorktreeConnectionId,
@@ -168,9 +182,11 @@ export function useMobileNativeChatImageAttachments({
     onImagesUploaded: addUploadedImages,
     onImageUploading: addUploadingImage,
     onUploadSettled: settleUploads,
+    onVideoFrameExtractionProgress: setVideoFrameExtractionProgress,
     onAttachSuccess,
     onError
   })
+  const videoFrameExtraction = (scopeKey ? videoFrameExtractionByScope[scopeKey] : undefined) ?? null
 
   const removeAttachment = useCallback(
     (id: string): void => {
@@ -213,12 +229,15 @@ export function useMobileNativeChatImageAttachments({
         }
         try {
           // Documents never paste as images: their note joins the text body, and
-          // the chip clears with the images once the send is accepted.
+          // the chip clears with the images once the send is accepted. A
+          // video's frames DO paste as images (they are ordinary photos to
+          // the terminal/session send below) — only their note joins the
+          // text body the same way a document's does.
           const pendingFiles = pendingAll.filter(isPendingNativeChatFile)
           const pendingImages = pendingAll.filter(
             (attachment) => !isPendingNativeChatFile(attachment)
           )
-          const text = withMobileNativeChatFileNotes(composerText, pendingFiles)
+          const text = withMobileNativeChatAttachmentNotes(composerText, pendingAll)
           const clearSent = (): void => {
             if (!scope) {
               return
@@ -420,6 +439,8 @@ export function useMobileNativeChatImageAttachments({
     attachDocument,
     removeAttachment,
     replaceAttachment,
-    sendNativeChat
+    sendNativeChat,
+    videoFrameExtraction,
+    cancelVideoFrameExtraction
   }
 }

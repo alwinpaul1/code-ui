@@ -447,6 +447,8 @@ export function MobileNativeChatOverlay({
             onDone: (result) => void images.replaceAttachment(id, result.base64)
           })
         }
+        videoFrameExtraction={images.videoFrameExtraction}
+        onCancelVideoFrameExtraction={images.cancelVideoFrameExtraction}
         isAttaching={images.isAttaching}
         onMicPress={onMicPress}
         onBeforeSend={onBeforeSend}

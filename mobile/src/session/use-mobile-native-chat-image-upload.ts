@@ -15,6 +15,11 @@ import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
+import {
+  VideoFrameExtractionCancelledError,
+  VideoFrameExtractionError
+} from './mobile-video-frame-extractor'
+import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -40,12 +45,19 @@ export function useMobileNativeChatImageUpload(args: {
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
+  /** A document attach is reading an over-the-cap video's frames — drawn
+   *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
+   *  `null` once the attach settles, extracted or not. */
+  onVideoFrameExtractionProgress?: (scope: string, progress: VideoFrameExtractionProgress | null) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
   attachImageFile: (uri: string) => Promise<void>
   attachDocument: () => Promise<void>
+  /** Stops a document attach's frame extraction in progress; a no-op once it
+   *  has already settled. */
+  cancelVideoFrameExtraction: () => void
   isAttaching: boolean
 } {
   const {
@@ -58,6 +70,7 @@ export function useMobileNativeChatImageUpload(args: {
     onImagesUploaded,
     onImageUploading,
     onUploadSettled,
+    onVideoFrameExtractionProgress,
     scopeKey,
     showToast,
     structuredNativeChat
@@ -66,9 +79,13 @@ export function useMobileNativeChatImageUpload(args: {
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
   const connStateRef = useRef(connState)
+  const videoFrameExtractionAbortRef = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
     connStateRef.current = connState
   }, [connState])
+  const cancelVideoFrameExtraction = useCallback(() => {
+    videoFrameExtractionAbortRef.current?.abort()
+  }, [])
 
   const attachWith = useCallback(
     async (
@@ -111,6 +128,8 @@ export function useMobileNativeChatImageUpload(args: {
             setIsAttaching(false)
           }
         }
+        // Whatever the outcome, this attach is no longer reading frames.
+        onVideoFrameExtractionProgress?.(scope, null)
       }
       if (uploadedImages.length > 0) {
         onImagesUploaded(scope, uploadedImages)
@@ -118,6 +137,12 @@ export function useMobileNativeChatImageUpload(args: {
       }
       onUploadSettled?.(scope, batch)
       if (uploadError !== null) {
+        // A cancelled extraction is the user changing their mind, like a
+        // dismissed picker — no toast, same as `result.canceled` never
+        // reaching this catch at all.
+        if (uploadError instanceof VideoFrameExtractionCancelledError) {
+          return
+        }
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
         if (connStateRef.current !== 'connected') {
@@ -126,6 +151,13 @@ export function useMobileNativeChatImageUpload(args: {
         }
         if (uploadError instanceof ImageLibraryPermissionError) {
           showToast('Photo permission denied', 1500)
+          return
+        }
+        if (uploadError instanceof VideoFrameExtractionError) {
+          // The video is still over the cap — extraction was the alternative
+          // to refusing it outright, and that alternative just failed too, so
+          // the same "too large" story stands, with why this time.
+          showToast(`File too large to attach (18 MB max) — couldn't read frames: ${message}`, 1500)
           return
         }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
@@ -145,6 +177,7 @@ export function useMobileNativeChatImageUpload(args: {
       onImagesUploaded,
       onImageUploading,
       onUploadSettled,
+      onVideoFrameExtractionProgress,
       scopeKey,
       showToast,
       structuredNativeChat
@@ -159,10 +192,23 @@ export function useMobileNativeChatImageUpload(args: {
     (uri: string) => attachWith(() => pickMobileImageFiles([uri]), 'files'),
     [attachWith]
   )
-  const attachDocument = useCallback(
-    () => attachWith(() => pickMobileDocuments(), 'files'),
-    [attachWith]
-  )
+  const attachDocument = useCallback(() => {
+    const controller = new AbortController()
+    videoFrameExtractionAbortRef.current = controller
+    return attachWith(
+      () =>
+        pickMobileDocuments(undefined, undefined, {
+          signal: controller.signal,
+          onProgress: (progress) => {
+            const scope = scopeKey
+            if (scope) {
+              onVideoFrameExtractionProgress?.(scope, progress)
+            }
+          }
+        }),
+      'files'
+    )
+  }, [attachWith, onVideoFrameExtractionProgress, scopeKey])
 
-  return { attachImage, attachImageFile, attachDocument, isAttaching }
+  return { attachImage, attachImageFile, attachDocument, cancelVideoFrameExtraction, isAttaching }
 }

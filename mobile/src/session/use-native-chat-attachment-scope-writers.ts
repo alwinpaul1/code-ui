@@ -13,6 +13,7 @@ import {
   nativeChatChipIdCounter,
   useNativeChatImageAttachmentsStore
 } from './mobile-native-chat-image-attachments-store'
+import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
 
 /** The writes an upload makes to a tab's chip strip: a chip when a file is
  *  picked, the finished upload into that chip, and the sweep of chips whose
@@ -78,12 +79,34 @@ export function useNativeChatAttachmentScopeWriters() {
     },
     [setAttachmentsByScope]
   )
+  const setVideoFrameExtractionUpdate = useNativeChatImageAttachmentsStore(
+    (state) => state.updateVideoFrameExtraction
+  )
+  // Null clears the scope's entry entirely: an absent key, not a null value,
+  // is what `extractionByScope[scope]` reading `undefined` depends on.
+  const setVideoFrameExtractionProgress = useCallback(
+    (scope: string, progress: VideoFrameExtractionProgress | null) => {
+      setVideoFrameExtractionUpdate((prev) => {
+        if (progress === null) {
+          if (!(scope in prev)) {
+            return prev
+          }
+          const next = { ...prev }
+          delete next[scope]
+          return next
+        }
+        return { ...prev, [scope]: progress }
+      })
+    },
+    [setVideoFrameExtractionUpdate]
+  )
   return {
     setAttachmentsByScope,
     addUploadedImages,
     addUploadingImage,
     settleUploads,
     markAttachmentReuploading,
-    replaceAttachmentImage
+    replaceAttachmentImage,
+    setVideoFrameExtractionProgress
   }
 }

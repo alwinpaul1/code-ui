@@ -16,11 +16,14 @@ vi.mock('expo-file-system', () => ({
 
 import {
   ImageLibraryPermissionError,
+  pickMobileDocuments,
   pickMobileImage,
   pickMobileImageFiles,
   pickMobileImages,
   type PickedMobileImage
 } from './mobile-image-source-picker'
+import { resetVideoFrameGroupCounterForTests } from './mobile-video-frame-picker'
+import type { VideoFrameExtractionResult } from './mobile-video-frame-extractor'
 
 const granted = { granted: true } as Awaited<
   ReturnType<typeof import('expo-image-picker').requestMediaLibraryPermissionsAsync>
@@ -335,5 +338,155 @@ describe('a photo from the camera', () => {
     const kept = await pickMobileImage('camera', { requestCameraPermission: vi.fn().mockResolvedValue(granted), launchCamera: small, createFile, resizeImage })
     await kept?.load?.()
     expect(resizeImage).not.toHaveBeenCalled()
+  })
+})
+
+// 2026-09-27: a video over the desktop's 18 MiB phone-upload cap could not be
+// attached at all ("File too large to attach (18 MB max)"). Instead of
+// refusing it, its still frames are read on the phone and sent as ordinary
+// images (mobile-video-frame-picker.ts); a video at or under the cap keeps
+// today's whole-file upload untouched.
+describe('pickMobileDocuments and an attached video', () => {
+  afterEach(() => {
+    resetVideoFrameGroupCounterForTests()
+  })
+
+  function extractionResult(frameCount: number): VideoFrameExtractionResult {
+    return {
+      frames: Array.from({ length: frameCount }, (_, i) => ({ base64: `f${i + 1}`, index: i + 1 })),
+      durationMs: 20_000,
+      intervalMs: 1000
+    }
+  }
+
+  it('uploads an ordinary (non-video) document whole, exactly as before', async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4])
+    const file = fileFactory(bytes)
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///a.pdf', size: bytes.length, name: 'a.pdf', mimeType: 'application/pdf' }]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, file.createFile))
+    expect(result).toEqual([
+      {
+        base64: Buffer.from(bytes).toString('base64'),
+        uri: 'file:///a.pdf',
+        name: 'a.pdf',
+        mimeType: 'application/pdf'
+      }
+    ])
+  })
+
+  it('keeps a video exactly at the cap on the whole-file path, unchanged', async () => {
+    const bytes = new Uint8Array([9, 9])
+    const file = fileFactory(bytes, { fileSize: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES })
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: 'file:///clip.mp4', size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES, name: 'clip.mp4', mimeType: 'video/mp4' }
+      ]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, file.createFile))
+    expect(result).toEqual([
+      { base64: Buffer.from(bytes).toString('base64'), uri: 'file:///clip.mp4', name: 'clip.mp4', mimeType: 'video/mp4' }
+    ])
+  })
+
+  it('keeps a video just under the cap on the whole-file path too', async () => {
+    const bytes = new Uint8Array([9])
+    const file = fileFactory(bytes, { fileSize: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES - 1 })
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///clip.mp4',
+          size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES - 1,
+          name: 'clip.mp4',
+          mimeType: 'video/mp4'
+        }
+      ]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, file.createFile))
+    expect(result).toEqual([
+      { base64: Buffer.from(bytes).toString('base64'), uri: 'file:///clip.mp4', name: 'clip.mp4', mimeType: 'video/mp4' }
+    ])
+  })
+
+  it('reads frames instead of refusing a video just one byte over the cap', async () => {
+    const extract = vi.fn(async () => extractionResult(20))
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///clip.mp4',
+          size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1,
+          name: 'clip.mp4',
+          mimeType: 'video/mp4'
+        }
+      ]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, undefined, { extract }))
+    expect(result).toHaveLength(20)
+    expect(result.every((item) => (item as { videoFrame?: unknown }).videoFrame !== undefined)).toBe(true)
+    expect(result.map((item) => item.base64)).toEqual(Array.from({ length: 20 }, (_, i) => `f${i + 1}`))
+  })
+
+  it('reads frames for a 142 MB video, one note-worthy group', async () => {
+    const extract = vi.fn(async () => extractionResult(20))
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///Screen_Recording.mp4',
+          size: 142 * 1024 * 1024,
+          name: 'Screen_Recording.mp4',
+          mimeType: 'video/mp4'
+        }
+      ]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, undefined, { extract }))
+    expect(result).toHaveLength(20)
+    expect((result[0] as { videoFrame?: { sourceSizeLabel?: string } }).videoFrame?.sourceSizeLabel).toBe('142 MB')
+  })
+
+  it('never reads an over-cap video into memory — a size stat only, never its content', async () => {
+    const open = vi.fn()
+    const createFile = vi.fn(() => ({ size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1, open }))
+    const extract = vi.fn(async () => extractionResult(1))
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      // No declared size: forces the fallback file stat, which must still be
+      // the only thing this asset's file is touched for.
+      assets: [{ uri: 'file:///huge.mp4', name: 'huge.mp4', mimeType: 'video/mp4' }]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, createFile, { extract }))
+    expect(result).toHaveLength(1)
+    expect(createFile).toHaveBeenCalledTimes(1)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('never reads an unknown-size video into memory either — unknown routes to frames, not a guess', async () => {
+    const open = vi.fn()
+    // A real file stat is always a number; NaN is the shape an unreliable one takes.
+    const createFile = vi.fn(() => ({ size: Number.NaN, open }))
+    const extract = vi.fn(async () => extractionResult(1))
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///mystery.mp4', name: 'mystery.mp4', mimeType: 'video/mp4' }]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, createFile, { extract }))
+    expect(result).toHaveLength(1)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('recognizes a video by extension when the picker omits a MIME type', async () => {
+    const extract = vi.fn(async () => extractionResult(1))
+    const launch = vi.fn().mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///cache/Screen_Recording.MOV', size: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1 }]
+    })
+    const result = await collectImages(pickMobileDocuments(launch, undefined, { extract }))
+    expect(result).toHaveLength(1)
+    expect(extract).toHaveBeenCalledOnce()
   })
 })
