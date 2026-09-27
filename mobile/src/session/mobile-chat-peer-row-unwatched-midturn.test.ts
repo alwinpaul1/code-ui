@@ -553,3 +553,49 @@ describe('rows on the screen, read beside the real transcript hook', () => {
     expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:general-purpose', 'a3'])
   })
 })
+
+// Fourth review (of 756f2e5d): a row found before the transcript settled
+// logged "drawn … placed after null" while it waited, and the line for where
+// it was placed never came.
+describe('the log line of a row found before the transcript settled', () => {
+  const text = (id: string, role: NativeChatMessage['role'], body: string, timestamp: number): NativeChatMessage => ({
+    id,
+    role,
+    timestamp,
+    source: 'transcript',
+    blocks: [{ type: 'text', text: body }]
+  })
+  const U1 = text('u1', 'user', 'start the agents', 1)
+  const COMMIT = text('commit', 'assistant', 'Committing it.', 10)
+  const FINAL = text('final', 'assistant', 'Committed on a branch.', 20)
+  const R = [{ sender: 'general-purpose' }]
+  type Props = { rows: ReturnType<typeof peerNoticesFromScreen> | null; folded: NativeChatMessage[]; settled: boolean }
+  beforeEach(() => resetScreenPeerNoticesForTests())
+  afterEach(() => vi.restoreAllMocks())
+
+  it('says where it was placed once it is, and nothing about a place before that', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    let renderer: ReactTestRenderer | null = null
+    function Chat(props: Props) {
+      useScreenPeerNotices(props.rows, props.folded, 'scope-A', true, undefined, props.settled)
+      return null
+    }
+    const show = (props: Props) =>
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(Chat, props))
+        } else {
+          renderer = create(createElement(Chat, props))
+        }
+      })
+    show({ rows: null, folded: [U1, COMMIT], settled: true })
+    show({ rows: [], folded: [U1, COMMIT], settled: true })
+    show({ rows: null, folded: [U1, COMMIT], settled: true })
+    show({ rows: R, folded: [U1, COMMIT], settled: false })
+    show({ rows: R, folded: [U1, COMMIT, FINAL], settled: true })
+    act(() => renderer?.unmount())
+    expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[peer-row]'))).toEqual([
+      '[peer-row] drawn: the row from @general-purpose was on the screen when the chat first read it, not watched arriving; placed after commit, the last row the chat held when it last read the screen'
+    ])
+  })
+})

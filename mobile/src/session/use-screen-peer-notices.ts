@@ -169,10 +169,13 @@ export function useScreenPeerNotices(
   // One line for each row placed without having been watched arriving, or
   // not drawn: a row in the wrong place otherwise leaves nothing to go by.
   // Keyed by the row and whether it is drawn: one drawn, then found again
-  // with nothing to place it by, must still say it is no longer drawn.
+  // with nothing to place it by, must still say it is no longer drawn. A row
+  // still waiting for the transcript says nothing yet: it has no place, and
+  // logged then, its line named none and took the key its place needed
+  // (fourth review).
   const found = JSON.stringify(
     notices.flatMap((notice) =>
-      notice.found === true
+      notice.found === true && notice.pending !== true
         ? [
             [
               `${notice.id}\0${notice.held === true ? 'held' : 'drawn'}`,
