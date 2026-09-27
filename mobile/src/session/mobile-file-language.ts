@@ -273,12 +273,15 @@ function lookUp(map: Record<string, string>, key: string): string | undefined {
   return Object.hasOwn(map, key) ? map[key] : undefined
 }
 
+/** A name first, then a known extension, and only then the Dockerfile and
+ *  dotenv name rules: `dockerfile.js` (highlight.js's own grammar for it)
+ *  and `.env.json` are what their extensions say (review, 2026-09-27). */
 function languageFromName(filename: string): string | undefined {
   return (
     lookUp(FILENAME_TO_LANGUAGE, filename) ??
+    lookUp(EXT_TO_LANGUAGE, extname(filename).toLowerCase()) ??
     (DOCKERFILE_NAME.test(filename) ? 'dockerfile' : undefined) ??
-    (DOTENV_NAME.test(filename) ? 'ini' : undefined) ??
-    lookUp(EXT_TO_LANGUAGE, extname(filename).toLowerCase())
+    (DOTENV_NAME.test(filename) ? 'ini' : undefined)
   )
 }
 

@@ -159,6 +159,28 @@ describe('the file names and extensions the viewer knows', () => {
     expect(resolveMobileSyntaxLanguage(path)).toBe(language)
   })
 
+  it.each([
+    // highlight.js's own lib/languages/dockerfile.js drew as a Dockerfile.
+    ['lib/languages/dockerfile.js', 'javascript'],
+    ['dockerfile.js.js', 'javascript'],
+    ['dockerfile.ts', 'typescript'],
+    ['dockerfile.test.ts', 'typescript'],
+    ['dockerfile.go', 'go'],
+    ['containerfile.py', 'python'],
+    ['DOCKERFILE', 'dockerfile'],
+    ['Dockerfile.dev', 'dockerfile'],
+    ['.env.json', 'json'],
+    ['.env.js', 'javascript'],
+    ['.env.yml', 'yaml'],
+    ['.env.sh', 'bash'],
+    ['.env.example', 'ini'],
+    ['.env', 'ini'],
+    ['.environment', 'plaintext'],
+    ['.envrc', 'bash']
+  ])('%s is %s: a known extension beats the Dockerfile and .env name rules', (path, language) => {
+    expect(resolveMobileSyntaxLanguage(path)).toBe(language)
+  })
+
   it('knows plain text by name, and does not know a name it has no entry for', () => {
     for (const path of ['notes.txt', 'server.log', 'LICENSE', 'data/scores.csv']) {
       expect(isUnknownMobileFileName(path), path).toBe(false)
