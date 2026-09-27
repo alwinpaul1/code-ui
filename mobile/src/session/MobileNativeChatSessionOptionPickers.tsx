@@ -4,6 +4,7 @@ import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
 import { sessionModelPillLabel } from './session-model-pill'
+import { matchClaudeCatalogModelId } from './claude-model-identity'
 import { IconButton } from '../ui/IconButton'
 import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
@@ -51,13 +52,17 @@ export type MobileNativeChatSessionOptionPickersProps = {
   /** Bumped by the owner to open the model sheet (a typed `/model` in Codex chat). */
   openRequest?: number
   /** The agent's own word about what is running — the status-line badge or
-   *  the beacon. When present it labels the pill; the snapshot still decides
-   *  which drawer row is selected, because that is what a pick changes. See
-   *  session-model-pill.ts for the 2026-09-18 case this exists for. */
+   *  the beacon, or with neither on a Claude session, the model its transcript
+   *  last recorded (claude-transcript-model.ts). When present it labels the
+   *  pill and decides which drawer row is checked (`withRunningModelSelected`);
+   *  the snapshot stands in for the checked row only until the agent has
+   *  spoken. See session-model-pill.ts for the 2026-09-18 case this exists for. */
   liveModel?: { model: string | null; label: string | null; effort: string | null }
   /** The agent's own model list is still being read (Codex scrapes its picker);
    *  the sheet shows a reader row instead of a placeholder list. */
   modelsPending?: boolean
+  /** The user tapped the pill to open the sheet. */
+  onOpen?: () => void
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
@@ -73,17 +78,28 @@ export type MobileNativeChatSessionOptionPickersProps = {
  * everything a tap dispatches are untouched. `applyOption` compares the tap
  * against this same value, so re-picking what is already running is a no-op
  * and picking the record's stale value dispatches, both of which are right.
+ *
+ * The agent states full ids (the beacon's `claude-opus-4-8`, the transcript's
+ * `claude-opus-5-5`) and the rows are catalog ids (`opus`), so the id goes
+ * through the same matcher the seeding uses (`matchClaudeCatalogModelId`) to
+ * find its row. Compared raw, nothing was checked on a quiet host (2026-09-27).
+ * An id no row carries checks nothing, never the record's row.
  */
 function withRunningModelSelected(
   descriptor: SessionOptionDescriptor,
   modelDescriptorId: string,
-  live: { model: string | null } | undefined
+  live: { model: string | null; label?: string | null } | undefined
 ): SessionOptionDescriptor {
   const running = live?.model?.trim()
   if (descriptor.id !== modelDescriptorId || !running || descriptor.kind.type !== 'select') {
     return descriptor
   }
-  return { ...descriptor, kind: { ...descriptor.kind, currentValue: running } }
+  const rows = {
+    models: descriptor.kind.choices.map((choice) => ({ id: choice.value, label: choice.label, options: [] })),
+    modelApply: {}
+  }
+  const row = matchClaudeCatalogModelId(rows, running, live?.label ?? null) ?? running
+  return { ...descriptor, kind: { ...descriptor.kind, currentValue: row } }
 }
 
 export function MobileNativeChatSessionOptionPickers({
@@ -94,7 +110,8 @@ export function MobileNativeChatSessionOptionPickers({
   sendInFlight = false,
   openRequest = 0,
   modelsPending = false,
-  liveModel
+  liveModel,
+  onOpen
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
@@ -149,6 +166,7 @@ export function MobileNativeChatSessionOptionPickers({
   const openPicker = (): void => {
     Keyboard.dismiss()
     setOpenDescriptorId(model.id)
+    onOpen?.()
   }
 
   // Why: picking a model is only half the choice — its effort level is the next

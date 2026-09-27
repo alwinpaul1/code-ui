@@ -37,7 +37,9 @@ import { sessionModelPillLabel } from './session-model-pill'
 
 /** The active session's model label: the agent's own word, or null. Reads the
  *  live pair and not the snapshot — see session-model-pill.ts for the 2026-09-18
- *  case where every source said Opus and the snapshot said Fable. */
+ *  case where every source said Opus and the snapshot said Fable. With no live
+ *  pair on a Claude session, the pair is what its transcript last recorded
+ *  (claude-transcript-model.ts). */
 export function resolveSessionModelLabel(controller: MobileSessionController): string | null {
   return sessionModelPillLabel(controller.nativeChatController.nativeChatLiveModel)
 }
