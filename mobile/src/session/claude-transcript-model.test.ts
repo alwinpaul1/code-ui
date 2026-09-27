@@ -120,9 +120,9 @@ describe('naming a Claude model id the way the pill names it', () => {
 })
 
 describe('which model the pill states when there is no live pair', () => {
-  // Both clocks are the phone's: when a scan was asked for, and when the first
-  // turn begun after the pick ended.
-  const transcript = { model: 'claude-opus-5-5', label: 'Opus 5.5', scannedAt: 1_000 }
+  // Both clocks are the phone's: how recent the transcript a reading speaks for
+  // is, and when the first turn begun after the pick ended.
+  const transcript = { model: 'claude-opus-5-5', label: 'Opus 5.5', freshAsOf: 1_000 }
 
   it('lets the beacon or the badge win over the transcript', () => {
     expect(
@@ -152,7 +152,7 @@ describe('which model the pill states when there is no live pair', () => {
     expect(
       resolveClaudeModelFallback({
         liveModel: null,
-        transcript: { ...transcript, scannedAt: 2_000 },
+        transcript: { ...transcript, freshAsOf: 2_000 },
         pick: { settledAt: 2_000 }
       })
     ).toEqual({ kind: 'transcript', model: { model: 'claude-opus-5-5', label: 'Opus 5.5' } })

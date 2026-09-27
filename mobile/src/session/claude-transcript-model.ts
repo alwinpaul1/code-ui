@@ -28,8 +28,10 @@ export type TranscriptModel = {
   label: string
 }
 
-/** A reading with the phone's own time of the scan that produced it. */
-export type ScannedTranscriptModel = TranscriptModel & { scannedAt: number }
+/** A reading, with how recent a transcript it speaks for (the phone's clock):
+ *  claude-transcript-model-scan.ts says why that is not simply when it was
+ *  asked for. */
+export type ScannedTranscriptModel = TranscriptModel & { freshAsOf: number }
 
 /** A model with its display name and effort, as both pills read it. */
 export type ModelPillPair = { model: string | null; label: string | null; effort: string | null }
@@ -116,7 +118,7 @@ export function transcriptModelForSession(
  *
  * After a model pick of the phone's own the answer is nothing, until the host
  * has been scanned after the first turn that STARTED after the pick had ended
- * (`settledAt`, the phone's clock, as `scannedAt` is). Not the pick: a picked
+ * (`settledAt`, the phone's clock, as `freshAsOf` is). Not the pick: a picked
  * record is not the agent's word, and showing one is how "Fable Medium" came to
  * be drawn on an Opus session (2026-09-18). Not the transcript's earlier
  * reading either, which the switch may have replaced. And not a reply that
@@ -135,7 +137,7 @@ export function resolveClaudeModelFallback(input: {
   if (liveModel || !transcript) {
     return { kind: 'none' }
   }
-  if (pick && (pick.settledAt === null || transcript.scannedAt < pick.settledAt)) {
+  if (pick && (pick.settledAt === null || transcript.freshAsOf < pick.settledAt)) {
     return { kind: 'none' }
   }
   return { kind: 'transcript', model: { model: transcript.model, label: transcript.label } }

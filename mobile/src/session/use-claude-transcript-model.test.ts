@@ -244,6 +244,44 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(latest?.fallback).toEqual({ kind: 'none' })
   })
 
+  it("does not take the host's cached answer from before the turn that confirms a pick", async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render()
+    model = 'claude-sonnet-5'
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    // The host shares one cache slot with the history screen and answers from
+    // it for up to a minute; this scan must read the transcript as it is now.
+    expect(host.sent('aiVault.listSessions').at(-1)?.params).toMatchObject({ force: true })
+    expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
+  })
+
+  it('runs the confirming scan when the five minutes allow it, and shows nothing until then', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(scans()).toBe(1)
+    // A minute later the phone picks Sonnet and a turn runs under it: the
+    // scan that would confirm it falls inside the budget.
+    await advance(60_000)
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render()
+    model = 'claude-sonnet-5'
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(1)
+    expect(latest?.fallback).toEqual({ kind: 'none' })
+
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+    expect(scans()).toBe(2)
+    expect(host.sent('aiVault.listSessions')[1]?.params).toMatchObject({ force: true })
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Sonnet 5' } })
+  })
+
   it('keeps one answer object across renders, so the pickers are not rebuilt every render', async () => {
     render()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)

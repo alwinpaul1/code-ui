@@ -7,7 +7,8 @@ import { resolveClaudeModelFallback, type ClaudeModelFallback } from './claude-t
 import {
   peekClaudeTranscriptModel,
   requestClaudeTranscriptModelScan,
-  subscribeClaudeTranscriptModelScans
+  subscribeClaudeTranscriptModelScans,
+  watchClaudeTranscriptModelHost
 } from './claude-transcript-model-scan'
 
 /** How long a Claude chat must go without a beacon or a badge before the phone
@@ -48,7 +49,8 @@ export function resetClaudeTranscriptModelPicksForTests(): void {
  * - the end of the first turn begun after the phone changed the model itself —
  *   the first moment a reply written under the switch exists. Asking at the
  *   pick could only return what answered before it, and Claude Code applies a
- *   `/model` sent mid-turn only when that turn ends.
+ *   `/model` sent mid-turn only when that turn ends. This one is forced, and
+ *   when the budget holds it back the scan module runs it once it allows.
  * Never on every turn end.
  *
  * Whatever the last scan said about this exact session is stated at once, and
@@ -76,11 +78,17 @@ export function useClaudeTranscriptModel(args: {
   const [, setVersion] = useState(0)
   useEffect(() => subscribeClaudeTranscriptModelScans(() => setVersion((value) => value + 1)), [])
 
-  const request = useCallback(() => {
-    if (quiet && connected && client) {
-      void requestClaudeTranscriptModelScan(client, hostId, worktreeId)
-    }
-  }, [client, connected, hostId, quiet, worktreeId])
+  useEffect(() => (quiet ? watchClaudeTranscriptModelHost(hostId) : undefined), [hostId, quiet])
+
+  const scan = useCallback(
+    (force: boolean) => {
+      if (quiet && connected && client) {
+        void requestClaudeTranscriptModelScan(client, hostId, worktreeId, { force })
+      }
+    },
+    [client, connected, hostId, quiet, worktreeId]
+  )
+  const request = useCallback(() => scan(false), [scan])
 
   // The chat opening: only once it has stayed quiet for the settle time.
   const [settledFor, setSettledFor] = useState<string | null>(null)
@@ -121,7 +129,8 @@ export function useClaudeTranscriptModel(args: {
     } else if (progress.phase === 'in-turn' && wasWorking && !agentWorking) {
       progress.phase = 'settled'
       progress.settledAt = Date.now()
-      request()
+      // Forced: an answer the host cached before this turn would not confirm it.
+      scan(true)
     }
   })
   const progress = scopeKey ? pickProgress.get(scopeKey) : undefined
