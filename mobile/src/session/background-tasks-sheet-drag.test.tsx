@@ -24,6 +24,11 @@ const win = vi.hoisted(() => ({ width: 384, height: 823 }))
 const scrolls = vi.hoisted(() => ({ calls: [] as { target: unknown; y: number }[] }))
 /** What the list's ref points at once mounted (createNodeMock below). */
 const LIST_NODE = vi.hoisted(() => ({ nativeList: true }))
+/** `springs: true` plays a spring back the way Reanimated moves it; off, it
+ *  lands at once, which is all a test of where a drag comes to rest needs. */
+const motion = vi.hoisted(() => ({ springs: false, overshoot: false }))
+/** Whether the tasks sheet is asked to show: a test closes and reopens it. */
+const shown = vi.hoisted(() => ({ visible: true }))
 
 vi.mock('react-native', () => ({
   AccessibilityInfo: {
@@ -101,20 +106,51 @@ vi.mock('react-native-gesture-handler', () => {
 
 // A shared value that is a timeline: `withTiming` hands back its curve and
 // `.value` reads it at `clock.now` (attach-sheet-opens-on-first-frame.test.tsx).
-// A spring lands on its target at once: these read where a drag comes to rest.
+// A spring lands on its target at once unless `motion.springs` is on.
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
   type Timing = { timing: true; to: number; duration: number; easing: (t: number) => number }
+  type SpringConfig = { damping?: number; stiffness?: number; mass?: number }
+  type Spring = { spring: true; to: number; config: SpringConfig }
+  type Animation = Timing | Spring
   const inOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
-  const isTiming = (value: unknown): value is Timing =>
-    typeof value === 'object' && value !== null && (value as Timing).timing === true
+  const isAnimation = (value: unknown): value is Animation =>
+    typeof value === 'object' && value !== null && ('timing' in value || 'spring' in value)
+  /** Reanimated 4.5.1's withSpring from rest (src/animation/spring): the
+   *  config goes over GentleSpringConfig, {damping 120, mass 4, stiffness 900},
+   *  and below a damping ratio of 1 it moves as
+   *  to + e^(-ζω0·t)·(x0·cos ω1t + (ζω0·x0/ω1)·sin ω1t); at 1 and above as
+   *  to + e^(-ω0·t)·x0·(1 + ω0·t) (springUtils.ts). */
+  function springAt(from: number, spring: Spring, seconds: number): number {
+    // `overshoot` plays every spring as the drawer's old {damping 28, stiffness 400}
+    // under that default mass: a ratio of 0.35, about 31% past its target.
+    const config = motion.overshoot ? { damping: 28, stiffness: 400 } : spring.config
+    const mass = config.mass ?? 4
+    const stiffness = config.stiffness ?? 900
+    const damping = config.damping ?? 120
+    const zeta = damping / (2 * Math.sqrt(stiffness * mass))
+    const omega0 = Math.sqrt(stiffness / mass)
+    const x0 = from - spring.to
+    if (zeta < 1) {
+      const omega1 = omega0 * Math.sqrt(1 - zeta * zeta)
+      const envelope = Math.exp(-zeta * omega0 * seconds)
+      return (
+        spring.to +
+        envelope * (x0 * Math.cos(omega1 * seconds) + ((zeta * omega0 * x0) / omega1) * Math.sin(omega1 * seconds))
+      )
+    }
+    return spring.to + Math.exp(-omega0 * seconds) * x0 * (1 + omega0 * seconds)
+  }
   function timeline<T>(initial: T) {
     let from: unknown = initial
-    let animation: Timing | null = null
+    let animation: Animation | null = null
     let startedAt = 0
     const read = (): unknown => {
       if (!animation) {
         return from
+      }
+      if ('spring' in animation) {
+        return springAt(from as number, animation, Math.max(clock.now - startedAt, 0) / 1000)
       }
       const t = Math.min(Math.max((clock.now - startedAt) / animation.duration, 0), 1)
       return (from as number) + (animation.to - (from as number)) * animation.easing(t)
@@ -123,8 +159,8 @@ vi.mock('react-native-reanimated', async () => {
       get value(): T {
         return read() as T
       },
-      set value(next: T | Timing) {
-        if (isTiming(next)) {
+      set value(next: T | Animation) {
+        if (isAnimation(next)) {
           from = read()
           animation = next
           startedAt = clock.now
@@ -151,7 +187,12 @@ vi.mock('react-native-reanimated', async () => {
       duration: config?.duration ?? 300,
       easing: config?.easing ?? inOutQuad
     }),
-    withSpring: (to: number) => to,
+    withSpring: (to: number, config?: SpringConfig) =>
+      motion.springs ? { spring: true, to, config: config ?? {} } : to,
+    runOnUI:
+      <A extends unknown[]>(fn: (...args: A) => void) =>
+      (...args: A) =>
+        fn(...args),
     runOnJS:
       <A extends unknown[]>(fn: (...args: A) => void) =>
       (...args: A) =>
@@ -238,6 +279,9 @@ beforeEach(() => {
   scrolls.calls = []
   win.width = 384
   win.height = 823
+  motion.springs = false
+  motion.overshoot = false
+  shown.visible = true
 })
 
 afterEach(() => {
@@ -251,7 +295,7 @@ afterEach(() => {
 function tasksSheet(scheme: Scheme): () => ReactElement {
   return () => (
     <ThemeProvider initialPreference={scheme}>
-      <MobileBackgroundTasksSheet visible messages={MESSAGES} onClose={() => {}} />
+      <MobileBackgroundTasksSheet visible={shown.visible} messages={MESSAGES} onClose={() => {}} />
     </ThemeProvider>
   )
 }
@@ -398,6 +442,17 @@ function pullToFull(): void {
   move(handlePan, -300)
   lift(handlePan, -300, -1500)
   expect(sheetTop(), 'the sheet should stand at full height').toBe(FULL_TOP)
+}
+
+/** Plays the clock on in 8 ms frames and reads `probe` on each. */
+function playFrames(ms: number, probe: () => number): number[] {
+  const seen: number[] = []
+  const end = clock.now + ms
+  while (clock.now < end) {
+    clock.now += 8
+    seen.push(probe())
+  }
+  return seen
 }
 
 function elapsedTexts(): string[] {
@@ -584,6 +639,46 @@ describe('the Background tasks sheet dragged down from full height (recording of
     expect(sheetTop()).toBe(FULL_TOP)
   })
 
+  it('rises no higher than full height, and keeps its bottom on the screen edge, as it springs up', async () => {
+    motion.springs = true
+    await open(tasksSheet('light'))
+    begin(handlePan)
+    move(handlePan, -100)
+    lift(handlePan, -100, -1500)
+    const gaps: number[] = []
+    const tops = playFrames(1000, () => {
+      // How far its bottom edge stands above the bottom of the window.
+      gaps.push(Math.max(0, -translateY(sheetStyle())))
+      return sheetTop()
+    })
+    expect(Math.min(...tops), 'the sheet sprang up into the status bar').toBeGreaterThanOrEqual(FULL_TOP)
+    expect(Math.max(...gaps), 'the sheet lifted its bottom off the screen').toBe(0)
+    expect(sheetTop()).toBeCloseTo(FULL_TOP, 0)
+  })
+
+  it('never stands above full height, even under a spring that overshoots', async () => {
+    motion.springs = true
+    motion.overshoot = true
+    await open(tasksSheet('light'))
+    begin(handlePan)
+    move(handlePan, -100)
+    lift(handlePan, -100, -1500)
+    const tops = playFrames(1000, sheetTop)
+    expect(Math.min(...tops), 'the sheet stood above full height').toBeGreaterThanOrEqual(FULL_TOP)
+  })
+
+  it('comes down to its opening height without sinking below it', async () => {
+    await open(tasksSheet('light'))
+    pullToFull()
+    motion.springs = true
+    begin(handlePan)
+    move(handlePan, 40)
+    lift(handlePan, 40, 900)
+    const tops = playFrames(1000, sheetTop)
+    expect(Math.max(...tops) - OPENING_TOP, 'dp the sheet sank below its opening height').toBeLessThanOrEqual(3)
+    expect(sheetTop()).toBeCloseTo(OPENING_TOP, 0)
+  })
+
   it('keeps the chat behind dimmed at its opening height', async () => {
     await open(tasksSheet('light'))
     const backdrop = renderer!.root.find(
@@ -632,6 +727,17 @@ describe('a content-sized sheet that closes by a drag on its content', () => {
     listReportsScroll(45)
     move(listPan, 140)
     expect(translateY(sheetStyle()), 'the sheet jumped back while the finger was still down').toBe(140)
+  })
+
+  it('springs back to where it rests without rising past it', async () => {
+    motion.springs = true
+    await open(contentSheet)
+    begin(listPan)
+    move(listPan, 60)
+    lift(listPan, 60)
+    const positions = playFrames(1000, () => translateY(sheetStyle()))
+    expect(Math.min(...positions), 'dp the sheet rose past its rest').toBeGreaterThanOrEqual(-3)
+    expect(translateY(sheetStyle())).toBeCloseTo(0, 0)
   })
 
   it('springs back rather than stopping part way when the list reports a scroll as the finger lifts', async () => {

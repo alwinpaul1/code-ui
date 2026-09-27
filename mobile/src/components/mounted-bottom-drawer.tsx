@@ -280,7 +280,10 @@ export function MountedBottomDrawer({
     // view at whatever opacity it last wrote — and the stale-cache path does
     // exactly that, rendering the first frame near 0 and then dropping the key,
     // leaving a fully interactive drawer invisible under a live backdrop.
-    const transform = [{ translateY: enterTravel + translateY.value - keyboardShift }]
+    // An expandable sheet's box is exactly full height: above its top rest it
+    // would lift its bottom off the screen, and nothing may take it there.
+    const offset = expandable ? Math.max(translateY.value, 0) : translateY.value
+    const transform = [{ translateY: enterTravel + offset - keyboardShift }]
     return { opacity: reduceMotion ? progress.value : 1, transform }
     // The dependency array names every shared value the updater reads: the web bundle is built
     // without Reanimated's Babel plugin, so `__closure` is never written and this list is what the

@@ -8,8 +8,8 @@ import {
   settleExpandableSheet,
   type ExpandableSheetSettle
 } from './bottom-drawer-expandable'
+import { DRAWER_SPRING } from './drawer-spring'
 
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 const DISMISS_DURATION_MS = 220
 
 /** The two rests of an expandable drawer, what a drag does between them, and
@@ -62,7 +62,7 @@ export function useExpandableBottomDrawer(args: {
       }
       const toFull = settle === 'full'
       listScrolls.value = toFull
-      translateY.value = withSpring(toFull ? 0 : expandableSheetOpeningOffset(heights), SPRING_CONFIG)
+      translateY.value = withSpring(toFull ? 0 : expandableSheetOpeningOffset(heights), DRAWER_SPRING)
       runOnJS(setExpanded)(toFull)
       return settle
     }

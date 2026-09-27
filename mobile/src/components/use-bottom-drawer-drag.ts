@@ -12,9 +12,9 @@ import {
   type SharedValue
 } from 'react-native-reanimated'
 import type { ExpandableSheetSettle } from './bottom-drawer-expandable'
+import { DRAWER_SPRING } from './drawer-spring'
 
 const DISMISS_THRESHOLD = 80
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Why: negative translateY (pulling up) is damped with a rubber-band factor
 // so the drawer resists upward dragging — a subtle polish touch that signals
 // the drawer cannot expand further.
@@ -103,7 +103,7 @@ export function useBottomDrawerDrag(args: {
           runOnJS(close)()
         })
       } else {
-        translateY.value = withSpring(0, SPRING_CONFIG)
+        translateY.value = withSpring(0, DRAWER_SPRING)
       }
     }
     const followFinger = (translationY: number) => {
@@ -145,7 +145,7 @@ export function useBottomDrawerDrag(args: {
           contentDragCanDismiss.value = false
           contentDragStartY.value = 0
           if (translateY.value !== 0) {
-            translateY.value = withSpring(0, SPRING_CONFIG)
+            translateY.value = withSpring(0, DRAWER_SPRING)
           }
           return
         }

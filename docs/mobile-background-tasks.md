@@ -38,6 +38,12 @@ phone moves the sheet onto its new rest. The gestures are built once, so the
 clock's tick and streamed messages do not rebuild them mid-drag
 (`use-bottom-drawer-drag.ts`, `background-tasks-sheet-drag.test.tsx`).
 
+The sheet never stands above full height: its box is exactly that tall, and
+above it the bottom would lift off the screen. Its springs settle without
+overshoot (`drawer-spring.ts`): the old `{damping 28, stiffness 400}` named no
+mass, Reanimated 4 filled in 4, and the sheet sprang about 50 dp into the
+status bar.
+
 ## The structured lane reads the host's roster
 
 Orca #18757, #18807, #19346 and #19311 put provider-owned background work on
