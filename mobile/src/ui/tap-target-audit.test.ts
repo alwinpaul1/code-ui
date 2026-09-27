@@ -31,9 +31,9 @@ function sourceFiles(dir: string, into: string[] = []): string[] {
 /** `key: { … }` blocks at two- or four-space indent: the shape of a
  *  StyleSheet.create entry at module level, and inside a themed style factory
  *  (`(theme) => StyleSheet.create({…})`, one level deeper). Two-space alone
- *  went blind to every factory: the 2026-09-27 theme sweep moved ~130 files'
- *  sheets into factories, and the scan kept passing while it read none of
- *  them. Only stated, non-zero sizes count (see tapTargetHitSlop). The body
+ *  went blind to every factory: 20 files had one before the 2026-09-27 theme
+ *  sweep and 89 after it (`grep -l '^  return StyleSheet.create('`), and the
+ *  scan kept passing while it read none of them. Only stated, non-zero sizes count (see tapTargetHitSlop). The body
  *  ends at the brace that closes it, found by depth, not at the next line
  *  that happens to start with `}`: a one-line `pressed: { opacity: 0.7 },`
  *  would otherwise swallow the sized block after it and inherit its size
