@@ -10,8 +10,12 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.facebook.react.HeadlessJsTaskService
+import com.facebook.react.ReactInstanceEventListener
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.bridge.UiThreadUtil
 import com.facebook.react.jstasks.HeadlessJsTaskConfig
+import com.facebook.react.jstasks.HeadlessJsTaskContext
 
 /**
  * Foreground service that keeps the React Native runtime — and with it the
@@ -27,9 +31,22 @@ import com.facebook.react.jstasks.HeadlessJsTaskConfig
  *
  * The task itself (`CodeUIBackgroundLink`, registered in JS) never resolves
  * while background delivery is enabled; the service ends when JS calls `stop`.
+ *
+ * Why it starts its task itself instead of through the base class: it has to
+ * know which task is its own. HeadlessJsTaskContext tells every listener about
+ * every headless task that finishes in the process, and expo-task-manager runs
+ * one for each WorkManager run of the hourly update check. The base class keeps
+ * its task ids private, so this service could not tell expo's finish from its
+ * own. It treated expo's as its own and cleared `taskStarted`, and the next
+ * open started a second link task. The two tasks ended each other and the
+ * service stopped itself seconds after the app was opened (a Pixel on 0.9.54,
+ * 2026-09-27: "background service not running" on every hourly wake overnight).
  */
 class BackgroundLinkService : HeadlessJsTaskService() {
   private var taskStarted = false
+
+  /** The id HeadlessJsTaskContext returned for this service's own task. */
+  private var ownTaskId: Int? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     val title = intent?.getStringExtra(EXTRA_TITLE) ?: DEFAULT_TITLE
@@ -50,7 +67,10 @@ class BackgroundLinkService : HeadlessJsTaskService() {
       return START_STICKY
     }
     taskStarted = true
-    return super.onStartCommand(intent, flags, startId)
+    startOwnTask(getTaskConfig(intent))
+    // What the base class returned for a started task: after a process death
+    // Android restarts the service with this intent.
+    return START_REDELIVER_INTENT
   }
 
   override fun getTaskConfig(intent: Intent?): HeadlessJsTaskConfig =
@@ -61,12 +81,57 @@ class BackgroundLinkService : HeadlessJsTaskService() {
       /* allowedInForeground */ true
     )
 
+  /**
+   * The base class's startTask, keeping the id. It takes the wake lock, then
+   * runs the task on the current React context or on the one it starts. This
+   * app is New Architecture only (newArchEnabled=true), so the context always
+   * comes from the ReactHost, as it does in the base class's bridgeless branch.
+   */
+  private fun startOwnTask(config: HeadlessJsTaskConfig) {
+    HeadlessJsTaskService.acquireWakeLockNow(this)
+    val context = reactContext
+    if (context != null) {
+      runOwnTask(context, config)
+      return
+    }
+    val host = checkNotNull(reactHost) { "ReactHost is not initialized in New Architecture" }
+    host.addReactInstanceEventListener(
+      object : ReactInstanceEventListener {
+        override fun onReactContextInitialized(context: ReactContext) {
+          host.removeReactInstanceEventListener(this)
+          runOwnTask(context, config)
+        }
+      }
+    )
+    host.start()
+  }
+
+  private fun runOwnTask(context: ReactContext, config: HeadlessJsTaskConfig) {
+    val tasks = HeadlessJsTaskContext.getInstance(context)
+    tasks.addTaskEventListener(this)
+    // startTask must run on the UI thread. The id is assigned in the same
+    // runnable, and a finish is posted to the UI thread after it, so a finish
+    // can never arrive before the id is known.
+    UiThreadUtil.runOnUiThread {
+      ownTaskId = tasks.startTask(config)
+    }
+  }
+
   override fun onHeadlessJsTaskFinish(taskId: Int) {
-    // The base class stops the service once no task is active. That is the
-    // right outcome: the JS task only ends when delivery was switched off or
-    // the runtime threw, and JS restarts the service on the next foreground.
+    if (taskId != ownTaskId) {
+      // Another module's headless task (expo-task-manager runs one for every
+      // WorkManager job). It says nothing about this service's task, which
+      // is still parked.
+      return
+    }
+    // Not super: the base class's own task set is empty, because this service
+    // starts its task itself, so its handler would stop the service on ANY
+    // task's finish. Stopping here is what it would have done for this one.
+    // The JS task only ends when delivery was switched off or the runtime
+    // threw, and JS restarts the service on the next foreground.
+    ownTaskId = null
     taskStarted = false
-    super.onHeadlessJsTaskFinish(taskId)
+    stopSelf()
   }
 
   override fun onTaskRemoved(rootIntent: Intent?) {
@@ -76,6 +141,7 @@ class BackgroundLinkService : HeadlessJsTaskService() {
   override fun onDestroy() {
     isRunning = false
     taskStarted = false
+    ownTaskId = null
     super.onDestroy()
   }
 
