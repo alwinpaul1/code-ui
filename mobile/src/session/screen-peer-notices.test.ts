@@ -546,3 +546,44 @@ describe("a subagent's next row, when the status's copy of its last message was 
     expect(drawn.find((entry) => entry.sender === OTHER)?.body).toBe('other agent report')
   })
 })
+
+// Device, 2026-09-27 (session 790eafa8): the chat's first screen read after
+// it came back found a "Message from" row the lead had answered since, and
+// anchored it at the chat's last row, under the answer. A row on that first
+// read was painted before the chat looked.
+describe('a row on the chat’s first read of the screen since it began watching', () => {
+  const folded = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('a3', 'assistant', 'the answer')]
+  const words = (rows: readonly NativeChatMessage[]) => rows.flatMap((message) => (agentMessageOf(message) ? [agentMessageOf(message)!] : []))
+
+  it('is anchored at the last row the chat held when it last read the screen, not at the tail', () => {
+    const found = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a3', 30, undefined, 100_000, { id: 'a1', at: 10 })
+    expect(found).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 10, found: true }])
+    expect(withScreenPeerNotices(folded, found, { subagentRows: true }).map((message) => message.id)).toEqual([
+      'a1',
+      'peer-notice:probe:1',
+      'a2',
+      'a3'
+    ])
+  })
+
+  it('takes no words from a status copy the phone read at that moment: it was not seen arriving then', () => {
+    const probe = { senders: ['probe'], body: 'hello from probe', cut: false, seenAt: 100_000 }
+    const found = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a3', 30, undefined, 100_000, { id: 'a1', at: 10 })
+    expect(words(withScreenPeerNotices(folded, found, { subagentRows: true, bodies: [probe] }))).toEqual([{ sender: 'probe', body: '' }])
+  })
+
+  it('is kept and never drawn when the chat holds no earlier reading, and is not counted again after', () => {
+    const held = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a3', 30, undefined, 100_000, null)
+    expect(held).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: null, sightedAt: 30, found: true, held: true }])
+    expect(withScreenPeerNotices(folded, held, { subagentRows: true })).toBe(folded)
+    expect(observeScreenPeerNotices(held, [{ sender: 'probe' }], 'a3', 31)).toBe(held)
+  })
+
+  it('does not claim a landed transcript bubble when it is never drawn', () => {
+    const landed = [...folded, peerRow('p1', 'code-ui-6f')]
+    const held = observeScreenPeerNotices([], [{ sender: 'code-ui-6f', body: 'Capture probe' }], 'a3', 30, undefined, 100_000, null)
+    const live = observeScreenPeerNotices(held, [{ sender: 'code-ui-6f', body: 'Capture probe' }, { sender: 'code-ui-6f', body: 'Second' }], 'a3', 31)
+    // The live one steps aside for the landed bubble; the held one draws nothing.
+    expect(withScreenPeerNotices(landed, live).map((message) => message.id)).toEqual(['a1', 'a2', 'a3', 'p1'])
+  })
+})

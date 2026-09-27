@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { resetPhotoCopyBindingsForTests } from './desktop-prompt-photo-copies'
+import { resetScreenPeerNoticesForTests } from './use-screen-peer-notices'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { mergeImagePreviews } from './use-host-image-previews'
@@ -117,8 +118,9 @@ export type Tick = {
   /** The subagent messages the prompt beacon carried (the controller's
    *  `nativeChatAgentMessages`). */
   agentMessages?: BeaconAgentMessage[]
-  /** The peer-message rows the agent's screen showed. */
-  peerRows?: ScreenPeerRow[]
+  /** The peer-message rows the agent's screen showed; null before the
+   *  chat's first read of the screen since it began watching it. */
+  peerRows?: ScreenPeerRow[] | null
   /** What the tab status carried of subagent messages (the controller's
    *  `nativeChatStatusAgentMessages`). */
   statusAgentMessages?: readonly StatusSubagentMessage[]
@@ -173,6 +175,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
     frames.length = 0
     // Each case is its own app launch: no send pairs with a copy from another.
     resetPhotoCopyBindingsForTests()
+    resetScreenPeerNoticesForTests()
   })
   afterEach(async () => {
     act(() => renderer?.unmount())
@@ -220,7 +223,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatQueuedMessages: tick.queued ?? [],
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
       nativeChatAgentMessages: tick.agentMessages ?? [],
-      nativeChatScreenPeerNotices: tick.peerRows ?? [],
+      nativeChatScreenPeerNotices: tick.peerRows === undefined ? [] : tick.peerRows,
       nativeChatStatusAgentMessages: tick.statusAgentMessages ?? [],
       nativeChatPromptHook: tick.promptHook ?? null,
       chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),

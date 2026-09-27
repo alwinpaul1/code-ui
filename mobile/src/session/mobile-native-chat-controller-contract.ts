@@ -207,8 +207,9 @@ export type MobileNativeChatController = {
   /** Prompts the agent has already accepted, read off its own screen. */
   nativeChatScreenPrompts: string[]
   /** The peer-message rows on the agent's screen, one per row
-   *  (mobile-terminal-peer-notices.ts). */
-  nativeChatScreenPeerNotices: ScreenPeerRow[]
+   *  (mobile-terminal-peer-notices.ts); null until the first read since the
+   *  chat began watching it. */
+  nativeChatScreenPeerNotices: ScreenPeerRow[] | null
   /** Photos Claude painted above a prompt it took (mobile-terminal-sent-photos.ts). */
   nativeChatScreenSentPhotos: ScreenSentPhotos[]
   /** Whether this tab was launched with the prompt hook; null until a beacon lands. */

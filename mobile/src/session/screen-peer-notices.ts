@@ -9,7 +9,11 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * A subagent's row says only who wrote (`› Message from @probe (ctrl+o to
  * expand)`); another session's row carries the message too
  * (mobile-terminal-peer-notices.ts). The phone remembers each sighting with
- * the id of the last folded row at that moment. Another session's message is
+ * the id of the last folded row at that moment. A row already on the screen
+ * when the chat first reads it (a return to the session, a reconnect) was
+ * not seen arriving: it goes after the last row the chat held when it last
+ * read the screen, or is not drawn when there is no such reading
+ * (2026-09-27). Another session's message is
  * drawn after that row as the same bubble a transcript turn gets: the
  * harness's boilerplate, the way the Claude app shows a peer message, and
  * nothing of the message or the sender (the user's call, 2026-09-21; the
@@ -44,6 +48,14 @@ export type ScreenPeerNotice = {
   /** The phone's clock at the sighting: what pairs the row with another
    *  source's copy of its message (bodyOf). */
   seenAt?: number
+  /** On the screen already when the chat first read it, not watched
+   *  arriving: anchored at the last row the chat held when it last read the
+   *  screen (the message came after that), and untimed, so it never takes
+   *  another copy's words. */
+  found?: true
+  /** Found with no earlier reading to place it by: kept, so it is not
+   *  counted again, and never drawn. */
+  held?: true
 }
 
 /**
@@ -74,7 +86,12 @@ export function observeScreenPeerNotices(
   now: number,
   afterId?: string,
   /** The phone's clock now. */
-  seenAt: number = Date.now()
+  seenAt: number = Date.now(),
+  /** Set when this is the chat's first read of the screen since it began
+   *  watching it (a mount, a reconnect): the rows new to it were painted
+   *  before it looked. The last row the chat held when it last read the
+   *  screen, or null when it holds no such reading. */
+  lastRead?: { id: string; at: number } | null
 ): readonly ScreenPeerNotice[] {
   const seen = new Map<string, ScreenPeerRow[]>()
   for (const row of rows) {
@@ -88,8 +105,20 @@ export function observeScreenPeerNotices(
     for (let ordinal = known + 1; ordinal <= list.length; ordinal += 1) {
       next ??= [...previous]
       const body = list[ordinal - 1]?.body
+      const id = `${SCREEN_NOTICE_ID_PREFIX}${sender}:${ordinal}`
+      if (lastRead !== undefined) {
+        // Found: the tail now is where the chat looked, not where it came,
+        // and a row the lead answered before the chat looked sat under the
+        // answer (device, 2026-09-27, session 790eafa8).
+        next.push(
+          lastRead === null
+            ? { id, sender, ...(body ? { body } : {}), anchorId: null, sightedAt: now, found: true, held: true }
+            : { id, sender, ...(body ? { body } : {}), anchorId: lastRead.id, sightedAt: lastRead.at, found: true }
+        )
+        continue
+      }
       next.push({
-        id: `${SCREEN_NOTICE_ID_PREFIX}${sender}:${ordinal}`,
+        id,
         sender,
         ...(body ? { body } : {}),
         anchorId: tailId,
@@ -118,7 +147,9 @@ export function withScreenPeerNotices(
   if (allNotices.length === 0) {
     return folded as NativeChatMessage[]
   }
-  const notices = allNotices.filter((notice) => drawsPeerBubble(notice) || options.subagentRows === true)
+  const notices = allNotices.filter(
+    (notice) => notice.held !== true && (drawsPeerBubble(notice) || options.subagentRows === true)
+  )
   if (notices.length === 0) {
     return folded as NativeChatMessage[]
   }

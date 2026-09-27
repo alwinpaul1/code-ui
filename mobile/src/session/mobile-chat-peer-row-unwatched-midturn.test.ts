@@ -1,0 +1,230 @@
+// Reported from the phone on 2026-09-27, Claude Code 2.1.283, session
+// 790eafa8, a tab with no prompt hook. A background subagent sent the lead a
+// message mid-turn. The session's own records (1-based transcript lines):
+//   17706 queue-operation enqueue            17:38:59.103Z
+//   17713 queue-operation remove, reason `absorbed_mid_turn`, 17:39:02.111Z
+//   17714 attachment, `attachment.type: "queued_command"`, `origin: {kind:
+//         "peer", from: "ae2d5e1c5fd6e774f", name: "general-purpose", …}`,
+//         `isMeta: true`, parentUuid the PostToolUse hook record of the Bash
+//         call 9241eb9b
+// The lead then messaged the subagent back (a9807473) and wrote its final
+// text (7d464ce8, 17:39:16). Orca's reader drops the attachment, so the phone
+// knows of the message only from the row the desktop TUI paints for it:
+//   › Message from @general-purpose (ctrl+o to expand)
+// between "Ran 1 shell command" and the lead's final text. The phone drew its
+// "Message from general-purpose" row at the tail, after that final text.
+//
+// The chat anchors a screen row at the last row it holds when a screen read
+// first shows it. That read was the chat's first after it came back to the
+// session: the row had been painted while it was not looking, and the lead
+// had answered since.
+//
+// The rows are the transcript's own records (uuid, role, time, text where the
+// reduced records kept it). The screen lines are transcribed from the
+// phone's screenshot of the desktop terminal (peer-row-terminal.png); a tmux
+// capture of this row's form (Claude Code 2.1.278, 46 columns) is pinned in
+// mobile-terminal-peer-notices.test.ts.
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react-test-renderer'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
+import { landingHarness } from './mobile-chat-phone-photo-landing.test-support'
+
+vi.mock('expo-clipboard', () => ({
+  hasImageAsync: vi.fn(async () => false),
+  getImageAsync: vi.fn(async () => null),
+  setStringAsync: vi.fn()
+}))
+vi.mock('react-native', () => ({
+  AppState: { addEventListener: () => ({ remove: () => undefined }), currentState: 'active' },
+  StyleSheet: { create: (styles: unknown) => styles, absoluteFill: {} },
+  View: 'View'
+}))
+const frames = vi.hoisted(() => [] as Record<string, unknown>[])
+vi.mock('./MobileNativeChatView', async () => {
+  const { createElement: h } = await import('react')
+  return {
+    MobileNativeChatView: (props: Record<string, unknown>) => {
+      frames.push(props)
+      return h('ChatView', props)
+    }
+  }
+})
+
+const at = (clock: string) => Date.parse(`2026-09-27T${clock}Z`)
+const text = (id: string, body: string, clock: string): NativeChatMessage => ({
+  id,
+  role: 'assistant',
+  blocks: [{ type: 'text', text: body }],
+  timestamp: at(clock),
+  source: 'transcript'
+})
+const tool = (callId: string, resultId: string, name: string, called: string, returned: string): NativeChatMessage[] => [
+  { id: callId, role: 'assistant', blocks: [{ type: 'tool-call', name, input: {} }], timestamp: at(called), source: 'transcript' },
+  { id: resultId, role: 'tool', blocks: [{ type: 'tool-result', output: '' }], timestamp: at(returned), source: 'transcript' }
+]
+
+const COMMITTING = '1c179b5c-4632-4f9c-b33c-6db3a7ba0a2b'
+const FINAL = '7d464ce8-8958-4250-b3f9-110f3016079e'
+const BEFORE_COMMIT = [
+  ...tool('4cacf5a5-adbd-429e-8cfd-6894e6f370d6', '93a40c38-ef7d-4c75-ac5e-c72b047254fb', 'Bash', '17:38:51.984', '17:38:55.102'),
+  text(COMMITTING, 'The Troubleshooting fix passes typecheck, lint and all 460 diagnostics tests. Committing it.', '17:38:57.069')
+]
+// Claude Code took the message after the commit's Bash call (17:39:02).
+const TAKEN = [
+  ...BEFORE_COMMIT,
+  ...tool('9241eb9b-dede-4384-be27-23f95c0597b6', 'f34f9d8f-8f86-4243-a566-59e883d95fc7', 'Bash', '17:39:00.975', '17:39:01.837')
+]
+const ANSWERED = [
+  ...TAKEN,
+  ...tool('a9807473-ca20-4351-8016-0146ea8195ab', 'fee69d76-47fa-4a10-b754-0a033ef038ca', 'SendMessage', '17:39:07.407', '17:39:08.177'),
+  text(
+    FINAL,
+    "I've removed the Troubleshooting line you pointed at, and the change is committed on a separate branch (`fix/troubleshoot-relay-row`). It isn't merged yet.",
+    '17:39:16.654'
+  )
+]
+/** The desktop terminal around the row, as the phone's terminal view showed it. */
+const SCREEN = [
+  '⏺ The Troubleshooting fix passes typecheck, lint and all 460 diagnostics tests. Committing it.',
+  '',
+  '  Ran 1 shell command',
+  '',
+  '› Message from @general-purpose (ctrl+o to expand)',
+  '  ⎿  Message queued for delivery to ae2d5e1c5fd6e774f at its next tool round.',
+  '  ⎿  Allowed by auto mode classifier',
+  '',
+  "⏺ I've removed the Troubleshooting line you pointed at, and the change is committed on a separate",
+  "  branch (fix/troubleshoot-relay-row). It isn't merged yet."
+]
+const ROWS = peerNoticesFromScreen(SCREEN)
+
+describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', () => {
+  const { show, unmount } = landingHarness(frames)
+  afterEach(() => vi.restoreAllMocks())
+  /** The harness's clock is a day earlier; move to this day's time first. */
+  async function showAt(clock: string, messages: NativeChatMessage[], peerRows: ReturnType<typeof peerNoticesFromScreen> | null) {
+    const delta = at(clock) - Date.now()
+    if (delta > 0) {
+      await act(async () => {
+        vi.advanceTimersByTime(delta)
+      })
+    }
+    await show('00:00:00.000', { messages, working: true, promptHook: false, peerRows })
+  }
+  function placement(): { row: number; committing: number; final: number; rows: number } {
+    const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+    const index = (id: string) => folded.findIndex((message) => message.id === id)
+    const rows = folded.filter((message) => agentMessageOf(message)?.sender === 'general-purpose')
+    return {
+      row: folded.findIndex((message) => agentMessageOf(message)?.sender === 'general-purpose'),
+      committing: index(COMMITTING),
+      final: index(FINAL),
+      rows: rows.length
+    }
+  }
+
+  it('reads the TUI’s row as a subagent’s, with no words', () => {
+    expect(ROWS).toEqual([{ sender: 'general-purpose' }])
+  })
+
+  it('keeps a subagent’s message the chat did not watch arrive above the lead’s reply to it', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    // The chat was open, reading the screen, before the message came…
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    // …and was left.
+    unmount()
+    // Back after the lead answered: the screen is not read yet, then is.
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:02.000', ANSWERED, ROWS)
+    const where = placement()
+    expect(where.rows).toBe(1)
+    expect(where.row).toBeGreaterThan(where.committing)
+    expect(where.row).toBeLessThan(where.final)
+  })
+
+  it('keeps it above the lead’s reply when the link was down while it came', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    // The link drops; the chat stays mounted and does not read the screen.
+    await showAt('17:38:59.000', BEFORE_COMMIT, null)
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    const where = placement()
+    expect(where.rows).toBe(1)
+    expect(where.row).toBeGreaterThan(where.committing)
+    expect(where.row).toBeLessThan(where.final)
+  })
+
+  it('is not drawn, and says so once, when the chat never read this screen before', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    vi.setSystemTime(at('17:40:00.000'))
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:02.000', ANSWERED, ROWS)
+    expect(placement().rows).toBe(0)
+    expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[peer-row]'))).toEqual([
+      '[peer-row] not drawn: the row from @general-purpose was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by'
+    ])
+  })
+
+  // What the chat did before, and must go on doing: a row it watched arrive
+  // is drawn after the step it came in.
+  it('stays after the step it came in when the chat was reading the screen as it arrived', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    await showAt('17:39:02.500', TAKEN, ROWS)
+    await showAt('17:39:17.000', ANSWERED, ROWS)
+    await showAt('17:39:18.000', ANSWERED, ROWS)
+    const where = placement()
+    expect(where.rows).toBe(1)
+    expect(where.row).toBeGreaterThan(where.committing)
+    expect(where.row).toBeLessThan(where.final)
+  })
+
+  it('keeps a row the chat watched arrive where it was drawn when the chat comes back', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    await showAt('17:39:02.500', TAKEN, ROWS)
+    unmount()
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    const where = placement()
+    expect(where.rows).toBe(1)
+    expect(where.row).toBeLessThan(where.final)
+  })
+
+  // Degenerate: the chat held one row when it last read the screen.
+  it('sits right after the only row the chat held when it last read the screen', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    const only = [BEFORE_COMMIT.at(-1)!]
+    await showAt('17:38:58.000', only, null)
+    await showAt('17:38:58.500', only, [])
+    unmount()
+    const later = [only[0]!, ...ANSWERED.slice(BEFORE_COMMIT.length)]
+    await showAt('17:40:00.000', later, null)
+    await showAt('17:40:01.000', later, ROWS)
+    const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+    const index = folded.findIndex((message) => agentMessageOf(message)?.sender === 'general-purpose')
+    expect(folded[index - 1]?.id).toBe(COMMITTING)
+  })
+
+  // Degenerate: the chat held no row when it last read the screen, so no
+  // reading places the row.
+  it('is not drawn when the chat held no row when it last read the screen', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', [], null)
+    await showAt('17:38:58.500', [], [])
+    unmount()
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    expect(placement().rows).toBe(0)
+  })
+})

@@ -296,7 +296,7 @@ export function MobileNativeChatOverlay({
   const statusAgentMessages = controller.nativeChatStatusAgentMessages ?? NO_STATUS_AGENT_MESSAGES
   const screenBodies = useMemo(() => screenRowBodies(statusAgentMessages, session.messages), [session.messages, statusAgentMessages])
   const foldedWithoutPhotos = useScreenPeerNotices(
-    controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
+    controller.nativeChatScreenPeerNotices === undefined ? NO_PEER_ROWS : controller.nativeChatScreenPeerNotices,
     foldedWithAgents,
     controller.nativeChatStreamScopeKey,
     controller.nativeChatPromptHook !== true,

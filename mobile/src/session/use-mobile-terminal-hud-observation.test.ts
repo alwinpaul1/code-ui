@@ -162,3 +162,42 @@ it('finds the live Claude queue when Orca extracts its hint into draft', async (
   })
   expect(observation.queuedMessages).toEqual(['desktop alpha', 'desktop beta'])
 })
+
+// Device, 2026-09-27 (session 790eafa8): the chat took the "Message from" rows
+// its first screen read found for ones it had watched arrive, and drew them
+// after its last row, under the lead's answer. The reader now says which read
+// is the first since the chat began watching: none before it.
+it('hands no peer rows until its first read since it began watching, and none again after it stops', async () => {
+  let answer: (value: unknown) => void = () => undefined
+  const sendRequest = vi.fn(
+    () =>
+      new Promise((resolve) => {
+        answer = resolve
+      })
+  )
+  const client = { sendRequest } as unknown as RpcClient
+  const screen = { ok: true, result: { terminal: { source: 'screen', tail: ['› Message from @general-purpose (ctrl+o to expand)'] } } }
+  function Harness({ enabled }: { enabled: boolean }) {
+    observation = useMobileTerminalHudObservation({
+      client,
+      enabled,
+      active: true,
+      handleRef,
+      handleKey: 'terminal',
+      agent: 'claude'
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(Harness, { enabled: true }))
+  })
+  expect(observation.peerNotices).toBeNull()
+  await act(async () => answer(screen))
+  expect(observation.peerNotices).toEqual([{ sender: 'general-purpose' }])
+  await act(async () => renderer.update(createElement(Harness, { enabled: false })))
+  expect(observation.peerNotices).toBeNull()
+  await act(async () => renderer.update(createElement(Harness, { enabled: true })))
+  expect(observation.peerNotices).toBeNull()
+  await act(async () => answer(screen))
+  expect(observation.peerNotices).toEqual([{ sender: 'general-purpose' }])
+})
