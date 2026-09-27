@@ -67,10 +67,10 @@ Dark or System). The app's colours come from the live theme
 (`useTheme()` / `useThemedStyles()` over `mobile/src/theme/tokens.ts`); the
 old dark-only static palette in `mobile-theme.ts` was deleted on 2026-09-27,
 and `theme-scheme-pin-ratchet.test.ts` keeps a scheme-pinned palette out of app
-code. Three things stay the same in both modes on purpose, because the app
-does not draw them: the terminal's content (Tokyonight), the in-app
-browser's web page with the busy tint over it, and photos in the image
-viewer.
+code. Content the app does not draw keeps its own colours in both modes: the
+terminal (Tokyonight), web pages in the in-app browser and the busy tint over
+them, HTML previews, photos in the image viewer, and the camera on the pairing
+screen.
 
 ## Releases and in-app updates
 
