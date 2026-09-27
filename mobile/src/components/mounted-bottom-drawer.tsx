@@ -19,12 +19,12 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
-import { useTheme } from '../theme/theme-context'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
-import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
+import { bottomDrawerStyles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
@@ -98,6 +98,7 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
+  const styles = useThemedStyles(bottomDrawerStyles)
   // Why: read at style time only. `null` (not yet known) runs full motion: the
   // enter effect below is left exactly as recorded, so nothing here can add a
   // `withTiming(1)` the window hand-back test counts. In practice the answer

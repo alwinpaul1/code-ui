@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 import {
   buildTerminalShortcutKey,
@@ -11,7 +11,7 @@ import {
   type TerminalShortcutModifier,
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
-import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import { customKeyModalStyles } from './CustomKeyModal.styles'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
@@ -83,6 +83,8 @@ export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
 }
 
 export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(customKeyModalStyles)
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
@@ -408,7 +410,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
                 value={macroEnter}
                 onValueChange={setMacroEnter}
                 trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
+                thumbColor={colors.text}
               />
             </View>
             <Pressable
