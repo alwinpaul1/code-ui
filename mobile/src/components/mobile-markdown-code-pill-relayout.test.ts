@@ -401,6 +401,39 @@ describe('a table of pills', () => {
   })
 })
 
+// Review of c3e62696: a prompt the lead wrote, drawn as Markdown in a user
+// bubble (the subagent transcript), is shrink-wrapped: the bubble is as wide
+// as its widest line, and its lines are cut to it, so it narrows as it
+// settles (300, 292, 273, 265, 250 for one command). The width in a Text's
+// key remounted it at every step. There the width follows the text, so it is
+// not a new layout's cause, and the key stays.
+describe('a shrink-wrapped bubble', () => {
+  it('keeps its Text mounted while it narrows to its widest line', () => {
+    const content = 'Run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint` then report.'
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content, shrinkWrapped: true }))
+    })
+    let width = 300
+    act(() => device.layOutDocument(width))
+    const first = mountedText(device.measuredText())
+    const widths = [width]
+    for (let step = 0; step < 12; step += 1) {
+      const { lines } = device.settle(width)
+      const next = Math.min(300, Math.round(Math.max(...lines.map((line) => line.width))))
+      if (next === width) {
+        break
+      }
+      width = next
+      widths.push(width)
+      device.rotateTo(width)
+    }
+    expect(widths.length).toBeGreaterThan(1)
+    expect(mountedText(device.measuredText())).toBe(first)
+    const { lines, lineWidth } = device.settle(width)
+    expect(whole(lines, lineWidth)).toEqual([])
+  })
+})
+
 // Review of f8c968a1, probe S1: greedy breaking came on the moment a
 // streaming paragraph's first code span closed, re-breaking its earlier lines
 // then. It is decided by the first backtick instead, which arrives before the

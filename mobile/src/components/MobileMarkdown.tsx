@@ -64,6 +64,10 @@ type Props = {
    *  code pills learnt about one message is not used for another, and is
    *  kept while the same one streams in (use-markdown-code-pill-runs.ts). */
   identity?: string
+  /** The document is as wide as its widest line (a bubble), so a new width
+   *  comes with a new layout and no Text is keyed by it
+   *  (use-markdown-code-pill-runs.ts, keyFor). */
+  shrinkWrapped?: boolean
 }
 
 const MAX_TABLE_ROWS = 40
@@ -293,7 +297,8 @@ function MobileMarkdownInner({
   textScale = 1,
   onOpenFile,
   resolveImage,
-  identity
+  identity,
+  shrinkWrapped
 }: Props) {
   const selectable = useChatTextSelectable()
   const styles = useMarkdownStyles()
@@ -308,7 +313,7 @@ function MobileMarkdownInner({
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
-  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity)
+  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity, shrinkWrapped)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }

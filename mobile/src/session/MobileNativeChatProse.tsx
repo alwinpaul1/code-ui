@@ -47,7 +47,16 @@ export function Prose({
         </Text>
       )
     }
-    return <MobileMarkdown content={block.text} textScale={fontScale} onOpenFile={onOpenFile} identity={identity} />
+    // A prompt drawn as Markdown sits in a shrink-wrapped bubble.
+    return (
+      <MobileMarkdown
+        content={block.text}
+        textScale={fontScale}
+        onOpenFile={onOpenFile}
+        identity={identity}
+        shrinkWrapped={invert}
+      />
+    )
   }
   if (isImageRefBlock(block)) {
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare
