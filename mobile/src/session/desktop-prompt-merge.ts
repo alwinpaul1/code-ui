@@ -47,24 +47,43 @@ export function mergeDesktopPrompts(
   // carried it (desk-prompt-harness-turns.ts, after this merge), and a twin
   // let through would then draw the message twice.
   const seen = new Set(status.map((prompt) => prompt.text))
-  const paired = new Set<DesktopPrompt>()
-  const foldedTwin = (prompt: DesktopPrompt): boolean => {
-    const folded = normalizePromptField(prompt.text)
-    const distance = (copy: DesktopPrompt) =>
-      typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
-    const nearest = status
-      .filter((copy) => copy.text === folded && !paired.has(copy))
-      .reduce<DesktopPrompt | undefined>((best, copy) => (best === undefined || distance(copy) < distance(best) ? copy : best), undefined)
-    if (nearest !== undefined) {
-      paired.add(nearest)
-    }
-    return nearest !== undefined
-  }
+  const twins = foldedTwins(status, beacon)
   for (const prompt of beacon) {
-    const twin = seen.has(prompt.text) || foldedTwin(prompt)
+    const twin = seen.has(prompt.text) || twins.has(prompt)
     if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
       merged.push(prompt)
     }
   }
   return merged
+}
+
+/**
+ * The beacon copies a status copy stands for by the status's folding, one
+ * each, nearest pair first by when the phone read them. Taken from the beacon
+ * side in list order, an older message of the same first 200 characters took
+ * the status copy after a remount, and the message the status carried was
+ * kept beside it, drawn twice (review of 08813139).
+ */
+function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopPrompt[]): Set<DesktopPrompt> {
+  const pairs: { copy: DesktopPrompt; prompt: DesktopPrompt; distance: number; order: number }[] = []
+  beacon.forEach((prompt, index) => {
+    const folded = normalizePromptField(prompt.text)
+    for (const copy of status) {
+      if (copy.text === folded && folded !== prompt.text) {
+        const distance =
+          typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
+        pairs.push({ copy, prompt, distance, order: index })
+      }
+    }
+  })
+  pairs.sort((a, b) => a.distance - b.distance || a.order - b.order)
+  const paired = new Set<DesktopPrompt>()
+  const twins = new Set<DesktopPrompt>()
+  for (const { copy, prompt } of pairs) {
+    if (!paired.has(copy) && !twins.has(prompt)) {
+      paired.add(copy)
+      twins.add(prompt)
+    }
+  }
+  return twins
 }

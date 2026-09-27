@@ -73,4 +73,16 @@ describe('two long desk messages that agree for their first 200 characters', () 
     ]
     expect(mergeDesktopPrompts([statusFirst], beacon).map((prompt) => prompt.nonce)).toEqual(['status:s:1000:0', '9002'])
   })
+
+  // Review of 08813139: paired from the beacon side in list order, the older
+  // message took the status copy first, and the one the status really carried
+  // was kept beside its own status copy, drawn twice.
+  it('pairs the status copy with the second, which it carried, after a remount', () => {
+    const statusSecond: DesktopPrompt = { nonce: 'status:s:1000:0', text: second.slice(0, 200).trimEnd(), cut: true, at: 1000, atStateStart: true, seenAt: 10_000 }
+    const beacon: DesktopPrompt[] = [
+      { nonce: '9001', text: first, anchorId: 'a1', seenAt: 2_000 },
+      { nonce: '9002', text: second, anchorId: 'a2', seenAt: 5_000 }
+    ]
+    expect(mergeDesktopPrompts([statusSecond], beacon).map((prompt) => prompt.nonce)).toEqual(['status:s:1000:0', '9001'])
+  })
 })
