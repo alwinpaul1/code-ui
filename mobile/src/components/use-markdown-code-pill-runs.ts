@@ -5,6 +5,7 @@ import {
   pillFitRoom,
   pillFitScale,
   readPillFits,
+  textPillScale,
   type PillFit,
   type PillLayoutLine,
   type PillSpanDrawn,
@@ -111,10 +112,14 @@ export function markdownDocumentKey(text: string): string {
 }
 
 /** Whether the document now drawn is the one an entry was learnt on, or the
- *  same one grown or edited: the same message by name, or without a name,
- *  text that starts with the old. */
+ *  same one grown: text that starts with the old, under the same name when
+ *  the caller names it. Both, because a name alone is not enough: the chat's
+ *  live row is `streaming` whatever reply part it shows, so every part was
+ *  `streaming:0:0`, and part two was cut with part one's pills and deleted
+ *  their memory (review of c3e62696). Text alone is not enough either: a
+ *  recycled cell's next message can begin with the last one's words. */
 function sameMessage(was: { identity: string | undefined; document: string }, identity: string | undefined, document: string): boolean {
-  return identity !== undefined ? was.identity === identity : document.startsWith(was.document)
+  return was.identity === identity && document.startsWith(was.document)
 }
 
 /**
@@ -162,6 +167,8 @@ export function useMarkdownCodePillRuns(
     // A table cell is set at BASE - 2 and does not follow the zoom.
     const proseSize = table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE * textScale
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
+    // The scale a span with no reading of its own is cut with.
+    const textScaleNow = textPillScale(current.fits)
     const spans: PillSpanDrawn[] = []
     let backtick = false
     const cutWith = (code: string, firstRoom: number, scale: number, glue: number) =>
@@ -249,7 +256,7 @@ export function useMarkdownCodePillRuns(
         const fit = current.fits.get(ordinal)
         const room = pillFitRoom(fit, lineRoom)
         const glue = codeTextWidth(GLUE.exec(after)![0], proseSize)
-        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit), glue)
+        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit, textScaleNow), glue)
         spans.push({ code, pieces, room, fresh, glue })
         return { pieces, version: entry?.versions[ordinal] ?? 0 }
       },

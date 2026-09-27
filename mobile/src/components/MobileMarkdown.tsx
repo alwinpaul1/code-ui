@@ -460,8 +460,13 @@ function MobileMarkdownInner({
             const pills = pillRuns(`table:${index}:${rowKey}:${cellIndex}`, inner, true)
             const children = renderInline(styles, source, onOpenFile, pills)
             return (
+              // No width in a cell's key: its width moves only with the zoom,
+              // which changes its pills' style too, so Fabric lays it out
+              // anyway; a key that moved remounted every pill-holding cell on
+              // every step of a pinch (review of c3e62696). A rotation leaves
+              // a cell's width as it was: columns are sized from their text.
               <Text
-                key={pills.keyFor(cellIndex)}
+                key={cellIndex}
                 selectable={selectable}
                 style={[
                   styles.tableCell,

@@ -6,6 +6,7 @@ import { cutCodePills } from './mobile-markdown-code-chip-split'
 import {
   createPhone,
   earlyLineEnds,
+  flatStyle,
   overflowingLines,
   sharedLines,
   type ModelLine
@@ -50,6 +51,20 @@ function mount(content: string, documentWidth: number, identity?: string) {
 function unmount() {
   act(() => renderer?.unmount())
   renderer = null
+}
+
+/** The pills a fresh phone settles on at a width, then forgotten. */
+function fresh(content: string, width: number, identity?: string): string[] {
+  mount(content, width, identity)
+  device.settle(width)
+  const settled = device.pillTexts()
+  unmount()
+  resetRememberedPillCutsForTests()
+  return settled
+}
+
+function mountedText(node: ReactTestInstance): unknown {
+  return (node as unknown as { _fiber: { stateNode: unknown } })._fiber.stateNode
 }
 
 function whole(lines: ModelLine[], lineWidth: number): string[] {
@@ -201,6 +216,63 @@ describe('turning the phone, or a split screen', () => {
   })
 })
 
+// Review of 3dd68229: between two close widths (a split-screen divider, a
+// pop-up view, DeX, a tablet) no pair of stale lines is short enough to prove
+// a narrower layout. At 800 -> 600 -> 800 the 600 dp lines reached the 800
+// handler; a span that started a line right after the same words there
+// looked cut for that room and gone down anyway, and its first piece was
+// capped a unit short at 800, remembered, and kept through a remount.
+describe('a turn between two close widths', () => {
+  const CLOSE = [
+    'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.',
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+
+  it('keeps the first line full at 800 after 800, 600, 800, and after scrolling away and back', () => {
+    const content = CLOSE[1]!
+    const wide = fresh(content, 800)
+    mount(content, 800)
+    device.settle(800)
+    device.rotateTo(600)
+    device.settle(600)
+    device.rotateTo(800)
+    const { lines, lineWidth } = device.settle(800)
+    expect(device.pillTexts()).toEqual(wide)
+    expect(whole(lines, lineWidth)).toEqual([])
+    unmount()
+    mount(content, 800)
+    expect(device.pillTexts()).toEqual(wide)
+  })
+
+  it.each([1.1, 1.2, 1.3, 1.4, 1.6])('leaves no gap after a turn at a width ratio of %s', (ratio) => {
+    const found: string[] = []
+    for (const wide of [800, 700]) {
+      const narrow = Math.round(wide / ratio)
+      CLOSE.forEach((base, index) => {
+        for (let n = 0; n <= LEAD.length; n += 3) {
+          const content = `${LEAD.slice(0, n).join(' ')}${n ? ' ' : ''}${base}`
+          const reference = fresh(content, wide)
+          mount(content, wide)
+          device.settle(wide)
+          device.rotateTo(narrow)
+          device.settle(narrow)
+          device.rotateTo(wide)
+          const { lines, lineWidth } = device.settle(wide)
+          const problems = whole(lines, lineWidth)
+          if (problems.length || device.pillTexts().join('|') !== reference.join('|')) {
+            found.push(`${wide} -> ${narrow} c${index} n${n}: ${device.pillTexts().join(' | ')} ${problems.join(' ; ')}`)
+          }
+          unmount()
+          resetRememberedPillCutsForTests()
+        }
+      })
+    }
+    expect(found).toEqual([])
+  })
+})
+
 // Review of 216a856f: the chat list (FlashList 2.3.2, no per-item key in
 // MobileNativeChatView) recycles a cell for another message. The cell's
 // rooms were used for whatever it drew next at the same width.
@@ -235,6 +307,49 @@ describe('a recycled list cell', () => {
   })
 })
 
+// Review of c3e62696: the chat draws the live reply as one row, `id:
+// 'streaming'` (mobile-native-chat-render-data.ts), and starts a new segment
+// in it for the next reply part, so every streamed part was `streaming:0:0`.
+// Part two was cut with part one's pills (whose scale only rises), and part
+// one's remembered pills were thrown away as "the same message, edited".
+describe('reply parts streaming through one live row', () => {
+  const PART_ONE =
+    'Checks: `✓ lint ✓ types ✓ tests ✓ build ✓ e2e ✓ size ✓ docs ✓ deps ✓ perf ✓ a11y ✓ i18n ✓ lint ✓ types ✓ tests ✓ build ✓ e2e ✓ size ✓ docs ✓ deps ✓ perf ✓ a11y ✓ i18n ✓ lint ✓ types ✓ tests ✓ build ✓ e2e ✓ size` all green.'
+  const partTwo = (k: number) =>
+    `Worktree: \`/Users/alwinpaul/Desktop/Project/Code UI/.claude/${'w'.repeat(k)}worktrees/chat-rows/mobile/src/components/pills/index.ts\` is ready.`
+
+  it('cuts the second part as a fresh phone would, at any width', () => {
+    const found: string[] = []
+    for (let k = 0; k < 30; k += 3) {
+      for (const width of [340, 360, 393]) {
+        const reference = fresh(partTwo(k), width, 'reference')
+        mount(PART_ONE, width, 'streaming:0:0')
+        device.settle(width)
+        act(() => renderer!.update(createElement(MobileMarkdown, { content: partTwo(k), identity: 'streaming:0:0' })))
+        const { lines, lineWidth } = device.settle(width)
+        const problems = whole(lines, lineWidth)
+        if (device.pillTexts().join('|') !== reference.join('|') || problems.length) {
+          found.push(`k${k} @${width}: ${device.pillTexts().join(' | ')} ; ${problems.join(' ; ')}`)
+        }
+        unmount()
+        resetRememberedPillCutsForTests()
+      }
+    }
+    expect(found).toEqual([])
+  })
+
+  it('keeps the first part remembered for when it lands in a row of its own', () => {
+    mount(partTwo(0), 360, 'streaming:0:0')
+    device.settle(360)
+    const settled = device.pillTexts()
+    act(() => renderer!.update(createElement(MobileMarkdown, { content: 'And then `pnpm install` ran in the worktree.', identity: 'streaming:0:0' })))
+    device.settle(360)
+    unmount()
+    mount(partTwo(0), 360, 'streaming:0:0')
+    expect(device.pillTexts()).toEqual(settled)
+  })
+})
+
 describe('a system font size change', () => {
   it('does not reuse the pills learnt at the old size', () => {
     const content = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe` here.'
@@ -250,6 +365,39 @@ describe('a system font size change', () => {
         insets: 10
       }).pieces
     )
+  })
+})
+
+// Review of c3e62696: every zoom step remounted every pill-holding table
+// cell (80 of 82 Texts in a 40-row table, about 240 native views a step, up
+// to 16 steps in a pinch), because the width in a Text's key moved with the
+// cells' zoomed columns. A cell's width moves only with the zoom, which
+// changes its pills' style too, so Fabric lays it out anyway.
+describe('a table of pills', () => {
+  const rows = Array.from({ length: 40 }, (_, i) => `| \`fix/branch-${i}\` | \`mobile/src/file-${i}.ts\` | ok |`).join('\n')
+  const TABLE = `Intro with \`a/b\` pill.\n\n| Branch | File | State |\n| --- | --- | --- |\n${rows}\n\nOutro with \`c/d\` pill.`
+  const reading = () =>
+    renderer!.root.findAll((node) => node.type === ('Text' as never) && typeof node.props.onTextLayout === 'function')
+
+  it('remounts no Text on any step of a pinch', () => {
+    mount(TABLE, 360)
+    let before = new Set(reading().map(mountedText))
+    for (const zoom of [1.05, 1.1, 1.15, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]) {
+      act(() => renderer!.update(createElement(MobileMarkdown, { content: TABLE, textScale: zoom })))
+      const now = reading()
+      expect(now.filter((text) => !before.has(mountedText(text))).length, `zoom ${zoom}`).toBe(0)
+      before = new Set(now.map(mountedText))
+    }
+  })
+
+  it('keeps its cells, and their pills whole, through a rotation: a cell is as wide as its column', () => {
+    mount(TABLE, 360)
+    const cells = reading().filter((text) => typeof flatStyle(text.props.style).width === 'number')
+    expect(cells.length).toBeGreaterThan(40)
+    device.rotateTo(700)
+    const after = new Set(reading().map(mountedText))
+    expect(cells.every((cell) => after.has(mountedText(cell)))).toBe(true)
+    expect(cells.every((cell) => flatStyle(cell.props.style).width === flatStyle(reading().find((text) => mountedText(text) === mountedText(cell))!.props.style).width)).toBe(true)
   })
 })
 

@@ -4,6 +4,7 @@ import {
   pillFitRoom,
   pillFitScale,
   readPillFits,
+  textPillScale,
   type PillFit,
   type PillLayoutLine,
   type PillSpanDrawn,
@@ -88,12 +89,15 @@ describe("reading a pill's line back from the phone's layout", () => {
   it('shrinks a first piece the phone drew wider than estimated until it fits', () => {
     const fit = { room: 250 }
     const span = drawn(PATH, fit)
-    // Cut for the 250 dp left, and still it went down a line: the room was right.
+    const first = span.pieces[0]!
+    // Cut for the 250 dp left, and still it went down a line, alone there:
+    // its own line shows it drawn 8% wider than the room.
     const next = learnt(
       read(
         [
           { x: 0, width: 110, text: '•  Worktree: ' },
-          { x: 0, width: 300, text: `${P}${P}. Branch ` }
+          { x: 0, width: width(first) * 1.08, text: P },
+          { x: 0, width: 200, text: `${P}. Branch ` }
         ],
         [span],
         { fits: new Map([[0, fit]]) }
@@ -101,8 +105,47 @@ describe("reading a pill's line back from the phone's layout", () => {
     )
     const shrunk = next.fits.get(0)!
     expect(shrunk.room).toBe(250)
-    expect(shrunk.below).toBe(width(span.pieces[0]!))
-    expect(width(drawn(PATH, shrunk).pieces[0]!)).toBeLessThan(width(span.pieces[0]!))
+    expect(width(drawn(PATH, shrunk).pieces[0]!)).toBeLessThan(width(first))
+  })
+
+  // Review of 3dd68229: at 800 -> 600 -> 800 the 600 dp lines reached the 800
+  // handler; a span that started a line right after the same words there
+  // looked cut for that room and gone down anyway, and its first piece was
+  // capped a unit short at 800 for good. Nothing on its line proved it wider.
+  it('does not cap a first piece that went down a line with another pill beside it', () => {
+    // At 800: "the fix lives in [one] and [two, cut for the 284 dp left]".
+    const WIDE = 800
+    const cutWide = (code: string, firstRoom: number, scale: number, glue = 0) =>
+      cutCodePills(code, firstRoom, WIDE, { ...FONT, scale }, glue)
+    const draw = (code: string, room: number): PillSpanDrawn => ({ code, room, glue: 0, ...cutWide(code, room, 1) })
+    const one = draw('mobile/src/components/use-markdown-code-pill-runs.ts', WIDE)
+    const two = draw('mobile/src/components/mobile-markdown-code-pill-fit.ts', 284)
+    expect([one.pieces.length, two.pieces.length]).toEqual([1, 2])
+    // The same tree broken at 600 and read at 800: the second span starts a
+    // line right after the same words, beside its own second piece.
+    const result = readPillFits({
+      ...readArgs(
+        [
+          { x: 0, width: 516, text: `the fix lives in ${P} and ` },
+          { x: 0, width: 505, text: `${P}${P}, both of them.` }
+        ],
+        [one, two]
+      ),
+      lineWidth: WIDE,
+      current: { fits: new Map([[1, { room: 284 }]]) },
+      cut: cutWide
+    })
+    expect(result.kind).not.toBe('unreadable')
+    expect(result.kind === 'changed' ? result.next.fits.get(1)?.below : undefined).toBeUndefined()
+  })
+
+  it('refuses lines where a first piece went down a line with room for it above', () => {
+    const span = drawn('mobile/src/components/', { room: 284 })
+    const lone = width(span.pieces[0]!)
+    expect(lone).toBeLessThan(284)
+    expect(
+      read([{ x: 0, width: 516, text: 'the fix lives in some words and ' }, { x: 0, width: lone, text: P }], [span], { fits: new Map([[0, { room: 284 }]]) }, 800).kind
+    ).toBe('unreadable')
   })
 
   it('grows a first piece that left the end of its line empty', () => {
@@ -225,6 +268,21 @@ describe("learning how wide the phone draws a span's pills", () => {
     // Bolder or larger words before the pill only make it look wider: not taken.
     const wider = at({ room: 250 }, 1.1)
     expect(wider.kind === 'changed' ? pillFitScale(wider.next.fits.get(0)) : 1).toBe(1)
+  })
+
+  it('cuts a span that has never been alone on a line as the others in its Text read', () => {
+    // Every pill drawn 10% wider (a larger system font size scales them all):
+    // the long span's lone pieces read it, and the short one follows.
+    const long = 'x'.repeat(90)
+    const spans = [drawn(long, undefined), drawn('fix/chat-rows', undefined)]
+    const lines = [
+      ...spans[0]!.pieces.map((piece) => ({ x: 0, width: codeTextWidth(piece, 14) * 1.1 + 10, text: P })),
+      { x: 0, width: 150, text: `Branch ${P}, commits` }
+    ]
+    const next = learnt(read(lines, spans))
+    expect(textPillScale(next.fits)).toBeCloseTo(1.1, 6)
+    expect(next.fits.get(1)!.scale).toBeUndefined()
+    expect(pillFitScale(next.fits.get(1), textPillScale(next.fits))).toBeCloseTo(1.1, 6)
   })
 
   it('reads a lone pill at the end of a paragraph without pricing the newline', () => {
