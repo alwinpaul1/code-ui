@@ -12,11 +12,8 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
-import { MobileSyntaxLine } from '../components/MobileSyntaxSegments'
-import { gutterWidthForLines, splitSyntaxIntoLines } from '../components/mobile-syntax-lines'
 import {
   buildPlainMobileDiffSyntaxLines,
-  highlightMobileCode,
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
@@ -24,27 +21,17 @@ import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
 import type { MarkdownImageResolver } from '../components/markdown-image-source'
 import { colors } from '../theme/mobile-theme'
-import { useTheme } from '../theme/theme-context'
 import { styles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
   DiffCommentActions,
   DiffSyntaxState,
   FileDocState,
-  FileSyntaxState,
   RenderableDiffLine
 } from './mobile-session-route-types'
 import { DiffLineRow } from './MobileSessionDiffLineRow'
-import {
-  extendFileReaderLineSelection,
-  fileReaderLineSelectionLabel,
-  fileReaderLineSelectionRange,
-  isFileReaderLineSelected,
-  startFileReaderLineSelection,
-  type FileReaderLineRange,
-  type FileReaderLineSelection
-} from './mobile-file-reader-line-selection'
-import { MobileSessionFileReaderLineActionBar } from './MobileSessionFileReaderLineActionBar'
+import type { FileReaderLineRange } from './mobile-file-reader-line-selection'
+import { MobileSessionFileSource } from './MobileSessionFileSource'
 
 export function FileReader({
   doc,
@@ -71,23 +58,10 @@ export function FileReader({
    *  and then no long-press/selection UI is wired up at all. */
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
-  const { colors: themeColors } = useTheme()
-  const [lineSelection, setLineSelection] = useState<FileReaderLineSelection>(null)
-  // A freshly opened file starts with nothing selected — otherwise a
-  // selection made on one file would appear to carry over onto the next.
-  useEffect(() => {
-    setLineSelection(null)
-  }, [relativePath])
-  const lineSelectionRangeValue = fileReaderLineSelectionRange(lineSelection)
-  const lineSelectionHighlightStyle = useMemo(
-    () => ({ backgroundColor: themeColors.accentSoft }),
-    [themeColors.accentSoft]
-  )
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]
   )
-  const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
@@ -183,17 +157,10 @@ export function FileReader({
       return undefined
     }
 
-    // Why: defer highlighting one tick so large files show as plain text immediately before colors are applied.
+    // Why: defer highlighting one tick so large diffs show as plain text
+    // immediately before colors are applied. Source views (file, html's
+    // "Source", markdown's source) colour themselves: MobileCodeView.
     const timer = setTimeout(() => {
-      // file + html share the syntax-segment source view (html's "Source" toggle).
-      if (doc.kind === 'file' || doc.kind === 'html') {
-        setFileSyntax({
-          doc,
-          language: syntaxLanguage,
-          segments: highlightMobileCode(doc.content, syntaxLanguage).segments
-        })
-        return
-      }
       if (doc.kind === 'diff') {
         setDiffSyntax({
           doc,
@@ -320,80 +287,19 @@ export function FileReader({
     )
   }
 
-  const renderSourceText = (content: string) => {
-    // Numbered lines, as an editor shows them: the highlighter's segments run
-    // across newlines, so they are cut per line and the gutter drawn inside
-    // each line's own Text, which keeps it aligned when a long line wraps
-    // (2026-09-13).
-    const highlighted =
-      fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
-        ? fileSyntax.segments
-        : [{ text: content, kind: 'plain' as const }]
-    const lines = splitSyntaxIntoLines(highlighted)
-    const gutterWidth = gutterWidthForLines(lines.length)
-    // An empty file still yields one (empty) line from splitSyntaxIntoLines,
-    // but there is nothing there to ask about — no selection UI at all, so
-    // the action bar can never appear over a blank reader.
-    const canSelectLines = onAskAboutLines != null && content.length > 0
-    return (
-      <View style={styles.markdownEditor}>
-        {/* A list, not a mapped ScrollView: one Text per line mounted the
-            whole file at once, and a 4000-line file blocked the UI thread
-            (2026-09-13). The diff view above already uses one. */}
-        <FlatList
-          style={styles.filePreviewScroll}
-          contentContainerStyle={styles.filePreviewContent}
-          data={lines}
-          accessibilityLabel={`${title} preview`}
-          keyExtractor={(_line, index) => String(index)}
-          initialNumToRender={60}
-          windowSize={9}
-          removeClippedSubviews
-          renderItem={({ item, index }) => {
-            const lineNumber = index + 1
-            return (
-              <MobileSyntaxLine
-                number={lineNumber}
-                segments={item}
-                gutterWidth={gutterWidth}
-                gutterDigits={String(lines.length).length}
-                lineStyle={styles.filePreviewText}
-                gutterStyle={styles.filePreviewGutter}
-                selectable={canSelectLines ? lineSelection === null : undefined}
-                highlighted={isFileReaderLineSelected(lineSelection, lineNumber)}
-                highlightStyle={lineSelectionHighlightStyle}
-                onLongPress={
-                  canSelectLines
-                    ? () => setLineSelection(startFileReaderLineSelection(lineNumber))
-                    : undefined
-                }
-                onPress={
-                  canSelectLines && lineSelection
-                    ? () => setLineSelection(extendFileReaderLineSelection(lineSelection, lineNumber))
-                    : undefined
-                }
-              />
-            )
-          }}
-        />
-        {canSelectLines && lineSelectionRangeValue ? (
-          <MobileSessionFileReaderLineActionBar
-            label={fileReaderLineSelectionLabel(lineSelectionRangeValue)}
-            onAskAboutLines={() => {
-              const range = lineSelectionRangeValue
-              setLineSelection(null)
-              onAskAboutLines?.(range)
-            }}
-            onAskAboutFile={() => {
-              setLineSelection(null)
-              onAskAboutLines?.(null)
-            }}
-            onDismiss={() => setLineSelection(null)}
-          />
-        ) : null}
-      </View>
-    )
-  }
+  const renderSourceText = (content: string, truncated?: boolean) => (
+    // The desktop editor's view of a source file: the code face, line
+    // numbers, indent guides, its colours and no wrapping (2026-09-26). A
+    // file the host cut short says so, and copies only what came.
+    <MobileSessionFileSource
+      content={content}
+      language={syntaxLanguage}
+      title={title}
+      relativePath={relativePath}
+      onAskAboutLines={onAskAboutLines}
+      truncated={truncated}
+    />
+  )
 
   if (doc.kind === 'html') {
     return (
@@ -416,11 +322,11 @@ export function FileReader({
           truncated={doc.truncated}
           readingPositionKey={readingPositionKey}
           resolveImage={resolveImage}
-          renderSource={() => renderSourceText(doc.content)}
+          renderSource={() => renderSourceText(doc.content, doc.truncated)}
         />
       </View>
     )
   }
 
-  return renderSourceText(doc.content)
+  return renderSourceText(doc.content, doc.truncated)
 }

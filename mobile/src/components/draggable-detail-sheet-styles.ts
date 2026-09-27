@@ -49,10 +49,11 @@ export const draggableDetailSheetStyles = StyleSheet.create({
     borderRadius: 2,
     opacity: 0.4
   },
+  // Left, as the Claude app's tool sheet has it (2026-09-26 screenshots).
   closeButton: {
     position: 'absolute',
     top: spacing.sm,
-    right: spacing.sm,
+    left: spacing.sm,
     padding: spacing.xs,
     zIndex: 1
   },

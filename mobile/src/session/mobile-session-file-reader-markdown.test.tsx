@@ -17,10 +17,13 @@ vi.mock('react-native', () => ({
 // for React Native internals the host-tag mock above removed. The routing
 // decision is what is under test.
 vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
   Copy: 'Copy',
   MessageSquare: 'MessageSquare',
   Send: 'Send'
 }))
+// The code viewer's Copy button writes through this; expo-clipboard cannot load here.
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: 'MobileHtmlPreview' }))
 vi.mock('../files/MobileFilePdfPreview', () => ({ MobileFilePdfPreview: 'MobileFilePdfPreview' }))
 vi.mock('../components/MobileSyntaxSegments', () => ({

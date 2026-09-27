@@ -24,7 +24,13 @@ installInstrumentSansText()
  *  Samsung. One UI's FlipFont packages substitute typefaces in-process, so the
  *  file reader drew code in a proportional face with its wrapped lines at
  *  column zero (screenshot, 2026-09-19) — the same defect the terminal hit
- *  and fixed by bundling its own font. */
+ *  and fixed by bundling its own font.
+ *
+ *  Bundling was not the whole fix. Code still drew proportional on 2026-09-26,
+ *  because `installInstrumentSansText` gives every Text that names no face
+ *  Instrument Sans, and a coloured span is a nested Text: it named the UI face
+ *  over the line's code face. Each code span names `fontFamily.mono` itself
+ *  (`syntaxSpanStyles` in MobileSyntaxSegments.tsx). */
 export function useAppFonts(): [boolean, Error | null] {
   return useFonts({
     InstrumentSans_400Regular,

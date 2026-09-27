@@ -18,7 +18,6 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
-import { useRestoreComposerCaret } from './use-restore-composer-caret'
 import { PressScale } from '../ui/PressScale'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
@@ -231,7 +230,6 @@ export function MobileNativeChatComposer({
     popoverSpace,
     dockHeight
   })
-  const caret = useRestoreComposerCaret(textInputRef, suggestions.length > 0)
 
   useEffect(() => {
     mountedRef.current = true
@@ -339,8 +337,16 @@ export function MobileNativeChatComposer({
               app does (device, 2026-09-20: four rows of draft and four photos
               left the menu a row and a half). The fold is a clipping wrapper,
               not a smaller input: shrinking a multiline TextInput's own
-              maxHeight under its content blanked the text on Android. */}
+              maxHeight under its content blanked the text on Android.
+              `collapsable={false}` keeps the input's native parent the same
+              whether or not the menu is up. Without it the menu's
+              `overflow: 'hidden'` alone decided whether Fabric kept this
+              wrapper's children or handed them to the card, so every open and
+              close moved the EditText to another parent. Android drops focus
+              on that move while the keyboard stays up, and keys typed after
+              `@` or `/` went nowhere until a tap (device, 2026-09-26). */}
           <View
+            collapsable={false}
             style={
               suggestions.length > 0
                 ? { maxHeight: COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU, overflow: 'hidden', justifyContent: 'flex-end' }
@@ -370,11 +376,8 @@ export function MobileNativeChatComposer({
                 onComposerCursor?.(next)
                 setPendingSelection(null)
               }}
-              onFocus={() => {
-                caret.onFocus()
-                setFocused(true)
-              }}
-              onBlur={() => { setFocused(false); caret.onBlur() }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
               placeholder={placeholder}
               placeholderTextColor={colors.textMuted}
               selectionColor={colors.accent}

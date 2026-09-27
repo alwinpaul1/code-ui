@@ -9,18 +9,31 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  FlatList: 'FlatList',
+  Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, flatten: (s: unknown) => s, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
-  useColorScheme: () => 'light'
+  useColorScheme: () => 'light',
+  useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 })
 }))
 vi.mock('react-native-gesture-handler', () => ({
   GestureHandlerRootView: 'GestureHandlerRootView'
 }))
-vi.mock('lucide-react-native', () => ({ Code: 'Icon', Pencil: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  Check: 'Icon',
+  Code: 'Icon',
+  Copy: 'Icon',
+  MessageSquare: 'Icon',
+  Pencil: 'Icon',
+  Send: 'Icon',
+  WrapText: 'Icon',
+  X: 'Icon'
+}))
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 vi.mock('./MobileFileImageZoom', () => ({ MobileFileImageZoom: () => null }))
@@ -28,6 +41,7 @@ vi.mock('./MobileFilePdfPreview', () => ({ MobileFilePdfPreview: () => null }))
 
 import { contrastRatio } from '../test/contrast'
 import { ThemeProvider } from '../theme/theme-context'
+import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 import { colorsForScheme } from '../theme/tokens'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
 import type { MobileFilePreviewTextKind } from './mobile-file-preview-response'
@@ -83,6 +97,20 @@ function inkOf(node: ReactTestInstance): string {
   return (Object.assign({}, ...list) as { color: string }).color
 }
 
+/** The colour actually painted behind a node: the nearest ancestor that paints one. A text file's
+ *  note sits on the code viewer's own surface (MobileCodeView), a Markdown file's on the page. */
+function surfaceBehind(node: ReactTestInstance): string {
+  for (let at = node.parent; at; at = at.parent) {
+    const style = at.props.style as unknown
+    const list = Array.isArray(style) ? style.flat(Infinity).filter(Boolean) : [style]
+    const fill = (Object.assign({}, ...list) as { backgroundColor?: string }).backgroundColor
+    if (fill) {
+      return fill
+    }
+  }
+  throw new Error('nothing paints behind the note')
+}
+
 function truncatedNote(): ReactTestInstance {
   const notes = tree!.root.findAll(
     (node) => node.type === 'Text' && textOf(node).startsWith('Preview truncated')
@@ -103,9 +131,11 @@ describe('the note over a preview the desktop cut', () => {
         const note = truncatedNote()
         expect(textOf(note)).not.toMatch(/File size/)
         expect(textOf(note)).toBe('Preview truncated: showing the first 512 KB of the file.')
-        const page = colorsForScheme(scheme).bg
+        const surface = surfaceBehind(note)
+        // This scheme's page or its code surface, never the other scheme's.
+        expect([colorsForScheme(scheme).bg, syntaxPaletteForScheme(scheme).surface]).toContain(surface)
         const ink = inkOf(note)
-        expect(contrastRatio(ink, page), `${ink} on ${page}`).toBeGreaterThanOrEqual(4.5)
+        expect(contrastRatio(ink, surface), `${ink} on ${surface}`).toBeGreaterThanOrEqual(4.5)
       })
     }
   }

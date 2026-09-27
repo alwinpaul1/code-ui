@@ -58,6 +58,7 @@ describe('a photo pasted at the desk with no words', () => {
     // timed at first sight by when the pane's working state began.
     const desk = [
       ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+        state: 'working',
         prompt: '[Image #74]',
         updatedAt: at('07:10:40.000'),
         stateStartedAt: at('07:02:10.000')

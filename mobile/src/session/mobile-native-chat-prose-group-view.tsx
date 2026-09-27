@@ -19,6 +19,8 @@ export function renderProseGroup(
     fontScale: number
     onOpenFile?: (relativePath: string) => void
     styles: ChatMessageStyles
+    /** Which message block this is (MobileMarkdown's `identity`). */
+    identity?: string
   }
 ): ReactNode {
   switch (group.type) {
@@ -37,6 +39,7 @@ export function renderProseGroup(
           fontScale={options.fontScale}
           onOpenFile={options.onOpenFile}
           styles={options.styles}
+          identity={options.identity}
         />
       )
     default: {

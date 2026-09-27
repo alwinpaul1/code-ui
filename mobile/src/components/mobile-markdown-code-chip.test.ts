@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown, isInlineCodeChip } from './MobileMarkdown'
-import { INLINE_CODE_CHIP_MAX_CHARS } from './mobile-markdown-code-chip-split'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -17,7 +16,8 @@ vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram'
 // 2026-09-12: the user wants inline code as in the Claude app — a rounded,
 // bordered "squircle" chip, every time. Android cannot round a nested Text's
 // background, so a span is a real inline View; a long one becomes several
-// pills that wrap, cut after a slash or space like the Claude app does.
+// pills, one per line, cut after a slash or space like the Claude app does
+// (how the first fills its line: mobile-markdown-code-pill-flow.test.ts).
 describe('inline code chips', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -49,8 +49,8 @@ describe('inline code chips', () => {
     ])
   })
 
-  it('chips a span longer than the cap too, and never chips a multi-line span', () => {
-    expect(isInlineCodeChip('a'.repeat(INLINE_CODE_CHIP_MAX_CHARS + 1))).toBe(true)
+  it('chips a span longer than a line too, and never chips a multi-line span', () => {
+    expect(isInlineCodeChip('a'.repeat(200))).toBe(true)
     expect(isInlineCodeChip('a\nb')).toBe(false)
     expect(isInlineCodeChip('')).toBe(false)
   })
@@ -155,7 +155,7 @@ describe('bold around a code span', () => {
 
 // 2026-09-20, phone: `.claude/worktrees/agent-a1922af126912f522` was two
 // pills side by side on one line. The component now takes the cut from the
-// paragraph's measured width; until it is measured the fixed cap stands.
+// paragraph's measured width; until it is measured a 280 dp line stands.
 describe('a path that fits the measured line', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {

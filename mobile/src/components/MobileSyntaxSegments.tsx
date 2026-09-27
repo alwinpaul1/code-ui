@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
-import { colors } from '../theme/mobile-theme'
-import { lightColors, type ThemeScheme } from '../theme/tokens'
+import { darkSyntaxPalette, SYNTAX_TOKEN_ROLES, type SyntaxPalette } from '../theme/syntax-palette'
+import { fontFamily } from '../theme/tokens'
 
 /** One numbered source line: the gutter in its own column, then the line's
  *  coloured segments beside it. A row, not one Text with the number as a span:
@@ -18,11 +18,14 @@ export function MobileSyntaxLine({
   selectable = true,
   highlighted = false,
   highlightStyle,
+  palette,
   onLongPress,
   onPress
 }: {
   number: number
   segments: MobileSyntaxSegment[]
+  /** The code colours; `useTheme().syntax` on a themed surface. */
+  palette?: SyntaxPalette
   gutterWidth: number
   /** False while a list is scrolling: a selectable Text under a finger that
    *  stops a fling arms a long-press the reader did not ask for, which
@@ -61,7 +64,7 @@ export function MobileSyntaxLine({
         onLongPress={onLongPress}
         onPress={onPress}
       >
-        <MobileSyntaxSegments segments={segments} />
+        <MobileSyntaxSegments segments={segments} palette={palette} />
       </Text>
     </View>
   )
@@ -83,24 +86,20 @@ const lineStyles = StyleSheet.create({
   }
 })
 
-/**
- * A line's coloured segments. `scheme` picks the palette for the surface underneath, not the app's
- * appearance: the session file reader, diffs and fenced blocks draw on the static dark editor
- * surface in both themes, so they keep the default. The file preview's source text sits on the
- * themed page and passes the live scheme.
- */
 export function MobileSyntaxSegments({
   segments,
-  scheme = 'dark'
+  palette = darkSyntaxPalette
 }: {
   segments: MobileSyntaxSegment[]
-  scheme?: ThemeScheme
+  /** Defaults to Dark+ for the surfaces still painted from the static dark
+   *  palette (the diff rows). A themed surface passes `useTheme().syntax`. */
+  palette?: SyntaxPalette
 }) {
-  const tokenStyles = scheme === 'light' ? lightSyntaxTokenStyles : syntaxTokenStyles
+  const styles = syntaxSpanStyles(palette)
   return (
     <>
       {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={tokenStyles[segment.kind]}>
+        <Text key={`${index}:${segment.kind}`} style={styles[segment.kind]}>
           {segment.text}
         </Text>
       ))}
@@ -108,79 +107,24 @@ export function MobileSyntaxSegments({
   )
 }
 
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
-  }
-})
+const spanStylesByPalette = new WeakMap<SyntaxPalette, Record<MobileSyntaxTokenKind, TextStyle>>()
 
-/**
- * The same token kinds for a light surface. VS Code's Light+ hues, darkened where Light+ falls under
- * 4.5:1 on the warm canvas (its number and type greens and teal measure 4.1:1 on #F3F1EA). Every
- * one clears 4.5:1 on lightColors.bg, codeBg and bgPanel (mobile-file-preview-light-dark.test.tsx
- * measures them on the page it is drawn on).
- */
-const LIGHT_SYNTAX = {
-  comment: '#34702A',
-  keyword: '#1A4FD6',
-  string: '#A31515',
-  number: '#0B6E4F',
-  type: '#1F6A80',
-  function: '#795E26',
-  variable: '#1F3A93',
-  meta: '#8E24AA'
-} as const
-
-const lightSyntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: lightColors.text
-  },
-  comment: {
-    color: LIGHT_SYNTAX.comment
-  },
-  keyword: {
-    color: LIGHT_SYNTAX.keyword
-  },
-  string: {
-    color: LIGHT_SYNTAX.string
-  },
-  number: {
-    color: LIGHT_SYNTAX.number
-  },
-  type: {
-    color: LIGHT_SYNTAX.type
-  },
-  function: {
-    color: LIGHT_SYNTAX.function
-  },
-  variable: {
-    color: LIGHT_SYNTAX.variable
-  },
-  meta: {
-    color: LIGHT_SYNTAX.meta
+/** One style per role, each naming the code face. Why the face on every span:
+ *  the React Native patch gives any Text that names no face Instrument Sans
+ *  (instrument-sans-text.ts), and a nested span is a Text, so a span with only
+ *  a colour drew the UI face inside a monospace line. That was the
+ *  proportional code in the 2026-09-19 and 2026-09-26 screenshots, not the
+ *  Samsung font swap. */
+export function syntaxSpanStyles(palette: SyntaxPalette): Record<MobileSyntaxTokenKind, TextStyle> {
+  const cached = spanStylesByPalette.get(palette)
+  if (cached) {
+    return cached
   }
-})
+  const styles = StyleSheet.create(
+    Object.fromEntries(
+      SYNTAX_TOKEN_ROLES.map((role) => [role, { color: palette[role], fontFamily: fontFamily.mono }])
+    ) as Record<MobileSyntaxTokenKind, TextStyle>
+  )
+  spanStylesByPalette.set(palette, styles)
+  return styles
+}

@@ -88,7 +88,14 @@ function reports(
 
 /** The prompt of one source timed nearest the send (an untimed one only when
  *  no timed one reports it). No lower bound: after a relaunch the status copy
- *  is timed by when the pane's state began, which can be well before the send. */
+ *  is timed by when the pane's state began, which can be well before the send.
+ *  A status copy held back for want of a time (`heldBack`) is taken first when
+ *  it is the first copy of the send's words the phone read after the send: the
+ *  pane still carried them when the chat looked, so it is the send's own, and a
+ *  timed copy of the same words watched since is a later message (re-review of
+ *  0d5853d3). Read after a copy the chat watched arrive, it is that copy read
+ *  again, and the watched one is the send's (third review, 280868b3). The
+ *  same holds for a copy timed by the start of the run it was found in. */
 function nearestCopy(
   sentAt: number | undefined,
   open: readonly number[],
@@ -96,6 +103,18 @@ function nearestCopy(
 ): number | undefined {
   if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
     return open[0]
+  }
+  const readSince = open.filter((index) => (prompts[index]!.seenAt ?? Number.NEGATIVE_INFINITY) >= sentAt)
+  const firstRead = readSince.reduce<number | undefined>(
+    (first, index) => (first === undefined || prompts[index]!.seenAt! < prompts[first]!.seenAt! ? index : first),
+    undefined
+  )
+  // A copy timed by the start of the run it was found in has that time only
+  // as a lower bound (`atStateStart`), which can be hours before the send:
+  // ranked by it, a later repeat of the same words was nearer (review of
+  // a615bde2's branch). Read first after the send, it is the send's own too.
+  if (firstRead !== undefined && (prompts[firstRead]!.heldBack === true || prompts[firstRead]!.atStateStart === true)) {
+    return firstRead
   }
   let best: number | undefined
   let bestDistance = Number.POSITIVE_INFINITY
@@ -200,7 +219,11 @@ export function pairPendingWithHookPrompts(
       claim(own ?? timed[0]!, false)
       steppedAside.add(item.id)
     } else if (candidates[0] !== undefined) {
-      claim(candidates[0], true)
+      // Its own prompt first: claimed, that echo is hidden. Another copy of
+      // the words claimed instead (a held status copy, listed first) left the
+      // echo of its own nonce drawn beside it, one key twice (pre-merge
+      // review of 06911823).
+      claim(candidates.find((index) => deskEchoId(prompts[index]!.nonce) === item.id) ?? candidates[0], true)
     }
   }
   // A copy a phone photo already claimed stays its own after it retires.

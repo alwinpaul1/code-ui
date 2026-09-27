@@ -1,13 +1,20 @@
 import { Text, View } from 'react-native'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import type { MarkdownStyles } from './mobile-markdown-styles'
-import type { markdownChipScale } from './mobile-markdown-prose-scale'
+import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
+import { systemSpScale } from './system-font-scale'
+import {
+  MARKDOWN_TABLE_CHIP_FONT_SIZE,
+  MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+  markdownChipInkRoom,
+  type MarkdownChipScale
+} from './mobile-markdown-prose-scale'
 
 /**
  * One inline code pill: a real inline View, the only way Android rounds and
- * borders a chip. It cannot break across lines, so a long span is several
- * pills that wrap (mobile-markdown-code-chip-split.ts).
+ * borders a chip. It cannot break across lines, so a span is one pill per
+ * line it crosses, the first cut to the room left on its line
+ * (mobile-markdown-code-chip-split.ts).
  *
  * Its Text is selectable on its own, under the same scroll gate as the prose.
  * The pill is drawn over the prose Text as a separate view, and on Android a
@@ -20,16 +27,21 @@ export function MobileMarkdownCodeChip({
   piece,
   styles,
   chipScale,
+  table,
   onPress
 }: {
   piece: string
   styles: MarkdownStyles
   /** Pill sizes at the reader's zoom; null when they have not zoomed. */
-  chipScale: ReturnType<typeof markdownChipScale> | undefined
+  chipScale: MarkdownChipScale | null
+  /** In a table cell, whose type is a step smaller than a paragraph's. */
+  table: boolean
   /** Opens the file a path pill names; a tap, never a hold (markdown-link-hold.ts). */
   onPress?: () => void
 }) {
   const selectable = useChatTextSelectable()
+  // The room for ink grows with the type, in whole pixels (see the style).
+  const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
   return (
     <View
       // A plain object when the reader has not zoomed: an array per chip costs
@@ -39,7 +51,12 @@ export function MobileMarkdownCodeChip({
         chipScale
           ? [
               styles.inlineCodeChip,
-              { paddingVertical: chipScale.paddingVertical, borderRadius: chipScale.borderRadius }
+              {
+                paddingVertical: chipScale.paddingVertical,
+                paddingHorizontal: chipScale.paddingHorizontal,
+                borderRadius: chipScale.borderRadius,
+                transform: [{ translateY: chipScale.baselineShift }]
+              }
             ]
           : styles.inlineCodeChip
       }
@@ -48,7 +65,23 @@ export function MobileMarkdownCodeChip({
         selectable={selectable}
         style={[
           styles.inlineCodeChipText,
-          chipScale ? { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight } : null,
+          table ? styles.inlineCodeChipTextTable : null,
+          chipScale
+            ? table
+              ? {
+                  fontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE * chipScale.factor,
+                  lineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT * chipScale.factor
+                }
+              : { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
+            : null,
+          inkRoom
+            ? {
+                paddingTop: inkRoom.top,
+                paddingBottom: inkRoom.bottom,
+                marginTop: -inkRoom.top,
+                marginBottom: -inkRoom.bottom
+              }
+            : null,
           onPress ? styles.inlineCodeLink : null
         ]}
         onPress={onPress}

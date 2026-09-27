@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
-import { inlineCodeChipMaxChars } from './mobile-markdown-code-chip-split'
-import { TABLE_CELL_MAX_WIDTH, computeTableColumnWidths, tableCellChipMaxChars } from './mobile-markdown-table-layout'
+import { codePillWidth, cutCodePills } from './mobile-markdown-code-chip-split'
+import { computeTableColumnWidths } from './mobile-markdown-table-layout'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -17,7 +17,7 @@ vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram'
 
 // From the phone, 2026-09-21: a table whose "Where" cells hold file paths as
 // code spans. The prose above the table cuts a span to the measured line; the
-// cells cut nothing and used the 34-character fallback, wider than the 260 dp
+// cells cut nothing and used the paragraph's fallback, wider than the 260 dp
 // a column may be. A pill wider than its cell wraps inside the pill, and
 // nested-Text pills then paint over the line below them:
 //
@@ -56,18 +56,20 @@ describe('code spans inside a table cell', () => {
     return out
   }
 
-  it('cuts each span to what its own cell can hold as one pill, never the paragraph fallback', () => {
+  // A cell's pill is set at the cell's own 13 dp, with the prose pill's 4 dp
+  // padding and 1 dp border a side; its line is the cell less its 8 dp of
+  // padding a side and its 1 dp right border.
+  const CELL_PILL = { fontSize: 13, insets: 10 }
+  const inner = (cellWidth: number) => cellWidth - 16 - 1
+
+  it('cuts each span to what its own cell can hold, never the paragraph line', () => {
     const chips = cellChipTexts()
     expect(chips.length).toBeGreaterThan(3)
     for (const chip of chips) {
-      const max = tableCellChipMaxChars(chip.cellWidth, 8, 13)
-      expect(chip.text.length, `${chip.text} in a ${chip.cellWidth} dp cell`).toBeLessThanOrEqual(max)
+      expect(codePillWidth(chip.text, CELL_PILL), `${chip.text} in a ${chip.cellWidth} dp cell`).toBeLessThanOrEqual(
+        inner(chip.cellWidth) - 1
+      )
     }
-  })
-
-  it('derives the cell limit from the cell width minus its padding, the way the paragraph does from its line', () => {
-    expect(tableCellChipMaxChars(TABLE_CELL_MAX_WIDTH, 8, 13)).toBe(inlineCodeChipMaxChars(TABLE_CELL_MAX_WIDTH - 16, 13))
-    expect(tableCellChipMaxChars(72, 8, 13)).toBe(12)
   })
 
   it('gives a cell that is one code span enough width for one pill', () => {
@@ -78,8 +80,32 @@ describe('code spans inside a table cell', () => {
       fontSize: 13,
       horizontalPadding: 8
     })
-    // 25 mono characters at 0.6 em, the pill's 18 dp of insets, the cell's padding.
-    expect(callColumn).toBeGreaterThanOrEqual(Math.ceil(25 * 13 * 0.6) + 18 + 16)
-    expect(tableCellChipMaxChars(callColumn!, 8, 13)).toBeGreaterThanOrEqual(25)
+    const room = inner(callColumn!)
+    expect(cutCodePills('git.generateCommitMessage', room, room, CELL_PILL).pieces).toEqual([
+      'git.generateCommitMessage'
+    ])
+  })
+
+  // Review of c3e62696: at a zoom a cell's text kept its size while its
+  // pills grew, so a pill hung out of its line, and cells holding one took
+  // extra room below for it. A cell's text follows the zoom now, as its
+  // column widths already did, and no cell needs the extra room.
+  it("sets a cell's text at the reader's zoom, so no cell needs extra room below for a pill", () => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: TABLE, textScale: 1.8 }))
+    })
+    const cells = renderer!.root.findAll(
+      (node: ReactTestInstance) =>
+        String(node.type) === 'Text' &&
+        Array.isArray(node.props.style) &&
+        node.props.style.some((s: unknown) => typeof s === 'object' && s !== null && 'width' in s)
+    )
+    expect(cells.length).toBeGreaterThan(3)
+    for (const cell of cells) {
+      const style = Object.assign({}, ...(cell.props.style as object[]).filter(Boolean)) as { fontSize: number; paddingBottom: number }
+      expect(style.fontSize).toBeCloseTo(13 * 1.8, 6)
+      expect(style.paddingBottom).toBe(6)
+    }
   })
 })
+

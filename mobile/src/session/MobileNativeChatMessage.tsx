@@ -19,6 +19,8 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
+import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
@@ -193,6 +195,12 @@ function MobileNativeChatMessageImpl({
     return <MobileNativeChatPeerBoilerplateRow message={message} fontScale={fontScale} styles={styles} />
   }
 
+  // A subagent's message to this session, folded as the desktop TUI folds it.
+  const agentMessage = agentMessageOf(message)
+  if (agentMessage) {
+    return <MobileNativeChatAgentMessageRow {...agentMessage} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
+  }
+
   // A host-authored notice — a compaction boundary, a plan document, a toned
   // line — is not something the agent said, so it never gets a bubble or the
   // copy/scroll controls. An unknown hint falls through to ordinary prose.
@@ -308,7 +316,16 @@ function MobileNativeChatMessageImpl({
                     key={index}
                     style={imageLeadsText(groups, index) ? styles.imageLead : null}
                   >
-                    {renderProseGroup(group, { isUser, promptsAsMarkdown, fontScale, onOpenFile, styles })}
+                    {renderProseGroup(group, {
+                      isUser,
+                      promptsAsMarkdown,
+                      fontScale,
+                      onOpenFile,
+                      styles,
+                      // The list recycles a row's cell for other messages;
+                      // this names the block for its markdown.
+                      identity: `${message.id}:${segmentIndex}:${index}`
+                    })}
                   </View>
                 ))}
               </View>

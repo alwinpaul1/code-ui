@@ -33,8 +33,12 @@ vi.mock('lucide-react-native', () => ({
   Copy: 'Icon',
   Download: 'Icon',
   MessageSquare: 'Icon',
-  Send: 'Icon'
+  Send: 'Icon',
+  WrapText: 'Icon',
+  X: 'Icon'
 }))
+// The file tab's code viewer (MobileSessionFileSource) copies through the clipboard.
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: 'MobileHtmlPreview' }))
 vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
 vi.mock('../files/MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: () => null }))

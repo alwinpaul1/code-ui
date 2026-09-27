@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { MIDTURN_HANDBACK_STATUS_PROMPT } from './fixtures/claude-midturn-queued-commands-2.1.283'
+import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 
@@ -206,5 +208,260 @@ describe('a peer or subagent message that reached the hook', () => {
       prompt: 'Another Claude session sent a message: what does that mean?'
     })
     expect(state.prompts).toEqual([])
+  })
+})
+
+// 2026-09-26, 23:36 local, session 76ba8f2f (Claude Code 2.1.283, the thesis
+// tab "paper-review"): the chat drew "lets ask mahdi later u continue the work"
+// under the answer that ends "…and 2999 (distillation) starts. session:ok",
+// just above the 23:36 turn. In the transcript's UTC times below, that turn
+// is 21:36. The prompt was typed at 13:20:44 and answered by
+// 13:22:30; three turns that teammates' messages started followed it, the last
+// one 14:27:03–14:27:47. Orca keeps a person's prompt through a turn a
+// harness message starts (resolvePrompt, prompt-fields.ts) and through the
+// `done` after it, and moves `stateStartedAt` on every state change (the
+// renderer's agent-status store), so the tab the phone opened that evening
+// read `done` since 14:27:47 with this prompt: its time at first sight was the
+// end of a turn it did not start, and the bubble was drawn after that turn's
+// answer. The history below is what that store pushes for the transcript's own
+// Stop records (13:22:30.957, 13:48:06.768, 13:48:12.723, 14:27:47.470) and
+// turn starts; the status itself was not captured.
+describe('a prompt the tab status still carries after its turn', () => {
+  const SESSION = '76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b'
+  const PROMPT = 'lets ask mahdi later u continue the work'
+  const T = (clock: string) => Date.parse(`2026-09-26T${clock}Z`)
+  const before = { state: 'done', prompt: 'whats running on willi now', startedAt: T('13:15:14.407') }
+  const history = [
+    before,
+    { state: 'working', prompt: PROMPT, startedAt: T('13:20:44.026') },
+    { state: 'done', prompt: PROMPT, startedAt: T('13:22:30.957') },
+    { state: 'working', prompt: PROMPT, startedAt: T('13:46:47.262') },
+    { state: 'done', prompt: PROMPT, startedAt: T('13:48:06.768') },
+    { state: 'working', prompt: PROMPT, startedAt: T('13:48:06.780') },
+    { state: 'done', prompt: PROMPT, startedAt: T('13:48:12.723') },
+    { state: 'working', prompt: PROMPT, startedAt: T('14:27:03.037') }
+  ]
+  const DONE = {
+    state: 'done',
+    agentType: 'claude',
+    prompt: PROMPT,
+    updatedAt: T('14:27:47.480'),
+    stateStartedAt: T('14:27:47.470'),
+    stateHistory: history,
+    providerSession: { id: SESSION }
+  }
+  /** Held back: kept for the pairing with no time, never drawn. */
+  const HELD = [[PROMPT, undefined, true]]
+  const timing = (state: { prompts: readonly { text: string; at?: number; heldBack?: true }[] }) =>
+    state.prompts.map((prompt) => [prompt.text, prompt.at, prompt.heldBack ?? false])
+
+  it('is not drawn as a message sent when the turn ended, when the chat opens after it', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, DONE)
+    // Held, with where it would go if the transcript shows the three turns
+    // after it were started by the teammates' messages (13:46:47, 13:48:06,
+    // 14:27:03): the run it came in, 13:20:44 (desk-prompt-harness-turns.ts).
+    expect(state.prompts).toEqual([
+      {
+        nonce: `status:${SESSION}:x:0`,
+        text: PROMPT,
+        heldBack: true,
+        ifHarnessStarted: {
+          at: T('13:20:44.026'),
+          crossings: [
+            { after: T('13:22:30.957'), before: T('13:46:47.262') },
+            { after: T('13:48:06.768'), before: T('13:48:06.780') },
+            { after: T('13:48:12.723'), before: T('14:27:03.037') }
+          ]
+        },
+        seenAt: expect.any(Number)
+      }
+    ])
+    // Seen, so the pings that keep carrying it are not new prompts either.
+    expect(timing(observeAgentStatusPrompt(state, SESSION, { ...DONE, updatedAt: T('21:30:00.000') }))).toEqual(HELD)
+  })
+
+  it('is not drawn at the start of a turn a teammate’s message started', () => {
+    // Read at 14:27:10, while the turn the writer-bridge message opened ran.
+    const working = {
+      ...DONE,
+      state: 'working',
+      updatedAt: T('14:27:10.900'),
+      stateStartedAt: T('14:27:03.037'),
+      stateHistory: history.slice(0, -1)
+    }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, working))).toEqual(HELD)
+  })
+
+  // The ask began after the prompt, and so did the run that went on after it:
+  // the history's run the prompt came in is its time (13:20:44), not either.
+  it('is timed by the run it came in, not where the agent stopped to ask or went on after', () => {
+    const TIMED = [[PROMPT, T('13:20:44.026'), false]]
+    const asking = { ...DONE, state: 'waiting', stateStartedAt: T('13:21:30.000'), stateHistory: history.slice(0, 2) }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, asking))).toEqual(TIMED)
+    const blocked = { ...asking, state: 'blocked' }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, blocked))).toEqual(TIMED)
+    const resumed = {
+      ...DONE,
+      state: 'working',
+      stateStartedAt: T('13:21:40.000'),
+      stateHistory: [...history.slice(0, 2), { state: 'waiting', prompt: PROMPT, startedAt: T('13:21:30.000') }]
+    }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, resumed))).toEqual(TIMED)
+  })
+
+  // The turn it came in ended, and no other took it over: its run is still
+  // in the history. Drawn in its own turn, never under the answer.
+  it('is timed by the run it came in when the chat opens after its own turn ended', () => {
+    const ended = { ...DONE, stateStartedAt: T('13:22:30.957'), stateHistory: history.slice(0, 2) }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, ended))).toEqual([[PROMPT, T('13:20:44.026'), false]])
+  })
+
+  it('is held back when the history is full and every entry carries it', () => {
+    const full = Array.from({ length: 20 }, (_, index) => ({ state: 'working', prompt: PROMPT, startedAt: T('13:20:44.026') + index }))
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { ...DONE, stateHistory: full }))).toEqual(HELD)
+  })
+
+  // Review of 784531ee: Orca keeps `waiting` as the entry before the run for
+  // as long as the run goes on, and a prompt that changed since came in it.
+  it('is timed by the run’s resume when it was typed after the agent stopped to ask', () => {
+    const typedAfter = {
+      ...DONE,
+      state: 'working',
+      prompt: 'also dump the row counts before and after',
+      stateStartedAt: T('13:21:40.000'),
+      stateHistory: [...history.slice(0, 2), { state: 'waiting', prompt: PROMPT, startedAt: T('13:21:30.000') }]
+    }
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, typedAfter)
+    expect(timing(state)).toEqual([['also dump the row counts before and after', T('13:21:40.000'), false]])
+  })
+
+  it('is still timed by the run it started when the chat opens while that run works', () => {
+    const running = {
+      ...DONE,
+      state: 'working',
+      updatedAt: T('13:21:26.600'),
+      stateStartedAt: T('13:20:44.026'),
+      stateHistory: [before]
+    }
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, running)
+    expect(state.prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([[PROMPT, T('13:20:44.026')]])
+  })
+
+  it('draws the next prompt the person sends while the chat is open', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, DONE)
+    state = observeAgentStatusPrompt(state, SESSION, {
+      ...DONE,
+      state: 'working',
+      prompt: '[Image #18]',
+      updatedAt: T('21:36:49.100'),
+      stateStartedAt: T('21:36:49.100'),
+      stateHistory: [...history, { state: 'done', prompt: PROMPT, startedAt: T('14:27:47.470') }]
+    })
+    expect(timing(state)).toEqual([...HELD, ['[Image #18]', T('21:36:49.100'), false]])
+  })
+
+  it('is not taken from a Codex tab whose turn has ended either', () => {
+    const codex = { ...DONE, agentType: 'codex', providerSession: null }
+    expect(timing(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, codex))).toEqual(HELD)
+  })
+
+  // The chat can mount before the tab's status reaches it. The prompt on the
+  // first status it reads was already there all the same, so its time is the
+  // run's start, not the last tool ping.
+  it('is timed by its run, not the last ping, when the first reading had no status yet', () => {
+    const running = { ...DONE, state: 'working', updatedAt: T('13:21:26.600'), stateStartedAt: T('13:20:44.026'), stateHistory: [before] }
+    for (const nothing of [null, undefined]) {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, nothing)
+      state = observeAgentStatusPrompt(state, SESSION, running)
+      expect(state.prompts.map((prompt) => prompt.at)).toEqual([T('13:20:44.026')])
+    }
+  })
+
+  it('says why it was not drawn, in one line that names the pane’s state', () => {
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, DONE)
+    expect(state.withheld).toMatch(/^\[desk-prompt\] not drawn: .*"lets ask mahdi later u continue/)
+    expect(state.withheld).toContain('done')
+    // Nothing to say about a prompt it drew.
+    const running = { ...DONE, state: 'working', stateStartedAt: T('13:20:44.026'), stateHistory: [before] }
+    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, running).withheld).toBeNull()
+  })
+})
+
+// Bug B, 2026-09-27: Orca's hook puts a subagent message on the tab status
+// like any prompt, folded to one line and cut at 200 characters. It is never
+// a desktop prompt, but on a tab with no prompt hook it is the only source of
+// the message's words.
+describe("a subagent message's copy on the tab status", () => {
+  /** Read live: the phone had read this session's status before. */
+  const observe = (prompt: string) =>
+    observeAgentStatusPrompt(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '' }), 'sess-1', { ...LIVE, prompt })
+
+  it("keeps the first words of a short message, marked as cut, and no desktop prompt", () => {
+    // SUBAGENT_REQUEST_PROMPT as normalizePromptField leaves it.
+    const onStatus = SUBAGENT_REQUEST_PROMPT.replaceAll(/\n+/g, ' ').slice(0, AGENT_STATUS_MAX_FIELD_LENGTH)
+    const state = observe(onStatus)
+    expect(state.prompts).toEqual([])
+    expect(state.agentMessages).toEqual([
+      {
+        from: 'a7a46867b4f497c96',
+        body: onStatus.slice('<agent-message from="a7a46867b4f497c96"> '.length).trim(),
+        cut: true,
+        seenAt: expect.any(Number)
+      }
+    ])
+    expect(state.agentMessages?.[0]?.body.startsWith('Request for one read-only device probe (copy-flicker agent)')).toBe(true)
+  })
+
+  it('keeps nothing of a hand-back but who sent it: the harness line fills all 200 characters', () => {
+    expect(MIDTURN_HANDBACK_STATUS_PROMPT).toHaveLength(200)
+    expect(observe(MIDTURN_HANDBACK_STATUS_PROMPT).agentMessages).toEqual([
+      { from: 'a9d5c2f85e94ca47f', body: '', cut: true, seenAt: expect.any(Number) }
+    ])
+  })
+
+  it('keeps a message that fit whole, and not a person\'s short prompt that opens with the tag', () => {
+    expect(observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>').agentMessages).toEqual([
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false, seenAt: expect.any(Number) }
+    ])
+    expect(observe('<agent-message from="x"> keeps showing in my log, why?').agentMessages ?? []).toEqual([])
+  })
+
+  // Review of 2026-09-27: the next prompt dropped them, so a "Message from"
+  // row lost its words the moment the person replied.
+  it('keeps them when the person\'s next prompt comes', () => {
+    const message = observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>')
+    const next = observeAgentStatusPrompt(message, 'sess-1', { ...LIVE, prompt: 'thanks, carry on', updatedAt: LIVE.updatedAt + 1000 })
+    expect(next.prompts.map((prompt) => prompt.text)).toEqual(['thanks, carry on'])
+    expect(next.agentMessages).toEqual(message.agentMessages)
+    expect(next.agentMessages?.map(({ from, body, cut }) => ({ from, body, cut }))).toEqual([
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false }
+    ])
+  })
+
+  it('starts over with the session', () => {
+    const first = observe(MIDTURN_HANDBACK_STATUS_PROMPT)
+    expect(observeAgentStatusPrompt(first, 'sess-2', { ...LIVE, prompt: '' }).agentMessages).toEqual([])
+  })
+})
+
+// Re-review of a6857609..235dfa20: a copy the phone reads on its first read
+// of a session (a launch, a return to the tab, the first read after a
+// reconnect) can be minutes old, its row long off the screen. Timed by that
+// read, it paired with the sender's NEXT row when that row's own copy was
+// missed, and the new row opened to the old words.
+describe("a subagent message's copy read on a first read of the tab status", () => {
+  const OLD = '<agent-message from="a7a46867b4f497c96"> OLD: probe step 1 done </agent-message>'
+
+  it('is kept with no time to pair by, and one read live after it has one', () => {
+    const first = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: OLD })
+    expect(first.agentMessages?.[0]).toEqual({ from: 'a7a46867b4f497c96', body: 'OLD: probe step 1 done', cut: false })
+    const live = observeAgentStatusPrompt(first, 'sess-1', { ...LIVE, prompt: '<agent-message from="a1111111111111111"> other report </agent-message>' })
+    expect(live.agentMessages?.[1]?.seenAt).toEqual(expect.any(Number))
+  })
+
+  it('has no time either when the caller says it is the first read after a reconnect', () => {
+    const seen = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: 'go on' })
+    const afterReconnect = observeAgentStatusPrompt(seen, 'sess-1', { ...LIVE, prompt: OLD }, { firstRead: true })
+    expect(afterReconnect.agentMessages?.[0]).not.toHaveProperty('seenAt')
   })
 })

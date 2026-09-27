@@ -86,6 +86,27 @@ function texts(renderer: ReactTestRenderer): string[] {
   return out
 }
 
+function labelNode(renderer: ReactTestRenderer) {
+  return renderer.root.find((node) => node.props.testID === 'agent-run-label' && String(node.type) === 'Text')
+}
+
+/** The label's glyphs while it shimmers: one span per character. */
+function glyphsOf(renderer: ReactTestRenderer): string[] {
+  return labelNode(renderer)
+    .findAll((node) => String(node.type) === 'Text' && node !== labelNode(renderer))
+    .map((node) => String(node.props.children))
+}
+
+/** The label as a reader sees it, whole or in glyphs. */
+function labelText(renderer: ReactTestRenderer): string {
+  const children = labelNode(renderer).props.children
+  return typeof children === 'string' ? children : glyphsOf(renderer).join('')
+}
+
+function opacityOf(style: unknown): unknown {
+  return [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
+}
+
 function colorsOf(renderer: ReactTestRenderer): string[] {
   const out: string[] = []
   for (const node of renderer.root.findAll((n) => typeof n.props.color === 'string')) {
@@ -146,21 +167,30 @@ describe('the conversation row for five agents launched at once', () => {
 
   it('reads "Running agent" while any of them runs, not "Ran 5 agents"', async () => {
     const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
-    expect(texts(tree)).toContain('Running agent')
+    expect(labelText(tree)).toBe('Running agent')
     expect(texts(tree)).not.toContain('Ran 5 agents')
   })
 
-  // 2026-09-26, the user: "make this running agent icon also animate, now the
-  // text only animated". The glyph beside "Running agent" stood still while its
-  // label breathed.
-  it('breathes the agent icon with its label while an agent runs', async () => {
+  // 2026-09-26, the user, with a recording of the Claude app: "Running agents
+  // animations must be like this". There the diamonds and the chevron stand
+  // still and a darker band sweeps across the label; nothing fades as a whole.
+  // Until then icon and label breathed together (d96fef9b).
+  it('keeps the diamonds still and sweeps a shimmer across the label while an agent runs', async () => {
     const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
-    const glyph = tree.root.find((node) => node.props.testID === 'agent-run-glyph')
-    const label = tree.root.find((node) => node.props.testID === 'agent-run-label')
-    const opacityOf = (style: unknown) =>
-      [style].flat(3).reduce<unknown>((found, entry) => (entry as { opacity?: unknown } | null)?.opacity ?? found, undefined)
-    expect(opacityOf(glyph.props.style)).toBeDefined()
-    expect(opacityOf(glyph.props.style)).toBe(opacityOf(label.props.style))
+    // The Svg alone: no animated wrapper around it.
+    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-glyph')).toHaveLength(1)
+    const row = tree.root.find(
+      (node) => String(node.type) === 'Pressable' && /Show the agents/.test(String(node.props.accessibilityLabel))
+    )
+    expect(row.findAll((node) => opacityOf(node.props.style) !== undefined)).toEqual([])
+    // The label is drawn a glyph at a time, each one coloured by the sweep.
+    expect(glyphsOf(tree).join('')).toBe('Running agent')
+  })
+
+  it('draws "Ran 5 agents" whole, with nothing left sweeping, once they have all reported', async () => {
+    const tree = await render({ status: statusWith([]), agentWorking: true })
+    expect(glyphsOf(tree)).toEqual([])
+    expect(labelText(tree)).toBe('Ran 5 agents')
   })
 
   it('settles to "Ran 5 agents" once the roster holds none of them', async () => {

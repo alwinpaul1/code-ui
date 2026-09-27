@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MIDTURN_HANDBACK_ROW, MIDTURN_PHOTO_SEND_TEXT } from './fixtures/claude-midturn-queued-commands-2.1.283'
 import {
   claudeQueueViewFromScreen,
   queuedMessagesFromScreen,
@@ -581,3 +582,105 @@ describe('Claude Code 2.1.281 queue block, above the spinner', () => {
   })
 })
 
+
+// Session 790eafa8, Claude Code 2.1.283, 2026-09-26 21:44:51Z to 21:46:34Z: a
+// subagent's hand-back waited in the queue ahead of a phone send with a
+// photo, and the queue box painted it as the TUI's own row for it
+// (fixtures/claude-midturn-queued-commands-2.1.283.ts). Read as a queued
+// message of the user's, the chat drew it as the user's bubble once the
+// agent took it: "Message from @a9d5c2f85e94ca47f (ctrl+o to expand)".
+// The block around it is the 2.1.281 layout above.
+describe('a peer message waiting in the queue box', () => {
+  const block = (rows: readonly string[]) => [
+    '● Running 1 shell command · 14s…',
+    '',
+    ...rows,
+    '  ctrl+x ctrl+s to send now',
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────────────────────────────────────────────'
+  ]
+
+  it('is not a queued message of the user\'s, and the send under it still is', () => {
+    expect(claudeQueueViewFromScreen(block([MIDTURN_HANDBACK_ROW, `❯ ${MIDTURN_PHOTO_SEND_TEXT}`])).entries).toEqual([
+      MIDTURN_PHOTO_SEND_TEXT
+    ])
+  })
+
+  it('leaves no queue when it is the only one waiting', () => {
+    expect(claudeQueueViewFromScreen(block([MIDTURN_HANDBACK_ROW])).entries).toEqual([])
+  })
+
+  it('does not take the wrapped lines of the message above it, and keeps the one below it whole', () => {
+    expect(
+      claudeQueueViewFromScreen(block(['❯ first one', '  goes on here', MIDTURN_HANDBACK_ROW, '❯ second one'])).entries
+    ).toEqual(['first one\ngoes on here', 'second one'])
+  })
+
+  it('is left out of the older layout\'s indented block too', () => {
+    const older = [
+      '',
+      `  ${MIDTURN_HANDBACK_ROW}`,
+      '  ❯ We miss this',
+      '',
+      '────────────────────────────────────────────────────────────────────────────────',
+      '❯ Press up to edit queued messages',
+      '────────────────────────────────────────────────────────────────────────────────'
+    ]
+    expect(claudeQueueViewFromScreen(older).entries).toEqual(['We miss this'])
+  })
+})
+
+// Re-review of a6857609..235dfa20: at 46 columns the TUI's row for a peer
+// message wraps. Claude Code 2.1.283 paints it as one text (`w9` in the
+// binary: the `›` pointer, "Message", " from @", the name, then the
+// "(ctrl+o to expand)" hint), word-wrapped to the width, so
+// "› Message from @general-purpose (ctrl+o to expand)" (50 characters)
+// breaks before "expand)". This wrap is CONSTRUCTED from that painter, not
+// captured: no agent could be run to capture it. A head that no line closes
+// with the hint can't be told from a person's queued message, and the
+// reading is refused rather than guessed.
+describe('a peer message waiting in the queue box, wrapped at 46 columns', () => {
+  const HEAD = '› Message from @general-purpose (ctrl+o to'
+  const TAIL = 'expand)'
+  const olderLayout = (rows: readonly string[]) => [
+    '',
+    ...rows,
+    '',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────────────────────────────────────────────'
+  ]
+  const queueBlock = (rows: readonly string[]) => [
+    '● Running 1 shell command · 14s…',
+    '',
+    ...rows,
+    '  ctrl+x ctrl+s to send now',
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '',
+    '────────────────────────────────────────────────────────────────────────────────',
+    '❯ Press up to edit queued messages',
+    '────────────────────────────────────────────────────────────────────────────────'
+  ]
+
+  it('is left out of the older layout\'s block, closed by its wrapped line, and the person\'s message kept', () => {
+    expect(claudeQueueViewFromScreen(olderLayout([`  ${HEAD}`, `  ${TAIL}`, '  ❯ We miss this'])).entries).toEqual(['We miss this'])
+  })
+
+  it('is left out of the column-zero block when its wrapped line is indented', () => {
+    expect(claudeQueueViewFromScreen(queueBlock([HEAD, `  ${TAIL}`, '❯ We miss this'])).entries).toEqual(['We miss this'])
+  })
+
+  it('refuses the column-zero block when its wrapped line sits at column zero', () => {
+    expect(claudeQueueViewFromScreen(queueBlock([HEAD, TAIL, '❯ We miss this'])).entries).toEqual([])
+  })
+
+  it('refuses the reading when no line closes the head with the hint', () => {
+    expect(claudeQueueViewFromScreen(olderLayout(['  › Message from @general-purpose: a report that goes', '  on and on', '  ❯ We miss this'])).entries).toEqual([])
+    expect(claudeQueueViewFromScreen(queueBlock(['› Message from @general-purpose (ctrl+o to', '❯ We miss this'])).entries).toEqual([])
+  })
+})

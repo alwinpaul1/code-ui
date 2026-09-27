@@ -15,7 +15,8 @@ export function Prose({
   markdownPrompt,
   fontScale,
   onOpenFile,
-  styles
+  styles,
+  identity
 }: {
   block: NativeChatBlock
   invert?: boolean
@@ -24,6 +25,9 @@ export function Prose({
   fontScale: number
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
+  /** Which message block this is, so a recycled row's markdown tells one
+   *  message from the next (MobileMarkdown's `identity`). */
+  identity?: string
 }) {
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt) {
@@ -43,7 +47,7 @@ export function Prose({
         </Text>
       )
     }
-    return <MobileMarkdown content={block.text} textScale={fontScale} onOpenFile={onOpenFile} />
+    return <MobileMarkdown content={block.text} textScale={fontScale} onOpenFile={onOpenFile} identity={identity} />
   }
   if (isImageRefBlock(block)) {
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare

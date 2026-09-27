@@ -33,6 +33,7 @@ export function unchangedBeacon(a: AgentHudBeacon, b: AgentHudBeacon): boolean {
     sameIds(a.doneTaskIds, b.doneTaskIds) &&
     sameIds(a.launchedTaskIds, b.launchedTaskIds) &&
     a.desktopPrompts === b.desktopPrompts &&
+    a.agentMessagePrompts === b.agentMessagePrompts &&
     a.desktopPrompt?.nonce === b.desktopPrompt?.nonce &&
     JSON.stringify(a.limits ?? null) === JSON.stringify(b.limits ?? null)
   )

@@ -9,20 +9,32 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
+  FlatList: 'FlatList',
   Image: 'Image',
-  Platform: { OS: 'android' },
+  Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+  StyleSheet: { create: (styles: unknown) => styles, flatten: (s: unknown) => s, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
   useColorScheme: () => 'light',
-  useWindowDimensions: () => ({ width: 390, height: 844 })
+  useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 })
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: 'GestureHandlerRootView' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Download: 'Icon', Save: 'Icon' }))
+vi.mock('lucide-react-native', () => ({
+  Check: 'Icon',
+  ChevronLeft: 'Icon',
+  Copy: 'Icon',
+  Download: 'Icon',
+  MessageSquare: 'Icon',
+  Save: 'Icon',
+  Send: 'Icon',
+  WrapText: 'Icon',
+  X: 'Icon'
+}))
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({ back: () => {}, canGoBack: () => false })
 }))
@@ -51,9 +63,8 @@ vi.mock('../transport/client-context', () => ({
   useHostClient: () => connection.current
 }))
 
-import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
-import type { MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
-import { colors as staticDarkPalette } from '../theme/mobile-theme'
+import type { ReactElement } from 'react'
+import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { colorsForScheme } from '../theme/tokens'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
@@ -201,7 +212,7 @@ describe('the file preview follows the appearance setting, header and page alike
       expect(schemeOf(styleOf(retry).borderColor, 'line')).toBe(scheme)
     })
 
-    it(`draws a source file on the ${scheme} page, every token readable on it`, () => {
+    it(`draws a source file on the ${scheme} code surface, every token readable on it`, async () => {
       const rendered = renderBody(scheme, {
         status: 'ready',
         kind: 'text',
@@ -209,19 +220,38 @@ describe('the file preview follows the appearance setting, header and page alike
         truncated: false,
         byteLength: 64
       })
-      const scroller = byType(rendered, 'ScrollView')[0]!
-      const surface = styleOf(scroller).backgroundColor as string
-      const tokenColors = [
-        ...new Set(
-          scroller
-            .findAll((node) => String(node.type) === 'Text')
-            .map((node) => styleOf(node).color)
-            .filter((color): color is string => typeof color === 'string')
-        )
-      ]
+      // The viewer colours its lines a tick after it draws them (useCodeDocumentHighlight).
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      // The code viewer (MobileCodeView): its surface is the nearest thing under the list that
+      // paints one, and its rows are what the list renders.
+      const list = rendered.root.findByType('FlatList' as never)
+      let painted: ReactTestInstance | null = list.parent
+      while (painted && styleOf(painted).backgroundColor === undefined) {
+        painted = painted.parent
+      }
+      const surface = styleOf(painted!).backgroundColor as string
+      const data = list.props.data as readonly number[]
+      const tokenColors = new Set<string>()
+      for (const [index, item] of data.entries()) {
+        const element = list.props.renderItem({ item, index }) as ReactElement
+        let row: ReactTestRenderer | null = null
+        act(() => {
+          row = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
+        })
+        for (const node of row!.root.findAll((node) => String(node.type) === 'Text')) {
+          const color = styleOf(node).color
+          if (typeof color === 'string') {
+            tokenColors.add(color)
+          }
+        }
+        act(() => row!.unmount())
+      }
 
-      expect(schemeOf(surface, 'surface')).toBe(scheme)
-      expect(tokenColors.length).toBeGreaterThan(2)
+      expect(surface).toBe(syntaxPaletteForScheme(scheme).surface)
+      expect(data.length).toBeGreaterThan(2)
+      expect(tokenColors.size).toBeGreaterThan(2)
       for (const color of tokenColors) {
         expect(contrast(color, surface), `${color} on ${surface}`).toBeGreaterThanOrEqual(4.5)
       }
@@ -258,54 +288,3 @@ describe('the file preview follows the appearance setting, header and page alike
   }
 })
 
-describe('the syntax colours under the source text', () => {
-  const KINDS: readonly MobileSyntaxTokenKind[] = [
-    'plain',
-    'comment',
-    'keyword',
-    'string',
-    'number',
-    'type',
-    'function',
-    'variable',
-    'meta'
-  ]
-
-  function tokenColors(scheme?: Scheme): string[] {
-    act(() => {
-      tree = create(
-        <MobileSyntaxSegments
-          segments={KINDS.map((kind) => ({ kind, text: kind }))}
-          {...(scheme ? { scheme } : {})}
-        />
-      )
-    })
-    return byType(tree!, 'Text').map((node) => styleOf(node).color as string)
-  }
-
-  it('reads at 4.5:1 or better on every light surface a light page uses', () => {
-    const light = colorsForScheme('light')
-    for (const color of tokenColors('light')) {
-      for (const surface of [light.bg, light.codeBg, light.bgPanel]) {
-        expect(contrast(color, surface), `${color} on ${surface}`).toBeGreaterThanOrEqual(4.5)
-      }
-    }
-  })
-
-  it('stays the dark editor palette where no scheme is asked for, as the dark-surface readers need', () => {
-    // The session file reader, diffs and fenced blocks draw on the static dark editor surface in
-    // both themes; the light palette there would be dark ink on a dark page.
-    expect(tokenColors()).toEqual([
-      staticDarkPalette.textPrimary,
-      staticDarkPalette.syntaxComment,
-      staticDarkPalette.syntaxKeyword,
-      staticDarkPalette.syntaxString,
-      staticDarkPalette.syntaxNumber,
-      staticDarkPalette.syntaxType,
-      staticDarkPalette.syntaxFunction,
-      staticDarkPalette.syntaxVariable,
-      staticDarkPalette.syntaxMeta
-    ])
-    expect(tokenColors('dark')).toEqual(tokenColors())
-  })
-})

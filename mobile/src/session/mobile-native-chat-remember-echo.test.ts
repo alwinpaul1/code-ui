@@ -7,6 +7,8 @@ import {
   sweepWitnessedEchoes
 } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
+import { unescapeJsonStringBody } from './agent-hud-beacon'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -115,5 +117,130 @@ describe('a phone send acknowledged after a witness of it was stored', () => {
     expect(accept([]).map((item) => item.id)).toEqual(['pending-1'])
     const earlierSend = { id: 'pending-0', text: 'Working W capital', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true, sentAt: tapAt + 1 }
     expect(accept([earlierSend]).map((item) => item.id)).toEqual(['pending-0', 'pending-1'])
+  })
+})
+
+// 2026-09-26: the prompt hook's copy of a subagent's message (Claude Code
+// 2.1.283's `<agent-message …>`) was drawn as a desktop prompt, the user's own
+// bubble, and remembered with the phone's sends. The hook's copy is no longer
+// a desktop prompt (desktop-prompt-merge.ts); one already on disk must not
+// come back as the user's bubble on the next launch.
+describe('a subagent message remembered as a desktop prompt before that was fixed', () => {
+  it('is swept from what the phone restores, and a phone send is not', () => {
+    const stored = [
+      { id: 'desk-4101', text: SUBAGENT_REQUEST_PROMPT, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
+      { id: 'pending-1', text: 'a phone send', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true },
+      { id: 'desk-4102', text: 'typed at the desk', expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((i) => i.id)).toEqual(['pending-1', 'desk-4102'])
+  })
+
+  it('is swept when the hook cut it, with no closing tag, as the store kept it', () => {
+    const stored = [{ id: 'desk-4103', text: SUBAGENT_HANDBACK_PROMPT, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }]
+    expect(sweepWitnessedEchoes(stored)).toEqual([])
+  })
+})
+
+// Review of 2026-09-26: the sweep used the shared harness classifier, which
+// matches by a leading word or tag, so it deleted real messages the person
+// typed from what the phone restores. Only the wrapper shape the old build
+// stored is swept.
+describe('a message the person typed, remembered as a witness, on the next launch', () => {
+  const base = { expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
+
+  it('is restored when it starts "A message arrived from"', () => {
+    const stored = [{ id: 'desk-4101', text: 'A message arrived from the backend team: the deploy failed, check the logs', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4101'])
+  })
+
+  it('is restored from the queue box when it starts "No response requested."', () => {
+    const stored = [{ id: 'absorbed-abc', text: 'No response requested. Just note that the API moved to v3.', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-abc'])
+  })
+
+  it('is swept when it is another session\'s delivery the old build stored, and kept when it only quotes the opener', () => {
+    const delivery = 'Another Claude session sent a message:\n<cross-session-message from="uds:/tmp/cc-socks/66525.sock" from-name="code-ui-6f">\n<agent-message from="a379d31745861b502">\nCapture probe\n</agent-message>\n</cross-session-message>'
+    const stored = [
+      { id: 'desk-4105', text: delivery, ...base },
+      { id: 'desk-4106', text: 'Another Claude session sent a message: what does that mean?', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4106'])
+  })
+
+  // Review of 2026-09-27: it is drawn as the user's bubble live (no closing
+  // tag, and the hook did not cut it), and the sweep took it as cut.
+  it('is restored when it quotes the wrapper\'s whole first line and goes on in its own words', () => {
+    const text = '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?'
+    const stored = [{ id: 'desk-4107', text, ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4107'])
+  })
+
+  it('is restored from the queue box when it only reads like a peer row, and the TUI\'s own row stored as one is swept', () => {
+    const stored = [
+      { id: 'absorbed-peer', text: 'Message from @a9d5c2f85e94ca47f (ctrl+o to expand)', ...base },
+      { id: 'absorbed-typed', text: 'Message from me: please look at the queue', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, item 4: a person's queued message that
+  // opens "Message from @name:" was swept, and for a mid-turn send with no
+  // desk copy that witness is the only record of it.
+  it('is restored from the queue box when it opens "Message from @name:" in the person\'s own words', () => {
+    const stored = [
+      { id: 'absorbed-typed', text: 'Message from @sarah: the deploy failed, can you look?', ...base },
+      { id: 'absorbed-peer', text: 'Message from @code-ui-6f: Capture probe from the Code UI session (ctrl+o to expand)', ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['absorbed-typed'])
+  })
+
+  // Review of 9f9aa4a0..a6857609, nit 7: since 417983a5 a cut subagent
+  // request (no hand-back line, and no closing tag after the hook's cut) that
+  // an old build stored as a desk witness came back as a raw XML bubble. The
+  // stored text is what the hook sent: the prompt's JSON string body cut at
+  // 2,000 bytes (agent-hud-launch-args.ts), decoded by the beacon.
+  it('is swept when it is a subagent request the hook cut, as the old build stored it', () => {
+    const body = Array.from({ length: 40 }, (_, index) => `${index + 1}. Please run the probe step ${index + 1} and report what the screen shows.`).join('\n')
+    const prompt = `<agent-message from="a7a46867b4f497c96">\nRequest for device probes:\n${body}\n</agent-message>`
+    const sent = unescapeJsonStringBody(JSON.stringify(prompt).slice(1, -1).slice(0, 2000))
+    expect(sent).not.toContain('</agent-message>')
+    // A person's prompt that quotes the line and goes on at length, short of the cut.
+    const quoting = `<agent-message from="a7a46867b4f497c96">\n${'why does this line show up in my log? '.repeat(40)}`
+    const stored = [
+      { id: 'desk-4108', text: sent, ...base },
+      { id: 'desk-4109', text: '<agent-message from="a7a46867b4f497c96">\nwhat is this line in my log?', ...base },
+      { id: 'desk-4110', text: quoting, ...base }
+    ]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4109', 'desk-4110'])
+  })
+
+  // Re-review of a6857609..235dfa20: the beacon's unescape drops the "\r" of
+  // a "\r\n" line end, so written back a CRLF request came out two bytes a
+  // line short of the hook's cut and was not swept.
+  it('is swept when it is a cut subagent request whose lines ended in CRLF', () => {
+    const lines = Array.from({ length: 40 }, (_, index) => `${index + 1}. Please run the probe step ${index + 1} and report what the screen shows.`)
+    const prompt = `<agent-message from="a7a46867b4f497c96">\r\nRequest for device probes:\r\n${lines.join('\r\n')}\r\n</agent-message>`
+    const sent = unescapeJsonStringBody(JSON.stringify(prompt).slice(1, -1).slice(0, 2000))
+    expect(sent).not.toContain('</agent-message>')
+    expect(sent).not.toContain('\r')
+    expect(sweepWitnessedEchoes([{ id: 'desk-4111', text: sent, ...base }])).toEqual([])
+  })
+
+  // Combined review of fix/prompt-leak, 2026-09-27: counting every line end
+  // as CRLF moved the window down two bytes a line, so a person's prompt of
+  // many short lines, 300 bytes under the cut, was swept.
+  it('is restored when it quotes the wrapper\'s line over many short lines, well under the cut', () => {
+    const lines = Array.from({ length: 172 }, (_, index) => `line ${index}`).join('\n')
+    const text = `<agent-message from="a7a46867b4f497c96">\n${lines}`
+    const written = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
+    // 1,652 bytes as the hook would send it, and 1,996 with every line end counted as CRLF.
+    expect(written).toBe(1652)
+    expect(written + 2 * (text.match(/\n/g)?.length ?? 0)).toBe(1996)
+    expect(sweepWitnessedEchoes([{ id: 'desk-4112', text, ...base }]).map((item) => item.id)).toEqual(['desk-4112'])
+  })
+
+  it('is restored when it opens by quoting an <agent-message> tag', () => {
+    const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
+    expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])
   })
 })

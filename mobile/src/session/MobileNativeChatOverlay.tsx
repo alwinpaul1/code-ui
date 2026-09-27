@@ -24,6 +24,8 @@ import {
   withoutLandedDesktopPrompts
 } from './use-desktop-prompt-echoes'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
+import { drawnAfterEarlierAgentMessages, useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
+import { screenRowBodies, type BeaconAgentMessage, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -38,11 +40,14 @@ import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-str
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
 import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
 import { holdsWholeSession } from './mobile-native-chat-whole-session'
+import { placedByHarnessTurns } from './desk-prompt-harness-turns'
 const CLIPBOARD_POLL_MS = 3000
 
 const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
+const NO_AGENT_MESSAGES: BeaconAgentMessage[] = []
+const NO_STATUS_AGENT_MESSAGES: readonly StatusSubagentMessage[] = []
 const NO_SENT_PHOTOS: ScreenSentPhotos[] = []
 
 type Props = {
@@ -197,7 +202,10 @@ export function MobileNativeChatOverlay({
   )
   // Prompts typed on the desktop never reach the phone through Orca; they
   // ride the HUD beacon instead (2026-09-13).
-  const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  // A held copy the transcript can now place goes to its run
+  // (desk-prompt-harness-turns.ts, 2026-09-27).
+  const statusAndBeaconPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  const desktopPrompts = useMemo(() => placedByHarnessTurns(statusAndBeaconPrompts, session.messages), [session.messages, statusAndBeaconPrompts])
   // The hook fires for the phone's own sends too, and those already have a
   // pending echo, so the hook's copy of one is left out (2026-09-13). The
   // phone's send keeps its photos and its send-time place; only a copy with
@@ -235,11 +243,13 @@ export function MobileNativeChatOverlay({
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).
   // The phone's own sends waiting in the queue box before the agent's box has
   // listed them are drawn too: a box row that left may be one of them.
+  // Not a status copy held back: it is never drawn, so a message the box
+  // lets go of would then show nowhere (agent-status-prompts.ts, 2026-09-27).
   const ownPrompts = useMemo(
     () => [
       ...projectedQueue.pending.map((p) => p.text),
       ...projectedQueue.unlisted.map((p) => p.text),
-      ...desktopPrompts.map((p) => p.text)
+      ...desktopPrompts.flatMap((p) => (p.heldBack === true ? [] : [p.text]))
     ],
     [desktopPrompts, projectedQueue.pending, projectedQueue.unlisted]
   )
@@ -249,7 +259,8 @@ export function MobileNativeChatOverlay({
     unlandedPrompts,
     baseFolded,
     session.messages,
-    session.hasMore
+    session.hasMore,
+    session.status === 'ready' && session.baseRetained !== true
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],
@@ -272,13 +283,24 @@ export function MobileNativeChatOverlay({
         : baseFolded,
     [absorbedEchoes, baseFolded, desktopEchoes, placedOwn, session.messages]
   )
+  // A subagent's message never reaches the transcript the phone reads; the
+  // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
+  const agentMessages = controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES
+  const wholeSessionHeld = session.status === 'ready' && session.baseRetained !== true && !session.hasMore
+  const foldedWithAgents = useAgentMessageRows(agentMessages, foldedWithoutPeers, session.messages, controller.nativeChatStreamScopeKey, wholeSessionHeld)
   // A message from a subagent or another session mostly never reaches the
   // transcript the phone reads; the agent's screen says one arrived, and
-  // from whom, so that is drawn where it was seen (2026-09-20).
+  // from whom, so that is drawn where it was seen (2026-09-20). A subagent's
+  // is drawn off the screen only where no prompt hook carries it.
+  // Its words, where the tab status carried a subagent message (2026-09-27).
+  const statusAgentMessages = controller.nativeChatStatusAgentMessages ?? NO_STATUS_AGENT_MESSAGES
+  const screenBodies = useMemo(() => screenRowBodies(statusAgentMessages, session.messages), [session.messages, statusAgentMessages])
   const foldedWithoutPhotos = useScreenPeerNotices(
     controller.nativeChatScreenPeerNotices ?? NO_PEER_ROWS,
-    foldedWithoutPeers,
-    controller.nativeChatStreamScopeKey
+    foldedWithAgents,
+    controller.nativeChatStreamScopeKey,
+    controller.nativeChatPromptHook !== true,
+    screenBodies
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).
@@ -309,6 +331,12 @@ export function MobileNativeChatOverlay({
     const sentAt = new Map(desktopPrompts.map((prompt) => [deskEchoId(prompt.nonce), prompt.at]))
     return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
   }, [absorbedEchoes, desktopEchoes, desktopPrompts, hookPairing, placedOwn])
+  // …and one the hook took after a subagent message at the same row is drawn
+  // below that message's row, as it came (2026-09-26).
+  const pendingInArrivalOrder = useMemo(
+    () => drawnAfterEarlierAgentMessages(pendingWithDesktopPrompts, agentMessages, folded, session.messages),
+    [agentMessages, folded, pendingWithDesktopPrompts, session.messages]
+  )
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void) =>
       void controller.handleNativeChatStopBackgroundTask(taskId, report),
@@ -402,7 +430,7 @@ export function MobileNativeChatOverlay({
         onEditQueue={controller.openNativeChatQueueEditor}
         onSendQueueNow={controller.sendNativeChatQueueNow}
         queueEditor={controller.nativeChatQueueEditor}
-        pending={pendingWithDesktopPrompts}
+        pending={pendingInArrivalOrder}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

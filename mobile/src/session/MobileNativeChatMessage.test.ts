@@ -35,6 +35,8 @@ vi.mock('react-native', async () => {
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
     Image: 'Image',
+    // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
+    Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -458,6 +460,27 @@ describe('MobileNativeChatMessage', () => {
     const typed = render(userMessage([{ type: 'text', text: task }]))
     expect(typed.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
     expect(textIn(typed.root)).toContain(task)
+  })
+
+  // Review of f8c968a1, probe E1: the chat list recycles a row's cell for
+  // another message, and the markdown in it could not tell that from the same
+  // reply streaming on, so a message's remembered code pills were thrown away
+  // when the next began with its words. Each block names its message.
+  it('names each markdown block by its message, so a recycled row tells one message from the next', () => {
+    const blocks: NativeChatMessage['blocks'] = [
+      { type: 'text', text: 'Before the `pnpm install` run.' },
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool-result', output: 'ok' },
+      { type: 'text', text: 'After it, `pnpm test`.' }
+    ]
+    const tree = render(toolMessage(blocks))
+    const names = tree.root.findAllByType('MobileMarkdown' as never).map((node) => node.props.identity as string)
+    expect(names).toHaveLength(2)
+    expect(new Set(names).size).toBe(2)
+    expect(names.every((name) => name.startsWith('a1:'))).toBe(true)
+    act(() => tree.update(createElement(MobileNativeChatMessage, { message: { ...toolMessage(blocks), id: 'a2' } })))
+    const recycled = tree.root.findAllByType('MobileMarkdown' as never).map((node) => node.props.identity as string)
+    expect(recycled.every((name) => name.startsWith('a2:'))).toBe(true)
   })
 
   it('draws Markdown in a bubble in the bubble\'s own text colour, in light and dark', () => {

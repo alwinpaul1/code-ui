@@ -59,6 +59,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     ]
     // The chat is opened mid-turn: the tab status is read at first sight.
     let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: '[Image #72]',
       updatedAt: at('07:03:10.000'),
       stateStartedAt: at('07:01:00.100')
@@ -66,7 +67,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     await show('07:03:20.000', { messages: running, working: true, prompts: [...state.prompts] })
     await send('07:03:54.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
     const sent = frames.length
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '[Image #73]', updatedAt: at('07:03:54.573') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #73]', updatedAt: at('07:03:54.573') })
     await show('07:03:55.000', { messages: running, working: true, prompts: [...state.prompts], queued: queuedMessagesFromScreen(claudeScreen(['[Image #73]'])) })
     const tookIt = [...running, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916')]
     await show('07:04:36.000', { messages: tookIt, working: true, prompts: [...state.prompts], queued: [] })
@@ -78,8 +79,8 @@ describe('a phone photo of no words sent while the tab status still shows an old
   it('a second phone photo of no words after a tab switch, sent idle: never flashes "Image on Desktop"', async () => {
     await show('07:00:00.000', { messages: before })
     await send('07:00:20.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
-    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('07:00:20.600') })
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
+    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
     await show('07:00:21.000', { messages: before, working: true, prompts: [...state.prompts] })
     const first = [...before, promptRow('a17a17a1', 17, 1, '', '07:00:20.500'), companionRow('a17a17a2', [A], '07:00:20.500')]
     await show('07:00:22.000', { messages: first, working: true, prompts: [...state.prompts] })
@@ -90,6 +91,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     // A tab switch and back: the status is read afresh.
     unmount()
     let back: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'done',
       prompt: '[Image #17]',
       updatedAt: at('07:00:29.100'),
       stateStartedAt: at('07:00:29.050')
@@ -98,7 +100,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     await show('07:02:01.000', { messages: replied, prompts: [...back.prompts] })
     await send('07:02:10.000', '', ['file:///phone/c2.jpg'], [`${TEMP}/${B}.png`])
     const sent = frames.length
-    back = observeAgentStatusPrompt(back, SESSION, { prompt: '[Image #18]', updatedAt: at('07:02:10.600') })
+    back = observeAgentStatusPrompt(back, SESSION, { state: 'working', prompt: '[Image #18]', updatedAt: at('07:02:10.600') })
     await show('07:02:10.700', { messages: replied, working: true, prompts: [...back.prompts] })
     await show('07:02:10.800', { messages: replied, working: true, prompts: [...back.prompts] })
     const second = [...replied, promptRow('b18b18b1', 18, 1, '', '07:02:10.500'), companionRow('b18b18b2', [B], '07:02:10.500')]
@@ -123,8 +125,8 @@ describe('a phone photo of no words sent while the tab status still shows an old
     // is sent idle before the turn in the other case; here the first photo
     // started this turn and has its row.
     await send('07:00:20.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
-    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('07:00:20.600') })
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
+    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
     const first = [...running, agentRow('0a0a0a0b', 'Done with the fold.', '07:00:19.000'), promptRow('a17a17a1', 17, 1, '', '07:00:20.500'), companionRow('a17a17a2', [A], '07:00:20.500')]
     await show('07:00:22.000', { messages: first, working: true, prompts: [...state.prompts] })
     const working = [...first, agentRow('d4f3162c', 'Looking at the cat, running a check.', '07:00:25.000')]
@@ -132,6 +134,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     // A tab switch and back mid-turn: the status is read afresh.
     unmount()
     let back: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: '[Image #17]',
       updatedAt: at('07:01:00.000'),
       stateStartedAt: at('07:00:20.550')
@@ -139,7 +142,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     await show('07:02:00.000', { messages: working, working: true, prompts: [...back.prompts] })
     await send('07:02:10.000', '', ['file:///phone/c2.jpg'], [`${TEMP}/${B}.png`])
     const sent = frames.length
-    back = observeAgentStatusPrompt(back, SESSION, { prompt: '[Image #18]', updatedAt: at('07:02:10.600') })
+    back = observeAgentStatusPrompt(back, SESSION, { state: 'working', prompt: '[Image #18]', updatedAt: at('07:02:10.600') })
     await show('07:02:11.000', { messages: working, working: true, prompts: [...back.prompts], queued: queuedMessagesFromScreen(claudeScreen(['[Image #18]'])) })
     const tookIt = [...working, agentRow('33806c18', 'Also a dog.', '07:02:40.000')]
     await show('07:02:45.000', { messages: tookIt, working: true, prompts: [...back.prompts], queued: [] })

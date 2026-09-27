@@ -9,7 +9,11 @@
  * grows in height. Long columns are capped so a table stays scrollable rather
  * than one column swallowing the screen; short ones keep a readable minimum.
  */
-import { inlineCodeChipMaxChars } from './mobile-markdown-code-chip-split'
+import { codePillWidth } from './mobile-markdown-code-chip-split'
+import {
+  MARKDOWN_CHIP_BORDER_WIDTH,
+  MARKDOWN_CHIP_PADDING_HORIZONTAL
+} from './mobile-markdown-prose-scale'
 
 export const TABLE_CELL_MIN_WIDTH = 72
 export const TABLE_CELL_MAX_WIDTH = 260
@@ -22,27 +26,23 @@ export function tableColumnCount(headers: readonly string[], rows: readonly (rea
   return Math.max(headers.length, ...rows.map((row) => row.length), 1)
 }
 
-/** How many characters of a code span fit one pill in a cell of this width:
- *  the paragraph rule (`inlineCodeChipMaxChars`) applied to the cell's inner
- *  width. Why: cells used the 34-character fallback, wider than a 260 dp
- *  column can hold, and a pill wider than its cell wraps inside the pill and
- *  paints over the line below (phone, 2026-09-21). */
-export function tableCellChipMaxChars(columnWidth: number, horizontalPadding: number, chipFontSize: number): number {
-  return inlineCodeChipMaxChars(columnWidth - horizontalPadding * 2, chipFontSize)
-}
-
-/** A code span paints wider than prose: the mono face's 0.6 em advance, plus
- *  the pill's insets around it. Estimating it at the prose advance left a
- *  cell one pill wide short by a quarter (`git.generateCommitMessage`). */
-const MONO_CHAR_EM = 0.6
-const CHIP_INSETS = 18
+/** A code span is a pill in the cell's own face (mobile-markdown-styles.ts
+ *  `inlineCodeChipTextTable`), plus its padding and border. Estimating it at
+ *  the prose advance with the backticks stripped left a cell one pill wide
+ *  short by a quarter (`git.generateCommitMessage`, 2026-09-21). */
+const PILL_INSETS = 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL + MARKDOWN_CHIP_BORDER_WIDTH)
+/** The cell's 1 dp right border and the cut's 1 dp of slack, so a cell sized
+ *  for one pill holds it as one (mobile-markdown-code-chip-split.ts). A pill
+ *  that starts the cell's line needs no slack since 1f405729; one after words
+ *  still does. */
+const PILL_CELL_EDGE = 2
 const CODE_SPAN = /`([^`]+)`/g
 
 function cellPaintedWidth(cell: string, fontSize: number): number {
   let width = 0
   let prose = cell
   for (const match of cell.matchAll(CODE_SPAN)) {
-    width += Math.ceil((match[1] ?? '').length * fontSize * MONO_CHAR_EM) + CHIP_INSETS
+    width += Math.ceil(codePillWidth(match[1] ?? '', { fontSize, insets: PILL_INSETS })) + PILL_CELL_EDGE
     prose = prose.replace(match[0], '')
   }
   // Inline markup markers (*, _) do not paint; do not pay for them.

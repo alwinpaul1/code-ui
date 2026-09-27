@@ -45,9 +45,11 @@ vi.mock('./MobileNativeChatView', async () => {
   }
 })
 
-/** The tab status read afresh, as on a return to the chat. */
-const statusFirstSight = (prompt: string, updatedAt: string, stateStartedAt: string) => [
+/** The tab status read afresh, as on a return to the chat: `working` while
+ *  the turn runs, `done` once it has ended. */
+const statusFirstSight = (state: 'working' | 'done', prompt: string, updatedAt: string, stateStartedAt: string) => [
   ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+    state,
     prompt,
     updatedAt: at(updatedAt),
     stateStartedAt: at(stateStartedAt)
@@ -76,7 +78,7 @@ describe('a phone photo with no words that Claude took mid-turn', () => {
     await sendAndLetClaudeTakeIt()
     unmount()
     const later = [...tookIt, agentRow('44906d18', 'Still fixing.', '07:05:30.000')]
-    const status = statusFirstSight('[Image #73]', '07:05:40.000', '07:02:10.000')
+    const status = statusFirstSight('working', '[Image #73]', '07:05:40.000', '07:02:10.000')
     await show('07:06:00.000', { messages: later, working: true, prompts: status, queued: [] })
     await show('07:06:01.000', { messages: later, working: true, prompts: status, queued: [] })
     expect([phoneCopies().length, deskCopies()]).toEqual([1, []])
@@ -85,7 +87,7 @@ describe('a phone photo with no words that Claude took mid-turn', () => {
   it('draws no "Image on Desktop" beside it when the chat is toggled off and on', async () => {
     await sendAndLetClaudeTakeIt()
     const later = [...tookIt, agentRow('44906d18', 'Still fixing.', '07:05:30.000')]
-    const status = statusFirstSight('[Image #73]', '07:05:40.000', '07:02:10.000')
+    const status = statusFirstSight('working', '[Image #73]', '07:05:40.000', '07:02:10.000')
     await show('07:06:00.000', { messages: later, working: true, prompts: status, queued: [] })
     await show('07:06:01.000', { messages: later, working: true, prompts: status, queued: [] })
     expect(deskCopies()).toEqual([])
@@ -95,7 +97,7 @@ describe('a phone photo with no words that Claude took mid-turn', () => {
     await sendAndLetClaudeTakeIt()
     unmount()
     const ended = [...tookIt, agentRow('55906d18', 'Fixed and verified.', '07:06:00.000')]
-    const status = statusFirstSight('[Image #73]', '07:06:00.100', '07:06:00.050')
+    const status = statusFirstSight('done', '[Image #73]', '07:06:00.100', '07:06:00.050')
     await show('07:10:00.000', { messages: ended, working: false, prompts: status, queued: [] })
     await show('07:10:01.000', { messages: ended, working: false, prompts: status, queued: [] })
     expect([phoneCopies().length, deskCopies()]).toEqual([1, []])
@@ -129,7 +131,7 @@ describe('a phone photo with no words that Claude took mid-turn', () => {
       userRow('t1t1t1t1', ['thanks, what next?'], '07:20:00.000'),
       agentRow('66906d18', 'Next is the fold.', '07:20:05.000')
     ]
-    const merged = [...statusFirstSight('thanks, what next?', '07:20:05.100', '07:20:05.050'), beaconOwn]
+    const merged = [...statusFirstSight('done', 'thanks, what next?', '07:20:05.100', '07:20:05.050'), beaconOwn]
     await show('07:25:00.000', { messages: next, working: false, prompts: merged, queued: [] })
     await show('07:25:01.000', { messages: next, working: false, prompts: merged, queued: [] })
     expect([phoneCopies().length, deskCopies()]).toEqual([1, []])

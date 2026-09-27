@@ -5,7 +5,8 @@ import {
   hydrateWaitingPhotoSends,
   rememberWaitingPhotoSends,
   resetWaitingPhotoSendsForTests,
-  waitingPhotoSends
+  waitingPhotoSends,
+  withThisRunsPhotos
 } from './mobile-native-chat-waiting-photo-sends'
 
 const send = (id: string, images?: string[]): MobileNativeChatPendingMessage => ({
@@ -89,5 +90,30 @@ describe('the photo sends a chat that comes back binds before its read', () => {
     await AsyncStorage.setItem('codeui:chat-waiting-photo-sends-recent', '{not json')
     await expect(hydrateWaitingPhotoSends()).resolves.toBeUndefined()
     expect(waitingPhotoSends('s1')).toBeUndefined()
+  })
+})
+
+// Storage leaves a `data:` photo out, and the store reads its sends back from
+// storage whenever a chat comes back: a send Claude took mid-turn, which gets
+// no row, came back with no photo (session 790eafa8, 2026-09-26).
+describe('the photos this run still holds, put back on sends read from storage', () => {
+  beforeEach(() => resetWaitingPhotoSendsForTests())
+  afterEach(() => resetWaitingPhotoSendsForTests())
+  const paths = ['/var/folders/0y/T/orca-paste-1-a.png', '/var/folders/0y/T/orca-paste-2-b.png']
+
+  it('puts back the data: photo storage left out, with its pasted path, in order', () => {
+    rememberWaitingPhotoSends('s1', [{ ...send('pending-1', ['data:image/png;base64,AA', 'file:///a2.jpg']), imagePaths: paths }])
+    const read = [{ ...send('pending-1', ['file:///a2.jpg']), imagePaths: [paths[1]!] }]
+    expect(withThisRunsPhotos('s1', read).map((item) => [item.images, item.imagePaths])).toEqual([
+      [['data:image/png;base64,AA', 'file:///a2.jpg'], paths]
+    ])
+  })
+
+  it('leaves a send this run holds nothing more for, another session, and none at all as stored', () => {
+    rememberWaitingPhotoSends('s1', [send('pending-1', ['data:image/png;base64,AA'])])
+    const read = [send('pending-2'), send('pending-1', ['file:///kept.jpg', 'file:///more.jpg'])]
+    expect(withThisRunsPhotos('s1', read)).toEqual(read)
+    expect(withThisRunsPhotos('s2', [send('pending-1')])).toEqual([send('pending-1')])
+    expect(withThisRunsPhotos('s1', [])).toEqual([])
   })
 })

@@ -25,17 +25,6 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl
   },
-  filePreviewGutter: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  filePreviewText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    fontFamily: typography.monoFamily
-  },
   imagePreviewContainer: {
     flex: 1,
     minHeight: 0,
@@ -130,8 +119,12 @@ export const mobileSessionReaderStyles = StyleSheet.create({
     lineHeight: 19,
     fontFamily: typography.monoFamily
   },
+  // A nested span in the line above, so it names the code face itself: the
+  // app's default gives a Text with no face Instrument Sans, and "+ ", "- "
+  // and "  " differ in width there, which shifts the code row to row.
   diffPrefix: {
-    color: colors.textMuted
+    color: colors.textMuted,
+    fontFamily: typography.monoFamily
   },
   diffPrefixAdded: {
     color: colors.gitDecorationAdded

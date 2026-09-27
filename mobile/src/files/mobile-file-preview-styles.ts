@@ -16,6 +16,12 @@ export function filePreviewStyles({ colors }: Theme) {
       flex: 1,
       backgroundColor: colors.bg
     },
+    /** The code viewer and its line bar, which floats over its foot. No
+     *  colour of its own: the viewer paints the theme's code surface. */
+    sourceArea: {
+      flex: 1,
+      minHeight: 0
+    },
     state: {
       flex: 1,
       alignItems: 'center',
@@ -47,20 +53,8 @@ export function filePreviewStyles({ colors }: Theme) {
       fontSize: typography.bodySize,
       fontWeight: '600'
     },
-    scroll: {
-      flex: 1,
-      backgroundColor: colors.bg
-    },
-    textContent: {
-      padding: spacing.md,
-      paddingBottom: spacing.xl
-    },
-    textPreview: {
-      color: colors.text,
-      fontFamily: typography.monoFamily,
-      fontSize: 13,
-      lineHeight: 19
-    },
+    // The source view's scroller and its one-Text body (scroll, textContent,
+    // textPreview) went with that view: text files draw in MobileCodeView.
     truncatedNote: {
       marginBottom: spacing.md,
       color: colors.textSecondary,

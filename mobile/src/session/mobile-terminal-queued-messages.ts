@@ -1,16 +1,17 @@
 import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
-/** Verified against Claude Code 2.1.263. Two different queue footers exist:
- * the legacy whole-queue recall, and the per-message selector that only appears
- * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
- * Claude Code 2.1.277 keeps the placeholder but redraws the block itself —
- * see `columnZeroQueueEntries`. Claude Code 2.1.283 draws the hints, the block,
- * its send-now row and the layout above the spinner with 2.1.282's code
- * (binaries compared 2026-09-26, not captured live). */
-export const QUEUE_HINT =
-  /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
-export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
+import {
+  footerWindow,
+  isQueueBound,
+  queueFooterIndex,
+  SELECTED_HINT,
+  SEND_NOW_HINT,
+  SPINNER_ROW,
+  withComposerText
+} from './mobile-terminal-queue-block'
+
+export { QUEUE_HINT, SELECTED_HINT, queueBlockLineIndices } from './mobile-terminal-queue-block'
 
 export type ClaudeQueueView = {
   /** Empty while an entry is selected: the rows are ambiguous then. */
@@ -39,26 +40,9 @@ export function claudeQueueViewFromScreen(
   screen: readonly string[],
   draft?: unknown
 ): ClaudeQueueView {
-  const lines = [...screen]
-  // Orca removes the composer text from tail and publishes it separately, even
-  // when Claude paints a queue hint as a placeholder in that composer.
-  if (typeof draft === 'string' && (QUEUE_HINT.test(draft) || SELECTED_HINT.test(draft))) {
-    const input = lines.findLastIndex((line) => /^\s*❯\s*$/.test(line))
-    if (input !== -1) {
-      lines[input] = `❯ ${draft}`
-    }
-  }
-  // Either footer can wrap on a narrow phone-sized terminal.
-  const window = (index: number) =>
-    lines
-      .slice(index, index + 3)
-      .map((part) => part.trim())
-      .join(' ')
-  const footer = lines.findLastIndex(
-    (line, index) =>
-      (/^\s*[❯›>]?\s*Press up to\b/i.test(line) && QUEUE_HINT.test(window(index))) ||
-      (/^\s*[❯›>]?\s*Press Enter\b/i.test(line) && SELECTED_HINT.test(window(index)))
-  )
+  const lines = withComposerText(screen, draft)
+  const window = (index: number) => footerWindow(lines, index)
+  const footer = queueFooterIndex(lines)
   if (footer === -1) {
     return EMPTY_VIEW
   }
@@ -118,39 +102,13 @@ export function claudeQueueViewFromScreen(
       selectedOldest: /up again for history/i.test(hint)
     }
   }
-  const entries: string[] = []
-  for (const line of block) {
-    const match = /^\s+[❯›>]\s+(.+)$/.exec(line)
-    if (match) {
-      entries.push(match[1]!.trim())
-    } else if (entries.length) {
-      entries[entries.length - 1] += '\n' + line.trim()
-    }
-  }
   return {
-    entries: entries.map(withoutComposerNotice),
+    entries: queueEntries(block, /^\s+[❯›>]\s+(.+)$/).map(withoutComposerNotice),
     selectable,
     selecting: false,
     selected: null,
     selectedOldest: false
   }
-}
-
-/** Claude Code 2.1.277 closes its queue block with this row instead of putting
- *  "Enter to send them immediately" in the composer placeholder. Its presence
- *  is what tells the 2.1.277 shape from a 2.1.263 transcript echo, which draws
- *  a delivered message with the same column-zero marker. The chord differs by
- *  build: "ctrl+x ctrl+s to send now" on 2.1.277, "ctrl+enter to send now" on
- *  2.1.280 (2026-09-23), so any key chord before "to send now" closes it. */
-const SEND_NOW_HINT = /^\s*(?:(?:ctrl|shift|alt|option|opt|cmd|meta)\+\S+\s+)+to send now\s*$/i
-/** The working spinner Claude draws between the transcript and the queue:
- *  "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)". The glyph rotates; the
- *  ellipsis after the verb does not. */
-const SPINNER_ROW = /^[^\s❯›>⏺⎿]\s+\S.*…/
-const TOOL_ROW = /^\s*[⏺⎿]/
-
-function isQueueBound(line: string): boolean {
-  return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
 
 /** Index of the "… to send now" row directly above the composer,
@@ -230,16 +188,49 @@ function columnZeroQueueEntries(lines: readonly string[], sendNow: number): stri
   if (!bounded || rows.length === 0) {
     return []
   }
-  const entries: string[] = []
+  return queueEntries(rows, /^[❯›>]\s+(.+)$/)
+}
+
+/** The head of the TUI's row for a peer message, as a queue row: the `›`
+ *  pointer, then "Message from @x" or "Cross-session message from @x". */
+const PEER_HEAD = /^\s*›\s+(?:Cross-session message|Message) from @\S/
+/** How the TUI's row for a peer message ends, however it wrapped. */
+const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
+
+/**
+ * The messages of a queue block, one per marked row with its wrapped lines
+ * joined on, less the peer messages in it; none at all when a row may be one
+ * and can't be told.
+ *
+ * Claude Code paints a message from another session or one of its own agents
+ * that waits in its queue as the TUI's own row, "› Message from
+ * @a9d5c2f85e94ca47f (ctrl+o to expand)". Read as a queued message of the
+ * user's, it was drawn as the user's bubble once the agent took it (session
+ * 790eafa8, 2026-09-26, Claude Code 2.1.283), with nothing to open. It is not
+ * the user's to edit either. The chat draws it from the screen's own row
+ * (screen-peer-notices.ts) and from the prompt hook.
+ *
+ * At a narrow width the row wraps, "(ctrl+o to" on its line and "expand)" on
+ * the next, so it is told by its head and by its own lines ending in the
+ * hint. A head no line closes that way could be a person's message or a cut
+ * peer row, and the whole reading is refused: an empty queue only hides a
+ * pencil, a wrong one draws the peer's row as the user's (re-review of
+ * 2026-09-27).
+ */
+function queueEntries(rows: readonly string[], marked: RegExp): string[] {
+  const read: { text: string; peer: boolean }[] = []
   for (const line of rows) {
-    const match = /^[❯›>]\s+(.+)$/.exec(line)
+    const match = marked.exec(line)
     if (match) {
-      entries.push(match[1]!.trim())
-    } else {
-      entries[entries.length - 1] += '\n' + line.trim()
+      read.push({ text: match[1]!.trim(), peer: PEER_HEAD.test(line) })
+    } else if (read.length) {
+      read[read.length - 1]!.text += '\n' + line.trim()
     }
   }
-  return entries
+  if (read.some((entry) => entry.peer && !PEER_TAIL.test(entry.text.replace(/\s+/g, ' ')))) {
+    return []
+  }
+  return read.filter((entry) => !entry.peer).map((entry) => entry.text)
 }
 
 /** Claude's own context warning, drawn in the composer box beside the queue
