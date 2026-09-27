@@ -292,22 +292,26 @@ export function createPhone(current: () => ReactTestRenderer) {
     return Math.min(Math.ceil(Math.max(...unwrapped.map((line) => line.width))), Math.floor(max))
   }
 
-  /** A bubble at `max` settling: Fabric lays the Text out at the width its
-   *  content gives it and reports its lines, the document's onLayout brings
-   *  that width, and so on until the width holds. Returns the width, or -1
-   *  when it never holds. */
+  /** A bubble at `max` settling. Each pass Fabric lays the Text out at the
+   *  width its content gives it now (atMost), reports those lines to the
+   *  handler the Text holds, and the document's onLayout brings that width,
+   *  until nothing changes. Returns the widths it went through, and the one
+   *  it held, or -1 when it never holds. */
   const settleBubble = (max: number, as: PhoneAs = {}): { width: number; widths: number[] } => {
-    let width = atMost(max, as)
-    const widths = [width]
-    for (let step = 0; step < 12; step += 1) {
-      rotateTo(width, as)
-      settle(width, as)
-      const next = atMost(max, as)
-      if (next === width) {
+    const widths: number[] = []
+    for (let step = 0; step < 30; step += 1) {
+      const width = atMost(max, as)
+      if (widths.at(-1) !== width) {
+        widths.push(width)
+      }
+      let reported = false
+      act(() => {
+        reported = passNow(width, as)
+        layOutDocument(width)
+      })
+      if (!reported && atMost(max, as) === width) {
         return { width, widths }
       }
-      width = next
-      widths.push(width)
     }
     return { width: -1, widths }
   }

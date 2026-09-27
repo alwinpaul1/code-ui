@@ -271,7 +271,9 @@ export function readPillFits(args: {
   /** The Text's own width, the one its lines should be broken to. */
   lineWidth: number
   current: TextPillFits
-  cut: (code: string, firstRoom: number, scale: number, glue: number) => CodePillCut
+  /** `guessed`: the span has read nothing of its own scale
+   *  (mobile-markdown-code-chip-split.ts). */
+  cut: (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) => CodePillCut
   measure: PillMeasure
   /** The Text's own type size, for the punctuation beside a pill. */
   proseSize: number
@@ -323,7 +325,7 @@ export function readPillFits(args: {
       // couple of per cent of the phone's.
       const proven =
         drawnFirst !== undefined && drawnFirst.width > room + (drawnFirst.exact ? 0 : Math.max(3, room * SOFT_MARGIN))
-      if (!span.fresh && proven && sameCut(cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue), span)) {
+      if (!span.fresh && proven && sameCut(cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined), span)) {
         // Cut as it would be for this very room, and drawn, by its own line,
         // wider than the room: the phone draws it wider than estimated. Only
         // a line can prove that. "Cut for this room and went down" alone
@@ -365,7 +367,10 @@ export function readPillFits(args: {
   }
   const firstChanged = spans.findIndex((span, ordinal) => {
     const fit = fits.get(ordinal)
-    return !sameCut(cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit, textScale), span.glue), span)
+    return !sameCut(
+      cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit, textScale), span.glue, fit?.floor === undefined),
+      span
+    )
   })
   return firstChanged === -1 ? { kind: 'settled' } : { kind: 'changed', next: { fits }, firstChanged }
 }

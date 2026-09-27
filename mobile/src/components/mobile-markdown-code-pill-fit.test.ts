@@ -14,8 +14,8 @@ import {
 const FONT: CodePillFont = { fontSize: 14, insets: 10 }
 const WIDTH = 360
 const width = (piece: string) => codePillWidth(piece, FONT)
-const cut = (code: string, firstRoom: number, scale: number, glue = 0) =>
-  cutCodePills(code, firstRoom, WIDTH, { ...FONT, scale }, glue)
+const cut = (code: string, firstRoom: number, scale: number, glue = 0, guessed = false) =>
+  cutCodePills(code, firstRoom, WIDTH, { ...FONT, scale }, glue, guessed)
 const PATH = '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows'
 const P = '\uFFFC'
 const NOTHING_LEARNT: TextPillFits = { fits: new Map() }

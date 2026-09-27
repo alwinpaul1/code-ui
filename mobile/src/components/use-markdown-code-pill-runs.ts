@@ -171,8 +171,8 @@ export function useMarkdownCodePillRuns(
     const textScaleNow = textPillScale(current.fits)
     const spans: PillSpanDrawn[] = []
     let backtick = false
-    const cutWith = (code: string, firstRoom: number, scale: number, glue: number) =>
-      cutCodePills(code, firstRoom, lineRoom, { ...font, scale }, glue)
+    const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) =>
+      cutCodePills(code, firstRoom, lineRoom, { ...font, scale }, glue, guessed)
     if (measured && !firstWidths.current.has(textKey)) {
       firstWidths.current.set(textKey, lineWidth)
     }
@@ -256,7 +256,7 @@ export function useMarkdownCodePillRuns(
         const fit = current.fits.get(ordinal)
         const room = pillFitRoom(fit, lineRoom)
         const glue = codeTextWidth(GLUE.exec(after)![0], proseSize)
-        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit, textScaleNow), glue)
+        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit, textScaleNow), glue, fit?.floor === undefined)
         spans.push({ code, pieces, room, fresh, glue })
         return { pieces, version: entry?.versions[ordinal] ?? 0 }
       },

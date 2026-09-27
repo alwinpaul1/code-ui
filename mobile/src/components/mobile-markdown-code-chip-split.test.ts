@@ -109,15 +109,17 @@ describe('degenerate spans', () => {
     expect(fresh).toBe(false)
     expect(pieces.join('')).toBe(token)
     expect(width(pieces[0]!)).toBeLessThanOrEqual(119)
-    for (const piece of pieces) {
-      expect(width(piece)).toBeLessThanOrEqual(199)
+    // Whole lines take the whole line: a pill that starts one has nowhere
+    // to go down to.
+    for (const piece of pieces.slice(1)) {
+      expect(width(piece)).toBeLessThanOrEqual(200)
     }
     const solid = 'x'.repeat(120)
     const cut = cutCodePills(solid, 100, 200, FONT)
     expect(cut.pieces.join('')).toBe(solid)
     // Each full line takes as many as fit: one more would not.
     for (const piece of cut.pieces.slice(1, -1)) {
-      expect(width(piece + 'x')).toBeGreaterThan(199)
+      expect(width(piece + 'x')).toBeGreaterThan(200)
     }
   })
 
@@ -135,5 +137,35 @@ describe('degenerate spans', () => {
 
   it('keeps the spaces inside a one-line span, which are its own', () => {
     expect(cutCodePills(' two ', 300, 300, FONT).pieces).toEqual([' two '])
+  })
+})
+
+// Review of 12e3b98e (probe S3): a prompt bubble is as wide as its widest
+// line, rounded up. When that line was a lone code span, the span had to clear
+// it by the 1 dp slack a pill after words needs, so it was cut in two, and the
+// bubble swung between two widths for as long as it was on screen.
+describe('a pill that starts a line', () => {
+  const code = 'pnpm install'
+
+  it('takes the whole line: it has nowhere to go down to', () => {
+    const line = width(code) + 0.25
+    expect(cutCodePills(code, line, line, FONT)).toEqual({ pieces: [code], fresh: false })
+  })
+
+  it('still clears the room after words by the slack, where a hair too wide goes down a line', () => {
+    const room = width('pnpm ') + 0.25
+    expect(cutCodePills(code, room, 300, FONT).pieces).toEqual(['pnpm', 'install'])
+  })
+
+  it('is tried whole while its scale is a guess, when it would fit drawn a little narrower', () => {
+    // Drawn 3% narrower than estimated (kerning), the bubble is as wide as
+    // that; the estimate does not fit it, the pill does.
+    const line = Math.ceil(codeTextWidth(code, 14) * 0.97 + 10)
+    expect(cutCodePills(code, line, line, FONT).pieces).toEqual(['pnpm', 'install'])
+    expect(cutCodePills(code, line, line, FONT, 0, true).pieces).toEqual([code])
+    // Not when it would not fit even so, and not after words.
+    const narrow = Math.floor(codeTextWidth(code, 14) * 0.9 + 10)
+    expect(cutCodePills(code, narrow, narrow, FONT, 0, true).pieces).toEqual(['pnpm', 'install'])
+    expect(cutCodePills(code, line - 1, line, FONT, 0, true).pieces).toEqual(['pnpm', 'install'])
   })
 })

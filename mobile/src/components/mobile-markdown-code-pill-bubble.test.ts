@@ -90,3 +90,30 @@ describe('a prompt bubble turned to landscape', () => {
     expect(whole(lines, lineWidth)).toEqual([])
   })
 })
+
+// Review of 12e3b98e (probe S3): a bubble whose widest line is a lone code
+// span is as wide as that pill, rounded up. The span must clear its line by
+// FIT_SLACK, so at that width it was cut in two; the two pieces side by side
+// made the bubble wider, where the span fitted whole again, and the bubble
+// swung between the two widths (89 and 97 dp for `pnpm install`) for as long
+// as it was on screen.
+describe('a prompt bubble as wide as its one line', () => {
+  it.each([
+    ['`pnpm install`', 1],
+    ['`pnpm install`', 0.97],
+    ['`pnpm install`', 1.03],
+    ['`x`', 1],
+    ['Run `pnpm install` now.', 1],
+    ['Run `pnpm install` now.', 0.97],
+    ['Please run\n\n`pnpm install --frozen-lockfile`', 1],
+    ['Please run\n\n`pnpm install --frozen-lockfile`', 0.97],
+    ['Run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint` then report.', 1]
+  ] as const)('%s settles on one width, pills drawn x%s', (text, pillError) => {
+    mountPrompt(text)
+    const { width, widths } = device.settleBubble(309, { pillError })
+    expect(widths.length).toBeLessThanOrEqual(3)
+    expect(width).toBeGreaterThan(0)
+    const { lines, lineWidth } = device.settle(width, { pillError })
+    expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth)]).toEqual([])
+  })
+})

@@ -70,9 +70,21 @@ export function codePillWidth(text: string, font: CodePillFont): number {
   return codeTextWidth(text, font.fontSize) * (font.scale ?? 1) + font.insets
 }
 
-/** A pill must clear the room by this much: Android rounds an inline view up
- *  to the next pixel, and the measured width is rounded to the dp. */
+/** A pill after words must clear the room left by this much: Android rounds
+ *  an inline view up to the next pixel, and the measured width is rounded to
+ *  the dp, and a pill a hair too wide goes down a line. One that starts a
+ *  line has nowhere to go down to, so it takes the whole line: a pill as wide
+ *  as its bubble, which is as wide as the pill rounded up, was cut in two by
+ *  this slack, the two made the bubble wider, where it fitted whole again,
+ *  and the bubble swung between the two widths (review of 12e3b98e, S3). */
 const FIT_SLACK = 1
+/** A span whose scale is still a guess, cut for a whole line, is tried whole
+ *  if it would fit drawn this much narrower than estimated (kerning mostly
+ *  narrows it): alone on its line the phone reads it back exactly, where cut
+ *  in two it only says how the two pieces sit. A bubble as wide as the pill
+ *  drawn 3% narrower did not fit the estimate, was cut in two, grew, and
+ *  swung between two widths too. */
+const GUESS_MARGIN = 0.05
 /** A token cut inside puts at least this many characters at a line's end;
  *  fewer is a stub, and the token starts on the next line instead. */
 const MIN_CUT_CHARS = 3
@@ -93,8 +105,17 @@ export function cutCodePills(
   /** What is glued to the span's end and cannot break from it, as `path` is
    *  to the full stop in "`path`." A last piece that just fills its line
    *  with that on it runs past the edge. */
-  glue = 0
+  glue = 0,
+  /** The scale is a guess: nothing has been read of how the phone draws it. */
+  guessed = false
 ): CodePillCut {
+  if (
+    guessed &&
+    firstRoom >= lineRoom &&
+    codePillWidth(code.trimEnd(), { ...font, scale: (font.scale ?? 1) * (1 - GUESS_MARGIN) }) + glue <= lineRoom
+  ) {
+    return { pieces: code ? [code] : [], fresh: false }
+  }
   const pieces: string[] = []
   let fresh = false
   let line = ''
@@ -102,12 +123,13 @@ export function cutCodePills(
   // Everything up to `consumed` is placed; a candidate that reaches the end
   // of the code carries the glue.
   let consumed = 0
+  const slack = (space: number) => (space >= lineRoom ? 0 : FIT_SLACK)
   const fits = (text: string, space: number) =>
     codePillWidth(text.trimEnd(), font) + (consumed + text.length - line.length === code.length ? glue : 0) <=
-    space - FIT_SLACK
+    space - slack(space)
   /** Whether `text` fits a line of its own; asked before the line wraps. */
   const fitsAlone = (text: string, space: number) =>
-    codePillWidth(text.trimEnd(), font) + (consumed + text.length === code.length ? glue : 0) <= space - FIT_SLACK
+    codePillWidth(text.trimEnd(), font) + (consumed + text.length === code.length ? glue : 0) <= space - slack(space)
   const wrap = () => {
     if (line) {
       pieces.push(line)
